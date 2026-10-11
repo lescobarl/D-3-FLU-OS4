@@ -4,6 +4,7 @@
  * 2) PCM (post-commit) — tras consumir preflight/embedding
  */
 import { flushAudioAccumulationOnFinal } from './audioBufferFlush.js'
+import { clearPendingFinal } from './activeListen.js'
 
 export function flushTranscriptStateOnFinal({
   listenState = null,
@@ -17,7 +18,7 @@ export function flushTranscriptStateOnFinal({
   if (listenState) {
     listenState.openLine = ''
     listenState.pendingInterim = ''
-    listenState.pendingFinal = ''
+    clearPendingFinal(listenState)
   }
 }
 

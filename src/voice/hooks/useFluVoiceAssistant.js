@@ -1698,12 +1698,12 @@ const lastResolvedTurnRef = useRef(0)
         return false
       }
 
+      // UN DUENO del nombre de la fila: en CONVERSACION lo aporta YA resuelto el commit
+      // (`resolveTurnSpeakerAtCommit`) y aqui se escribe TAL CUAL; el `|| resolveSpeakerByText`
+      // era una SEGUNDA resolucion por TEXTO que decidia la fila cuando el commit no daba
+      // etiqueta. Ese dueno es SOLO de la escucha PASIVA (unica via sin `speakerName`).
       const speakerName = normalizeSpeakerLabel(
-        cleanForSpeech(explicitSpeaker) ||
-        resolveConversationSpeakerLabel(
-          capture,
-          fallbackSpeaker || lastLoggedSpeakerRef.current || lastSpeakerRef.current,
-        ),
+        cleanForSpeech(explicitSpeaker) || (conversationActiveRef?.current ? lastLoggedSpeakerRef.current || lastSpeakerRef.current || fallbackSpeaker : resolveConversationSpeakerLabel(capture, fallbackSpeaker)),
       )
 
       lastLoggedCaptureRef.current = capture

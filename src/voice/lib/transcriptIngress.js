@@ -22,6 +22,7 @@ import {
   utterancesRelate,
   utterancesSameRevision,
   sealPendingInterim,
+  clearPendingFinal,
   phrasesEquivalent,
 } from './activeListen.js'
 import {
@@ -302,7 +303,7 @@ export function flushRecognitionEndThroughIngress(ctx) {
   }
 
   const result = sealPendingInterim(ctx.listenState)
-  if (ctx.listenState) ctx.listenState.pendingFinal = ''
+  clearPendingFinal(ctx.listenState)
   ctx.scheduleTurnCommit?.({
     capture,
     newParagraph: result.newParagraph,
@@ -319,7 +320,7 @@ function resetInterimControlBuffers(listenState, publishedLiveRef, lastStreamPre
   if (listenState) {
     listenState.openLine = ''
     listenState.pendingInterim = ''
-    listenState.pendingFinal = ''
+    clearPendingFinal(listenState)
     clearInterimOpenLineClock(listenState)
   }
   if (publishedLiveRef) publishedLiveRef.current = ''

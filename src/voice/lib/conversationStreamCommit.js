@@ -85,7 +85,6 @@ export function buildFinalSpeakerSnapshotResolver({ createSpeakerAudioResolver, 
  * @property {import('react').MutableRefObject<string>} publishedLiveRef
  * @property {import('react').MutableRefObject<object>} listenStateRef
  * @property {import('react').MutableRefObject<boolean>} openPreviewTurnRef
- * @property {(value: string) => void} setLiveTranscript
  * @property {(capture: string) => void} scheduleLiveTranscriptUpdate
  * @property {(phrase: string, fallbackSpeaker: string, options?: object) => void} applyConversationSpeaker
  * @property {() => void} flushPendingStreamLog
@@ -144,7 +143,6 @@ export function handleConversationStreamSync(
     publishedLiveRef,
     listenStateRef,
     openPreviewTurnRef,
-    setLiveTranscript,
     scheduleLiveTranscriptUpdate,
     applyConversationSpeaker,
     flushPendingStreamLog,
@@ -185,8 +183,9 @@ export function handleConversationStreamSync(
     })
   if (!capture) {
     if (newParagraph || freshUtterance) {
+      // Misma regla del cierre: se resetea el ANCLA, no lo PUBLICADO (la "ultima frase"
+      // la borra su dueno, el reset de la sesion/voz, no el commit del turno).
       publishedLiveRef.current = ''
-      setLiveTranscript('')
       openPreviewTurnRef.current = false
     }
     if (import.meta.env.DEV && debugHotPath) fluDebugHot('stream-skip', { reason: 'empty-capture' })
@@ -313,8 +312,12 @@ export function handleConversationStreamSync(
     // del turno NO avanza (`openPreviewTurnRef` sigue abierto) -> UNA fila.
     if (closeTurn) {
       openPreviewTurnRef.current = false
+      // El ANCLA interna se resetea (dedupe/shrink/reconcile del turno que empieza), pero
+      // lo PUBLICADO NO se borra: borrar la "ultima frase" al cerrar el segmento dejaba la
+      // zona en blanco (~3 s) mientras el dueno seguia hablando hasta que llegaba el
+      // siguiente interino. Flicker medido en su log: cierre 02:20:15.94, siguiente
+      // asrRaw 02:20:19.07. La frase vive hasta que habla nueva la reemplaza.
       publishedLiveRef.current = ''
-      setLiveTranscript('')
       listenStateRef.current.openLine = ''
       listenStateRef.current.pendingInterim = ''
       preflightScheduledForTurnRef.current = false
@@ -444,25 +447,20 @@ export function handleConversationStreamSync(
   }
 
   // UN DUENO de "que hablante lleva la fila": la resolucion del turno
-  // (`resolveTurnSpeakerAtCommit`, que YA trata la revision del mismo utterance).
-  // La segunda cadena (`logRowSpeakersRef.at(-1) || lastLogged || fallback`) pisaba
-  // el nombre ya resuelto con la etiqueta pegajosa: medido en el log del dueno
-  // (2026-10-07), `commit{src:asr-revision, name:"luis"}` y la fila quedaba
-  // "Hablante 2" (D6: 5 filas).
-  // El nombre de la fila se decide en UN SOLO sitio: el escritor unico de la fila
-  // (`commitUserTurnRow` -> `resolveRowSpeakerName`). Aqui solo se aporta la ETIQUETA
-  // cruda (la voz); el vinculo etiqueta->persona viaja en el payload y el escritor
-  // aplica la regla CON la evidencia. Antes esta MISMA transformacion vivia aqui y en
-  // App.tsx con reglas distintas: ruta doble del nombre de la fila.
+  // (`resolveTurnSpeakerAtCommit`, que YA trata la revision del mismo utterance) y el
+  // escritor unico de la fila (`commitUserTurnRow` -> `resolveRowSpeakerName`).
+  // Aqui se aporta la ETIQUETA RESUELTA (la voz) y SI hay evidencia acustica; el
+  // escritor aplica la regla CON esa evidencia.
+  // La etiqueta se escribe SIEMPRE (leccion A5): la evidencia acustica decide el
+  // ASCENSO a nombre propio, NO si se escribe. Medido en el log del dueno (2026-10-10):
+  // con `preflight.ready` casi siempre false, el gate condicionaba la ESCRITURA de la
+  // etiqueta y dejaba `written:""` en 41/41 commits; la fila quedaba a merced de una
+  // SEGUNDA resolucion por TEXTO (`resolveSpeakerByText` dentro de `emitConversationLog`):
+  // dos duenos del nombre de la fila. Un dato, un dueno.
   const speakerResuelto = resolved.speakerName || fallbackSpeaker
   const speakerName = normalizeSpeakerLabel(speakerResuelto)
-  // El hablante del turno llega DESPUES del commit (el embedding tarda 7-19 s): lo que
-  // se escribe aqui es una PREDICCION, y escribirla inventaba etiquetas ('Hablante 8/12'
-  // para 2 voces reales) y las heredaba el turno siguiente. Sin evidencia NO se escribe:
-  // la resolucion tardia COMPLETA la fila por identidad de turno
-  // (`updateTurnRowSpeaker`). Regla del dueno: "escribes sin hablante y ya que lo tienes
-  // lo pones".
-  const speakerEscrito = preflight?.ready ? speakerName : ''
+  const evidenciaAcustica = Boolean(preflight?.ready)
+  const speakerEscrito = speakerName
 
   let segmentPlan =
     !sameRevisionReplace && turnCommit
@@ -581,7 +579,7 @@ export function handleConversationStreamSync(
   // la fila de SESION; el cierre (onend, srGap, split por wake) la escribe completa.
   if (refreshNeeded && settlesTurn) {
     delivered = emitTurnRow(capture, {
-      speakerName: speakerEscrito, evidenciaAcustica: Boolean(preflight?.ready),
+      speakerName: speakerEscrito, evidenciaAcustica,
       fallbackSpeaker: speakerName,
       currentClock: formatClock(),
       replaceLastRawLog: replaceLast,

@@ -244,6 +244,24 @@ export function sealPendingInterim(state, nowMs = Date.now()) {
   return confirmFinal(state, pending, nowMs)
 }
 
+/**
+ * DUENO UNICO del BORRADO de la locucion CONFIRMADA sin fila (`pendingFinal`).
+ *
+ * Un dato, un dueno: el borrado estaba repartido en TRES sitios por su cuenta (el
+ * ingress lo vaciaba en dos ramas y el flush de buffers en una tercera), y el orden
+ * entre ellos decide si la locucion se sella o se pierde. Aqui vive el unico borrado,
+ * y DEVUELVE lo que habia para que ningun llamante pueda perderlo en silencio.
+ *
+ * @param {object|null} state Estado de escucha.
+ * @returns {string} La locucion confirmada que se descarta ('' si no habia).
+ */
+export function clearPendingFinal(state) {
+  if (!state) return ''
+  const pendiente = cleanForSpeech(state.pendingFinal || '')
+  state.pendingFinal = ''
+  return pendiente
+}
+
 export function foldSpeechKey(text = '') {
   return cleanForSpeech(text).toLowerCase()
 }

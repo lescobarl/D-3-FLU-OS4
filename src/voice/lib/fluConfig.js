@@ -121,7 +121,7 @@ export const FLU_CONFIG = {
       conversationMinVoicedMs: 8,
       /** Voz mínima para nuevo hablante (ms); bajo en sala/TV para no perder cambios de voz. */
       conversationMinVoicedForNewMs: 2200,
-      conversationMaxAutoSpeakers: 6,
+      conversationMaxAutoSpeakers: 99, // SIN TOPE de etiquetas automaticas: un tope bajo fuerza FUSIONES FALSAS (se pierden voces); el unico criterio de union es el de la diarizacion, no un recuento.
       /** Umbrales de similitud coseno entre embeddings WavLM-SV 512-D (mayor = misma persona). */
       conversationSpeakerThresholds: {
         /** Misma persona con variación natural de tono NO crea H2/H3. Subido para separar voces claras. */
@@ -2226,8 +2226,8 @@ export const FLU_CONFIG = {
     /** Umbrales pausa/cola ASR — único bloque numérico (docs/reglas-duras.md). 0 en *MaxWords = solo heurística. */
     pauseAndWeakAsr: {
       interimOpenLineFlushMs: 0,
-      /** Tras N ms sin onresult de Chrome: commit openLine no guardado (TV / SR mudo). */
-      srGapCommitMs: 10000,
+      /** Tras N ms sin onresult: commit openLine (TV / SR mudo). CIERRE por silencio ~3,5 s (spec del dueno 2026-10-10). */
+      srGapCommitMs: 3500,
       srGapCommitMinWords: 3,
       /** Extensión mínima (chars/palabras) para commit por gap SR vs fila anterior. */
       srGapCommitExtensionMinChars: 16,
