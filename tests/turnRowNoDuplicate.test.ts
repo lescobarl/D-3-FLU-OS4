@@ -213,7 +213,7 @@ describe('el hablante que llega tarde COMPLETA su fila (no la del turno siguient
         fliHabla('Entendido.');
         commitUserTurnRow({ text: 'otra locucion distinta', speakerName: 'Hablante 1', turnId: 202 });
 
-        expect(updateTurnRowSpeaker(201, 'luis')).toBe(true);
+        expect(updateTurnRowSpeaker(201, 'luis', { evidenciaAcustica: true })).toBe(true);
 
         const rows = userRows();
         expect(rows).toHaveLength(2);

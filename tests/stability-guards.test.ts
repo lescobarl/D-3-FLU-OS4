@@ -210,7 +210,9 @@ describe('🧪 Guard de estabilidad — Bug D: flushListenStateBeforeRebuild no 
         // Reset de la línea abierta (espejo de finalizeTurnCommit pero sin commitear fila).
         expect(block, 'debe limpiar openLine').toContain("listenStateRef.current.openLine = ''");
         expect(block, 'debe limpiar pendingInterim').toContain("listenStateRef.current.pendingInterim = ''");
-        expect(block, 'debe limpiar publishedLiveRef').toContain("publishedLiveRef.current = ''");
+        // La "ultima frase" NO se vacia en el rebuild (spec del dueno 2026-10-11): antes la
+        // borraba a mitad de frase y producia el borra-y-reaparece. Su dueno es el reset de sesion/voz.
+        expect(block, 'NO debe borrar la memoria de la frase viva').not.toContain("publishedLiveRef.current = ''");
         expect(block, 'debe cerrar openPreviewTurnRef').toContain('openPreviewTurnRef.current = false');
         expect(block, 'debe limpiar lastStreamPreviewRef').toContain("lastStreamPreviewRef.current = ''");
         expect(block, 'debe limpiar preflightScheduledForTurnRef').toContain(
@@ -219,7 +221,7 @@ describe('🧪 Guard de estabilidad — Bug D: flushListenStateBeforeRebuild no 
         expect(block, 'debe limpiar srGapFiredForOpenLineRef').toContain(
             'srGapFiredForOpenLineRef.current = false'
         );
-        expect(block, 'debe limpiar el live transcript').toContain("setLiveTranscript('')");
+        expect(block, 'NO debe vaciar la zona en el rebuild').not.toContain("setLiveTranscript('')");
     });
 
     it('lee el parcial solo para diagnóstico (no para commitearlo)', () => {

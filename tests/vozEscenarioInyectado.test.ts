@@ -36,7 +36,7 @@ describe('escenario inyectado: hablantes, registro y renombre de la participacio
     const r = commitUserTurnRow({ text: 'bueno empecemos a hacer unas pruebas', turnId: 7 })
     // A5: la fila escrita sin etiqueta lleva el RESPALDO (ya no queda vacia).
     expect(userRows()[0].speakerName).toBe('Hablante 1')
-    const changed = updateTurnRowSpeaker(7, 'luis')
+    const changed = updateTurnRowSpeaker(7, 'luis', { evidenciaAcustica: true })
     expect(changed).toBe(true)
     expect(userRows().find((row) => row.id === r.id)?.speakerName).toBe('luis')
   })

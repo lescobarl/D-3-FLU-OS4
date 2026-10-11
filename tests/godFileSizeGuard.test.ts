@@ -33,8 +33,11 @@ export const TECHOS: Record<string, number> = {
   'src/App.tsx': 4643, // 5391 antes de P6.6
   // -40 en P8.32: el bloque de parametros del turno salio a src/voice/lib/contractParams.js
   // (buildContractParams), dueno unico de la lista de entradas del contrato de voz.
-  'src/voice/hooks/useFluVoiceAssistant.js': 4539,
-  'src/voice/lib/fluConfig.js': 2772,
+  // -3: la frase viva no se vacia al cerrar/entregar el turno (spec del dueno 2026-10-11).
+  'src/voice/hooks/useFluVoiceAssistant.js': 4536,
+  // -66: 49 claves de config SIN lector (prometian comportamiento sin efecto) se borraron,
+  // con su barrera (configConEfectoGuard).
+  'src/voice/lib/fluConfig.js': 2706,
   'src/voice/lib/gemini.js': 1848,
 }
 

@@ -273,4 +273,7 @@ export const GUARD_FILES = [
     'tests/documentGenerationStore.test.ts',
     'tests/workspaceArtifactPersonIsolation.test.ts',
     'tests/workspacePersonIsolation.test.ts',
+    'tests/vozUltimaFraseNoSeVaciaGuard.test.ts',
+    'tests/vozEvidenciaPorOmisionGuard.test.ts',
+    'tests/configConEfectoGuard.test.ts',
 ]

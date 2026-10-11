@@ -93,6 +93,7 @@ vi.mock('../src/voice/lib/voiceLocalFallback', () => ({
 vi.mock('../src/voice/lib/turnSpeakerPreflight.js', () => ({
   createTurnSpeakerAudioResolver: vi.fn(() => ({})),
   peekTurnSpeakerPreflight: vi.fn(() => ({ ready: false })),
+  preflightEvidenceMeasured: vi.fn(() => false),
 }));
 
 vi.mock('../src/core/selfKnowledge/selfKnowledge', () => ({ isSelfKnowledgeRequest: vi.fn(() => false) }));

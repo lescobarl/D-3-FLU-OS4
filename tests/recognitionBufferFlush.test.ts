@@ -7,10 +7,12 @@ import { flushTranscriptStateOnFinal, flushPcmStateAfterCommit } from '../src/vo
 const ref = (v: unknown = null) => ({ current: v })
 
 describe('flushTranscriptStateOnFinal: vacia el estado de transcripcion en FINAL', () => {
-    it('limpia el texto live publicado', () => {
+    it('NO vacia el texto live publicado (su dueno es el reset de sesion/voz)', () => {
+        // Spec del dueno (2026-10-11): la "ultima frase" no se vacia al cerrar el turno: borrarla
+        // aqui era una de las dos rutas del borra-y-reaparece. Este flush ya no la conoce.
         const publishedLiveRef = ref('hola')
         flushTranscriptStateOnFinal({ publishedLiveRef } as any)
-        expect(publishedLiveRef.current).toBe('')
+        expect(publishedLiveRef.current).toBe('hola')
     })
 
     it('limpia el ultimo preview de stream', () => {
