@@ -1724,13 +1724,25 @@ function toTitleCaseName(text = '') {
     .join(' ')
 }
 
-export function detectIntroducedName(text = '') {
+/**
+ * Nombre propio introducido en el TEXTO ("soy X" / "me llamo X" / "mi nombre es X").
+ *
+ * @param {string} text
+ * @param {{ mustOpen?: boolean }} [options] `mustOpen` (por defecto true): el patron tiene
+ *   que ABRIR el texto. Sin eso el nombre se captura en cualquier posicion y una frase que
+ *   REPORTA el comando ("mi definicion fue hasta que yo diga ... soy Luis") devolvia un
+ *   nombre. Medido por el dueno 2026-10-10.
+ */
+export function detectIntroducedName(text = '', { mustOpen = true } = {}) {
   const normalized = normalizeSpaces(stripDiacritics(text))
   if (!normalized) return ''
 
   for (const pattern of NAME_INTRO_PATTERNS) {
     const match = normalized.match(pattern)
     if (!match?.[1]) continue
+    // El intro tiene que ABRIR el texto: un "soy <nombre>" a mitad de frase es habla que
+    // HABLA de la orden, no una presentacion.
+    if (mustOpen && (match.index || 0) > 0) continue
 
     const rawCandidate = normalizeSpaces(match[1]).toLowerCase()
     if (!rawCandidate) continue
@@ -1754,13 +1766,19 @@ export function detectIntroducedName(text = '') {
 export function detectWakeIntroducedName(text = '', wakeWords = []) {
   const split = splitTranscriptAtWakeWord(text, wakeWords)
   if (!split.wakeWordMatched) return ''
+  // EL MANDATO EMPIEZA EN LA WAKE (Anexo B #11): una wake INLINE significa que la frase
+  // HABLA de la orden ("mi definicion fue hasta que yo diga okay flow soy Luis"), no que la
+  // DIGA. Sin esto el intro se capturaba dentro del reporte y la voz quedaba renombrada.
+  // Medido por el dueno (2026-10-10): esa frase devolvia 'Luis'.
+  if (split.beforeWake) return ''
 
   const introText = normalizeSpaces(
     stripDiacritics(split.commandText || split.afterWake || ''),
   )
   if (!introText) return ''
 
-  return detectIntroducedName(introText)
+  // El intro debe ABRIR el mandato (no venir tras "la frase es" / "que yo diga" / ...).
+  return detectIntroducedName(introText, { mustOpen: true })
 }
 
 export function extractTheme(text = '', role = '', wakeWords = []) {

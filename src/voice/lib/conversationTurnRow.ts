@@ -27,29 +27,17 @@ import { getFallbackSpeaker } from './speakerCore';
 let currentTurn: { id: number | string | null; rowId: string | null } = { id: null, rowId: null };
 
 /**
- * Alias de etiqueta -> nombre (sesion). Cuando "soy Luis" renombra la etiqueta con
- * la que ese hablante venia apareciendo, TODA fila posterior escrita o completada
- * con esa etiqueta sale ya con su nombre. NO depende del microfono: es un dato de
- * sesion (log del dueno 2026-10-07 17:29-17:33: tras identificarse, sus filas
- * volvian a "Hablante 1" y la misma etiqueta se reutilizaba para otra voz).
+ * NO hay mapa etiqueta->nombre. Un dato (la VOZ/firma), un dueno.
+ *
+ * Existia (`speakerAliases`) para que las filas POSTERIORES de "soy Luis" salieran ya con
+ * su nombre, pero mapeaba una ETIQUETA desnuda de forma GLOBAL: en cuanto otra voz
+ * reutilizaba "Hablante 1", heredaba "Luis" (defecto medido por el dueno 2026-10-10:
+ * `resolveRowSpeakerName('Hablante 1', false)` devolvia 'Luis'). El renombre va por VOZ:
+ * `findLabelsWithSharedVoice` (firma, en el dueno de los clusters) elige QUE etiquetas son
+ * esa voz, `renameSpeakerRows` reescribe sus filas y `registerSpeakerIdentity` deja el
+ * NOMBRE en el CLUSTER de esa voz, que es quien lo resuelve en los turnos siguientes.
+ * La etiqueta automatica se escribe TAL CUAL (A5): no es un alias de nadie.
  */
-const speakerAliases = new Map<string, string>();
-
-/** Registra el alias; devuelve 1 si cambio algo. */
-export function registerSpeakerAlias(fromLabel: string, toName: string): number {
-    const from = foldSpeakerKey(fromLabel);
-    const to = String(toName || '').trim();
-    if (!from || !to || from === foldSpeakerKey(to)) return 0;
-    if (speakerAliases.get(from) === to) return 0;
-    speakerAliases.set(from, to);
-    return 1;
-}
-
-/** Nombre final de un hablante: aplica los alias de sesion si los hay. */
-export function resolveSpeakerAlias(speakerName: string): string {
-    const name = String(speakerName || '').trim();
-    return speakerAliases.get(foldSpeakerKey(name)) || name;
-}
 
 /**
  * Hablante que puede ESCRIBIRSE en la fila del turno. DUENO UNICO de la decision,
@@ -79,16 +67,11 @@ export function resolveRowSpeakerName(
     const raw = String(speakerName || '').trim();
     // El RESPALDO se usa SOLO cuando no hay etiqueta (la fila nunca queda vacia).
     if (!raw) return respaldo;
-    // La etiqueta de DIARIZACION es PROVISIONAL: se escribe TAL CUAL (con su alias de
-    // sesion). La evidencia acustica decide si se ASCIENDE al nombre de la persona
-    // registrada (`registered`), no si se escribe.
+    // La etiqueta de DIARIZACION es PROVISIONAL: se escribe TAL CUAL (no hay mapa de
+    // etiquetas->nombre: el renombre va por VOZ). La evidencia acustica decide si se
+    // ASCIENDE al nombre de la persona registrada (`registered`), no si se escribe.
     const registrado = evidenciaAcustica ? resolveRegisteredSpeakerName(raw, registered) : '';
-    return resolveSpeakerAlias(registrado || raw);
-}
-
-/** Solo para pruebas: limpia los alias de sesion. */
-export function resetSpeakerAliases(): void {
-    speakerAliases.clear();
+    return registrado || raw;
 }
 
 /**
@@ -168,7 +151,6 @@ export function renameSpeakerRows(labels: string[], toName: string): number {
         labels.map((l) => foldSpeakerKey(l)).filter(Boolean),
     );
     normalized.add(foldSpeakerKey(name));
-    for (const label of labels) registerSpeakerAlias(label, name);
     const store = useIntegrationStore.getState();
     const history = store.conversationHistory;
     let changed = 0;
@@ -196,9 +178,9 @@ export function updateTurnRowSpeaker(
 ): boolean {
     // MISMO DUENO que el commit (`resolveRowSpeakerName`): la resolucion tardia aplica
     // la MISMA regla (etiqueta automatica -> nombre registrado SOLO con evidencia), no
-    // una copia mas pobre. Antes usaba `resolveSpeakerAlias` a secas, asi que la fila
-    // que rellenaba esta via tardia salia "Hablante N" aunque la persona estuviera
-    // registrada (defecto del dueno: "le puso a un registro Luis y a los demas los dejo
+    // una copia mas pobre: una etiqueta de diarizacion solo asciende al nombre de la
+    // persona registrada CON evidencia acustica, y el nombre propio ya escrito NO se
+    // degrada (defecto del dueno: "le puso a un registro Luis y a los demas los dejo
     // como hablante dos").
     const resolved = resolveRowSpeakerName(speakerName, evidenciaAcustica, registeredSpeaker);
     if (turnId === null || turnId === undefined || !resolved) return false;
@@ -299,7 +281,7 @@ export function commitUserTurnRow(input: UserTurnRowInput): UserTurnRowResult {
         id: result.id,
         len: fullText.length,
         text: fullText,
-        speaker: resolveSpeakerAlias(input.speakerName || ''),
+        speaker: String(input.speakerName || ''),
         evidencia: input.evidenciaAcustica === true,
         efectivo: fila ? String(fila.speakerName || '') : '',
         turnId: input.turnId ?? null,

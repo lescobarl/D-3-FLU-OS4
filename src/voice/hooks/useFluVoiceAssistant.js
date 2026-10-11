@@ -615,7 +615,7 @@ const lastResolvedTurnRef = useRef(0)
   const preflightScheduledForTurnRef = useRef(false)
   const turnBridgeTextRef = useRef('')
   const sessionPrimarySpeakerRef = useRef('')
-  if (identitySession) identitySession.current = { speakerClustersRef, sessionPrimarySpeakerRef }
+  if (identitySession) identitySession.current = { speakerClustersRef, sessionPrimarySpeakerRef, setClusters: setSpeakerClusters }
   const turnSegmentStartedAtRef = useRef(0)
   const ingressEchoStreakRef = useRef(0)
   const lastEchoAtRef = useRef(0)
@@ -1471,8 +1471,8 @@ const lastResolvedTurnRef = useRef(0)
     if (Number.isFinite(id)) lastResolvedTurnRef.current = id
     lastSpeakerRef.current = speakerName; lastLoggedSpeakerRef.current = speakerName
     updateTurnRowSpeaker(turnId, speakerName, { evidenciaAcustica: Boolean(workingClusters?.length), registeredSpeaker: participantSpeakerRef.current }) // completa la fila de ESE turno, no la hereda
-    registerSpeakerIdentity({ name: speakerName, clusters: speakerClustersRef.current })
-  }, [participantSpeakerRef])
+    registerSpeakerIdentity({ name: speakerName, clusters: speakerClustersRef.current, refs: { setClusters: setSpeakerClusters, sessionPrimarySpeakerRef } })
+  }, [participantSpeakerRef, setSpeakerClusters])
 
   const scheduleIdentityPreflight = useCallback(
     ({ utterance = '' } = {}) => {

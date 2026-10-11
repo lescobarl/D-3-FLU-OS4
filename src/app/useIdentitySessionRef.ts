@@ -22,6 +22,8 @@ export interface IdentitySessionRefs {
   speakerClustersRef: { current: unknown[] };
   /** Hablante primario de la sesion (su dueno de precedencia es `setSessionPrimarySpeaker`). */
   sessionPrimarySpeakerRef: { current: string };
+  /** Escritor unico de los clusters (el renombre por VOZ lo necesita). */
+  setClusters: (clusters: unknown[]) => void;
 }
 
 /**

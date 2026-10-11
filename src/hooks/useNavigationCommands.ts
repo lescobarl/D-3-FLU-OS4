@@ -264,7 +264,7 @@ export function useNavigationCommands(
                     transcript,
                     speakerName: speakerName || '',
                     clusters: sesionIdentidad?.speakerClustersRef?.current || [],
-                    refs: { sessionPrimarySpeakerRef: sesionIdentidad?.sessionPrimarySpeakerRef },
+                    refs: { sessionPrimarySpeakerRef: sesionIdentidad?.sessionPrimarySpeakerRef, setClusters: sesionIdentidad?.setClusters },
                 });
                 auditLog.logEvent('command:registrar_participante', 'navigation', uuidv4(), {
                     speaker: registrado.name || speakerName || undefined,

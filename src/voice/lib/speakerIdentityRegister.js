@@ -26,7 +26,7 @@
  */
 import { resolveSpeakerNameFromUtterance } from './speakerPolicy.js'
 import { isProperSpeakerName, normalizeSpeakerLabel } from './voiceIdentity.js'
-import { findLabelsWithSharedVoice } from './speakerClusters.js'
+import { findLabelsWithSharedVoice, mergeSpeakerClustersOnRename } from './speakerClusters.js'
 import { renameSpeakerRows } from './conversationTurnRow'
 import { setSessionPrimarySpeaker } from './sessionPrimarySpeaker.js'
 
@@ -44,7 +44,7 @@ import { setSessionPrimarySpeaker } from './sessionPrimarySpeaker.js'
  * @param {Array} [params.clusters] Clusters de hablante (evidencia de voces): sin ellos
  *   no se cosen las etiquetas de la MISMA voz re-clusterizada ("Hablante 3"/"4").
  * @param {string} [params.previousLabel] Etiqueta con la que esa voz venia apareciendo.
- * @param {{ sessionPrimarySpeakerRef?: { current: string } }} [params.refs] Refs de sesion
+ * @param {{ sessionPrimarySpeakerRef?: { current: string }, setClusters?: (clusters: unknown[]) => void }} [params.refs] Refs de sesion
  *   (el dueno de la precedencia decide si escribe).
  * @param {"presented"|"participant"|"resolved"} [params.source] Fuente del primario.
  * @param {(labels: string[], toName: string) => number} [params.rename] Escritor de
@@ -69,6 +69,14 @@ export function registerSpeakerIdentity({
     ),
   ]
   const rowsChanged = typeof rename === "function" ? rename(labels, clean) : 0
+  // El nombre queda en el CLUSTER de ESA VOZ (un dato: la voz), no en un mapa de
+  // etiquetas: los turnos siguientes lo resuelven por FIRMA. Se trabaja sobre una
+  // COPIA y la entrega el escritor unico de clusters (`refs.setClusters`).
+  const clustersRenombrados = labels.reduce(
+    (acc, label) => mergeSpeakerClustersOnRename(acc, label, clean),
+    clusters.map((c) => ({ ...c })),
+  )
+  if (typeof refs?.setClusters === "function") refs.setClusters(clustersRenombrados)
   const primarySet = setSessionPrimarySpeaker(refs?.sessionPrimarySpeakerRef, clean, source)
   return { registered: true, name: clean, labels, rowsChanged, primarySet }
 }
@@ -84,7 +92,7 @@ export function registerSpeakerIdentity({
  * @param {string} params.transcript Enunciado completo (con wake: "okay flu soy Luz").
  * @param {string} [params.speakerName] Etiqueta con la que venia apareciendo esa voz.
  * @param {Array} [params.clusters] Clusters vivos de la sesion (cosido de la misma voz).
- * @param {{ sessionPrimarySpeakerRef?: { current: string } }} [params.refs] Refs de sesion.
+ * @param {{ sessionPrimarySpeakerRef?: { current: string }, setClusters?: (clusters: unknown[]) => void }} [params.refs] Refs de sesion.
  * @returns {ReturnType<typeof registerSpeakerIdentity>}
  */
 export function registerSpeakerIdentityFromCommand({

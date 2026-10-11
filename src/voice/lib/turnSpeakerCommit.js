@@ -220,7 +220,7 @@ export function applyResolvedSpeakerToSessionRefs(resolved, refs = {}) {
       name,
       clusters: refs.speakerClustersRef?.current || [],
       previousLabel: previous,
-      refs: { sessionPrimarySpeakerRef: refs.sessionPrimarySpeakerRef },
+      refs: { sessionPrimarySpeakerRef: refs.sessionPrimarySpeakerRef, setClusters: refs.setSpeakerClusters },
       rename: refs.renameSpeakerRows,
     })
   }
