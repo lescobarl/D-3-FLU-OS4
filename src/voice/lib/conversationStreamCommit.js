@@ -489,7 +489,10 @@ export function handleConversationStreamSync(
   // "Luis pegado a una voz distinta" (P3 del e2e del dueno) pasaba con ella muerta.
   // Solo la evidencia de IDENTIDAD levanta el nombre: la acustica (preflight) o las
   // fuentes que lo traen de un dato (el texto "soy X" y el panel de participantes).
-  const FUENTES_CON_IDENTIDAD = ['wake-intro', 'pinned']
+  // Fuentes que traen el nombre por DATO: SOLO el texto del mandato ("Okay flu soy Luis"). El
+  // PARTICIPANTE queda FUERA (spec del dueno, 2026-10-11): un nombre propio solo se afirma con
+  // coincidencia MEDIDA contra su ancla; elegir a Luis en el onboarding no etiqueta sus filas.
+  const FUENTES_CON_IDENTIDAD = ['wake-intro']
   // Evidencia = la MEDIDA del turno (dueno: `preflightEvidenceMeasured`), no "hay clusters".
   const evidenciaAcustica = preflightEvidenceMeasured(preflight)
   const crudo = resolved.speakerName || fallbackSpeaker
