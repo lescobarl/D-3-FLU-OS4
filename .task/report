@@ -5308,3 +5308,43 @@ GATE VERDE (metrica base=0 actual=1 target=1; guard base=1 actual=0) · e2e acot
 NO CUBIERTO (0.23): su pantalla; el reset por CAMBIO DE HABLANTE (hoy entra por el cierre de
 turno, que es donde la conversacion se vacia); la causa del corte de ASR (necesita hot-path);
 "una voz = una etiqueta" con su voz real (umbrales de audio, no se tocan).
+
+----------------------------------------------------------------
+PASADA AUTONOMA 8 - 2026-10-11 - RUTINA DE REVISION (un dueno por regla + checker del log)
+----------------------------------------------------------------
+CODIGO (un dueno por regla)
+  1. La CAJA tiene UNA condicion de bloqueo: el TROZO (`isFragmentOfLocution`). Se retiro la
+     dimension de LONGITUD (`encoge` / "revision mas corta"). El VACIADO no pasa por ahi: solo
+     lo hace el reset del cierre (silencio/cambio de hablante/commit).
+  2. El NOMBRE tiene UNA via de introduccion: wake + comando (`FUENTES_CON_IDENTIDAD =
+     ["wake-intro"]`). La VOZ no lo introduce: `resolveRowSpeakerName` ya no asciende la
+     etiqueta al nombre registrado (se retiro el `resolveRegisteredSpeakerName` de la fila).
+  3. Sin defaults que mientan (evidenciaAcustica nunca en true por defecto), sin config sin
+     efecto (49 claves muertas borradas + guard), un dato un dueno.
+
+CHECKER EN EL REPO (no es mi palabra): `tests/logRevisionGuard.test.ts`
+  `revisarTraza(lineas)` exige 8 invariantes sobre la traza de UNA corrida:
+   1) bloqueado SOLO con mismaLocucion:true · 2) sin emisiones len=0 · 3) locucion nueva con
+   previo:0 · 4) aplicado con texto real · 5) fila con nombre propio exige src=wake-intro ·
+   6) row-update no escribe nombres · 7) la fila no puede ser MAS CORTA que lo mostrado del
+   turno · 8) cada commit lleva su veredicto `dup`.
+  PRUEBA DE DETECTOR: 6 fixtures que VIOLAN cada invariante + 1 traza limpia (0 violaciones) +
+  la fuente (dueño unico) + la corrida REAL de `debug.log`. Nace ROJO con el defecto.
+
+CORRIDA UNICA (log limpio, e2e 8/8, 691 lineas): TABLA
+  escenario                         entrada                                  esperado        medido
+  caja: la COLA                     "y no lo pusiste ahi" (19) tras 57      bloqueado+trozo  bloqueado=1 trozo=true
+  caja: locucion distinta corta     "ya no transcribio nada..." tras 382    aplicado        aplicado=19, 0 encogen
+  caja: vaciado                     (reset del cierre)                      len=0 solo ahi  0 emisiones len=0
+  caja: locucion nueva              tras un commit                          previo:0        0 violaciones
+  nombre: fila con nombre           "Okay flow soy luis"                    src=wake-intro  4 commits Luis, todos wake-intro
+  nombre: participante/relleno      (n/a en e2e)                            sin ascenso     row-update con nombre=0
+  flujo: fila = lo mostrado         toda la corrida                         sin perdida     0 violaciones
+  flujo: veredicto del dedupe       toda la corrida                         dup por commit  dup=28 · filas duplicadas/sesion=0
+
+VALIDACION: lint:guards VERDE 255 ficheros / 2050 tests · typecheck y eslint sin errores ·
+  GATE VERDE (metrica base=0 actual=1 target=1; guard base=1 actual=0). TECHOS: 4536/4536 ·
+  2706/2706 · 4624/4643 · 1838/1848. NINGUN UMBRAL DE AUDIO TOCADO.
+
+REGLA DE ORO: nada se cierra por "gate verde"; se cierra cuando los invariantes se cumplen en
+  el log de UNA corrida y el codigo tiene un dueno por regla. El DoD-producto es del dueno.
