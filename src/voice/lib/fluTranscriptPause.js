@@ -73,8 +73,17 @@ function emitSrGapProbe(reason, data) {
   voiceProbe('srGap', { reason, ...data })
 }
 
-export function resolveSrGapTrigger({ sinceLastResultMs = 0, sinceLastCommitMs = 0, hasOpenLine = true } = {}) {  const gapMs = Number(getTranscriptPauseCfg()?.srGapCommitMs) || 0
-  if (gapMs <= 0) return { fire: false, sinceLastResultMs: 0, reason: 'sr-gap-commit-disabled' }
+/** DUENO UNICO del tiempo del silencio: srGapCommitMs se lee SOLO aqui. */
+export function srGapSilenceReached(sinceLastResultMs = 0) {
+  const gapMs = Number(getTranscriptPauseCfg()?.srGapCommitMs) || 0
+  return gapMs > 0 && Number(sinceLastResultMs) >= gapMs
+}
+
+export function resolveSrGapTrigger({ sinceLastResultMs = 0, sinceLastCommitMs = 0, hasOpenLine = true } = {}) {
+  // El trigger PREGUNTA al dueno del tiempo (srGapSilenceReached); NO re-decide el cierre.
+  if (!srGapSilenceReached(sinceLastResultMs)) {
+    return { fire: false, sinceLastResultMs: Number(sinceLastResultMs) || 0, reason: 'sr-active' }
+  }
   // Sin locucion viva no hay nada que cerrar: no se sondea. En reposo el srGap
   // emitia `sr-live-turn-stale` cada 5 s durante minutos (medido 2026-10-08) con
   // cero `commit`/`row`; un log que inunda es un defecto (§10.7).
@@ -88,15 +97,11 @@ export function resolveSrGapTrigger({ sinceLastResultMs = 0, sinceLastCommitMs =
   // su sesion del 2026-10-10 15:02-15:14: 26 de 26 srGap por 'sr-live-turn-stale', fila
   // nacida en el "10" y reemplazada 3 veces). El sintoma que perseguia P9.55 (texto que no
   // llegaba a fila) tenia su causa en el DESCARTE del rebuild, cerrado en P9.60.
-  const silence = Number(sinceLastResultMs) >= gapMs
-  if (!silence) {
-    return { fire: false, sinceLastResultMs: Number(sinceLastResultMs) || 0, reason: 'sr-active' }
-  }
   const reason = 'sr-silence'
   emitSrGapProbe(reason, { sinceResult: Number(sinceLastResultMs) || 0, sinceCommit: Number(sinceLastCommitMs) || 0 })
   return {
     fire: true,
-    sinceLastResultMs: Math.max(Number(sinceLastResultMs) || 0, gapMs),
+    sinceLastResultMs: Number(sinceLastResultMs) || 0,
     reason,
   }}
 

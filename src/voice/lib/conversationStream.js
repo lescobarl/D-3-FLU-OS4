@@ -13,7 +13,7 @@ import {
   utterancesRelate,
 } from './speechMerge.js'
 import { shouldForceNewLogRowOnCommit } from './ingressGuards.js'
-import { getTranscriptPauseCfg, countSpeechWords as countWordsFromPauseCfg } from './fluTranscriptPause.js'
+import { getTranscriptPauseCfg, countSpeechWords as countWordsFromPauseCfg, srGapSilenceReached } from './fluTranscriptPause.js'
 import { normalizeForMatch } from '../../lib/textUtils'
 import { VOICE_DIARIZATION_DEFAULTS } from '../../core/config/sharedConfig'
 
@@ -432,10 +432,6 @@ export function evaluateSrGapSegmentCommit(
   } = {},
 ) {
   const cfg = getTranscriptPauseCfg()
-  const gapMs = Number(cfg.srGapCommitMs)
-  if (!gapMs || gapMs <= 0) {
-    return { flush: false, capture: '', reason: 'sr-gap-commit-disabled' }
-  }
   // MISMA condicion que el TRIGGER (`resolveSrGapTrigger`): SOLO SILENCIO. En P9.55 esta
   // rama acepto tambien 'turno viejo' (`sinceCommitMs >= gapMs`) para volcar el texto que
   // se quedaba en «ultima frase»; se RETIRA porque con el ASR entregando onresult vaciaba
@@ -443,7 +439,8 @@ export function evaluateSrGapSegmentCommit(
   // 15:02-15:14: 26 de 26 srGap por 'sr-live-turn-stale' y la fila nacida en el "10",
   // luego reemplazada). El texto NO se pierde: sigue acumulado en la linea viva y lo
   // escribe el cierre REAL (silencio / onend / cambio de hablante).
-  if (sinceLastResultMs < gapMs) {
+  // Mismo dueno del tiempo que el trigger (srGapCommitMs): un solo lector.
+  if (!srGapSilenceReached(sinceLastResultMs)) {
     return { flush: false, capture: '', reason: 'sr-active' }
   }
 
