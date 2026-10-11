@@ -23,7 +23,7 @@
 import { IntervalLifecycle } from './intervalLifecycle';
 import { createModuleSingleton } from './serviceSingleton';
 import { NETWORK_PROBE_URLS, buildTextApiUrl, isLocalTextEndpoint, resolveTextApiKey, TIMEOUT_POLICY_MS } from '../config/appConfig';
-import { fetchTextEngine } from '../ai/httpClient';
+import { fetchTextEngineResilient } from '../ai/httpClient';
 import { AUTONOMY_THRESHOLD_DEFAULTS } from '../config/sharedConfig';
 import { AUTONOMY_POLICY } from './autonomyPolicy';
 import { isSpeechSupported, getSpeechVoices } from '../../voice/lib/fluSpeech';
@@ -285,13 +285,17 @@ async function checkAIService(): Promise<ComponentHealth> {
         } else {
             // Verificar conectividad real enviando la credencial (HEAD autorizado)
             try {
-                const response = await fetchTextEngine(
+                // El transporte lo sirve su DUENO (`fetchTextEngineResilient`): la
+                // politica de reintento vive en UN sitio (fallo de transporte -> 1 reintento; el
+                // TIMEOUT no se reintenta: es el veredicto de la sonda). Antes la sonda llamaba al
+                // transporte crudo y quedaba FUERA de esa politica (hallazgo P9.62).
+                const response = await fetchTextEngineResilient(
                     testUrl,
                     {
                         method: 'HEAD',
                         headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : undefined,
                     },
-                    TIMEOUT_POLICY_MS.healthProbeAbort,
+                    { timeoutMs: TIMEOUT_POLICY_MS.healthProbeAbort },
                 );
                 metrics.networkReachable = response.ok;
                 if (!response.ok) {
@@ -511,13 +515,13 @@ async function checkNetwork(): Promise<ComponentHealth> {
             testUrls.map(async (url) => {
                 const pingStart = Date.now();
                 try {
-                    await fetchTextEngine(
+                    await fetchTextEngineResilient(
                         url,
                         {
                             method: 'HEAD',
                             mode: 'no-cors',
                         },
-                        TIMEOUT_POLICY_MS.networkPingAbort,
+                        { timeoutMs: TIMEOUT_POLICY_MS.networkPingAbort },
                     );
                     return Date.now() - pingStart;
                 } catch (e) {

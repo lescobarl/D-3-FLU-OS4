@@ -18,6 +18,7 @@ import { voiceProbe } from './voiceProbe';
 import { isAutoSpeakerLabel, isProperSpeakerName } from './voiceIdentity';
 import { resolveRegisteredSpeakerName, foldSpeakerKey } from './speakerLabels';
 import { getFallbackSpeaker } from './speakerCore';
+import { isFragmentOfLocution } from './turnStream';
 
 /**
  * Turno actual de la conversacion: su id y la fila de usuario que le pertenece.
@@ -330,6 +331,29 @@ function commitUserTurnRowInner({
             store.batchLoadHistory(updated);
             rememberTurn(turnId, entry.id);
             return { id: entry.id, action: 'replaced' };
+        }
+        // La respuesta de FLU NO puede DERROTAR la accion de fila ya decidida
+        // (`replaceLast` = "esta emision reemplaza la ultima"): si la fila de la MISMA
+        // locucion quedo ANTES de esa respuesta, se reutiliza. El criterio de "es el
+        // mismo texto, mas corto/largo" es el DUENO UNICO de la recompuesta
+        // (`isFragmentOfLocution`). Medido (log del dueno): la locucion con wake
+        // "voy a decir el comando Okay flu Soy Luis" dejo DOS filas (turn=12 y turn=13,
+        // la 2.a recortada encima de la respuesta de FLU).
+        const ultima = [...history].reverse().find((e) => e?.role === 'user');
+        if (ultima) {
+            const previo = String(ultima.text || '');
+            const rawEsTrozo = isFragmentOfLocution(raw, previo);
+            const previoEsTrozo = !rawEsTrozo && isFragmentOfLocution(previo, raw);
+            if (rawEsTrozo || previoEsTrozo) {
+                const completa = rawEsTrozo ? previo : raw;
+                if (completa !== previo) {
+                    store.batchLoadHistory(
+                        history.map((e) => (e.id === ultima.id ? { ...e, text: completa } : e)),
+                    );
+                }
+                rememberTurn(turnId, ultima.id);
+                return { id: ultima.id, action: rawEsTrozo ? 'reused' : 'replaced' };
+            }
         }
     }
 

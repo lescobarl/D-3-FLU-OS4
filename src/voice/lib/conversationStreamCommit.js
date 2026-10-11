@@ -29,6 +29,7 @@ import { planAsrTurnSegments, segmentPlanCoversCapture } from './asrTurnSegmenta
 import { resolveTurnSpeakerAtCommit, applyResolvedSpeakerToSessionRefs } from './turnSpeakerCommit.js'
 import {
   anchorResolvedToLastLogged,
+  blindSpeakerFallback,
   resolveCommitStickyFallback,
   isWeakAsrSpeakerEvidence,
 } from './speakerPolicy.js'
@@ -457,9 +458,21 @@ export function handleConversationStreamSync(
   // etiqueta y dejaba `written:""` en 41/41 commits; la fila quedaba a merced de una
   // SEGUNDA resolucion por TEXTO (`resolveSpeakerByText` dentro de `emitConversationLog`):
   // dos duenos del nombre de la fila. Un dato, un dueno.
-  const speakerResuelto = resolved.speakerName || fallbackSpeaker
-  const speakerName = normalizeSpeakerLabel(speakerResuelto)
+  // NOMBRE PROPIO SIN EVIDENCIA: la etiqueta del resolver puede ser un nombre heredado por
+  // CONTINUIDAD (fuente `sticky`/`asr-revision`, sin ventana de audio). Eso NO se estampa:
+  // degrada al label generico. El dueno de esa regla es `blindSpeakerFallback`
+  // (speakerPolicy), que estaba ESCRITA Y SIN NINGUN CONSUMIDOR (medido): el defecto
+  // "Luis pegado a una voz distinta" (P3 del e2e del dueno) pasaba con ella muerta.
+  // Solo la evidencia de IDENTIDAD levanta el nombre: la acustica (preflight) o las
+  // fuentes que lo traen de un dato (el texto "soy X" y el panel de participantes).
+  const FUENTES_CON_IDENTIDAD = ['wake-intro', 'pinned']
   const evidenciaAcustica = Boolean(preflight?.ready)
+  const crudo = resolved.speakerName || fallbackSpeaker
+  const speakerResuelto =
+    evidenciaAcustica || FUENTES_CON_IDENTIDAD.includes(resolved.source)
+      ? crudo
+      : blindSpeakerFallback(crudo)
+  const speakerName = normalizeSpeakerLabel(speakerResuelto)
   const speakerEscrito = speakerName
 
   let segmentPlan =
