@@ -114,6 +114,21 @@ describe('A - la ultima frase SOLO acumula (lo que se ve)', () => {
     expect(ultimo(mostrado)).toBe('pon musica relajante para cenar y tambien una lista de compras larga para toda la semana completa del mes entero')
   })
 
+  it('RACIONAL DEL DUENO: al VACIAR la locucion a la conversacion, la ultima frase arranca de CERO', () => {
+    // "Nueva iteracion de transcripcion = nueva ultima frase. Ya vaciaste a la conversacion,
+    //  entonces ultima frase = ''" (dueno, 2026-10-11). Es el reset que quita el congelamiento
+    //  de raiz: la memoria vuelve a "" y el dictado siguiente no puede ser "mas corto" que nada.
+    const { deps, mostrado } = makeDeps()
+    handleConversationStreamSync(deps as never, { capture: FRASE })
+    handleConversationStreamSync(deps as never, { capture: FRASE, turnCommit: true, settlesTurn: true })
+    expect(deps.emitConversationLog, 'la locucion se vacio a la conversacion').toHaveBeenCalled()
+    expect(deps.publishedLiveRef.current, 'la memoria arranca de cero').toBe('')
+    expect(mostrado[mostrado.length - 1], 'y la zona se vacia').toBe('')
+    // El dictado NUEVO (mas corto) se ve.
+    handleConversationStreamSync(deps as never, { capture: 'ya no transcribio nada' })
+    expect(ultimo(mostrado), 'el dictado nuevo se ve desde cero').toBe('ya no transcribio nada')
+  })
+
   it('el caso CRUDO del log del dueno: tras una locucion larga el dictado nuevo se VE', () => {
     // debug.log 16:11-16:12: la frase viva quedo congelada en la 1.a locucion (382 chars) mientras
     // el dueno dictaba "ya no transcribio ya nada a la ultima frase..." -> 543 bloqueos.
@@ -137,19 +152,14 @@ describe('A - la ultima frase SOLO acumula (lo que se ve)', () => {
     expect(ultimo(mostrado), 'la locucion nueva se muestra').toBe('ya no transcribio nada a la ultima frase')
   })
 
-  it('el CIERRE no vacia lo mostrado (ni la zona ni su memoria)', () => {
+  it('el CIERRE vacia la zona (la locucion YA esta en la conversacion) y la iteracion nueva acumula desde cero', () => {
     const { deps, mostrado } = makeDeps()
     handleConversationStreamSync(deps as never, { capture: FRASE })
-    handleConversationStreamSync(deps as never, {
-      capture: FRASE,
-      turnCommit: true,
-      settlesTurn: true,
-    })
-    expect(deps.setLiveTranscript, 'el cierre no borra la zona').not.toHaveBeenCalledWith('')
-    expect(mostrado).not.toContain('')
-    // Y un trozo posterior al cierre sigue sin poder acortar lo mostrado.
-    handleConversationStreamSync(deps as never, { capture: COLA })
-    expect(ultimo(mostrado)).toBe(FRASE)
+    handleConversationStreamSync(deps as never, { capture: FRASE, turnCommit: true, settlesTurn: true })
+    expect(mostrado[mostrado.length - 1], 'el cierre vacia la zona').toBe('')
+    // Iteracion NUEVA: se acumula desde cero (no puede quedar congelada por la anterior).
+    handleConversationStreamSync(deps as never, { capture: 'otra cosa distinta que digo ahora' })
+    expect(ultimo(mostrado)).toBe('otra cosa distinta que digo ahora')
   })
 
   it('la sonda DICE si el acortamiento fue BLOQUEADO o APLICADO (dato concluyente)', () => {

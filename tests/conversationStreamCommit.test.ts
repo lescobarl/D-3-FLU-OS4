@@ -245,9 +245,9 @@ describe('conversationStreamCommit — commit de turno', () => {
         expect(deps.turnAudioStartSampleRef.current).toBe(4800);
         expect(deps.openPreviewTurnRef.current).toBe(false);
         expect(deps.publishedLiveRef.current).toBe('');
-        // Lo publicado NO se borra al cerrar (flicker de "ultima frase"): el unico dueno
-        // del borrado de la zona es el reset de la sesion/voz, no el commit del turno.
-        expect(deps.setLiveTranscript).not.toHaveBeenCalled();
+        // RACIONAL DEL DUENO: la locucion YA se vacio a la conversacion -> la zona arranca de cero.
+        // (mismo dueno en el flujo real: el reset de la iteracion nueva).
+        expect(deps.setLiveTranscript).toHaveBeenCalledWith('');
         expect(deps.listenStateRef.current.openLine).toBe('');
         expect(deps.listenStateRef.current.pendingInterim).toBe('');
         expect(deps.preflightScheduledForTurnRef.current).toBe(false);

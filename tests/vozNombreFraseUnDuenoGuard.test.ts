@@ -125,12 +125,12 @@ describe('flicker de "ultima frase" - el commit NO borra lo publicado', () => {
       settlesTurn: true,
     });
 
-    // La MEMORIA de lo mostrado se conserva: es lo que impide que un TROZO posterior
-    // reemplace la frase (medido 2026-10-11: la cola la dejaba en dos o tres palabras).
-    expect(deps.publishedLiveRef.current, 'la memoria se conserva').toBe('estoy hablando y esto se ve');
-    // ...pero lo PUBLICADO no se borra (el unico dueno del borrado de la zona es el
-    // reset de sesion/voz, no el commit): borrarlo = zona en blanco ~3 s = flicker.
-    expect(deps.setLiveTranscript).not.toHaveBeenCalled();
+    // RACIONAL DEL DUENO (2026-10-11): la locucion YA se vacio a la CONVERSACION, asi que la
+    // ultima frase arranca de CERO (nueva iteracion = nueva ultima frase). NO es un flicker:
+    // el texto ya esta en su fila; sin este reset el dictado nuevo se quedaba congelado por
+    // ser mas corto que el anterior (medido: 543 bloqueos con previo=382).
+    expect(deps.publishedLiveRef.current, 'la memoria arranca de cero').toBe('');
+    expect(deps.setLiveTranscript).toHaveBeenCalledWith('');
   });
 
   it('el detector no es decorativo: borrar lo publicado en el cierre hace caer el caso', () => {
