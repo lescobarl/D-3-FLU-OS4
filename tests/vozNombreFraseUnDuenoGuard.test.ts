@@ -116,7 +116,7 @@ describe('EL GATE - el commit SIEMPRE escribe la etiqueta del resolver', () => {
 });
 
 describe('flicker de "ultima frase" - el commit NO borra lo publicado', () => {
-  it('al cerrar el turno NO se limpia la zona de la frase viva', () => {
+  it('al cerrar el turno NO se limpia la zona NI su memoria', () => {
     const deps = makeDeps({ publishedLiveRef: { current: 'estoy hablando y esto se ve' } });
 
     handleConversationStreamSync(deps, {
@@ -125,8 +125,9 @@ describe('flicker de "ultima frase" - el commit NO borra lo publicado', () => {
       settlesTurn: true,
     });
 
-    // El ANCLA interna se resetea (dedupe del turno que empieza)...
-    expect(deps.publishedLiveRef.current).toBe('');
+    // La MEMORIA de lo mostrado se conserva: es lo que impide que un TROZO posterior
+    // reemplace la frase (medido 2026-10-11: la cola la dejaba en dos o tres palabras).
+    expect(deps.publishedLiveRef.current, 'la memoria se conserva').toBe('estoy hablando y esto se ve');
     // ...pero lo PUBLICADO no se borra (el unico dueno del borrado de la zona es el
     // reset de sesion/voz, no el commit): borrarlo = zona en blanco ~3 s = flicker.
     expect(deps.setLiveTranscript).not.toHaveBeenCalled();

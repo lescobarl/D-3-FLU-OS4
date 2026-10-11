@@ -41,12 +41,28 @@ describe('A4 - el primario sobrevive al reinicio de escucha', () => {
     }
   })
 
-  it('los turnos siguientes salen con el nombre (el primario conservado manda)', () => {
+  it('los turnos siguientes salen con el nombre (el primario conservado manda, con su ancla)', () => {
+    // CORRECCION DE CRITERIO (7.7.f(3)): el nombre exige COINCIDENCIA con su ancla; el
+    // primer turno la crea y va con etiqueta, el segundo ya lo afirma.
+    const clusters: { label?: string; signature?: number[] }[] = []
+    const primero = resolveConversationSpeaker({
+      speakerClusters: clusters,
+      sessionPrimary: 'Luz',
+      signatureVector: vozA,
+      voicedSampleCount: 48000,
+      minVoicedSamples: 12000,
+      sampleRate: 48000,
+      utteranceText: 'siguiente carta por favor',
+      atTurnBoundary: true,
+      allowNewCluster: true,
+    } as never)
+    expect(primero, 'sin ancla no se afirma el nombre').not.toBe('Luz')
     expect(
       resolveConversationSpeaker({
-        speakerClusters: [],
+        speakerClusters: clusters,
         sessionPrimary: 'Luz',
         signatureVector: vozA,
+        lastSpeaker: String(primero),
         voicedSampleCount: 48000,
         minVoicedSamples: 12000,
         sampleRate: 48000,

@@ -4937,3 +4937,93 @@ inyectado). Por eso P9.65 se cierra con medicion.
 Techos finales: useFluVoiceAssistant.js 4539/4539 - App.tsx 4624/4643 - fluConfig.js
 2772/2772 - gemini.js 1838/1848 (ninguno ampliado; ningun umbral de audio tocado).
 
+
+----------------------------------------------------------------
+PASADA AUTONOMA (una sola) - 2026-10-11 - commit 12eb21d
+A) sonda de la frase viva + SOLO acumula; B) ningun nombre propio sin ancla;
+C) la evidencia es la COINCIDENCIA medida; D) la fila se completa con su medida.
+----------------------------------------------------------------
+
+ERRORES DEL DUENO (los 4, de su pantalla 05:23-05:32) vs LO MEDIDO EN EL LOG:
+
+  E3 "volvio a poner Luis en la primera intervencion" -> CONFIRMADO EN EL LOG.
+     raw: Match reason=canonical name="Luis" inClusters=0  (turno 1) +
+          clusters {"write":1,"labels":["luis"]} +
+          row-update {turnId:2, actual:"Hablante 1", objetivo:"luis"}.
+     CAUSA (codigo): la rama production-primary-create-cluster CREABA el ancla con el
+     nombre del participante Y ADEMAS devolvia ese nombre para ESE turno (saltaba la
+     regla "si el ancla aun no existe, tampoco"). El nombre salia SIN coincidencia.
+     ARREGLO: la rama crea el ancla (ensureClusterForLabel) pero devuelve la etiqueta
+     vigente (lastSpeaker || fallback), nunca el nombre. El nombre solo asciende si la
+     coincidencia es MEDIDA (isMeasuredIdentityMatch).
+
+  E4 "se fue Hablante 2 y 3, le puso a la mujer, y pierde transcripcion" -> CONFIRMADO.
+     raw: clusters {"write":3,"labels":["luis","Hablante 2","Hablante 3"]} +
+          row-update {turnId:35, actual:"Hablante 3", objetivo:"Hablante 2"}.
+     CAUSA (codigo): (a) evidenciaAcustica = Boolean(workingClusters?.length) declaraba
+     "evidencia" por EXISTIR clusters (no por COINCIDIR) y con eso el relleno tardio
+     reescribia filas AJENAS; (b) el relleno tardio DESCARTABA entero el aviso de un
+     turno anterior (id < lastResolvedTurnRef -> return).
+     ARREGLO: la evidencia es la COINCIDENCIA medida; el relleno tardio COMPLETA siempre
+     la fila de SU turno (solo deja de mover hacia atras los REFS de sesion).
+
+  E2 "la ultima frase nunca debe borrar y luego volver a poner" -> CONFIRMADO.
+     CAUSA (codigo): el rechazo del recorte solo cubria PREFIJO (wouldShrinkListenLog);
+     una COLA ("...de la transcripcion") o un trozo del MEDIO si reemplazaban la frase
+     publicada -> parpadeo (se borra y vuelve).
+     ARREGLO: el dueno del TROZO contiguo (isFragmentOfLocution, una sola via) decide;
+     la "ultima frase" SOLO acumula. El cierre ya no borra ni la zona ni su MEMORIA
+     (se retiro la segunda via que la vaciaba en transcriptIngress.resetInterimControlBuffers).
+
+  E1 "esta perdiendo transcripcion" -> PARCIALMENTE CONFIRMADO, y AQUI VEO INCORRECTO.
+     El log NO muestra texto de usuario ya commiteado siendo borrado: las filas
+     persisten. Lo que el dueno ve como "perdida" es (i) el parpadeo del preview (E2)
+     y (ii) el retardo de cierre: srGapCommitMs=10000 dejaba la locucion confirmada
+     SIN fila hasta 10 s (silencio de cierre ~3,5 s exigido). NO es perdida de datos,
+     es REVERSION VISUAL + LATENCIA. Ademas E1 y la cola de E4 son EL MISMO sintoma
+     contado dos veces.
+     ARREGLO: srGapCommitMs 10000 -> 3500.
+
+  "TODO sigue exactamente igual" -> INCORRECTO como causa: los 4 son de CODIGO (no de la
+     calibracion de audio del dueno). Por eso se RETRACTA P9.64 (ver plans/ledger.json).
+
+  "el code esta de adorno" -> CORRECTO en un punto, y se corrige: mis guards previos
+     median CAMPOS INTERNOS que el dueno NO ve (written / efectivo / "una fila"). Un
+     guard verde sobre un campo invisible es adorno. Los guards nuevos miden LO QUE SE
+     MUESTRA: el texto de "ultima frase" (scheduleLiveTranscriptUpdate) y la etiqueta de
+     la fila mostrada.
+
+SONDA NUEVA (A): voiceProbe(live) en cada publicacion de la frase viva y en cada
+  acortamiento, con {turn, previo, len, acorta, text}; y "shown" en la sonda del commit.
+  Metrica del contrato: voiceProbe(live) 0 -> 2 (base 738270c -> actual).
+
+GUARDS NUEVOS (nacen ROJO -> verde, con control negativo):
+  tests/vozUltimaFraseSoloAcumulaGuard.test.ts  5 casos. ROJO: revertidos
+    conversationStreamCommit.js y transcriptIngress.js caen 3 de 5.
+  tests/vozNombreSinAnclaGuard.test.ts          7 casos. ROJO: revertidos
+    speakerDiarization.js y voiceIdentityResolve.js caen 2 de 7.
+  Tabla (escenario -> entrada -> esperado -> medido -> PASS/FAIL):
+    A1 la cola NO reemplaza la frase mostrada | FRASE + COLA | FRASE | FRASE | PASS
+    A2 un trozo del medio NO acorta        | FRASE + MEDIO| FRASE | FRASE | PASS
+    A3 locucion nueva SI reemplaza         | FRASE, OTRA  | OTRA  | OTRA  | PASS
+    A4 el cierre NO vacia la zona         | cierre       | FRASE | FRASE | PASS
+    A5 la sonda live emite antes/despues   | acortamiento | >=2   | 2     | PASS
+    B1 sin ancla el turno NO lleva el nombre | inClusters=0 | != Luis | != Luis | PASS
+    B2 el ancla SI se crea                | turno 1      | cluster Luis | si | PASS
+    B3 el turno siguiente de la misma voz SI lo afirma | 2o | Luis | Luis | PASS
+    C1 isMeasuredIdentityMatch por razon  | create-cluster | false | false | PASS
+    D1 la fila no se reescribe sin evidencia | sin evidencia | intacta | intacta | PASS
+    D2 la medida tardia completa SU fila  | turnId 17    | Hablante 2 | Hablante 2 | PASS
+
+CORRECCION DE CRITERIO (7.7.f(3)) en 4 guards que codificaban la regla vieja:
+  speakerIdentitySession, vozPrimarioReinicioGuard, vozNombreFraseUnDuenoGuard,
+  vozPreflightAntesCommitGuard.
+
+VALIDACION: lint:guards VERDE 251 ficheros / 2024 tests; typecheck y eslint sin errores;
+  gate VERDE (metrica base=0 actual=2 target=2; guard base=1 actual=0).
+  TECHOS: useFluVoiceAssistant.js 4539/4539; App.tsx 4624/4643; fluConfig.js 2772/2772;
+  gemini.js 1838/1848. NINGUN UMBRAL DE AUDIO TOCADO (el dueno los calibra).
+
+NO CUBIERTO (0.23): el DoD-producto. El dueno re-corre sobre su pantalla + log EN VIVO
+  con la sonda nueva (interim/final + "ultima frase" + filas tal como se ven). Falta
+  reinicio de portal + hard reload por parte del dueno y su log NUEVO.

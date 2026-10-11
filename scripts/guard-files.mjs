@@ -252,6 +252,8 @@ export const GUARD_FILES = [
     'tests/vozUnaFilaPorLocucionConWakeGuard.test.ts',
     'tests/vozFilaSiempreConHablanteGuard.test.ts',
     'tests/healthProbeTransportOwnerGuard.test.ts',
+    'tests/vozUltimaFraseSoloAcumulaGuard.test.ts',
+    'tests/vozNombreSinAnclaGuard.test.ts',
     'tests/vozDescarteConMotivoGuard.test.ts',
     'tests/vozEcoTextoRealGuard.test.ts',
     'tests/vozAlucinacionClaraGuard.test.ts',

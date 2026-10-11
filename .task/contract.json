@@ -1,7 +1,7 @@
 {
-  "task": "P9.67 (una locucion con wake = una fila) + P9.62 (la sonda de salud va por el dueno del transporte) + P9.65 (ninguna fila sin hablante) + P9.64 (declarado: inflacion = calibracion de audio del dueno)",
-  "objective": "Cerrar los cuatro pendientes del ledger: (P9.67) la accion de fila ya decidida no se derrota por la respuesta de FLU, asi que una locucion con wake deja UNA fila; (P9.62) las sondas de salud usan el dueno del transporte (politica de reintento en un sitio) y el sondeo se reprograma; (P9.65) la fila de usuario SIEMPRE lleva hablante y el nombre propio heredado por continuidad degrada al label generico; (P9.64) la inflacion de etiquetas se DECLARA con su medicion: su causa son los umbrales/ventana de audio del dueno y no se tocan.",
-  "base": "b954d7d",
+  "task": "A) sonda de la frase viva + la frase viva SOLO acumula; B) ningun nombre propio sin su ancla; C) la evidencia es la COINCIDENCIA medida; D) la fila del turno se completa con su medida aunque llegue tarde; E) retractacion de P9.64",
+  "objective": "Instrumentar la frase viva (interim/preview y cada acortamiento con antes/despues) y hacer que SOLO acumule (nunca borre ni reescriba mas corto, ni al cerrar el segmento); que un nombre propio se afirme UNICAMENTE con coincidencia contra su ancla biometrica (ni el participante ni el relleno tardio lo estampan sin ancla); que la evidencia sea esa coincidencia medida (no 'hay clusters'); y que la fila del turno la complete la medida de ESE turno aunque resuelva tarde.",
+  "base": "738270c",
   "allow": [
     "src/**",
     "tests/**",
@@ -10,19 +10,19 @@
     ".task/**"
   ],
   "maxFiles": 30,
-  "maxLines": 1400,
-  "dod": "npx vitest run --reporter=dot tests/autoRecovery.test.ts tests/conversationStreamCommit.test.ts tests/conversationTurnInterleavedRows.test.ts tests/conversationTurnSingleRow.test.ts tests/decideVoiceTurnDispatch.test.ts tests/healthMonitor.test.ts tests/normalizeCommandForDeterministic.test.ts tests/notesClearEndToEnd.test.ts tests/selfKnowledge.test.ts tests/spokenUtteranceRevision.test.ts tests/useAutonomyIntegration.test.tsx tests/useFluVoiceAssistant.behavior.test.tsx tests/voiceCanonicalPhrase.test.ts tests/voiceQueryParity.test.ts tests/voiceTurnStabilization.test.ts tests/wakeWordDisplay.test.ts",
-  "guard": "npx vitest run --reporter=dot tests/vozUnaFilaPorLocucionConWakeGuard.test.ts tests/healthProbeTransportOwnerGuard.test.ts tests/vozFilaSiempreConHablanteGuard.test.ts",
+  "maxLines": 1500,
+  "dod": "npx vitest run --reporter=dot tests/conversationStreamCommit.test.ts tests/conversationTurnInterleavedRows.test.ts tests/conversationTurnSingleRow.test.ts tests/turnIdentityPipeline.test.ts tests/turnSpeakerPreflight.test.ts tests/useFluVoiceAssistant.behavior.test.tsx tests/autoRecovery.test.ts tests/decideVoiceTurnDispatch.test.ts tests/healthMonitor.test.ts tests/normalizeCommandForDeterministic.test.ts tests/notesClearEndToEnd.test.ts tests/selfKnowledge.test.ts tests/spokenUtteranceRevision.test.ts tests/useAutonomyIntegration.test.tsx tests/voiceCanonicalPhrase.test.ts tests/voiceQueryParity.test.ts tests/voiceTurnStabilization.test.ts tests/wakeWordDisplay.test.ts",
+  "guard": "npx vitest run --reporter=dot tests/vozUltimaFraseSoloAcumulaGuard.test.ts tests/vozNombreSinAnclaGuard.test.ts",
   "guardExpect": "green",
   "invariant": {
-    "statement": "Filas de conversacion que el dueno de la fila resuelve por POSICION respecto a la respuesta de FLU (la rama que derrotaba `replaceLast`): 1 -> 0. La locucion ya escrita se reutiliza por TROZO contiguo.",
-    "base": "b954d7d",
+    "statement": "Sondas del relay que registran el texto MOSTRADO (frase viva) con su acortamiento: 0 -> 2. Lo que no se mide no se puede cerrar.",
+    "base": "738270c",
     "metric": {
-      "command": "node -e \"const fs=require('fs');const s=fs.readFileSync('src/voice/lib/conversationTurnRow.ts','utf8');console.log(s.split('isFragmentOfLocution(').length-1)\"",
+      "command": "node -e \"const fs=require('fs');const s=fs.readFileSync('src/voice/lib/conversationStreamCommit.js','utf8');console.log((s.match(/voiceProbe\\('live'/g)||[]).length)\"",
       "target": 2
     },
     "guardFiles": [
-      "tests/vozUnaFilaPorLocucionConWakeGuard.test.ts"
+      "tests/vozUltimaFraseSoloAcumulaGuard.test.ts"
     ]
   },
   "ignore": [
@@ -31,31 +31,28 @@
     "kilo.json"
   ],
   "e2eScope": {
-    "src/core/autonomy/healthMonitor.ts": [
-      "tests/e2e/autonomia-respaldo.spec.ts"
+    "src/voice/lib/conversationStreamCommit.js": [
+      "tests/e2e/voz-escenario-dueno.spec.ts"
+    ],
+    "src/voice/lib/transcriptIngress.js": [
+      "tests/e2e/voz-escenario-dueno.spec.ts"
     ],
     "src/voice/lib/conversationTurnRow.ts": [
       "tests/e2e/voz-escenario-dueno.spec.ts"
     ],
-    "src/voice/lib/conversationStreamCommit.js": [
+    "src/voice/lib/speakerDiarization.js": [
       "tests/e2e/voz-escenario-dueno.spec.ts"
     ],
-    "src/voice/lib/audioMath.js": [
-      "tests/e2e/voz-locucion-unica.spec.ts"
-    ],
-    "src/voice/lib/speakerIdentityRegister.js": [
+    "src/voice/lib/voiceIdentityResolve.js": [
       "tests/e2e/voz-escenario-dueno.spec.ts"
     ],
-    "src/voice/lib/turnSpeakerCommit.js": [
+    "src/voice/lib/voiceIdWorkerClient.js": [
+      "tests/e2e/voz-escenario-dueno.spec.ts"
+    ],
+    "src/voice/lib/turnSpeakerPreflight.js": [
       "tests/e2e/voz-escenario-dueno.spec.ts"
     ],
     "src/voice/hooks/useFluVoiceAssistant.js": [
-      "tests/e2e/voz-locucion-unica.spec.ts"
-    ],
-    "src/hooks/useNavigationCommands.ts": [
-      "tests/e2e/voz-escenario-dueno.spec.ts"
-    ],
-    "src/app/useIdentitySessionRef.ts": [
       "tests/e2e/voz-escenario-dueno.spec.ts"
     ]
   }

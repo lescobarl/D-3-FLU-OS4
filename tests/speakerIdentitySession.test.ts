@@ -73,20 +73,28 @@ const turno = (
     } as never) as string;
 
 describe('el hablante primario de la sesion conserva su nombre', () => {
-    it('la MISMA voz mantiene el nombre en todos los turnos', () => {
+    it('la MISMA voz mantiene el nombre desde que EXISTE su ancla (el primer turno la crea)', () => {
         const clusters: { label?: string; signature?: number[] }[] = [];
         const r1 = turno(clusters, vozA);
         const r2 = turno(clusters, vozA, { lastSpeaker: r1 });
         const r3 = turno(clusters, vozA, { lastSpeaker: r2 });
 
-        expect([r1, r2, r3]).toEqual(['Luis', 'Luis', 'Luis']);
+        // CORRECCION DE CRITERIO (7.7.f(3)): el PRIMER turno NO puede llevar el nombre (no
+        // hay ancla contra la que afirmarlo: es el defecto 'nombre sin ancla' del dueno,
+        // 2026-10-11). El turno que CREA el ancla va con etiqueta; los siguientes, con el
+        // nombre.
+        expect(r1).not.toBe('Luis');
+        expect(r2).toBe('Luis');
+        expect(r3).toBe('Luis');
     });
 
     it('CONTROL: una voz DISTINTA no hereda el nombre', () => {
         const clusters: { label?: string; signature?: number[] }[] = [];
         const r1 = turno(clusters, vozA);
-        expect(r1).toBe('Luis');
-        const otra = turno(clusters, vozB, { lastSpeaker: r1 });
+        expect(r1).not.toBe('Luis');
+        const r2 = turno(clusters, vozA, { lastSpeaker: r1 });
+        expect(r2).toBe('Luis');
+        const otra = turno(clusters, vozB, { lastSpeaker: r2 });
         expect(otra).not.toBe('Luis');
     });
 

@@ -34,6 +34,7 @@ function resolverHablante2() {
     Promise.resolve({
       speakerId: 'spk-2',
       speakerName: 'Hablante 2',
+      evidence: true,
       signatureVector: [1, 0, 0],
       workingClusters: [{ label: 'Hablante 2', signature: [1, 0, 0] }],
     })
@@ -121,6 +122,27 @@ describe('preflight antes del commit: la fila nace con el hablante del turno', (
     const fila = filaEmitida(deps)
     expect(fila.speakerName, 'la fila nace con el hablante del turno').toBe('Hablante 2')
     expect(fila.evidenciaAcustica, 'y con evidencia acustica declarada').toBe(true)
+  })
+  it('la evidencia es la COINCIDENCIA medida: un preflight listo SIN coincidencia no la declara', async () => {
+    const deps = makeDeps({
+      activeTurnIdRef: { current: 400 },
+      createSpeakerAudioResolver: vi.fn(() => () => Promise.resolve({ speakerId: 'spk-2', speakerName: 'Hablante 2', evidence: false, signatureVector: [1, 0, 0], workingClusters: [{ label: 'Hablante 2', signature: [1, 0, 0] }] })),
+    })
+    handleConversationStreamSync(deps as never, { capture: LOCUCION })
+    const turnId = deps.activeTurnIdRef.current
+    await primeTurnSpeakerPreflight(
+      turnId,
+      buildFinalSpeakerSnapshotResolver({
+        createSpeakerAudioResolver: deps.createSpeakerAudioResolver,
+        phrase: LOCUCION,
+        turnId,
+      }),
+      { onClusters: deps.setSpeakerClusters, onResolved: deps.applyConversationSpeaker },
+    )
+    handleConversationStreamSync(deps as never, { capture: LOCUCION, turnCommit: true, settlesTurn: true })
+    const fila = filaEmitida(deps)
+    expect(fila.speakerName, 'la etiqueta viaja igual').toBe('Hablante 2')
+    expect(fila.evidenciaAcustica, 'pero SIN coincidencia medida no hay evidencia').toBe(false)
   })
 
   it('PRUEBA DE DETECTOR (el detector no es decorativo): sin la espera el commit NO tiene evidencia acustica', () => {
