@@ -85,7 +85,7 @@ describe('A) la fila NO asciende al nombre sin evidencia declarada', () => {
         updateTurnRowSpeaker(2, 'Hablante 1', { registeredSpeaker: LUIS } as never)
         expect(etiquetaDe(2)).toBe('Hablante 1')
         updateTurnRowSpeaker(2, 'Hablante 1', { registeredSpeaker: LUIS, evidenciaAcustica: true } as never)
-        expect(etiquetaDe(2), 'CON la medida declarada SI asciende').toBe('Luis')
+        expect(etiquetaDe(2), 'la evidencia de VOZ no introduce el nombre (solo lo confirma)').toBe('Hablante 1')
     })
     it('preserveProperSpeaker sin evidencia no deja pasar un nombre propio de otra voz', () => {
         expect(preserveProperSpeaker('Luis', 'Hablante 2', false, { evidenciaDeTexto: false })).toBe('Hablante 2')

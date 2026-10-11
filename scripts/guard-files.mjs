@@ -276,4 +276,5 @@ export const GUARD_FILES = [
     'tests/vozUltimaFraseNoSeVaciaGuard.test.ts',
     'tests/vozEvidenciaPorOmisionGuard.test.ts',
     'tests/configConEfectoGuard.test.ts',
+    'tests/logRevisionGuard.test.ts',
 ]

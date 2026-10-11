@@ -111,9 +111,10 @@ describe('A5 corregida - la etiqueta del resolver se escribe y el renombre susti
     expect(resolveRowSpeakerName('Hablante 2', false, {}, 'Hablante 9')).toBe('Hablante 2')
     // Sin etiqueta: manda el respaldo inyectado.
     expect(resolveRowSpeakerName('', false, {}, 'Hablante 9')).toBe('Hablante 9')
-    // El vinculo registrado solo asciende CON evidencia.
+    // El vinculo registrado NO asciende: la etiqueta se escribe tal cual (la unica via del
+    // nombre propio es el texto del comando; la voz no lo introduce).
     const LUIS = { registeredLabel: 'Hablante 2', registeredName: 'Luis' }
     expect(resolveRowSpeakerName('Hablante 2', false, LUIS)).toBe('Hablante 2')
-    expect(resolveRowSpeakerName('Hablante 2', true, LUIS)).toBe('Luis')
+    expect(resolveRowSpeakerName('Hablante 2', true, LUIS)).toBe('Hablante 2')
   })
 })

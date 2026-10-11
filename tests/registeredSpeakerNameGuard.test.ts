@@ -69,7 +69,7 @@ const lastRowSpeaker = () => {
   return String(rows.at(-1)?.speakerName ?? '');
 };
 
-describe('P8.40b - el nombre se estampa CON evidencia (dueno unico de la fila)', () => {
+describe('P8.40b - UNA via de introduccion del nombre: wake + comando (la VOZ no lo introduce)', () => {
   beforeEach(() => {
     useIntegrationStore.getState().resetConversationHistory();
   });
@@ -86,7 +86,9 @@ describe('P8.40b - el nombre se estampa CON evidencia (dueno unico de la fila)',
     expect(lastRowSpeaker()).toBe('Hablante 1');
   });
 
-  it('la MISMA etiqueta CON evidencia -> nombre de la persona', () => {
+  it('la MISMA etiqueta CON evidencia SIGUE siendo la etiqueta (la voz no introduce el nombre)', () => {
+    // SPEC DEL DUENO (2026-10-11): la evidencia de VOZ solo CONFIRMA un nombre ya introducido
+    // (wake + comando); nunca lo introduce. Antes esto ascendia 'Hablante 1' -> 'Luis'.
     commitUserTurnRow({
       text: 'hola hola como estan',
       speakerName: 'Hablante 1',
@@ -94,7 +96,7 @@ describe('P8.40b - el nombre se estampa CON evidencia (dueno unico de la fila)',
       evidenciaAcustica: true,
       turnId: 1,
     });
-    expect(lastRowSpeaker()).toBe('Luis');
+    expect(lastRowSpeaker()).toBe('Hablante 1');
   });
 
   it('nombre propio introducido por el texto no se bloquea (soy luis)', () => {
@@ -102,15 +104,15 @@ describe('P8.40b - el nombre se estampa CON evidencia (dueno unico de la fila)',
     expect(lastRowSpeaker()).toBe('Luis');
   });
 
-  it('PRUEBA DE DETECTOR: la misma etiqueta cambia de veredicto solo por la evidencia', () => {
+  it('PRUEBA DE DETECTOR: la etiqueta NO cambia por la evidencia (no hay ascenso por voz)', () => {
     useIntegrationStore.getState().resetConversationHistory();
     commitUserTurnRow({ text: 'a', speakerName: 'Hablante 1', registeredSpeaker: LUIS_REG, evidenciaAcustica: false, turnId: 1 });
     const sin = lastRowSpeaker();
     commitUserTurnRow({ text: 'b', speakerName: 'Hablante 1', registeredSpeaker: LUIS_REG, evidenciaAcustica: true, turnId: 2 });
     const con = lastRowSpeaker();
-    expect(con).not.toBe(sin);
+    expect(con, 'la evidencia no asciende').toBe(sin);
     expect(sin).toBe('Hablante 1');
-    expect(con).toBe('Luis');
+    expect(con).toBe('Hablante 1');
   });
 });
 
@@ -118,16 +120,23 @@ describe('P8.40b - el nombre se estampa CON evidencia (dueno unico de la fila)',
 // commit (`resolveRowSpeakerName`): tambien mapea etiqueta->nombre registrado. Antes
 // usaba `resolveSpeakerAlias` a secas (ruta doble del nombre), asi que la fila que
 // rellenaba esa via salia "Hablante N" aunque la persona estuviera registrada.
-describe('P9.48 - la resolucion tardia aplica el nombre registrado (un solo dueno)', () => {
+describe('P9.48 - la resolucion tardia NO introduce el nombre (la via es el comando)', () => {
   beforeEach(() => {
     useIntegrationStore.setState({ conversationHistory: [], activePersonId: undefined });
   });
 
-  it('updateTurnRowSpeaker mapea la etiqueta registrada al NOMBRE', () => {
+  it('updateTurnRowSpeaker CON evidencia deja la etiqueta (no asciende al nombre)', () => {
     const { id } = commitUserTurnRow({ text: 'hola soy luis', turnId: 11 });
     updateTurnRowSpeaker(11, 'Hablante 1', { evidenciaAcustica: true, registeredSpeaker: LUIS });
     const row = useIntegrationStore.getState().conversationHistory.find((e) => e.id === id);
-    expect(row?.speakerName).toBe('Luis');
+    // La via del nombre es el TEXTO del comando, que la aporta el stream como `speakerName`;
+    // esta capa NO lo inventa: la etiqueta se queda.
+    expect(row?.speakerName).toBe('Hablante 1');
+    // Y una fila sin introduccion tampoco asciende con evidencia.
+    const otra = commitUserTurnRow({ text: 'hola a todos', speakerName: 'Hablante 1', turnId: 14 });
+    updateTurnRowSpeaker(14, 'Hablante 1', { evidenciaAcustica: true, registeredSpeaker: LUIS });
+    const row2 = useIntegrationStore.getState().conversationHistory.find((e) => e.id === otra.id);
+    expect(row2?.speakerName).toBe('Hablante 1');
   });
 
   it('sin evidencia acustica NO inventa el nombre (etiqueta automatica)', () => {
@@ -137,7 +146,7 @@ describe('P9.48 - la resolucion tardia aplica el nombre registrado (un solo duen
     expect(String(row?.speakerName || '')).toBe('Hablante 1');
   });
 
-  it('PRUEBA DE DETECTOR: con el vinculo renombra; con otro registro, no', () => {
+  it('PRUEBA DE DETECTOR: el vinculo del panel no renombra por si solo', () => {
     const { id } = commitUserTurnRow({ text: 'x', turnId: 13 });
     updateTurnRowSpeaker(13, 'Hablante 1', { evidenciaAcustica: true, registeredSpeaker: { registeredLabel: 'Hablante 9', registeredName: 'Luis' } });
     const row = useIntegrationStore.getState().conversationHistory.find((e) => e.id === id);
