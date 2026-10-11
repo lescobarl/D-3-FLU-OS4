@@ -1,6 +1,6 @@
 {
-  "task": "A) ninguna via da por MEDIDA la identidad por OMISION; B) la frase viva NO se vacia durante la conversacion (rebuild del watchdog y entrega a la IA); C) ninguna configuracion promete un comportamiento sin efecto (consumir o borrar)",
-  "objective": "Que ninguna via pueda dar por \"medida\" la identidad por omision (sin evidencia -> etiqueta generica, nunca un nombre); que la \"ultima frase\" no se vacie durante la conversacion (las dos rutas: rebuild del watchdog y entrega a la IA), dejando los vaciados de arranque/parada/sesion declarados aparte; y que ninguna configuracion prometa un comportamiento sin efecto (consumir o borrar).",
+  "task": "1) la sonda de la frase viva distingue BLOQUEADO/APLICADO; 2) una locucion = una fila; 3) una voz = una etiqueta; 4) nombre solo con coincidencia (tambien el relleno tardio)",
+  "objective": "Que el dato sea concluyente: la sonda de la frase viva declara si un acortamiento fue BLOQUEADO o APLICADO; que la MISMA locucion no produzca 2-3 commits/filas; que la MISMA voz no salga con dos etiquetas (sin tocar umbrales de audio: se declara); y que ningun nombre aparezca sin coincidencia. Cierre medido sobre LOG NUEVO.",
   "base": "738270c",
   "allow": [
     "src/**",
@@ -11,19 +11,18 @@
   ],
   "maxFiles": 40,
   "maxLines": 2500,
-  "dod": "npx vitest run --reporter=dot tests/conversationStreamCommit.test.ts tests/conversationTurnInterleavedRows.test.ts tests/conversationTurnSingleRow.test.ts tests/turnIdentityPipeline.test.ts tests/turnSpeakerPreflight.test.ts tests/useFluVoiceAssistant.behavior.test.tsx tests/autoRecovery.test.ts tests/decideVoiceTurnDispatch.test.ts tests/healthMonitor.test.ts tests/normalizeCommandForDeterministic.test.ts tests/notesClearEndToEnd.test.ts tests/selfKnowledge.test.ts tests/spokenUtteranceRevision.test.ts tests/useAutonomyIntegration.test.tsx tests/voiceCanonicalPhrase.test.ts tests/voiceQueryParity.test.ts tests/voiceTurnStabilization.test.ts tests/wakeWordDisplay.test.ts tests/App.shell.test.tsx tests/FluWorkspaceTabView.test.tsx tests/agendaQueryScenarios.test.ts tests/ambienteEditorForm.test.tsx tests/browserProfilesPanel.test.tsx tests/contactsPanel.test.tsx tests/continuousAudioBuffer.test.ts tests/conversationSession.test.ts tests/dndPolicy.test.ts tests/documentsHistoryPanel.test.tsx tests/fluDevConsole.test.ts tests/fluMinutesTabView.test.tsx tests/fluParticipantConfig.test.ts tests/materiaGrisPanel.test.tsx tests/notificationService.test.ts tests/onboardingFlow.test.ts tests/paletaEditorForm.test.tsx tests/participantRegistry.test.ts tests/participantsPanel.test.tsx tests/preLaunchDelay.test.ts tests/recognitionBufferFlush.test.ts tests/searchControlCenter.test.tsx tests/shoppingPanel.test.tsx tests/speakerIdentityNoInheritance.test.ts tests/speakerPassiveNoNameInheritance.test.ts tests/speakerPinnedMismatch.test.ts tests/speakerSoloCoalesce.test.ts tests/systemMatrix.test.ts tests/useBrowserProfiles.test.tsx tests/useContacts.test.tsx tests/useDeviceActions.test.tsx tests/useDiary.test.tsx tests/useMateriaGris.test.tsx tests/useNotificationCenter.test.tsx tests/useParticipants.test.tsx tests/workspaceContractTipo.test.ts",
-  "guard": "npx vitest run --reporter=dot tests/vozUltimaFraseSoloAcumulaGuard.test.ts tests/vozNombreSinAnclaGuard.test.ts tests/vozUltimaFraseNoSeVaciaGuard.test.ts tests/vozEvidenciaPorOmisionGuard.test.ts tests/configConEfectoGuard.test.ts",
+  "dod": "npx vitest run --reporter=dot tests/conversationStreamCommit.test.ts tests/conversationTurnInterleavedRows.test.ts tests/conversationTurnSingleRow.test.ts tests/turnIdentityPipeline.test.ts tests/turnSpeakerPreflight.test.ts tests/useFluVoiceAssistant.behavior.test.tsx tests/autoRecovery.test.ts tests/decideVoiceTurnDispatch.test.ts tests/healthMonitor.test.ts tests/normalizeCommandForDeterministic.test.ts tests/notesClearEndToEnd.test.ts tests/selfKnowledge.test.ts tests/spokenUtteranceRevision.test.ts tests/useAutonomyIntegration.test.tsx tests/voiceCanonicalPhrase.test.ts tests/voiceQueryParity.test.ts tests/voiceTurnStabilization.test.ts tests/wakeWordDisplay.test.ts tests/App.shell.test.tsx tests/FluWorkspaceTabView.test.tsx tests/agendaQueryScenarios.test.ts tests/ambienteEditorForm.test.tsx tests/browserProfilesPanel.test.tsx tests/contactsPanel.test.tsx tests/continuousAudioBuffer.test.ts tests/conversationSession.test.ts tests/dndPolicy.test.ts tests/documentsHistoryPanel.test.tsx tests/fluDevConsole.test.ts tests/fluMinutesTabView.test.tsx tests/fluParticipantConfig.test.ts tests/materiaGrisPanel.test.tsx tests/notificationService.test.ts tests/onboardingFlow.test.ts tests/paletaEditorForm.test.tsx tests/participantRegistry.test.ts tests/participantsPanel.test.tsx tests/preLaunchDelay.test.ts tests/recognitionBufferFlush.test.ts tests/searchControlCenter.test.tsx tests/shoppingPanel.test.tsx tests/speakerIdentityNoInheritance.test.ts tests/speakerPassiveNoNameInheritance.test.ts tests/speakerPinnedMismatch.test.ts tests/speakerSoloCoalesce.test.ts tests/systemMatrix.test.ts tests/useBrowserProfiles.test.tsx tests/useContacts.test.tsx tests/useDeviceActions.test.tsx tests/useDiary.test.tsx tests/useMateriaGris.test.tsx tests/useNotificationCenter.test.tsx tests/useParticipants.test.tsx tests/workspaceContractTipo.test.ts tests/voiceTurnRefireDedup.test.ts",
+  "guard": "npx vitest run --reporter=dot tests/vozUltimaFraseSoloAcumulaGuard.test.ts tests/vozNombreSinAnclaGuard.test.ts tests/vozUltimaFraseNoSeVaciaGuard.test.ts tests/vozEvidenciaPorOmisionGuard.test.ts tests/configConEfectoGuard.test.ts tests/vozUnaFilaPorLocucionConWakeGuard.test.ts",
   "guardExpect": "green",
   "invariant": {
-    "statement": "Perillas de la fila que declaran \"identidad MEDIDA por OMISION\" (evidenciaAcustica = true): 3 -> 0. Si no se midio, no hay evidencia.",
+    "statement": "Ciclos de commit que declaran el VEREDICTO del dedupe (sonda `dup`) con sus entradas: 0 -> 1. Sin el veredicto, un doble commit de la misma locucion es inmedible desde el log.",
     "base": "738270c",
     "metric": {
-      "command": "node -e \"const fs=require('fs');const s=fs.readFileSync('src/voice/lib/conversationTurnRow.ts','utf8');console.log((s.match(/evidenciaAcustica = true/g)||[]).length)\"",
-      "target": 0
+      "command": "node -e \"const fs=require('fs');const s=fs.readFileSync('src/voice/lib/conversationStreamCommit.js','utf8');console.log((s.match(/voiceProbe\\('dup'/g)||[]).length)\"",
+      "target": 1
     },
     "guardFiles": [
-      "tests/vozEvidenciaPorOmisionGuard.test.ts",
-      "tests/vozUltimaFraseNoSeVaciaGuard.test.ts"
+      "tests/vozUnaFilaPorLocucionConWakeGuard.test.ts"
     ]
   },
   "ignore": [

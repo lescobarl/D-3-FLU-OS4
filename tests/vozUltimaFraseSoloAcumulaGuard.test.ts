@@ -129,6 +129,25 @@ describe('A - la ultima frase SOLO acumula (lo que se ve)', () => {
     expect(ultimo(mostrado)).toBe(FRASE)
   })
 
+  it('la sonda DICE si el acortamiento fue BLOQUEADO o APLICADO (dato concluyente)', () => {
+    const { deps } = makeDeps()
+    handleConversationStreamSync(deps as never, { capture: FRASE })
+    handleConversationStreamSync(deps as never, { capture: COLA })
+    handleConversationStreamSync(deps as never, { capture: 'pon musica relajante para cenar' })
+    const live = vi.mocked(voiceProbe).mock.calls.filter((c) => c[0] === 'live').map((c) => c[1] as { resultado?: string; acorta?: boolean; mismaLocucion?: boolean })
+    expect(live.some((o) => o.resultado === 'bloqueado'), 'el recorte bloqueado se declara').toBe(true)
+    expect(live.some((o) => o.resultado === 'aplicado'), 'la sustitucion aplicada se declara').toBe(true)
+    // INVARIANTE DEL DUENO: `acortamientos APLICADOS = 0` -> ningun recorte de la MISMA locucion
+    // se aplica jamas (el bloqueo lo impide en la rama anterior).
+    expect(live.filter((o) => o.resultado === 'aplicado' && o.mismaLocucion === true), 'ningun recorte de la misma locucion puede aplicarse').toEqual([])
+    // Y todo lo aplicado es una locucion NUEVA (no un trozo de la mostrada).
+    expect(live.filter((o) => o.resultado === 'aplicado').every((o) => o.mismaLocucion === false), 'lo aplicado es locucion nueva').toBe(true)
+    // El bloqueado SIEMPRE acorta y SIEMPRE es la misma locucion (es su motivo).
+    expect(live.filter((o) => o.resultado === 'bloqueado').every((o) => o.acorta === true && o.mismaLocucion === true)).toBe(true)
+    // El campo tiene que existir en TODA emision: sin el, el dato no es concluyente.
+    expect(live.every((o) => o.resultado === 'bloqueado' || o.resultado === 'aplicado')).toBe(true)
+  })
+
   it('control NEGATIVO (el detector no es decorativo): el criterio por PREFIJO dejaba pasar la cola', () => {
     // Implementacion VIEJA aislada: solo bloqueaba si el nuevo texto era PREFIJO del mostrado.
     const viejoBloquea = (nuevo: string, mostrado: string) =>

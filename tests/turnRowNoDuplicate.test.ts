@@ -101,9 +101,14 @@ describe('la fila del turno se reutiliza por IDENTIDAD de turno', () => {
             path.join(process.cwd(), 'src', 'voice', 'hooks', 'useFluVoiceAssistant.js'),
             'utf8',
         );
-        const marcas = hook.match(/turnId: activeTurnIdRef\.current/g) || [];
         // Commit temprano + resolucion + LOG CRUDO (el path raw tambien escribe
-        // fila: sin identidad caia al criterio posicional, ya retirado).
+        // fila: sin identidad caia al criterio posicional, ya retirado). La RESOLUCION puede
+        // derivar el turno de la FRASE emitida (idempotencia: una locucion = una fila), que es
+        // tan identidad de turno como el vivo.
+        const marcas = [
+            ...(hook.match(/turnId: activeTurnIdRef\.current/g) || []),
+            ...(hook.match(/turnId: turnIdDeLaFrase/g) || []),
+        ];
         expect(marcas).toHaveLength(3);
     });
 
