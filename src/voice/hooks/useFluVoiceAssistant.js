@@ -148,7 +148,7 @@ import {
   shouldSkipPreviewDiarize,
 } from '../lib/speakerPolicy.js'
 import { WAKE_POLICY_ORDER, applyWakePolicyOrder, resolveWakePolicyOrder, wakePolicySpeech } from '../lib/wakePolicy.js'
-import { getTranscriptPauseCfg, countSpeechWords, resolveSrGapTrigger } from '../lib/fluTranscriptPause.js'
+import { resolveSrGapTrigger } from '../lib/fluTranscriptPause.js'
 // Ruta única: useFluParticipant vive solo en src/hooks/useFluParticipant.ts.
 // El motor de voz la importa aquí solo como fallback defensivo; en producción App.tsx inyecta su instancia vía participantRef (mismo módulo).
 import { useFluParticipant } from '../../hooks/useFluParticipant'
@@ -4383,8 +4383,6 @@ const lastResolvedTurnRef = useRef(0)
           }
         }
 
-        const pauseCfg = getTranscriptPauseCfg()
-        const srGapMinWords = Number(pauseCfg.srGapCommitMinWords) || 0
         const sinceResult = now - (lastOnresultAtRef.current || 0)
         const openLine = cleanForSpeech(
           listenStateRef.current?.openLine ||
@@ -4393,10 +4391,6 @@ const lastResolvedTurnRef = useRef(0)
         )
         const srGap = resolveSrGapTrigger({ sinceLastResultMs: sinceResult, sinceLastCommitMs: lastCommitAtRef.current > 0 ? now - lastCommitAtRef.current : 0, hasOpenLine: Boolean(openLine) })
         if (srGap.fire && !srGapFiredForOpenLineRef.current) {
-          if (openLine && countSpeechWords(openLine) >= srGapMinWords) {
-            srGapFiredForOpenLineRef.current = true
-            ingressRuntimeRef.current?.pushSrGapEvent?.({ sinceLastResultMs: srGap.sinceLastResultMs })
-          }
         }
         return
       }

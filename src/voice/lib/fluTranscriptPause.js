@@ -9,7 +9,6 @@ import { voiceProbe } from './voiceProbe'
 export const TRANSCRIPT_PAUSE_KEYS = [
   'interimOpenLineFlushMs',
   'srGapCommitMs',
-  'srGapCommitMinWords',
   'srGapCommitExtensionMinChars',
   'srGapCommitNoNewContentMinChars',
   'postCommitCooldownMs',

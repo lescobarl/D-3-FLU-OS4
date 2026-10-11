@@ -28,7 +28,9 @@ export function formatIdentityDiagnosis({ label = '', diagnosis = {}, lastSpeake
   const d = diagnosis || {}
   const lastSim = Number(d.lastSim ?? 0).toFixed(3)
   const auto = d.autoClusterCount ?? (Array.isArray(workingClusters) ? workingClusters.length : 0)
-  return `label="${label}" reason=${d.reason || ''} lastSim=${lastSim} auto=${auto} last="${lastSpeaker || ''}" prefer="${preferSpeaker || ''}" boundary=${Boolean(atTurnBoundary)}`
+  const best = Number(d.bestSim)
+  const bestTxt = Number.isFinite(best) ? ` bestSim=${best.toFixed(3)} best="${d.bestLabel || ''}"` : ''
+  return `label="${label}" reason=${d.reason || ''} lastSim=${lastSim} auto=${auto} last="${lastSpeaker || ''}" prefer="${preferSpeaker || ''}" boundary=${Boolean(atTurnBoundary)}${bestTxt}`
 }
 
 /**

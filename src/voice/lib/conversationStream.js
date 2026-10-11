@@ -450,10 +450,6 @@ export function evaluateSrGapSegmentCommit(
   const capture = cleanForSpeech(readTurnLive(state) || state?.pendingFinal)
   if (!capture) return { flush: false, capture: '', reason: 'empty-openline' }
 
-  const minWords = Number(cfg.srGapCommitMinWords)
-  if (countWordsFromPauseCfg(capture) < minWords) {
-    return { flush: false, capture, reason: 'too-short' }
-  }
 
   const prior = cleanForSpeech(lastCommitted)
   if (prior && capture === prior) {
@@ -467,7 +463,7 @@ export function evaluateSrGapSegmentCommit(
     prior &&
     utterancesSameRevision(prior, capture) &&
     extensionChars < Number(cfg.srGapCommitExtensionMinChars) &&
-    extensionWords < minWords
+    extensionWords === 0
   ) {
     return { flush: false, capture, reason: 'already-committed' }
   }

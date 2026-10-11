@@ -1766,11 +1766,12 @@ export function detectIntroducedName(text = '', { mustOpen = true } = {}) {
 export function detectWakeIntroducedName(text = '', wakeWords = []) {
   const split = splitTranscriptAtWakeWord(text, wakeWords)
   if (!split.wakeWordMatched) return ''
-  // EL MANDATO EMPIEZA EN LA WAKE (Anexo B #11): una wake INLINE significa que la frase
-  // HABLA de la orden ("mi definicion fue hasta que yo diga okay flow soy Luis"), no que la
-  // DIGA. Sin esto el intro se capturaba dentro del reporte y la voz quedaba renombrada.
-  // Medido por el dueno (2026-10-10): esa frase devolvia 'Luis'.
-  if (split.beforeWake) return ''
+  // EL MANDATO EMPIEZA EN LA WAKE (Anexo B #11): lo anterior a la wake es habla de contexto
+  // y SE DESCARTA; el intro se lee del MANDATO (lo que sigue a la wake). Antes se exigia
+  // ADEMAS que no hubiera nada antes de la wake, y como el ASR acumula la locucion previa
+  // ("vamos a poner Ah voy a voy a decirle Okay flu Soy Luis") el intro se perdia: el
+  // registro no se ejecutaba y el nombre no se sustituia (medido 2026-10-11 21:27:40).
+  // El `mustOpen` de abajo sigue exigiendo que el intro ABRA el mandato.
 
   const introText = normalizeSpaces(
     stripDiacritics(split.commandText || split.afterWake || ''),

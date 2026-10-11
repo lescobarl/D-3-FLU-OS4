@@ -390,20 +390,6 @@ export function resolveImmediateShortSpeakerContinuity({
 }
 
 /**
- * PISO de "MISMA voz" para el COSIDO de etiquetas: el criterio de la DIARIZACION, no
- * un segundo umbral propio. La diarizacion decide que una voz NO es nueva por
- * `cosineNewVoiceThreshold` (medido 2026-10-07: misma voz 0.69-0.74, voz distinta 0.58;
- * el 0.64 cae ENTRE las dos bandas). Por debajo de ese piso, dos firmas son voces
- * distintas; por encima, la misma.
- */
-export function sameVoiceCosidoFloor(thresholds = null) {
-  const cfg =
-    thresholds ||
-    getVoiceIdentityConfig()?.capture?.conversationSpeakerThresholds ||
-    {}
-  const value = Number(cfg.cosineNewVoiceThreshold)
-  return Number.isFinite(value) && value > 0 && value < 1 ? value : 0.64
-}
 
 /**
  * DUENO UNICO de "que etiquetas son la MISMA voz que el ancla" para el COSIDO.
@@ -422,7 +408,7 @@ export function sameVoiceCosidoFloor(thresholds = null) {
 export function sameVoiceLabelGroup(
   speakerClusters = [],
   anchorLabel = '',
-  matchThreshold = sameVoiceCosidoFloor(),
+  matchThreshold = sameVoiceFloor(),
 ) {
   const anchor = String(anchorLabel || "").trim()
   if (!anchor) return []
@@ -472,7 +458,7 @@ export function isNameBoundToVoice(speakerClusters = [], name = '') {
 export function findLabelsWithSharedVoice(
   speakerClusters = [],
   anchorLabel = '',
-  matchThreshold = sameVoiceCosidoFloor(),
+  matchThreshold = sameVoiceFloor(),
 ) {
   return sameVoiceLabelGroup(speakerClusters, anchorLabel, matchThreshold)
 }
