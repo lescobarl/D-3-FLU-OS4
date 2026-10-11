@@ -27,7 +27,7 @@ import {
   registerSpeakerIdentity,
   registerSpeakerIdentityFromCommand,
 } from '../src/voice/lib/speakerIdentityRegister.js'
-import { detectWakeIntroducedName } from '../src/voice/lib/audioMath.js'
+import { detectIntroducedName, detectWakeIntroducedName } from '../src/voice/lib/audioMath.js'
 import { resolveSpeakerNameFromUtterance } from '../src/voice/lib/speakerPolicy.js'
 import { findLabelsWithSharedVoice } from '../src/voice/lib/speakerClusters.js'
 
@@ -65,6 +65,19 @@ describe('B1 - el intro ("soy <nombre>") solo si la orden EMPIEZA en la wake', (
       expect(detectWakeIntroducedName(entrada, WAKES)).toBe(esperado)
     })
   }
+
+  it('FIXTURE CRUDA del log del dueno: el texto real del asrFinal no introduce un nombre', () => {
+    // debug.log 02:20:11.434 (asrFinal len=275 -> commit turn=1 y turn=2, replace=false):
+    // texto CRUDO, sin reconstruir.
+    const ASR_FINAL =
+      'pruebas de transcripcion de diarizacion estoy hablando yo Luis no estoy diciendo El Comando cuando diga El Comando para que ponga mi nombre entonces debe de recuperar todas mis intervenciones y ponerles a cada una mi nombre estoy voy a hacer un alto para ver como se comporta'
+    // El "estoy hablando yo Luis" va A MITAD de frase: no es una presentacion.
+    expect(detectIntroducedName(ASR_FINAL)).toBe('')
+    expect(resolveSpeakerNameFromUtterance(ASR_FINAL, { wakeWords: WAKES })).toBe('')
+    // Y la frase REAL que el dueno dijo en esa sesion (fila de turnId=12 del log):
+    // "voy a decir el comando Okay flu Soy Luis": la wake NO abre la orden.
+    expect(resolveSpeakerNameFromUtterance('voy a decir el comando Okay flu Soy Luis', { wakeWords: WAKES })).toBe('')
+  })
 
   it('control NEGATIVO (el detector no es decorativo): partir el texto por la wake en cualquier posicion si captura el nombre', () => {
     // Implementacion VIEJA aislada: basta con que la wake aparezca.
