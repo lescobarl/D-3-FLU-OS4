@@ -87,6 +87,7 @@ describe('A6 - una voz = un cluster (tope + fusion)', () => {
     expect(clusters.length).toBe(1)
   })
 
+
   it('PRUEBA DE DETECTOR (el detector no es decorativo): el criterio y el tope discriminan', () => {
     const clusters = [
       { label: 'Hablante 1', signature: v(1) },

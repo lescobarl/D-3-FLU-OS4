@@ -2,16 +2,15 @@
 // vozIntroYAliasPorVozGuard - B1 (el intro solo si la orden EMPIEZA en la wake) y
 // B2 (la identidad es la VOZ/firma, no la etiqueta).
 // ------------------------------------------------------------
-// B1 MEDIDO por el dueno (verificacion independiente):
-//   resolveSpeakerNameFromUtterance('mi definicion fue hasta que yo diga okay flow soy Luis')
-//     esperado '' -> medido 'Luis'
-//   CAUSA: `detectWakeIntroducedName` (audioMath.js) se conforma con
-//   `split.wakeWordMatched`, y el splitter marca `true` tambien cuando la wake va
-//   INLINE (la frase HABLA de la orden: "hasta que yo diga okay flow soy Luis"). Ademas
-//   los patrones de intro NO estan anclados (`(?:^|\b)soy`), asi que el nombre se
-//   captura en cualquier posicion del mandato.
-//   REGLA: el intro se acepta solo si (a) el mandato EMPIEZA en la wake y (b) el patron
-//   ABRE el mandato (no viene dentro de una frase que reporta el comando).
+// B1 (Anexo B #11: "El mandato empieza en la wake"): lo anterior a la wake es habla de
+//   contexto y SE DESCARTA; el intro se lee del MANDATO (lo que SIGUE a la wake) y tiene
+//   que ABRIRLO (`mustOpen`), para que una frase que HABLA del comando ("la frase es soy
+//   Luis", "voy a decir el comando de soy Luis") no capture un nombre.
+//   MEDIDO por el dueno (2026-10-11 21:27:40): con la condicion extra "no puede haber nada
+//   antes de la wake", el ASR acumulando la locucion previa ("vamos a poner Ah voy a voy a
+//   decirle Okay flu Soy Luis") dejaba el intro a CERO -> el registro NO se ejecutaba y el
+//   nombre no se sustituia en sus turnos. La condicion extra se RETIRA: el mandato ya
+//   empieza en la wake y el contexto de delante se descarta (que es lo que manda #11).
 //
 // B2 MEDIDO por el dueno:
 //   registerSpeakerAlias('Hablante 1','Luis'); resolveRowSpeakerName('Hablante 1', false)
@@ -42,9 +41,11 @@ const OTRA_VOZ = 0.58
 describe('B1 - el intro ("soy <nombre>") solo si la orden EMPIEZA en la wake', () => {
   /** Tabla del encargo: entrada cruda -> esperado. */
   const CASOS: Array<[string, string]> = [
-    // El dueno REPORTANDO el comando: el mandato NO empieza en la wake.
-    ['mi definicion fue hasta que yo diga okay flow soy Luis', ''],
-    ['voy a decir el comando de okay flu soy Luis', ''],
+    // Habla de CONTEXTO antes de la wake: el mandato (tras la wake) ES el intro.
+    ['mi definicion fue hasta que yo diga okay flow soy Luis', 'Luis'],
+    ['voy a decir el comando de okay flu soy Luis', 'Luis'],
+    // La frase REAL del log del dueno (21:27:40) que no registraba el nombre.
+    ['bueno en resumen no funciona vamos a poner Ah voy a voy a decirle Okay flu Soy Luis', 'Luis'],
     // La wake es prefijo pero el mandato REPORTA el comando antes del intro.
     ['okay flu la frase es soy Luis', ''],
     ['okay flu que yo diga soy Luis', ''],
@@ -66,7 +67,7 @@ describe('B1 - el intro ("soy <nombre>") solo si la orden EMPIEZA en la wake', (
     })
   }
 
-  it('FIXTURE CRUDA del log del dueno: el texto real del asrFinal no introduce un nombre', () => {
+  it('FIXTURE CRUDA del log del dueno: un "yo Luis" a MITAD de frase no introduce un nombre', () => {
     // debug.log 02:20:11.434 (asrFinal len=275 -> commit turn=1 y turn=2, replace=false):
     // texto CRUDO, sin reconstruir.
     const ASR_FINAL =
@@ -74,9 +75,8 @@ describe('B1 - el intro ("soy <nombre>") solo si la orden EMPIEZA en la wake', (
     // El "estoy hablando yo Luis" va A MITAD de frase: no es una presentacion.
     expect(detectIntroducedName(ASR_FINAL)).toBe('')
     expect(resolveSpeakerNameFromUtterance(ASR_FINAL, { wakeWords: WAKES })).toBe('')
-    // Y la frase REAL que el dueno dijo en esa sesion (fila de turnId=12 del log):
-    // "voy a decir el comando Okay flu Soy Luis": la wake NO abre la orden.
-    expect(resolveSpeakerNameFromUtterance('voy a decir el comando Okay flu Soy Luis', { wakeWords: WAKES })).toBe('')
+    // Y la misma frase dicha COMO mandato (la wake abre la orden): SI registra.
+    expect(resolveSpeakerNameFromUtterance('voy a decir el comando Okay flu Soy Luis', { wakeWords: WAKES })).toBe('Luis')
   })
 
   it('control NEGATIVO (el detector no es decorativo): partir el texto por la wake en cualquier posicion si captura el nombre', () => {
@@ -88,9 +88,9 @@ describe('B1 - el intro ("soy <nombre>") solo si la orden EMPIEZA en la wake', (
       const m = /(?:yo\s+)?soy\s+([a-zA-Z]+)/i.exec(resto)
       return m ? m[1].charAt(0).toUpperCase() + m[1].slice(1) : ''
     }
-    const reporta = 'mi definicion fue hasta que yo diga okay flow soy Luis'
+    const reporta = 'okay flu la frase es soy Luis'
     expect(viejo(reporta), 'el defecto medido: la implementacion vieja SI captura el nombre').toBe('Luis')
-    expect(detectWakeIntroducedName(reporta, WAKES), 'el dueno real NO').toBe('')
+    expect(detectWakeIntroducedName(reporta, WAKES), 'el dueno real NO: el intro no ABRE el mandato').toBe('')
   })
 })
 

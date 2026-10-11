@@ -58,9 +58,14 @@ describe('P6.7 jsReferenceGuard - referencias a nombres que no existen', () => {
     // Cierre por SILENCIO con DOS palabras: la regla de cierre del dueno (2026-10-11) baja el
     // minimo 3 -> 2 (medido: "no man" nunca cerraba -> sin fila, sin respuesta, sin reascuchar).
     expect(r).toEqual({ flush: true, capture: 'hola mundo', reason: 'sr-gap-segment-commit', sinceLastResultMs: 10001, openLineAgeMs: 0 })
-    // UNA palabra sigue siendo "too-short" (la rama no se queda sin cubrir).
+    // UNA palabra TAMBIEN cierra: con el minimo en 2, "hola" se quedaba en ULTIMA FRASE y no
+    // pasaba a la conversacion (medido por el dueno 2026-10-11 21:25:42: asrFinal "Hola"
+    // len=4 sin commit; el srGap de 21:25:49 bloqueado por too-short).
     const r1 = evaluateSrGapSegmentCommit({ openLine: 'hola' }, { sinceLastResultMs: 10001, lastCommitted: '' })
-    expect(r1).toEqual({ flush: false, capture: 'hola', reason: 'too-short' })
+    expect(r1).toEqual({ flush: true, capture: 'hola', reason: 'sr-gap-segment-commit', sinceLastResultMs: 10001, openLineAgeMs: 0 })
+    // La linea VACIA sigue sin cerrar (la rama no se queda sin cubrir).
+    const r0 = evaluateSrGapSegmentCommit({ openLine: '   ' }, { sinceLastResultMs: 10001, lastCommitted: '' })
+    expect(r0).toEqual({ flush: false, capture: '', reason: 'empty-openline' })
   })
 
   it('evaluateSrGapSegmentCommit con prior cuenta la extension (lineas 369/370)', () => {
