@@ -143,9 +143,9 @@ describe('rutina de revision - la traza de UNA corrida cumple los invariantes', 
   })
 
   it('el CODIGO tiene UN dueno por regla (fuente)', () => {
-    // Caja: UNA condicion de bloqueo (el trozo). Sin dimension de longitud/revision.
+    // Caja: UNA sola condicion de bloqueo, y es el ACORTAMIENTO (solo acumula). Antes
     expect(STREAM.includes('revisionMasCorta'), 'sin revision-mas-corta').toBe(false)
-    expect(/if \(esTrozo\) \{/.test(STREAM), 'el bloqueo es solo el trozo').toBe(true)
+    expect(/capture\.length < previoLive\.length/.test(STREAM), 'el bloqueo es cualquier emision mas corta (solo acumula)').toBe(true)
     // Nombre: UNA via (wake + comando). La voz no lo introduce.
     expect(STREAM.includes("FUENTES_CON_IDENTIDAD = ['wake-intro']"), 'solo wake-intro').toBe(true)
     expect(TURN_ROW.includes('resolveRegisteredSpeakerName'), 'la fila no asciende por voz').toBe(false)

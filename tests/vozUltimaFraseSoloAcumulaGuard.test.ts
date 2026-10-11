@@ -139,17 +139,17 @@ describe('A - la ultima frase SOLO acumula (lo que se ve)', () => {
     for (const t of ['no se', 'no se que', 'no se que construye', 'ya no transcribio nada a la ultima frase']) {
       handleConversationStreamSync(deps as never, { capture: t })
     }
-    expect(ultimo(mostrado), 'el dictado NUEVO tiene que verse').toBe('ya no transcribio nada a la ultima frase')
+    expect(ultimo(mostrado), 'LA CAJA SOLO ACUMULA: el dictado mas corto NO reemplaza (medido 2026-10-11 22:36 -> 356 acortamientos APLICADOS)').toBe(LARGA)
   })
 
-  it('una locucion DISTINTA (no relacionada) SI reemplaza aunque sea mas corta', () => {
+  it('una locucion DISTINTA mas CORTA tampoco reemplaza (la caja solo acumula)', () => {
     // ANTI-CONGELAMIENTO (medido en el log del dueno 16:11-16:12: 543 bloqueos con previo=382
     // mientras dictaba OTRA frase): si el texto nuevo no se relaciona con lo mostrado, es una
     // locucion nueva y DEBE verse. Dentro de la locucion nada encoge (caso anterior).
     const { deps, mostrado } = makeDeps()
     handleConversationStreamSync(deps as never, { capture: FRASE })
     handleConversationStreamSync(deps as never, { capture: 'ya no transcribio nada a la ultima frase' })
-    expect(ultimo(mostrado), 'la locucion nueva se muestra').toBe('ya no transcribio nada a la ultima frase')
+    expect(ultimo(mostrado), 'ni una locucion distinta puede encoger lo mostrado').toBe(FRASE)
   })
 
   it('el CIERRE vacia la zona (la locucion YA esta en la conversacion) y la iteracion nueva acumula desde cero', () => {
@@ -173,7 +173,7 @@ describe('A - la ultima frase SOLO acumula (lo que se ve)', () => {
     // INVARIANTE: un TROZO contiguo de lo mostrado JAMAS se aplica (la locucion solo acumula).
     expect(live.filter((o) => o.resultado === 'aplicado' && o.mismaLocucion === true), 'un trozo de lo mostrado no se aplica').toEqual([])
     // Y lo aplicado que encoge es locucion DISTINTA (no una revision de lo mostrado).
-    expect(live.filter((o) => o.resultado === 'aplicado' && o.acorta === true).every((o) => o.mismaLocucion === false), 'solo una locucion distinta puede encoger').toBe(true)
+    expect(live.filter((o) => o.resultado === 'aplicado' && o.acorta === true), 'nada encoge: acorta:true + aplicado = 0').toEqual([])
     // El bloqueado SIEMPRE acorta (es su motivo).
     expect(live.filter((o) => o.resultado === 'bloqueado').every((o) => o.acorta === true)).toBe(true)
     // El campo tiene que existir en TODA emision: sin el, el dato no es concluyente.
