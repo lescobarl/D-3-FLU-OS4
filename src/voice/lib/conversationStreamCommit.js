@@ -234,17 +234,19 @@ export function handleConversationStreamSync(
     // que una COLA reemplazaba la frase entera ("la borra y deja dos o tres palabras, y luego
     // ya se vuelve a ver": log del dueno 2026-10-11 11:28). El criterio del trozo tiene UN
     // dueno (`isFragmentOfLocution`, el mismo de la recompuesta) y ahora es el de la sonda.
-    // REGLA LITERAL DEL DUENO (2026-10-11): la frase viva SOLO ACUMULA. Nunca encoge — ni por
-    // "otra locucion". El bloqueo del trozo contiguo sigue (misma locucion), y ademas NO se aplica
-    // NINGUN texto mas corto que lo mostrado. El dato lo declara la sonda: acorta + bloqueado.
+    // REGLA LITERAL DEL DUENO: DENTRO de una locucion la frase viva SOLO ACUMULA: nada la encoge
+    // (ni un trozo contiguo ni un texto mas corto, aunque parezca otra locucion). Pero una
+    // locucion NUEVA (el ASR marca su arranque: `freshUtterance`) SI reemplaza: sin eso la frase
+    // se quedaba congelada en el texto anterior y el dictado nuevo no se veia (medido 2026-10-11
+    // 15:37-15:38: 561 bloqueos con previo=558 mientras el dueno dictaba otra frase).
     const esTrozo = isFragmentOfLocution(capture, publishedLiveRef.current)
     const encoge = capture.length < publishedLiveRef.current.length
-    if (esTrozo || encoge) {
+    if (!freshUtterance && (esTrozo || encoge)) {
       voiceProbe('live', { turn: activeTurnIdRef.current, resultado: 'bloqueado', acorta: true, mismaLocucion: esTrozo, previo: publishedLiveRef.current.length, len: capture.length, text: capture.slice(0, 220) }) // BANDERA DE DIAGNOSTICO
       return
     }
     if (capture !== publishedLiveRef.current) {
-      voiceProbe('live', { turn: activeTurnIdRef.current, resultado: 'aplicado', acorta: false, mismaLocucion: false, reemplaza: true, previo: publishedLiveRef.current.length, len: capture.length, text: capture.slice(0, 220) }) // BANDERA DE DIAGNOSTICO
+      voiceProbe('live', { turn: activeTurnIdRef.current, resultado: 'aplicado', acorta: capture.length < publishedLiveRef.current.length, fresh: Boolean(freshUtterance), mismaLocucion: esTrozo, reemplaza: true, previo: publishedLiveRef.current.length, len: capture.length, text: capture.slice(0, 220) }) // BANDERA DE DIAGNOSTICO
       publishedLiveRef.current = capture
       scheduleLiveTranscriptUpdate(capture)
     }

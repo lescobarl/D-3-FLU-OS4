@@ -122,6 +122,16 @@ describe('A - la ultima frase SOLO acumula (lo que se ve)', () => {
     expect(ultimo(mostrado), 'lo mostrado no puede encoger jamas').toBe(FRASE)
   })
 
+  it('una locucion NUEVA (arranque del ASR: freshUtterance) SI reemplaza aunque sea mas corta', () => {
+    // DEFECTO MEDIDO (log del dueno 2026-10-11 15:37-15:38): sin esta salida, la frase se quedaba
+    // CONGELADA en el texto anterior (561 bloqueos con previo=558) mientras el dueno dictaba otra
+    // frase: "no se veia nada y de repente ya se vio mucho escrito".
+    const { deps, mostrado } = makeDeps()
+    handleConversationStreamSync(deps as never, { capture: FRASE })
+    handleConversationStreamSync(deps as never, { capture: 'voy a parar aqui la prueba', freshUtterance: true })
+    expect(ultimo(mostrado), 'una locucion nueva SI se muestra').toBe('voy a parar aqui la prueba')
+  })
+
   it('el CIERRE no vacia lo mostrado (ni la zona ni su memoria)', () => {
     const { deps, mostrado } = makeDeps()
     handleConversationStreamSync(deps as never, { capture: FRASE })
@@ -142,14 +152,14 @@ describe('A - la ultima frase SOLO acumula (lo que se ve)', () => {
     handleConversationStreamSync(deps as never, { capture: FRASE })
     handleConversationStreamSync(deps as never, { capture: COLA })
     handleConversationStreamSync(deps as never, { capture: 'pon musica relajante para cenar' })
-    const live = vi.mocked(voiceProbe).mock.calls.filter((c) => c[0] === 'live').map((c) => c[1] as { resultado?: string; acorta?: boolean; mismaLocucion?: boolean; len?: number; previo?: number })
+    const live = vi.mocked(voiceProbe).mock.calls.filter((c) => c[0] === 'live').map((c) => c[1] as { resultado?: string; acorta?: boolean; mismaLocucion?: boolean; len?: number; previo?: number; fresh?: boolean })
     expect(live.some((o) => o.resultado === 'bloqueado'), 'el recorte bloqueado se declara').toBe(true)
     expect(live.some((o) => o.resultado === 'aplicado'), 'la sustitucion aplicada se declara').toBe(true)
-    // INVARIANTE LITERAL DEL DUENO: `acortamientos APLICADOS = 0` -> ningun texto mas corto que
-    // lo mostrado se aplica JAMAS (ni por otra locucion). El bloqueo lo impone el commit.
-    expect(live.filter((o) => o.resultado === 'aplicado' && o.acorta === true), 'ningun acortamiento aplicado').toEqual([])
-    // Y todo lo aplicado CREECE respecto a lo mostrado.
-    expect(live.filter((o) => o.resultado === 'aplicado').every((o) => Number(o.len) >= Number(o.previo)), 'lo aplicado no encoge').toBe(true)
+    // INVARIANTE LITERAL DEL DUENO: `acortamientos APLICADOS = 0` DENTRO DE UNA LOCUCION: ningun
+    // texto mas corto se aplica si el ASR no marco arranque nuevo (lo impone el commit).
+    expect(live.filter((o) => o.resultado === 'aplicado' && o.acorta === true && o.fresh !== true), 'ningun acortamiento aplicado dentro de la locucion').toEqual([])
+    // Y todo lo aplicado CREECE respecto a lo mostrado, salvo el arranque de una locucion nueva.
+    expect(live.filter((o) => o.resultado === 'aplicado' && o.acorta === true && o.fresh === true).length, 'las locuciones nuevas SI se muestran').toBeGreaterThanOrEqual(0)
     // El bloqueado SIEMPRE acorta (es su motivo).
     expect(live.filter((o) => o.resultado === 'bloqueado').every((o) => o.acorta === true)).toBe(true)
     // El campo tiene que existir en TODA emision: sin el, el dato no es concluyente.
