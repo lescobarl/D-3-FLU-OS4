@@ -5280,3 +5280,31 @@ VALIDACION: lint:guards VERDE 254 / 2044 · typecheck y eslint sin errores · GA
 NO CUBIERTO (0.23): su pantalla; la causa del corte de ASR (necesita hot-path); "una voz = una
   etiqueta" con su voz real (umbrales de audio, no se tocan); la espera de la fila hasta el
   cierre por silencio (3,5 s).
+
+----------------------------------------------------------------
+PASADA AUTONOMA 7 - 2026-10-11 - RACIONAL DEL DUENO: el reset de la ultima frase
+----------------------------------------------------------------
+RACIONAL (literal del dueno): "Nueva iteracion de transcripcion, nueva ultima frase. Ya
+vaciaste a la conversacion, entonces ultima frase = ''". Se abre por cambio de hablante o
+pausa de silencio.
+
+ARREGLO (un solo sitio, junto al EMITIR la fila): cuando la locucion YA se vacio a la
+conversacion (`delivered`), la memoria de la frase viva y la ZONA vuelven a CERO. Es el reset
+por iteracion nueva (y por pausa de silencio, que es el cierre que la escribe). Con la memoria
+en "" el dictado siguiente no puede quedar congelado por ser mas corto que el anterior:
+el congelamiento se quita DE RAIZ, no por tolerancia.
+
+CORRECCION DE CRITERIO en 2 guards que codificaban la regla anterior ("el cierre no borra la
+zona"): conversationStreamCommit.test.ts y vozNombreFraseUnDuenoGuard. Ahora el cierre REAL
+(`settlesTurn`) SI deja la zona en blanco porque el texto ya tiene su fila.
+Tambien se mantiene el criterio por RELACION de la pasada 6 (trozo contiguo o revision mas
+corta se bloquea; locucion distinta se ve) y la sonda con su veredicto.
+
+VALIDACION: lint:guards VERDE 254 ficheros / 2045 tests · typecheck y eslint sin errores ·
+GATE VERDE (metrica base=0 actual=1 target=1; guard base=1 actual=0) · e2e acotado P1/P2/P5/P7
+4/4 con la sonda: aplicados=11 con len<previo=0 · bloqueados=1 (la COLA 57->19). TECHOS:
+4536/4536 · 2706/2706 · 4624/4643 · 1838/1848. NINGUN UMBRAL DE AUDIO TOCADO.
+
+NO CUBIERTO (0.23): su pantalla; el reset por CAMBIO DE HABLANTE (hoy entra por el cierre de
+turno, que es donde la conversacion se vacia); la causa del corte de ASR (necesita hot-path);
+"una voz = una etiqueta" con su voz real (umbrales de audio, no se tocan).
