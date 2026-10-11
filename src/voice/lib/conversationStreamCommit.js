@@ -90,6 +90,7 @@ export function buildFinalSpeakerSnapshotResolver({ createSpeakerAudioResolver, 
  * @property {import('react').MutableRefObject<object>} listenStateRef
  * @property {import('react').MutableRefObject<boolean>} openPreviewTurnRef
  * @property {(capture: string) => void} scheduleLiveTranscriptUpdate
+ * @property {(capture: string) => void} setLiveTranscript
  * @property {(phrase: string, fallbackSpeaker: string, options?: object) => void} applyConversationSpeaker
  * @property {() => void} flushPendingStreamLog
  * @property {import('react').MutableRefObject<string[]>} logRowsTextRef
@@ -148,6 +149,7 @@ export function handleConversationStreamSync(
     listenStateRef,
     openPreviewTurnRef,
     scheduleLiveTranscriptUpdate,
+    setLiveTranscript,
     applyConversationSpeaker,
     flushPendingStreamLog,
     logRowsTextRef,
@@ -625,6 +627,12 @@ export function handleConversationStreamSync(
     if (delivered) {
       lastEmittedTranscriptRef.current = capture
       if (lastEmittedTurnRef) lastEmittedTurnRef.current = activeTurnIdRef.current
+      // RACIONAL DEL DUENO (2026-10-11): la locucion YA se vacio a la conversacion -> la ultima
+      // frase arranca de CERO. Es el reset por ITERACION NUEVA (y por pausa de silencio, que es el
+      // cierre que la escribe). Con la memoria a "" el dictado siguiente no puede quedar
+      // congelado por ser mas corto que el anterior.
+      publishedLiveRef.current = ''
+      if (typeof setLiveTranscript === 'function') setLiveTranscript('')
     }
   }
   commitTurnToSessionRows(capture, speakerEscrito, { replaceLast })
