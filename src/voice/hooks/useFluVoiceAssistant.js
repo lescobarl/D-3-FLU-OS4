@@ -150,8 +150,7 @@ import {
 import { WAKE_POLICY_ORDER, applyWakePolicyOrder, resolveWakePolicyOrder, wakePolicySpeech } from '../lib/wakePolicy.js'
 import { getTranscriptPauseCfg, countSpeechWords, resolveSrGapTrigger } from '../lib/fluTranscriptPause.js'
 // Ruta única: useFluParticipant vive solo en src/hooks/useFluParticipant.ts.
-// El motor de voz la importa aquí solo como fallback defensivo; en producción
-// App.tsx inyecta su instancia vía participantRef (mismo módulo).
+// El motor de voz la importa aquí solo como fallback defensivo; en producción App.tsx inyecta su instancia vía participantRef (mismo módulo).
 import { useFluParticipant } from '../../hooks/useFluParticipant'
 import { isSpeechSynthesisSpeaking, isFluSpeaking, waitForSpeechIdle, getLastCompletedSpeechAt } from '../lib/fluSpeech.js'
 import { createLocalRecognition, shouldUseLocalFallback } from '../lib/voiceLocalFallback'
@@ -1070,7 +1069,8 @@ const lastResolvedTurnRef = useRef(0)
       finalizeGraceUsedRef.current = false
 
       const spillPreview = pendingSpillRef.current ? cleanForSpeech(pendingSpillRef.current) : ''
-      publishedLiveRef.current = spillPreview
+      // La memoria de lo MOSTRADO nunca encoge dentro de la sesion (regla literal).
+      if (spillPreview.length >= publishedLiveRef.current.length) publishedLiveRef.current = spillPreview
       flushLiveTranscript()
     },
     [flushLiveTranscript],

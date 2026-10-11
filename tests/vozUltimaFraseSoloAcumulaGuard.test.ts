@@ -110,8 +110,16 @@ describe('A - la ultima frase SOLO acumula (lo que se ve)', () => {
   it('una locucion NUEVA (no es trozo) SI reemplaza lo mostrado', () => {
     const { deps, mostrado } = makeDeps()
     handleConversationStreamSync(deps as never, { capture: FRASE })
-    handleConversationStreamSync(deps as never, { capture: 'pon musica relajante para cenar' })
-    expect(ultimo(mostrado)).toBe('pon musica relajante para cenar')
+    handleConversationStreamSync(deps as never, { capture: 'pon musica relajante para cenar y tambien una lista de compras larga para toda la semana completa del mes entero' })
+    expect(ultimo(mostrado)).toBe('pon musica relajante para cenar y tambien una lista de compras larga para toda la semana completa del mes entero')
+  })
+
+  it('REGLA LITERAL: ni una locucion NUEVA puede ENCOGER lo mostrado', () => {
+    const { deps, mostrado } = makeDeps()
+    handleConversationStreamSync(deps as never, { capture: FRASE })
+    // Otra locucion, mas CORTA: NO reemplaza (la frase viva solo acumula).
+    handleConversationStreamSync(deps as never, { capture: 'pon musica' })
+    expect(ultimo(mostrado), 'lo mostrado no puede encoger jamas').toBe(FRASE)
   })
 
   it('el CIERRE no vacia lo mostrado (ni la zona ni su memoria)', () => {
@@ -134,16 +142,16 @@ describe('A - la ultima frase SOLO acumula (lo que se ve)', () => {
     handleConversationStreamSync(deps as never, { capture: FRASE })
     handleConversationStreamSync(deps as never, { capture: COLA })
     handleConversationStreamSync(deps as never, { capture: 'pon musica relajante para cenar' })
-    const live = vi.mocked(voiceProbe).mock.calls.filter((c) => c[0] === 'live').map((c) => c[1] as { resultado?: string; acorta?: boolean; mismaLocucion?: boolean })
+    const live = vi.mocked(voiceProbe).mock.calls.filter((c) => c[0] === 'live').map((c) => c[1] as { resultado?: string; acorta?: boolean; mismaLocucion?: boolean; len?: number; previo?: number })
     expect(live.some((o) => o.resultado === 'bloqueado'), 'el recorte bloqueado se declara').toBe(true)
     expect(live.some((o) => o.resultado === 'aplicado'), 'la sustitucion aplicada se declara').toBe(true)
-    // INVARIANTE DEL DUENO: `acortamientos APLICADOS = 0` -> ningun recorte de la MISMA locucion
-    // se aplica jamas (el bloqueo lo impide en la rama anterior).
-    expect(live.filter((o) => o.resultado === 'aplicado' && o.mismaLocucion === true), 'ningun recorte de la misma locucion puede aplicarse').toEqual([])
-    // Y todo lo aplicado es una locucion NUEVA (no un trozo de la mostrada).
-    expect(live.filter((o) => o.resultado === 'aplicado').every((o) => o.mismaLocucion === false), 'lo aplicado es locucion nueva').toBe(true)
-    // El bloqueado SIEMPRE acorta y SIEMPRE es la misma locucion (es su motivo).
-    expect(live.filter((o) => o.resultado === 'bloqueado').every((o) => o.acorta === true && o.mismaLocucion === true)).toBe(true)
+    // INVARIANTE LITERAL DEL DUENO: `acortamientos APLICADOS = 0` -> ningun texto mas corto que
+    // lo mostrado se aplica JAMAS (ni por otra locucion). El bloqueo lo impone el commit.
+    expect(live.filter((o) => o.resultado === 'aplicado' && o.acorta === true), 'ningun acortamiento aplicado').toEqual([])
+    // Y todo lo aplicado CREECE respecto a lo mostrado.
+    expect(live.filter((o) => o.resultado === 'aplicado').every((o) => Number(o.len) >= Number(o.previo)), 'lo aplicado no encoge').toBe(true)
+    // El bloqueado SIEMPRE acorta (es su motivo).
+    expect(live.filter((o) => o.resultado === 'bloqueado').every((o) => o.acorta === true)).toBe(true)
     // El campo tiene que existir en TODA emision: sin el, el dato no es concluyente.
     expect(live.every((o) => o.resultado === 'bloqueado' || o.resultado === 'aplicado')).toBe(true)
   })
