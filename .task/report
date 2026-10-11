@@ -5195,3 +5195,49 @@ VALIDACION: lint:guards VERDE 254 ficheros / 2043 tests · typecheck y eslint si
 
 NO CUBIERTO (0.23): el DoD-producto (la pantalla del dueno) y su sesion REAL multi-voz; y los
   2 ciclos de commit por locucion (el de segmento no escribe fila, por diseno).
+
+----------------------------------------------------------------
+PASADA AUTONOMA 5 - 2026-10-11 - REGRESION MIA: la frase viva congelaba el dictado nuevo
+----------------------------------------------------------------
+ANALISIS DE LA SESION DEL DUENO (debug.log 15:36-15:38, datos crudos):
+  (1) CONGELAMIENTO (MIO): 682 sondas `live` con 561 BLOQUEADAS. Desde 15:37:22 el texto
+      mostrado quedo en `previo=558` y TODO lo que dictaba despues era mas corto -> bloqueado.
+      La regla "solo acumula" la habia aplicado contra la memoria de TODA la sesion (no de la
+      locucion en curso), asi que el dictado nuevo no se veia: "no se veia nada y de repente
+      ya se vio mucho escrito". ARREGLADO: el bloqueo de encogimiento vale DENTRO de la
+      locucion; un ARRANQUE NUEVO del ASR (`freshUtterance`) la reemplaza.
+  (2) LA FILA SOLO NACE EN EL CIERRE POR SILENCIO: entre 15:36:21 y 15:37:22 se commitearon 4
+      tramos (142 -> 456 -> 542 -> 558 chars) SIN fila; la fila salio en los dos `srGap`
+      (silencio 3,5 s). Chrome no mando cierre real (`onend`) en esa sesion. De ahi el "tardo
+      muchisimo tiempo en transcribir". Se declara (la constante de silencio no se toca a
+      ciegas).
+  (3) DESPUES DE 15:38:14 NO HAY NINGUN EVENTO DE ASR (0 asrRaw/asrFinal/commit) durante mas
+      de 4 minutos, mientras el avatar seguia animandose: el micro no entrego nada y el
+      watchdog no registro `stall`/`rebuild`/error (0 lineas). Para fijar la causa hace falta
+      la sesion con el hot-path (`debugHotPath`) encendido: se declara, no se parchea a ciegas.
+  (4) `Hablante 2` aparecio a las 15:38:07 para la MISMA voz que era `Hablante 1` -> el
+      defecto "una voz = dos etiquetas" ES REAL en su sesion y exige umbrales de audio: NO se
+      tocan (decision del dueno) -> declarado.
+
+ARREGLO (un solo sitio, `conversationStreamCommit`):
+    if (!freshUtterance && (esTrozo || encoge)) { bloqueado } else { aplicado }
+  La sonda declara ahora el dato completo: resultado + acorta + fresh + mismaLocucion.
+
+LOG NUEVO (una sola corrida, 8/8, 4,0 min, 715 lineas):
+  aplicados=18 con `len<previo`=0 (NINGUN encogimiento aplicado) · bloqueados=3, TODOS mas
+  cortos (57->19 la cola; 32->30 x2 = otra locucion a mitad de dictado) · vaciados(len=0)=0 ·
+  nombres sin coincidencia=0 · written vacio=0 · filas reescritas sin evidencia=0 ·
+  etiquetas automaticas distintas=["Hablante 1"] · 11 filas added con 11 ids (0 duplicadas
+  dentro de una sesion; las 2 coincidencias de texto estan a 26 s = tests/sesiones distintas).
+
+GUARD: caso nuevo "una locucion NUEVA (freshUtterance) SI reemplaza aunque sea mas corta"
+  (control negativo: sin esa salida la frase se congela, que es el defecto medido) + la
+  invariante literal `aplicado && acorta && !fresh` = 0.
+
+VALIDACION: lint:guards VERDE 254 ficheros / 2044 tests · typecheck y eslint sin errores ·
+  GATE VERDE (metrica base=0 actual=1 target=1; guard base=1 actual=0). TECHOS: 4536/4536 ·
+  2706/2706 · 4624/4643 · 1838/1848. NINGUN UMBRAL DE AUDIO TOCADO.
+
+NO CUBIERTO (0.23): el DoD-producto (su pantalla); la causa del corte de ASR posterior a
+  15:38:14 (necesita hot-path); "una voz = una etiqueta" en su voz real (umbrales de audio,
+  no se tocan); y la espera de la fila hasta el cierre por silencio (3,5 s de constante).
