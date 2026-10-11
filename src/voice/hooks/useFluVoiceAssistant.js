@@ -1464,13 +1464,13 @@ const lastResolvedTurnRef = useRef(0)
     [getContinuousBufferAdapter, userSpeakersView],
   )
 
-  /** El embedding tarda MAS que el commit: manda el ULTIMO turno resuelto (monotono). */
-  const applyResolvedSpeaker = useCallback(({ speakerName, turnId, workingClusters }) => {
+  /** El embedding tarda MAS que el commit: la FILA de ese turno se completa SIEMPRE, los REFS de sesion no retroceden y la evidencia es la COINCIDENCIA medida (no "hay clusters"). */
+  const applyResolvedSpeaker = useCallback(({ speakerName, turnId, evidence }) => {
     const id = Number(turnId)
-    if (!speakerName || (Number.isFinite(id) && id < lastResolvedTurnRef.current)) return
-    if (Number.isFinite(id)) lastResolvedTurnRef.current = id
+    if (!speakerName) return
+    updateTurnRowSpeaker(turnId, speakerName, { evidenciaAcustica: evidence === true, registeredSpeaker: participantSpeakerRef.current }) // completa la fila de ESE turno, aunque la medida llegue tarde
+    if (Number.isFinite(id)) { if (id < lastResolvedTurnRef.current) return; lastResolvedTurnRef.current = id }
     lastSpeakerRef.current = speakerName; lastLoggedSpeakerRef.current = speakerName
-    updateTurnRowSpeaker(turnId, speakerName, { evidenciaAcustica: Boolean(workingClusters?.length), registeredSpeaker: participantSpeakerRef.current }) // completa la fila de ESE turno, no la hereda
     registerSpeakerIdentity({ name: speakerName, clusters: speakerClustersRef.current, refs: { setClusters: setSpeakerClusters, sessionPrimarySpeakerRef } })
   }, [participantSpeakerRef, setSpeakerClusters])
 

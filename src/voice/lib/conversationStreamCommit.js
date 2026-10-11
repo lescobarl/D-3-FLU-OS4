@@ -9,6 +9,7 @@ import { FLU_CONFIG } from './fluConfig.js'
 import {
   resolveMicCommitAction,
   isDuplicateTurnCommit,
+  isFragmentOfLocution,
   reconcileCommitText,
 } from './turnStream.js'
 import {
@@ -19,7 +20,6 @@ import {
   shouldRefreshStream,
   syncSpeakerIndexFromLabel,
   utterancesSameRevision,
-  wouldShrinkListenLog,
 } from './activeListen.js'
 import { debugHotPath, fluDebugHot } from './fluDebug.js'
 import { relayLog } from '../../lib/clientLogRelay'
@@ -225,13 +225,18 @@ export function handleConversationStreamSync(
   }
 
   if (!turnCommit) {
-    if (wouldShrinkListenLog(capture, publishedLiveRef.current)) {
-      // B1 corregido: esto NO es un descarte de locucion (es "no actualizar el preview");
-      // se queda como marca de DEV, fuera del relay (una WARN por interino inundaba el log).
-      if (import.meta.env.DEV && debugHotPath) fluDebugHot('stream-skip', { reason: 'shrink-preview' })
+    // LA FRASE VIVA SOLO ACUMULA (spec del dueno, 2026-10-11): si el ASR reentrega un TROZO
+    // contiguo de lo YA MOSTRADO (una COLA, un trozo del medio), manda lo mostrado y el turno
+    // no se toca. Antes el recorte solo se bloqueaba por PREFIJO (`wouldShrinkListenLog`), asi
+    // que una COLA reemplazaba la frase entera ("la borra y deja dos o tres palabras, y luego
+    // ya se vuelve a ver": log del dueno 2026-10-11 11:28). El criterio del trozo tiene UN
+    // dueno (`isFragmentOfLocution`, el mismo de la recompuesta) y ahora es el de la sonda.
+    if (isFragmentOfLocution(capture, publishedLiveRef.current)) {
+      voiceProbe('live', { turn: activeTurnIdRef.current, acorta: true, previo: publishedLiveRef.current.length, len: capture.length, text: capture.slice(0, 220) }) // BANDERA DE DIAGNOSTICO
       return
     }
     if (capture !== publishedLiveRef.current) {
+      voiceProbe('live', { turn: activeTurnIdRef.current, acorta: capture.length < publishedLiveRef.current.length, previo: publishedLiveRef.current.length, len: capture.length, text: capture.slice(0, 220) }) // BANDERA DE DIAGNOSTICO
       publishedLiveRef.current = capture
       scheduleLiveTranscriptUpdate(capture)
     }
@@ -313,12 +318,11 @@ export function handleConversationStreamSync(
     // del turno NO avanza (`openPreviewTurnRef` sigue abierto) -> UNA fila.
     if (closeTurn) {
       openPreviewTurnRef.current = false
-      // El ANCLA interna se resetea (dedupe/shrink/reconcile del turno que empieza), pero
-      // lo PUBLICADO NO se borra: borrar la "ultima frase" al cerrar el segmento dejaba la
-      // zona en blanco (~3 s) mientras el dueno seguia hablando hasta que llegaba el
-      // siguiente interino. Flicker medido en su log: cierre 02:20:15.94, siguiente
-      // asrRaw 02:20:19.07. La frase vive hasta que habla nueva la reemplaza.
-      publishedLiveRef.current = ''
+      // El cierre NO borra lo publicado ni su memoria: la transicion a una locucion NUEVA
+      // la decide el dueno del trozo (`isFragmentOfLocution`: una frase que NO es trozo
+      // reemplaza lo mostrado; un trozo conserva la COMPLETA). Borrar aqui era la via por la
+      // que una COLA del ASR dejaba la frase en dos o tres palabras (log del dueno
+      // 2026-10-11 11:28) y la razon del parpadeo del 2026-10-10.
       listenStateRef.current.openLine = ''
       listenStateRef.current.pendingInterim = ''
       preflightScheduledForTurnRef.current = false
@@ -466,7 +470,8 @@ export function handleConversationStreamSync(
   // Solo la evidencia de IDENTIDAD levanta el nombre: la acustica (preflight) o las
   // fuentes que lo traen de un dato (el texto "soy X" y el panel de participantes).
   const FUENTES_CON_IDENTIDAD = ['wake-intro', 'pinned']
-  const evidenciaAcustica = Boolean(preflight?.ready)
+  // Evidencia = la MEDIDA del turno (dueno: el resolutor la reporta), no "hay clusters".
+  const evidenciaAcustica = Boolean(preflight?.ready && preflight?.evidence === true)
   const crudo = resolved.speakerName || fallbackSpeaker
   const speakerResuelto =
     evidenciaAcustica || FUENTES_CON_IDENTIDAD.includes(resolved.source)
@@ -582,7 +587,7 @@ export function handleConversationStreamSync(
   lastSpeakerRef.current = speakerName
 
   relayLog('LOG', 'RowTrace', `refresh=${refreshNeeded} blocked=${ambientRowBlocked} replace=${replaceLast} turn=${activeTurnIdRef.current} cap="${capture.slice(0, 60)}"`) // BANDERA DE DIAGNOSTICO
-  voiceProbe('commit', { preReady: Boolean(preflight?.ready), src: resolved.source, name: resolved.speakerName, written: speakerEscrito, wc: resolved.workingClusters?.length ?? 0, refClusters: speakerClustersRef.current?.length ?? 0, sticky: stickyFallback, turn: activeTurnIdRef.current, replace: replaceLast, len: capture.length, capture: capture.slice(0, 220) }) // BANDERA DE DIAGNOSTICO
+  voiceProbe('commit', { preReady: Boolean(preflight?.ready), src: resolved.source, name: resolved.speakerName, written: speakerEscrito, shown: publishedLiveRef.current.slice(0, 220), wc: resolved.workingClusters?.length ?? 0, refClusters: speakerClustersRef.current?.length ?? 0, sticky: stickyFallback, turn: activeTurnIdRef.current, replace: replaceLast, len: capture.length, capture: capture.slice(0, 220) }) // BANDERA DE DIAGNOSTICO
   let delivered = false
   // La fila de CONVERSACION solo se escribe al CIERRE REAL del turno. Chrome cierra
   // SEGMENTOS mientras sigues hablando (un `final` por tramo) y esos commits NO

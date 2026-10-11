@@ -53,7 +53,7 @@ export function scheduleTurnSpeakerPreflight(turnId, run, { onClusters, onResolv
       const known = (getSpeakerClusters() || []).some((c) => normalizeSpeakerLabel(c?.label) === label)
       if (!known) return
     }
-    onResolved({ speakerId: result.speakerId || '', speakerName: result.speakerName, workingClusters: result.workingClusters || null, turnId: id })
+    onResolved({ speakerId: result.speakerId || '', speakerName: result.speakerName, workingClusters: result.workingClusters || null, turnId: id, evidence: result.evidence === true })
   }
 
   // El aviso que COMPLETA la fila lo da SOLO el snapshot FINAL: es el unico que
@@ -86,6 +86,7 @@ export function scheduleTurnSpeakerPreflight(turnId, run, { onClusters, onResolv
           signatureVector: prior.signatureVector,
           workingClusters: prior.workingClusters,
           reason: prior.reason,
+          evidence: prior.evidence === true,
         }
       : { ready: false }),
     pending: true,
@@ -140,6 +141,7 @@ export function scheduleTurnSpeakerPreflight(turnId, run, { onClusters, onResolv
         audioStartedAtMs: Number.isFinite(result?.audioStartedAtMs) ? result.audioStartedAtMs : 0,
         snapshotAt: Date.now(),
         reason: result?.reason || '',
+        evidence: result?.evidence === true,
       }
       const snapshots = [...(slot.snapshots || []), snapshotEntry]
       preflightByTurn.set(id, {
@@ -153,6 +155,7 @@ export function scheduleTurnSpeakerPreflight(turnId, run, { onClusters, onResolv
         audioStartedAtMs: snapshotEntry.audioStartedAtMs,
         workingClusters: result?.workingClusters || null,
         reason: result?.reason || '',
+        evidence: result?.evidence === true,
         snapshots,
         continuous: slot.continuous,
       })

@@ -316,6 +316,7 @@ export async function resolveSpeakerFromAudio(samples, sampleRate = DEFAULT_SAMP
     workingClusters: identity.workingClusters,
     signatureVector: identity.signatureVector?.length ? identity.signatureVector : vector,
     reason: 'resolved-idle',
+    evidence: identity.evidence === true,
   }
 }
 

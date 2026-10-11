@@ -232,19 +232,22 @@ function resolveProductionSpeakerAtBoundary({
     const strongAutoMatch = bestLabel && bestSim >= REUSE_EFF
     const strongLastMatch = lastSpeaker && lastSim >= REUSE_EFF
     if (!strongAutoMatch && !strongLastMatch) {
-      speakerClusters.push({
-        label: primaryLabel,
-        signature: [...normalized],
-        signatureHistory: [[...normalized]],
-      })
+      // El cluster se CREA: es el ANCLA que faltaba para poder AFIRMAR el nombre en los
+      // turnos siguientes. Pero ESTE turno NO se rotula con el nombre: no hubo ninguna
+      // coincidencia que lo afirme (regla del dueno, `registeredIdentityConfirmed`:
+      // "si el ancla aun no existe, tampoco"). Antes devolvia `primaryLabel` y el nombre
+      // aparecia en la PRIMERA intervencion SIN decir el comando (medido 2026-10-11:
+      // `Match name="Luis" inClusters=0` + `row-update objetivo:"luis"` a los 7 s).
+      ensureClusterForLabel(speakerClusters, primaryLabel, normalized, { learn: true })
       note?.({
         reason: 'production-primary-create-cluster',
         speaker: primaryLabel,
         lastSim,
         bestSim,
         bestLabel,
+        anchorOnly: true,
       })
-      return primaryLabel
+      return lastSpeaker || getFallbackSpeaker(FLU_CONFIG)
     }
   }
 
@@ -1082,4 +1085,40 @@ export function resolveConversationSpeaker({
     ensureClusterForLabel(speakerClusters, effectiveSticky, vector, { learn: false })
   }
   return stickyFallback()
+}
+
+/**
+ * DUENO UNICO de "la etiqueta se AFIRMO con una COINCIDENCIA medida" (evidencia).
+ *
+ * "HAY clusters" NO es evidencia: el relleno tardio usaba
+ * `Boolean(workingClusters.length)` y con eso REESCRIBIA filas ajenas (medido en el log
+ * del dueno 2026-10-11: `row-update {turnId:2, actual:"Hablante 1", objetivo:"luis"}` y
+ * `{turnId:35, actual:"Hablante 3", objetivo:"Hablante 2"}`). Evidencia = el vector del
+ * turno se COMPARO contra su ancla/cluster y la comparacion paso. Las razones de
+ * CONTINUIDAD (`production-last-*`) y las que no comparan (crear cluster, voz nueva,
+ * sin vector) NO son evidencia de identidad.
+ *
+ * El vocabulario se produce AQUI (`note({reason})`): la lista vive con el.
+ * @param {string} reason
+ * @returns {boolean}
+ */
+const RAZONES_CON_COINCIDENCIA_MEDIDA = new Set([
+  'production-cluster-match',
+  'production-primary-rematch',
+  'production-short-primary',
+  'production-short-historical',
+  'production-historical-reidentify',
+  'production-reidentify',
+  'production-reidentify-marginal',
+  'production-classroom-switch',
+  'production-cluster-continuity',
+  'production-known-other',
+  'production-cap-reidentify',
+  'production-cap-nearest',
+  'production-grey-zone-cluster-agreement',
+  'registered-pinned-rematch',
+])
+
+export function isMeasuredIdentityMatch(reason = '') {
+  return RAZONES_CON_COINCIDENCIA_MEDIDA.has(String(reason || ''))
 }

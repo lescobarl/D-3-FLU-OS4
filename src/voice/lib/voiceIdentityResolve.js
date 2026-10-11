@@ -12,6 +12,7 @@ import {
   resolveSpeakerNameFromId,
 } from './conversationRow.js'
 import { resolveConversationSpeaker as matchSpeakerByVoice, getFallbackSpeaker } from './voiceIdentity.js'
+import { isMeasuredIdentityMatch } from './speakerDiarization.js'
 import { relayLog } from '../../lib/clientLogRelay'
 import { DEFAULT_SAMPLE_RATE } from './audioConstants.js'
 
@@ -93,5 +94,6 @@ export function resolveSpeakerIdentityFromVector(
   )
   const speakerId = matched?.speakerId || labelToSpeakerId(label)
   const speakerName = resolveSpeakerNameFromId(speakerId, workingClusters)
-  return { speakerId, speakerName, workingClusters, label, signatureVector: vector }
+  // Evidencia = COINCIDENCIA medida (dueno: `isMeasuredIdentityMatch`), no "hay clusters".
+  return { speakerId, speakerName, workingClusters, label, signatureVector: vector, evidence: isMeasuredIdentityMatch(diagnosis.reason) }
 }

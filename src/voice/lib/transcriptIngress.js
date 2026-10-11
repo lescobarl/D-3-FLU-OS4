@@ -317,13 +317,15 @@ export function flushRecognitionEndThroughIngress(ctx) {
 }
 
 function resetInterimControlBuffers(listenState, publishedLiveRef, lastStreamPreviewRef) {
+  // El estado de ESCUCHA se limpia; la MEMORIA de lo mostrado NO (un dato, un dueno:
+  // la gobierna el escritor de la frase viva, `conversationStreamCommit`). Vaciarla aqui
+  // era la segunda via por la que un trozo posterior reemplazaba la frase completa.
   if (listenState) {
     listenState.openLine = ''
     listenState.pendingInterim = ''
     clearPendingFinal(listenState)
     clearInterimOpenLineClock(listenState)
   }
-  if (publishedLiveRef) publishedLiveRef.current = ''
   if (lastStreamPreviewRef) lastStreamPreviewRef.current = ''
 }
 
