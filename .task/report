@@ -5029,3 +5029,75 @@ NO CUBIERTO (0.23): el DoD-producto. El dueno re-corre sobre su pantalla + log E
   reinicio de portal + hard reload por parte del dueno y su log NUEVO.
 
 SONDA complementaria: la sonda asrRaw ya registraba el texto de cada item (interim y final) y ahora lleva tambien su LONGITUD (l) y el TURNO; asrFinal lleva el turno. Con voiceProbe(live) y el campo shown del commit, el dueno puede medir por tramo: cada interim/final, cada actualizacion de la "ultima frase" y cada acortamiento (previo/len/turn).
+
+----------------------------------------------------------------
+PASADA AUTONOMA 2 - 2026-10-11 - las 3 cosas que se ven en pantalla
+----------------------------------------------------------------
+
+1) NINGUNA VIA DA POR "MEDIDA" LA IDENTIDAD POR OMISION.
+   DEFECTO: los tres duelos de la fila declaraban `evidenciaAcustica = true` POR DEFECTO
+   (`preserveProperSpeaker`, `updateTurnRowSpeaker`, `commitUserTurnRowInner`) y el resolver
+   sincrono del hook declaraba la evidencia como `audioSnapshot.length > 0` ("hay audio" !=
+   "coincidio"). Omitir la marca ascendia a nombre propio SIN coincidencia.
+   ARREGLO: los 3 defaults a `false`; la evidencia del sync pasa por el dueno unico
+   `preflightEvidenceMeasured` (turnSpeakerPreflight.js), que exige `ready && evidence`; el
+   commit consume el MISMO predicado (un dato, un dueno).
+   TABLA (escenario -> entrada -> esperado -> medido -> PASS/FAIL):
+     resolveRowSpeakerName("Hablante 1", sin evidencia, {registeredName:Luis}) | "Hablante 1" | "Hablante 1" | PASS
+     commitUserTurnRow sin marca + registrado                     | "Hablante 1" | "Hablante 1" | PASS
+     updateTurnRowSpeaker sin marca + registrado                  | "Hablante 1" | "Hablante 1" | PASS
+     updateTurnRowSpeaker CON marca                               | "Luis"       | "Luis"       | PASS
+     preflightEvidenceMeasured({ready:true})                      | false        | false        | PASS
+     preflightEvidenceMeasured({ready:true,evidence:true})        | true         | true         | PASS
+     fuente: 0 ocurrencias de `evidenciaAcustica = true`          | 0            | 0            | PASS
+   GUARD: tests/vozEvidenciaPorOmisionGuard.test.ts (7 casos). ROJO en base (3 defaults en true).
+
+2) LA "ULTIMA FRASE" NO SE VACIA DURANTE LA CONVERSACION.
+   DEFECTO: se borraba en las rutas del rebuild del watchdog (`flushListenStateBeforeRebuild`) y
+   al entregar la frase a la IA (comando y consulta), mas el flush de cierre
+   (`flushTranscriptStateOnFinal`). Ese era el borra-y-reaparece.
+   ARREGLO: esas rutas ya NO tocan la memoria de la frase viva; su dueno es el reset de
+   SESION/VOZ. Los vaciados de arranque (`resetVoiceDisplay`), parada y sesion siguen y se
+   declaran aparte (4 en el hook, contados por el guard).
+   TABLA:
+     tras ENTREGAR (flushTranscriptStateOnFinal) la memoria sigue viva | intacta | intacta | PASS
+     una COLA posterior NO reemplaza lo mostrado                      | FRASE   | FRASE   | PASS
+     el flush de cierre no conoce la frase viva (fuente)              | sin publishedLiveRef | sin | PASS
+     el rebuild del watchdog no vacia la zona (fuente)                | sin setLiveTranscript  | sin | PASS
+     vaciados totales en el hook = escenas declaradas                 | 4       | 4       | PASS
+   GUARD: tests/vozUltimaFraseNoSeVaciaGuard.test.ts (4 casos). ROJO en base (el cierre borraba).
+   LOG EN VIVO (e2e `voz-escenario-dueno`, debug.log): 20 sondas `live`; len=0 -> 0 (nunca vacia);
+   2 acortamientos REGISTRADOS y BLOQUEADOS (previo=57 len=19; previo=32 len=30); la frase larga
+   acumula 21->37->54->57 sin bajar.
+
+3) NINGUNA CONFIGURACION PROMETE UN COMPORTAMIENTO SIN EFECTO (consumir o borrar).
+   MEDIDO: 48 claves tecnicas (num/bool) declaradas y SIN lector + `analyserSmoothing` = 49.
+   BORRADAS: `deferNewSpeakerUntilCommit`, `registeredMatchRelax`, `commitPreviewOnSpeakerChange`,
+   `preserveAllPreview`, `minCharsToCommitOnSpeakerChange`, `soundEnabled`, `conversationSettleStableMs`,
+   `conversationMinMsAfterLastResult`, `logRelateWindowMs`, `interimOpenLineFlushCheckMs`,
+   `restartAfterNetworkMs`, `auditLogMax`, `workspaceImageMs`, `analyserSmoothing`, las `roomRematch*`
+   que nadie leia, `refreshIntervalMinutes`, `postureIntervalMinutes`, `maxPerDay`, `diaMin/diaMax`,
+   `startHour/endHour`, ... (lista completa en el diff; cada una con 0 lecturas en todo el repo).
+   Se limpiaron los comentarios que quedaron huerfanos (prometian el comportamiento borrado).
+   fluConfig.js: 2772 -> 2706 lineas.
+   GUARD: tests/configConEfectoGuard.test.ts (3 casos, con PRUEBA DE DETECTOR). Claves con "_" son
+   DATOS (mapas de acciones), no perillas: excluidas y declarado el limite.
+
+LOG EN VIVO (debug.log, e2e voz-escenario-dueno, sonda nueva):
+   VozProbe live=20 · asrRaw=26 · asrFinal=15 · VozProbe commit=26 · VozProbe row=29.
+   written:"" en commit = 0 de 26 (todos llevan etiqueta).
+   row: TODAS con evidencia=false salvo `src=wake-intro` (el usuario DIJO "Okay flow soy luis":
+   la evidencia es de TEXTO, via declarada). Medido el descenso:
+   `turn=5 preReady=false src=sticky-preflight-pending name="Luis" written="Hablante 1"` -> el
+   nombre heredado se DEGRADA al generico por no haber coincidencia medida.
+   preReady sigue 100% false: la medida llega tarde; la fila SI se escribe siempre (written != "").
+
+VALIDACION: lint:guards VERDE 254 ficheros / 2038 tests; typecheck y eslint sin errores; GATE VERDE
+  (metrica base=3 actual=0 target=0; guard base=1 actual=0). TECHOS: useFluVoiceAssistant.js 4536/4536,
+  fluConfig.js 2706/2706, App.tsx 4624/4643, gemini.js 1838/1848 (trinquete APRETADO, no ampliado).
+  NINGUN UMBRAL DE AUDIO TOCADO.
+
+NO CUBIERTO (0.23): el DoD-producto. El dueno re-corre sobre su pantalla + log EN VIVO: (a) que un
+  nombre solo salga con coincidencia (primera intervencion SIN decir el comando), (b) que la ultima
+  frase no se vacie ni acorte, (c) que su voz = una etiqueta. Y el sintoma aun no medido en su log:
+  la MISMA locucion con wake puede producir 2-3 commits (turn 36/37/38 en el log anterior).
