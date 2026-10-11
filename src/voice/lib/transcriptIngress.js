@@ -269,7 +269,12 @@ export function flushRecognitionEndThroughIngress(ctx) {
     return { flushed: false, reason: 'inactive' }
   }
 
+  // LOCUCION CONFIRMADA SIN FILA primero: es el texto que el usuario YA dijo (FINAL de
+  // Chrome) y que ningun cierre ha sellado. Los interinos POSTERIORES son el tramo EN
+  // VUELO (Chrome suelta palabras truncadas) y NO deben pisar la captura confirmada
+  // (regla P9.60: el parcial en vuelo se descarta, la confirmada se sella).
   const capture =
+    cleanForSpeech(ctx.listenState.pendingFinal) ||
     readStreamDisplay(ctx.listenState) || cleanForSpeech(ctx.listenState.pendingInterim)
   if (!capture) {
     sealPendingInterim(ctx.listenState)
@@ -297,6 +302,7 @@ export function flushRecognitionEndThroughIngress(ctx) {
   }
 
   const result = sealPendingInterim(ctx.listenState)
+  if (ctx.listenState) ctx.listenState.pendingFinal = ''
   ctx.scheduleTurnCommit?.({
     capture,
     newParagraph: result.newParagraph,
@@ -492,6 +498,11 @@ function ingestFinalChunk({ finalChunk, ctx }) {
     forceNewRowOnSegment: segmentChronoSplit,
   })
   if (!wakeSplit.handled) {
+    // LOCUCION CONFIRMADA SIN FILA: el FINAL de segmento NO cierra el turno (no escribe
+    // fila), asi que el texto se DERRAMA al slot `pendingFinal` hasta que un cierre REAL
+    // (onend/srGap) lo selle. Sin esto, los interinos posteriores "desconfirmaban" la
+    // linea y el rebuild la descartaba: la locucion se perdia entera (medido: filas=[]).
+    if (ctx.listenState) ctx.listenState.pendingFinal = commitCapture
     ctx.scheduleTurnCommit?.({
       capture: published,
       newParagraph: forceNewRow ? true : newParagraph,

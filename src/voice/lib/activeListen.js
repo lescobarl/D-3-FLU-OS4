@@ -184,6 +184,12 @@ export function shouldOpenNewParagraph(state, nowMs = Date.now()) {
  * perdia).
  */
 export function hasConfirmedOpenLine(state) {
+  // LOCUCION CONFIRMADA SIN FILA: la marca el ingress (`pendingFinal`) al confirmar un
+  // FINAL de segmento que NO cierra el turno. Los interinos POSTERIORES tocan la linea
+  // viva (`openLineLastTouchMs > lastFinalAtMs`) y hacian que este test dijera "no
+  // confirmada" -> el rebuild por stall la descartaba y la locucion se perdia ENTERA
+  // (medido en el log del dueno 2026-10-10 19:24: `filas=[]` con el texto en la linea).
+  if (cleanForSpeech(state?.pendingFinal)) return true
   if (!cleanForSpeech(state?.openLine)) return false
   const finalAt = Number(state?.lastFinalAtMs) || 0
   if (finalAt <= 0) return false

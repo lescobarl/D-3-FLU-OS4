@@ -447,7 +447,7 @@ export function evaluateSrGapSegmentCommit(
     return { flush: false, capture: '', reason: 'sr-active' }
   }
 
-  const capture = cleanForSpeech(readTurnLive(state))
+  const capture = cleanForSpeech(readTurnLive(state) || state?.pendingFinal)
   if (!capture) return { flush: false, capture: '', reason: 'empty-openline' }
 
   const minWords = Number(cfg.srGapCommitMinWords)
