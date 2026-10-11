@@ -33,6 +33,12 @@
     "kilo.json"
   ],
   "e2eScope": {
+    "src/app/useIdentitySessionRef.ts": [
+      "tests/e2e/voz-escenario-dueno.spec.ts"
+    ],
+    "src/hooks/useNavigationCommands.ts": [
+      "tests/e2e/voz-escenario-dueno.spec.ts"
+    ],
     "src/voice/lib/audioMath.js": [
       "tests/e2e/voz-locucion-unica.spec.ts"
     ],

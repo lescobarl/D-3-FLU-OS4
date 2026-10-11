@@ -4802,3 +4802,51 @@ guard que nace ROJO (10/15) y metrica 5 -> 0; NO CUBIERTO=la pantalla del dueno 
 P9.64 (inflado de etiquetas: si el resolutor no vuelve a casar el turno con el cluster, el
 nombre puede no pegarse a un cluster NUEVO), que depende de umbrales de audio del dueno.
 
+
+----------------------------------------------------------------
+CORRECCION Y CIERRE DEL BLOQUE B1/B2 (misma sesion, antes de reportar)
+----------------------------------------------------------------
+COMMITS: 66f7d31 (7 ficheros src) + db842b2 (guard nuevo + 4 guards corregidos + contrato +
+ledger) + 7846201 (fixture CRUDA del log en el guard).
+
+FIXTURE CRUDA (datos del log del dueno, sin reconstruir):
+ asrFinal 02:20:11.434 len=275, texto "pruebas de transcripcion de diarizacion estoy
+ hablando yo Luis no estoy diciendo El Comando cuando diga El Comando ..." con los commits
+ turn=1 y turn=2 (preReady:false, replace:false) -> el "estoy hablando yo Luis" va A MITAD
+ de frase: detectIntroducedName = '' (antes capturaba 'Luis').
+ Fila REAL de turnId=12: "voy a decir el comando Okay flu Soy Luis" -> '' (la wake no abre
+ la orden).
+
+TABLA DE CIERRE FINAL (escenario -> entrada cruda -> esperado -> medido -> PASS/FAIL)
+ B1-1  '...hasta que yo diga okay flow soy Luis'        -> ''     -> ''     PASS
+ B1-2  'voy a decir el comando de okay flu soy Luis'    -> ''     -> ''     PASS
+ B1-3  'okay flu soy Luis'                              -> 'Luis' -> 'Luis' PASS
+ B1-4  'okay flu la frase es soy Luis'                  -> ''     -> ''     PASS
+ B1-5  'okay flu que yo diga soy Luis'                  -> ''     -> ''     PASS
+ B1-6  'okay flu voy a decir el comando de soy Luis'    -> ''     -> ''     PASS
+ B1-7  'okay flu mi definicion fue hasta que yo diga soy Luis' -> '' -> '' PASS
+ B1-8  'okay flow soy Luis'                             -> 'Luis' -> 'Luis' PASS
+ B1-9  'okay flu soy Luis y no sustituyo' (ASR pega)    -> 'Luis' -> 'Luis' PASS
+ B1-10 'okay flu me llamo Luis'                         -> 'Luis' -> 'Luis' PASS
+ B1-11 FIXTURE asrFinal (275 chars, 'estoy hablando yo Luis' en medio) -> '' -> '' PASS
+ B1-12 FIXTURE fila turnId=12 ('voy a decir el comando Okay flu Soy Luis') -> '' -> '' PASS
+ B2-1  etiqueta reusada (alias por etiqueta)            -> 'Hablante 1' -> 'Hablante 1' PASS
+ B2-2  'soy X' renombra solo la VOZ (por FIRMA)         -> ['Luis','Hablante 3','Luis'] +
+        cluster con el nombre -> PASS
+ B2-3  ruta del comando                                 -> registra + la VOZ queda con el
+        nombre -> PASS
+
+CONTROL NEGATIVO: el guard (16 casos) NACE ROJO contra 1f4a92d: revertidos los 7 ficheros
+src con `git checkout 1f4a92d -- ...`, CAEN 11 de 16; con el arreglo 16/16 VERDES. El propio
+guard incluye los 2 mutantes del defecto aislados.
+
+GATE VERDE (re-corrido sobre el estado FINAL): alcance OK - tamano OK - DoD OK - guard OK
+(metrica base=5 actual=0; guard base=1 actual=0).
+LINT 246 ficheros / 1996 tests VERDE = 0 fallos nuevos.
+e2e:plan: 1 spec del bloque (tests/e2e/voz-escenario-dueno.spec.ts).
+TECHOS: useFluVoiceAssistant.js 4539/4539; App.tsx 4624/4643; fluConfig.js 2772/2772;
+gemini.js 1838/1848. Ningun umbral de audio tocado.
+
+CONSECUENCIA DECLARADA de la regla (a): una wake INLINE ya NO introduce el nombre (la orden
+empieza en la wake). El dueno lo confirma en su pantalla.
+
