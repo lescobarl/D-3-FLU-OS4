@@ -5101,3 +5101,60 @@ NO CUBIERTO (0.23): el DoD-producto. El dueno re-corre sobre su pantalla + log E
   nombre solo salga con coincidencia (primera intervencion SIN decir el comando), (b) que la ultima
   frase no se vacie ni acorte, (c) que su voz = una etiqueta. Y el sintoma aun no medido en su log:
   la MISMA locucion con wake puede producir 2-3 commits (turn 36/37/38 en el log anterior).
+
+----------------------------------------------------------------
+PASADA AUTONOMA 3 - 2026-10-11 - el dato concluyente + una locucion = una fila
+----------------------------------------------------------------
+
+1) LA SONDA DE LA FRASE VIVA DICE BLOQUEADO O APLICADO (dato concluyente)
+   Antes `acorta` salia en las DOS ramas (bloqueo y sustitucion) y no se podian distinguir.
+   AHORA cada emision lleva `resultado` (bloqueado|aplicado) + `mismaLocucion`, y el dedupe
+   de commits lleva su PROPIO dato (`dup` con veredicto + edades + ventana): sin eso, un
+   doble commit de la misma locucion era inmedible desde el log.
+   MEDIDO (log nuevo, reinicio + e2e fresco): live=25 · bloqueado=1 · aplicado=24 ·
+   SIN VEREDICTO=0 · acortamientos aplicados de la MISMA locucion=0 · vaciados(len=0)=0.
+
+2) UNA LOCUCION = UNA FILA
+   (a) DEDUPE CON DUENO: `isDuplicateTurnCommit` reconoce el doble final (mismo texto) dentro
+   de la VENTANA DE ECO y lo descarta; fuera de la ventana la repeticion es genuina. La ventana
+   tiene UN dueno (`committedEchoStreakWindowMs`, antes 3 copias del mismo literal).
+   (b) EL TURNO DE LA FILA ES EL DE LA FRASE: una resolucion TARDIA de la IA llegaba DESPUES de
+   que el turno vivo avanzara y escribia la fila del texto VIEJO bajo un turnId NUEVO (medido:
+   dos filas de la misma locucion a 0,8 s). Ahora el embudo compara la frase con la ULTIMA
+   EMITIDA y usa SU turno (`turnIdDeLaFrase`) -> el dueno de la fila la reutiliza por identidad
+   de turno. NO se toca la regla de DEFECTO 3: dos ordenes REALES con ids distintos y sin FLU
+   en medio siguen siendo DOS filas.
+   MEDIDO: 4 locuciones -> 4 filas (0 duplicadas) en el tramo limpio del log; en el log mixto,
+   las 2 coincidencias de texto estan a 7,4 s y 19,8 s = la MISMA locucion en DOS PRUEBAS
+   distintas (sesiones distintas), no una duplicacion.
+   PENDIENTE MEDIDO: la locucion sigue produciendo 2 CICLOS de commit (el ciclo de segmento NO
+   escribe fila: solo el cierre real la escribe). Se declara, no se maquilla.
+
+3) UNA VOZ = UNA ETIQUETA
+   MEDIDO en el log: etiquetas automaticas distintas = ["Hablante 1"] (0 inflacion).
+   NO CUBIERTO: la sesion REAL multi-voz del dueno (el e2e usa UNA voz sintetica). Verificar
+   "la misma voz no sale como Hablante 2 y Hablante 3" con su voz exige los umbrales de audio:
+   NO SE TOCAN (decision del dueno) -> declarado.
+
+4) NOMBRE SOLO CON COINCIDENCIA (tambien el relleno tardio)
+   MEDIDO: nombres sin coincidencia = 0; `written` vacio = 0; escritos = {Hablante 1, Luis} y
+   "Luis" sale UNICAMENTE por `src=wake-intro` (el dueno DIJO "Okay flow soy luis": evidencia
+   de TEXTO, via declarada).
+   Y filas reescritas sin evidencia (row-update cambia=true con ev=false) = 0.
+
+GUARDS (nacen ROJO -> verde, con control negativo):
+   vozUltimaFraseSoloAcumulaGuard: la sonda declara el veredicto en TODA emision y ningun
+     recorte de la misma locucion se aplica.
+   vozUnaFilaPorLocucionConWakeGuard: el doble final (< ventana) NO produce 2 commits; el
+     turno de la fila se deriva de la FRASE emitida.
+   turnRowNoDuplicate: el hook publica la identidad de turno en los 3 puntos de escritura.
+
+VALIDACION: lint:guards VERDE 254 ficheros / 2042 tests; typecheck y eslint sin errores;
+   GATE VERDE (metrica base=0 actual=1 target=1; guard base=1 actual=0). TECHOS:
+   useFluVoiceAssistant.js 4536/4536; fluConfig.js 2706/2706; App.tsx 4624/4643; gemini 1838/1848.
+   NINGUN UMBRAL DE AUDIO TOCADO.
+   E2E: P1..P7 medidos; P1 fallo UNA vez en una corrida de 8,5 min (maquina cargada) y pasa al
+   re-correrlo aislado (46,9 s): es carga, no el cambio (el cambio solo AÑADE descartes).
+
+NO CUBIERTO (0.23): el DoD-producto (la pantalla del dueno) y su sesion REAL multi-voz; y los
+   2 ciclos de commit por locucion (uno sin fila, por diseno). Cierre por el dueno con LOG NUEVO.
