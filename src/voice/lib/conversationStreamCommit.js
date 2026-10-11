@@ -242,13 +242,18 @@ export function handleConversationStreamSync(
     // (`encoge`/revision mas corta): una emision mas corta de la locucion en curso SI se aplica
     // (la caja refleja la emision actual, suba o baje). El VACIADO (len=0) no pasa por aqui: solo
     // lo hace el reset del cierre (silencio/cambio de hablante/commit).
-    const esTrozo = isFragmentOfLocution(capture, publishedLiveRef.current)
-    if (esTrozo) {
-      voiceProbe('live', { turn: activeTurnIdRef.current, resultado: 'bloqueado', motivo: 'trozo', acorta: true, fresh: Boolean(freshUtterance), mismaLocucion: true, previo: publishedLiveRef.current.length, len: capture.length, text: capture.slice(0, 220) }) // BANDERA DE DIAGNOSTICO
+    // LA CAJA SOLO ACUMULA: cualquier emision MAS CORTA que lo ya mostrado se BLOQUEA
+    // (antes solo el TROZO contiguo, y una emision corta NO relacionada REEMPLAZABA:
+    // medido 2026-10-11 22:36 -> 356 acortamientos APLICADOS y la frase viva "se comia"
+    // parte de la transcripcion). Cero excepciones: acorta:true + aplicado = 0.
+    const previoLive = publishedLiveRef.current || ''
+    const esTrozo = isFragmentOfLocution(capture, previoLive)
+    if (previoLive && capture.length < previoLive.length) {
+      voiceProbe('live', { turn: activeTurnIdRef.current, resultado: 'bloqueado', motivo: esTrozo ? 'trozo' : 'acorta', acorta: true, fresh: Boolean(freshUtterance), mismaLocucion: esTrozo, previo: previoLive.length, len: capture.length, text: capture.slice(0, 220) }) // BANDERA DE DIAGNOSTICO
       return
     }
     if (capture !== publishedLiveRef.current) {
-      voiceProbe('live', { turn: activeTurnIdRef.current, resultado: 'aplicado', motivo: 'emision-actual', acorta: capture.length < publishedLiveRef.current.length, fresh: Boolean(freshUtterance), mismaLocucion: esTrozo, reemplaza: true, previo: publishedLiveRef.current.length, len: capture.length, text: capture.slice(0, 220) }) // BANDERA DE DIAGNOSTICO
+      voiceProbe('live', { turn: activeTurnIdRef.current, resultado: 'aplicado', motivo: 'emision-actual', acorta: false, fresh: Boolean(freshUtterance), mismaLocucion: false, reemplaza: true, previo: publishedLiveRef.current.length, len: capture.length, text: capture.slice(0, 220) }) // BANDERA DE DIAGNOSTICO
       publishedLiveRef.current = capture
       scheduleLiveTranscriptUpdate(capture)
     }
