@@ -2152,7 +2152,7 @@ const lastResolvedTurnRef = useRef(0)
       }
 
       Recognition.onresult = (event) => {
-        if (isVoiceProbeEnabled()) voiceProbe('asrRaw', { items: Array.from(event.results || []).map((r) => ({ f: r?.isFinal ? 1 : 0, t: String(r?.[0]?.transcript || '') })) })
+        if (isVoiceProbeEnabled()) voiceProbe('asrRaw', { turn: activeTurnIdRef.current, items: Array.from(event.results || []).map((r) => { const t = String(r?.[0]?.transcript || ''); return { f: r?.isFinal ? 1 : 0, t, l: t.length } }) })
         // Supresión de eco: mientras FLU HABLA, ignorar resultados del
         // reconocedor para no capturar la propia voz y re-mandarla a la IA.
         // Se usa la promesa propia de FLU (`isFluSpeaking`, acotada por el
@@ -2191,7 +2191,7 @@ const lastResolvedTurnRef = useRef(0)
         }
 
         if (conversationActiveRef?.current) {
-          if (finalText) { const w = analyzeWakeTurn(finalText, { lastCommitted: userRowsTextView.current.at(-1) || '' }); voiceProbe('asrFinal', { wake: w.wakeWordMatched, inline: w.hasInlineBoundary, before: w.passiveOnly.slice(0, 80), after: w.afterWake.slice(0, 80), len: w.cleaned.length, text: w.cleaned }) }
+          if (finalText) { const w = analyzeWakeTurn(finalText, { lastCommitted: userRowsTextView.current.at(-1) || '' }); voiceProbe('asrFinal', { turn: activeTurnIdRef.current, wake: w.wakeWordMatched, inline: w.hasInlineBoundary, before: w.passiveOnly.slice(0, 80), after: w.afterWake.slice(0, 80), len: w.cleaned.length, text: w.cleaned }) }
           try {
             if (import.meta.env.DEV && debugHotPath) {
               const { interimChunks, finalChunks } = collectRecognitionResultChunks(event)

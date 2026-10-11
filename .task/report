@@ -5027,3 +5027,5 @@ VALIDACION: lint:guards VERDE 251 ficheros / 2024 tests; typecheck y eslint sin 
 NO CUBIERTO (0.23): el DoD-producto. El dueno re-corre sobre su pantalla + log EN VIVO
   con la sonda nueva (interim/final + "ultima frase" + filas tal como se ven). Falta
   reinicio de portal + hard reload por parte del dueno y su log NUEVO.
+
+SONDA complementaria: la sonda asrRaw ya registraba el texto de cada item (interim y final) y ahora lleva tambien su LONGITUD (l) y el TURNO; asrFinal lleva el turno. Con voiceProbe(live) y el campo shown del commit, el dueno puede medir por tramo: cada interim/final, cada actualizacion de la "ultima frase" y cada acortamiento (previo/len/turn).
