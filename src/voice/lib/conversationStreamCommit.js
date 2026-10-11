@@ -37,6 +37,7 @@ import {
 import { markCommitPerfNow } from './audioSegmentClock.js'
 import { labelToSpeakerId } from './conversationRow.js'
 import { renameSpeakerRows } from './conversationTurnRow'
+import { isNameBoundToVoice } from './speakerClusters.js'
 import { preflightEvidenceMeasured } from './turnSpeakerPreflight.js'
 import { normalizeSpeakerLabel, isAutoSpeakerLabel } from './voiceIdentity.js'
 import { isSameEmissionWithinWindow } from './captureDedup.js'
@@ -492,8 +493,11 @@ export function handleConversationStreamSync(
   // Evidencia = la MEDIDA del turno (dueno: `preflightEvidenceMeasured`), no "hay clusters".
   const evidenciaAcustica = preflightEvidenceMeasured(preflight)
   const crudo = resolved.speakerName || fallbackSpeaker
+  // El nombre LIGADO a la voz (registro del comando o del panel) se mantiene en TODOS sus turnos:
+  // no depende de que la medida del turno llegue (N turnos -> N filas con el nombre).
+  const nombreLigado = isNameBoundToVoice(speakerClustersRef.current, crudo)
   const speakerResuelto =
-    evidenciaAcustica || FUENTES_CON_IDENTIDAD.includes(resolved.source)
+    evidenciaAcustica || FUENTES_CON_IDENTIDAD.includes(resolved.source) || nombreLigado
       ? crudo
       : blindSpeakerFallback(crudo)
   const speakerName = normalizeSpeakerLabel(speakerResuelto)

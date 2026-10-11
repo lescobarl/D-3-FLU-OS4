@@ -324,8 +324,7 @@ async function stopMediaStream(stream) {
 
 function createRecognition(language, activeLocale = '') {
   // §9 Motor de escucha: Chrome SpeechRecognition (Google, online) — en vivo y
-  // preciso. El resto del pipeline (ingress/commit/query/display/diarización)
-  // sigue unificado y es agnóstico al motor.
+  // preciso. El resto del pipeline (ingress/commit/query/display/diarización) sigue unificado y es agnóstico al motor.
   return acquireSpeechRecognition(language, activeLocale)
 }
 
@@ -377,16 +376,14 @@ export function useFluVoiceAssistant({
    * el mismo texto (display === fila). Ninguna rama llama ya
    * `commitVisibleTranscript` directo (salvo el reset).
    */
-  // Wake words efectivas (Ajustes o default): UN solo criterio. Van declaradas
-  // ANTES del commit porque el commit las consume para recortar el eco.
+  // Wake words efectivas (Ajustes o default): UN solo criterio. Van declaradas ANTES del commit porque el commit las consume para recortar el eco.
   const resolvedWakeWords = resolveWakeWords(wakeWords)
   const commitTurnPhrase = useCallback((text, fallback = '') => {
     const phrase = resolveTurnCommitPhrase({ capture: text, fallback, log: relayLog, wakeWords: resolvedWakeWords })
     if (phrase) commitVisibleTranscript(phrase)
     return phrase
   }, [commitVisibleTranscript, resolvedWakeWords])
-  // Limpieza del estado del turno tras resolver (se asigna cuando
-  // `clearTurnBuffers` existe). Evita que la locución ya ejecutada quede en el
+  // Limpieza del estado del turno tras resolver (se asigna cuando `clearTurnBuffers` existe). Evita que la locución ya ejecutada quede en el
   // buffer/spill y se vuelva a procesar (ciclo de comandos repetidos).
   const clearTurnAfterResolveRef = useRef(() => {})
   const activeTurnIdRef = useRef(0)
@@ -404,8 +401,7 @@ export function useFluVoiceAssistant({
       // Garbage descartada (anti-alucinación): no se commitea ni se consulta a IA.
       if (!canonicalPhrase) return ''
       // `commitOnly`: commit temprano + fila del USUARIO inmediata (sin esperar a
-      // la IA). La resolución posterior re-commitea el MISMO valor (idempotente)
-      // y deduplica la fila, así no hay doble fuente.
+      // la IA). La resolución posterior re-commitea el MISMO valor (idempotente) y deduplica la fila, así no hay doble fuente.
       if (commitOnly) {
         if (!earlyCommitDedupeRef.current.isRepeat(canonicalPhrase)) {
           await onContractResolved?.({ contract: null, userCommitOnly: true, transcript: canonicalPhrase, speakerName: payload.speakerName, evidenciaAcustica, phase: payload.phase, turnId: activeTurnIdRef.current })
@@ -416,8 +412,7 @@ export function useFluVoiceAssistant({
       // ya emitida escribe SU fila, no una nueva bajo el turno siguiente (filas duplicadas).
       const turnIdDeLaFrase = canonicalPhrase && canonicalPhrase === lastEmittedTranscriptRef.current && lastEmittedTurnRef.current ? lastEmittedTurnRef.current : activeTurnIdRef.current
       const result = await onContractResolved?.({ contract, ...payload, evidenciaAcustica, transcript: canonicalPhrase, turnId: turnIdDeLaFrase })
-      // Turno cerrado: limpiar buffer/spill para que la locución ya ejecutada no
-      // se reprocese (ciclo de comandos/ambient que repetían la misma orden).
+      // Turno cerrado: limpiar buffer/spill para que la locución ya ejecutada no se reprocese (ciclo de comandos/ambient que repetían la misma orden).
       clearTurnAfterResolveRef.current?.()
       return result
     },
@@ -644,8 +639,16 @@ const lastResolvedTurnRef = useRef(0)
     const skipDefaults = FLU_CONFIG.multiuser?.skipDefaults || {}
     const anonymousName = String(skipDefaults.anonymousName || 'Anónimo').trim().toLowerCase()
     if (name.toLowerCase() === anonymousName) return
+    // PANEL DE PARTICIPANTES: al cambiar el nombre se liga a la VOZ (mismo dueno del registro):
+    // reescribe la BASE de esa voz y los turnos siguientes lo resuelven por FIRMA.
+    registerSpeakerIdentity({
+      name,
+      previousLabel: activeParticipantSpeakerLabel,
+      clusters: speakerClustersRef.current,
+      refs: { setClusters: setSpeakerClusters, sessionPrimarySpeakerRef },
+    })
     setSessionPrimarySpeaker(sessionPrimarySpeakerRef, name, 'participant')
-  }, [activeParticipantName])
+  }, [activeParticipantName, activeParticipantSpeakerLabel, setSpeakerClusters])
 
   useEffect(() => {
     seedSessionPrimaryFromActiveName()
@@ -758,8 +761,7 @@ const lastResolvedTurnRef = useRef(0)
     const hasGetUserMedia = Boolean(navigator.mediaDevices?.getUserMedia)
     const hasSpeechRecognition = Boolean(window.SpeechRecognition || window.webkitSpeechRecognition)
     const hasAudioContext = Boolean(window.AudioContext)
-    // §9 Motor: Chrome SpeechRecognition (Google, online) + AudioContext para la
-    // captura PCM (identidad de voz). El resto del pipeline es agnóstico.
+    // §9 Motor: Chrome SpeechRecognition (Google, online) + AudioContext para la captura PCM (identidad de voz). El resto del pipeline es agnóstico.
     const supported = hasGetUserMedia && hasSpeechRecognition && hasAudioContext
     setIsSupported(supported)
     if (!supported) {
@@ -790,8 +792,7 @@ const lastResolvedTurnRef = useRef(0)
             theme: saved.theme || FLU_CONFIG.sessionDefaults.theme,
           })
         }
-        // §9: el historial restaurado lo carga `useConversationPersistence` en el
-        // store; el motor NO mantiene diálogo propio. El filtrado de eventos de
+        // §9: el historial restaurado lo carga `useConversationPersistence` en el store; el motor NO mantiene diálogo propio. El filtrado de eventos de
         // sistema pertenece a la persistencia, no a este hook.
         if (saved.phase === 'SESION_ACTIVA' || saved.phase === 'CONFIGURACION') {
           setPhase(saved.phase)
@@ -892,8 +893,7 @@ const lastResolvedTurnRef = useRef(0)
 
   const flushLiveTranscript = useCallback(() => {
     if (conversationActiveRef?.current) {
-      // §9 — UN SOLO ESCRITOR: en conversación activa la frase viva la escribe
-      // únicamente `handleConversationStreamSync` (vía syncConversationStream,
+      // §9 — UN SOLO ESCRITOR: en conversación activa la frase viva la escribe únicamente `handleConversationStreamSync` (vía syncConversationStream,
       // preview y commit). Aquí NO se escribe: antes había dos escritores
       // (este + el stream sync) con reglas distintas → alternancia/ciclo.
       return
@@ -1476,7 +1476,7 @@ const lastResolvedTurnRef = useRef(0)
     updateTurnRowSpeaker(turnId, speakerName, { evidenciaAcustica: evidence === true, registeredSpeaker: participantSpeakerRef.current }) // completa la fila de ESE turno, aunque la medida llegue tarde
     if (Number.isFinite(id)) { if (id < lastResolvedTurnRef.current) return; lastResolvedTurnRef.current = id }
     lastSpeakerRef.current = speakerName; lastLoggedSpeakerRef.current = speakerName
-    registerSpeakerIdentity({ name: speakerName, clusters: speakerClustersRef.current, refs: { setClusters: setSpeakerClusters, sessionPrimarySpeakerRef } })
+    registerSpeakerIdentity({ name: speakerName, previousLabel: speakerName, clusters: speakerClustersRef.current, refs: { setClusters: setSpeakerClusters, sessionPrimarySpeakerRef } })
   }, [participantSpeakerRef, setSpeakerClusters])
 
   const scheduleIdentityPreflight = useCallback(

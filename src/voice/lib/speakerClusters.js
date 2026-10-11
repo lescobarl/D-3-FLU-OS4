@@ -452,6 +452,23 @@ export function sameVoiceLabelGroup(
   return group
 }
 
+/**
+ * true si `name` es la etiqueta de un cluster CON firma: el NOMBRE esta LIGADO a esa VOZ (lo
+ * escribio el registro del comando o el panel de participantes). Un turno de esa voz lleva su
+ * nombre AUNQUE la medida del turno no llegue (N turnos de la voz -> N filas con el nombre).
+ *
+ * @param {Array} speakerClusters clusters de sesion
+ * @param {string} name nombre candidato
+ * @returns {boolean}
+ */
+export function isNameBoundToVoice(speakerClusters = [], name = '') {
+  const target = String(name || '').trim()
+  if (!target) return false
+  return (speakerClusters || []).some((c) => {
+    const sig = c?.signature
+    return String(c?.label || '').trim() === target && Array.isArray(sig) && sig.length > 0
+  })
+}
 export function findLabelsWithSharedVoice(
   speakerClusters = [],
   anchorLabel = '',

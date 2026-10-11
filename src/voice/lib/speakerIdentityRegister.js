@@ -26,7 +26,7 @@
  */
 import { resolveSpeakerNameFromUtterance } from './speakerPolicy.js'
 import { isProperSpeakerName, normalizeSpeakerLabel } from './voiceIdentity.js'
-import { findLabelsWithSharedVoice, mergeSpeakerClustersOnRename } from './speakerClusters.js'
+import { findLabelsWithSharedVoice, mergeSpeakerClustersOnRename, sameVoiceFloor } from './speakerClusters.js'
 import { renameSpeakerRows } from './conversationTurnRow'
 import { setSessionPrimarySpeaker } from './sessionPrimarySpeaker.js'
 
@@ -63,9 +63,20 @@ export function registerSpeakerIdentity({
   if (!clean || !isProperSpeakerName(clean)) {
     return { registered: false, name: "", labels: [], rowsChanged: 0, primarySet: false }
   }
+  // La VOZ agrupa sus etiquetas por FIRMA: el ancla es la ETIQUETA con la que esa voz venia
+  // apareciendo (`previousLabel`), no el nombre (que aun no esta en ningun cluster). Antes se
+  // anclaba en `clean`, asi que solo se renombraba ESA etiqueta y los demas turnos de la misma
+  // voz (re-clusterizada como Hablante 2/3) quedaban genericos.
+  const anchor = normalizeSpeakerLabel(previousLabel)
   const labels = [
     ...new Set(
-      [normalizeSpeakerLabel(previousLabel), ...findLabelsWithSharedVoice(clusters, clean)].filter(Boolean),
+      [
+        anchor,
+        // PISO ESTRICTO (el de REUTILIZACION, 0.66): el cosido permisivo metia voces distintas
+        // (la banda de voz DISTINTA medida es 0.58).
+        ...findLabelsWithSharedVoice(clusters, anchor, sameVoiceFloor()),
+        ...findLabelsWithSharedVoice(clusters, clean, sameVoiceFloor()),
+      ].filter(Boolean),
     ),
   ]
   const rowsChanged = typeof rename === "function" ? rename(labels, clean) : 0
