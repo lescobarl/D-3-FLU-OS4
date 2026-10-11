@@ -55,7 +55,12 @@ describe('P6.7 jsReferenceGuard - referencias a nombres que no existen', () => {
       { openLine: 'hola mundo' },
       { sinceLastResultMs: 10001, lastCommitted: '' },
     )
-    expect(r).toEqual({ flush: false, capture: 'hola mundo', reason: 'too-short' })
+    // Cierre por SILENCIO con DOS palabras: la regla de cierre del dueno (2026-10-11) baja el
+    // minimo 3 -> 2 (medido: "no man" nunca cerraba -> sin fila, sin respuesta, sin reascuchar).
+    expect(r).toEqual({ flush: true, capture: 'hola mundo', reason: 'sr-gap-segment-commit', sinceLastResultMs: 10001, openLineAgeMs: 0 })
+    // UNA palabra sigue siendo "too-short" (la rama no se queda sin cubrir).
+    const r1 = evaluateSrGapSegmentCommit({ openLine: 'hola' }, { sinceLastResultMs: 10001, lastCommitted: '' })
+    expect(r1).toEqual({ flush: false, capture: 'hola', reason: 'too-short' })
   })
 
   it('evaluateSrGapSegmentCommit con prior cuenta la extension (lineas 369/370)', () => {
