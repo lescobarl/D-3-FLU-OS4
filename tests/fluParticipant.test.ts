@@ -403,3 +403,12 @@ describe('fluParticipant — log y labels', () => {
         expect(resolveFluParticipantLabel('handRaisedLabel', 'en')).toBe('Flu wants to speak');
     });
 });
+
+
+describe('PRUEBA DE DETECTOR (el detector no es decorativo): el predicado de evaluateOnTurnCommit discrimina', () => {
+    it('false -> NO evalua; true/ausente -> SI (una sola lectura de la clave)', async () => {
+        const mod = await import('../src/lib/fluParticipant');
+        expect(mod.evaluatesOnTurnCommit({ ...DEFAULT_PARTICIPANT_CONFIG, evaluateOnTurnCommit: false })).toBe(false);
+        expect(mod.evaluatesOnTurnCommit({ ...DEFAULT_PARTICIPANT_CONFIG, evaluateOnTurnCommit: true })).toBe(true);
+    });
+});

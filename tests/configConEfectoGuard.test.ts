@@ -27,14 +27,16 @@ export function clavesTecnicasSinLector(cfgTexto: string, textosFuera: string[])
   for (const m of cfgTexto.matchAll(/^(\s{2,8})([A-Za-z_][A-Za-z0-9_]*):\s*(?:-?\d+(?:\.\d+)?|true|false)\s*,/gm)) {
     decl.add(m[2])
   }
+  // Una MENCION en un comentario NO es un lector: se quitan antes de contar (un
+  // "// esto lee maxActive" convertia una clave muerta en viva).
+  const cfgSinComentarios = cfgTexto.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:'"\\])\/\/[^\n]*/g, '$1 ')
   const muertas: string[] = []
   for (const clave of decl) {
-    // Las claves con '_' son DATOS (mapas de acciones/etiquetas), no perillas de config.
-    if (clave.includes('_')) continue
+    // NO se salta ninguna clave: los datos de accion son config declarada y su nombre lleva '_'.
     const re = new RegExp('\\b' + clave + '\\b', 'g')
     let fuera = 0
     for (const t of textosFuera) fuera += (t.match(re) || []).length
-    const enConfig = (cfgTexto.match(re) || []).length
+    const enConfig = (cfgSinComentarios.match(re) || []).length
     // Sin lector fuera y sin un getter que la lea dentro (>1 aparicion en el propio fluConfig).
     if (fuera === 0 && enConfig <= 1) muertas.push(clave)
   }

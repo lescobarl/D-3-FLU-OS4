@@ -37,7 +37,7 @@ export const TECHOS: Record<string, number> = {
   'src/voice/hooks/useFluVoiceAssistant.js': 4530,
   // -66: 49 claves de config SIN lector (prometian comportamiento sin efecto) se borraron,
   // con su barrera (configConEfectoGuard).
-  'src/voice/lib/fluConfig.js': 2706,
+  'src/voice/lib/fluConfig.js': 2699,
   'src/voice/lib/gemini.js': 1848,
 }
 

@@ -12,6 +12,7 @@
 // ============================================================
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { readFileSync } from 'node:fs';
 import { renderHook, act } from '@testing-library/react';
 import type { RefObject } from 'react';
 import { useFluParticipant } from '../src/hooks/useFluParticipant';
@@ -137,5 +138,14 @@ describe('useFluParticipant — turno N con historial desacoplado (regresión OS
         });
 
         expect(generateParticipantEvaluationMock).not.toHaveBeenCalled();
+    });
+});
+
+
+describe('PRUEBA DE DETECTOR (el detector no es decorativo): el hook CONSUME el predicado, no lee la clave', () => {
+    it('una sola lectura de evaluateOnTurnCommit (la del dueno)', () => {
+        const src = readFileSync('src/hooks/useFluParticipant.ts', 'utf8');
+        expect(src).toContain('evaluatesOnTurnCommit(cfg)');
+        expect(src, 'el hook no puede re-leer la clave').not.toContain('cfg.evaluateOnTurnCommit === false');
     });
 });
