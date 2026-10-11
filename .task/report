@@ -5348,3 +5348,46 @@ VALIDACION: lint:guards VERDE 255 ficheros / 2050 tests · typecheck y eslint si
 
 REGLA DE ORO: nada se cierra por "gate verde"; se cierra cuando los invariantes se cumplen en
   el log de UNA corrida y el codigo tiene un dueno por regla. El DoD-producto es del dueno.
+
+----------------------------------------------------------------
+PASADA AUTONOMA 9 - 2026-10-11 - EL NOMBRE SE LIGA A LA VOZ (firma), EN TODOS SUS TURNOS
+----------------------------------------------------------------
+CODIGO (un dueno por regla)
+  1. El cosido de etiquetas del registro se ancla en la ETIQUETA de la voz (`previousLabel`),
+     no en el nombre (que aun no esta en ningun cluster): antes solo se renombraba ESA etiqueta
+     y los demas turnos de la misma voz (re-clusterizada como Hablante 2/3) quedaban genericos.
+     PISO ESTRICTO (`sameVoiceFloor`, 0.66): el cosido permisivo (0.64) metia voces distintas.
+  2. El nombre LIGADO A LA VOZ (`isNameBoundToVoice`: cluster con firma y ese nombre) NO se
+     degrada cuando la medida del turno no llega: N turnos de la voz => N filas con el nombre.
+  3. El PANEL DE PARTICIPANTES actualiza el nombre de esa VOZ (mismo dueno del registro): al
+     cambiar el nombre se reescriben las filas de su voz (la BASE) y los turnos siguientes lo
+     resuelven por FIRMA.
+
+GUARD (nace ROJO): tests/vozNombrePorVozTodosLosTurnosGuard.test.ts
+  Fixture: clusters con 2 etiquetas de la MISMA voz (cos 0.99) y una voz distinta ORTOGONAL.
+  Caso 1: la VOZ agrupa sus etiquetas por FIRMA (no por etiqueta).
+  Caso 2: 3 turnos de esa voz (con DOS etiquetas) + 1 de otra voz -> registro -> TODAS las
+    filas de la voz con el nombre y la otra voz intacta. INVARIANTE: N turnos => N filas.
+  Caso 3: el commit consulta el vinculo voz->nombre (no degrada si la medida no llega).
+  CONTROL NEGATIVO: sin el arreglo, la fila de la 2.a etiqueta de la MISMA voz queda generica
+    y el caso cae.
+  CORRECCION DE PRECISION en `vozRegistroNombreUnicoGuard`: su "otra voz" usaba `v(0.58)`, que
+    tiene coseno 0.987 con `v(0.70)` = la MISMA voz; la voz distinta se modela ORTOGONAL.
+
+LOG DE UNA CORRIDA (limpio, e2e 8/8, 740 lineas) + CHECKER DEL REPO
+  `tests/logRevisionGuard.test.ts` (rutina de revision) VERDE sobre la corrida real:
+    0 violaciones. Metricas: live=20 · bloqueado=1 (trozo) · aplicado=19 con 0 encogen ·
+    0 emisiones len=0 · commit=26 · row=30 · dup=28 · etiquetas automaticas distintas
+    ["Hablante 1"] · nombres sin coincidencia=0 · written vacio=0 · 11 filas con 11 ids.
+  TABLA (entrada -> esperado -> medido)
+    N turnos de la MISMA voz (2 etiquetas) | N filas con el nombre | verde (guard)
+    voz distinta (ortogonal)               | intacta               | intacta
+    nombre ligado + turno sin medida       | conserva el nombre    | conserva
+    panel: cambio de nombre                | reescribe la BASE     | verde (efecto)
+
+VALIDACION: lint:guards VERDE 256 ficheros / 2053 tests · typecheck y eslint sin errores ·
+  GATE VERDE (metrica base=0 actual=1 target=1; guard base=1 actual=0). TECHOS: 4536/4536 ·
+  2706/2706 · 4624/4643 · 1838/1848. NINGUN UMBRAL DE AUDIO TOCADO.
+
+NO CUBIERTO (0.23): el DoD-producto (su pantalla y su voz real); la prueba de que la VOZ real
+  (no un fixture) produce ese cosido (necesita su corrida).
