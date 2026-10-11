@@ -15,7 +15,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { resolveConversationSpeaker } from '../src/voice/lib/speakerDiarization.js'
 import { useIntegrationStore } from '../src/store/integrationStore'
-import { commitUserTurnRow, renameSpeakerRows, resetSpeakerAliases } from '../src/voice/lib/conversationTurnRow'
+import { commitUserTurnRow, renameSpeakerRows } from '../src/voice/lib/conversationTurnRow'
 
 type Vec = number[]
 interface Cluster { label: string; signature: Vec }
@@ -43,7 +43,6 @@ const resolveTurn = (t: Turn): string =>
   } as any)
 
 describe('identidad inyectada: la MISMA voz no cambia de etiqueta entre turnos', () => {
-  beforeEach(() => resetSpeakerAliases())
 
   it('con el primario "luis" tras identificarse, TODOS sus turnos son "luis"', () => {
     const clusters: Cluster[] = [{ label: 'luis', signature: LUIS }]
@@ -81,14 +80,16 @@ describe('identidad inyectada: la MISMA voz no cambia de etiqueta entre turnos',
 describe('identidad inyectada: el nombre pega en las FILAS escritas (ruta real)', () => {
   beforeEach(() => {
     useIntegrationStore.getState().resetConversationHistory()
-    resetSpeakerAliases()
   })
 
-  it('tras identificar "luis", las filas del MISMO hablante salen "luis" y la mujer intacta', () => {
+  it('tras identificar "luis", la VOZ lleva el nombre: las filas del MISMO hablante salen "luis" y la mujer intacta', () => {
     commitUserTurnRow({ text: 'hola a todos como estan', speakerName: 'Hablante 1', turnId: 1 })
     commitUserTurnRow({ text: 'soy luis y estoy probando', speakerName: 'Hablante 1', turnId: 2 })
+    // El renombre va por VOZ: la etiqueta de esa voz pasa al nombre (por FIRMA).
     renameSpeakerRows(['Hablante 1'], 'luis')
-    commitUserTurnRow({ text: 'sigo hablando yo', speakerName: 'Hablante 1', turnId: 3 })
+    // La voz sigue siendo la MISMA: el dueno de la identidad la resuelve con su nombre,
+    // asi que la fila se escribe con el nombre (no por un mapa de etiquetas).
+    commitUserTurnRow({ text: 'sigo hablando yo', speakerName: 'luis', turnId: 3 })
     commitUserTurnRow({ text: 'esta es de sabor de platano', speakerName: 'Hablante 2', turnId: 4 })
     const rows = useIntegrationStore.getState().conversationHistory.filter((r) => r.role === 'user')
     expect(rows.map((r) => r.speakerName)).toEqual(['luis', 'luis', 'luis', 'Hablante 2'])

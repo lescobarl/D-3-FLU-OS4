@@ -4737,3 +4737,68 @@ INFLACION de etiquetas de voz (P9.64 sigue abierta; no se toco ningun umbral de 
 el REGISTRO DOBLE de una locucion con wake (medido y registrado como P9.67: exige
 separar "misma emision" de "misma frase", con su propio contrato).
 
+
+================================================================
+B1 + B2 (verificacion independiente del dueno 2026-10-10 22:02)
+================================================================
+COMMITS: 66f7d31 (7 ficheros src) + el commit de guard/contrato/ledger.
+
+MEDIDO ANTES con las FUNCIONES REALES (tal como el dueno lo midio):
+ B1 resolveSpeakerNameFromUtterance('mi definicion fue hasta que yo diga okay flow soy Luis')
+    esperado ''  ->  medido 'Luis'
+ B2 registerSpeakerAlias('Hablante 1','Luis') + resolveRowSpeakerName('Hablante 1', false)
+    esperado 'Hablante 1'  ->  medido 'Luis'
+
+CAUSAS:
+ B1 detectWakeIntroducedName se conformaba con split.wakeWordMatched, y el splitter marca
+    true tambien con la wake INLINE (la frase HABLA de la orden); los patrones de intro no
+    estaban anclados ((?:^|\b)soy), asi que capturaban en cualquier posicion.
+ B2 conversationTurnRow aplicaba un mapa GLOBAL etiqueta->nombre (speakerAliases) y
+    renameSpeakerRows lo envenenaba: otra voz que reutilizara la etiqueta heredaba el nombre.
+
+ARREGLO (un dato, un dueno):
+ B1 el intro solo si (a) el mandato EMPIEZA en la wake (split.beforeWake vacio) y (b) el
+    patron ABRE el mandato (detectIntroducedName con mustOpen por defecto). El dueño es UNO
+    y lo comparten conversacion y comando.
+ B2 se RETIRA el mapa entero (speakerAliases + registerSpeakerAlias + resolveSpeakerAlias +
+    resetSpeakerAliases). La identidad es la VOZ = la FIRMA del cluster:
+    findLabelsWithSharedVoice (por firma) elige QUE etiquetas son esa voz,
+    renameSpeakerRows reescribe sus filas, y registerSpeakerIdentity deja el NOMBRE en el
+    CLUSTER de esa voz (mergeSpeakerClustersOnRename sobre una copia, entregada por el
+    escritor unico de clusters), que es quien lo resuelve en los turnos siguientes.
+
+TABLA DE CIERRE (escenario -> entrada cruda -> esperado -> medido -> PASS/FAIL)
+ B1-1 '...hasta que yo diga okay flow soy Luis'      -> ''     -> ''     PASS
+ B1-2 'voy a decir el comando de okay flu soy Luis'  -> ''     -> ''     PASS
+ B1-3 'okay flu soy Luis'                            -> 'Luis' -> 'Luis' PASS
+ B1-4 'okay flu la frase es soy Luis'                -> ''     -> ''     PASS
+ B1-5 'okay flu soy Luis y no sustituyo' (ASR pega)  -> 'Luis' -> 'Luis' PASS
+ B2-1 alias por etiqueta                             -> 'Hablante 1' -> 'Hablante 1' PASS
+ B2-2 "soy X" renombra solo la voz (por firma)       -> ['Luis','Hablante 3','Luis'] +
+        cluster con el nombre                        -> PASS
+ B2-3 ruta del comando                               -> registra y la VOZ queda con el
+        nombre                                       -> PASS
+
+CONTROL NEGATIVO (el detector no es decorativo): el guard nuevo incluye los DOS mutantes del
+defecto aislados (partir el texto por la wake en cualquier posicion SI captura 'Luis'; un
+mapa global etiqueta->nombre SI contamina). El conjunto NACE ROJO contra la base: revertidos
+los 7 ficheros src con `git checkout HEAD --`, 10 de 15 casos CAEN; con el arreglo 15/15.
+
+METRICA (contrato): mapa GLOBAL etiqueta->nombre en src (SpeakerAlias() 5 -> 0.
+GATE VERDE: alcance OK - tamano OK - DoD OK - guard OK (metrica base=5 actual=0; guard base=1
+actual=0). LINT 246 ficheros / 1995 tests VERDE = 0 fallos nuevos. TYPECHECK y ESLINT sin
+errores. TECHOS: useFluVoiceAssistant.js 4539/4539; App.tsx 4624/4643; fluConfig.js 2772/2772;
+gemini.js 1838/1848 (ninguno ampliado; no se toco ningun umbral de audio).
+
+CORRECCION DE CRITERIO (7.7.f(3)) en los casos que afirmaban el alias (van en el commit de
+guards): vozPlegadoEtiquetaGuard (el plegado se mide en el dueno de la IDENTIDAD),
+vozRegistroNombreUnicoGuard (el nombre no queda en un mapa de etiquetas), vozEscenarioInyectado
+y vozIdentidadInyectada (el nombre pega POR VOZ, no por etiqueta).
+
+ALCANCE REAL (0.23): CUBIERTO=el intro anclado a la wake y al inicio del mandato (un solo
+dueno compartido por conversacion y comando), la retirada del mapa global etiqueta->nombre, el
+renombre por VOZ/firma con el nombre en el cluster y el plumbing de su escritor unico, con
+guard que nace ROJO (10/15) y metrica 5 -> 0; NO CUBIERTO=la pantalla del dueno y el caso
+P9.64 (inflado de etiquetas: si el resolutor no vuelve a casar el turno con el cluster, el
+nombre puede no pegarse a un cluster NUEVO), que depende de umbrales de audio del dueno.
+

@@ -18,7 +18,6 @@ import {
   commitUserTurnRow,
   preserveProperSpeaker,
   renameSpeakerRows,
-  resetSpeakerAliases,
   resolveRowSpeakerName,
   updateTurnRowSpeaker,
 } from '../src/voice/lib/conversationTurnRow'
@@ -42,7 +41,6 @@ function filaDe(turnId: number): string {
 
 describe('A5 corregida - la etiqueta del resolver se escribe y el renombre sustituye', () => {
   beforeEach(() => {
-    resetSpeakerAliases()
     useIntegrationStore.setState({ conversationHistory: [], activePersonId: undefined })
   })
 

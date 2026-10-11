@@ -18,7 +18,7 @@
 // ============================================================
 import { describe, it, expect, beforeEach } from 'vitest'
 import { useIntegrationStore } from '../src/store/integrationStore'
-import { commitUserTurnRow, renameSpeakerRows, resetSpeakerAliases } from '../src/voice/lib/conversationTurnRow'
+import { commitUserTurnRow, renameSpeakerRows } from '../src/voice/lib/conversationTurnRow'
 
 const userRows = () => useIntegrationStore.getState().conversationHistory.filter((r) => r.role === 'user')
 
@@ -31,7 +31,6 @@ function sembrar(filas: Array<{ text: string; speaker: string }>) {
 describe('identificado el hablante, TODA su participacion lleva su nombre', () => {
   beforeEach(() => {
     useIntegrationStore.getState().resetConversationHistory()
-    resetSpeakerAliases()
   })
 
   it('renombra las filas de su voz (etiquetas de la MISMA voz) y respeta a los demas', () => {
@@ -57,7 +56,6 @@ describe('identificado el hablante, TODA su participacion lleva su nombre', () =
 describe('PRUEBA DE DETECTOR (el detector no es decorativo)', () => {
   beforeEach(() => {
     useIntegrationStore.getState().resetConversationHistory()
-    resetSpeakerAliases()
   })
 
   it('NO renombra a un hablante ajeno (discrimina por etiqueta)', () => {

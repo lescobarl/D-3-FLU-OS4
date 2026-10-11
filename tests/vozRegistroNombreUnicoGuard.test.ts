@@ -27,8 +27,7 @@ import { walkFiles } from './_helpers'
 import { useIntegrationStore } from '../src/store/integrationStore'
 import {
   renameSpeakerRows,
-  resetSpeakerAliases,
-  resolveSpeakerAlias,
+  resolveRowSpeakerName,
 } from '../src/voice/lib/conversationTurnRow'
 import {
   registerSpeakerIdentity,
@@ -51,7 +50,6 @@ const CLUSTERS = [
 
 /** Store con tres filas de usuario: la voz de 'Hablante 1' y una voz distinta. */
 function seedRows() {
-  resetSpeakerAliases()
   useIntegrationStore.setState({
     conversationHistory: [
       { id: 'r1', role: 'user', text: 'hola', speakerName: 'Hablante 1', timestamp: '10:00' },
@@ -70,7 +68,6 @@ function speakerRows(): string[] {
 
 describe('A1 - un solo dueno del registro del nombre propio', () => {
   beforeEach(() => {
-    resetSpeakerAliases()
     useIntegrationStore.setState({ conversationHistory: [] })
   })
 
@@ -94,8 +91,9 @@ describe('A1 - un solo dueno del registro del nombre propio', () => {
     })
     expect(result.registered).toBe(true)
     expect(speakerRows()).toEqual(['Luz', 'Hablante 2', 'Luz'])
-    // y la etiqueta con la que esa voz venia apareciendo queda con su nombre
-    expect(resolveSpeakerAlias('Hablante 1')).toBe('Luz')
+    // y el nombre NO queda en un mapa de ETIQUETAS: la etiqueta de diarizacion se
+        // escribe TAL CUAL y es la VOZ (el cluster) la que lleva el nombre.
+        expect(resolveRowSpeakerName('Hablante 1', false)).toBe('Hablante 1')
   })
 
   it('MISMA RUTA: comando y wake-intro dejan el store identico para la misma voz', () => {
@@ -163,7 +161,6 @@ const CLUSTERS_VOZ_UNICA = [
 ]
 
 function seedFilasDeLaMismaVoz() {
-  resetSpeakerAliases()
   useIntegrationStore.setState({
     conversationHistory: [
       { id: 'r1', role: 'user', text: 'uno', speakerName: 'Hablante 1', timestamp: '10:00' },

@@ -15,7 +15,7 @@ vi.mock('../src/lib/clientLogRelay', () => ({ relayLog: vi.fn() }))
 
 import { relayLog } from '../src/lib/clientLogRelay'
 import { voiceProbe, setVoiceProbeEnabled, isVoiceProbeEnabled } from '../src/voice/lib/voiceProbe'
-import { commitUserTurnRow, resetSpeakerAliases } from '../src/voice/lib/conversationTurnRow'
+import { commitUserTurnRow } from '../src/voice/lib/conversationTurnRow'
 import { useIntegrationStore } from '../src/store/integrationStore'
 
 const settle = async () => {
@@ -30,7 +30,6 @@ const probeCalls = () =>
 describe('sonda de datos de voz', () => {
   beforeEach(() => {
     useIntegrationStore.getState().resetConversationHistory()
-    resetSpeakerAliases()
     ;(relayLog as unknown as { mockClear: () => void }).mockClear()
   })
 

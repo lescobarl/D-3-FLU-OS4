@@ -1,28 +1,30 @@
 {
-  "task": "EL GATE del nombre de la fila + un dueno por dato (nombre, frase viva, locucion confirmada) + tope 99 + silencio de cierre ~3,5 s",
-  "objective": "El commit escribe SIEMPRE la etiqueta que trae el resolver (la evidencia acustica decide el ASCENSO a nombre propio, no si se escribe), la fila deja de re-resolver el nombre por TEXTO (un solo dueno), el cierre del turno no borra lo publicado (flicker de 'ultima frase'), el borrado de la locucion CONFIRMADA tiene un solo dueno, el tope de hablantes automaticos deja de forzar fusiones falsas (99) y el cierre por silencio pasa a ~3,5 s.",
-  "base": "42f2c60",
+  "task": "B1 (el intro solo si la orden EMPIEZA en la wake) + B2 (la identidad es la VOZ/firma, no la etiqueta)",
+  "objective": "Que una frase que REPORTA el comando ('mi definicion fue hasta que yo diga okay flow soy Luis') no introduzca un nombre propio, y que el nombre propio deje de viajar por un mapa GLOBAL etiqueta->nombre: la identidad se resuelve y se renombra por VOZ (la firma del cluster del turno), con evidencia.",
+  "base": "1f4a92d",
   "allow": [
     "src/voice/**",
+    "src/hooks/useNavigationCommands.ts",
+    "src/app/useIdentitySessionRef.ts",
     "tests/**",
     "scripts/guard-files.mjs",
     "plans/ledger.json",
     ".task/**"
   ],
-  "maxFiles": 12,
-  "maxLines": 700,
-  "dod": "npx vitest run --reporter=dot tests/App.shell.test.tsx tests/FluWorkspaceTabView.test.tsx tests/agendaQueryScenarios.test.ts tests/ambienteEditorForm.test.tsx tests/browserProfilesPanel.test.tsx tests/contactsPanel.test.tsx tests/continuousAudioBuffer.test.ts tests/conversationSession.test.ts tests/conversationStreamCommit.test.ts tests/decideVoiceTurnDispatch.test.ts tests/dndPolicy.test.ts tests/documentsHistoryPanel.test.tsx tests/fluDevConsole.test.ts tests/fluMinutesTabView.test.tsx tests/fluParticipantConfig.test.ts tests/materiaGrisPanel.test.tsx tests/notesClearEndToEnd.test.ts tests/notificationService.test.ts tests/onboardingFlow.test.ts tests/paletaEditorForm.test.tsx tests/participantRegistry.test.ts tests/participantsPanel.test.tsx tests/preLaunchDelay.test.ts tests/recognitionBufferFlush.test.ts tests/searchControlCenter.test.tsx tests/selfKnowledge.test.ts tests/shoppingPanel.test.tsx tests/speakerIdentityNoInheritance.test.ts tests/speakerPassiveNoNameInheritance.test.ts tests/speakerPinnedMismatch.test.ts tests/speakerSoloCoalesce.test.ts tests/systemMatrix.test.ts tests/turnIdentityPipeline.test.ts tests/turnSpeakerPreflight.test.ts tests/useBrowserProfiles.test.tsx tests/useContacts.test.tsx tests/useDeviceActions.test.tsx tests/useDiary.test.tsx tests/useFluVoiceAssistant.behavior.test.tsx tests/useMateriaGris.test.tsx tests/useNotificationCenter.test.tsx tests/useParticipants.test.tsx tests/voiceCanonicalPhrase.test.ts tests/voiceQueryParity.test.ts tests/voiceTurnStabilization.test.ts tests/workspaceContractTipo.test.ts",
-  "guard": "npx vitest run --reporter=dot tests/vozNombreFraseUnDuenoGuard.test.ts",
+  "maxFiles": 20,
+  "maxLines": 900,
+  "dod": "npx vitest run --reporter=dot tests/App.shell.test.tsx tests/FluWorkspaceTabView.test.tsx tests/agendaQueryScenarios.test.ts tests/ambienteEditorForm.test.tsx tests/browserProfilesPanel.test.tsx tests/contactsPanel.test.tsx tests/continuousAudioBuffer.test.ts tests/conversationSession.test.ts tests/conversationStreamCommit.test.ts tests/conversationTurnInterleavedRows.test.ts tests/conversationTurnSingleRow.test.ts tests/decideVoiceTurnDispatch.test.ts tests/dndPolicy.test.ts tests/documentsHistoryPanel.test.tsx tests/fluDevConsole.test.ts tests/fluMinutesTabView.test.tsx tests/fluParticipantConfig.test.ts tests/materiaGrisPanel.test.tsx tests/normalizeCommandForDeterministic.test.ts tests/notesClearEndToEnd.test.ts tests/notificationService.test.ts tests/onboardingFlow.test.ts tests/paletaEditorForm.test.tsx tests/participantRegistry.test.ts tests/participantsPanel.test.tsx tests/preLaunchDelay.test.ts tests/recognitionBufferFlush.test.ts tests/searchControlCenter.test.tsx tests/selfKnowledge.test.ts tests/shoppingPanel.test.tsx tests/speakerIdentityNoInheritance.test.ts tests/speakerPassiveNoNameInheritance.test.ts tests/speakerPinnedMismatch.test.ts tests/speakerSoloCoalesce.test.ts tests/spokenUtteranceRevision.test.ts tests/systemMatrix.test.ts tests/turnIdentityPipeline.test.ts tests/turnSpeakerPreflight.test.ts tests/useBrowserProfiles.test.tsx tests/useContacts.test.tsx tests/useDeviceActions.test.tsx tests/useDiary.test.tsx tests/useFluVoiceAssistant.behavior.test.tsx tests/useMateriaGris.test.tsx tests/useNotificationCenter.test.tsx tests/useParticipants.test.tsx tests/voiceCanonicalPhrase.test.ts tests/voiceQueryParity.test.ts tests/voiceTurnStabilization.test.ts tests/wakeWordDisplay.test.ts tests/workspaceContractTipo.test.ts",
+  "guard": "npx vitest run --reporter=dot tests/vozIntroYAliasPorVozGuard.test.ts",
   "guardExpect": "green",
   "invariant": {
-    "statement": "Gate del nombre de la fila en el commit (la etiqueta se condicionaba a la evidencia acustica): 1 -> 0. La etiqueta se escribe SIEMPRE.",
-    "base": "42f2c60",
+    "statement": "Mapa GLOBAL etiqueta->nombre en src (el alias que barria otras voces): 5 -> 0. Un dato (la VOZ/firma), un dueno.",
+    "base": "1f4a92d",
     "metric": {
-      "command": "node -e \"const fs=require('fs');const s=fs.readFileSync('src/voice/lib/conversationStreamCommit.js','utf8');console.log(s.split('? speakerName : ').length-1)\"",
+      "command": "node -e \"const fs=require('fs'),p=require('path');let n=0;const walk=d=>{for(const f of fs.readdirSync(d)){const a=p.join(d,f);if(fs.statSync(a).isDirectory())walk(a);else if(/\\.(js|ts)$/.test(f))n+=(fs.readFileSync(a,'utf8').match(/SpeakerAlias\\(/g)||[]).length}};walk('src');console.log(n)\"",
       "target": 0
     },
     "guardFiles": [
-      "tests/vozNombreFraseUnDuenoGuard.test.ts"
+      "tests/vozIntroYAliasPorVozGuard.test.ts"
     ]
   },
   "ignore": [
@@ -31,22 +33,19 @@
     "kilo.json"
   ],
   "e2eScope": {
-    "src/voice/lib/conversationStreamCommit.js": [
+    "src/voice/lib/audioMath.js": [
       "tests/e2e/voz-locucion-unica.spec.ts"
     ],
-    "src/voice/lib/fluConfig.js": [
-      "tests/e2e/voz-locucion-unica.spec.ts"
+    "src/voice/lib/conversationTurnRow.ts": [
+      "tests/e2e/voz-escenario-dueno.spec.ts"
     ],
-    "src/voice/lib/activeListen.js": [
-      "tests/e2e/voz-locucion-unica.spec.ts"
+    "src/voice/lib/speakerIdentityRegister.js": [
+      "tests/e2e/voz-escenario-dueno.spec.ts"
     ],
-    "src/voice/lib/transcriptIngress.js": [
-      "tests/e2e/voz-locucion-unica.spec.ts"
+    "src/voice/lib/turnSpeakerCommit.js": [
+      "tests/e2e/voz-escenario-dueno.spec.ts"
     ],
     "src/voice/hooks/useFluVoiceAssistant.js": [
-      "tests/e2e/voz-locucion-unica.spec.ts"
-    ],
-    "src/voice/lib/recognitionBufferFlush.js": [
       "tests/e2e/voz-locucion-unica.spec.ts"
     ]
   }

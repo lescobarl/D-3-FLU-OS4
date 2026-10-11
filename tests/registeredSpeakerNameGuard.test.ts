@@ -17,7 +17,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { resolveRegisteredSpeakerName } from '../src/voice/lib/speakerLabels.js';
 import { useIntegrationStore } from '../src/store/integrationStore';
-import { commitUserTurnRow, resetSpeakerAliases, updateTurnRowSpeaker } from '../src/voice/lib/conversationTurnRow';
+import { commitUserTurnRow, updateTurnRowSpeaker } from '../src/voice/lib/conversationTurnRow';
 
 const LUIS = { registeredLabel: 'Hablante 1', registeredName: 'Luis' };
 
@@ -72,7 +72,6 @@ const lastRowSpeaker = () => {
 describe('P8.40b - el nombre se estampa CON evidencia (dueno unico de la fila)', () => {
   beforeEach(() => {
     useIntegrationStore.getState().resetConversationHistory();
-    resetSpeakerAliases();
   });
 
   it('etiqueta registrada SIN evidencia -> respaldo (no hereda el nombre)', () => {
@@ -122,7 +121,6 @@ describe('P8.40b - el nombre se estampa CON evidencia (dueno unico de la fila)',
 describe('P9.48 - la resolucion tardia aplica el nombre registrado (un solo dueno)', () => {
   beforeEach(() => {
     useIntegrationStore.setState({ conversationHistory: [], activePersonId: undefined });
-    resetSpeakerAliases();
   });
 
   it('updateTurnRowSpeaker mapea la etiqueta registrada al NOMBRE', () => {

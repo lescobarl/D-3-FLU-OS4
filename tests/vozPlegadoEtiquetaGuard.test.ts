@@ -21,10 +21,7 @@ import { foldSpeakerKey } from '../src/voice/lib/speakerLabels.js'
 import { useIntegrationStore } from '../src/store/integrationStore'
 import {
   commitUserTurnRow,
-  registerSpeakerAlias,
   renameSpeakerRows,
-  resetSpeakerAliases,
-  resolveSpeakerAlias,
 } from '../src/voice/lib/conversationTurnRow'
 
 const clusters = () => [
@@ -41,7 +38,6 @@ function filas(): string[] {
 
 describe('plegado luis/Luis: una identidad, un cluster', () => {
   beforeEach(() => {
-    resetSpeakerAliases()
     useIntegrationStore.setState({ conversationHistory: [], activePersonId: undefined })
   })
 
@@ -72,12 +68,17 @@ describe('plegado luis/Luis: una identidad, un cluster', () => {
     expect(filas()).toEqual(['Luis Perez', 'Luis Perez'])
   })
 
-  it('(util) el alias de sesion pliega: "luis" y "Luis" resuelven igual', () => {
-    expect(registerSpeakerAlias('luis', 'Luis')).toBe(0)
-    registerSpeakerAlias('Hablante 2', 'Luis')
-    expect(resolveSpeakerAlias('Hablante 2')).toBe('Luis')
-    expect(resolveSpeakerAlias('hablante 2')).toBe('Luis')
-    expect(resolveSpeakerAlias('HABLANTE 2')).toBe('Luis')
+  it('(util) el plegado vive en el dueno de la IDENTIDAD: "luis" y "Luis" son el MISMO cluster', () => {
+    const c = clusters()
+    expect(foldSpeakerKey(findClusterByLabel(c, 'Luis')?.label || ''), 'el plegado lo decide foldSpeakerKey').toBe('luis')
+    expect(sameVoiceLabelGroup(c, 'luis'), 'las DOS grafias son UNA identidad (clave plegada)').toHaveLength(1)
+    // Y el cosido por FIRMA junta etiquetas que NO son la misma grafia:
+    const otro = [
+      { label: 'Hablante 1', signature: [1, 0, 0] },
+      { label: 'Hablante 2', signature: [0.99, Math.sqrt(1 - 0.99 * 0.99), 0] },
+    ]
+    expect(sameVoiceLabelGroup(otro, 'Hablante 1'), 'misma voz, etiquetas distintas').toHaveLength(2)
+    expect(consolidateSpeakerClusters(c, 0.99), 'misma voz = un cluster').toHaveLength(1)
   })
 
   it('PRUEBA DE DETECTOR (el detector no es decorativo): la comparacion cruda NO pliega', () => {

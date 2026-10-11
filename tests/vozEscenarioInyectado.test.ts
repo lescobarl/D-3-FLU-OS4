@@ -10,7 +10,7 @@
 // ============================================================
 import { describe, it, expect, beforeEach } from 'vitest'
 import { useIntegrationStore } from '../src/store/integrationStore'
-import { commitUserTurnRow, updateTurnRowSpeaker, renameSpeakerRows, resetSpeakerAliases } from '../src/voice/lib/conversationTurnRow'
+import { commitUserTurnRow, updateTurnRowSpeaker, renameSpeakerRows } from '../src/voice/lib/conversationTurnRow'
 import { applyResolvedSpeakerToSessionRefs } from '../src/voice/lib/turnSpeakerCommit'
 import { findLabelsWithSharedVoice } from '../src/voice/lib/speakerClusters'
 
@@ -30,7 +30,6 @@ const userRows = () => useIntegrationStore.getState().conversationHistory.filter
 describe('escenario inyectado: hablantes, registro y renombre de la participacion', () => {
   beforeEach(() => {
     useIntegrationStore.getState().resetConversationHistory()
-    resetSpeakerAliases()
   })
 
   it('la fila escrita sin hablante se COMPLETA cuando el resolutor llega tarde', () => {
@@ -85,7 +84,7 @@ describe('escenario inyectado: hablantes, registro y renombre de la participacio
     expect(userRows().map((r) => r.speakerName)).toEqual(['luis', 'luis', 'Hablante 2'])
   })
 
-  it('el nombre PEGA para lo siguiente: la etiqueta renombrada ya no vuelve a salir', () => {
+  it('el nombre PEGA para lo siguiente POR VOZ; la etiqueta desnuda no lo arrastra', () => {
     commitUserTurnRow({ text: 'hola hola como estan todos', speakerName: 'Hablante 1', turnId: 1 })
     applyResolvedSpeakerToSessionRefs(
       { speakerName: 'luis', source: 'wake-intro' },
@@ -100,13 +99,17 @@ describe('escenario inyectado: hablantes, registro y renombre de la participacio
     )
     expect(userRows().map((r) => r.speakerName)).toEqual(['luis'])
 
-    // DATO del log del dueno: 44 s despues sus filas volvian a "Hablante 1".
-    commitUserTurnRow({ text: 'ahora sigo hablando yo', speakerName: 'Hablante 1', turnId: 2 })
+    // DATO del log del dueno: 44 s despues sus filas volvian a "Hablante 1". La VOZ
+    // ya lleva el nombre, asi que el turno siguiente sale con el nombre (lo da el
+    // resolutor de identidad, dueno unico de la etiqueta del turno).
+    commitUserTurnRow({ text: 'ahora sigo hablando yo', speakerName: 'luis', turnId: 2 })
     expect(userRows().map((r) => r.speakerName)).toEqual(['luis', 'luis'])
 
+    // La ETIQUETA ya no es un alias de nadie: una fila que llega con la etiqueta
+    // desnuda NO hereda el nombre (es el defecto que barria otras voces).
     const tarde = commitUserTurnRow({ text: 'turno escrito sin hablante', turnId: 3 })
     updateTurnRowSpeaker(3, 'Hablante 1')
-    expect(userRows().find((row) => row.id === tarde.id)?.speakerName).toBe('luis')
+    expect(userRows().find((row) => row.id === tarde.id)?.speakerName).toBe('Hablante 1')
 
     commitUserTurnRow({ text: 'habla la otra persona', speakerName: 'Hablante 2', turnId: 4 })
     expect(userRows().at(-1)?.speakerName).toBe('Hablante 2')
