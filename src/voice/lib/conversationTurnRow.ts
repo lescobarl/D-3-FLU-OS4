@@ -16,7 +16,7 @@ import { useIntegrationStore } from '../../store/integrationStore';
 import { cleanForSpeech } from './audioMath';
 import { voiceProbe } from './voiceProbe';
 import { isAutoSpeakerLabel, isProperSpeakerName } from './voiceIdentity';
-import { resolveRegisteredSpeakerName, foldSpeakerKey } from './speakerLabels';
+import { foldSpeakerKey } from './speakerLabels';
 import { getFallbackSpeaker } from './speakerCore';
 import { isFragmentOfLocution } from './turnStream';
 
@@ -62,19 +62,18 @@ let currentTurn: { id: number | string | null; rowId: string | null } = { id: nu
  */
 export function resolveRowSpeakerName(
     speakerName: string,
-    evidenciaAcustica: boolean,
-    registered: { registeredLabel?: string; registeredName?: string } = {},
+    _evidenciaAcustica?: boolean,
+    _registered: { registeredLabel?: string; registeredName?: string } = {},
     fallbackSpeaker: string = getFallbackSpeaker(),
 ): string {
     const respaldo = String(fallbackSpeaker || '').trim() || getFallbackSpeaker();
     const raw = String(speakerName || '').trim();
     // El RESPALDO se usa SOLO cuando no hay etiqueta (la fila nunca queda vacia).
     if (!raw) return respaldo;
-    // La etiqueta de DIARIZACION es PROVISIONAL: se escribe TAL CUAL (no hay mapa de
-    // etiquetas->nombre: el renombre va por VOZ). La evidencia acustica decide si se
-    // ASCIENDE al nombre de la persona registrada (`registered`), no si se escribe.
-    const registrado = evidenciaAcustica ? resolveRegisteredSpeakerName(raw, registered) : '';
-    return registrado || raw;
+    // DUENO UNICO (spec del dueno 2026-10-11): la etiqueta se escribe TAL CUAL. El NOMBRE PROPIO
+    // tiene UNA sola via de introduccion (wake + comando); la evidencia de VOZ no lo introduce,
+    // solo lo CONFIRMA si ya venia introducido. Por eso NO se asciende la etiqueta al registrado.
+    return raw;
 }
 
 /**

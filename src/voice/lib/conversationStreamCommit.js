@@ -20,7 +20,6 @@ import {
   shouldRefreshStream,
   syncSpeakerIndexFromLabel,
   utterancesSameRevision,
-  utterancesRelate,
   committedEchoStreakWindowMs,
 } from './activeListen.js'
 import { debugHotPath, fluDebugHot } from './fluDebug.js'
@@ -237,21 +236,18 @@ export function handleConversationStreamSync(
     // que una COLA reemplazaba la frase entera ("la borra y deja dos o tres palabras, y luego
     // ya se vuelve a ver": log del dueno 2026-10-11 11:28). El criterio del trozo tiene UN
     // dueno (`isFragmentOfLocution`, el mismo de la recompuesta) y ahora es el de la sonda.
-    // REGLA DEL DUENO, bien acotada (medido 2 veces en su log: 15:37-15:38 y 16:11-16:12):
-    // DENTRO de una locucion la frase viva SOLO ACUMULA: se bloquea el TROZO contiguo y tambien
-    // cualquier REVISION mas corta del mismo texto (el ASR reescribe y recorta). Pero una locucion
-    // DISTINTA (el texto nuevo NO se relaciona con lo mostrado) SI reemplaza, aunque sea mas
-    // corta: sin esa salida la frase quedaba CONGELADA en el texto anterior para siempre
-    // (543 bloqueos con previo=382 mientras el dueno dictaba otra frase).
+    // DUENO UNICO de la CAJA (spec del dueno 2026-10-11): UNA sola condicion de bloqueo, el TROZO
+    // (cola/medio que reemplazaria la locucion entera). Se retiro la dimension de LONGITUD
+    // (`encoge`/revision mas corta): una emision mas corta de la locucion en curso SI se aplica
+    // (la caja refleja la emision actual, suba o baje). El VACIADO (len=0) no pasa por aqui: solo
+    // lo hace el reset del cierre (silencio/cambio de hablante/commit).
     const esTrozo = isFragmentOfLocution(capture, publishedLiveRef.current)
-    const encoge = capture.length < publishedLiveRef.current.length
-    const revisionMasCorta = encoge && utterancesRelate(publishedLiveRef.current, capture)
-    if (esTrozo || revisionMasCorta) {
-      voiceProbe('live', { turn: activeTurnIdRef.current, resultado: 'bloqueado', acorta: true, mismaLocucion: esTrozo, previo: publishedLiveRef.current.length, len: capture.length, text: capture.slice(0, 220) }) // BANDERA DE DIAGNOSTICO
+    if (esTrozo) {
+      voiceProbe('live', { turn: activeTurnIdRef.current, resultado: 'bloqueado', motivo: 'trozo', acorta: true, fresh: Boolean(freshUtterance), mismaLocucion: true, previo: publishedLiveRef.current.length, len: capture.length, text: capture.slice(0, 220) }) // BANDERA DE DIAGNOSTICO
       return
     }
     if (capture !== publishedLiveRef.current) {
-      voiceProbe('live', { turn: activeTurnIdRef.current, resultado: 'aplicado', acorta: encoge, fresh: Boolean(freshUtterance), mismaLocucion: esTrozo, reemplaza: true, previo: publishedLiveRef.current.length, len: capture.length, text: capture.slice(0, 220) }) // BANDERA DE DIAGNOSTICO
+      voiceProbe('live', { turn: activeTurnIdRef.current, resultado: 'aplicado', motivo: 'emision-actual', acorta: capture.length < publishedLiveRef.current.length, fresh: Boolean(freshUtterance), mismaLocucion: esTrozo, reemplaza: true, previo: publishedLiveRef.current.length, len: capture.length, text: capture.slice(0, 220) }) // BANDERA DE DIAGNOSTICO
       publishedLiveRef.current = capture
       scheduleLiveTranscriptUpdate(capture)
     }
