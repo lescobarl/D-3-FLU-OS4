@@ -81,6 +81,11 @@ export interface FloorGrantContext {
 // Defaults
 // -----------------------------------------------------------
 
+/** DUENO UNICO de `evaluateOnTurnCommit`: el unico sitio que lee la clave. */
+export function evaluatesOnTurnCommit(cfg: ParticipantEvaluationConfig): boolean {
+    return cfg.evaluateOnTurnCommit !== false;
+}
+
 export const DEFAULT_PARTICIPANT_CONFIG: ParticipantEvaluationConfig = {
     enabled: true,
     evaluateOnTurnCommit: true,
@@ -234,7 +239,7 @@ export function canScheduleParticipantEvaluation(
     // incondicionalmente, dejando muerta la opción conversationOnly=false.
     if (cfg.enabled === false) return false;
     if (cfg.conversationOnly !== false && !conversationActive) return false;
-    if (!force && cfg.evaluateOnTurnCommit === false) return false;
+    if (!force && !evaluatesOnTurnCommit(cfg)) return false;
     if (force && cfg.evaluateOnManualGrant === false) return false;
     if (state.phase === 'evaluating' || state.phase === 'raised') return false;
     if (state.phase === 'cooldown' && now < state.cooldownUntil) return false;

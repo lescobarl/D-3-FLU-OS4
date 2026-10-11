@@ -793,7 +793,6 @@ export const FLU_CONFIG = {
     enabled: true,
     tickMs: 30000,
     graceMs: 15000,
-    maxActive: 12,
     defaultAlarmTimeOfDay: '07:00',
     defaultTimerMinutes: 5,
     sound: {
@@ -1342,10 +1341,7 @@ export const FLU_CONFIG = {
   materiaGris: {
     enabled: true,
     actions: {
-      participacion_conversacion: 3,
       recordatorio_completado: 5,
-      tarea_hogar: 5,
-      juego_completado: 8,
       cuento: 10,
     },
     maxEntriesPerParticipant: 200,
@@ -1421,7 +1417,6 @@ export const FLU_CONFIG = {
    */
   mood: {
     enabled: true,
-    scaleMin: 1,
     scaleMax: 5,
     ui: {
       panelTitle: 'Bienestar y ánimo',
@@ -1559,7 +1554,6 @@ export const FLU_CONFIG = {
     // Activo: reconocido por voz (parseDiaryIntent) y visible en el panel Hoy.
     enabled: true,
     maxEntriesPerDay: 50,
-    moodMax: 5,
     ui: {
       panelTitle: 'Diario personal',
       addLabel: 'Guardar entrada',

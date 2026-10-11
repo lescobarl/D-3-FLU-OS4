@@ -31,6 +31,7 @@ import {
     type ParticipantEvaluationConfig,
     type ParticipantState,
     type ParticipantUiPresentation,
+    evaluatesOnTurnCommit,
 } from '../lib/fluParticipant';
 
 export interface UseFluParticipantOptions {
@@ -246,9 +247,9 @@ export function useFluParticipant({
     // -----------------------------------------------------------
     const onTurnCommitted = useCallback(() => {
         const cfg = cfgRef.current;
-        if (!cfg.enabled || cfg.evaluateOnTurnCommit === false) {
+        if (!cfg.enabled || !evaluatesOnTurnCommit(cfg)) {
             if (import.meta.env.DEV) {
-                console.warn(`[Flu][participant] onTurnCommitted: BAIL (enabled=${cfg.enabled}, evaluateOnTurnCommit=${cfg.evaluateOnTurnCommit})`);
+                console.warn(`[Flu][participant] onTurnCommitted: BAIL (enabled=${cfg.enabled}, evaluateOnTurnCommit=${evaluatesOnTurnCommit(cfg)})`);
             }
             return;
         }
