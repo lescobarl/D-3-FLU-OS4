@@ -144,14 +144,16 @@ describe('conversationStreamCommit — puertas de entrada', () => {
         expect(deps.publishedLiveRef.current).toBe('');
     });
 
-    it('captura vacia con parrafo nuevo: si limpia el preview abierto', () => {
+    it('captura vacia con parrafo nuevo: resetea el ancla pero NO borra lo publicado', () => {
         const deps = makeDeps({ publishedLiveRef: { current: 'algo previo' } });
         deps.openPreviewTurnRef.current = true;
 
         handleConversationStreamSync(deps, { newParagraph: true });
 
         expect(deps.publishedLiveRef.current).toBe('');
-        expect(deps.setLiveTranscript).toHaveBeenCalledWith('');
+        // Lo PUBLICADO (la "ultima frase") lo borra su dueno (el reset de la sesion/voz),
+        // no el commit: borrarlo aqui dejaba la zona en blanco = flicker.
+        expect(deps.setLiveTranscript).not.toHaveBeenCalled();
         expect(deps.openPreviewTurnRef.current).toBe(false);
     });
 });
@@ -243,7 +245,9 @@ describe('conversationStreamCommit — commit de turno', () => {
         expect(deps.turnAudioStartSampleRef.current).toBe(4800);
         expect(deps.openPreviewTurnRef.current).toBe(false);
         expect(deps.publishedLiveRef.current).toBe('');
-        expect(deps.setLiveTranscript).toHaveBeenLastCalledWith('');
+        // Lo publicado NO se borra al cerrar (flicker de "ultima frase"): el unico dueno
+        // del borrado de la zona es el reset de la sesion/voz, no el commit del turno.
+        expect(deps.setLiveTranscript).not.toHaveBeenCalled();
         expect(deps.listenStateRef.current.openLine).toBe('');
         expect(deps.listenStateRef.current.pendingInterim).toBe('');
         expect(deps.preflightScheduledForTurnRef.current).toBe(false);
@@ -318,9 +322,10 @@ describe('conversationStreamCommit — commit de turno', () => {
         expect(deps.emitConversationLog).not.toHaveBeenCalled();
         const [, rowSpeaker, rowOpts] = deps.commitTurnToSessionRows.mock.calls[0];
         expect(rowOpts).toEqual({ replaceLast: true });
-        // La fila se REEMPLAZA sin hablante nuevo (no hay evidencia en este commit); el
-        // dueno de la fila CONSERVA el suyo (`commitUserTurnRow`: `resolved || e.speakerName`).
-        expect(rowSpeaker).toBe('');
+        // La fila escribe la ETIQUETA que trae el resolver (el commit SIEMPRE la aporta:
+        // la evidencia acustica decide el ASCENSO a nombre propio, no si se escribe); el
+        // dueno de la fila preserva el nombre propio ya escrito (`preserveProperSpeaker`).
+        expect(rowSpeaker).toBe('Hablante 2');
         expect(deps.fluParticipantRef.current.onTurnCommitted).toHaveBeenCalledTimes(1);
     });
 

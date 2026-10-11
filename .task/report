@@ -4665,3 +4665,75 @@ DoD 80 ficheros VERDE = 0 fallos nuevos.
 ALCANCE REAL (0.23): CUBIERTO=el tope y la fusion por criterio en un dueno, con guard y
 metrica; NO CUBIERTO=la eleccion del valor del tope (decision del dueno), el DoD-producto,
 la suite completa y la E2E completa.
+
+================================================================
+EL GATE DEL NOMBRE DE LA FILA + UN DUENO POR DATO (encargo dueno 2026-10-10 20:43)
+================================================================
+COMMITS: cb67871 (6 ficheros src) + el commit de guards/tests/contrato/ledger.
+MEDIDO ANTES (log del dueno 02:20-02:42, 80 commits): 80/80 con preReady:false y
+written:"" (el dueno reporto 41/41 del tramo equivalente). El commit condicionaba la
+ESCRITURA de la etiqueta a la evidencia acustica y la fila quedaba a merced de una
+SEGUNDA resolucion por TEXTO (resolveSpeakerByText como `||` en emitConversationLog).
+
+ARREGLO (un dato, un dueno):
+ 1) GATE: `speakerEscrito = speakerName` SIEMPRE; `evidenciaAcustica` viaja aparte y es
+    la que decide el ASCENSO a nombre propio (leccion A5). Comentario 448-464 corregido
+    (contradecia el codigo).
+ 2) NOMBRE: emitConversationLog deja de re-resolver por texto en CONVERSACION; el dueno
+    del texto (resolveSpeakerByText) queda SOLO en la escucha pasiva (unica via sin
+    etiqueta). Su guard (speakerPassiveNoNameInheritance) sigue verde.
+ 3) FLICKER de "ultima frase": el cierre del turno ya NO borra lo publicado
+    (setLiveTranscript('') retirado del branch closeTurn; el ancla interna si se
+    resetea o el reconcile arrastraria el texto viejo).
+ 4) pendingFinal (locucion CONFIRMADA sin fila): un solo borrador
+    (clearPendingFinal en activeListen.js); los 3 sitios que lo vaciaban por su cuenta
+    (ingress x2 + flush de buffers) pasan por el dueno.
+ 5) TOPE: conversationMaxAutoSpeakers 6 -> 99 (sin freno; el tope forzaba fusiones
+    falsas). NO se toco ningun umbral de audio (calibracion del dueno).
+ 6) SILENCIO DE CIERRE: srGapCommitMs 10000 -> 3500 (~3,5 s, spec del dueno).
+
+MEDIDO DESPUES (log NUEVO tras recargar el modulo por HMR):
+ commit {preReady:false, src:sticky-preflight-pending, name:"Hablante 1",
+         written:"Hablante 1"}   <-- written:"" 100% -> 0/2
+ row    {speaker:"luis", efectivo:"luis", turnId:95}
+
+GUARD NUEVO tests/vozNombreFraseUnDuenoGuard.test.ts (lint:guards), 4 bloques con
+prueba de detector. NACE ROJO MEDIDO: sobre el arbol BASE (git checkout HEAD -- de los
+6 ficheros) caen 7 de 9 casos; con el arreglo 9/9 verdes.
+
+METRICA (contrato): gate del nombre en el commit (`? speakerName : `) 1 -> 0.
+GATE VERDE: alcance OK - tamano OK - DoD OK - guard OK
+  (invariante base=1 actual=0 target=0; guard base=1 actual=0).
+LINT: 245 ficheros / 1980 tests VERDE = 0 fallos nuevos (baseline 244/1971).
+TYPECHECK sin errores. ESLINT sin errores. E2E:PLAN 12 ficheros en alcance, sin specs
+que correr. TECHOS: useFluVoiceAssistant.js 4539/4539; App.tsx 4624/4643;
+fluConfig.js 2772/2772; gemini.js 1838/1848 (ninguno ampliado).
+
+CORRECCION DE CRITERIO (7.7.f(3)) en 2 guards cuya vara codificaba la regla VIEJA; su
+arreglo va en el commit de guards, SEPARADO del src (0.22), para que "guard mal escrito"
+y "codigo mal escrito" sean distinguibles:
+ - vozPreflightAntesCommitGuard: el detector pasa de "sin la espera el commit escribe
+   SIN hablante" a "sin la espera el commit NO tiene evidencia acustica" (la etiqueta
+   viaja igual).
+ - vozRebuildTuberiaCompletaGuard: el caso del rebuild aisla el srGap (lo apaga) porque
+   con el cierre a 3,5 s el srGap sella el interino antes de que el watchdog reconstruya
+   (conversationStallMs 4200 > 3500).
+
+LIMITE/CONSECUENCIA DECLARADA del cierre a 3,5 s: el srGap por silencio sella la linea
+viva a los 3,5 s; como conversationStallMs (4200) queda POR ENCIMA, un interino EN VUELO
+puede sellarse por silencio antes de que el watchdog reconstruya.
+
+IMPACTO EN PRODUCTO (por escenario del dueno):
+ (1) la fila del turno DEJA de nacer sin hablante;
+ (2) al cerrar el turno la "ultima frase" ya no queda en blanco;
+ (3) el cierre por silencio tarda ~3,5 s en vez de ~10 s;
+ (4) el tope ya no funde voces por recuento.
+
+ALCANCE REAL (0.23): CUBIERTO=el gate del nombre + la retirada del segundo dueno (texto)
+en conversacion, el no-borrado de lo publicado al cerrar, el dueno unico del borrado de
+pendingFinal, el tope 99 y el cierre ~3,5 s, con guard que nace ROJO y metrica 1 -> 0;
+NO CUBIERTO=el DoD-producto (pantalla del dueno tras reiniciar server + hard reload), la
+INFLACION de etiquetas de voz (P9.64 sigue abierta; no se toco ningun umbral de audio) y
+el REGISTRO DOBLE de una locucion con wake (medido y registrado como P9.67: exige
+separar "misma emision" de "misma frase", con su propio contrato).
+

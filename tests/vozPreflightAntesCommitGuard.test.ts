@@ -123,13 +123,16 @@ describe('preflight antes del commit: la fila nace con el hablante del turno', (
     expect(fila.evidenciaAcustica, 'y con evidencia acustica declarada').toBe(true)
   })
 
-  it('PRUEBA DE DETECTOR (el detector no es decorativo): sin la espera el commit escribe SIN hablante', () => {
+  it('PRUEBA DE DETECTOR (el detector no es decorativo): sin la espera el commit NO tiene evidencia acustica', () => {
     const deps = makeDeps({ activeTurnIdRef: { current: 200 } })
     handleConversationStreamSync(deps as never, { capture: LOCUCION })
     handleConversationStreamSync(deps as never, { capture: LOCUCION, turnCommit: true, settlesTurn: true })
     const fila = filaEmitida(deps)
-    expect(fila.speakerName, 'sin la espera del preflight el commit pierde la carrera').toBe('')
-    expect(fila.evidenciaAcustica).toBe(false)
+    // A5 corregida: la ETIQUETA viaja SIEMPRE (nunca ''); lo que la espera aporta es la
+    // EVIDENCIA acustica, que es la unica que decide el ascenso a nombre propio.
+    expect(fila.speakerName, 'la etiqueta viaja igual (nunca vacia)').not.toBe('')
+    expect(fila.evidenciaAcustica, 'sin la espera no hay ventana de audio medida del turno').toBe(false)
+    expect(fila.speakerName, 'y NO es la etiqueta que resuelve el preflight').not.toBe('Hablante 2')
   })
 
   it('la espera NO bloquea: si el resolver no llega en plazo, el commit escribe igual', async () => {

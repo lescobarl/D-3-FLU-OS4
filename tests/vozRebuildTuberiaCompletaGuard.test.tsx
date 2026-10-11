@@ -126,6 +126,7 @@ vi.mock('../src/voice/lib/micEventProducer.js', async (original) => ({
   convertSimEventsToMicBursts: vi.fn(() => []),
 }));
 
+import { FLU_CONFIG } from '../src/voice/lib/fluConfig';
 import { useFluVoiceAssistant } from '../src/voice/hooks/useFluVoiceAssistant';
 import { acquireSpeechRecognition } from '../src/voice/lib/speechRecognitionLocal';
 
@@ -235,21 +236,31 @@ describe('P9.60 - tuberia completa: el rebuild del watchdog no puede perder la l
 
   it('el detector no es decorativo: un INTERINO en vuelo NO se cierra en el rebuild (sigue descartandose)', async () => {
     vi.useFakeTimers();
-    const onContract = vi.fn();
-    await arrancarEscucha(onContract);
+    // AISLAMIENTO del camino REBUILD: con el cierre por SILENCIO en ~3,5 s (spec del dueno,
+    // 2026-10-10) el srGap sellaria el interino ANTES de que el watchdog reconstruya
+    // (conversationStallMs 4200 > 3500). Aqui se apaga el srGap para medir SOLO que el
+    // rebuild no sella un interino NO confirmado.
+    const srGapAntes = FLU_CONFIG.transcript.pauseAndWeakAsr.srGapCommitMs;
+    FLU_CONFIG.transcript.pauseAndWeakAsr.srGapCommitMs = 0;
+    try {
+      const onContract = vi.fn();
+      await arrancarEscucha(onContract);
 
-    await act(async () => {
-      h.recognition.onresult?.(chromeEvent([{ isFinal: false, transcript: 'la transcripcion desde' }], 0));
-      await Promise.resolve();
-    });
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(6000);
-    });
+      await act(async () => {
+        h.recognition.onresult?.(chromeEvent([{ isFinal: false, transcript: 'la transcripcion desde' }], 0));
+        await Promise.resolve();
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(6000);
+      });
 
-    expect(vecesCreadoElReconocedor(), 'el watchdog no llego a reconstruir').toBeGreaterThanOrEqual(2);
-    expect(
-      filasDelTurno(onContract).join(' | '),
-      'filas=' + JSON.stringify(filasDelTurno(onContract)),
-    ).not.toContain('la transcripcion desde');
+      expect(vecesCreadoElReconocedor(), 'el watchdog no llego a reconstruir').toBeGreaterThanOrEqual(2);
+      expect(
+        filasDelTurno(onContract).join(' | '),
+        'filas=' + JSON.stringify(filasDelTurno(onContract)),
+      ).not.toContain('la transcripcion desde');
+    } finally {
+      FLU_CONFIG.transcript.pauseAndWeakAsr.srGapCommitMs = srGapAntes;
+    }
   });
 });
