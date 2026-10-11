@@ -114,22 +114,27 @@ describe('A - la ultima frase SOLO acumula (lo que se ve)', () => {
     expect(ultimo(mostrado)).toBe('pon musica relajante para cenar y tambien una lista de compras larga para toda la semana completa del mes entero')
   })
 
-  it('REGLA LITERAL: ni una locucion NUEVA puede ENCOGER lo mostrado', () => {
+  it('el caso CRUDO del log del dueno: tras una locucion larga el dictado nuevo se VE', () => {
+    // debug.log 16:11-16:12: la frase viva quedo congelada en la 1.a locucion (382 chars) mientras
+    // el dueno dictaba "ya no transcribio ya nada a la ultima frase..." -> 543 bloqueos.
+    const LARGA = 'vamos a validar otra vez esto esta haciendo cada vez mas tortuoso me desespera el equipo de kilo cody de ghost'
     const { deps, mostrado } = makeDeps()
-    handleConversationStreamSync(deps as never, { capture: FRASE })
-    // Otra locucion, mas CORTA: NO reemplaza (la frase viva solo acumula).
-    handleConversationStreamSync(deps as never, { capture: 'pon musica' })
-    expect(ultimo(mostrado), 'lo mostrado no puede encoger jamas').toBe(FRASE)
+    handleConversationStreamSync(deps as never, { capture: LARGA })
+    expect(ultimo(mostrado)).toBe(LARGA)
+    for (const t of ['no se', 'no se que', 'no se que construye', 'ya no transcribio nada a la ultima frase']) {
+      handleConversationStreamSync(deps as never, { capture: t })
+    }
+    expect(ultimo(mostrado), 'el dictado NUEVO tiene que verse').toBe('ya no transcribio nada a la ultima frase')
   })
 
-  it('una locucion NUEVA (arranque del ASR: freshUtterance) SI reemplaza aunque sea mas corta', () => {
-    // DEFECTO MEDIDO (log del dueno 2026-10-11 15:37-15:38): sin esta salida, la frase se quedaba
-    // CONGELADA en el texto anterior (561 bloqueos con previo=558) mientras el dueno dictaba otra
-    // frase: "no se veia nada y de repente ya se vio mucho escrito".
+  it('una locucion DISTINTA (no relacionada) SI reemplaza aunque sea mas corta', () => {
+    // ANTI-CONGELAMIENTO (medido en el log del dueno 16:11-16:12: 543 bloqueos con previo=382
+    // mientras dictaba OTRA frase): si el texto nuevo no se relaciona con lo mostrado, es una
+    // locucion nueva y DEBE verse. Dentro de la locucion nada encoge (caso anterior).
     const { deps, mostrado } = makeDeps()
     handleConversationStreamSync(deps as never, { capture: FRASE })
-    handleConversationStreamSync(deps as never, { capture: 'voy a parar aqui la prueba', freshUtterance: true })
-    expect(ultimo(mostrado), 'una locucion nueva SI se muestra').toBe('voy a parar aqui la prueba')
+    handleConversationStreamSync(deps as never, { capture: 'ya no transcribio nada a la ultima frase' })
+    expect(ultimo(mostrado), 'la locucion nueva se muestra').toBe('ya no transcribio nada a la ultima frase')
   })
 
   it('el CIERRE no vacia lo mostrado (ni la zona ni su memoria)', () => {
@@ -155,11 +160,10 @@ describe('A - la ultima frase SOLO acumula (lo que se ve)', () => {
     const live = vi.mocked(voiceProbe).mock.calls.filter((c) => c[0] === 'live').map((c) => c[1] as { resultado?: string; acorta?: boolean; mismaLocucion?: boolean; len?: number; previo?: number; fresh?: boolean })
     expect(live.some((o) => o.resultado === 'bloqueado'), 'el recorte bloqueado se declara').toBe(true)
     expect(live.some((o) => o.resultado === 'aplicado'), 'la sustitucion aplicada se declara').toBe(true)
-    // INVARIANTE LITERAL DEL DUENO: `acortamientos APLICADOS = 0` DENTRO DE UNA LOCUCION: ningun
-    // texto mas corto se aplica si el ASR no marco arranque nuevo (lo impone el commit).
-    expect(live.filter((o) => o.resultado === 'aplicado' && o.acorta === true && o.fresh !== true), 'ningun acortamiento aplicado dentro de la locucion').toEqual([])
-    // Y todo lo aplicado CREECE respecto a lo mostrado, salvo el arranque de una locucion nueva.
-    expect(live.filter((o) => o.resultado === 'aplicado' && o.acorta === true && o.fresh === true).length, 'las locuciones nuevas SI se muestran').toBeGreaterThanOrEqual(0)
+    // INVARIANTE: un TROZO contiguo de lo mostrado JAMAS se aplica (la locucion solo acumula).
+    expect(live.filter((o) => o.resultado === 'aplicado' && o.mismaLocucion === true), 'un trozo de lo mostrado no se aplica').toEqual([])
+    // Y lo aplicado que encoge es locucion DISTINTA (no una revision de lo mostrado).
+    expect(live.filter((o) => o.resultado === 'aplicado' && o.acorta === true).every((o) => o.mismaLocucion === false), 'solo una locucion distinta puede encoger').toBe(true)
     // El bloqueado SIEMPRE acorta (es su motivo).
     expect(live.filter((o) => o.resultado === 'bloqueado').every((o) => o.acorta === true)).toBe(true)
     // El campo tiene que existir en TODA emision: sin el, el dato no es concluyente.
