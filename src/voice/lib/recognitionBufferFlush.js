@@ -8,11 +8,11 @@ import { clearPendingFinal } from './activeListen.js'
 
 export function flushTranscriptStateOnFinal({
   listenState = null,
-  publishedLiveRef = null,
   openPreviewTurnRef = null,
   lastStreamPreviewRef = null,
 } = {}) {
-  if (publishedLiveRef) publishedLiveRef.current = ''
+  // La "ultima frase" NO se vacia al cerrar el turno: su dueno es el reset de
+  // sesion/voz. Borrarla aqui era una de las dos rutas del borra-y-reaparece.
   if (lastStreamPreviewRef) lastStreamPreviewRef.current = ''
   if (openPreviewTurnRef) openPreviewTurnRef.current = false
   if (listenState) {

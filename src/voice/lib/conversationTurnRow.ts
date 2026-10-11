@@ -53,7 +53,9 @@ let currentTurn: { id: number | string | null; rowId: string | null } = { id: nu
  * registro, que es dato de sesion, no por esta via).
  *
  * @param speakerName etiqueta/nombre que aporta el que llama
- * @param evidenciaAcustica `true` si el nombre viene de una ventana de AUDIO medida
+ * @param evidenciaAcustica `true` SOLO si el nombre viene de una ventana de AUDIO medida
+ *   (coincidencia). OMITIRLA equivale a `false` (sin evidencia): la identidad NO se da por
+ *   "medida" por omision -> etiqueta generica, nunca un nombre propio sin coincidencia.
  * @param registered vinculo etiqueta->persona registrada (panel de participantes)
  * @param fallbackSpeaker respaldo cuando NO hay etiqueta (por defecto, el de config)
  * @returns el hablante a escribir (siempre una etiqueta)
@@ -89,7 +91,7 @@ export function resolveRowSpeakerName(
 export function preserveProperSpeaker(
     nextName: string,
     currentName?: string,
-    evidenciaAcustica = true,
+    evidenciaAcustica = false,
     { evidenciaDeTexto = true }: { evidenciaDeTexto?: boolean } = {},
 ): string {
     const next = String(nextName || '').trim();
@@ -170,7 +172,7 @@ export function updateTurnRowSpeaker(
     turnId: number | string | null,
     speakerName: string,
     {
-        evidenciaAcustica = true,
+        evidenciaAcustica = false,
         registeredSpeaker,
     }: {
         evidenciaAcustica?: boolean;
@@ -296,7 +298,7 @@ function commitUserTurnRowInner({
     timestamp,
     replaceLast = false,
     turnId,
-    evidenciaAcustica = true,
+    evidenciaAcustica = false,
     registeredSpeaker,
     sentiment = 'neutral',
 }: UserTurnRowInput): UserTurnRowResult {

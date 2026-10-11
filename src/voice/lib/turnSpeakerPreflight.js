@@ -30,6 +30,19 @@ function clusterMergeFloor() {
 }
 
 /**
+ * DUENO UNICO de "la identidad de este turno fue MEDIDA": el preflight resolvio
+ * el hablante por una ventana de audio del turno Y reporta coincidencia
+ * (`evidence`). `ready` sin `evidence` es "hay clusters", NO coincidencia.
+ * Lo consumen el commit (que decide la escritura) y el resolver sincrono del hook.
+ *
+ * @param {object|null|undefined} slot resultado de `peekTurnSpeakerPreflight`
+ * @returns {boolean}
+ */
+export function preflightEvidenceMeasured(slot) {
+  return Boolean(slot?.ready && slot?.evidence === true)
+}
+
+/**
  * @param {number} turnId
  * @param {Function} run
  * @param {{ onClusters?: Function, onResolved?: Function, continuous?: boolean, getSpeakerClusters?: Function }} [options]

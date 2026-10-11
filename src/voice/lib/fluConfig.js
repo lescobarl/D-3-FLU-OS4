@@ -65,7 +65,6 @@ export const FLU_CONFIG = {
     userId: '',
   },
   limits: {
-    auditLogMax: 200,
     /** Tope visible del log de conversación para evitar crecimiento infinito. */
     conversationLogMax: 180,
     /** Máximo de filas de minutas que entran al prompt de consulta. */
@@ -128,8 +127,6 @@ export const FLU_CONFIG = {
         cosineMatchThreshold: 0.85,
         /** Re-identificación room-rematch estricta (512-D L2 + coseno). */
         roomRematchThreshold: 0.80,
-        roomRematchThresholdMax: 0.80,
-        roomRematchShortThreshold: 0.80,
         cosineContinuityThreshold: 0.80,
         cosineNewVoiceThreshold: 0.64, // medido 2026-10-07: MISMA voz 0.69-0.74, DISTINTA 0.58; con 0.70 (dentro de la misma voz) cada turno abria un 'Hablante N'
         /** Caída de similitud coseno que indica cambio abrupto de voz en ingress. */
@@ -140,10 +137,6 @@ export const FLU_CONFIG = {
         /** Reutilización de cluster en producción (512-D real). */
         productionClusterReuseThreshold: 0.66,
         shortUtteranceMaxMs: 1500,
-        shortUtteranceThresholdRelax: 0.04,
-        /** Con ≥N clusters y frase no corta: sube umbral (evita colapsar voces distintas). */
-        roomRematchMultiClusterAfter: 3,
-        roomRematchMultiClusterBoost: 0.03,
         /** Tras N ecos committed-echo consecutivos, rebuild SR (Chrome atascado). */
         committedEchoRebuildAfter: 3,
         /** Ventana (ms) para clasificar un eco ASR real: la misma fila re-emitida DENTRO
@@ -170,10 +163,8 @@ export const FLU_CONFIG = {
         targetSampleRate: 16000,
         minSampleRatio: 0.35,
         quantized: true,
-        logProgress: false,
       },
       roomCapture: {
-        deferNewSpeakerUntilCommit: true,
         pruneGhostClusters: false, // borraba el cluster recien escrito -> inClusters=0
         stickySpeaker: true,
           pinRegisteredSpeaker: true,
@@ -182,8 +173,6 @@ export const FLU_CONFIG = {
          * Sin wake: diarización genérica (Hablante N); no inferir «Luis» del texto pasivo.
          */
         requireWakeWordForSpeakerName: true,
-        /** Umbral relajado para no crear Hablante N tras registro con nombre propio. */
-        registeredMatchRelax: 1.42,
         /** Misma voz no salta H1->H2 por ruido/TV; timbre distinto si abre H2, H3 (reuniones). */
         soloSpeakerSticky: false,
         strictCosineDiarization: true,
@@ -201,23 +190,8 @@ export const FLU_CONFIG = {
         turnBoundaryNewVoiceMultiFactor: 0.72,
         /** Cambio de voz vs turno anterior (mic débil, misma sala). */
         turnBoundaryLastTurnFactor: 0.48,
-        /** Reutilizar cluster si distancia < match × factor (re-identificación en junta). */
-        roomRematchFactor: 1.12,
-        /** Un solo cluster (TV/junta inicio): match estricto; no confundir hija con H1. */
-        roomRematchSingleCluster: 1.08,
         /** Margen coseno mínimo para saltar de lastSpeaker a otro cluster (evita H1→H3 por TV). */
         lastSpeakerSwitchMargin: 0.1,
-        /** Si lastSim ≥ NEW_VOICE × factor, no abrir hablante nuevo por audio débil. */
-        lastSpeakerLowSimRetainFactor: 0.72,
-        /** Crear hablante solo si lejos del mejor cluster Y del último turno. */
-        newPersonMinFactor: 1.05,
-        /**
-         * Distancia mínima (× newVoice) para abrir H2+ en commit.
-         * Alto = no fragmentar tu misma voz por ruido; bajo solo con timbre muy distinto (hija).
-         */
-        roomNewPersonFactor: 2.0,
-        /** Con ≥1 cluster: timbre distinto pero < factor estricto (mic laptop). */
-        roomSessionNewFactor: 1.4,
         /** 0 = sin tope duro por salón (N personas reales → N hablantes). */
         maxAutoSpeakersInRoom: 0,
         /** 0 = sin tope blando; anti-fantasma vía productionClusterReuseThreshold + segmentChronoSplit. */
@@ -228,15 +202,6 @@ export const FLU_CONFIG = {
         segmentChronoSplit: false,
         /** No vaciar openLine al límite de turno (evita perder frase al cambiar hablante). */
         preservePreviewOnTurnBoundary: true,
-        /** No bloquear previews más cortos (TV/ASR fluctúa). */
-        preserveAllPreview: true,
-        /**
-         * Cerrar preview al cambiar hablante. Desactivado en sala solo: generaba
-         * commits fantasma (H1→H4) y huecos percibidos como «congelado».
-         */
-        commitPreviewOnSpeakerChange: false,
-        commitPreviewOnSoloAutoDrift: false,
-        minCharsToCommitOnSpeakerChange: 6,
         /** Con ≥N clusters: preferir re-identificación a timbre histórico vs anclar al último. */
         preferHistoricalClusterInMultiSpeakerRoom: true,
         multiSpeakerRoomClusterMin: 3,
@@ -311,7 +276,6 @@ export const FLU_CONFIG = {
         silenceThresholdDb: -45,
         /** Pausas naturales antes de cortar segmento de voz (ms). */
         voiceHoldMs: 1200,
-        analyserSmoothing: 0.1,
         processEvery: 1,
       },
     },
@@ -324,7 +288,6 @@ export const FLU_CONFIG = {
     resumeAfterSpeechMaxMs: 500,
     /** Factor por carácter para escalar el retraso dentro de [min, max]. */
     resumeAfterSpeechPerCharMs: 0.5,
-    workspaceImageMs: 140,
     recognitionStopMs: 250,
     recognitionFinalizeMs: 200,
     transcriptSettleStepMs: 40,
@@ -373,9 +336,7 @@ export const FLU_CONFIG = {
     dictationGraceBaseMs: 800,
     dictationGracePerWordMs: 120,
     dictationGraceMaxMs: 4000,
-    conversationMinMsAfterLastResult: 250,
     interimFinalizeGraceMs: 250,
-    conversationSettleStableMs: 300,
     /** Retraso antes de auto-stop en modo pasivo (ms). */
     scheduleAutoProcessDelayMs: 150,
     /** Reintento mientras hay commit en curso (ms). */
@@ -439,7 +400,6 @@ export const FLU_CONFIG = {
       /** Tras onend, si sigue sin onstart → reinicio rápido. */
       deadRecognitionMs: 2500,
     },
-    logRelateWindowMs: 12000,
     speakers: {
       /** Mínimo entre diarizaciones por audio (ms). Más bajo = más sensible. */
       diarizeIntervalMs: 120,
@@ -463,7 +423,6 @@ export const FLU_CONFIG = {
     watchdogMs: 900,
     restartAfterEndMs: 0,
     restartAfterNoSpeechMs: 0,
-    restartAfterNetworkMs: 0,
   },
   navigation: {
     sessionResetCommand: COMMAND_IDS.INICIAR_CONVERSACION,
@@ -591,9 +550,7 @@ export const FLU_CONFIG = {
   reminders: {
     enabled: true,
     defaultReminderOffsetMinutes: 10,
-    maxPerDay: 20,
     defaultCategory: 'reminder',
-    soundEnabled: true,
     // Scheduler (useReminders): frecuencia de revisión y margen de vencimiento.
     tickMs: 30000,
     graceMs: 15000,
@@ -655,21 +612,14 @@ export const FLU_CONFIG = {
     // tipo de agenda (escuela, consultas médicas/IMSS, trabajo, gimnasio…).
     // Cada entrada lleva un campo libre "tipo" que etiqueta su naturaleza;
     // "titulo" es el rótulo legible y "lugar" la ubicación opcional.
-    maxClasesPorDia: 16,
-    diaMin: 1,
-    diaMax: 7,
     defaultColor: 'm1',
     // Adaptador OCR→horario: mínimo de entradas para PROPONER una importación.
     // Evita que un documento genérico (carta/reunión con una hora) dispare horario.
     ocrAdapter: { minEntries: 2 },
     // Duración por defecto (minutos) cuando se dicta una entrada sin hora de fin.
-    defaultDurationMinutes: 60,
     // Etiquetas sugeridas para el campo libre "tipo" (NO son obligatorias).
     tipoSuggestions: ['escuela', 'medico', 'trabajo', 'gimnasio', 'personal'],
     grid: {
-      startHour: 7,
-      endHour: 18,
-      hourPx: 40,
     },
     dayLabels: ['', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'],
     dayLabelsShort: ['', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'],
@@ -1118,8 +1068,6 @@ export const FLU_CONFIG = {
     fetch: {
       endpoint: '/api/browser/fetch',
       timeoutMs: 10000,
-      maxContentChars: 6000,
-      maxParagraphs: 40,
     },
     // Tiles de inicio del navegador curado. Única fuente de verdad de los
     // sitios built-in (los consume el catálogo de búsqueda vía panel.tiles).
@@ -1429,8 +1377,6 @@ export const FLU_CONFIG = {
   habits: {
     enabled: true,
     categories: ['habito', 'meta', 'estudio', 'personal'],
-    defaultTargetDays: 21,
-    maxGoalsPerParticipant: 50,
     ui: {
       panelTitle: 'Hábitos y metas',
       addLabel: 'Agregar meta',
@@ -1477,7 +1423,6 @@ export const FLU_CONFIG = {
     enabled: true,
     scaleMin: 1,
     scaleMax: 5,
-    maxLogsPerParticipant: 365,
     ui: {
       panelTitle: 'Bienestar y ánimo',
       addLabel: 'Registrar ánimo',
@@ -1685,7 +1630,6 @@ export const FLU_CONFIG = {
       // perfil → "fantasma") se abre el selector para que cada persona
       // elija o cree el suyo. No se abre en el primer arranque (0 perfiles
       // y onboarding sin completar → corren las preguntas de bienvenida).
-      autoOpenOnLoad: true,
     },
     steps: [
       {
@@ -1741,7 +1685,6 @@ export const FLU_CONFIG = {
   news: {
     enabled: false,
     maxItems: 5,
-    refreshIntervalMinutes: 60,
     sources: [],
   },
   /**
@@ -1749,9 +1692,6 @@ export const FLU_CONFIG = {
    */
   health: {
     enabled: false,
-    hydrationIntervalMinutes: 90,
-    postureIntervalMinutes: 60,
-    focusIntervalMinutes: 45,
   },
   /**
    * Flu como participante: escucha activa, mano alzada, intervención con «ok flu adelante».
@@ -1967,7 +1907,6 @@ export const FLU_CONFIG = {
         summary: '',
         history: 'Historial de minutas',
       },
-      conversationLogVisible: true,
       minuteDraftEmpty: 'Genera o selecciona una minuta para editarla aquí.',
       summaryUnavailableTitle: 'Minuta no disponible',
       summaryUnavailableMessage: 'No se pudo generar el resumen.',
@@ -2048,7 +1987,6 @@ export const FLU_CONFIG = {
     enabled: IS_DEV,
     ringSize: 800,
     /** Eventos speaker/diarize-* en ring y __fluDev.speakerMonitor */
-    speakerDiarize: true,
     mirrorConsole: false,
     /** POST periódico a Vite → flu-voz/logs/agent-trace.json (lectura agente). */
     agentSink: IS_DEV,
@@ -2117,8 +2055,6 @@ export const FLU_CONFIG = {
     refreshMs: 1500,
     /** Relaya fragmentos crudos de Chrome (interim/final) al servidor para diagnóstico. */
     listenTrace: false,
-    /** Vectores de embedding en filas del log de conversación (solo diagnóstico). */
-    showEmbeddingPreview: false,
     /** Reenviar logs del frontend al servidor (terminal) para que Roo pueda verlos. */
     relayToServer: IS_DEV,
   },
@@ -2214,7 +2150,6 @@ export const FLU_CONFIG = {
     asrSegmentation: {
       enabled: true,
       /** Solo partir cuando un turno previo ya commitido aparece embebido + voz nueva. */
-      proportionalSplit: false,
       minSpeakerRuns: 2,
       minSnapshotsPerRun: 2,
       minWordsPerSegment: 6,
@@ -2307,7 +2242,6 @@ export const FLU_CONFIG = {
       echoCoverageFloor: 0.6,
 
     },
-    interimOpenLineFlushCheckMs: 0,
     /** Tras este intervalo sin commit: no shrink/redundant agresivo en ingress. */
     relaxGuardsAfterCommitMs: 1500,
     /** Pausa entre frases: fuerza nueva fila (evita machacar voz por TV continua). */

@@ -140,6 +140,7 @@ import { startContinuousIdentityPipeline, stopAllContinuousIdentityPipelines, pr
 import {
   createTurnSpeakerAudioResolver,
   peekTurnSpeakerPreflight,
+  preflightEvidenceMeasured,
 } from '../lib/turnSpeakerPreflight.js'
 import {
   blindSpeakerFallback,
@@ -682,7 +683,6 @@ const lastResolvedTurnRef = useRef(0)
   const flushTranscriptOnFinal = useCallback(() => {
     flushTranscriptStateOnFinal({
       listenState: listenStateRef.current,
-      publishedLiveRef,
       openPreviewTurnRef,
       lastStreamPreviewRef,
     })
@@ -1602,7 +1602,7 @@ const lastResolvedTurnRef = useRef(0)
         return {
           signatureVector,
           speakerName: audioSnapshot.length ? resolvedSpeakerName : '',
-          evidenciaAcustica: audioSnapshot.length > 0,
+          evidenciaAcustica: preflightEvidenceMeasured(peekTurnSpeakerPreflight(activeTurnIdRef.current)),
           introducedName: null,
           resolvedSpeakerName: audioSnapshot.length ? resolvedSpeakerName : '',
           speakerAlias: null,
@@ -1872,22 +1872,21 @@ const lastResolvedTurnRef = useRef(0)
     }
     // Reset de la línea abierta (espejo de finalizeTurnCommit pero SIN commitear
     // una fila al log).
+    // La "ultima frase" NO se vacia aqui (spec del dueno 2026-10-11): se rearma el ANCLA
+    // del turno, no lo PUBLICADO. Antes este rebuild del watchdog la borraba a mitad de
+    // frase -> el borra-y-reaparece. Su dueno es el reset de sesion/voz.
     listenStateRef.current.openLine = ''
     listenStateRef.current.pendingInterim = ''
-    publishedLiveRef.current = ''
     openPreviewTurnRef.current = false
     lastStreamPreviewRef.current = ''
     preflightScheduledForTurnRef.current = false
     srGapFiredForOpenLineRef.current = false
-    setLiveTranscript('')
   }, [
     conversationActiveRef,
     openPreviewTurnRef,
-    publishedLiveRef,
     lastStreamPreviewRef,
     preflightScheduledForTurnRef,
     srGapFiredForOpenLineRef,
-    setLiveTranscript,
   ])
 
   const cleanupAudio = useCallback(async () => {
@@ -2946,8 +2945,6 @@ const lastResolvedTurnRef = useRef(0)
       openPreviewTurnRef.current = false
       listenStateRef.current.openLine = ''
       listenStateRef.current.pendingInterim = ''
-      publishedLiveRef.current = ''
-      setLiveTranscript('')
 
       if (import.meta.env.DEV && debugHotPath) {
         fluDebugHot('conversation-command', { command: uiCommand, phrase })
@@ -3223,8 +3220,8 @@ const lastResolvedTurnRef = useRef(0)
       if (!canonicalPhrase) return
       // §9: la query ya viene derivada por el derivador único
       // (`planConversationDispatch` → action.question); NO se re-deriva aquí.
-      publishedLiveRef.current = ''
-      setLiveTranscript('')
+      // La "ultima frase" NO se vacia al entregar la frase a la IA (spec del dueno
+      // 2026-10-11): borrarla aqui era la otra ruta del borra-y-reaparece.
 
       const sampleRate = sampleRateRef.current || AUDIO_SAMPLE_RATE
       const streamSamples = turnAudioForDiarize(activeTurnIdRef.current, chunksRef.current)

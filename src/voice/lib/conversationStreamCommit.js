@@ -36,6 +36,7 @@ import {
 import { markCommitPerfNow } from './audioSegmentClock.js'
 import { labelToSpeakerId } from './conversationRow.js'
 import { renameSpeakerRows } from './conversationTurnRow'
+import { preflightEvidenceMeasured } from './turnSpeakerPreflight.js'
 import { normalizeSpeakerLabel, isAutoSpeakerLabel } from './voiceIdentity.js'
 import { isSameEmissionWithinWindow } from './captureDedup.js'
 import { DISCARD_REASONS, discardLocution } from './phraseDiscard.js'
@@ -470,8 +471,8 @@ export function handleConversationStreamSync(
   // Solo la evidencia de IDENTIDAD levanta el nombre: la acustica (preflight) o las
   // fuentes que lo traen de un dato (el texto "soy X" y el panel de participantes).
   const FUENTES_CON_IDENTIDAD = ['wake-intro', 'pinned']
-  // Evidencia = la MEDIDA del turno (dueno: el resolutor la reporta), no "hay clusters".
-  const evidenciaAcustica = Boolean(preflight?.ready && preflight?.evidence === true)
+  // Evidencia = la MEDIDA del turno (dueno: `preflightEvidenceMeasured`), no "hay clusters".
+  const evidenciaAcustica = preflightEvidenceMeasured(preflight)
   const crudo = resolved.speakerName || fallbackSpeaker
   const speakerResuelto =
     evidenciaAcustica || FUENTES_CON_IDENTIDAD.includes(resolved.source)
