@@ -38,6 +38,16 @@ const esperarListo = async (page: Page) => {
     );
 };
 
+// "Etiqueta INVENTADA": una etiqueta automatica con indice > 1 (H2, H3...) para la MISMA
+// sesion, es decir un hablante que NO existe (la inflacion medida). El label generico con
+// indice 1 es el de IDENTIDAD DESCONOCIDA: la fila siempre lleva hablante (P9.65), asi que
+// sin evidencia acustica el turno toma ESE label, nunca el nombre de otra voz.
+const inventadas = (hablantes: string[]) =>
+    hablantes.filter((h) => {
+        const m = /^Hablante\s+(\d+)$/.exec(h);
+        return m !== null && Number(m[1]) > 1;
+    });
+
 const usuarios = async (page: Page) =>
     (await readHistoryRows(page)).filter((row) => row.role === 'user');
 
@@ -126,7 +136,7 @@ test.describe('voz - escenario reportado por el dueño (simulacion REAL)', () =>
             `sin evidencia no se estampa nombre ajeno: ${JSON.stringify(hablantes)}`,
         ).not.toContain('Luis');
         expect(
-            hablantes.filter((h) => /^Hablante\s+\d+$/.test(h)),
+            inventadas(hablantes),
             `no puede quedar una etiqueta inventada: ${JSON.stringify(hablantes)}`,
         ).toHaveLength(0);
     });
@@ -163,7 +173,7 @@ test.describe('voz - escenario reportado por el dueño (simulacion REAL)', () =>
         // nada de dos nombres para el mismo turno.
         expect(hablantes[0], `hablantes=${JSON.stringify(hablantes)}`).toBe('Luis');
         expect(
-            hablantes.filter((h) => /^Hablante\s+\d+$/.test(h)),
+            inventadas(hablantes),
             `no puede quedar una etiqueta inventada: ${JSON.stringify(hablantes)}`,
         ).toHaveLength(0);
     });
