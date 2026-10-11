@@ -5158,3 +5158,40 @@ VALIDACION: lint:guards VERDE 254 ficheros / 2042 tests; typecheck y eslint sin 
 
 NO CUBIERTO (0.23): el DoD-producto (la pantalla del dueno) y su sesion REAL multi-voz; y los
    2 ciclos de commit por locucion (uno sin fila, por diseno). Cierre por el dueno con LOG NUEVO.
+
+----------------------------------------------------------------
+PASADA AUTONOMA 4 - 2026-10-11 - LA FRASE VIVA SOLO ACUMULA (literal, cero excepciones)
+----------------------------------------------------------------
+REGLA LITERAL: la frase viva nunca borra y nunca encoge, ni por "otra locucion".
+ARREGLO (un solo sitio): el commit del stream BLOQUEA cualquier captura MAS CORTA que lo
+mostrado (`encoge`), ademas del trozo contiguo; y la memoria de lo mostrado NO se re-arma a
+un texto mas corto al cerrar el turno (`releaseTurnAfterLog`). La sonda declara el veredicto
+en TODA emision: resultado=bloqueado|aplicado + acorta + mismaLocucion.
+
+LOG NUEVO - UNA SOLA CORRIDA (reinicio del portal, 8/8 tests, 2,9 min, log limpio de 719 lineas)
+  sondeas: live=21 · dup=28 · commit=26 · row=29
+  APLICADOS=18 · aplicados que ENCOGEN (len<previo) = 0   <- criterio literal del dueno
+  BLOQUEADOS=3 · de ellos 2 eran OTRA locucion (trozo=false) y tambien se bloquearon:
+      previo=57 len=19 "y no lo pusiste ahi"
+      previo=32 len=30 "y no lo pusiste ahi en el vaso" (x2)
+  TODOS los aplicados CRECEN (18/18 con len>previo). Vaciados (len=0) = 0.
+  nombres sin coincidencia = 0 · written vacio = 0 · escritos {Hablante 1:22, Luis:4}
+  (Luis SOLO por src=wake-intro = evidencia de TEXTO, via declarada)
+  filas reescritas sin evidencia = 0 · filas: 11 added, 11 ids distintos
+  una voz = una etiqueta: etiquetas automaticas distintas = ["Hablante 1"] (0 inflacion)
+  filas duplicadas por locucion: 0 DENTRO DE UNA SESION. Las 2 coincidencias de texto del log
+  estan a 21 s (15:15:09 vs 15:15:31; 15:15:13 vs 15:15:35) y cada test de Playwright corre en
+  una pagina/contexto NUEVO = sesiones distintas.
+
+GUARD: tests/vozUltimaFraseSoloAcumulaGuard.test.ts - nueva invariante literal:
+  `acorta:true + aplicado` = 0 (vacio) y todo lo aplicado cumple len >= previo; caso nuevo
+  "ni una locucion NUEVA puede ENCOGER lo mostrado". Control negativo: con el codigo anterior
+  la misma entrada SI reemplazaba (la locucion nueva mas corta reemplazaba lo mostrado).
+
+VALIDACION: lint:guards VERDE 254 ficheros / 2043 tests · typecheck y eslint sin errores ·
+  GATE VERDE (metrica base=0 actual=1 target=1; guard base=1 actual=0). TECHOS:
+  useFluVoiceAssistant.js 4536/4536 (comprimido), fluConfig.js 2706/2706, App.tsx 4624/4643,
+  gemini.js 1838/1848. NINGUN UMBRAL DE AUDIO TOCADO.
+
+NO CUBIERTO (0.23): el DoD-producto (la pantalla del dueno) y su sesion REAL multi-voz; y los
+  2 ciclos de commit por locucion (el de segmento no escribe fila, por diseno).
