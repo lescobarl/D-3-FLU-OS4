@@ -41,11 +41,14 @@ function v(c: number): number[] {
 }
 const ANCLA = [1, 0, 0]
 const MISMA_VOZ = 0.70 // techo medido de la banda de la misma voz
-const OTRA_VOZ = 0.58 // voz distinta medida
+// VOZ DISTINTA REAL: ortogonal a [1,0,0] y a v(0.70) (coseno 0). `v(0.58)` NO servia como "otra
+// voz": su coseno con `v(0.70)` es 0.987 (la MISMA voz re-clusterizada), asi que el cosido por FIRMA
+// la unia con razon. La voz distinta se modela ortogonal.
+const OTRA_VOZ_VEC = [0, 0, 1] // ortogonal a [1,0,0] Y a v(0.70)
 const CLUSTERS = [
   { label: 'Luz', signature: ANCLA },
   { label: 'Hablante 1', signature: v(MISMA_VOZ) },
-  { label: 'Hablante 2', signature: v(OTRA_VOZ) },
+  { label: 'Hablante 2', signature: OTRA_VOZ_VEC },
 ]
 
 /** Store con tres filas de usuario: la voz de 'Hablante 1' y una voz distinta. */
@@ -157,7 +160,7 @@ const CLUSTERS_VOZ_UNICA = [
   { label: 'Hablante 1', signature: v(0.70) },
   { label: 'Hablante 3', signature: v(0.71) },
   { label: 'Hablante 4', signature: v(0.69) },
-  { label: 'Hablante 2', signature: v(OTRA_VOZ) },
+  { label: 'Hablante 2', signature: OTRA_VOZ_VEC },
 ]
 
 function seedFilasDeLaMismaVoz() {
