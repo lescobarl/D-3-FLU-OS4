@@ -4924,3 +4924,16 @@ etiqueta automatica.
 
 PENDIENTE ABIERTO: P9.64 (unico). Depende de la VOZ/CALIBRACION del dueno.
 
+
+----------------------------------------------------------------
+MEDICION FINAL EN LOG NUEVO (reproducible; el log se habia rotado a 0 bytes)
+----------------------------------------------------------------
+Comando (dev server en vivo, log NUEVO):
+  npx playwright test tests/e2e/voz-escenario-dueno.spec.ts -g "P1:|P2:|P3:|P3b:"
+Resultado: 4 passed (1.7m) y, en debug.log:
+  lineas=343 - VozProbe commit=12 - written:""=0 - VozProbe row=14 - efectivo:""=0
+Es decir: written:"" 100% -> 0% y CERO filas sin hablante, con el pipeline REAL (no
+inyectado). Por eso P9.65 se cierra con medicion.
+Techos finales: useFluVoiceAssistant.js 4539/4539 - App.tsx 4624/4643 - fluConfig.js
+2772/2772 - gemini.js 1838/1848 (ninguno ampliado; ningun umbral de audio tocado).
+
