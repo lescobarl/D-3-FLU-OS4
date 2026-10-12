@@ -1,7 +1,7 @@
 {
   "task": "1) el nombre se liga por VOZ (firma) y vale en TODOS sus turnos; 2) la caja: UNA condicion de bloqueo (trozo); 3) el nombre: UNA via (wake+comando); 4) quien HABLA reanuda la escucha; 5) rutina de revision (checker del log)",
   "objective": "Ligar el nombre por VOZ (firma), aplicarlo a TODOS los turnos de esa voz (la base incluida) y actualizarlo desde el panel de participantes; la caja con UNA condicion de bloqueo; el nombre con UNA via de introduccion; quien habla reanuda la escucha; y la rutina de revision como checker del log en el repo.",
-  "base": "738270c",
+  "base": "f11bc11",
   "allow": [
     "src/**",
     "tests/**",
