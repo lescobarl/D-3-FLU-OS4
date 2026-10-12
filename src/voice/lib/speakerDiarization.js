@@ -171,25 +171,38 @@ function resolveProductionSpeakerAtBoundary({
     // P9.64 + H8: la MISMA persona NO puede tener DOS clusters (ruta doble de DATOS: antes
     // solo se unificaba la etiqueta de la fila y quedaban vivos el cluster historico y el
     // primario -> dos duenos de la misma voz). Si el historico es la misma persona que el
-    // primario (clave plegada), se FUSIONA: se actualiza el canonico y se RETIRA el duplicado.
+    // primario (clave plegada), se FUSIONA: sobrevive el CANONICO y se RETIRA el OTRO.
+    //
+    // P9.74 (MEDIDO 2026-10-12, DOS ordenes): la version anterior elegia el cluster con
+    // `findClusterByLabel(historical.label)`, que devuelve el ULTIMO con la clave plegada
+    // (`speakerClusters.js::_buildClusterMap`). Con `[luis, Luis]` ese "cluster" ERA el primario
+    // -> se le actualizaba la firma al duplicado y se borraba el PRIMARIO: sobrevivia "luis"
+    // mientras la etiqueta devuelta era "Luis" (la divergencia que H8 queria matar); y con
+    // `[Luis, luis]` no fusionaba nada (n=2). Ahora se elige por IDENTIDAD: primero el que debe
+    // SOBREVIVIR (el canonico) y despues se retira el otro; el orden del array deja de importar.
     const mismoPrimario = Boolean(primaryLabel) && foldSpeakerKey(historical.label) === foldSpeakerKey(primaryLabel)
     const canonico = mismoPrimario ? primaryLabel : historical.label
-    const cluster = findClusterByLabel(speakerClusters, historical.label)
-    if (cluster) {
-      if (mismoPrimario && canonico !== historical.label) {
-        const canonIdx = speakerClusters.findIndex(
-          (c) => c !== cluster && foldSpeakerKey(c?.label) === foldSpeakerKey(canonico),
+    let canonIdx = speakerClusters.findIndex((c) => String(c?.label ?? '') === String(canonico))
+    if (canonIdx < 0) {
+      canonIdx = speakerClusters.findIndex((c) => foldSpeakerKey(c?.label) === foldSpeakerKey(canonico))
+    }
+    if (canonIdx >= 0) {
+      const superviviente = speakerClusters[canonIdx]
+      if (String(superviviente?.label ?? '') !== String(canonico)) superviviente.label = canonico
+      updateClusterSignature(superviviente, normalized)
+      if (mismoPrimario) {
+        const duplicadoIdx = speakerClusters.findIndex(
+          (c, i) => i !== canonIdx && foldSpeakerKey(c?.label) === foldSpeakerKey(historical.label),
         )
-        if (canonIdx >= 0) {
-          updateClusterSignature(speakerClusters[canonIdx], normalized)
-          const at = speakerClusters.indexOf(cluster)
-          if (at >= 0) speakerClusters.splice(at, 1)
-        } else {
-          cluster.label = canonico
-          updateClusterSignature(cluster, normalized)
-        }
-      } else {
-        updateClusterSignature(cluster, normalized)
+        if (duplicadoIdx >= 0) speakerClusters.splice(duplicadoIdx, 1)
+      }
+    } else {
+      // El canonico no existe como cluster (solo como nombre en la sesion): el historico se
+      // queda con el nombre canonico (una etiqueta, un dato).
+      const historico = findClusterByLabel(speakerClusters, historical.label)
+      if (historico) {
+        historico.label = canonico
+        updateClusterSignature(historico, normalized)
       }
     }
     note?.({
