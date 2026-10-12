@@ -76,3 +76,22 @@ describe('el nombre se liga a la VOZ y vale en TODOS sus turnos', () => {
         expect(STREAM.includes('nombreLigado'), 'y lo usa para no degradar el nombre').toBe(true)
     })
 })
+
+describe('el NOMBRE sustituye a la PERSONA (no da de alta una identidad nueva)', () => {
+  it('las filas del PARTICIPANTE/primerio pasan al nombre nuevo', () => {
+    useIntegrationStore.setState({ conversationHistory: [] })
+    commitUserTurnRow({ text: 'antes', speakerName: 'Hablante 1', evidenciaAcustica: false, turnId: 1 } as never)
+    commitUserTurnRow({ text: 'participante', speakerName: 'luis', evidenciaAcustica: false, turnId: 2 } as never)
+    const refs = { sessionPrimarySpeakerRef: { current: 'luis' } }
+    registerSpeakerIdentity({
+      name: 'Juan',
+      previousLabel: 'Hablante 1',
+      clusters: [{ label: 'Hablante 1', signature: [1, 0, 0] }],
+      refs,
+    })
+    expect(
+      useIntegrationStore.getState().conversationHistory.filter((e: any) => e.role === 'user').map((e: any) => e.speakerName).sort(),
+      'la persona entera pasa a su nombre nuevo (incluida su etiqueta de participante)',
+    ).toEqual(['Juan', 'Juan'])
+  })
+})
