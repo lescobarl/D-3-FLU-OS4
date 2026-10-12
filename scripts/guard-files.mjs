@@ -244,6 +244,7 @@ export const GUARD_FILES = [
     'tests/vozSondaLastSimGuard.test.ts',
     'tests/vozReinicioMicroGuard.test.ts',
     'tests/voiceMicSingleton.test.ts',
+    'tests/vozPisoDeVozGuard.test.ts',
     'tests/vozHablanteFilaUnicaGuard.test.ts',
     'tests/vozUnClusterPorVozGuard.test.ts',
 'tests/vozUnSoloCriterioGuard.test.ts',
