@@ -5556,3 +5556,18 @@ Alcance real (0.23) de este bloque: CUBIERTO=el dato unico del umbral de voz y e
   ambos con guard y control negativo medido; el registro (ledger + reporte) de los 5 hallazgos y de la
   aprobacion D9.1. NO CUBIERTO=el DoD-producto (pantalla del dueno), el panel/DOM, e2e, P9.74 (fichero de
   otra sesion), P9.73 (declarado, no deduplicado) y la retirada del tramo inalcanzable de P9.75.
+
+==============================================================================
+P9.74 FALSIFICADO Y CORREGIDO (2026-10-12) - el falsificador fue una medicion, no una sesion
+==============================================================================
+El fix commiteado (7e77a2d) y su guard pasaban. MEDIDO con la entrada EXACTA del guard, DOS ordenes:
+  [luis, Luis] -> sobrevivia "luis" (el DUPLICADO) y se borraba el PRIMARIO; etiqueta devuelta "Luis"
+  [Luis, luis] -> NO fusionaba (n=2)
+  Causa: findClusterByLabel devuelve el ULTIMO por clave plegada (_buildClusterMap) y el merge lo
+  trataba como "el historico". El guard tapaba el defecto: solo comprobaba n===1 y la etiqueta.
+FIX aae01b5: se elige por IDENTIDAD (sobrevive el canonico; el otro se retira). Ambas ordenes:
+  clusters [luis, Luis] y [Luis, luis] -> [Luis] (n=1), etiqueta == superviviente.
+GUARD 9862de2: los DOS ordenes + superviviente canonico + etiqueta == superviviente.
+CONTROL NEGATIVO MEDIDO: con speakerDiarization de 7e77a2d -> 1 failed; con aae01b5 -> 6/6.
+Alcance (0.23): CUBIERTO=la fusion sin dependencia del orden, con guard que discrimina CUAL sobrevive;
+  NO CUBIERTO=DoD-producto y recuento real en sala.
