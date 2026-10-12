@@ -4343,6 +4343,7 @@ const lastResolvedTurnRef = useRef(0)
         const sinceRebuild = now - (lastStallRebuildAtRef.current || 0)
         const deadMs = restartCfg.deadRecognitionMs
         const rebuildCooldown = restartCfg.stallRebuildMinMs
+        releaseStalledTurn({ openPreviewTurnRef, sinceResult: now - (lastOnresultAtRef.current || 0), stallMs: restartCfg.stallMs }) // (b) dueno unico, ANTES de los rebuilds
 
         if (
           recognitionActiveRef.current &&
@@ -4375,7 +4376,6 @@ const lastResolvedTurnRef = useRef(0)
         }
 
         const sinceResult = now - (lastOnresultAtRef.current || 0)
-        releaseStalledTurn({ openPreviewTurnRef, sinceResult, stallMs: restartCfg.stallMs }) // (b) dueno unico: voiceStallPolicy
         const openLine = cleanForSpeech(
           listenStateRef.current?.openLine ||
           publishedLiveRef.current ||
@@ -4383,6 +4383,8 @@ const lastResolvedTurnRef = useRef(0)
         )
         const srGap = resolveSrGapTrigger({ sinceLastResultMs: sinceResult, sinceLastCommitMs: lastCommitAtRef.current > 0 ? now - lastCommitAtRef.current : 0, hasOpenLine: Boolean(openLine) })
         if (srGap.fire && !srGapFiredForOpenLineRef.current) {
+          srGapFiredForOpenLineRef.current = true
+          ingressRuntimeRef.current?.pushSrGapEvent?.({ sinceLastResultMs: srGap.sinceLastResultMs })
         }
         return
       }

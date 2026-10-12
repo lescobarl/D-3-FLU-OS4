@@ -68,10 +68,19 @@ export function registerSpeakerIdentity({
   // anclaba en `clean`, asi que solo se renombraba ESA etiqueta y los demas turnos de la misma
   // voz (re-clusterizada como Hablante 2/3) quedaban genericos.
   const anchor = normalizeSpeakerLabel(previousLabel)
+  // SUSTITUIR A LA PERSONA, no dar de alta una identidad nueva (spec del dueno 2026-10-11:
+  // "a todo lo que tenia Luis o Hablante X lo debia haber sustituido ... no dar de alta uno
+  // nuevo sino sustituir a esa persona"). Entra la etiqueta del PRIMARIO/PARTICIPANTE: es un
+  // DATO de la persona, no una medida. Medido 2026-10-11 01:21:57: el renombre solo alcanzo la
+  // etiqueta de ese turno ("Juan") y las filas anteriores ("Hablante 1") y las del participante
+  // ("luis") se quedaron como estaban (el cosido por firma no las alcanza: la misma voz midio
+  // bestSim 0.476 frente a "luis").
+  const personLabels = [normalizeSpeakerLabel(refs?.sessionPrimarySpeakerRef?.current || '')]
   const labels = [
     ...new Set(
       [
         anchor,
+        ...personLabels,
         // PISO ESTRICTO (el de REUTILIZACION, 0.66): el cosido permisivo metia voces distintas
         // (la banda de voz DISTINTA medida es 0.58).
         ...findLabelsWithSharedVoice(clusters, anchor, sameVoiceFloor()),
