@@ -59,6 +59,20 @@ describe('ciclo de vida del microfono', () => {
     expect((r as unknown as { start: { mock: { calls: unknown[] } } }).start.mock.calls.length).toBe(1)
   })
 
+  it('P9.70: el lock se marca al INTENTAR start(), no depende de onstart ni del TEXTO del error', () => {
+    // Sin `onstart` (el motor tarda o no lo emite): antes la guarda (capturing.has) no veia la
+    // captura, el 2.o start() volvia a llamar start() y, si el error no casaba el texto
+    // ('already started'), devolvia false -> el micro no volvia, en silencio.
+    const r = fakeRecognition({ throwOnSecondStart: true })
+    bindSpeechRecognition(r as never, {})
+    expect(startSpeechRecognition(r as never)).toBe(true)
+    expect(startSpeechRecognition(r as never), 'idempotente aunque NO llegue onstart').toBe(true)
+    expect(
+      (r as unknown as { start: { mock: { calls: unknown[] } } }).start.mock.calls.length,
+      'P9.70: no se re-arranca (el lock es del INTENTO)',
+    ).toBe(1)
+  })
+
   it('(util) tras onend la escucha se puede REANUDAR (el lock no se queda pegado)', () => {
     const r = fakeRecognition()
     bindSpeechRecognition(r as never, { onEnd: vi.fn() })

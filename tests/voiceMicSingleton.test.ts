@@ -58,4 +58,19 @@ describe('voiceMicSingleton — 1 listener activo a la vez (§9.1)', () => {
     expect(a.calls.abort).toBe(1)
     expect(getActiveRecognition()).toBeNull()
   })
+
+  it('PRUEBA DE DETECTOR (el detector no es decorativo): sin el choke point habria DOBLE captura', () => {
+    // Defecto real §9.1: dos instancias arrancadas por su cuenta capturan a la vez.
+    const crudo = [fakeRecognition('x'), fakeRecognition('y')]
+    crudo.forEach((r) => r.start())
+    expect(crudo.filter((r) => r.calls.start === 1).length, 'sin singleton: 2 capturas').toBe(2)
+    // Con el choke point, arrancar la segunda DETIENE la primera (1 sola captura).
+    resetActiveRecognitionForTest()
+    const a = fakeRecognition('a')
+    const b = fakeRecognition('b')
+    startSpeechRecognition(a as any)
+    startSpeechRecognition(b as any)
+    expect(a.calls.stop, 'el singleton detiene la primera').toBe(1)
+    expect(getActiveRecognition()).toBe(b)
+  })
 })

@@ -243,6 +243,7 @@ export const GUARD_FILES = [
     'tests/vozPlegadoEtiquetaGuard.test.ts',
     'tests/vozSondaLastSimGuard.test.ts',
     'tests/vozReinicioMicroGuard.test.ts',
+    'tests/voiceMicSingleton.test.ts',
     'tests/vozHablanteFilaUnicaGuard.test.ts',
     'tests/vozUnClusterPorVozGuard.test.ts',
 'tests/vozUnSoloCriterioGuard.test.ts',
