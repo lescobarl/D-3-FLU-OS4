@@ -10,11 +10,16 @@
 //       ENTERO (hasta 30 s = 11250 chunks = ~1,44 M muestras) y luego tomaba su
 //       cola; esa copia corria en cada tick y en cada commit.
 //
-// FIX (sin ruta nueva): (1) el tick lo gobierna la revision del habla viva
-// (`getAudioRevision`): sin habla nueva, no hay nada que embeber. (2) la ventana
-// se calcula ANTES y se copian SOLO sus muestras.
+// FIX (sin ruta nueva): (1) el tick lo gobierna el AUDIO del turno
+// (`getAudioBuffer` -> `identityAudioRevision`, su unico dueno): sin audio nuevo, no
+// hay nada que embeber. (2) la ventana se calcula ANTES y se copian SOLO sus muestras.
 //
-// Nace ROJO (getAudioRevision no gobernaba el tick y la ventana copiaba todo).
+// P9.77 (2026-10-12): la version anterior pasaba una `getAudioRevision` OPACA; el hook
+// le colaba el TEXTO del display (`publishedLiveRef`), que cambia con cada interim, asi
+// que el gate no frenaba (medido en el log del dueno: 6 resoluciones con salida
+// IDENTICA -lastSim=0.706- para el mismo turno abierto). El contrato ahora es el BUFFER
+// de audio: el display NO es expresable. Con `getAudioRevision` este caso es ROJO
+// (la opcion se ignora -> re-embebe en cada tick).
 // ============================================================
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import {
@@ -34,8 +39,8 @@ describe('P9.6 (1) - el tick de identidad NO re-embebe sin habla nueva', () => {
     vi.useRealTimers()
   })
 
-  it('con la MISMA revision no relanza el resolutor; con revision nueva, si', async () => {
-    let revision = 'a'
+  it('con el MISMO audio no relanza el resolutor; con audio nuevo, si', async () => {
+    let samples = 48000
     let runs = 0
     startContinuousIdentityPipeline(
       () => 1,
@@ -43,16 +48,16 @@ describe('P9.6 (1) - el tick de identidad NO re-embebe sin habla nueva', () => {
         runs += 1
         return () => Promise.resolve({ speakerName: 'Hablante 1', signatureVector: [1, 0, 0] })
       },
-      { getAudioRevision: () => revision },
+      { getAudioBuffer: () => ({ getTotalSamples: () => samples }) },
     )
     expect(runs, 'el primer tick siempre corre').toBe(1)
 
     await vi.advanceTimersByTimeAsync(4000)
-    expect(runs, 'sin habla nueva NO se re-embebe').toBe(1)
+    expect(runs, 'sin audio nuevo NO se re-embebe').toBe(1)
 
-    revision = 'b'
+    samples = 64000
     await vi.advanceTimersByTimeAsync(1000)
-    expect(runs, 'con habla nueva SI se re-embebe').toBe(2)
+    expect(runs, 'con audio nuevo SI se re-embebe').toBe(2)
   })
 })
 

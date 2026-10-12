@@ -24,13 +24,30 @@ export function getIdentitySnapshotIntervalMs(config = FLU_CONFIG) {
 const DYNAMIC_KEY = '__dynamic__'
 
 /**
+ * DUENO UNICO del gate del tick continuo: "el AUDIO del turno avanzo" = su cuenta de
+ * muestras capturadas. La revision se DERIVA del buffer de audio; el llamador NO la
+ * aporta. Antes la opcion era una `getAudioRevision` opaca y el hook le pasaba el TEXTO
+ * del display (`publishedLiveRef`), que cambia con cada interim -> el gate nunca frenaba
+ * (MEDIDO 2026-10-12 en el log del dueno: 6 resoluciones con salida IDENTICA
+ * -lastSim=0.706, clusters=2- para el mismo turno abierto; se re-embebia el MISMO audio
+ * y el embedder competia con el ASR local hasta cortar la transcripcion). Con el buffer
+ * como entrada, el display NO es expresable: no hay forma de colarlo.
+ * @param {{ getTotalSamples?: () => number, totalSamples?: number }|null} [audioBuffer]
+ * @returns {number}
+ */
+export function identityAudioRevision(audioBuffer) {
+  const n = audioBuffer?.getTotalSamples?.() ?? audioBuffer?.totalSamples
+  return Number.isFinite(n) && n > 0 ? n : 0
+}
+
+/**
  * @param {number|(() => number)} turnId — numero (pipeline atado a ese turno) o
  *   GETTER (pipeline que sigue al turno actual). El getter es lo que usa el hook:
  *   el id del turno se acuña MAS TARDE que el aviso de inicio, asi que capturarlo
  *   al arrancar dejaba los snapshots en un slot que el commit no miraba
  *   (medido: `Preflight turn=5` vs `Commit turn=9` -> `preReady=false` siempre).
  */
-export function startContinuousIdentityPipeline(turnId, runFactory, { onClusters, onResolved, getAudioRevision } = {}) {
+export function startContinuousIdentityPipeline(turnId, runFactory, { onClusters, onResolved, getAudioBuffer } = {}) {
   const dynamic = typeof turnId === 'function'
   const initialId = Number(dynamic ? turnId() : turnId)
   if (!Number.isFinite(initialId) || initialId <= 0) return
@@ -39,14 +56,15 @@ export function startContinuousIdentityPipeline(turnId, runFactory, { onClusters
 
   // RENDIMIENTO (medido 2026-10-07): el tick corria cada 800 ms aunque el audio del
   // turno NO hubiera cambiado -> se re-embebia la MISMA ventana (log: `Preflight
-  // turn=7 ready=true vec=512` repetido cada ~3 s). Con `getAudioRevision`, la
-  // revision del audio gobierna el tick: si no avanzo, no hay nada nuevo que embeber.
+  // turn=7 ready=true vec=512` repetido cada ~3 s). El gate lo gobierna el AUDIO del
+  // turno (`identityAudioRevision`, derivado del buffer): si no avanzo, no hay nada
+  // nuevo que embeber.
   let lastRevision = null
   const tick = () => {
     const id = dynamic ? Number(turnId()) : initialId
     if (!Number.isFinite(id) || id <= 0) return
-    if (typeof getAudioRevision === 'function') {
-      const revision = getAudioRevision()
+    if (typeof getAudioBuffer === 'function') {
+      const revision = identityAudioRevision(getAudioBuffer())
       if (lastRevision !== null && revision === lastRevision) return
       lastRevision = revision
     }

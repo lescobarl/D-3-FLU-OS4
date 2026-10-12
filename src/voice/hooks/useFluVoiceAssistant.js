@@ -1407,6 +1407,8 @@ const lastResolvedTurnRef = useRef(0)
 
   const getContinuousBufferAdapter = useCallback(() => ({
     getTurnStartSample: () => turnAudioStartSampleRef.current,
+    /** Cuenta de muestras capturadas: la revision de AUDIO del turno (su unico dueño). */
+    getTotalSamples: () => chunkTotalSamplesRef.current,
     snapshotTurnWindow: ({ turnAudioStartSample, atTurnBoundary = false, minSamplesMs = 0 } = {}) => {
       const rate = sampleRateRef.current || AUDIO_SAMPLE_RATE
       const tailMs = getConversationSpeakerTailMs(FLU_CONFIG, { atTurnBoundary })
@@ -1489,10 +1491,10 @@ const lastResolvedTurnRef = useRef(0)
         () => activeTurnIdRef.current,
         () => createSpeakerAudioResolver({ atTurnBoundary: true, allowNewCluster: true, utterance: phrase }),
         // §9 Dueño unico de la escritura de clusters: el ref del hook.
-        { onClusters: setSpeakerClusters, onResolved: applyResolvedSpeaker, getSpeakerClusters: () => speakerClustersRef.current, getAudioRevision: () => publishedLiveRef.current },
+        { onClusters: setSpeakerClusters, onResolved: applyResolvedSpeaker, getSpeakerClusters: () => speakerClustersRef.current, getAudioBuffer: () => getContinuousBufferAdapter() },
       )
     },
-    [conversationActiveRef, createSpeakerAudioResolver, setSpeakerClusters, applyResolvedSpeaker],
+    [conversationActiveRef, createSpeakerAudioResolver, getContinuousBufferAdapter, setSpeakerClusters, applyResolvedSpeaker],
   )
 
   const resolveSpeakerWithAudio = useCallback(
