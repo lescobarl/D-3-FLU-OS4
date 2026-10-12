@@ -92,6 +92,12 @@ export function startSpeechRecognition(recognition) {
   try {
     recognition.start()
     activeRecognition = recognition
+    // P9.70: marcar la captura al INTENTAR start(), no depender del evento `onstart` ni del
+    // TEXTO del error. Si `onstart` no llegaba, la guarda de la linea 87 no veia la captura y
+    // un 2.o start() volvia a llamar start() -> InvalidStateError, que solo se absorvia si el
+    // mensaje decia 'already started'; con otro idioma/version del motor la rama no entraba,
+    // devolvia false y el micro NO volvia, en silencio.
+    capturing.add(recognition)
     return true
   } catch (error) {
         logCaughtError('[catch] src/voice/lib/speechRecognitionLocal.js', error);

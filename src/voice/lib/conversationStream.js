@@ -440,7 +440,9 @@ export function evaluateSrGapSegmentCommit(
   // luego reemplazada). El texto NO se pierde: sigue acumulado en la linea viva y lo
   // escribe el cierre REAL (silencio / onend / cambio de hablante).
   // Mismo dueno del tiempo que el trigger (srGapCommitMs): un solo lector.
-  if (!srGapSilenceReached(sinceLastResultMs)) {
+  const contentAgeMs = nowMs - (state?.openLineStartedAtMs || nowMs)
+  const sinContenidoNuevo = srGapSilenceReached(contentAgeMs)
+  if (!srGapSilenceReached(sinceLastResultMs) && !sinContenidoNuevo) {
     return { flush: false, capture: '', reason: 'sr-active' }
   }
 
@@ -456,6 +458,17 @@ export function evaluateSrGapSegmentCommit(
   const extensionWords = prior
     ? countWordsFromPauseCfg(capture.slice(Math.min(prior.length, capture.length)))
     : countWordsFromPauseCfg(capture)
+  // Cierre por SIN CONTENIDO NUEVO (congelacion, medido 2026-10-12): la linea VIVA dejo de
+  // crecer aunque el ASR siga entregando interinos repetidos -> se CIERRA, volcando la ultima
+  // frase que aun no esta en la conversacion. Se adelanta al porton de contenido: si no, el
+  // turno quedaba abierto indefinidamente con interinos (78 s sin fila).
+  if (sinContenidoNuevo) {
+    const cooldownContent = Number(cfg.postCommitCooldownMs)
+    if (cooldownContent > 0 && lastCommitAtMs > 0 && nowMs - lastCommitAtMs < cooldownContent) {
+      return { flush: false, capture, reason: 'post-commit-cooldown' }
+    }
+    return { flush: true, capture, reason: 'sr-gap-segment-commit', sinceLastResultMs, openLineAgeMs: contentAgeMs }
+  }
   if (
     prior &&
     utterancesSameRevision(prior, capture) &&

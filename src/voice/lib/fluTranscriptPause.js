@@ -79,9 +79,17 @@ export function srGapSilenceReached(sinceLastResultMs = 0) {
   return gapMs > 0 && Number(sinceLastResultMs) >= gapMs
 }
 
-export function resolveSrGapTrigger({ sinceLastResultMs = 0, sinceLastCommitMs = 0, hasOpenLine = true } = {}) {
+export function resolveSrGapTrigger({ sinceLastResultMs = 0, sinceLastCommitMs = 0, hasOpenLine = true, openLineAgeMs = 0 } = {}) {
   // El trigger PREGUNTA al dueno del tiempo (srGapSilenceReached); NO re-decide el cierre.
-  if (!srGapSilenceReached(sinceLastResultMs)) {
+  // DOS caminos, MISMO umbral: (1) SILENCIO (`srGapCommitMs` sin onresult) y (2) SIN
+  // CONTENIDO NUEVO: la locucion lleva `srGapCommitMs` SIN CAMBIAR aunque Chrome siga
+  // entregando interinos repetidos. Antes solo existia (1): con interinos continuos el reloj
+  // de resultado nunca vencia y el turno NO cerraba (congelacion medida 2026-10-12, turn
+  // 15->26: 78 s sin fila). El reloj del CONTENIDO (`openLineStartedAtMs`) es DISTINTO del de
+  // resultado: se reinicia SOLO cuando el texto crece, asi que interinos repetidos no lo tocan.
+  const silence = srGapSilenceReached(sinceLastResultMs)
+  const noNewContent = !silence && hasOpenLine && srGapSilenceReached(openLineAgeMs)
+  if (!silence && !noNewContent) {
     return { fire: false, sinceLastResultMs: Number(sinceLastResultMs) || 0, reason: 'sr-active' }
   }
   // Sin locucion viva no hay nada que cerrar: no se sondea. En reposo el srGap
@@ -97,8 +105,8 @@ export function resolveSrGapTrigger({ sinceLastResultMs = 0, sinceLastCommitMs =
   // su sesion del 2026-10-10 15:02-15:14: 26 de 26 srGap por 'sr-live-turn-stale', fila
   // nacida en el "10" y reemplazada 3 veces). El sintoma que perseguia P9.55 (texto que no
   // llegaba a fila) tenia su causa en el DESCARTE del rebuild, cerrado en P9.60.
-  const reason = 'sr-silence'
-  emitSrGapProbe(reason, { sinceResult: Number(sinceLastResultMs) || 0, sinceCommit: Number(sinceLastCommitMs) || 0 })
+  const reason = silence ? 'sr-silence' : 'sr-no-new-content'
+  emitSrGapProbe(reason, { sinceResult: Number(sinceLastResultMs) || 0, sinceCommit: Number(sinceLastCommitMs) || 0, openLineAge: Number(openLineAgeMs) || 0 })
   return {
     fire: true,
     sinceLastResultMs: Number(sinceLastResultMs) || 0,

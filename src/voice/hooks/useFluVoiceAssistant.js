@@ -4379,7 +4379,7 @@ const lastResolvedTurnRef = useRef(0)
           publishedLiveRef.current ||
           readStreamDisplay(listenStateRef.current),
         )
-        const srGap = resolveSrGapTrigger({ sinceLastResultMs: sinceResult, sinceLastCommitMs: lastCommitAtRef.current > 0 ? now - lastCommitAtRef.current : 0, hasOpenLine: Boolean(openLine) })
+        const srGap = resolveSrGapTrigger({ sinceLastResultMs: sinceResult, sinceLastCommitMs: lastCommitAtRef.current > 0 ? now - lastCommitAtRef.current : 0, hasOpenLine: Boolean(openLine), openLineAgeMs: now - (listenStateRef.current?.openLineStartedAtMs || now) })
         if (srGap.fire && !srGapFiredForOpenLineRef.current) {
           srGapFiredForOpenLineRef.current = true
           ingressRuntimeRef.current?.pushSrGapEvent?.({ sinceLastResultMs: srGap.sinceLastResultMs })
