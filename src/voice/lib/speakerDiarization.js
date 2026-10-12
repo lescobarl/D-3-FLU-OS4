@@ -116,7 +116,8 @@ function resolveProductionSpeakerAtBoundary({
     VOICE_DIARIZATION_DEFAULTS.cosineRegisteredMatch,
   )
   const HISTORICAL = cosineThreshold(thresholds, 'shortUtteranceHistoricalMatch', 0.7)
-  const REUSE_EFF = classroom ? REUSE - (Number(roomCfg.classroomReuseRelax) || VOICE_DIARIZATION_DEFAULTS.classroomReuseRelax) : REUSE
+  const reuseRelax = Number(roomCfg.classroomReuseRelax)
+  const REUSE_EFF = classroom ? REUSE - (Number.isFinite(reuseRelax) ? reuseRelax : VOICE_DIARIZATION_DEFAULTS.classroomReuseRelax) : REUSE
   const NEW_VOICE_EFF = classroom ? NEW_VOICE + (Number(roomCfg.classroomNewVoiceRelax) || VOICE_DIARIZATION_DEFAULTS.classroomNewVoiceRelax) : NEW_VOICE
   const SWITCH = classroom
     ? Number(roomCfg.classroomLastSpeakerSwitchMargin) || VOICE_DIARIZATION_DEFAULTS.classroomLastSpeakerSwitchMargin
@@ -333,14 +334,15 @@ function resolveProductionSpeakerAtBoundary({
       return adoptCluster(bestLabel, 'production-historical-reidentify', bestSim)
     }
     if (lastSpeaker && lastSim >= NEW_VOICE_EFF && !shortAfterOtherVoice && registeredIdentityConfirmed(lastSpeaker)) {
-      if (
-        classroom &&
-        bestLabel &&
-        bestLabel !== lastSpeaker &&
-        bestSim >= REUSE_EFF &&
-        bestSim - lastSim >= SWITCH
-      ) {
+      if (classroom && bestLabel && bestLabel !== lastSpeaker && bestSim >= REUSE_EFF && bestSim - lastSim >= SWITCH) {
         return adoptCluster(bestLabel, 'production-classroom-switch', bestSim)
+      }
+      // Un NOMBRE PROPIO con evidencia (bestSim >= REUSE_EFF) GANA a una etiqueta
+      // GENERICA pegajosa: la misma voz no debe quedarse en "Hablante N" teniendo su
+      // ancla (medido con relax 0: la diferencia con el sticky era < SWITCH y anclaba
+      // al generico; regla del dueno: el nombre aplica sus turnos).
+      if (bestLabel && isRegisteredSpeakerLabel(bestLabel) && !isRegisteredSpeakerLabel(lastSpeaker) && bestSim >= REUSE_EFF) {
+        return adoptCluster(bestLabel, 'production-proper-name-over-generic', bestSim)
       }
       return anchorLastSpeaker('production-last-speaker-anchored')
     }
@@ -369,6 +371,11 @@ function resolveProductionSpeakerAtBoundary({
   // ACOTADO: el reuso solo vale para una etiqueta AUTOMATICA. Un NOMBRE propio no se
   // estampa sin coincidencia medida (si no, la voz distinta heredaria el nombre: medido en
   // speakerIdentitySession "una voz DISTINTA no hereda el nombre").
+  // REUSO (bajo la banda de voz distinta): un vector que NO casa con ninguna voz
+  // (bestSim < cosineDistinctVoice) reusa la etiqueta del anterior EN VEZ de abrir
+  // otra. La contaminacion de la ventana (R1) empujaba a la voz distinta por debajo
+  // de esa banda y HEREDABA la etiqueta del titular (log 2026-10-12: la mujer =
+  // "Hablante 3"); con R1 la medida es limpia y esta rama no se dispara.
   if (lastSpeaker && isAutoSpeakerLabel(lastSpeaker) && lastSim < NEW_VOICE_OPEN_GATE && bestSim < NEW_VOICE_OPEN_GATE && bestSim < DISTINCT_VOICE) {
     note?.({
       reason: 'production-reuse-no-evidence',

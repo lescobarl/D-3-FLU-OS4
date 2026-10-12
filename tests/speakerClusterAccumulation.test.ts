@@ -51,7 +51,7 @@ beforeEach(() => {
 // respondia `no-vector` -> sin firma, sin cluster. Por eso la captura impone un
 // MINIMO (`minSamplesMs`); el primitivo que lo aplica es `flattenChunksWindow`.
 describe('la captura del turno impone un minimo de audio (no ventanas casi vacias)', () => {
-  it('minSamples ENSANCHA una ventana de turno casi vacia hasta el minimo', () => {
+  it('R1: minSamples NO ensancha la ventana mas alla del inicio del turno', () => {
     const chunks = [new Float32Array(48000)] // 1 s @48k
     const w = flattenChunksWindow(chunks, {
       totalSamples: 48000,
@@ -59,7 +59,10 @@ describe('la captura del turno impone un minimo de audio (no ventanas casi vacia
       maxSamples: 86400,
       minSamples: 43200, // minimo exigido (0.9 s @48k)
     })
-    expect(w.length, 'debe ensancharse al minimo, no quedarse en 384').toBe(43200)
+    // R1: la ventana NO puede empezar antes del turno (antes se ensanchaba a 43200 y
+    // metia audio PRE-turno: la voz de FLU, medido 67-83%). El piso insuficiente lo
+    // cubre R2 (no se mide ni se abre etiqueta por debajo del piso de voz).
+    expect(w.length, 'R1: se queda en el turno, no en el minimo').toBe(384)
   })
 })
 

@@ -14,6 +14,7 @@
 // ============================================================
 import { describe, it, expect, beforeEach } from 'vitest'
 import { resolveConversationSpeaker } from '../src/voice/lib/speakerDiarization.js'
+import { FLU_CONFIG } from '../src/voice/lib/fluConfig.js'
 import { useIntegrationStore } from '../src/store/integrationStore'
 import { commitUserTurnRow, renameSpeakerRows } from '../src/voice/lib/conversationTurnRow'
 
@@ -38,6 +39,7 @@ const resolveTurn = (t: Turn): string =>
     lastSignature: t.lastSignature,
     voicedSampleCount: 86400,
     sampleRate: 48000,
+    thresholds: FLU_CONFIG.voiceIdentity.capture.conversationSpeakerThresholds,
     atTurnBoundary: true,
     allowNewCluster: true,
   } as any)

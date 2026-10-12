@@ -1505,16 +1505,14 @@ const lastResolvedTurnRef = useRef(0)
       const sampleRate = sampleRateRef.current || AUDIO_SAMPLE_RATE
       const maxSamples = Math.floor(sampleRate * (tailMs / 1000))
       const minVoiced = getConversationMinVoicedSamples(sampleRate)
-      let tail = flattenChunksTail(chunksRef.current, maxSamples)
-      if (captureCfg.conversationTurnAlignedDiarize !== false) {
-        const turnWindow = flattenChunksWindow(chunksRef.current, {
-          totalSamples: chunkTotalSamplesRef.current,
-          sinceSample: turnAudioStartSampleRef.current,
-          maxSamples,
-          minSamples: minVoiced,
-        })
-        if (turnWindow.length >= minVoiced) tail = turnWindow
-      }
+      // R1: la ventana es la del TURNO. Antes, si la ventana del turno era corta, se
+      // caia a `flattenChunksTail` (la cola del buffer) que metia audio PRE-turno (la
+      // voz de FLU) -> coseno mezclado. Ahora la ventana del turno se usa tal cual (si
+      // es corta, el piso de voz del resolutor la descarta: no se mide ni se abre fila).
+      const turnAligned = captureCfg.conversationTurnAlignedDiarize !== false
+      const tail = turnAligned
+        ? flattenChunksWindow(chunksRef.current, { totalSamples: chunkTotalSamplesRef.current, sinceSample: turnAudioStartSampleRef.current, maxSamples, minSamples: minVoiced })
+        : flattenChunksTail(chunksRef.current, maxSamples)
       if (!tail.length) return blindSpeakerFallback(fallbackSpeaker)
       return resolveConversationSpeakerSync(utterance, tail, sampleRate, fallbackSpeaker, {
         atTurnBoundary,

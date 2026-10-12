@@ -89,7 +89,11 @@ export function flattenChunksWindow(
   let windowLen = turnSpan > 0 ? Math.min(turnSpan, bufferLen) : bufferLen
   if (maxSamples > 0) windowLen = Math.min(windowLen, maxSamples)
   if (minSamples > 0 && windowLen < minSamples) {
-    windowLen = Math.min(Math.max(windowLen, minSamples), bufferLen)
+    // R1: la ventana NO puede empezar ANTES del turno. Antes se extendia hacia
+    // atras hasta `minSamples` y con locuciones cortas metia la voz de FLU
+    // (medido: 67-83% de la ventana era audio PRE-turno) -> coseno mezclado.
+    const turnLimit = turnSpan > 0 ? turnSpan : bufferLen
+    windowLen = Math.min(Math.max(windowLen, minSamples), turnLimit)
   }
   if (windowLen <= 0) return new Float32Array(0)
 

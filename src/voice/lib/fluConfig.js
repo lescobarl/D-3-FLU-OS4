@@ -113,11 +113,11 @@ export const FLU_CONFIG = {
       recognition: {
         fallbackErrors: ['network', 'no-speech'],
       },
-      conversationSpeakerTailMs: 5000,
+      conversationSpeakerTailMs: 2000,
       /** Tope de ventana de audio en límite de turno (ms). */
-      turnBoundaryTailCapMs: 900,
-      /** Voz mínima para analizar timbre (ms). Más bajo = más sensible. */
-      conversationMinVoicedMs: 8,
+      turnBoundaryTailCapMs: 2000,
+      /** Voz mínima para timbre (ms); es el piso REAL del embedder (350 ms). */
+      conversationMinVoicedMs: 350,
       /** Voz mínima para nuevo hablante (ms); bajo en sala/TV para no perder cambios de voz. */
       conversationMinVoicedForNewMs: 2200,
       conversationMaxAutoSpeakers: 99, // SIN TOPE de etiquetas automaticas: un tope bajo fuerza FUSIONES FALSAS (se pierden voces); el unico criterio de union es el de la diarizacion, no un recuento.
@@ -210,11 +210,11 @@ export const FLU_CONFIG = {
          * No desactiva captura total ni filtros TV; solo ajusta umbrales de diarización.
          */
         classroomMultiSpeaker: true,
-        classroomTurnBoundaryTailCapMs: 1800,
-        classroomMinVoicedForNewMs: 1400,
+        classroomTurnBoundaryTailCapMs: 2000,
+        classroomMinVoicedForNewMs: 2200,
         classroomLastSpeakerSwitchMargin: 0.06,
         classroomMultiSpeakerRoomClusterMin: 2,
-        classroomReuseRelax: 0.03,
+        classroomReuseRelax: 0,
         classroomNewVoiceRelax: 0.04,
         /** Factor de relajación de "solo". 1.0 = sin relajación: una voz claramente
          *  distinta separa aunque solo haya hablado 1 persona (hombre/mujer/niño).
