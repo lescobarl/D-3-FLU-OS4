@@ -151,7 +151,6 @@ export const FLU_CONFIG = {
         modelId: 'Xenova/wavlm-base-plus-sv',
         targetSampleRate: 16000,
         minSampleRatio: 0.35,
-        voicedRmsFloor: 0.01,
         quantized: true,
       },
       roomCapture: {

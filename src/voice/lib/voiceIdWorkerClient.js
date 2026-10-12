@@ -305,10 +305,9 @@ export async function resolveSpeakerFromAudio(samples, sampleRate = DEFAULT_SAMP
   // P9.71: el piso de voz debe ser de VOZ, no de LONGITUD. Antes se pasaba `sampleCount`
   // (longitud de la ventana) y, como `conversationMinVoicedMs` == el minimo del embedder,
   // CUALQUIER ventana aceptada pasaba el piso (incluida TV/silencio). Aqui se cuenta lo VIVO.
-  const voiced = countVoicedSamples(samples, {
-    sampleRate,
-    rmsFloor: Number(getEmbeddingConfig().voicedRmsFloor) || 0.01,
-  })
+  // P9.72: el umbral NO se fija aqui (era un SEGUNDO umbral, mas permisivo que el del VAD).
+  // El dueno unico del piso de voz es `voicedActivity.getVoicedFloor()`.
+  const voiced = countVoicedSamples(samples, { sampleRate })
   const identity = await resolveIdentityIdle(vector, matchPayload, sampleRate, voiced)
   if (typeof window !== 'undefined') {
     // El log dice la decision REAL (la del hilo principal), no la del worker.
