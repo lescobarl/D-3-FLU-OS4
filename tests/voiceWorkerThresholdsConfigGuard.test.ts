@@ -19,6 +19,8 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { resolveConversationSpeaker } from '../src/voice/lib/speakerDiarization.js'
 import { FLU_CONFIG } from '../src/voice/lib/fluConfig.js'
+import { getMinSamples, getTargetSampleRate } from '../src/voice/lib/embeddingConfig.js'
+import { getConversationMinVoicedSamples } from '../src/voice/lib/micCapture.js'
 
 const WORKER = resolve(process.cwd(), 'src/voice/workers/voiceId.worker.js')
 const CLIENT = resolve(process.cwd(), 'src/voice/lib/voiceIdWorkerClient.js')
@@ -50,6 +52,13 @@ describe('los umbrales de identidad salen de la config, no de un literal', () =>
     const t = FLU_CONFIG.voiceIdentity?.capture?.conversationSpeakerThresholds || {}
     expect(t.productionClusterReuseThreshold).toBe(0.66)
     expect(t.cosineNewVoiceThreshold).toBe(0.64)
+  })
+
+  it('conversationMinVoicedMs ES el piso del embedder (no una copia que puede divergir)', () => {
+    const capture = FLU_CONFIG.voiceIdentity?.capture || {}
+    const pisoEmbedderMs = Math.round(Number(capture.embedding?.minSampleRatio) * 1000)
+    expect(capture.conversationMinVoicedMs, 'MinVoiced debe igualar el piso real del embedder').toBe(pisoEmbedderMs)
+    expect(getConversationMinVoicedSamples(getTargetSampleRate())).toBe(getMinSamples())
   })
 })
 
