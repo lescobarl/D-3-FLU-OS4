@@ -82,6 +82,34 @@
         "origen": "reporte-dueno-2026-10-12-1635"
     },
     {
+        "id": "P9.82",
+        "titulo": "La respuesta de FLU se guarda DOS veces en el mismo store (dato duplicado) y el render lo tapa con un parche.",
+        "estado": "todo",
+        "evidencia": "MEDIDO (lectura de codigo, 2026-10-12): `addFluMessage` (src/store/integrationStore.ts:520-554) escribe la MISMA respuesta de FLU dos veces: la adjunta al ultimo turno del usuario (`response` + `meta.response`, :536-539) Y agrega una entrada independiente `role='flu'` (:545). El duplicado visible se tapa en el RENDER con un parche: src/voice/components/ConversationLog.jsx:21-40 ('FIX duplicacion ... SIN tocar el store') recolecta los textos FLU y omite el adjunto al pintar. Es ruta doble de DATOS (AGENTS 7.7.c: un dato, un dueno) con parche de presentacion (AGENTS 2.3). El escritor unico de la fila de FLU es `logFluReply` (src/voice/lib/fluConversationLog.ts:21; llamadores App.tsx:1989 y useNavigationCommands.ts:117). FALTA: decidir la forma unica (entrada propia o adjunta) y medir quien lee `.response` (persistencia/export/Gemini) antes de tocarlo.",
+        "origen": "auditoria-codigo-2026-10-12-2300"
+    },
+    {
+        "id": "P9.83",
+        "titulo": "El texto 'participante ignorado -> enojado' esta hardcodeado y duplicado en 3 ficheros + filtro por lista de literales.",
+        "estado": "todo",
+        "evidencia": "MEDIDO (lectura, 2026-10-12): el mismo contenido vive en TRES sitios sin dueno unico: (1) src/App.tsx:1104 fuerza, via setRecentMemory, 'El participante \"Hablante\" levanto la mano ... Estas enojado por eso: debes decirlo ... ANTES de continuar con cualquier otro tema'; (2) src/lib/systemEventLog.ts:124-125 la linea de conversacion '[FLU recuerda] Me enoje porque levante la mano...'; (3) src/hooks/useConversationPersistence.ts:146-153 mantiene una BLOCKLIST de 4 literales (incluye la parafrasis de Gemini) para filtrar del historial al recargar. Rompe AGENTS 4 / Anexo B.8 (una etiqueta, un sitio) y 2.2 (texto de politica fuera de config/i18n). El filtro por literales es fragil: otra parafrasis se cuela. Ademas `setRecentMemory` (App.tsx:1103-1105) FUERZA el tema del siguiente turno: medido en el log del dueno 16:34:28 (hablaba de otra cosa y FLU responde el enojo). FALTA: dueno unico del texto (config/i18n) y decidir con el dueno si el forzado del tema es deseado.",
+        "origen": "auditoria-codigo-2026-10-12-2300"
+    },
+    {
+        "id": "P9.84",
+        "titulo": "El participante es un SEGUNDO consumidor de LLM activo por defecto; su evento compite con el turno principal.",
+        "estado": "todo",
+        "evidencia": "MEDIDO (lectura, 2026-10-12): `FLU_CONFIG.fluParticipant.enabled = true` por defecto (src/voice/lib/fluConfig.js:1681-1682) y `conversationOnly:false` -> evalua tambien en escucha pasiva. `useFluParticipant.runEvaluation` (src/hooks/useFluParticipant.ts:147-233) llama `aiService.generateParticipantEvaluation` (src/core/ai/aiServiceBase.ts:283; server src/server/geminiProxy.ts:561) con el MISMO log de conversacion (buildParticipantLogWindow) y su resultado ENTRA al historial por `integrationStore.addConversationEntry` (App.tsx:1095) y por `commitSessionTurn(draft, FLU_DIALOGUE_SPEAKER)` (src/voice/hooks/useFluVoiceAssistant.js:2856). Es una segunda ruta de IA que puede interrumpir el turno del usuario (log 16:34:28). NO es necesariamente defecto (feature OS3): DECLARAR si se desea en produccion o apagar por defecto; medir con el dueno.",
+        "origen": "auditoria-codigo-2026-10-12-2300"
+    },
+    {
+        "id": "P9.85",
+        "titulo": "sameVoiceLabelGroup no implementa el encadenamiento que su contrato declara (cosido parcial).",
+        "estado": "todo",
+        "evidencia": "MEDIDO (lectura, 2026-10-12): el contrato de src/voice/lib/speakerClusters.js:400-412 dice 'ENCADENAMIENTO ... se itera hasta punto fijo' (texto 'antes se comparaba SOLO contra el ancla'), pero la implementacion (:428-443) compara cada cluster UNICAMENTE contra `firmaAncla` una vez: no hay bucle de punto fijo. Divergencia contrato<->codigo. Efecto: el cosido de la MISMA voz no alcanza la 3.a etiqueta cuando se parece a la 2.a y no al ancla -> contribuye al renombrado PARCIAL medido por el dueno (16:29:25 'lo puso en 1 2 3 y dos intermedios no'), porque `labels` (src/voice/lib/speakerIdentityRegister.js:79-90) acota las filas que `renameSpeakerRows` (src/voice/lib/conversationTurnRow.ts:151-181) puede reescribir. FIX candidato: implementar el encadenamiento declarado o corregir el contrato; medir con la voz femenina.",
+        "origen": "auditoria-codigo-2026-10-12-2300"
+    },
+    {
       "id": "P9.49",
       "titulo": "El hook cablea el vinculo del participante a la via tardia del nombre (extraido a src/app por el trinquete del god-file)",
       "estado": "done",
