@@ -337,6 +337,34 @@ function sealTurnBoundaryAfterFinal(ctx) {
 }
 
 function ingestFinalChunk({ finalChunk, ctx }) {
+  // P9.68-b (PERDIDA MEDIDA 2026-10-12, turn 23->29): la locucion CONFIRMADA SIN FILA de la
+  // locucion ANTERIOR no se puede perder al llegar una NUEVA. El reset de buffers limpia
+  // `pendingFinal` sin volcarla; aqui, si lo que llega es OTRA locucion (ni continuacion ni
+  // revision), se VOLCA la anterior por la puerta real (`settlesTurn`) ANTES de empezar la
+  // nueva. Reproducido: sin esto la locucion larga (1112 chars) quedaba sin fila.
+  const pendientePrevio = cleanForSpeech(ctx.listenState?.pendingFinal || '')
+  const finalLimpio = cleanForSpeech(finalChunk || '')
+  if (
+    pendientePrevio &&
+    finalLimpio &&
+    !utterancesRelate(pendientePrevio, finalLimpio) &&
+    !utterancesSameRevision(pendientePrevio, finalLimpio)
+  ) {
+    ctx.scheduleTurnCommit?.({
+      capture: pendientePrevio,
+      utterance: pendientePrevio,
+      newParagraph: false,
+      speaker: ctx.lastLoggedSpeakerRef?.current || '',
+      turnCommit: true,
+      settlesTurn: true,
+      freshUtterance: false,
+      turnBoundary: true,
+      atTurnBoundary: true,
+      forceNewRow: false,
+      forceNewRowOnSegment: false,
+    })
+    clearPendingFinal(ctx.listenState)
+  }
   const lastCommittedRow = cleanForSpeech(
     ctx.logRowsTextRef?.current?.at(-1) || ctx.lastEmittedTranscriptRef?.current || '',
   )
