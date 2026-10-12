@@ -5533,3 +5533,26 @@ DECISIONES DEL DUENO 2026-10-12 14:27 (respuesta a la auditoria)
 5) P9.75 (extension corta + contenido estancado): GUARD o FUERA. Inalcanzable = conversationStream.js:472-499;
    se conservan el rechazo por texto exacto (:454-456) y el cooldown (:466-469).
 6) P9.76 (micro): DoD-producto, lo cierra la corrida del dueno.
+
+==============================================================================
+EJECUTADO 2026-10-12 (orden: ejecuta) - commits de esta sesion
+==============================================================================
+03429e0  chore(auditoria): 5 hallazgos MEDIDOS en desk (P9.72-P9.76) + bloque de auditoria
+4f0a01b  chore(ledger): D9.1 (aprobacion del dueno de los valores de audio, con VEREDICTO)
+255c291  fix(voz): P9.72 - UN SOLO DUENO del umbral de voz (el del VAD); se retira voicedRmsFloor
+(este)   test(voz): P9.75 (cierre por contenido estancado, red-on-old) + P9.72 (un solo dueno, red-on-old)
+
+MEDIDO ANTES/DESPUES (desk d:/flu-audit/audit-hallazgos.test.ts, 11 casos, funciones REALES)
+  P9.72: quiet(amp 0.015, RMS~0.0106)  ANTES voiced=16000  ->  DESPUES voiced=0
+         piso por defecto: ANTES 0.01 (propio)           ->  DESPUES 0.02 (el del VAD, dueno unico)
+  P9.75: (a) silencio 4000 ms + contenido vencido + 4 chars  => flush=true (unico cierre real)
+         (b) el rechazo no-new-content solo con el estado INCOHERENTE (silencio + contenido fresco)
+         (c) openLineAgeMs = edad del CONTENIDO (rama nueva) vs del ULTIMO TOQUE (cierre normal): 2 significados
+  Sigue ABIERTO y medido: P9.73 (revision del ASR con prefijo distinto => 2 filas), P9.74 (el merge de
+    clusters no se observa; el cambio de speakerDiarization.js sigue SIN COMMITEAR), P9.76 (micro: sin la
+    senal `false` que disparaba el rebuild inmediato; lo cierra la corrida del dueno).
+
+Alcance real (0.23) de este bloque: CUBIERTO=el dato unico del umbral de voz y el cierre por contenido,
+  ambos con guard y control negativo medido; el registro (ledger + reporte) de los 5 hallazgos y de la
+  aprobacion D9.1. NO CUBIERTO=el DoD-producto (pantalla del dueno), el panel/DOM, e2e, P9.74 (fichero de
+  otra sesion), P9.73 (declarado, no deduplicado) y la retirada del tramo inalcanzable de P9.75.
