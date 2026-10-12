@@ -111,20 +111,29 @@ describe('PRUEBA DE DETECTOR (el detector no es decorativo)', () => {
 // P9.64 + H8 (MEDIDO 2026-10-12): la MISMA persona con el cluster en otra caja ("luis" del
 // historico) y el primario "Luis" producia DOS etiquetas Y DOS clusters (ruta doble de DATOS).
 // El canonico es el del primario y los clusters de la misma persona se FUSIONAN.
+//
+// P9.74 (MEDIDO 2026-10-12, DOS ordenes): comprobar solo `n === 1` y la etiqueta devuelta NO
+// distingue el defecto: la version que elegia el cluster con `findClusterByLabel` devolvia "Luis"
+// con `n === 1` y, en el orden `[luis, Luis]`, dejaba vivo el cluster DUPLICADO ("luis") y borraba
+// el PRIMARIO. Por eso aqui se exige, en LOS DOS ordenes: (a) un cluster por persona, (b) que el
+// superviviente sea el CANONICO exacto, y (c) que la etiqueta devuelta sea la del superviviente.
 describe('P9.64 + H8: la MISMA persona no lleva DOS etiquetas NI DOS clusters', () => {
-  it('devuelve el canonico del primario Y fusiona los clusters (uno por persona)', () => {
-    const clusters: Cluster[] = [
-      { label: 'luis', signature: LUIS },
-      { label: 'Luis', signature: LUIS },
-    ]
-    const out = resolveConversationSpeaker({
-      signatureVector: luisVar(0.75), speakerClusters: clusters,
-      thresholds: FLU_CONFIG.voiceIdentity.capture.conversationSpeakerThresholds,
-      sessionPrimary: 'Luis', lastSpeaker: 'luis', voicedSampleCount: 86400, sampleRate: 48000,
-      atTurnBoundary: true, allowNewCluster: true, utteranceText: 'si',
-    } as never)
-    expect(out, `resolvio "${out}"`).toBe('Luis')
-    const mismos = clusters.filter((c) => String(c.label).toLowerCase() === 'luis')
-    expect(mismos.length, `clusters=${JSON.stringify(clusters.map((c) => c.label))}`).toBe(1)
+  it('los DOS ordenes: sobrevive el canonico y la etiqueta coincide con el superviviente', () => {
+    const ordenes: Array<Array<'luis' | 'Luis'>> = [['luis', 'Luis'], ['Luis', 'luis']]
+    for (const orden of ordenes) {
+      const clusters: Cluster[] = orden.map((label) => ({ label, signature: LUIS }))
+      const out = resolveConversationSpeaker({
+        signatureVector: luisVar(0.75), speakerClusters: clusters,
+        thresholds: FLU_CONFIG.voiceIdentity.capture.conversationSpeakerThresholds,
+        sessionPrimary: 'Luis', lastSpeaker: 'luis', voicedSampleCount: 86400, sampleRate: 48000,
+        atTurnBoundary: true, allowNewCluster: true, utteranceText: 'si',
+      } as never)
+      const etiquetas = clusters.map((c) => String(c.label))
+      const etiqueta = `orden=[${orden.join(', ')}]`
+      expect(out, `${etiqueta}: la etiqueta devuelta`).toBe('Luis')
+      expect(etiquetas.length, `${etiqueta}: un cluster por persona, quedo clusters=${JSON.stringify(etiquetas)}`).toBe(1)
+      expect(etiquetas[0], `${etiqueta}: NO puede sobrevivir el duplicado`).toBe('Luis')
+      expect(out, `${etiqueta}: la fila y el cluster deben coincidir`).toBe(etiquetas[0])
+    }
   })
 })
