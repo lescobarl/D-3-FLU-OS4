@@ -5472,8 +5472,15 @@ ALCANCE REAL (0.23)
     ROJOS y los leen voiceWorkerThresholdsConfigGuard / vozCosidoDiarizacionGuard /
     vozClusterConsolidacionGuard / vozDiarizacionDosVocesGuard / continuousAudioBuffer).
 
-=== CIERRE 2026-10-12 (P9.64 / P9.68 / P9.69 / P9.70) ===
-CUBIERTO=los 4 fixes y sus guards existen, estan en lint:guards, nacen ROJOS (verificado revirtiendo el src de cada commit) y sus literales salen del log preservado (d:/flu-audit/sesion-2026-10-12-0954-1004.log); npm run lint 265 ficheros / 2182 tests VERDE, eslint 0, typecheck 0.
-Commits: P9.68=e61e464(+30bac63) | P9.70=e61e464(+30bac63) | P9.69=beeef07(+aaf3e0c) | P9.64=b4d569f(+35eee89).
-NO CUBIERTO=el DoD-producto (pantalla del dueno), la suite completa y el e2e (no corridos: exigen autorizacion); y P9.71 (hueco ABIERTO: la via de limite no tiene piso de VOZ; el piso se alimenta de longitud de ventana, no de voz).
-ENMIENDA DE CONTRATO: el contrato vigente (.task/contract.json) es el de la tarea del NOMBRE POR VOZ (base 738270c) y NO cubre esta pasada; el cierre va por plans/ledger.json (items P9.64/68/69/70 a done + done[] con CUBIERTO/NO CUBIERTO) y este bloque. No se edita el contrato para no invalidar su gate/base.
+=== CIERRE 2026-10-12 (P9.64 / P9.68 / P9.68-b / P9.69 / P9.70 / P9.71) ===
+CUBIERTO=los 6 fixes y sus guards existen, estan en lint:guards, nacen ROJOS (verificado revirtiendo el src) y sus literales salen del log preservado (d:/flu-audit/sesion-2026-10-12-0954-1004.log); npm run lint 265 ficheros / 2182 tests VERDE, eslint 0, typecheck 0; ledger:check OK (0 pendientes).
+Commits: P9.68=e61e464(+30bac63) | P9.70=e61e464(+30bac63) | P9.69=beeef07(+aaf3e0c) | P9.64=b4d569f(+35eee89) | P9.68-b=904d6b1(+7fcc68f) | P9.71=d20a014(+6232d86).
+NO CUBIERTO=el DoD-producto (pantalla del dueno), la suite completa y el e2e (no corridos: exigen autorizacion).
+DECLARACIONES DEL AUDIT (H1/H2/H6/H7/H8), no ocultadas:
+ H1=la rama de P9.68 (sin contenido nuevo) devuelve flush ANTES de los portones de contenido; los rechazos already-committed/no-new-content quedan inalcanzables en la practica y una extension corta que antes se frenaba ahora se vuelca (queda el cooldown). Es el precio de matar la congelacion: DECLARADO (0 tests citan no-new-content).
+ H2=openLineAgeMs tiene DOS significados (edad del CONTENIDO vs ultimo TOQUE); pendiente de renombrar (contentAgeMs/lastTouchAgeMs). DECLARADO.
+ H3=REFUTADO: los numeros de audio (cap 2000 / minVoiced 350 / relax 0) los aprobo el dueno por escrito ("Propuesta APROBADA ... los numeros").
+ H6=RIESGO no medido: P9.68-b decide "otra locucion" por prefijo comun >=24 chars y el dedupe es por texto EXACTO; una reescritura de los ~24 primeros chars podria dar 2 filas. Requiere sesion del dueno.
+ H7=ABIERTO: P9.69 cerro el doble REGISTRO, no la doble RESPUESTA (el arbitro no matchea la orden de nombre -> cae a IA).
+ H8=PARCIAL: P9.64 unifica la ETIQUETA, no el DATO (los dos clusters por persona pueden seguir).
+ENMIENDA DE CONTRATO: el contrato vigente (.task/contract.json) es el de la tarea del NOMBRE POR VOZ (base 738270c) y NO cubre esta pasada; el cierre va por plans/ledger.json (items a done + done[] con CUBIERTO/NO CUBIERTO) y este bloque. No se edita el contrato para no invalidar su gate/base.
