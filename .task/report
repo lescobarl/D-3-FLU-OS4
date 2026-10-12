@@ -5484,3 +5484,39 @@ DECLARACIONES DEL AUDIT (H1/H2/H6/H7/H8), no ocultadas:
  H7=ABIERTO: P9.69 cerro el doble REGISTRO, no la doble RESPUESTA (el arbitro no matchea la orden de nombre -> cae a IA).
  H8=PARCIAL: P9.64 unifica la ETIQUETA, no el DATO (los dos clusters por persona pueden seguir).
 ENMIENDA DE CONTRATO: el contrato vigente (.task/contract.json) es el de la tarea del NOMBRE POR VOZ (base 738270c) y NO cubre esta pasada; el cierre va por plans/ledger.json (items a done + done[] con CUBIERTO/NO CUBIERTO) y este bloque. No se edita el contrato para no invalidar su gate/base.
+
+==============================================================================
+AUDITORIA POSTERIOR AL CIERRE b41f209 (desk: d:/flu-audit/audit-hallazgos.test.ts)
+==============================================================================
+Medido con funciones REALES (no mocks). Estado del arbol: HEAD 6232d86 + speakerDiarization.js sin commitear.
+
+1) P9.71 (piso de voz): silencio digital -> voiced=0; tramas a amp 0.015 (RMS ~0.0106) -> voiced=16000/16000
+   con voicedRmsFloor=0.01, mientras el VAD existente (asr.vad.energyThreshold=0.02, "unico knob de voz")
+   las llamaria NO voz. => el piso es MAS permisivo que el VAD y no cierra el caso TV/ambiente (P9.72).
+2) Cierre por contenido estancado: estado coherente (silencio 4000 ms + contenido viejo + 4 chars nuevos)
+   => flush=true reason=sr-gap-segment-commit; "no-new-content" solo aparece con el estado incoherente (P9.75).
+3) Revision del ASR con prefijo distinto => 2 FILAS para el mismo dictado (harness ingress->commit->fila) (P9.73).
+4) Doble respuesta al nombre: extractFluVoiceCommand("okay flu soy luis") accepted=true y
+   resolveDeterministicSkipGeminiContract => null: la orden la responde el comando Y el LLM (P9.69-b).
+5) P9.70: 2 start() sin onstart => start() 1 vez y r2=true: el hook ya no recibe el false que disparaba el
+   rebuild inmediato (useFluVoiceAssistant.js:1248-1262) (P9.76).
+6) H8 (speakerDiarization.js SIN COMMITEAR): clusters [luis, Luis] => label="Luis" (reason=production-short-historical)
+   y clusters DESPUES (luis, Luis) n=2: la fusion no se observa; el guard de P9.64 solo mira la etiqueta (P9.74).
+
+CONTROLES NEGATIVOS (auditoria 2026-10-12, sobre el src de cada fix)
+  P9.64 -> vozIdentidadInyectada: 1 failed con speakerDiarization de b4d569f~1; verde en HEAD
+  P9.68 -> fluTranscriptPause: 1 failed con fluTranscriptPause de e61e464~1; verde en HEAD
+  P9.68-b -> vozCierrePierdeLocucionGuard: 1 failed con transcriptIngress de 904d6b1~1; verde en HEAD
+  P9.69 -> vozUnCommitPorTurnoGuard: 1 failed con wakeTurnCommit de beeef07~1; verde en HEAD
+  P9.70 -> vozReinicioMicroGuard: 1 failed con speechRecognitionLocal de e61e464~1; verde en HEAD
+
+Alcance real (0.23)
+  CUBIERTO = el cableado ingress->commit->fila (ruta unica de commit y de emision + un solo dedupe), los datos
+    de fila/hablante, los 5 controles negativos por guard, y las 6 mediciones del desk.
+  NO CUBIERTO = el DoD-producto (pantalla del dueno), panel de participantes/DOM, e2e, el efecto real de los
+    knobs de audio del 98f4358 (se aplicaron sin aprobacion visible: DECISION DEL DUENO) y el merge de H8 sin commitear.
+
+PENDIENTES REGISTRADOS POR ESTA AUDITORIA: P9.72 (dos medidores de voz), P9.73 (revision => 2 filas),
+  P9.74 (merge de clusters no observado), P9.75 (portones de contenido inalcanzables), P9.76 (senal de rebuild del micro).
+DECISION DEL DUENO PENDIENTE: confirmar o revertir los valores de audio aplicados en 98f4358
+  (tail 2000 / cap 2000 / minVoiced 350 / minVoicedForNew 2200 / classroomReuseRelax 0).

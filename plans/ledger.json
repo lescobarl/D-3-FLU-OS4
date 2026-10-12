@@ -5,6 +5,41 @@
   "invariante": "Todo commit de cierre (scope=codigo C##/T##) debe estar en done; todo done apunta a un commit existente; todo pendiente cita evidencia.",
   "items": [
     {
+        "id": "P9.72",
+        "titulo": "Dos medidores de VOZ por RMS con umbrales distintos: el piso nuevo (0.01) es MAS permisivo que el VAD existente (0.02) -> no cierra el caso TV/ambiente.",
+        "estado": "todo",
+        "evidencia": "MEDIDO 2026-10-12 (desk d:/flu-audit/audit-hallazgos.test.ts, funciones REALES): countVoicedSamples de tramas a amplitud 0.015 (RMS~0.0106) => 16000/16000 muestras contadas como VOZ con voicedRmsFloor=0.01, mientras asr.vad.energyThreshold=0.02 (fluConfig.js:2104, \"Unico knob de voz del VAD\") las llamaria NO voz; silencio digital => 0. DOS medidores del MISMO dato: src/voice/lib/asr/voiceActivitySegmenter.js:52,99 (frameMs 30, umbral 0.02) vs src/voice/lib/voicedActivity.js:17 (frameMs 20, umbral 0.01, config nueva fluConfig.js:153). EFECTO: P9.71 cierra el silencio digital (<0.01), pero una ventana con TV/ruido por encima de 0.0106 SIGUE contando como voz -> el hueco que motivo P9.71 no queda cerrado para TV audible. Ademas voiceIdWorkerClient.js:204 conserva el nombre de parametro `sourceLength` aunque recibe un conteo de VOZ. ACCION: un solo dueno del umbral de voz (compartir el del VAD o justificar dos con motivo medido) y renombrar el parametro.",
+        "origen": "medicion-auditoria-2026-10-12"
+    },
+    {
+        "id": "P9.73",
+        "titulo": "Revision del ASR con prefijo distinto: la MISMA locucion acaba en DOS filas.",
+        "estado": "todo",
+        "evidencia": "MEDIDO 2026-10-12 (desk, harness fiel ingress->commit->fila, mismo cableado que el guard): interim + FINAL de una locucion larga y despues un FINAL REVISADO (cambian los primeros ~24 caracteres por el ASR, MISMO dictado) => filas=2 (la original y la revisada). Control con otra locucion real => 2 filas, que es lo correcto. CAUSA: transcriptIngress.js:350-352 decide \"es OTRA locucion\" con utterancesRelate/utterancesSameRevision (prefijo comun >=24 chars, conversationStream.js:203-221 y speechMerge.js:10) y el dedupe es por texto EXACTO (turnStream.js:156, sin similitud). ACCION: decidir si una revision dentro de la ventana de eco debe deduplicarse (un dictado = una fila) o declarar el limite.",
+        "origen": "medicion-auditoria-2026-10-12"
+    },
+    {
+        "id": "P9.74",
+        "titulo": "El merge del cluster duplicado (H8) no se observa y no tiene guard que lo mida.",
+        "estado": "todo",
+        "evidencia": "MEDIDO 2026-10-12 (desk, funciones REALES, con el cambio de src/voice/lib/speakerDiarization.js AUN SIN COMMITEAR en el arbol): con clusters [luis, Luis] de la MISMA persona y resolveConversationSpeaker(utteranceText \"si\", sessionPrimary \"Luis\", atTurnBoundary, voicedSampleCount 86400) => label=\"Luis\" con reason=production-short-historical (la rama SI corre) y clusters ANTES (luis, Luis) -> DESPUES (luis, Luis), n=2: la FUSION no ocurre en este caso; la etiqueta se unifica, los dos clusters siguen vivos. El guard de P9.64 (tests/vozIdentidadInyectada.test.ts:113-124) solo comprueba la ETIQUETA, no el recuento de clusters. ACCION: que el autor aporte el caso que fusiona (o declare la fusion NO cubierta) y un guard que cuente clusters, no solo la etiqueta.",
+        "origen": "medicion-auditoria-2026-10-12"
+    },
+    {
+        "id": "P9.75",
+        "titulo": "El cierre por contenido estancado deja INALCANZABLES los portones \"no-new-content\" y el cierre normal (declarar o pinear).",
+        "estado": "todo",
+        "evidencia": "MEDIDO 2026-10-12 (desk): evaluateSrGapSegmentCommit con estado COHERENTE (silencio 4000 ms => openLineStartedAtMs de 4000 ms) y una extension de 4 chars => flush=true, reason=sr-gap-segment-commit (antes lo frenaba \"no-new-content\" por srGapCommitNoNewContentMinChars); el rechazo \"no-new-content\" y el cierre normal (conversationStream.js:472-499) solo aparecen con el estado INCOHERENTE (silencio >=3500 ms y contenido FRESCO), practicamente imposible porque crecer la linea implica onresult. Consecuencia: P9.68 sustituye los portones finos por UN cierre por contenido; el unico freno que queda es postCommitCooldownMs. Cero tests citan \"no-new-content\". ACCION: guard que fije el caso (extension corta + contenido estancado => vuelca UNA vez respetando cooldown) o retirar el codigo inalcanzable; no dejarlo como ruina.",
+        "origen": "medicion-auditoria-2026-10-12"
+    },
+    {
+        "id": "P9.76",
+        "titulo": "P9.70: el lock al INTENTAR start() retira la senal (false) que disparaba el rebuild inmediato del micro.",
+        "estado": "todo",
+        "evidencia": "MEDIDO 2026-10-12 (desk, speechRecognitionLocal real): dos llamadas a startSpeechRecognition sobre el mismo motor sin evento onstart => start() llamado 1 sola vez y r1=r2=true. El hook usaba el false de la 2.a llamada para stop + retry + rebuildRecognitionRef (useFluVoiceAssistant.js:1248-1262); con el fix esa via YA NO se toma y la recuperacion queda a cargo del watchdog (srGap / stall). En Chrome el mensaje coincidia y antes tambien devolvia true (sin cambio real); el caso afectado es el de mensaje de error NO coincidente (\"already started\" en otro idioma/version). ACCION: validar en pantalla que el micro vuelve tras morir; si no vuelve, devolver false cuando el motor no confirme arranque.",
+        "origen": "medicion-auditoria-2026-10-12"
+    },
+    {
       "id": "P9.49",
       "titulo": "El hook cablea el vinculo del participante a la via tardia del nombre (extraido a src/app por el trinquete del god-file)",
       "estado": "done",
