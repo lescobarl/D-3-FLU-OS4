@@ -168,16 +168,30 @@ function resolveProductionSpeakerAtBoundary({
     effectiveSticky: primaryLabel || lastSpeaker,
   })
   if (historical?.label) {
-    // P9.64: UNA etiqueta por persona. Si el label historico es la MISMA persona que el
-    // primario registrado (misma clave plegada: "luis" == "Luis"), se devuelve el nombre
-    // CANONICO del primario. Sin esto convivian "luis" (historico) y "Luis" (primario) y
-    // el dueno veia DOS etiquetas para su voz (medido 2026-10-12: 4 etiquetas para 1 voz).
-    const canonico =
-      primaryLabel && foldSpeakerKey(historical.label) === foldSpeakerKey(primaryLabel)
-        ? primaryLabel
-        : historical.label
+    // P9.64 + H8: la MISMA persona NO puede tener DOS clusters (ruta doble de DATOS: antes
+    // solo se unificaba la etiqueta de la fila y quedaban vivos el cluster historico y el
+    // primario -> dos duenos de la misma voz). Si el historico es la misma persona que el
+    // primario (clave plegada), se FUSIONA: se actualiza el canonico y se RETIRA el duplicado.
+    const mismoPrimario = Boolean(primaryLabel) && foldSpeakerKey(historical.label) === foldSpeakerKey(primaryLabel)
+    const canonico = mismoPrimario ? primaryLabel : historical.label
     const cluster = findClusterByLabel(speakerClusters, historical.label)
-    if (cluster) updateClusterSignature(cluster, normalized)
+    if (cluster) {
+      if (mismoPrimario && canonico !== historical.label) {
+        const canonIdx = speakerClusters.findIndex(
+          (c) => c !== cluster && foldSpeakerKey(c?.label) === foldSpeakerKey(canonico),
+        )
+        if (canonIdx >= 0) {
+          updateClusterSignature(speakerClusters[canonIdx], normalized)
+          const at = speakerClusters.indexOf(cluster)
+          if (at >= 0) speakerClusters.splice(at, 1)
+        } else {
+          cluster.label = canonico
+          updateClusterSignature(cluster, normalized)
+        }
+      } else {
+        updateClusterSignature(cluster, normalized)
+      }
+    }
     note?.({
       reason: 'production-short-historical',
       speaker: canonico,
