@@ -107,6 +107,9 @@ function resolveProductionSpeakerAtBoundary({
   const CONTINUITY = cosineThreshold(thresholds, 'cosineContinuityThreshold', VOICE_DIARIZATION_DEFAULTS.cosineContinuity)
   const NEW_VOICE = cosineThreshold(thresholds, 'cosineNewVoiceThreshold', VOICE_DIARIZATION_DEFAULTS.cosineNewVoice)
   const REUSE = cosineThreshold(thresholds, 'productionClusterReuseThreshold', VOICE_DIARIZATION_DEFAULTS.productionClusterReuse)
+  // Banda MEDIDA de "voz DISTINTA" (clave cosineDistinctVoiceThreshold): por debajo NO hay
+  // evidencia de ninguna voz.
+  const DISTINCT_VOICE = cosineThreshold(thresholds, 'cosineDistinctVoiceThreshold', VOICE_DIARIZATION_DEFAULTS.cosineDistinctVoice)
   const REGISTERED_ANCHOR = cosineThreshold(
     thresholds,
     'cosineRegisteredMatchThreshold',
@@ -355,6 +358,26 @@ function resolveProductionSpeakerAtBoundary({
         return adoptCluster(primaryLabel, 'production-short-primary-fallback', primarySim)
       }
     }
+  }
+
+  // SIN EVIDENCIA MEDIDA NO HAY VOZ NUEVA (repro del dueno): un cluster de la MISMA voz, firma
+  // nueva por debajo de la banda de reutilizacion contra ese cluster y lastSpeaker = esa voz ->
+  // antes abria 'Hablante 2'. Por debajo de la banda MEDIDA de voz DISTINTA (clave
+  // cosineDistinctVoiceThreshold) no hay evidencia de ninguna voz: se REUSA la etiqueta de ESA
+  // voz. En/por encima de esa banda SI hay evidencia -> se abre (la mujer conserva su etiqueta:
+  // speakerClusterAccumulation lo fija).
+  // ACOTADO: el reuso solo vale para una etiqueta AUTOMATICA. Un NOMBRE propio no se
+  // estampa sin coincidencia medida (si no, la voz distinta heredaria el nombre: medido en
+  // speakerIdentitySession "una voz DISTINTA no hereda el nombre").
+  if (lastSpeaker && isAutoSpeakerLabel(lastSpeaker) && lastSim < NEW_VOICE_OPEN_GATE && bestSim < NEW_VOICE_OPEN_GATE && bestSim < DISTINCT_VOICE) {
+    note?.({
+      reason: 'production-reuse-no-evidence',
+      speaker: lastSpeaker,
+      lastSim,
+      bestSim,
+      autoCount,
+    })
+    return anchorLastSpeaker('production-reuse-no-evidence')
   }
 
   if (lastSpeaker && lastSim < NEW_VOICE_OPEN_GATE && bestSim < NEW_VOICE_OPEN_GATE) {

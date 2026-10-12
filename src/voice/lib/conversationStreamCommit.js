@@ -231,6 +231,10 @@ export function handleConversationStreamSync(
   }
 
   if (!turnCommit) {
+    // El ID del turno se acuna AL ABRIR el turno y ANTES de la caja: un bloqueo de la frase
+    // viva (3b) no puede comerse el bump (wakeRowNoiseGuard: "un PREVIEW de ruido no mueve el
+    // id del turno VIVO").
+    ensureTurnId(esTurno(capture), sameRequestAsLastDispatch(capture))
     // LA FRASE VIVA SOLO ACUMULA (spec del dueno, 2026-10-11): si el ASR reentrega un TROZO
     // contiguo de lo YA MOSTRADO (una COLA, un trozo del medio), manda lo mostrado y el turno
     // no se toca. Antes el recorte solo se bloqueaba por PREFIJO (`wouldShrinkListenLog`), asi
@@ -247,9 +251,22 @@ export function handleConversationStreamSync(
     // medido 2026-10-11 22:36 -> 356 acortamientos APLICADOS y la frase viva "se comia"
     // parte de la transcripcion). Cero excepciones: acorta:true + aplicado = 0.
     const previoLive = publishedLiveRef.current || ''
+    // 3b: lo mostrado tiene que seguir CONTENIDO en lo nuevo (unico normalizador: cleanForSpeech).
+    const conservaLoMostrado = (mostrado, nuevo) => {
+      const a = String(cleanForSpeech(mostrado) || '').toLowerCase()
+      if (!a) return true
+      return String(cleanForSpeech(nuevo) || '').toLowerCase().includes(a)
+    }
     const esTrozo = isFragmentOfLocution(capture, previoLive)
     if (previoLive && capture.length < previoLive.length) {
       voiceProbe('live', { turn: activeTurnIdRef.current, resultado: 'bloqueado', motivo: esTrozo ? 'trozo' : 'acorta', acorta: true, fresh: Boolean(freshUtterance), mismaLocucion: esTrozo, previo: previoLive.length, len: capture.length, text: capture.slice(0, 220) }) // BANDERA DE DIAGNOSTICO
+      return
+    }
+    // 3b: no basta "no ser mas corta": si lo nuevo YA NO CONTIENE lo mostrado (misma longitud
+    // o MAS larga pero con una palabra perdida, p.ej. "vamos a validar" -> "vamos validar la
+    // transcripcion"), la caja lo BLOQUEA. Nada de lo mostrado desaparece.
+    if (previoLive && !conservaLoMostrado(previoLive, capture)) {
+      voiceProbe('live', { turn: activeTurnIdRef.current, resultado: 'bloqueado', motivo: 'no-conserva', acorta: capture.length < previoLive.length, fresh: Boolean(freshUtterance), mismaLocucion: false, previo: previoLive.length, len: capture.length, text: capture.slice(0, 220) }) // BANDERA DE DIAGNOSTICO
       return
     }
     if (capture !== publishedLiveRef.current) {
@@ -257,7 +274,6 @@ export function handleConversationStreamSync(
       publishedLiveRef.current = capture
       scheduleLiveTranscriptUpdate(capture)
     }
-    ensureTurnId(esTurno(capture), sameRequestAsLastDispatch(capture))
     if (turnBoundary || atTurnBoundary) {
       const fallbackSpeaker = speaker || getSpeakerLabel(listenStateRef.current)
       const phrase = cleanForSpeech(utterance) || capture

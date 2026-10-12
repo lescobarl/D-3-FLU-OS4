@@ -378,6 +378,9 @@ export const AUTONOMY_THRESHOLD_DEFAULTS = {
 export const VOICE_DIARIZATION_DEFAULTS = {
     cosineContinuity: 0.74,
     cosineNewVoice: 0.68,
+    // Banda MEDIDA de "voz DISTINTA" (dueno 2026-10-11): MISMA voz 0.69-0.74, DISTINTA 0.58.
+    // Por DEBAJO de 0.58 no hay evidencia de NINGUNA voz -> no se abre voz nueva.
+    cosineDistinctVoice: 0.58,
     productionClusterReuse: 0.74,
     classroomReuseRelax: 0.03,
     classroomNewVoiceRelax: 0.04,
