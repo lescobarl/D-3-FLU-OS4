@@ -64,6 +64,17 @@ describe('la captura del turno impone un minimo de audio (no ventanas casi vacia
     // cubre R2 (no se mide ni se abre etiqueta por debajo del piso de voz).
     expect(w.length, 'R1: se queda en el turno, no en el minimo').toBe(384)
   })
+
+  it('R1: marca de turno en el sello (turnSpan<=0) => ventana VACIA, no la cola del buffer', () => {
+    const chunks = [new Float32Array(48000)] // 1 s @48k
+    const w = flattenChunksWindow(chunks, {
+      totalSamples: 48000,
+      sinceSample: 48000, // la marca cae en el sello: 0 muestras de turno
+      maxSamples: 86400,
+      minSamples: 43200,
+    })
+    expect(w.length, 'sin turno no hay ventana: no se mide la cola del buffer').toBe(0)
+  })
 })
 
 describe('la separacion de voces exige que el cluster se ACUMULE entre turnos', () => {
