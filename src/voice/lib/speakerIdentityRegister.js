@@ -26,6 +26,7 @@
  */
 import { resolveSpeakerNameFromUtterance } from './speakerPolicy.js'
 import { isProperSpeakerName, normalizeSpeakerLabel } from './voiceIdentity.js'
+import { canonicalSpeakerName } from './speakerLabels.js'
 import { findClusterByLabel, findLabelsWithSharedVoice, mergeSpeakerClustersOnRename, sameVoiceFloor } from './speakerClusters.js'
 import { renameSpeakerRows } from './conversationTurnRow'
 import { setSessionPrimarySpeaker } from './sessionPrimarySpeaker.js'
@@ -59,7 +60,9 @@ export function registerSpeakerIdentity({
   source = "presented",
   rename = renameSpeakerRows,
 } = {}) {
-  const clean = normalizeSpeakerLabel(name)
+  // P9.78: UNA grafia. El nombre entra canonico (inicial en mayuscula) para que la fila,
+  // el alias y la base no partan la MISMA identidad en "luis"/"Luis".
+  const clean = canonicalSpeakerName(normalizeSpeakerLabel(name))
   if (!clean || !isProperSpeakerName(clean)) {
     return { registered: false, name: "", labels: [], rowsChanged: 0, primarySet: false }
   }

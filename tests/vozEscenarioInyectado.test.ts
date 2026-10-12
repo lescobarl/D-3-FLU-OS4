@@ -81,7 +81,9 @@ describe('escenario inyectado: hablantes, registro y renombre de la participacio
       },
     )
 
-    expect(userRows().map((r) => r.speakerName)).toEqual(['luis', 'luis', 'Hablante 2'])
+    // P9.78: el nombre entra con UNA grafia canonica (inicial en mayuscula): "soy luis"
+    // deja las filas en "Luis" (antes quedaban en "luis" y convivian las dos grafias).
+    expect(userRows().map((r) => r.speakerName)).toEqual(['Luis', 'Luis', 'Hablante 2'])
   })
 
   it('el nombre PEGA para lo siguiente POR VOZ; la etiqueta desnuda no lo arrastra', () => {
@@ -97,13 +99,14 @@ describe('escenario inyectado: hablantes, registro y renombre de la participacio
         renameSpeakerRows,
       },
     )
-    expect(userRows().map((r) => r.speakerName)).toEqual(['luis'])
+    expect(userRows().map((r) => r.speakerName)).toEqual(['Luis'])
 
     // DATO del log del dueno: 44 s despues sus filas volvian a "Hablante 1". La VOZ
     // ya lleva el nombre, asi que el turno siguiente sale con el nombre (lo da el
     // resolutor de identidad, dueno unico de la etiqueta del turno).
     commitUserTurnRow({ text: 'ahora sigo hablando yo', speakerName: 'luis', turnId: 2 })
-    expect(userRows().map((r) => r.speakerName)).toEqual(['luis', 'luis'])
+    // P9.78: la fila nueva se resuelve por el nombre registrado (canonico) -> "Luis".
+    expect(userRows().map((r) => r.speakerName)).toEqual(['Luis', 'luis'])
 
     // La ETIQUETA ya no es un alias de nadie: una fila que llega con la etiqueta
     // desnuda NO hereda el nombre (es el defecto que barria otras voces).

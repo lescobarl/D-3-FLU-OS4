@@ -80,4 +80,35 @@ describe('P9.79 - el nombre registrado por VOZ entra en la BASE de participantes
     expect(rows.map((r) => r.name)).toEqual(['Luis']);
     expect(rows[0].speakerLabel).toBe('Luis');
   });
+
+  it('P9.78: el nombre entra con UNA grafia canonica ("luis" y "Luis" -> "Luis")', async () => {
+    let n = 0;
+    const registry = createParticipantRegistry({
+      db: mapDb(),
+      config: CONFIG,
+      newId: () => `q${++n}`,
+      now: () => 1,
+    });
+    // SECUENCIAL: una locucion a la vez (el registro real ocurre por turno). Dos
+    // llamadas CONCURRENTES ven la base vacia las dos y duplican -> P9.87 (carrera
+    // medida aqui, no tapada).
+    for (const dicho of ['luis', 'Luis']) {
+      let pending: Promise<unknown> | undefined;
+      registerSpeakerIdentity({
+        name: dicho,
+        clusters: [],
+        refs: {
+          registerParticipant: (name: string) => {
+            pending = registry.register({ name, speakerLabel: name });
+          },
+        },
+      });
+      await pending;
+    }
+    // Las dos locuciones ("soy luis" / "soy Luis") dan la MISMA fila: no hay duplicado
+    // por grafia (el registro es idempotente por nombre, case-insensitive) y la grafia
+    // guardada es la canonica.
+    const rows = await registry.list();
+    expect(rows.map((r) => r.name)).toEqual(['Luis']);
+  });
 });

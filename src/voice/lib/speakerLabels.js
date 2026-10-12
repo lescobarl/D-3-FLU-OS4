@@ -16,6 +16,23 @@ export function foldSpeakerKey(label = '') {
   return stripDiacritics(normalizeSpaces(label)).toLowerCase()
 }
 
+/**
+ * DUENO UNICO de la GRAFIA canonica de un nombre propio. Las etiquetas automaticas
+ * («Hablante N») y el motor («FLU») se dejan TAL CUAL: no son nombres de persona.
+ * Un nombre propio se escribe con la INICIAL EN MAYUSCULA, asi "luis" y "Luis" son
+ * UNA sola grafia en la fila, el alias y la base (P9.78: medido en el log del dueno,
+ * las filas salian con las dos: `luis` 2 y `Luis` 8). No toca el resto del texto.
+ * @param {string} [label]
+ * @returns {string}
+ */
+export function canonicalSpeakerName(label = '') {
+  const text = normalizeSpaces(label)
+  if (!text) return ''
+  if (isAutoSpeakerLabel(text)) return text
+  if (text.toLowerCase() === 'flu') return 'FLU'
+  return text.charAt(0).toUpperCase() + text.slice(1)
+}
+
 /** Nombre propio registrado (no «Hablante N»). */
 export function isRegisteredSpeakerLabel(label = '') {
   const text = String(label || '').trim()
