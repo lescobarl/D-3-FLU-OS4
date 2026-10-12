@@ -1169,6 +1169,21 @@ function App() {
     // `useFluVoiceAssistant` y lo consume el comando REGISTRAR_PARTICIPANTE, para que las
     // DOS rutas del registro del nombre usen la MISMA evidencia (A1: casos 3 y 4).
     const identitySessionRef = useIdentitySessionRef();
+    // P9.79: PUERTO a la BASE de participantes. El registro del nombre por VOZ (unico
+    // dueno: registerSpeakerIdentity) escribe el participante AQUI; antes solo escribia
+    // las filas y el panel, que lee Dexie, no lo mostraba (si hay una base de
+    // participantes debe de aparecer a la derecha). Entra con su speakerLabel para que
+    // la voz quede ligada al participante.
+    useEffect(() => {
+        if (!identitySessionRef.current) return;
+        identitySessionRef.current.registerParticipant = (name: string) => {
+            const canonical = String(name || '').trim();
+            if (!canonical) return;
+            participants.service
+                .register({ name: canonical, speakerLabel: canonical })
+                .catch((err: unknown) => logCaughtError('src/App.tsx: registerParticipant (voz)', err));
+        };
+    }, [identitySessionRef, participants.service]);
     participantSpeakerRef.current = participantSpeakerForRow;
     const {
         status: voiceStatus,

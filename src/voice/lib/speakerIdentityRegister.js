@@ -44,7 +44,7 @@ import { setSessionPrimarySpeaker } from './sessionPrimarySpeaker.js'
  * @param {Array} [params.clusters] Clusters de hablante (evidencia de voces): sin ellos
  *   no se cosen las etiquetas de la MISMA voz re-clusterizada ("Hablante 3"/"4").
  * @param {string} [params.previousLabel] Etiqueta con la que esa voz venia apareciendo.
- * @param {{ sessionPrimarySpeakerRef?: { current: string }, setClusters?: (clusters: unknown[]) => void }} [params.refs] Refs de sesion
+ * @param {{ sessionPrimarySpeakerRef?: { current: string }, setClusters?: (clusters: unknown[]) => void, registerParticipant?: (name: string, speakerLabel?: string) => void | Promise<unknown> }} [params.refs] Refs de sesion
  *   (el dueno de la precedencia decide si escribe).
  * @param {"presented"|"participant"|"resolved"} [params.source] Fuente del primario.
  * @param {(labels: string[], toName: string) => number} [params.rename] Escritor de
@@ -101,6 +101,12 @@ export function registerSpeakerIdentity({
   )
   if (typeof refs?.setClusters === "function") refs.setClusters(clustersRenombrados)
   const primarySet = setSessionPrimarySpeaker(refs?.sessionPrimarySpeakerRef, clean, source)
+  // P9.79: la VOZ que dice su nombre ENTRA en la BASE de participantes (puerto inyectado
+  // por la app). Antes el nombre quedaba ligado a las filas y el panel, que lee Dexie, no
+  // lo mostraba ("si hay una base de participantes debe de aparecer a la derecha"). El
+  // nombre que entra es el CANONICO del registro: UNA grafia para fila, alias y base.
+  // El puerto avisa de sus fallos (no se silencian aqui).
+  if (typeof refs?.registerParticipant === "function") refs.registerParticipant(clean, clean)
   return { registered: true, name: clean, labels, rowsChanged, primarySet }
 }
 
@@ -115,7 +121,7 @@ export function registerSpeakerIdentity({
  * @param {string} params.transcript Enunciado completo (con wake: "okay flu soy Luz").
  * @param {string} [params.speakerName] Etiqueta con la que venia apareciendo esa voz.
  * @param {Array} [params.clusters] Clusters vivos de la sesion (cosido de la misma voz).
- * @param {{ sessionPrimarySpeakerRef?: { current: string }, setClusters?: (clusters: unknown[]) => void }} [params.refs] Refs de sesion.
+ * @param {{ sessionPrimarySpeakerRef?: { current: string }, setClusters?: (clusters: unknown[]) => void, registerParticipant?: (name: string, speakerLabel?: string) => void | Promise<unknown> }} [params.refs] Refs de sesion.
  * @returns {ReturnType<typeof registerSpeakerIdentity>}
  */
 export function registerSpeakerIdentityFromCommand({

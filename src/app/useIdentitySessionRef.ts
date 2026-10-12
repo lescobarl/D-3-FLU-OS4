@@ -24,6 +24,13 @@ export interface IdentitySessionRefs {
   sessionPrimarySpeakerRef: { current: string };
   /** Escritor unico de los clusters (el renombre por VOZ lo necesita). */
   setClusters: (clusters: unknown[]) => void;
+  /**
+   * P9.79: PUERTO a la BASE de participantes. Lo rellena la app (el hook solo publica
+   * los refs de sesion) y lo consume el registro del nombre: la voz que dice su nombre
+   * ENTRA en la base, no solo en las filas. Sin esto el nombre quedaba ligado a las
+   * filas y el panel (que lee Dexie) no lo mostraba.
+   */
+  registerParticipant?: (name: string, speakerLabel?: string) => void | Promise<unknown>;
 }
 
 /**
