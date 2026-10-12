@@ -248,6 +248,7 @@ export const GUARD_FILES = [
 'tests/vozUnSoloCriterioGuard.test.ts',
   'tests/vozSuspendReanudaGuard.test.ts',
   'tests/vozSrGapCierreGuard.test.ts',
+  'tests/vozFirmaDeFilaGuard.test.ts',
   'tests/fluParticipant.test.ts',
   'tests/decisionEngine.test.ts',
   'tests/imageGeneration.test.ts',

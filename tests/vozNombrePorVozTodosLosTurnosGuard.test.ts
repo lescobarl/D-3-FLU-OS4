@@ -14,7 +14,7 @@
 import { readFileSync } from 'node:fs'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { useIntegrationStore } from '../src/store/integrationStore'
-import { commitUserTurnRow } from '../src/voice/lib/conversationTurnRow'
+import { commitUserTurnRow, renameSpeakerRows } from '../src/voice/lib/conversationTurnRow'
 import { isNameBoundToVoice, findLabelsWithSharedVoice } from '../src/voice/lib/speakerClusters.js'
 import { registerSpeakerIdentity } from '../src/voice/lib/speakerIdentityRegister.js'
 
@@ -93,5 +93,21 @@ describe('el NOMBRE sustituye a la PERSONA (no da de alta una identidad nueva)',
       useIntegrationStore.getState().conversationHistory.filter((e: any) => e.role === 'user').map((e: any) => e.speakerName).sort(),
       'la persona entera pasa a su nombre nuevo (incluida su etiqueta de participante)',
     ).toEqual(['Juan', 'Juan'])
+  })
+})
+
+describe('sustitucion por FIRMA: las etiquetas ya EXTINTAS tambien se renombran', () => {
+  it('N filas de la misma voz (etiquetas que ya no estan en los clusters) => N con el nombre', () => {
+    useIntegrationStore.setState({ conversationHistory: [] })
+    const VOZ = [1, 0, 0]
+    commitUserTurnRow({ text: 'uno', speakerName: 'Hablante 1', evidenciaAcustica: false, turnId: 1, signature: VOZ } as never)
+    commitUserTurnRow({ text: 'dos', speakerName: 'Hablante 4', evidenciaAcustica: false, turnId: 2, signature: [0.99, Math.sqrt(1 - 0.99 * 0.99), 0] } as never)
+    commitUserTurnRow({ text: 'otra voz', speakerName: 'Hablante 7', evidenciaAcustica: false, turnId: 3, signature: [0, 0, 1] } as never)
+    const cambiadas = renameSpeakerRows(['Hablante 1'], 'Luis', { anchorSignature: VOZ })
+    expect(cambiadas, 'las DOS filas de esa voz (una por etiqueta, otra solo por firma)').toBe(2)
+    expect(
+      useIntegrationStore.getState().conversationHistory.filter((e: any) => e.role === 'user').map((e: any) => e.speakerName),
+      'la voz distinta NO se toca',
+    ).toEqual(['Luis', 'Luis', 'Hablante 7'])
   })
 })
