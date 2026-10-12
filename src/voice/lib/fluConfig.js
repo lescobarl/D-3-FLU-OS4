@@ -13,23 +13,10 @@ const IS_DEV = import.meta.env.DEV
  * Fuente ÚNICA del wake word (§9.4): `voiceCommands.wakeWords` y el sesgo del
  * decoder (`initialPrompt`) derivan de aquí. Configurable en Ajustes.
  */
+const WAKE_PREFIXES = ['oye', 'ok', 'okay', 'hey']
+const WAKE_TOKENS = ['flu', 'flow', 'blue', 'flo', 'flujo', 'flui', 'flou']
 export const FLU_WAKE_WORDS = Object.freeze([
-  'oye flu',
-  'oye flow',
-  'oye blue',
-  'oye flo',
-  'ok flu',
-  'ok flow',
-  'ok blue',
-  'ok flo',
-  'okay flu',
-  'okay flow',
-  'okay blue',
-  'okay flo',
-  'hey flu',
-  'hey flow',
-  'hey blue',
-  'hey flo',
+  ...WAKE_PREFIXES.flatMap((p) => WAKE_TOKENS.map((t) => `${p} ${t}`)),
 ])
 
 /** Primer alias de wake para un prefijo dado (deriva de FLU_WAKE_WORDS). */
