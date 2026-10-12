@@ -153,6 +153,7 @@ import { resolveSrGapTrigger } from '../lib/fluTranscriptPause.js'
 // El motor de voz la importa aquí solo como fallback defensivo; en producción App.tsx inyecta su instancia vía participantRef (mismo módulo).
 import { useFluParticipant } from '../../hooks/useFluParticipant'
 import { isSpeechSynthesisSpeaking, isFluSpeaking, waitForSpeechIdle, getLastCompletedSpeechAt } from '../lib/fluSpeech.js'
+import { resumeAfterSpeechSuspend, releaseStalledTurn } from '../lib/voiceStallPolicy.js'
 import { createLocalRecognition, shouldUseLocalFallback } from '../lib/voiceLocalFallback'
 import { logCaughtError } from '../../lib/caughtError';
 import { useTurnLifecycleSync, useOffPathSessionWriter } from './useTurnInfrastructure'
@@ -1361,17 +1362,7 @@ const lastResolvedTurnRef = useRef(0)
     // en conversación activa lo hace App (onContractResolved →
     // scheduleResumeListening); reabrir aqui forzaba LISTENING en el mismo ms del
     // SPEAKING y congelaba la boca aunque el audio siguiera.
-    if (wasListeningBefore && !conversationActiveRef?.current) {
-      relayLog('LOG', 'useFluVoiceAssistant', '[REC] suspend: reanudando tras habla (modo pasivo)', {
-        wasListeningBefore,
-      })
-      requestRecognitionRestart(0)
-    } else {
-      relayLog('LOG', 'useFluVoiceAssistant', '[REC] suspend: sin reanudar en suspend (conversación activa o no escuchaba)', {
-        wasListeningBefore,
-        conversationActive: Boolean(conversationActiveRef?.current),
-      })
-    }
+    resumeAfterSpeechSuspend({ wasListeningBefore, isConversationActive: () => Boolean(conversationActiveRef?.current), requestRestart: requestRecognitionRestart }) // (a) dueno unico: voiceStallPolicy
   }, [conversationActiveRef, requestRecognitionRestart])
 
   const restartRecognition = useCallback(() => {
@@ -4384,6 +4375,7 @@ const lastResolvedTurnRef = useRef(0)
         }
 
         const sinceResult = now - (lastOnresultAtRef.current || 0)
+        releaseStalledTurn({ openPreviewTurnRef, sinceResult, stallMs: restartCfg.stallMs }) // (b) dueno unico: voiceStallPolicy
         const openLine = cleanForSpeech(
           listenStateRef.current?.openLine ||
           publishedLiveRef.current ||

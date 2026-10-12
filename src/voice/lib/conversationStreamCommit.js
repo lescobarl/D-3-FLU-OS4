@@ -265,7 +265,11 @@ export function handleConversationStreamSync(
     // 3b: no basta "no ser mas corta": si lo nuevo YA NO CONTIENE lo mostrado (misma longitud
     // o MAS larga pero con una palabra perdida, p.ej. "vamos a validar" -> "vamos validar la
     // transcripcion"), la caja lo BLOQUEA. Nada de lo mostrado desaparece.
-    if (previoLive && !conservaLoMostrado(previoLive, capture)) {
+    // ACEPTA LA REVISION (dueno 2026-10-11): el ASR reemite la MISMA locucion corregida; si solo
+    // se exigiera "contener", una revision que cambia una palabra de dentro BLOQUEABA la caja
+    // para siempre (se compara con el texto congelado, que ya nunca contiene). El dueno de "es la
+    // misma revision" ya existe (utterancesSameRevision): se consume, no se inventa.
+    if (previoLive && !conservaLoMostrado(previoLive, capture) && !utterancesSameRevision(previoLive, capture)) {
       voiceProbe('live', { turn: activeTurnIdRef.current, resultado: 'bloqueado', motivo: 'no-conserva', acorta: capture.length < previoLive.length, fresh: Boolean(freshUtterance), mismaLocucion: false, previo: previoLive.length, len: capture.length, text: capture.slice(0, 220) }) // BANDERA DE DIAGNOSTICO
       return
     }
