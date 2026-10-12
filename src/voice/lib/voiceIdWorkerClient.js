@@ -13,6 +13,7 @@ import { relayLog } from '../../lib/clientLogRelay';
 import { DEFAULT_SAMPLE_RATE } from './audioConstants.js'
 import { createWorkerPendingBridge } from './workerPendingBridge.js'
 import { scheduleIdle } from './idleSchedule.js'
+import { countVoicedSamples } from './voicedActivity.js'
 
 let seq = 0
 const workerRequestMs = REQUEST_TIMEOUT_DEFAULTS.WORKER_MS
@@ -301,7 +302,14 @@ export async function resolveSpeakerFromAudio(samples, sampleRate = DEFAULT_SAMP
     }
   }
 
-  const identity = await resolveIdentityIdle(vector, matchPayload, sampleRate, sampleCount)
+  // P9.71: el piso de voz debe ser de VOZ, no de LONGITUD. Antes se pasaba `sampleCount`
+  // (longitud de la ventana) y, como `conversationMinVoicedMs` == el minimo del embedder,
+  // CUALQUIER ventana aceptada pasaba el piso (incluida TV/silencio). Aqui se cuenta lo VIVO.
+  const voiced = countVoicedSamples(samples, {
+    sampleRate,
+    rmsFloor: Number(getEmbeddingConfig().voicedRmsFloor) || 0.01,
+  })
+  const identity = await resolveIdentityIdle(vector, matchPayload, sampleRate, voiced)
   if (typeof window !== 'undefined') {
     // El log dice la decision REAL (la del hilo principal), no la del worker.
     relayLog(
