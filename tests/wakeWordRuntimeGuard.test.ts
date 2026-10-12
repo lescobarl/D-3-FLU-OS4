@@ -13,6 +13,7 @@ import { readFileSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { walkFiles } from './_helpers'
+import { FLU_WAKE_WORDS } from '../src/voice/lib/fluConfig.js'
 const ROOT = process.cwd()
 const SRC = join(ROOT, 'src')
 const CONFIG = 'src/voice/lib/fluConfig.js'
@@ -24,10 +25,9 @@ const strip = (line: string) => {
 }
 /** Wake words canonicas, leidas de la config (fuente unica, §9.4). */
 function readWakeWords(): string[] {
-  const src = readFileSync(join(ROOT, CONFIG), 'utf8')
-  const block = src.match(/FLU_WAKE_WORDS\s*=\s*Object\.freeze\(\[([\s\S]*?)\]\)/)
-  if (!block) throw new Error(`No se pudo leer FLU_WAKE_WORDS de ${CONFIG}`)
-  return [...block[1].matchAll(/'([^']+)'/g)].map((m) => m[1])
+  // La lista es DERIVADA (prefijos x tokens): se importa el export, no se parsea el
+  // texto (parsearla ataba el guard a una forma literal concreta).
+  return [...FLU_WAKE_WORDS]
 }
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 const WAKE_WORDS = readWakeWords()

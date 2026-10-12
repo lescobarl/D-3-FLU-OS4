@@ -14,7 +14,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const WAKE_CONFIG_FILE = join(process.cwd(), 'src/voice/lib/fluConfig.js')
-const WAKE_TOKEN = /\b(?:oye|ok|okay|hey)\s+(?:flu|flow|blue|flo)\b/i
+const WAKE_TOKEN = /\b(?:oye|ok|okay|hey)\s+(?:flu|flow|blue|flo|flujo|flui|flou)\b/i
 const isCommentLine = (line: string) => /^\s*(?:\/\/|\*|\/\*)/.test(line)
 
 /** Líneas con wake literal en datos de decisión (ver cabecera). */
@@ -88,7 +88,7 @@ describe('C56 wakeInternal — el detector no es decorativo', () => {
  * `wakeWords?.[0] ?? 'FLU'` pasaba desapercibido (P5.1). La fuente unica es la
  * primera entrada de FLU_WAKE_WORDS (o cualquiera de sus tokens).
  */
-const WAKE_FALLBACK_RE = /wakeWords[\s\S]{0,120}?(?:\|\||\?\?)\s*['"`]?\s*(?:(?:oye|ok|okay|hey)\s+)?(?:flu|flow|blue|flo)['"`]?\b/i
+const WAKE_FALLBACK_RE = /wakeWords[\s\S]{0,120}?(?:\|\||\?\?)\s*['"`]?\s*(?:(?:oye|ok|okay|hey)\s+)?(?:flu|flow|blue|flo|flujo|flui|flou)['"`]?\b/i
 
 export function bareWakeFallbackLines(src: string): number[] {
   const out: number[] = []

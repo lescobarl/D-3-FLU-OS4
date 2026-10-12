@@ -60,8 +60,8 @@ describe('la captura del turno impone un minimo de audio (no ventanas casi vacia
       minSamples: 43200, // minimo exigido (0.9 s @48k)
     })
     // R1: la ventana NO puede empezar antes del turno (antes se ensanchaba a 43200 y
-    // metia audio PRE-turno: la voz de FLU, medido 67-83%). El piso insuficiente lo
-    // cubre R2 (no se mide ni se abre etiqueta por debajo del piso de voz).
+    // metia audio PRE-turno: la voz de FLU, medido 67-83%). Una ventana SIN voz cae al
+    // reuso (production-reuse-no-evidence), no abre etiqueta.
     expect(w.length, 'R1: se queda en el turno, no en el minimo').toBe(384)
   })
 
