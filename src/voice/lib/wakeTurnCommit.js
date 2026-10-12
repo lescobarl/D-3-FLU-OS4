@@ -130,6 +130,11 @@ export function applyWakeTurnCommit(ctx, capture, commitOpts = {}) {
     ...baseOpts,
     capture: passiveOnly,
     utterance: passiveOnly,
+    // P9.69: el tramo PASIVO (pre-wake: contexto/ruido de TV) NO lleva la identidad del
+    // comando. Antes `speaker: result.speaker` viajaba a LOS DOS commits del split y el
+    // tramo pasivo TAMBIEN registraba el nombre -> DOS "Registrado Luis." por UNA orden
+    // (medido 2026-10-12, turn 13 x2, ambos src=wake-intro). Un turno = un registro.
+    speaker: '',
     forceNewRow: commitOpts.forceNewRow,
   })
 
