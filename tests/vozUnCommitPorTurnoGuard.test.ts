@@ -12,6 +12,7 @@
 // ============================================================
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { handleConversationStreamSync } from '../src/voice/lib/conversationStreamCommit.js'
+import { applyWakeTurnCommit } from '../src/voice/lib/wakeTurnCommit.js'
 import { createActiveListenState } from '../src/voice/lib/activeListen.js'
 import { FLU_CONFIG } from '../src/voice/lib/fluConfig.js'
 
@@ -98,5 +99,32 @@ describe('B5 - cada locucion real produce EXACTAMENTE una fila', () => {
     expect(vacio.emitConversationLog, 'sin conversacion activa no hay commit').toHaveBeenCalledTimes(0)
     handleConversationStreamSync(deps as never, { capture: LOCUCION, turnCommit: true, settlesTurn: true })
     expect(deps.emitConversationLog).toHaveBeenCalledTimes(1)
+  })
+})
+
+// ============================================================
+// P9.69 (MEDIDO 2026-10-12, log del dueno turn 13 x2 ambos src=wake-intro): UNA orden con
+// wake producia DOS "Registrado Luis." porque el split por wake commitea el tramo PASIVO
+// (pre-wake) y el comando, y AMBOS recibian `speaker` (el nombre del comando). El pasivo NO
+// puede llevar la identidad: un turno = un registro. NACE ROJO (el pasivo llevaba "Luis").
+// ============================================================
+describe('P9.69 - el tramo pasivo del split por wake NO registra identidad', () => {
+  it('el commit del tramo PASIVO no lleva el nombre del comando; el comando SI', () => {
+    const commits: Array<{ capture: string; speaker: unknown }> = []
+    const ctx = {
+      logRowsTextRef: { current: [] as string[] },
+      scheduleTurnCommit: (p: Record<string, unknown>) => commits.push({ capture: String(p.capture || ''), speaker: p.speaker }),
+      tryDispatch: () => {},
+    }
+    const r = applyWakeTurnCommit(
+      ctx as never,
+      'ya te la escribio y voy a ejecutar mi comando Okay flu Soy Luis',
+      { source: 'final', speaker: 'Luis' },
+    )
+    expect(r.handled).toBe(true)
+    const pasivo = commits.find((c) => c.capture.startsWith('ya te la'))
+    expect(pasivo, 'debe existir el commit del tramo pasivo').not.toBeUndefined()
+    expect(pasivo!.speaker, 'un turno = un registro: el pasivo no lleva la identidad del comando').not.toBe('Luis')
+    expect(commits.find((c) => c.capture === 'soy luis')!.speaker, 'el comando SI lleva el nombre').toBe('Luis')
   })
 })
