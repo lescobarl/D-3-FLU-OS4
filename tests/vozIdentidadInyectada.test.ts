@@ -107,3 +107,18 @@ describe('PRUEBA DE DETECTOR (el detector no es decorativo)', () => {
     expect(out, `resolvio "${out}"`).not.toBe('luis')
   })
 })
+
+// P9.64 (MEDIDO 2026-10-12): la MISMA persona con el cluster en otra caja ("luis" del
+// historico) y el primario "Luis" producia DOS etiquetas. El canonico es el del primario.
+describe('P9.64: la MISMA persona no lleva DOS etiquetas por la caja ("luis" vs "Luis")', () => {
+  it('el historico con etiqueta en otra caja devuelve el nombre canonico del primario', () => {
+    const clusters: Cluster[] = [{ label: 'luis', signature: LUIS }]
+    const out = resolveConversationSpeaker({
+      signatureVector: luisVar(0.75), speakerClusters: clusters,
+      thresholds: FLU_CONFIG.voiceIdentity.capture.conversationSpeakerThresholds,
+      sessionPrimary: 'Luis', lastSpeaker: 'luis', voicedSampleCount: 86400, sampleRate: 48000,
+      atTurnBoundary: true, allowNewCluster: true, utteranceText: 'si',
+    } as never)
+    expect(out, `resolvio "${out}"`).toBe('Luis')
+  })
+})
