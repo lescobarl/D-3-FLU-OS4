@@ -1679,7 +1679,7 @@ export const FLU_CONFIG = {
    * Umbrales únicos — ver scripts/validate-flu-participant-config.mjs
    */
   fluParticipant: {
-    enabled: true,
+    enabled: false,
     /** true = solo con sesión «Iniciar conversación» activa; false = también en escucha pasiva (OS3 parity). */
     conversationOnly: false,
     evaluateOnTurnCommit: true,

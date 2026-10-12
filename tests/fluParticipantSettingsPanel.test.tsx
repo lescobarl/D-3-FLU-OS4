@@ -164,14 +164,15 @@ describe('FluParticipantSettingsPanel - valores del borrador', () => {
         expect(inputByKey(container, 'evaluateEveryNTurns').value).toBe('7');
     });
 
-    it('el checkbox enabled es true por defecto y la clave legacy "0" lo apaga', () => {
-        const on = renderPanel();
-        expect((inputByKey(on.container, 'enabled') as HTMLInputElement).checked).toBe(true);
-        on.unmount();
-
-        localStorage.setItem(LEGACY_ENABLED_KEY, '0');
+    it('el checkbox enabled arranca APAGADO (P9.84) y la clave legacy "1" lo enciende', () => {
+        // Decision del dueno (P9.84): el participante va apagado por defecto.
         const off = renderPanel();
         expect((inputByKey(off.container, 'enabled') as HTMLInputElement).checked).toBe(false);
+        off.unmount();
+
+        localStorage.setItem(LEGACY_ENABLED_KEY, '1');
+        const on = renderPanel();
+        expect((inputByKey(on.container, 'enabled') as HTMLInputElement).checked).toBe(true);
     });
 });
 

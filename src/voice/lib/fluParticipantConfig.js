@@ -172,8 +172,16 @@ export function setFluParticipantEnabled(enabled) {
   return setFluParticipantOverrides({ enabled: Boolean(enabled) })
 }
 
+/**
+ * DUENO UNICO de "el participante esta activo": SOLO con encendido EXPLICITO
+ * (`enabled === true`). Defecto APAGADO (decision del dueno, P9.84): el participante
+ * es un SEGUNDO consumidor del LLM y competia con el turno principal (medido: su
+ * evento entro al historial y FLU respondio Me siento enojado hablando de otra
+ * cosa). Antes la puerta era `!== false` (fail-open): un `enabled` ausente la dejaba
+ * ENCENDIDA. Va a produccion solo si se demuestra que no inventa.
+ */
 export function isFluParticipantEnabled(config = FLU_CONFIG) {
-  return getFluParticipantConfig(config).enabled !== false
+  return getFluParticipantConfig(config).enabled === true
 }
 
 export function resolveFluParticipantFieldLabel(key = '', language = 'es', config = FLU_CONFIG) {

@@ -185,7 +185,9 @@ describe('fluParticipantConfig - escritura y reinicio', () => {
     });
 
     it('encender y apagar deja la clave heredada en 1 y en 0', () => {
-        expect(isFluParticipantEnabled()).toBe(true);
+        // P9.84 (decision del dueno): el participante (2.o consumidor del LLM) va APAGADO
+        // por defecto; solo con encendido explicito. Antes el defecto era encendido.
+        expect(isFluParticipantEnabled()).toBe(false);
         expect(setFluParticipantEnabled(false).enabled).toBe(false);
         expect(localGet(HEREDADA)).toBe('0');
         expect(isFluParticipantEnabled()).toBe(false);
@@ -195,9 +197,10 @@ describe('fluParticipantConfig - escritura y reinicio', () => {
         expect(isFluParticipantEnabled()).toBe(true);
     });
 
-    it('el participante se considera activo salvo apagado explicito', () => {
-        expect(isFluParticipantEnabled(configFalsa({ enabled: undefined as never }))).toBe(true);
+    it('el participante solo se considera activo con encendido EXPLICITO (default off)', () => {
+        expect(isFluParticipantEnabled(configFalsa({ enabled: undefined as never }))).toBe(false);
         expect(isFluParticipantEnabled(configFalsa({ enabled: false }))).toBe(false);
+        expect(isFluParticipantEnabled(configFalsa({ enabled: true }))).toBe(true);
     });
 
     it('el reinicio borra lo guardado (las dos claves) y vuelve a los defaults', () => {
