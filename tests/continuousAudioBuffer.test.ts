@@ -21,7 +21,7 @@ import {
     extractTurnAudioSnapshot,
 } from '../src/voice/lib/continuousAudioBuffer.js';
 import { FLU_CONFIG } from '../src/voice/lib/fluConfig.js';
-import { getConversationSpeakerTailMs } from '../src/voice/lib/micCapture.js';
+import { getConversationMinVoicedSamples, getConversationSpeakerTailMs } from '../src/voice/lib/micCapture.js';
 import { DEFAULT_SAMPLE_RATE } from '../src/voice/lib/audioConstants.js';
 
 /** 1 muestra por ms y cada muestra vale su indice: una ventana se afirma por valores. */
@@ -104,6 +104,12 @@ describe('continuousAudioBuffer — ventana de turno (snapshot de identidad)', (
     const tailMs = getConversationSpeakerTailMs(FLU_CONFIG, { atTurnBoundary: false });
     const boundaryMs = getConversationSpeakerTailMs(FLU_CONFIG, { atTurnBoundary: true });
 
+    // P9.86 / D9.1: los valores APROBADOS por el dueno fijan UN solo tail (2000 ms, sin
+    // cola de frontera mas corta) y minVoiced 350 ms. Los casos afirman ESOS valores: el
+    // umbral de alineacion es el minVoiced de config (no el 8 ms anterior).
+    const minVoiced = getConversationMinVoicedSamples(1_000); // 350 muestras a 1 muestra/ms
+    const inicioAlineado = 20_000 - minVoiced;
+
     const withAudio = () => {
         const buffer = makeBuffer();
         buffer.append(ramp(20_000));
@@ -116,7 +122,8 @@ describe('continuousAudioBuffer — ventana de turno (snapshot de identidad)', (
         expect(window.length).toBe(boundaryMs);
         expect(window[0]).toBe(20_000 - boundaryMs);
         expect(window.at(-1)).toBe(19_999);
-        expect(boundaryMs).toBeLessThan(tailMs);
+        // UN solo tail (aprobado): ya no hay cola de frontera mas corta.
+        expect(boundaryMs).toBe(tailMs);
     });
 
     it('con turno largo la ventana sigue anclada al FIN de lo capturado', () => {
@@ -129,31 +136,32 @@ describe('continuousAudioBuffer — ventana de turno (snapshot de identidad)', (
     it('un turno corto NO recorta por turno: da la cola completa', () => {
         const buffer = withAudio();
 
-        // minVoiced (config) son 8 ms -> 8 muestras a 1 muestra/ms.
+        // Por DEBAJO del minVoiced de config (350 muestras): NO alinea, da la cola.
         const corto = buffer.snapshotTurnWindow({ turnAudioStartSample: 19_995 });
         expect(corto.length).toBe(tailMs);
         expect(corto[0]).toBe(20_000 - tailMs);
 
-        const justo = buffer.snapshotTurnWindow({ turnAudioStartSample: 19_992 });
-        expect(justo.length).toBe(8);
-        expect(justo[0]).toBe(19_992);
+        // JUSTO en el umbral de config: alinea al inicio del turno.
+        const justo = buffer.snapshotTurnWindow({ turnAudioStartSample: inicioAlineado });
+        expect(justo.length).toBe(minVoiced);
+        expect(justo[0]).toBe(inicioAlineado);
     });
 
     it('con el turno alineado y mas corto que la cola, la ventana empieza en el turno', () => {
         const buffer = withAudio();
 
-        const window = buffer.snapshotTurnWindow({ turnAudioStartSample: 19_900 });
+        const window = buffer.snapshotTurnWindow({ turnAudioStartSample: 20_000 - 500 });
 
-        expect(window.length).toBe(100);
-        expect(window[0]).toBe(19_900);
+        expect(window.length).toBe(500);
+        expect(window[0]).toBe(19_500);
         expect(window.at(-1)).toBe(19_999);
     });
 
     it('el umbral es el minVoiced de la config: en el limite alinea, por debajo cae a la cola', () => {
         const buffer = withAudio();
 
-        expect(buffer.snapshotTurnWindow({ turnAudioStartSample: 19_993 }).length).toBe(tailMs);
-        expect(buffer.snapshotTurnWindow({ turnAudioStartSample: 19_992 }).length).toBe(8);
+        expect(buffer.snapshotTurnWindow({ turnAudioStartSample: inicioAlineado + 1 }).length).toBe(tailMs);
+        expect(buffer.snapshotTurnWindow({ turnAudioStartSample: inicioAlineado }).length).toBe(minVoiced);
     });
 });
 
@@ -249,9 +257,10 @@ describe('continuousAudioBuffer — costuras con el resto del motor', () => {
         expect(porDefecto.at(-1)).toBe(19_999);
         expect(porDefecto.length).toBe(getConversationSpeakerTailMs(FLU_CONFIG, { atTurnBoundary: false }));
 
-        const explicito = extractTurnAudioSnapshot(buffer, 1_000, { turnAudioStartSample: 19_950 });
-        expect(explicito[0]).toBe(19_950);
-        expect(explicito.length).toBe(50);
+        // Turno >= minVoiced de config (350): respeta el inicio explicito del turno.
+        const explicito = extractTurnAudioSnapshot(buffer, 1_000, { turnAudioStartSample: 19_550 });
+        expect(explicito[0]).toBe(19_550);
+        expect(explicito.length).toBe(450);
 
         const frontera = extractTurnAudioSnapshot(buffer, 1_000, { atTurnBoundary: true });
         expect(frontera.length).toBe(getConversationSpeakerTailMs(FLU_CONFIG, { atTurnBoundary: true }));
