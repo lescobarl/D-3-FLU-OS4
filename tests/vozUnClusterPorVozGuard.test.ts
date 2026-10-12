@@ -98,3 +98,25 @@ describe('A6 - una voz = un cluster (tope + fusion)', () => {
     expect(capAndFuseSpeakerClusters(clusters, { maxAuto: 0, floor: sameVoiceFloor() })).toHaveLength(1)
   })
 })
+
+
+describe('REPRO del dueno 2026-10-11 - sin evidencia medida NO se abre voz nueva', () => {
+  it('misma voz a coseno 0.5 del cluster, lastSpeaker = esa voz => conserva la anterior (Hablante 1)', () => {
+    const clusters: any[] = [{ label: 'Hablante 1', signature: v(1) }]
+    const out = resolveConversationSpeaker({
+      speakerClusters: clusters,
+      sessionPrimary: '',
+      signatureVector: v(0.5),
+      lastSpeaker: 'Hablante 1',
+      lastSignature: v(1),
+      voicedSampleCount: 96000,
+      minVoicedSamples: 12000,
+      sampleRate: 48000,
+      utteranceText: 'esta es una frase de prueba para voz',
+      atTurnBoundary: true,
+      allowNewCluster: true,
+    } as never)
+    expect(out, 'sin evidencia no se acuna una etiqueta nueva').toBe('Hablante 1')
+    expect(clusters.length, 'un cluster por voz, no dos').toBe(1)
+  })
+})

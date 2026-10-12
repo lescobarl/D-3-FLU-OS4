@@ -107,11 +107,11 @@ describe('A - la ultima frase SOLO acumula (lo que se ve)', () => {
     expect((acorte?.[1] as { len?: number })?.len).toBe(COLA.length)
   })
 
-  it('una locucion NUEVA (no es trozo) SI reemplaza lo mostrado', () => {
+  it('una locucion NUEVA tampoco reemplaza: la caja solo acumula (ni por otra locucion)', () => {
     const { deps, mostrado } = makeDeps()
     handleConversationStreamSync(deps as never, { capture: FRASE })
     handleConversationStreamSync(deps as never, { capture: 'pon musica relajante para cenar y tambien una lista de compras larga para toda la semana completa del mes entero' })
-    expect(ultimo(mostrado)).toBe('pon musica relajante para cenar y tambien una lista de compras larga para toda la semana completa del mes entero')
+    expect(ultimo(mostrado)).toBe(FRASE)
   })
 
   it('RACIONAL DEL DUENO: al VACIAR la locucion a la conversacion, la ultima frase arranca de CERO', () => {

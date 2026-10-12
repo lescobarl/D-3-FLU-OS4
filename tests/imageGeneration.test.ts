@@ -372,3 +372,11 @@ describe('imageGeneration — video real (fal.ai)', () => {
         expect(timeout.trace.source).toBe('fal_video_timeout');
     });
 });
+
+describe('PRUEBA DE DETECTOR (el detector no es decorativo): la banda de voz DISTINTA esta por debajo de la de voz nueva', () => {
+  it('cosineDistinctVoice < cosineNewVoice: "sin evidencia" no es "voz nueva"', async () => {
+    const cfg = await import('../src/core/config/sharedConfig');
+    const d = (cfg as unknown as { VOICE_DIARIZATION_DEFAULTS: { cosineDistinctVoice: number; cosineNewVoice: number } }).VOICE_DIARIZATION_DEFAULTS;
+    expect(d.cosineDistinctVoice, 'la banda de voz distinta tiene que ser MENOR que la de voz nueva').toBeLessThan(d.cosineNewVoice);
+  });
+});
