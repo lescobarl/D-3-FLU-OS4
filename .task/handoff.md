@@ -577,3 +577,22 @@ de P9.64 y contar las filas sin hablante de P9.65.
 - TECHOS: hook 4539/4539 (este hito no lo toco) · App 4624/4643 · fluConfig 2772/2772.
 - SIGUIENTE: validacion del dueno en pantalla. OJO: el preflight espera 1.5 s (si su micro
   tarda mas, la fila nace sin hablante).
+
+## 2026-10-11 (noche) - P9.64 MEDIDO: propuesta de mandos de audio (SIN APLICAR)
+
+- Portal reiniciado (PID nuevo, 5173, HTTP 200) y `debug.log` limpiado a 0 bytes: base limpia para la corrida.
+- Medido con desk de funciones REALES (`.agent_tmp/audit/desk-audio-knobs.test.ts`, 5/5):
+  la ventana del limite de turno es la COLA del buffer (`minSamplesMs = cap`): en aula manda el cap 1800
+  (el base 900 no se usa) -> fuga de audio PRE-turno (voz de FLU) 83% con locucion de 300 ms, 50% con
+  900 ms, 0% con >=1800 ms. El embedder rechaza <350 ms (16000 x 0.35) mientras `conversationMinVoicedMs`
+  = 8. Piso EFECTIVO de reutilizacion 0.63 (0.66 - classroomReuseRelax 0.03). Con la banda de SU log
+  (0.041..0.824) sale `production-forced-new-voice`; con la banda limpia (0.69-0.74) 1 sola etiqueta.
+- PROPUESTA (NO aplicada; la aprueba el dueno): tail 5000->2000 - cap UNICO 2000 (aula 1800->2000) -
+  MinVoiced 8->350 - MinVoicedForNew (aula) 1400->2200 - `productionClusterReuseThreshold` 0.66 SIN TOCAR -
+  `classroomReuseRelax` 0.03->0 - + R1 (la ventana nunca empieza antes del turno) y R2 (piso de voz en la
+  via de limite). Detalle crudo en `.task/report` (MEDICION + PROPUESTA 2026-10-11).
+- PENDIENTE DEL DUENO: aprobar los valores; su corrida con el checker (`npm run voz:log`); re-sembrar el
+  ancla si nacio contaminada. Casos vistos en su pantalla (2026-10-11 20:29-20:34): la orden de nombre
+  tuvo DOS respuestas (determinista "Registrado Luis." + LLM "Entendido. Procedere..."), el wake llego
+  como "flujo" y no disparo, y el micro se congelo/repite locucion (falta el log para diagnosticarlo).
+- NO CUBIERTO: el DoD-producto (su pantalla/micro); suite completa y E2E completa (exigen autorizacion).

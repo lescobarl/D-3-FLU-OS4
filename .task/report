@@ -5391,3 +5391,83 @@ VALIDACION: lint:guards VERDE 256 ficheros / 2053 tests · typecheck y eslint si
 
 NO CUBIERTO (0.23): el DoD-producto (su pantalla y su voz real); la prueba de que la VOZ real
   (no un fixture) produce ese cosido (necesita su corrida).
+
+----------------------------------------------------------------
+MEDICION + PROPUESTA - 2026-10-11 - MANDOS DE AUDIO DE LA DIARIZACION (P9.64)
+----------------------------------------------------------------
+Encargo del dueno: medir su log y PROPONER conversationSpeakerTailMs, conversationMinVoicedMs
+y el piso de reutilizacion para que SU VOZ mida >= 0.66 contra su ancla. PROPONER, no aplicar
+(la aplicacion y la validacion son suyas). Regla dura: no parchear el piso (0.58-0.66 es la
+banda que barrio a la mujer).
+
+MODO: light/medicion. NO se toca src. NO se declara cierre: P9.64 sigue ABIERTO.
+
+PRUEBA DE ESCRITORIO (funciones REALES del repo, sin mocks del motor):
+  npx vitest run --config .agent_tmp/audit/vitest.config.ts .agent_tmp/audit/desk-audio-knobs.test.ts
+  -> 5/5 verde. Salida cruda:
+    cap base=5000ms - cap en limite de turno HOY=1800ms - classroom=true aulaCap=1800ms
+      locucion(ms) | HOY ventana=cap, fuga PRE-turno
+         300 | 1800ms  fuga=1500ms ( 83%)
+         600 | 1800ms  fuga=1200ms ( 67%)
+         900 | 1800ms  fuga= 900ms ( 50%)
+        1500 | 1800ms  fuga= 300ms ( 17%)
+        2000 | 1800ms  fuga=   0ms (  0%)
+    embedder: minSamples=5600 = 350 ms (16k x minSampleRatio 0.35) - config conversationMinVoicedMs=8 ms
+    coseno minimo que reutiliza el ancla 'Luis' HOY = 0.63 (0.66 - classroomReuseRelax 0.03)
+    9 turnos con la banda de SU log -> 2 etiquetas; motivo del 1.o: production-forced-new-voice
+      (lastSim=0.041 bestSim=0.041) - banda LIMPIA 0.69-0.74 -> 1 etiqueta ("Luis")
+    limite de turno con 8ms de audio y con 350ms -> DECIDE IGUAL (el piso de voz solo existe
+      en la via principal: speakerDiarization.js:702)
+
+HECHOS MEDIDOS (fuente = codigo citado + desk):
+  H1 capita el cap de AULA, no el base. fluConfig.js:212 classroomMultiSpeaker=true y :213
+     classroomTurnBoundaryTailCapMs=1800 -> getConversationSpeakerTailMs() devuelve min(5000,1800).
+     El base turnBoundaryTailCapMs=900 (:118) NO llega a usarse en su instalacion.
+  H2 la ventana del limite de turno es la COLA del buffer, no el turno: captureTurnAudio
+     (useFluVoiceAssistant.js:1433) pasa minSamplesMs = cap y flattenChunksWindow
+     (speakerClusters.js:88-93) la EXTIENDE hacia atras hasta el minimo -> si la locucion es
+     mas corta que el cap, la ventana es audio PRE-turno (voz de FLU). Medido arriba: 83% con
+     locucion de 300 ms. Es la causa fisica del bestSim 0.20-0.57 de su log.
+  H3 el embedder rechaza <350 ms (embeddingConfig.getMinSamples = 16000 * 0.35) mientras la
+     config declara conversationMinVoicedMs=8 ms (:120): el mando dice "medible" para audio
+     que el propio modelo rechaza.
+  H4 la via de limite NO tiene piso de voz: speakerDiarization.js:702 (insufficient-voiced)
+     vive en la via principal; resolviendo el limite, 8 ms y 350 ms deciden igual.
+  H5 el piso EFECTIVO de reutilizacion es 0.63 = 0.66 - classroomReuseRelax 0.03
+     (speakerDiarization.js:119): HOY el piso esta DENTRO de la banda 0.58-0.66.
+  H6 con la banda de SU log el resolver reproduce el defecto (production-forced-new-voice con
+     lastSim 0.041), y con la banda limpia 0.69-0.74 la sesion entera queda en 1 etiqueta.
+
+PROPUESTA (valores; a aprobar por el dueno; NO aplicada)
+  mando                                                     HOY    PROPUESTO
+  capture.conversationSpeakerTailMs                         5000   2000
+  capture.turnBoundaryTailCapMs                              900   2000
+  capture.roomCapture.classroomTurnBoundaryTailCapMs        1800   2000   (UN solo cap, == base)
+  capture.conversationMinVoicedMs                              8    350   (piso REAL del embedder)
+  capture.conversationMinVoicedForNewMs                     2200   2200   (aula 1400 -> 2200: sin relax)
+  thresholds.productionClusterReuseThreshold                0.66   0.66   (NO SE TOCA: es la META)
+  roomCapture.classroomReuseRelax                           0.03      0   (hoy deja el piso en 0.63)
+  DOS REGLAS DE CODIGO sin las cuales los mandos NO alcanzan (parche si se aplican solos):
+    R1 la ventana del limite de turno no puede empezar ANTES del turno (nunca fuga); el minimo
+       pasa a ser conversationMinVoicedMs, no el cap. Sin R1, bajar el cap solo acota la fuga
+       (600 ms) y sigue midiendo mezcla en locuciones cortas.
+    R2 la via de limite aplica el MISMO piso de voz que la principal (insufficient-voiced):
+       por debajo del piso NO se mide y NO se abre etiqueta (se conserva la del vinculo por firma).
+
+PREDICCION FALSABLE (para su corrida con el checker)
+  * TurnAudio ms= <= 2000 y ~= duracion de la locucion (hoy: 1800 fijos con fuga).
+  * Identity lastSim= de su voz contra su ancla en la banda limpia (>= 0.66); 0 lineas
+    production-forced-new-voice con lastSim < 0.66.
+  * clusters: 1 sola etiqueta de su voz en N turnos (hoy 6).
+  PASO PREVIO DE SU CORRIDA (si el ancla nacio contaminada, ningun mando la limpia):
+    re-sembrar el ancla (borrar el cluster del participante y registrarlo de nuevo) antes de
+    medir, o el ancla arrastra el vector basura y la medida sigue baja.
+
+ALCANCE REAL (0.23)
+  CUBIERTO = la ventana real por duracion de locucion, el piso real del embedder, el piso
+    efectivo de reutilizacion (0.63), la reproduccion del inflado con SU banda medida y la
+    propuesta de valores con su par de reglas.
+  NO CUBIERTO = el DoD-producto (su micro y su pantalla); la corrida que valida los valores
+    (checker, suya); los guards de la fase de APLICACION (aun no existen: al aplicar nacen
+    ROJOS y los leen voiceWorkerThresholdsConfigGuard / vozCosidoDiarizacionGuard /
+    vozClusterConsolidacionGuard / vozDiarizacionDosVocesGuard / continuousAudioBuffer).
