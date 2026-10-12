@@ -66,11 +66,7 @@ export function getConversationSpeakerTailMs(config = FLU_CONFIG, { atTurnBounda
   const capture = getVoiceIdentityCaptureConfig(config)
   const tailMs = Number(capture.conversationSpeakerTailMs)
   if (!atTurnBoundary) return tailMs
-  const room = capture.roomCapture || {}
-  const classroomCap = Number(room.classroomTurnBoundaryTailCapMs)
-  if (room.classroomMultiSpeaker === true && Number.isFinite(classroomCap) && classroomCap > 0) {
-    return Math.min(tailMs, classroomCap)
-  }
+  // UN cap (un dato = una clave): el mismo techo sirve para aula y no-aula.
   const cap = Number(capture.turnBoundaryTailCapMs)
   const boundaryCap = Number.isFinite(cap) && cap > 0 ? cap : tailMs
   return Math.min(tailMs, boundaryCap)
@@ -82,13 +78,7 @@ export function getConversationMinVoicedSamples(sampleRate, config = FLU_CONFIG)
 }
 
 export function getConversationMinVoicedForNewSamples(sampleRate, config = FLU_CONFIG) {
-  const capture = getVoiceIdentityCaptureConfig(config)
-  const room = capture.roomCapture || {}
-  let ms = Number(capture.conversationMinVoicedForNewMs)
-  if (room.classroomMultiSpeaker === true) {
-    const classroomMs = Number(room.classroomMinVoicedForNewMs)
-    if (Number.isFinite(classroomMs) && classroomMs > 0) ms = classroomMs
-  }
+  const ms = Number(getVoiceIdentityCaptureConfig(config).conversationMinVoicedForNewMs)
   return Math.floor(sampleRate * (ms / 1000))
 }
 

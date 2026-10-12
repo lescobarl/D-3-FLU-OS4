@@ -381,13 +381,16 @@ export const VOICE_DIARIZATION_DEFAULTS = {
     // Banda MEDIDA de "voz DISTINTA" (dueno 2026-10-11): MISMA voz 0.69-0.74, DISTINTA 0.58.
     // Por DEBAJO de 0.58 no hay evidencia de NINGUNA voz -> no se abre voz nueva.
     cosineDistinctVoice: 0.58,
-    productionClusterReuse: 0.74,
     classroomReuseRelax: 0.03,
     classroomNewVoiceRelax: 0.04,
     classroomLastSpeakerSwitchMargin: 0.06,
     soloNewVoiceFactor: 0.82,
     newVoiceHysteresis: 0.06,
     switchRelax: 0.45,
+    /** Piso del gate de voz nueva con sesion multi-locutor (Math.max). */
+    newVoiceGateFloor: 0.5,
+    /** Margen del switch del rematch del primario (fraccion de SWITCH). */
+    primaryRematchSwitchFactor: 0.5,
     turnBoundaryClusterReabsorbMargin: 0.035,
     cosineMatch: 0.76,
     cosineRegisteredMatch: 0.72,

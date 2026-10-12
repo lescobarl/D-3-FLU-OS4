@@ -136,6 +136,8 @@ export const FLU_CONFIG = {
         lastTurnSignatureContinuityDistance: 0.075,
         /** Reutilización de cluster en producción (512-D real). */
         productionClusterReuseThreshold: 0.66,
+        /** Banda MEDIDA de "voz DISTINTA": por DEBAJO no hay evidencia de ninguna voz. */
+        cosineDistinctVoiceThreshold: 0.58,
         shortUtteranceMaxMs: 1500,
         /** Tras N ecos committed-echo consecutivos, rebuild SR (Chrome atascado). */
         committedEchoRebuildAfter: 3,
@@ -210,8 +212,6 @@ export const FLU_CONFIG = {
          * No desactiva captura total ni filtros TV; solo ajusta umbrales de diarización.
          */
         classroomMultiSpeaker: true,
-        classroomTurnBoundaryTailCapMs: 2000,
-        classroomMinVoicedForNewMs: 2200,
         classroomLastSpeakerSwitchMargin: 0.06,
         classroomMultiSpeakerRoomClusterMin: 2,
         classroomReuseRelax: 0,

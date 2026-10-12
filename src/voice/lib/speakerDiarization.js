@@ -17,6 +17,7 @@ import {
   nextAvailableSpeakerLabel,
 } from './speakerLabels.js'
 import {
+  SHORT_UTTERANCE_HISTORICAL_MATCH,
   SHORT_UTTERANCE_IMMEDIATE_CONTINUITY,
   cosineThreshold,
   ensureClusterForLabel,
@@ -27,6 +28,7 @@ import {
   isVoiceDistinctFromSticky,
   resolveImmediateShortSpeakerContinuity,
   resolveRoomRematchThreshold,
+  sameVoiceFloor,
   updateClusterSignature,
 } from './speakerClusters.js'
 
@@ -106,7 +108,8 @@ function resolveProductionSpeakerAtBoundary({
   const classroom = roomCfg.classroomMultiSpeaker === true
   const CONTINUITY = cosineThreshold(thresholds, 'cosineContinuityThreshold', VOICE_DIARIZATION_DEFAULTS.cosineContinuity)
   const NEW_VOICE = cosineThreshold(thresholds, 'cosineNewVoiceThreshold', VOICE_DIARIZATION_DEFAULTS.cosineNewVoice)
-  const REUSE = cosineThreshold(thresholds, 'productionClusterReuseThreshold', VOICE_DIARIZATION_DEFAULTS.productionClusterReuse)
+  // UN lector del piso "misma voz": sameVoiceFloor (dueno unico), no una copia inline.
+  const REUSE = sameVoiceFloor(thresholds)
   // Banda MEDIDA de "voz DISTINTA" (clave cosineDistinctVoiceThreshold): por debajo NO hay
   // evidencia de ninguna voz.
   const DISTINCT_VOICE = cosineThreshold(thresholds, 'cosineDistinctVoiceThreshold', VOICE_DIARIZATION_DEFAULTS.cosineDistinctVoice)
@@ -115,7 +118,7 @@ function resolveProductionSpeakerAtBoundary({
     'cosineRegisteredMatchThreshold',
     VOICE_DIARIZATION_DEFAULTS.cosineRegisteredMatch,
   )
-  const HISTORICAL = cosineThreshold(thresholds, 'shortUtteranceHistoricalMatch', 0.7)
+  const HISTORICAL = cosineThreshold(thresholds, 'shortUtteranceHistoricalMatch', SHORT_UTTERANCE_HISTORICAL_MATCH)
   const reuseRelax = Number(roomCfg.classroomReuseRelax)
   const REUSE_EFF = classroom ? REUSE - (Number.isFinite(reuseRelax) ? reuseRelax : VOICE_DIARIZATION_DEFAULTS.classroomReuseRelax) : REUSE
   const NEW_VOICE_EFF = classroom ? NEW_VOICE + (Number(roomCfg.classroomNewVoiceRelax) || VOICE_DIARIZATION_DEFAULTS.classroomNewVoiceRelax) : NEW_VOICE
@@ -150,7 +153,7 @@ function resolveProductionSpeakerAtBoundary({
   // personas + TV la sesion acumulaba 5 clusters y las filas saltaban de etiqueta).
   const HYST = Number(roomCfg.newVoiceHysteresis) || VOICE_DIARIZATION_DEFAULTS.newVoiceHysteresis
   const multiSession = autoCount >= multiMin
-  const NEW_VOICE_GATE = multiSession ? Math.max(0.5, NEW_VOICE_EFF - HYST) : NEW_VOICE_EFF
+  const NEW_VOICE_GATE = multiSession ? Math.max(VOICE_DIARIZATION_DEFAULTS.newVoiceGateFloor, NEW_VOICE_EFF - HYST) : NEW_VOICE_EFF
   const NEW_VOICE_OPEN_GATE = soloSession ? NEW_VOICE_GATE * soloNewVoiceFactor : NEW_VOICE_GATE
 
   const historical = findShortUtteranceHistoricalMatch({
@@ -206,7 +209,7 @@ function resolveProductionSpeakerAtBoundary({
           bestLabel &&
           bestLabel !== primaryLabel &&
           bestSim >= REUSE_EFF &&
-          bestSim > primarySim + SWITCH * 0.5
+          bestSim > primarySim + SWITCH * VOICE_DIARIZATION_DEFAULTS.primaryRematchSwitchFactor
         if (!skipPrimaryRematch) {
           const cluster = findClusterByLabel(speakerClusters, primaryLabel)
           if (cluster) updateClusterSignature(cluster, normalized)
