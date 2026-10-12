@@ -87,8 +87,12 @@ describe('MateriaGrisPanel - Bloque A: formulario de entrega', () => {
         const opts = Array.from(select.querySelectorAll('option'));
         const actionCount = Object.keys(FLU_CONFIG.materiaGris.actions).length;
         expect(opts).toHaveLength(actionCount + 1);
-        const tarea = opts.find((o) => o.value === 'tarea_hogar') as HTMLOptionElement;
-        expect(tarea.textContent).toBe('Tarea del hogar (5 pts)');
+        // P9.86b: la clave se toma del CATALOGO real (Regla #1); 'tarea_hogar' salio de
+        // FLU_CONFIG.materiaGris.actions y el test la hardcodeaba.
+        const clave = 'cuento';
+        expect(Object.keys(FLU_CONFIG.materiaGris.actions)).toContain(clave);
+        const tarea = opts.find((o) => o.value === clave) as HTMLOptionElement;
+        expect(tarea.textContent).toBe('Participar en un cuento (10 pts)');
     });
 
     it('otorgar esta deshabilitado hasta elegir participante y accion', () => {
@@ -97,7 +101,7 @@ describe('MateriaGrisPanel - Bloque A: formulario de entrega', () => {
         expect(submit.disabled).toBe(true);
         chooseParticipant('p1');
         expect(submit.disabled).toBe(true);
-        chooseAction('tarea_hogar');
+        chooseAction('cuento');
         expect(submit.disabled).toBe(false);
     });
 
@@ -132,7 +136,7 @@ describe('MateriaGrisPanel - Bloque B: estado en vuelo', () => {
         panel({ onAward });
 
         chooseParticipant('p1');
-        chooseAction('tarea_hogar');
+        chooseAction('cuento');
         fireEvent.click(screen.getByTestId('materiagris-award-submit'));
 
         const select = screen.getByTestId('materiagris-award-participant') as HTMLSelectElement;

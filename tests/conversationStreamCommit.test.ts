@@ -183,7 +183,11 @@ describe('conversationStreamCommit — preview (sin turnCommit)', () => {
 
         expect(deps.publishedLiveRef.current).toBe('hola como estas');
         expect(deps.scheduleLiveTranscriptUpdate).not.toHaveBeenCalled();
-        expect(deps.activeTurnIdRef.current).toBe(0);
+        // P9.86b: el ID del turno se acuna AL ABRIR el turno y ANTES de la caja
+        // (cambio deliberado 2026-10-11, con guard wakeRowNoiseGuard: "un bloqueo de
+        // la frase viva no puede comerse el bump"). El preview se SIGUE descartando
+        // (las dos aserciones de arriba); lo que ya no es 0 es el id.
+        expect(deps.activeTurnIdRef.current).toBe(1);
     });
 
     it('en frontera de turno avisa al hablante con atTurnBoundary y sin abrir cluster', () => {

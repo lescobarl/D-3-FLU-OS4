@@ -86,7 +86,11 @@ describe('resolveConversationSpeaker — separación sin relajación de solo (ma
         expect(diagnosis.reason).toMatch(/forced-new-voice|new-voice/);
     });
 
-    it('solo (1 cluster) sim 0.50 (genuinamente distinta < 0.5576) → abre Hablante 2', () => {
+        it('solo (1 cluster) sim 0.50 (POR DEBAJO de la banda de evidencia 0.58) -> NO inventa voz', () => {
+        // P9.86b: por debajo de la banda MEDIDA de voz distinta (cosineDistinctVoice 0.58)
+        // no hay evidencia de ninguna voz: se REUSA la etiqueta del anterior para no abrir
+        // un "Hablante N" fantasma (red anti-fantasma; el diseno dice que con R1 la medida
+        // limpia ya no cae aqui). Antes el test afirmaba la regla previa (gate 0.5576).
         const clusters: any[] = [{ label: 'Hablante 1', signature: E1 }];
         const diagnosis: Record<string, unknown> = {};
         const r = resolveConversationSpeaker({
@@ -97,9 +101,9 @@ describe('resolveConversationSpeaker — separación sin relajación de solo (ma
             lastSignature: E1,
             diagnosis,
         } as any);
-        expect(r).toBe('Hablante 2');
-        expect(clusters.map((c) => c.label)).toEqual(['Hablante 1', 'Hablante 2']);
-        expect(diagnosis.reason).toBe('production-forced-new-voice');
+        expect(r).toBe('Hablante 1');
+        expect(clusters.map((c) => c.label)).toEqual(['Hablante 1']);
+        expect(diagnosis.reason).toBe('production-reuse-no-evidence');
     });
 
     it('solo (1 cluster) sim 0.60 con lastSignature ausente → separa a Hablante 2', () => {

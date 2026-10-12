@@ -24,7 +24,6 @@ function makeVector(pairs: Array<[number, number]>): number[] {
 // Tres voces ortogonales entre sí: el titular, la TV y FLU.
 const LUIS = makeVector([[0, 1]]);
 const TV = makeVector([[1, 1]]);
-const FLU = makeVector([[2, 1]]);
 
 const PROD = FLU_CONFIG.voiceIdentity.capture.conversationSpeakerThresholds;
 
@@ -104,11 +103,22 @@ describe('la etiqueta no se hereda por continuidad sin evidencia de voz', () => 
     });
 
     it('tres voces distintas no colapsan en una sola etiqueta', () => {
+        // P9.86b: los vectores ORTOGONALES (sim 0) caen por debajo de la banda MEDIDA de
+        // voz distinta (cosineDistinctVoice 0.58) y el diseno los trata como "sin
+        // evidencia" (anti-fantasma). Se usan voces EN la banda (~0.60), que es lo que
+        // mide una voz realmente distinta (misma 0.69-0.74 / distinta ~0.58).
+        const c = Math.sqrt(0.6);
+        const s = Math.sqrt(1 - 0.6);
+        const voces = [
+            makeVector([[0, c], [1, s]]),
+            makeVector([[0, c], [2, s]]),
+            makeVector([[0, c], [3, s]]),
+        ];
         const clusters: any[] = [];
         const last = { speaker: '', signature: [] as number[] };
         const labels = new Set<string>();
         for (let ronda = 0; ronda < 4; ronda += 1) {
-            for (const voz of [TV, LUIS, FLU]) labels.add(turno(voz, clusters, last));
+            for (const voz of voces) labels.add(turno(voz, clusters, last));
         }
         expect(labels.size).toBeGreaterThanOrEqual(3);
     });
