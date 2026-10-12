@@ -201,7 +201,7 @@ async function embedAudioInternal(samples, sampleRate = DEFAULT_SAMPLE_RATE) {
   return Array.isArray(result?.vector) ? result.vector : []
 }
 
-function resolveIdentityIdle(vector, matchPayload, sampleRate, sourceLength) {
+function resolveIdentityIdle(vector, matchPayload, sampleRate, voicedSampleCount) {
   return scheduleIdleAsync(
     () =>
       resolveSpeakerIdentityFromVector(vector, {
@@ -211,7 +211,7 @@ function resolveIdentityIdle(vector, matchPayload, sampleRate, sourceLength) {
         fallbackSpeaker: matchPayload.fallbackSpeaker,
         utteranceText: matchPayload.utteranceText || '',
         sampleRate,
-        voicedSampleCount: sourceLength,
+        voicedSampleCount,
         atTurnBoundary: matchPayload.atTurnBoundary !== false,
         allowNewCluster: Boolean(matchPayload.allowNewCluster),
         preferSpeaker: matchPayload.preferSpeaker || '',

@@ -7,7 +7,7 @@
  *
  * Config: `FLU_CONFIG.transcript.asr.vad` (sin valores quemados en el motor).
  */
-import { getAsrConfig } from './asrConfig.js'
+import { getAsrConfig, VAD_DEFAULTS } from './asrConfig.js'
 
 // El dueno de la lectura de la config del ASR es asrConfig.js; se re-exporta para no
 // cambiar la API del segmentador (lo consumen el worker y los tests).
@@ -48,8 +48,8 @@ function rootMeanSquare(samples) {
  * @returns {VoiceSegmenter}
  */
 export function createVoiceSegmenter(config = getVadConfig(), sampleRate = getAsrSampleRate()) {
-  const frameMs = Math.max(1, Number(config.frameMs) || 30)
-  const energyThreshold = Number(config.energyThreshold) || 0.012
+  const frameMs = Math.max(1, Number(config.frameMs) || VAD_DEFAULTS.frameMs)
+  const energyThreshold = Number(config.energyThreshold) || VAD_DEFAULTS.energyThreshold
   const minSpeechMs = Math.max(0, Number(config.minSpeechMs) || 240)
   const minSilenceMs = Math.max(0, Number(config.minSilenceMs) || 480)
   const maxSegmentMs = Math.max(minSpeechMs + frameMs, Number(config.maxSegmentMs) || 12000)

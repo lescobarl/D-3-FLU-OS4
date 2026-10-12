@@ -15,3 +15,24 @@ import { FLU_CONFIG } from '../fluConfig.js';
 export function getAsrConfig() {
     return FLU_CONFIG.transcript?.asr || {};
 }
+
+/**
+ * RESPALDOS del bloque VAD — dueno UNICO (un dato, un sitio).
+ *
+ * P9.72: el segmentador (`voiceActivitySegmenter.js`) caia a `30` / `0.012` por su cuenta y el
+ * conteo de VOZ (`voicedActivity.js`) a `20` / `0.02`: si el bloque VAD desaparecia de la config,
+ * los dos consumidores del MISMO dato volvian a divergir. El respaldo vive aqui, junto al lector.
+ */
+export const VAD_DEFAULTS = Object.freeze({ frameMs: 30, energyThreshold: 0.02 });
+
+/** Trama del VAD (ms): config, o el respaldo unico. */
+export function getVadFrameMs(config = getAsrConfig().vad || {}) {
+    const value = Number(config.frameMs);
+    return value > 0 ? value : VAD_DEFAULTS.frameMs;
+}
+
+/** Umbral de energia RMS para considerar voz: config, o el respaldo unico. */
+export function getVadEnergyThreshold(config = getAsrConfig().vad || {}) {
+    const value = Number(config.energyThreshold);
+    return value > 0 ? value : VAD_DEFAULTS.energyThreshold;
+}

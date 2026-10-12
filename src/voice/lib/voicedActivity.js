@@ -1,5 +1,5 @@
 import { DEFAULT_SAMPLE_RATE } from './audioConstants.js'
-import { getAsrConfig } from './asr/asrConfig.js'
+import { getVadEnergyThreshold, getVadFrameMs } from './asr/asrConfig.js'
 
 /**
  * Actividad de voz (VAD-lite) — DUENO UNICO de "cuanto de esta ventana es VOZ".
@@ -11,26 +11,18 @@ import { getAsrConfig } from './asr/asrConfig.js'
  * parte la senal en tramas de `frameMs` y se suman las muestras de las tramas cuya energia
  * (RMS) supera `rmsFloor`. El piso pasa a ser de VOZ, no de longitud.
  *
- * DUENO UNICO DEL UMBRAL (P9.72): el umbral de VOZ es el MISMO que el del VAD del ASR
- * (`transcript.asr.vad.energyThreshold`, subido a 0.02 con motivo medido: con 0.015 el ruido de
- * ambiente abria turno y Whisper alucinaba). Antes habia un `voicedRmsFloor` propio (0.01) MAS
- * permisivo que el VAD -> TV/ambiente contaba como voz y el piso no filtraba. Dos umbrales que
- * miden lo MISMO son ruta doble de datos: se comparte uno.
+ * DUENO UNICO DEL DATO (P9.72): el umbral de VOZ, la trama y sus RESPALDOS son los MISMOS que
+ * los del VAD del ASR (`asrConfig.getVadEnergyThreshold` / `getVadFrameMs`). Antes habia un
+ * `voicedRmsFloor` propio (0.01, MAS permisivo que el VAD 0.02 -> TV/ambiente contaba como voz),
+ * una trama propia (20 ms frente a los 30 del VAD) y un respaldo propio (0.02 frente a 0.012):
+ * tres copias del mismo dato. Con la config ausente los dos consumidores volvian a divergir.
  *
  * @param {Float32Array|number[]} samples Muestras de audio (mono, [-1,1]).
- * @param {{ sampleRate?: number, frameMs?: number, rmsFloor?: number }} [opts]
+ * @param {{ sampleRate?: number, frameMs?: number, rmsFloor?: number }} [opts] Trama y umbral
+ *   por defecto del dueno unico; se admiten explicitos para los tests.
  * @returns {number} muestras consideradas VOZ (0 si no hay senal).
  */
-/**
- * Piso de VOZ vigente (dueno unico: el umbral del VAD del ASR).
- *
- * @returns {number}
- */
-function getVoicedFloor() {
-  return Number(getAsrConfig()?.vad?.energyThreshold) || 0.02
-}
-
-export function countVoicedSamples(samples, { sampleRate = DEFAULT_SAMPLE_RATE, frameMs = 20, rmsFloor = getVoicedFloor() } = {}) {
+export function countVoicedSamples(samples, { sampleRate = DEFAULT_SAMPLE_RATE, frameMs = getVadFrameMs(), rmsFloor = getVadEnergyThreshold() } = {}) {
   const data = samples && samples.length ? samples : null
   if (!data || !(Number(sampleRate) > 0) || !(Number(frameMs) > 0)) return 0
   const floor = Number(rmsFloor)
