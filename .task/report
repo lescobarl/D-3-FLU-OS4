@@ -5471,3 +5471,9 @@ ALCANCE REAL (0.23)
     (checker, suya); los guards de la fase de APLICACION (aun no existen: al aplicar nacen
     ROJOS y los leen voiceWorkerThresholdsConfigGuard / vozCosidoDiarizacionGuard /
     vozClusterConsolidacionGuard / vozDiarizacionDosVocesGuard / continuousAudioBuffer).
+
+=== CIERRE 2026-10-12 (P9.64 / P9.68 / P9.69 / P9.70) ===
+CUBIERTO=los 4 fixes y sus guards existen, estan en lint:guards, nacen ROJOS (verificado revirtiendo el src de cada commit) y sus literales salen del log preservado (d:/flu-audit/sesion-2026-10-12-0954-1004.log); npm run lint 265 ficheros / 2182 tests VERDE, eslint 0, typecheck 0.
+Commits: P9.68=e61e464(+30bac63) | P9.70=e61e464(+30bac63) | P9.69=beeef07(+aaf3e0c) | P9.64=b4d569f(+35eee89).
+NO CUBIERTO=el DoD-producto (pantalla del dueno), la suite completa y el e2e (no corridos: exigen autorizacion); y P9.71 (hueco ABIERTO: la via de limite no tiene piso de VOZ; el piso se alimenta de longitud de ventana, no de voz).
+ENMIENDA DE CONTRATO: el contrato vigente (.task/contract.json) es el de la tarea del NOMBRE POR VOZ (base 738270c) y NO cubre esta pasada; el cierre va por plans/ledger.json (items P9.64/68/69/70 a done + done[] con CUBIERTO/NO CUBIERTO) y este bloque. No se edita el contrato para no invalidar su gate/base.
