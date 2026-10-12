@@ -196,3 +196,26 @@ describe('el detector no es decorativo: el gate del CIERRE discrimina', () => {
         expect(h.rows, 'filas=' + JSON.stringify(h.rows)).toHaveLength(0)
     })
 })
+
+// ============================================================
+// P9.68-b (PERDIDA MEDIDA 2026-10-12, log del dueno, turn 23->29): una locucion LARGA
+// abierta (confirmada sin fila) se PIERDE si llega OTRA sin silencio: `pendingFinal` se
+// sobrescribia/limpiaba sin volcarla (filas solo con la nueva; la de 1112 chars sin fila).
+// NACE ROJO. El fix VOLCA la anterior (settlesTurn) al detectar el cambio de locucion.
+// ============================================================
+const LARGA_P968 =
+    'bien ahí detuve la transcripción de la mujer pero hay un error en la última transcripción justo cuando ya iba a dar por bueno puso mi nombre en el nombre de la mujer o sea eso es un error'
+const NUEVA_P968 = 'ya el otro escribe nada es justo es un problema en la transcripción cuando hay mucha transcripción'
+
+describe('P9.68-b: una locucion LARGA abierta NO se descarta al llegar otra', () => {
+    it('locucion larga (crece) + OTRA locucion SIN silencio -> AMBAS quedan en filas', () => {
+        const h = createHarness()
+        h.result(chromeEvent([{ isFinal: false, transcript: LARGA_P968.slice(0, 60) }], 0))
+        h.result(chromeEvent([{ isFinal: true, transcript: LARGA_P968 }], 0))
+        h.result(chromeEvent([{ isFinal: true, transcript: NUEVA_P968 }], 0))
+        h.end()
+        const todo = h.rows.join(' | ')
+        expect(todo, 'la LARGA no puede perderse · filas=' + JSON.stringify(h.rows)).toContain('bien ahí detuve')
+        expect(todo, 'la NUEVA tambien · filas=' + JSON.stringify(h.rows)).toContain('ya el otro escribe')
+    })
+})
