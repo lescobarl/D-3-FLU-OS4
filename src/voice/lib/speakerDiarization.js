@@ -168,14 +168,22 @@ function resolveProductionSpeakerAtBoundary({
     effectiveSticky: primaryLabel || lastSpeaker,
   })
   if (historical?.label) {
+    // P9.64: UNA etiqueta por persona. Si el label historico es la MISMA persona que el
+    // primario registrado (misma clave plegada: "luis" == "Luis"), se devuelve el nombre
+    // CANONICO del primario. Sin esto convivian "luis" (historico) y "Luis" (primario) y
+    // el dueno veia DOS etiquetas para su voz (medido 2026-10-12: 4 etiquetas para 1 voz).
+    const canonico =
+      primaryLabel && foldSpeakerKey(historical.label) === foldSpeakerKey(primaryLabel)
+        ? primaryLabel
+        : historical.label
     const cluster = findClusterByLabel(speakerClusters, historical.label)
     if (cluster) updateClusterSignature(cluster, normalized)
     note?.({
       reason: 'production-short-historical',
-      speaker: historical.label,
+      speaker: canonico,
       clusterSimilarity: historical.similarity,
     })
-    return historical.label
+    return canonico
   }
 
   const lastSim = resolveLastTurnSimilarity(normalized, lastSpeaker, lastSignature, speakerClusters)
