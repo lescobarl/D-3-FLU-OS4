@@ -395,15 +395,19 @@ export function resolveImmediateShortSpeakerContinuity({
 }
 
 /**
-
-/**
  * DUENO UNICO de "que etiquetas son la MISMA voz que el ancla" para el COSIDO.
  *
- * Regla = la de la diarizacion al consolidar clusters: ENCADENAMIENTO (una etiqueta
- * entra si su firma pasa el piso contra CUALQUIER miembro ya dentro del grupo, y se
- * itera hasta punto fijo). Antes se comparaba SOLO contra el ancla, asi que una voz
- * partida en tres etiquetas donde la tercera se parece a la segunda y no al ancla
- * quedaba fuera y la voz seguia con dos etiquetas.
+ * Regla: ESTRELLA (cada etiqueta entra si su firma pasa el piso contra el ANCLA), NO
+ * encadenamiento. El contrato anterior declaraba "encadenamiento hasta punto fijo" y el
+ * codigo no lo hacia; P9.85 se cierra en el lado del CONTRATO, no del codigo, porque el
+ * encadenamiento es transitivo y COLAPSA voces distintas: con el piso del cosido (0.66,
+ * el de la diarizacion) una voz "distinta" (banda medida 0.58) queda a ~0.99 de una
+ * etiqueta de 0.70 al meterlas en cadena, asi que se fusionarian las dos voces y el
+ * nombre del titular acabaria en la voz ajena (el defecto que el dueno reporta como
+ * "me puso Luis a la chica"). El cosido parcial se prefiere a la fusion falsa.
+ * CONSECUENCIA DECLARADA: una voz partida en A--B--C donde C solo se parece a B queda
+ * en {A,B}; B y C se coseran cuando compartan turno medido. La propiedad queda FIJADA
+ * por tests/vozCosidoDiarizacionGuard.test.ts (una cadena NO se cose mas alla del ancla).
  *
  * @param {Array} speakerClusters Clusters con firma.
  * @param {string} anchorLabel Etiqueta ancla (el nombre registrado o su etiqueta).

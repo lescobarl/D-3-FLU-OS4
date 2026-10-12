@@ -63,6 +63,21 @@ describe('A3 - "misma voz": UN piso (el de la diarizacion), no dos', () => {
     expect(sameVoiceLabelGroup(CLUSTERS, 'Luz', vozNueva)).toContain('Hablante 1')
   })
 
+  it('P9.85 - el cosido es ESTRELLA, no cadena: una 3.a etiqueta que solo se parece a la 2.a NO entra', () => {
+    // A(ancla) --0.70-- B --0.70-- C, con C vs A = 0.60 (por DEBAJO del piso 0.66).
+    // El encadenamiento transitivo metería C (via B) y con ello fusionaría voces
+    // distintas (en esta geometria C queda a ~0.99 de B): se PREFIERE el cosido parcial
+    // a la fusion falsa. El contrato se corrigio para declarar la regla ESTRELLA.
+    const B = [0.7, Math.sqrt(1 - 0.49), 0]
+    const C = [0.6, 0.3922, 0.6974]
+    const cadena = [
+      { label: 'Luz', signature: ANCLA },
+      { label: 'Hablante 2', signature: B },
+      { label: 'Hablante 3', signature: C },
+    ]
+    expect(sameVoiceLabelGroup(cadena, 'Luz')).toEqual(['Luz', 'Hablante 2'])
+  })
+
   it('PRUEBA DE DETECTOR (el detector no es decorativo): el piso discrimina', () => {
     expect(sameVoiceLabelGroup(CLUSTERS, 'Luz', 0.99)).toEqual(['Luz'])
     expect(sameVoiceLabelGroup(CLUSTERS, 'Luz', 0.1)).toContain('Hablante 2')
