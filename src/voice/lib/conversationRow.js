@@ -73,6 +73,10 @@ export function ensureClusterSpeakerId(cluster = {}) {
   return { ...cluster, label, speakerId }
 }
 
+/**
+ * @param {number[]|null} [signature]
+ * @returns {number[]|null}
+ */
 export function normalizeRowSignature(signature = null) {
   if (!Array.isArray(signature) || !signature.length) return null
   return signature.slice(0, 512).map((value) => Number(value) || 0)

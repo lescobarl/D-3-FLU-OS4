@@ -17,7 +17,9 @@ import { cleanForSpeech } from './audioMath';
 import { voiceProbe } from './voiceProbe';
 import { isAutoSpeakerLabel, isProperSpeakerName } from './voiceIdentity';
 import { foldSpeakerKey } from './speakerLabels';
-import { getFallbackSpeaker } from './speakerCore';
+import { compareCosineSignatures, getFallbackSpeaker } from './speakerCore';
+import { normalizeRowSignature } from './conversationRow';
+import { sameVoiceBySignature } from './speakerClusters'
 import { isFragmentOfLocution } from './turnStream';
 
 /**
@@ -146,7 +148,11 @@ function rememberTurn(turnId: number | string | null, rowId: string): void {
  * @param {string} toName nombre identificado (persona registrada)
  * @returns {number} filas cambiadas
  */
-export function renameSpeakerRows(labels: string[], toName: string): number {
+export function renameSpeakerRows(
+    labels: string[],
+    toName: string,
+    { anchorSignature = null }: { anchorSignature?: number[] | null } = {},
+): number {
     const name = String(toName || '').trim();
     if (!name || !Array.isArray(labels) || !labels.length) return 0;
     const normalized = new Set(
@@ -155,11 +161,17 @@ export function renameSpeakerRows(labels: string[], toName: string): number {
     normalized.add(foldSpeakerKey(name));
     const store = useIntegrationStore.getState();
     const history = store.conversationHistory;
+    // FIRMA DE LA FILA: la sustitucion alcanza TAMBIEN las filas cuya etiqueta YA NO existe en
+    // los clusters (medido 2026-10-11: "Hablante 1" no se renombraba). Un solo criterio de
+    // "misma voz", el del dueno (sameVoiceBySignature), nunca el de la etiqueta.
+    const ancla = normalizeRowSignature(anchorSignature) || undefined;
     let changed = 0;
     const updated = history.map((e) => {
         if (e.role !== 'user') return e;
         const current = String(e.speakerName || '').trim();
-        if (!current || !normalized.has(foldSpeakerKey(current))) return e;
+        const porEtiqueta = Boolean(current) && normalized.has(foldSpeakerKey(current));
+        const porFirma = Boolean(ancla) && sameVoiceBySignature(compareCosineSignatures(ancla, normalizeRowSignature(e.signature ?? undefined) || []));
+        if (!porEtiqueta && !porFirma) return e;
         if (current === name) return e;
         changed += 1;
         return { ...e, speakerName: name };
@@ -224,6 +236,8 @@ export interface UserTurnRowInput {
     registeredSpeaker?: { registeredLabel?: string; registeredName?: string };
     /** El que llama DECLARA que el nombre viene de una ventana de AUDIO medida. */
     evidenciaAcustica?: boolean;
+    /** FIRMA de la voz del turno (para sustituir el nombre en TODAS las filas de esa voz). */
+    signature?: number[] | null;
     /** Sentimiento de la locucion (lo calcula quien la captura); por defecto 'neutral'. */
     sentiment?: 'positive' | 'negative' | 'neutral' | 'question';
     /** Reloj inyectable (por defecto Date.now()). */
@@ -299,6 +313,7 @@ function commitUserTurnRowInner({
     turnId,
     evidenciaAcustica = false,
     registeredSpeaker,
+    signature = null,
     sentiment = 'neutral',
 }: UserTurnRowInput): UserTurnRowResult {
     const raw = String(text || '');
@@ -395,6 +410,7 @@ function commitUserTurnRowInner({
         speakerName: preserveProperSpeaker(resolved, '', evidenciaAcustica) || undefined,
         timestamp: stamp,
         sentiment,
+        signature: normalizeRowSignature(signature),
     });
     currentTurn = { id: turnId, rowId: id };
     rememberTurn(turnId, id);

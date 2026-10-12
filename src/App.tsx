@@ -1332,6 +1332,7 @@ function App() {
                 // el mapeo lo aplica el DUENO UNICO de la fila (`resolveRowSpeakerName`).
                 commitUserTurnRow({
                     text: transcript,
+                    signature: (resolved as { signature?: number[] | null })?.signature ?? null,
                     speakerName, registeredSpeaker: participantSpeakerRef.current,
                     sentiment: detectSentiment(transcript),
                     evidenciaAcustica: resolved?.evidenciaAcustica === true,

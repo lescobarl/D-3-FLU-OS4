@@ -447,6 +447,18 @@ export function sameVoiceLabelGroup(
  * @param {string} name nombre candidato
  * @returns {boolean}
  */
+/**
+ * DUENO UNICO de "esta similitud de FIRMA es la MISMA voz" para SUSTITUIR el nombre.
+ * Banda MEDIDA (2026-10-07): misma voz 0.69-0.74, voz distinta 0.58 -> el piso de
+ * reutilizacion (sameVoiceFloor) cae entre las dos. Se usa ESE piso, no uno nuevo.
+ * @param {number} sim similitud coseno entre la firma de la fila y el ancla de la voz
+ * @returns {boolean}
+ */
+export function sameVoiceBySignature(sim) {
+  const s = Number(sim)
+  return Number.isFinite(s) && s >= sameVoiceFloor()
+}
+
 export function isNameBoundToVoice(speakerClusters = [], name = '') {
   const target = String(name || '').trim()
   if (!target) return false
