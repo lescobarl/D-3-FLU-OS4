@@ -9,6 +9,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { countVoicedSamples } from '../src/voice/lib/voicedActivity.js'
+import { FLU_CONFIG } from '../src/voice/lib/fluConfig.js'
 
 describe('P9.71 - el piso de voz es de VOZ, no de longitud de ventana', () => {
   it('silencio -> 0 muestras de voz (el piso lo rechaza)', () => {
@@ -35,4 +36,35 @@ describe('P9.71 - el piso de voz es de VOZ, no de longitud de ventana', () => {
     voz.fill(0.2)
     expect(countVoicedSamples(voz, { sampleRate: 16000, rmsFloor: 0.01 })).toBe(8000)
   })
+})
+
+// ============================================================
+// P9.72 - UN SOLO DUENO del umbral de voz (el del VAD del ASR).
+// MEDIDO (auditoria 2026-10-12): `voicedRmsFloor: 0.01` (config propia) era MAS permisivo que
+// `transcript.asr.vad.energyThreshold` (0.02) -> TV/ambiente contaba como voz. Prueba RELACIONAL
+// (no fija el valor de calibracion: lo lee del dueno unico) y NACE ROJA contra el umbral propio.
+// ============================================================
+describe('P9.72 - el piso de voz por defecto es el del dueno unico (VAD)', () => {
+    const floor = Number((FLU_CONFIG as never as { transcript: { asr: { vad: { energyThreshold: number } } } }).transcript.asr.vad.energyThreshold)
+
+    function rmsTone(rms: number, n = 16000) {
+        const a = new Float32Array(n)
+        const amp = rms * Math.SQRT2
+        for (let i = 0; i < n; i++) a[i] = amp * Math.sin((2 * Math.PI * 180 * i) / 16000)
+        return a
+    }
+
+    it('por DEBAJO del umbral del VAD no cuenta como voz; por ENCIMA si', () => {
+        const debajo = countVoicedSamples(rmsTone(floor * 0.7), { sampleRate: 16000 })
+        const encima = countVoicedSamples(rmsTone(floor * 1.3), { sampleRate: 16000 })
+        console.log(`  umbral (VAD)=${floor} · debajo=${debajo} · encima=${encima}`)
+        expect(debajo, 'el piso no puede ser mas permisivo que el VAD').toBe(0)
+        expect(encima).toBeGreaterThan(0)
+    })
+
+    it('no hay un segundo umbral de voz en la config del embedder', () => {
+        const emb = (FLU_CONFIG as never as { voiceIdentity: { capture: { embedding: Record<string, unknown> } } }).voiceIdentity.capture.embedding
+        console.log(`  claves del embedding: ${Object.keys(emb).join(', ')}`)
+        expect(Object.keys(emb), 'un dato = una clave: sin `voicedRmsFloor`').not.toContain('voicedRmsFloor')
+    })
 })
