@@ -5520,3 +5520,16 @@ PENDIENTES REGISTRADOS POR ESTA AUDITORIA: P9.72 (dos medidores de voz), P9.73 (
   P9.74 (merge de clusters no observado), P9.75 (portones de contenido inalcanzables), P9.76 (senal de rebuild del micro).
 DECISION DEL DUENO PENDIENTE: confirmar o revertir los valores de audio aplicados en 98f4358
   (tail 2000 / cap 2000 / minVoiced 350 / minVoicedForNew 2200 / classroomReuseRelax 0).
+
+==============================================================================
+DECISIONES DEL DUENO 2026-10-12 14:27 (respuesta a la auditoria)
+==============================================================================
+1) 98f4358 (valores de audio): CONFIRMADOS por escrito por el dueno ("Propuesta APROBADA... Aplica
+   R1 + R2 + los numeros (cap 2000 - minVoiced 350 - relax 0)"), productionClusterReuseThreshold
+   intacto. Registrado como D9.1 (decision con VEREDICTO). Revert = git revert 98f4358.
+2) P9.72 (umbral de voz): UN SOLO DUEÑO. Se comparte el del VAD (0.02) y se retira voicedRmsFloor.
+3) P9.73 (revision del ASR): se DECLARA el limite; no se deduplica por umbral (transcriptionDedupLoss).
+4) P9.74 (clusters): fusion obligatoria + guard que cuente CLUSTERS, no la etiqueta de la fila.
+5) P9.75 (extension corta + contenido estancado): GUARD o FUERA. Inalcanzable = conversationStream.js:472-499;
+   se conservan el rechazo por texto exacto (:454-456) y el cooldown (:466-469).
+6) P9.76 (micro): DoD-producto, lo cierra la corrida del dueno.
