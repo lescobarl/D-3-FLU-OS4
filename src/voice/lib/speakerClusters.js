@@ -85,15 +85,16 @@ export function flattenChunksWindow(
   }
   if (!bufferLen) return new Float32Array(0)
 
+  const hasTurnMark = sinceSample > 0
   const turnSpan = Math.max(0, totalSamples - sinceSample)
-  let windowLen = turnSpan > 0 ? Math.min(turnSpan, bufferLen) : bufferLen
+  let windowLen = hasTurnMark ? Math.min(turnSpan, bufferLen) : bufferLen
   if (maxSamples > 0) windowLen = Math.min(windowLen, maxSamples)
   if (minSamples > 0 && windowLen < minSamples) {
-    // R1: la ventana NO puede empezar ANTES del turno. Antes se extendia hacia
-    // atras hasta `minSamples` y con locuciones cortas metia la voz de FLU
-    // (medido: 67-83% de la ventana era audio PRE-turno) -> coseno mezclado.
-    const turnLimit = turnSpan > 0 ? turnSpan : bufferLen
-    windowLen = Math.min(Math.max(windowLen, minSamples), turnLimit)
+    // R1: la ventana NO puede empezar ANTES del turno (marca presente). Si la marca
+    // cae en el sello (turnSpan<=0) la ventana es VACIA: no se mide la cola del buffer
+    // (fallo medido: turnSpan=0 -> ventana = cola completa = audio PRE-turno).
+    const limit = hasTurnMark ? turnSpan : bufferLen
+    windowLen = Math.min(Math.max(windowLen, minSamples), limit)
   }
   if (windowLen <= 0) return new Float32Array(0)
 
