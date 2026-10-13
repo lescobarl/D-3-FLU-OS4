@@ -17,8 +17,15 @@
 // se apaga sola al cumplirlo, aunque el temporizador nunca llegue.
 // ============================================================
 
+import { FLU_CONFIG } from './fluConfig.js';
+
 /** Vence (epoch ms) del asentamiento en vuelo; 0 = no hay asentamiento. */
 let pendingUntilMs = 0;
+
+/** Plazo por defecto: el MISMO que usa el temporizador del asentamiento (config). */
+function getSettlePlazoMs() {
+    return Number(FLU_CONFIG?.timing?.searchCommandSettleMs) || 2800;
+}
 
 /**
  * Enciende/apaga el asentamiento en vuelo.
@@ -28,7 +35,7 @@ let pendingUntilMs = 0;
  *   obligatorio: es el único modo de que la bandera no pueda colgar el pipeline.
  */
 export function setNavSettlePending(value, ttlMs = 0) {
-    const ttl = Number(ttlMs) || 0;
+    const ttl = Number(ttlMs) || Number(getSettlePlazoMs()) || 0;
     pendingUntilMs = value ? Date.now() + ttl : 0;
 }
 
