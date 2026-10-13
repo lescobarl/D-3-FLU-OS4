@@ -34,3 +34,10 @@ reports/
 # TypeScript incremental (cache en node_modules/.cache/ts)
 tsconfig.tsbuildinfo
 .agent_tmp/
+
+# Volcados de stdout de runners externos en la raiz del repo
+guards-output.txt
+guards-result.txt
+last-result.txt
+*-result.txt
+*-output.txt
