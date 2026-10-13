@@ -186,9 +186,22 @@ export function createParticipantRegistry({
     return value;
   };
 
+  /**
+   * Altas EN VUELO, por nombre plegado. P9.87: dos registros CONCURRENTES del mismo
+   * nombre (dos locuciones de nombre pegadas, o dos rutas) leian la base VACIA los dos
+   * y creaban DOS filas; el dedupe es case-insensitive pero lee el estado ANTES de
+   * escribir. Quien llega despues recibe la MISMA alta (mismo patron que
+   * `anonymousSeedInFlight`, que ya cubre la siembra anonima).
+   */
+  const registerInFlight = new Map<string, Promise<ParticipantRegisterResult>>();
+
   const register = async (input: ParticipantInput): Promise<ParticipantRegisterResult> => {
     const name = normalizeName(input?.name);
     if (!name) return { ok: false, reason: INVALID_INPUT };
+    const claveAlta = name.toLowerCase();
+    const enVuelo = registerInFlight.get(claveAlta);
+    if (enVuelo) return enVuelo;
+    const alta = (async (): Promise<ParticipantRegisterResult> => {
 
     const all = await db.toArray();
     const duplicate = all.some((p) => !p.sync?.deleted && p.name.toLowerCase() === name.toLowerCase());
@@ -215,6 +228,13 @@ export function createParticipantRegistry({
     await db.add(record);
     await addAuditLog('participant.register', 'participant', id, null, { name: record.name }, 'participantRegistry');
     return { ok: true, record };
+    })();
+    registerInFlight.set(claveAlta, alta);
+    try {
+      return await alta;
+    } finally {
+      registerInFlight.delete(claveAlta);
+    }
   };
 
   // Identifica el perfil anónimo por defecto (config-driven). Devuelve el

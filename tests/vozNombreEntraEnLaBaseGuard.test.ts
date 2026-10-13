@@ -111,4 +111,21 @@ describe('P9.79 - el nombre registrado por VOZ entra en la BASE de participantes
     const rows = await registry.list();
     expect(rows.map((r) => r.name)).toEqual(['Luis']);
   });
+
+  it('P9.87: dos altas CONCURRENTES del mismo nombre no duplican (candado del registro)', async () => {
+    let n = 0;
+    const registry = createParticipantRegistry({
+      db: mapDb(),
+      config: CONFIG,
+      newId: () => `r${++n}`,
+      now: () => 1,
+    });
+    await Promise.all([
+      registry.register({ name: 'Luis' }),
+      registry.register({ name: 'Luis' }),
+    ]);
+    const rows = await registry.list();
+    // UNA fila: la segunda alta devuelve la MISMA promesa en vuelo.
+    expect(rows.map((r) => r.name)).toEqual(['Luis']);
+  });
 });
