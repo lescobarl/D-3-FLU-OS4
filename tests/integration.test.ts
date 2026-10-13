@@ -417,7 +417,8 @@ describe('💬 Conversation Memory', () => {
         useIntegrationStore.getState().addFluMessage('¡Hola! ¿Cómo estás?');
         const history = useIntegrationStore.getState().conversationHistory;
         // UNA fila por respuesta: la de FLU (role=flu). El turno del usuario NO la duplica.
-        expect(history[0].response).toBeUndefined();
+        // P9.82: el campo `response` YA NO EXISTE en la entrada (murio con la ruta doble).
+        expect(Object.prototype.hasOwnProperty.call(history[0], 'response')).toBe(false);
         expect(history[1].role).toBe('flu');
         expect(history[1].text).toBe('¡Hola! ¿Cómo estás?');
     });
@@ -2461,7 +2462,8 @@ describe('🎭 Pipeline Emoción/Animación — Validación Funcional', () => {
         const userMsg = history.find((e) => e.role === 'user');
         const fluMsg = history.find((e) => e.role === 'flu');
         // Un escritor por fila: la respuesta vive SOLO en la fila de FLU.
-        expect(userMsg?.response).toBeUndefined();
+        // P9.82: el campo `response` ya no existe (la respuesta vive SOLO en la fila de FLU).
+        expect(userMsg && Object.prototype.hasOwnProperty.call(userMsg, 'response')).toBe(false);
         expect(fluMsg?.text).toBe('¡Hola! ¿En qué puedo ayudarte?');
     });
 
