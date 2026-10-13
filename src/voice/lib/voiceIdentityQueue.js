@@ -22,7 +22,7 @@ function drainQueue() {
   pending = null
   inFlight = true
 
-  scheduleIdle(() => {
+  const dispatch = () => {
     Promise.resolve()
       .then(() => job.run())
       .then(
@@ -38,7 +38,16 @@ function drainQueue() {
         inFlight = false
         if (pending) scheduleIdle(drainQueue, 0)
       })
-  })
+  }
+
+  // El trabajo del TURNO (`priority`: el snapshot FINAL, el unico que escribe clusters y
+  // resuelve el hablante) NO espera a "idle": su retraso entra DIRECTO en el plazo del
+  // commit (`commitPreflightTimeoutMs`) y el embedding corre en un WORKER, asi que no
+  // compite con el hilo principal. Medido (2026-10-13): con `scheduleIdle` (tope 2500 ms)
+  // y un commit que espera 1500 ms, en una pestana ocupada la medida NO llegaba nunca
+  // (`preReady:false` en 60/60 turnos). Los ticks oportunistas siguen en idle.
+  if (job.priority) dispatch()
+  else scheduleIdle(dispatch)
 }
 
 /**

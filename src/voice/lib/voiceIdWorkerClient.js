@@ -74,7 +74,10 @@ export function prepareTransferableAudio(samples, { transferOwnership = false } 
   }
 }
 
-function scheduleIdleAsync(fn, timeoutMs) {
+function scheduleIdleAsync(fn, timeoutMs, { immediate = false } = {}) {
+  // `immediate`: el llamante tiene PLAZO (el limite de turno lo consume el commit). El
+  // embedding corre en un WORKER, asi que no aplazarlo no compite con el hilo principal.
+  if (immediate) return Promise.resolve().then(fn)
   return new Promise((resolve, reject) => {
     scheduleIdle(() => {
       try {
@@ -219,6 +222,7 @@ function resolveIdentityIdle(vector, matchPayload, sampleRate, voicedSampleCount
         sessionPrimary: matchPayload.sessionPrimary || '',
       }),
     3000,
+    { immediate: matchPayload.atTurnBoundary !== false },
   )
 }
 
