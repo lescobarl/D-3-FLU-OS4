@@ -37,7 +37,7 @@ import {
 import { markCommitPerfNow } from './audioSegmentClock.js'
 import { labelToSpeakerId } from './conversationRow.js'
 import { renameSpeakerRows } from './conversationTurnRow'
-import { isNameBoundToVoice } from './speakerClusters.js'
+
 import { preflightEvidenceMeasured } from './turnSpeakerPreflight.js'
 import { normalizeSpeakerLabel, isAutoSpeakerLabel } from './voiceIdentity.js'
 import { isSameEmissionWithinWindow } from './captureDedup.js'
@@ -518,11 +518,13 @@ export function handleConversationStreamSync(
   // Evidencia = la MEDIDA del turno (dueno: `preflightEvidenceMeasured`), no "hay clusters".
   const evidenciaAcustica = preflightEvidenceMeasured(preflight)
   const crudo = resolved.speakerName || fallbackSpeaker
-  // El nombre LIGADO a la voz (registro del comando o del panel) se mantiene en TODOS sus turnos:
-  // no depende de que la medida del turno llegue (N turnos -> N filas con el nombre).
-  const nombreLigado = isNameBoundToVoice(speakerClustersRef.current, crudo)
+  // P9.81 (spec del dueno 2026-10-12): SI al reuso del CLUSTER, NO al NOMBRE sin evidencia.
+  // Levanta el nombre la MEDIDA del turno o el DATO del mandato ("soy Luis"); un nombre
+  // heredado por CONTINUIDAD cae a generico via `blindSpeakerFallback`, que es la regla
+  // escrita para esto ("Luis pegado a una voz distinta": medido 2026-10-12 con
+  // `reason=production-reuse-no-evidence`). Antes un atajo la saltaba (ya retirado).
   const speakerResuelto =
-    evidenciaAcustica || FUENTES_CON_IDENTIDAD.includes(resolved.source) || nombreLigado
+    evidenciaAcustica || FUENTES_CON_IDENTIDAD.includes(resolved.source)
       ? crudo
       : blindSpeakerFallback(crudo)
   const speakerName = normalizeSpeakerLabel(speakerResuelto)

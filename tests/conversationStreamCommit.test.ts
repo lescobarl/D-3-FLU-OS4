@@ -260,6 +260,25 @@ describe('conversationStreamCommit — commit de turno', () => {
         expect(deps.fluParticipantRef.current.onTurnCommitted).toHaveBeenCalledTimes(1);
     });
 
+    it('P9.81: un nombre por CONTINUIDAD sin evidencia NO se estampa (la fila cae a generica)', () => {
+        // Log del dueno (2026-10-12): una voz distinta salia con el nombre del hablante
+        // anterior (`Identity label=Hablante 1 reason=production-reuse-no-evidence
+        // lastSim=0.278 best="Luis"`). El commit NO puede levantar un NOMBRE propio sin
+        // evidencia del turno: el duenio de esa regla es `blindSpeakerFallback`
+        // (speakerPolicy), que degrada un nombre a etiqueta generica.
+        const deps = makeDeps({
+            lastLoggedSpeakerRef: { current: 'Luis' },
+            lastSpeakerRef: { current: 'Luis' },
+            sessionPrimarySpeakerRef: { current: 'Luis' },
+            speakerClustersRef: { current: [{ label: 'Luis', signature: [1, 0, 0] }] },
+        });
+
+        handleConversationStreamSync(deps, { capture: 'y ahora habla la chica', turnCommit: true });
+
+        const [, speakerName] = deps.commitTurnToSessionRows.mock.calls[0];
+        expect(String(speakerName || ''), 'sin evidencia no se hereda el NOMBRE').not.toBe('Luis');
+    })
+
     it('el participante es opcional: sin el, el commit no revienta', () => {
         const deps = makeDeps({ fluParticipantRef: { current: null } });
 
