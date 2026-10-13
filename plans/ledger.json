@@ -4586,6 +4586,18 @@
       "commit": "a7e0ec6",
       "titulo": "El vector vive en UN solo lugar y es comparable entre reuniones (el modelo no cambia en silencio).",
       "evidencia": "src/voice/lib/speakerDirectory.js: CERRADO 2026-10-13. El nombre se guarda CON el vector que lo acredita y con el MODELO que lo genero (`voiceVectorModel`, dueno unico `embeddingConfig.getModelId`); el emparejamiento (`matchDirectoryVoice`) SOLO compara vectores del MISMO modelo (un vector de otro modelo no empareja: barrera duenoNombrePorVoz N1b). El piso de similitud es el unico de reutilizacion de voz (`sameVoiceFloor`). El participante de la base guarda ademas su vector (`participantRegistry.voiceVector`, normalizado por el dueno del embedding). Alcance (0.23): CUBIERTO=el dato unico y la comparabilidad declarada, con barrera; NO CUBIERTO=la re-embedicion automatica al cambiar de modelo (hoy: no se compara, se deja sin nombre)."
+    },
+    {
+      "id": "P11.4",
+      "commit": "c633659",
+      "titulo": "La ETIQUETA y el PARTICIPANTE ACTIVO nombraban una voz sin medida (\"Luis a la chica\").",
+      "evidencia": "src/voice/lib/speakerPolicy.js: CERRADO 2026-10-13 (mandato: \"la etiqueta y el participante activo no nombran a nadie; el nombre de una voz sale SOLO de su VOZ\"). CAUSAS MEDIDAS: (a) `resolveCommitStickyFallback` caia al PRIMARIO de la sesion (el participante activo sembrado de la base) cuando no habia etiqueta -> la fila salia con SU nombre sin ninguna medida; (b) el efecto del PARTICIPANTE ACTIVO del hook llamaba a `registerSpeakerIdentity` con el nombre y el `speakerLabel` del panel, ligando ese nombre a la voz de esa etiqueta SIN medir el timbre; (c) la resolucion tardia (`applyResolvedSpeaker`) registraba el nombre resuelto aunque `evidence === false`. AHORA: fuera el primario de la cadena del sticky (devuelve lastLogged||fallback), el efecto del participante solo fija el PRIMARIO (dato de sesion, sin nombrar voz) y la resolucion tardia NO registra por su cuenta (el nombre solo lo afirma la MEDIDA, via `updateTurnRowSpeaker`, que exige evidencia). BARRERA RED-ON-OLD MEDIDA: tests/duenoNombreSoloPorVoz.test.ts N1 (el sticky devolvia \"Luis\" con el primario; el guard del efecto es ROJO contra el hook de a7e0ec6, comprobado con `git show`) + anti-vacuidad (el tramo tiene que contener `setSessionPrimarySpeaker`). Alcance (0.23): CUBIERTO=las tres vias con barrera y red-on-old; NO CUBIERTO=la medicion en vivo y la pantalla."
+    },
+    {
+      "id": "P11.5",
+      "commit": "c633659",
+      "titulo": "Los consumidores leian la etiqueta CRUDA: la IA no sabia quien hablo.",
+      "evidencia": "src/core/ai/aiServiceBase.ts: CERRADO 2026-10-13 (mandato: \"que TODO consumidor vea el nombre resuelto, no la etiqueta cruda\"). MEDIDO: el log que va a la IA decia \"Usuario: hola\" (o la etiqueta cruda) en vez del nombre de la voz; `services/gemini.ts` tenia ADEMAS su propia copia del mismo map (dos duenos del mismo formato). AHORA: el log hacia la IA se construye con `resolveRowSpeakerLabel` (nombre resuelto por VOZ) en el dueno unico `buildConversationLog`, y gemini usa ESA funcion (se elimino su copia). Migrados tambien: `conversationSession.listSessionSpeakers`, `lib/generationTopic`, `voice/lib/asrTurnSegmentation`, el panel (`App` speakers/filtros por nombre) y el borrado por hablante del store (`removeConversationEntriesBySpeaker`); la persistencia ya no inventa \"Usuario\" como nombre (guarda la VOZ). BARRERA RED-ON-OLD MEDIDA: `duenoNombreSoloPorVoz` N2 (antes: \"Usuario: hola a todos\"; ahora \"Luis: hola a todos\"; y \"Hablante 2\" en vez de \"Usuario\"). Alcance (0.23): CUBIERTO=los consumidores con barrera; NO CUBIERTO=la pantalla del dueno y la calidad del vector en vivo."
     }
   ]
 }
