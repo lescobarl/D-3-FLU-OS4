@@ -45,7 +45,7 @@ import { setSessionPrimarySpeaker } from './sessionPrimarySpeaker.js'
  * @param {Array} [params.clusters] Clusters de hablante (evidencia de voces): sin ellos
  *   no se cosen las etiquetas de la MISMA voz re-clusterizada ("Hablante 3"/"4").
  * @param {string} [params.previousLabel] Etiqueta con la que esa voz venia apareciendo.
- * @param {{ sessionPrimarySpeakerRef?: { current: string }, setClusters?: (clusters: unknown[]) => void, registerParticipant?: (name: string, speakerLabel?: string) => void | Promise<unknown> }} [params.refs] Refs de sesion
+ * @param {{ sessionPrimarySpeakerRef?: { current: string }, setClusters?: (clusters: unknown[]) => void, registerParticipant?: (name: string, speakerLabel?: string, voiceVector?: number[] | null) => void | Promise<unknown> }} [params.refs] Refs de sesion
  *   (el dueno de la precedencia decide si escribe).
  * @param {"presented"|"participant"|"resolved"} [params.source] Fuente del primario.
  * @param {(labels: string[], toName: string) => number} [params.rename] Escritor de
@@ -116,7 +116,11 @@ export function registerSpeakerIdentity({
   // lo mostraba ("si hay una base de participantes debe de aparecer a la derecha"). El
   // nombre que entra es el CANONICO del registro: UNA grafia para fila, alias y base.
   // El puerto avisa de sus fallos (no se silencian aqui).
-  if (typeof refs?.registerParticipant === "function") refs.registerParticipant(clean, clean)
+  // El VECTOR de ESA voz (la "cadena de numeros" de la diarizacion) viaja con el nombre:
+  // es la identidad que permite reconocerla en OTRA sesion (diseno del dueno 2026-10-13).
+  const clusterDeLaVoz = findClusterByLabel(clusters, anchor) || findClusterByLabel(clusters, clean)
+  const vectorDeLaVoz = Array.isArray(clusterDeLaVoz?.signature) ? clusterDeLaVoz.signature : null
+  if (typeof refs?.registerParticipant === "function") refs.registerParticipant(clean, clean, vectorDeLaVoz)
   return { registered: true, name: clean, labels, rowsChanged, primarySet }
 }
 

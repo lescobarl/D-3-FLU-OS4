@@ -30,7 +30,8 @@ export interface VoiceParticipantEntry {
 export function resolveVoiceParticipants({
     history = [],
     profiles = [],
-    base = [],
+    /** `base` se conserva en la firma (compatibilidad de llamadas): el panel NO la lista. */
+    base: _base = [],
 }: {
     history?: readonly { speakerName?: string }[];
     profiles?: readonly { label?: string; id?: string }[];
@@ -41,13 +42,9 @@ export function resolveVoiceParticipants({
         const label = String(history[i]?.speakerName || '').trim();
         if (label) labels.add(label);
     }
-    // Si el nombre está en la BASE, APARECE en el panel (punto del dueño).
-    for (let i = 0; i < base.length; i += 1) {
-        const nombre = String(base[i]?.name || '').trim();
-        const etiqueta = String(base[i]?.speakerLabel || '').trim();
-        if (nombre) labels.add(nombre);
-        if (etiqueta) labels.add(etiqueta);
-    }
+    // SOLO participantes de ESTA sesión (diseño del dueño 2026-10-13): el panel NO vuelca la
+    // base entera; quien participó aparece porque SUS filas llevan su etiqueta/nombre. La base
+    // se consulta aparte. `base` se conserva en la firma para no romper llamadas existentes.
     for (let i = 0; i < profiles.length; i += 1) {
         const label = String(profiles[i]?.label || '').trim();
         if (label) labels.add(label);

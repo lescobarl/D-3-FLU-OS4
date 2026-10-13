@@ -199,6 +199,9 @@ import { localGet, localRemove, localSet } from './core/storage/localStore';
 import { pathForTab, type RightTab, tabFromPath } from './app/tabRoutes';
 import { useFluBridgesLifecycle } from './app/fluBridges';
 import { useIdentitySessionRef } from './app/useIdentitySessionRef';
+import { registerSpeakerIdentity } from './voice/lib/speakerIdentityRegister';
+import { matchParticipantByVoice } from './voice/lib/participantVoiceMatch';
+import { isAutoSpeakerLabel } from './voice/lib/voiceIdentity';
 import { resolveVoiceParticipants } from './voice/lib/voiceParticipantsSource';
 import { isAIProvider } from './app/appTypeGuards';
 import { type FastPathExecutedMarks, arbiterDomainRoute, isTurnAlreadyExecuted } from './app/arbiterDomainRoutes';
@@ -1172,11 +1175,11 @@ function App() {
         if (!identitySessionRef.current) return;
         // PUERTO unico a la BASE de participantes: el registro del nombre por VOZ entra por
         // aqui (puente de sesion) y asi su nombre se ve en la seccion de participantes.
-        identitySessionRef.current.registerParticipant = (name: string) => {
+        identitySessionRef.current.registerParticipant = (name: string, _label?: string, voiceVector?: number[] | null) => {
             const canonical = String(name || '').trim();
             if (!canonical) return;
             participants.service
-                .register({ name: canonical, speakerLabel: canonical })
+                .register({ name: canonical, speakerLabel: canonical, voiceVector: Array.isArray(voiceVector) ? voiceVector : undefined })
                 .catch((err: unknown) => logCaughtError('src/App.tsx: registerParticipant (voz)', err));
         };
     }, [identitySessionRef, participants.service]);
@@ -1330,6 +1333,23 @@ function App() {
             const transcript: string = resolved?.transcript || '';
             const rawOnly: boolean = resolved?.rawOnly === true;
             const speakerName: string = resolved?.speakerName || '';
+            const rawSignature = (resolved as { signature?: number[] | null })?.signature || null;
+
+            // IDENTIDAD POR VOZ (diseno del dueno 2026-10-13): el VECTOR del turno se busca en
+            // la base de participantes. Si coincide, esa voz ES esa persona y deja de ser
+            // "Hablante N": su nombre, desde este turno y en TODAS sus filas (mismo dueno del
+            // registro). Sin coincidencia no se afirma nada (no se mezclan hablantes).
+            if (Array.isArray(rawSignature) && rawSignature.length && isAutoSpeakerLabel(speakerName)) {
+                const vozConocida = matchParticipantByVoice(rawSignature, participants.participants);
+                if (vozConocida?.name) {
+                    registerSpeakerIdentity({
+                        name: vozConocida.name,
+                        previousLabel: speakerName,
+                        clusters: identitySessionRef.current?.speakerClustersRef?.current || [],
+                        refs: identitySessionRef.current || {},
+                    });
+                }
+            }
             const phase: string = resolved?.phase || '';
             const userCommitOnly: boolean = resolved?.userCommitOnly === true;
 

@@ -23,6 +23,14 @@ import { stripDiacriticsLower } from '../../lib/textUtils';
 import { INVALID_INPUT } from '../../lib/resultReasons';
 import type { InvalidInput } from '../../lib/resultReasons';
 import { listAliveByName } from '../db/entityMutations';
+import { normalizeEmbeddingVector } from '../../voice/lib/speakerCore';
+
+/** Vector de voz normalizado (vacio si no hay dato). Dueno del calculo: speakerCore. */
+function normalizeVoiceVector(vector?: number[]): number[] | undefined {
+  if (!Array.isArray(vector) || !vector.length) return undefined;
+  const clean = normalizeEmbeddingVector(vector);
+  return clean.length ? clean : undefined;
+}
 
 // ------------------------------------------------------------
 // Tipos
@@ -32,11 +40,20 @@ import { listAliveByName } from '../db/entityMutations';
 // (fuente única de verdad — Regla de oro) y se re-exporta aquí.
 export type { ParticipantRecord } from '../db/fluDatabase';
 
+/**
+ * El registro del participante lleva ADEMAS el VECTOR de su voz: la identidad es el vector,
+ * el nombre es su ETIQUETA (diseno del dueno 2026-10-13). Se declara como EXTENSION aqui
+ * (el tipo del registro vive en la capa de base de datos) para no tocar su forma.
+ */
+export type ParticipantRecordWithVoice = ParticipantRecord & { voiceVector?: number[] };
+
 export interface ParticipantInput {
   name: string;
   role?: string;
   birthday?: string;
   speakerLabel?: string;
+  /** VECTOR de voz del participante (identidad de la voz; el nombre es su etiqueta). */
+  voiceVector?: number[];
   profileId?: string;
   ttsVoiceURI?: string;
   ttsVoiceName?: string;
@@ -209,12 +226,13 @@ export function createParticipantRegistry({
 
     const id = newId();
     const t = timestamp();
-    const record: ParticipantRecord = {
+    const record: ParticipantRecordWithVoice = {
       id,
       name,
       role: input.role,
       birthday: normalizeBirthday(input.birthday),
       speakerLabel: input.speakerLabel,
+      voiceVector: normalizeVoiceVector(input.voiceVector),
       profileId: input.profileId,
       ttsVoiceURI: input.ttsVoiceURI,
       ttsVoiceName: input.ttsVoiceName,
