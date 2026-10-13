@@ -412,15 +412,14 @@ describe('💬 Conversation Memory', () => {
         expect(history[1].text).toBe('¡Hola! ¿Cómo estás?');
     });
 
-    it('debe enlazar response al último mensaje de usuario', () => {
+    it('la respuesta de FLU va en SU fila, no colgada del turno del usuario (P9.82)', () => {
         addUserRow('Hola');
         useIntegrationStore.getState().addFluMessage('¡Hola! ¿Cómo estás?');
         const history = useIntegrationStore.getState().conversationHistory;
-        expect(history[0].response).toBe('¡Hola! ¿Cómo estás?');
-        // meta.response se establece si meta existe; si no, se crea con { response }
-        if (history[0].meta) {
-            expect(history[0].meta.response).toBe('¡Hola! ¿Cómo estás?');
-        }
+        // UNA fila por respuesta: la de FLU (role=flu). El turno del usuario NO la duplica.
+        expect(history[0].response).toBeUndefined();
+        expect(history[1].role).toBe('flu');
+        expect(history[1].text).toBe('¡Hola! ¿Cómo estás?');
     });
 
     it('debe incrementar totalFluMessages al añadir mensaje de FLU', () => {
@@ -1407,7 +1406,8 @@ describe('🔄 End-to-End Conversation Flow', () => {
         useIntegrationStore.getState().setConversationState('SPEAKING');
         useIntegrationStore.getState().addFluMessage('¡Hola! ¿Cómo estás?');
         expect(useIntegrationStore.getState().conversationHistory).toHaveLength(2);
-        expect(useIntegrationStore.getState().conversationHistory[0].response).toBe('¡Hola! ¿Cómo estás?');
+        // P9.82: la respuesta es su PROPIA fila.
+        expect(useIntegrationStore.getState().conversationHistory[1].text).toBe('¡Hola! ¿Cómo estás?');
 
         useIntegrationStore.getState().setConversationState('IDLE');
         expect(useIntegrationStore.getState().conversationState).toBe('IDLE');
@@ -2452,16 +2452,17 @@ describe('🎭 Pipeline Emoción/Animación — Validación Funcional', () => {
     // ============================================================
     // Test 14: addFluMessage debe enlazar response al último mensaje user
     // ============================================================
-    it('addFluMessage debe enlazar response al último user message', () => {
+    it('addFluMessage escribe la fila de FLU y NO duplica el texto en el turno del usuario (P9.82)', () => {
         const store = useIntegrationStore.getState();
         addUserRow('Hola FLU');
         store.addFluMessage('¡Hola! ¿En qué puedo ayudarte?');
 
         const history = useIntegrationStore.getState().conversationHistory;
         const userMsg = history.find((e) => e.role === 'user');
-        // addFluMessage enlaza response al último user message en el historial
-        // Verificar que el response se asignó correctamente
-        expect(userMsg?.response).toBe('¡Hola! ¿En qué puedo ayudarte?');
+        const fluMsg = history.find((e) => e.role === 'flu');
+        // Un escritor por fila: la respuesta vive SOLO en la fila de FLU.
+        expect(userMsg?.response).toBeUndefined();
+        expect(fluMsg?.text).toBe('¡Hola! ¿En qué puedo ayudarte?');
     });
 
     // ============================================================

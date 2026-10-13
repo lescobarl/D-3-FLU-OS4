@@ -98,7 +98,8 @@ describe('VALIDACIÓN INTEGRAL — memoria de contexto determinista', () => {
         transcript: 'traduce a español lo que hablaste',
         history: [
           { role: 'user', text: 'habla en chino' },
-          { role: 'assistant', response: ZH_RESP },
+          // P9.82: la respuesta de FLU es SU fila; su texto va en `text`.
+          { role: 'assistant', text: ZH_RESP },
         ],
       } as any)
       const assistantMsgs = msgs.filter((m) => m.role === 'assistant')
