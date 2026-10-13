@@ -5596,3 +5596,49 @@ P9.73 - LIMITE DECLARADO (no se deduplica). Revisiones del ASR con PREFIJO DISTI
   Si el dueno aporta el caso real (frase + las 2 filas con hora), se reabre con su umbral medido.
   Alcance (0.23): CUBIERTO=la medicion del caso y la puerta exacta con transcriptionDedupLoss como muro;
   NO CUBIERTO=la dedupe por similitud (rechazada a proposito sin medicion del dueno).
+==============================================================================
+P11.7 - EL ESQUEMA DECLARA EL VECTOR DE VOZ (2026-10-13) · commits 62bd320 + f6e1ce0
+==============================================================================
+Mandato del dueno: "El esquema de la base (ParticipantRecord) no declara voiceVector ni
+voiceVectorModel, y en el codigo se accede a ellos con un cast. Declara los dos campos en
+el esquema y quita el cast."
+ANTES: `ParticipantRecord` (src/core/db/fluDatabase.ts) declaraba id/name/role/birthday/
+  speakerLabel/profileId/ttsVoiceURI... pero NO el vector de voz. El vector y su modelo se
+  leian con un CAST en src/App.tsx (`p as { voiceVector?; voiceVectorModel? }`) y con una
+  extension de tipo local en src/core/multiuser/participantRegistry.ts
+  (`ParticipantRecordWithVoice`). El dato se guardaba, pero el TIPO del DB no lo tenia: era
+  un campo colado -> el esquema NO era la fuente unica.
+DESPUES: el ESQUEMA es la fuente unica: `voiceVector?: number[]` (identidad de la VOZ; el
+  nombre es su etiqueta) y `voiceVectorModel?: string` (sin el, el vector NO es comparable:
+  la comparacion exige el MISMO modelo). Desaparecen el cast de App.tsx y la extension
+  `ParticipantRecordWithVoice`.
+EVIDENCIA: `git diff` (3 ficheros, +13/-13) · `npm run lint` = 274 ficheros / 2235 tests
+  verdes · `npm run typecheck` limpio · `npm run build` = 1341 modulos, verde.
+Barreras del dueno (8 ficheros / 46 tests) VERDES: duenoVozPuntos, duenoP2Participantes,
+  duenoB11Contexto, duenoVectorVoz, duenoNombrePorVoz, duenoMedidaViva, duenoNombreSoloPorVoz,
+  duenoUnaSolaVia.
+
+HALLAZGO Y REPARACION EN EL MISMO CIERRE (regresion del rediseno de la fila, misma sesion)
+  Al correr el DoD del contrato (113 ficheros) aparecieron 5 ROJOS ajenos a este cambio y
+  causados por el rediseno de la fila (el nombre fuera de la conversacion; la fila guarda la VOZ):
+   (a) 3 casos en tests/conversationTurnSingleRow.test.ts y
+       tests/conversationTurnInterleavedRows.test.ts leian `row.speakerName`, campo que la
+       fila YA NO escribe (guarda `speakerId`). Fix: leer por la VOZ, `resolveRowSpeakerLabel(row)`
+       (el mismo criterio que el guard de la propia sesion, conversationTurnRowSingleWriter).
+   (b) 1 caso REAL de conducta en tests/conversationStreamCommit.test.ts (rama SEGMENTADA):
+       `collapseSnapshotSpeakerRuns` resolvia con `resolveRowSpeakerLabel` los SNAPSHOTS de
+       preflight, cuyo `speakerId` NO es clave de voz (p.ej. "id-Hablante 2"): todos los runs
+       caian al respaldo generico -> un solo run -> sin plan de troceo -> la captura entera se
+       emitia (el prior embebido NO se omitia). Fix en el dueno de la etiqueta visible:
+       `resolveRowSpeakerLabel` resuelve por VOZ solo si el `speakerId` es una clave de voz
+       VALIDA (`isValidSpeakerId`); si no, muestra la etiqueta que la fila YA trae (nunca el
+       respaldo generico).
+  VERIFICADO ROJO-EN-VIEJO: con el src del base (f11bc11) copiado (conversationStreamCommit.js
+  + asrTurnSegmentation.js) el caso SEGMENTADA PASA y el caso P9.81 cae; con el src de HEAD el
+  SEGMENTADA cae. Commits: db5a90a (fix src) + 6b476b0 (tests). DoD del contrato RE-MEDIDO:
+  113 ficheros / 1640 tests, exit 0. Guard del contrato (6 ficheros / 39 tests) verde.
+Alcance real (0.23): CUBIERTO=el esquema como fuente unica del vector y su modelo, sin cast
+  ni extension; el DoD (113 ficheros) y las 8 barreras del dueno verdes; lint+tipos+build.
+  NO CUBIERTO=la medicion en vivo en la sesion del dueno y su pantalla (DoD-producto); el
+  `npm run gate` no se pudo correr para este diff acumulado (80+ ficheros > maxFiles=48 del
+  contrato: es un gate POR TAREA, no por sesion).
