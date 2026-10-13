@@ -8,6 +8,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { useIntegrationStore } from '../src/store/integrationStore';
 import { commitUserTurnRow } from '../src/voice/lib/conversationTurnRow';
+import { resolveRowSpeakerLabel } from '../src/voice/lib/conversationRow';
 
 const userRows = () =>
     useIntegrationStore.getState().conversationHistory.filter((r) => r.role === 'user');
@@ -29,6 +30,6 @@ describe('conversación — filas intercaladas no duplican al usuario', () => {
 
         const rows = userRows();
         expect(rows).toHaveLength(1);
-        expect(rows[0].speakerName).toBe('Hablante 1');
+        expect(resolveRowSpeakerLabel(rows[0])).toBe('Hablante 1');
     });
 });

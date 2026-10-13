@@ -10,6 +10,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { useIntegrationStore } from '../src/store/integrationStore';
 import { commitUserTurnRow } from '../src/voice/lib/conversationTurnRow';
+import { resolveRowSpeakerLabel } from '../src/voice/lib/conversationRow';
 
 const userRows = () =>
     useIntegrationStore.getState().conversationHistory.filter((r) => r.role === 'user');
@@ -22,8 +23,9 @@ describe('una locución → una fila de usuario por turno', () => {
     it('el commit temprano y el final no duplican: completan el hablante', () => {
         commitUserTurnRow({ text: 'Okay flu crea una junta de comité para hoy', turnId: 1 });
         expect(userRows()).toHaveLength(1);
-        // A5: la fila del commit temprano SIEMPRE lleva etiqueta (respaldo de config).
-        expect(userRows()[0].speakerName).toBe('Hablante 1');
+        // A5: la fila del commit temprano SIEMPRE lleva etiqueta (respaldo de config); el
+        // nombre visible se resuelve al MOSTRAR, por la VOZ de la fila (no vive en la fila).
+        expect(resolveRowSpeakerLabel(userRows()[0])).toBe('Hablante 1');
 
         // Fila ambiente/sistema intercalada: NO cierra el turno.
         useIntegrationStore.getState().addConversationEntry({
@@ -35,7 +37,7 @@ describe('una locución → una fila de usuario por turno', () => {
 
         commitUserTurnRow({ text: 'Okay flu crea una junta de comité para hoy', speakerName: 'Hablante 1', turnId: 1 });
         expect(userRows()).toHaveLength(1);
-        expect(userRows()[0].speakerName).toBe('Hablante 1');
+        expect(resolveRowSpeakerLabel(userRows()[0])).toBe('Hablante 1');
     });
 
     it('un turno nuevo (tras la respuesta de FLU) sí agrega otra fila', () => {
@@ -84,7 +86,7 @@ describe('una locución → una fila (el fast-path de estado no reescribe la fil
 
         expect(userRows()).toHaveLength(1);
         expect(userRows()[0].text).toBe(LOCUCION);
-        expect(userRows()[0].speakerName).toBe('Hablante 1');
+        expect(resolveRowSpeakerLabel(userRows()[0])).toBe('Hablante 1');
     });
 
     it('el MISMO turno no abre fila aunque el fast-path reenvíe un texto derivado', () => {
@@ -134,7 +136,7 @@ describe('eco de la wake: una sola locucion (con wake) y una sola fila', () => {
         const rows = userRows();
         expect(rows).toHaveLength(1);
         expect(rows[0].text).toBe('ok flu siguiente carta');
-        expect(rows[0].speakerName).toBe('Hablante 1');
+        expect(resolveRowSpeakerLabel(rows[0])).toBe('Hablante 1');
     });
 
     it('una locucion sin eco no cambia (no se rompe lo validado)', () => {
