@@ -1767,6 +1767,17 @@ export function detectIntroducedName(text = '', { mustOpen = true } = {}) {
   return ''
 }
 
+/**
+ * ¿El texto es el ARRANQUE de un intro de nombre (el ASR partió la locución y dejó
+ * "... soy" / "me llamo" tras la wake)? Se comprueba completándolo con un nombre de prueba
+ * usando los MISMOS patrones (una sola fuente del vocabulario de intro).
+ */
+export function isIncompleteNameIntro(text = '') {
+  const normalized = normalizeSpaces(stripDiacritics(text))
+  if (!normalized) return false
+  return Boolean(detectIntroducedName(`${normalized} prueba`, { mustOpen: true }))
+}
+
 /** Solo tras wake word (ok flu / oye flu …) + soy | me llamo | mi nombre es. */
 export function detectWakeIntroducedName(text = '', wakeWords = []) {
   const split = splitTranscriptAtWakeWord(text, wakeWords)
@@ -1786,15 +1797,15 @@ export function detectWakeIntroducedName(text = '', wakeWords = []) {
   // El intro debe ABRIR el mandato (no venir tras "la frase es" / "que yo diga" / ...).
   const directo = detectIntroducedName(introText, { mustOpen: true })
   if (directo) return directo
-  // FORMA REAL DEL ASR (medido en el log del dueno 2026-10-12 21:37): el ASR entrega la
-  // locucion PARTIDA y el intro queda ANTES de la wake ("Soy Luis" + "Okay flu soy"). El
-  // mandato tras la wake es solo "soy", asi que el nombre se busca tambien en lo ANTERIOR a
-  // la wake: el intro ABRE esa parte y es la misma locucion (no es habla de contexto: el
-  // dueño dijo "soy luis" y luego la wake). Sin esto el registro NO dispara y el nombre
-  // nunca entra en la base ni en las filas.
-  const previo = normalizeSpaces(stripDiacritics(split.beforeWake || split.beforeWakeText || ''))
+  // El intro de ANTES de la wake SOLO vale si el mandato tras la wake es el FRAGMENTO de un
+  // intro ("... soy"): es la MISMA locucion partida por el ASR ("Soy Luis Okay flu soy").
+  // Con un mandato COMPLETO ("pon musica") o VACIO, lo anterior es habla de CONTEXTO (TV/sala
+  // u otra persona) y NO registra ningun nombre: Anexo B.11 ("ayer mi tia dijo soy Luis" NO
+  // registra). Y el intro previo tiene que ABRIR esa parte (mismo criterio que el directo).
+  if (!isIncompleteNameIntro(introText)) return ''
+  const previo = normalizeSpaces(stripDiacritics(split.beforeWakeText || ''))
   if (!previo) return ''
-  return detectIntroducedName(previo, { mustOpen: false })
+  return detectIntroducedName(previo, { mustOpen: true })
 }
 
 export function extractTheme(text = '', role = '', wakeWords = []) {

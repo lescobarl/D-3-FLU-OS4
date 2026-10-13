@@ -30,4 +30,15 @@ describe('B11 - el contexto antes de la wake NO registra nombre', () => {
         expect(detectWakeIntroducedName('Soy Luis Okay flu soy', WAKE)).toBe('Luis')
         expect(detectWakeIntroducedName('Okay flu soy Luis', WAKE)).toBe('Luis')
     })
+
+    it('casos limite: solo la MISMA locucion partida vale; el contexto NO', () => {
+        // El intro previo solo ABRE la locucion (mismo caso del dueno).
+        expect(detectWakeIntroducedName('Soy Luis Okay flu soy', WAKE)).toBe('Luis')
+        // Contexto acumulado que NO abre con el intro -> no registra.
+        expect(detectWakeIntroducedName('vamos a poner soy luis okay flu soy', WAKE)).toBe('')
+        // Mandato COMPLETO tras la wake -> lo previo es contexto.
+        expect(detectWakeIntroducedName('soy Luis okay flu pon una alarma', WAKE)).toBe('')
+        // Mandato vacio -> no hay fragmento -> no registra.
+        expect(detectWakeIntroducedName('ayer mi tia dijo soy Luis okay flu', WAKE)).toBe('')
+    })
 })
