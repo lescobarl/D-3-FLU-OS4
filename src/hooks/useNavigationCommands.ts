@@ -199,8 +199,10 @@ export function useNavigationCommands(
         }
         // Marca global: hay corrección parcial→completo en vuelo. El dedup de
         // capturas no debe descartar el superconjunto entrante.
-        setNavSettlePending(true);
         const settleMs = Number(FLU_CONFIG?.timing?.searchCommandSettleMs) || 2800;
+        // La bandera lleva el MISMO plazo que el temporizador: si el temporizador se
+        // retrasa, vence y NO deja el pipeline congelado (defecto del dueno 2026-10-12).
+        setNavSettlePending(true, settleMs);
         navSettleTimerRef.current = window.setTimeout(() => {
             navSettleTimerRef.current = null;
             const pending = pendingNavRef.current;

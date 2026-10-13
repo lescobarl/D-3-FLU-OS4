@@ -42,19 +42,56 @@ let currentTurn: { id: number | string | null; rowId: string | null } = { id: nu
  * etiquetas (ese mapa fue el defecto retirado: "Hablante 1" de OTRA voz heredaba "Luis").
  * Se vacia con la sesion (mismo punto que vacia los clusters).
  */
-const speakerLabelAliases = new Map<string, string>();
+const speakerLabelAliases = new Map<string, Set<string>>();
+
+/** Nombres con los que se ha registrado ESA etiqueta (vacio = ninguna voz la ha nombrado). */
+function namesForLabel(label: string): Set<string> | undefined {
+    return speakerLabelAliases.get(foldSpeakerKey(label));
+}
+
+/**
+ * NOMBRE de esa etiqueta, SOLO si es INEQUIVOCA: una etiqueta nombrada por DOS voces distintas
+ * no resuelve a ninguna (volveria a contaminar: "la misma etiqueta de OTRA voz hereda el
+ * nombre"). Con un solo nombre, la etiqueta ES esa voz.
+ */
+function unambiguousNameForLabel(label: string): string {
+    const names = namesForLabel(label);
+    if (!names || names.size !== 1) return '';
+    return names.values().next().value || '';
+}
 
 /** Fija el nombre registrado de una etiqueta de ESA voz. Dueno: `registerSpeakerIdentity`. */
 export function setSpeakerLabelAlias(label: string, name: string): void {
     const key = foldSpeakerKey(label);
     const value = String(name || '').trim();
     if (!key || !value) return;
-    speakerLabelAliases.set(key, value);
+    const names = speakerLabelAliases.get(key) || new Set<string>();
+    names.add(value);
+    speakerLabelAliases.set(key, names);
 }
 
 /** Vacia los alias de sesion (reset de conversacion). */
 export function resetSpeakerLabelAliases(): void {
     speakerLabelAliases.clear();
+}
+
+/**
+ * Etiquetas que YA pertenecen a una voz nombrada (las que su alias apunta a ese nombre).
+ * Lo consume el dueno del registro al renombrar: con esto el nombre alcanza TODAS las filas
+ * de la voz, incluidas las que se escribieron con otra etiqueta provisional antes de que la
+ * voz dijera su nombre (punto del dueno: "le dije ok flu soy luis y no actualizo todos los
+ * Hablante 1"). Sin esto, el renombre solo alcanzaba la etiqueta de ese turno.
+ */
+export function labelsAliasedTo(name: string): string[] {
+    const target = foldSpeakerKey(name);
+    if (!target) return [];
+    const out: string[] = [];
+    speakerLabelAliases.forEach((names, key) => {
+        if (names.size !== 1) return;
+        const value = names.values().next().value || '';
+        if (foldSpeakerKey(value) === target) out.push(key);
+    });
+    return out;
 }
 /**
  * NO hay mapa etiqueta->nombre. Un dato (la VOZ/firma), un dueno.
@@ -103,7 +140,7 @@ export function resolveRowSpeakerName(
     // etiqueta PROVISIONAL ("Hablante N") pasa a llevar el nombre de la voz que lo dijo,
     // tambien en los turnos sin ventana de audio medida. Un nombre propio que YA llega en la
     // fila se escribe TAL CUAL (dueño 2026-10-11): el alias solo sustituye la etiqueta.
-    const alias = isAutoSpeakerLabel(raw) ? speakerLabelAliases.get(foldSpeakerKey(raw)) : '';
+    const alias = isAutoSpeakerLabel(raw) ? unambiguousNameForLabel(raw) : '';
     if (alias) return alias;
     // DUENO UNICO (spec del dueno 2026-10-11): la etiqueta se escribe TAL CUAL. El NOMBRE PROPIO
     // tiene UNA sola via de introduccion (wake + comando); la evidencia de VOZ no lo introduce,
@@ -250,6 +287,11 @@ export function updateTurnRowSpeaker(
         cambia: String(entry.speakerName || '').trim() !== objetivo,
     });
     if (String(entry.speakerName || '').trim() === objetivo) return false;
+    // La VOZ queda registrada: la etiqueta con la que venia apareciendo pertenece a ese
+    // nombre. Ese dato es el que permite que el nombre alcance sus OTRAS etiquetas mas tarde.
+    if (evidenciaAcustica && isProperSpeakerName(objetivo) && isAutoSpeakerLabel(String(entry.speakerName || ''))) {
+        setSpeakerLabelAlias(String(entry.speakerName || ''), objetivo);
+    }
     store.batchLoadHistory(
         history.map((e) => (e.id === rowId ? { ...e, speakerName: objetivo } : e)),
     );
@@ -301,12 +343,30 @@ export type UserTurnRowAction = 'replaced' | 'reused' | 'added' | 'skipped';
  *
  * Función pura (no toca el store) para poder probarla directamente.
  */
+/**
+ * DECISIÓN de escritura de la fila del usuario: ¿este payload de resolución
+ * ESCRIBE en la conversación?
+ *
+ * Un SERVICIO (juego/ambiente/configuración) manda `effectOnly`: aplica su
+ * efecto en su motor y NO escribe la conversación. La transcripción tiene su
+ * único dueño (`commitAndResolveTurn`). Antes los tres fast-path pasaban
+ * `transcript` a secas y escribían fila: una ruta de escritura de más.
+ *
+ * `userCommitOnly` es el COMMIT TEMPRANO (visibilidad inmediata, sin esperar a la IA):
+ * NO escribe la conversación. La conversación solo lleva datos CONSOLIDADOS, y lo
+ * consolidado se conoce cuando CIERRA la última frase (spec del dueño 2026-10-12:
+ * "la conversación solo lleva datos consolidados una vez que termina la última frase").
+ * El texto sigue visible en ÚLTIMA FRASE mientras se habla; la fila entra al cerrar
+ * (`emitTurnRow` con `settlesTurn`), una vez, con el texto completo.
+ *
+ * Función pura (no toca el store) para poder probarla directamente.
+ */
 export function escribeFilaDeUsuario(
     payload: { effectOnly?: boolean; userCommitOnly?: boolean; rawOnly?: boolean } | null | undefined,
     { hayTexto = false, hablable = false } = {},
 ): boolean {
     if (payload?.effectOnly) return false;
-    if (payload?.userCommitOnly) return true;
+    if (payload?.userCommitOnly) return false;
     return hayTexto && (!payload?.rawOnly || hablable);
 }
 

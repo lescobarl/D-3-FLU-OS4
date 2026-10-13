@@ -25,10 +25,23 @@
  * nombre sobre las filas y el alias.
  */
 import { resolveSpeakerNameFromUtterance } from './speakerPolicy.js'
-import { isProperSpeakerName, normalizeSpeakerLabel } from './voiceIdentity.js'
+/**
+ * PUERTO de la app -> BASE de participantes (lo inyecta App UNA vez).
+ *
+ * El registro del nombre sucede en varias rutas (commit `wake-intro`, comando
+ * REGISTRAR_PARTICIPANTE, tick de identidad) y no todas construyen su objeto `refs` con el
+ * puente de sesion, asi que el nombre NO llegaba a la base y el panel de participantes no lo
+ * mostraba. Un puerto declarado evita que cada ruta tenga que recordar traerlo.
+ */
+let participantPort = null
+
+/** Inyecta el puerto de alta en la base de participantes (App). */
+export function setParticipantPort(fn) {
+  participantPort = typeof fn === 'function' ? fn : null
+}import { isProperSpeakerName, normalizeSpeakerLabel } from './voiceIdentity.js'
 import { canonicalSpeakerName } from './speakerLabels.js'
 import { findClusterByLabel, findLabelsWithSharedVoice, mergeSpeakerClustersOnRename, sameVoiceFloor } from './speakerClusters.js'
-import { renameSpeakerRows, setSpeakerLabelAlias } from './conversationTurnRow'
+import { renameSpeakerRows, setSpeakerLabelAlias, labelsAliasedTo } from './conversationTurnRow'
 import { setSessionPrimarySpeaker } from './sessionPrimarySpeaker.js'
 
 /**
@@ -88,6 +101,9 @@ export function registerSpeakerIdentity({
         // (la banda de voz DISTINTA medida es 0.58).
         ...findLabelsWithSharedVoice(clusters, anchor, sameVoiceFloor()),
         ...findLabelsWithSharedVoice(clusters, clean, sameVoiceFloor()),
+        // Y las etiquetas que YA sabemos de ESA voz (su alias apunta a este nombre): son las
+        // filas que se escribieron con su etiqueta provisional antes de decir su nombre.
+        ...labelsAliasedTo(clean),
       ].filter(Boolean),
     ),
   ]
@@ -113,7 +129,8 @@ export function registerSpeakerIdentity({
   // lo mostraba ("si hay una base de participantes debe de aparecer a la derecha"). El
   // nombre que entra es el CANONICO del registro: UNA grafia para fila, alias y base.
   // El puerto avisa de sus fallos (no se silencian aqui).
-  if (typeof refs?.registerParticipant === "function") refs.registerParticipant(clean, clean)
+  const port = typeof refs?.registerParticipant === "function" ? refs.registerParticipant : participantPort
+  if (typeof port === "function") port(clean, clean)
   return { registered: true, name: clean, labels, rowsChanged, primarySet }
 }
 

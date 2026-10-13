@@ -199,6 +199,8 @@ import { localGet, localRemove, localSet } from './core/storage/localStore';
 import { pathForTab, type RightTab, tabFromPath } from './app/tabRoutes';
 import { useFluBridgesLifecycle } from './app/fluBridges';
 import { useIdentitySessionRef } from './app/useIdentitySessionRef';
+import { setParticipantPort } from './voice/lib/speakerIdentityRegister';
+import { resolveVoiceParticipants } from './voice/lib/voiceParticipantsSource';
 import { isAIProvider } from './app/appTypeGuards';
 import { type FastPathExecutedMarks, arbiterDomainRoute, isTurnAlreadyExecuted } from './app/arbiterDomainRoutes';
 import { type ArbiterResult, dispatchArbiterIntent, readStringProp } from './app/arbiterDispatch';
@@ -1168,14 +1170,19 @@ function App() {
     // participantes debe de aparecer a la derecha). Entra con su speakerLabel para que
     // la voz quede ligada al participante.
     useEffect(() => {
-        if (!identitySessionRef.current) return;
-        identitySessionRef.current.registerParticipant = (name: string) => {
+        const registrarEnLaBase = (name: string) => {
             const canonical = String(name || '').trim();
             if (!canonical) return;
             participants.service
                 .register({ name: canonical, speakerLabel: canonical })
                 .catch((err: unknown) => logCaughtError('src/App.tsx: registerParticipant (voz)', err));
         };
+        // UN puerto, DOS consumidores de la MISMA funcion: el puente de sesion y el puerto
+        // del registro de identidad (el hook no siempre construye su `refs` con el puente).
+        if (identitySessionRef.current) {
+            identitySessionRef.current.registerParticipant = registrarEnLaBase;
+        }
+        setParticipantPort(registrarEnLaBase);
     }, [identitySessionRef, participants.service]);
     participantSpeakerRef.current = participantSpeakerForRow;
     const {
@@ -3972,35 +3979,17 @@ const {
     // Avoids recomputing on every render (forEach + map + find over
     // conversationHistory and voiceProfiles).
     // ============================================================
-    const voiceParticipants = useMemo(() => {
-        const historyLabels = new Set<string>();
-        const history = integrationStore.conversationHistory;
-        for (let i = 0; i < history.length; i++) {
-            const e = history[i];
-            const label = String(e.speakerName || '').trim();
-            if (label) historyLabels.add(label);
-        }
-        const profiles = voiceProfiles.profiles;
-        const profileLabels = new Set<string>();
-        for (let i = 0; i < profiles.length; i++) {
-            const p = profiles[i];
-            if (p.label) profileLabels.add(p.label);
-        }
-        const allLabels = new Set([...historyLabels, ...profileLabels]);
-        const result: { label: string; profileId: string | undefined }[] = [];
-        for (const label of allLabels) {
-            let profileId: string | undefined;
-            for (let i = 0; i < profiles.length; i++) {
-                const p = profiles[i];
-                if (p.label === label) {
-                    profileId = p.id || undefined;
-                    break;
-                }
-            }
-            result.push({ label, profileId });
-        }
-        return result;
-    }, [integrationStore.conversationHistory, voiceProfiles.profiles]);
+    // Dueno unico de la lista del panel (`resolveVoiceParticipants`): historial + BASE de
+    // participantes + perfiles de voz. La vista NO la recalcula.
+    const voiceParticipants = useMemo(
+        () =>
+            resolveVoiceParticipants({
+                history: integrationStore.conversationHistory,
+                profiles: voiceProfiles.profiles,
+                base: participants.participants,
+            }),
+        [integrationStore.conversationHistory, voiceProfiles.profiles, participants.participants],
+    );
 
     // ============================================================
     // Render
