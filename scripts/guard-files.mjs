@@ -26,6 +26,7 @@ export const GUARD_FILES = [
     'tests/duenoVectorVoz.test.ts',
     'tests/duenoMedidaViva.test.ts',
     'tests/duenoNombrePorVoz.test.ts',
+    'tests/duenoNombreSoloPorVoz.test.ts',
     'tests/aiServiceSingleImplGuard.test.ts',
     'tests/arbiterDomainBarrier.test.ts',
     'tests/architecture.test.ts',
