@@ -25,5 +25,9 @@ export function logFluReply(text: string): void {
     const history = store.conversationHistory;
     const last = history[history.length - 1];
     if (last?.role === 'flu' && String(last.text || '').trim() === clean) return;
-    store.addFluMessage(clean);
+    // P9.83: si el ULTIMO turno es un evento de sistema, esta respuesta ES su respuesta.
+    // Se marca de forma ESTRUCTURAL (no por el texto): el filtro de persistencia deja de
+    // depender de una lista de literales que se rompia con cualquier cambio de redaccion.
+    const respuestaAEvento = Boolean(last?.meta?.systemEvent);
+    store.addFluMessage(clean, respuestaAEvento ? { systemEventReply: true } : undefined);
 }

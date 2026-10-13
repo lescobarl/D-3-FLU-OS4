@@ -1053,12 +1053,9 @@ function App() {
     // Ref para enviar animaciones de emoción resueltas vía callback directo (Fase 7)
     // Reemplaza integrationStore.uiState.pendingEmotionAnims
     const emotionAnimsRef = useRef<((anims: string[]) => void) | null>(null);
-    // Ref for setRecentMemory to avoid stale closure in onEmotion callback.
-    // useFluParticipant is called BEFORE useFluVoiceAssistant, so setRecentMemory
-    // is undefined during first render. Even on subsequent renders, scheduleHandTimeout's
-    // setTimeout captures onEmotion at creation time. Using a ref ensures the callback
-    // always reads the latest setRecentMemory regardless of when it was captured.
-    const setRecentMemoryRef = useRef<((text: string) => void) | undefined>(undefined);
+    // P9.83: el ref de "memoria del turno" (setRecentMemory) se RETIRO: solo servia para
+    // FORZAR el tema del turno siguiente con un prompt hardcodeado. El contexto va por el
+    // historial (fuente unica).
     const fluParticipant = useFluParticipant({
         apiKey,
         language,
@@ -1093,16 +1090,12 @@ function App() {
                     // Store único (§9): el evento entra al historial (única fuente de
                     // verdad) y Gemini lo ve por derivación; no hay canal lateral.
                     integrationStore.addConversationEntry(entry);
-                    // FIX "¿por qué estás enojado?": además de la línea de contexto,
-                    // forzar el bloque CRÍTICO del system prompt (gemini.js:458-463) en el
-                    // SIGUIENTE contract request vía setRecentMemory, para que FLU EXPRESE
-                    // la emoción "antes que cualquier otra cosa" y no la parafrasee genérica.
-                    // setRecentMemory es ONE-SHOT: useFluVoiceAssistant.js:988-989 lee y
-                    // limpia recentMemoryRef antes de cada contract, así que NO persiste en
-                    // requests posteriores (el comentario anterior estaba obsoleto).
-                    setRecentMemoryRef.current?.(
-                        `El participante "Hablante" levantó la mano para participar y fue ignorado (no se le dio la palabra). Estás enojado por eso: debes decirlo explícitamente y explicar por qué te enojaste, ANTES de continuar con cualquier otro tema.`
-                    );
+                    // P9.83: NO se fuerza el tema del turno siguiente. Antes se inyectaba
+                    // aqui un prompt HARDCODEADO ("Estas enojado por eso: debes decirlo ...
+                    // ANTES de continuar con cualquier otro tema") via setRecentMemory, y FLU
+                    // respondia "Me siento enojado..." HABLANDO DE OTRA COSA (medido por el
+                    // dueno 2026-10-12 16:34:28). La linea de contexto de arriba YA entra al
+                    // historial (fuente unica), que es de donde Gemini lo deriva.
                 }
             }
         },
@@ -1203,8 +1196,7 @@ function App() {
         // OS2 parity: additional actions from useFluVoiceAssistant (FluShell.jsx lines 3444-3457)
         resetVoiceDisplay: os2ResetVoiceDisplay,
         suspendRecognitionForAssistantSpeech: os2SuspendRecognition,
-        /** Set recent memory text that gets injected into the system prompt on next contract request. */
-        setRecentMemory,
+        // P9.83: setRecentMemory ya no se consume (servia para FORZAR el tema del turno).
     } = useFluVoiceAssistant({
         apiKey,
         language,
@@ -2426,9 +2418,6 @@ function App() {
 
         identitySession: identitySessionRef,    });
 
-    // Keep the ref in sync so onEmotion (captured by useFluParticipant before
-    // useFluVoiceAssistant) always reads the latest setRecentMemory.
-    setRecentMemoryRef.current = setRecentMemory;
 
     // ---- Navigation commands (extraído a hook) ----
     const navigationCommands = useNavigationCommands(

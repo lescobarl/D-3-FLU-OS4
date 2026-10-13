@@ -69,6 +69,8 @@ export interface ConversationEntry {
     /** Metadatos adicionales (OS2: meta.response) */
     meta?: {
         response?: string;
+        /** P9.83: esta fila es la RESPUESTA a un evento de sistema (la marca el escritor) */
+        systemEventReply?: boolean;
         /** Marcador de evento del sistema (no controlado por Gemini) */
         systemEvent?: {
             type: 'participant_ignored' | 'participant_rejected' | 'participant_granted'

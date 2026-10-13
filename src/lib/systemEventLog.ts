@@ -109,6 +109,12 @@ export type SystemEvent =
 // ------------------------------------------------------------
 
 /**
+ * DUENO UNICO del PREFIJO del evento de sistema. Lo consumen el formateador de abajo
+ * y el filtro de persistencia (P9.83): antes cada consumidor copiaba el literal.
+ */
+export const SYSTEM_EVENT_PREFIX = { es: '[FLU recuerda]', en: '[FLU remembers]' } as const;
+
+/**
  * Convierte un evento del sistema en texto en PRIMERA PERSONA
  * como si FLU mismo lo recordara. Gemini interpreta esto como
  * un pensamiento propio, no como un evento externo.

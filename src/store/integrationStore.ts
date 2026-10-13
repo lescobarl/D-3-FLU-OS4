@@ -187,7 +187,7 @@ export interface IntegrationActions {
     addConversationEntry: (entry: ConversationEntry) => void;
     /** Detectar sentimiento de un texto y añadirlo al historial */
     addUserMessage: (text: string, speakerName?: string) => void;
-    addFluMessage: (text: string) => void;
+    addFluMessage: (text: string, meta?: ConversationEntry['meta']) => void;
     /** Añadir un mensaje de sistema al historial de conversación */
     addSystemMessage: (text: string) => void;
     /** Cargar historial completo desde DB (sin side effects) */
@@ -517,13 +517,14 @@ addSystemMessage: (text: string) => {
                 }));
             },
 
-            addFluMessage: (text: string) => {
+            addFluMessage: (text: string, meta?: ConversationEntry['meta']) => {
                 const entry: ConversationEntry = withActivePersonId({
                     role: 'flu',
                     text,
                     timestamp: Date.now(),
                     id: nextId(),
                     speakerName: 'FLU',
+                    ...(meta ? { meta } : {}),
                 }, get().activePersonId);
                 // UN ESCRITOR POR FILA (P9.82): la respuesta de FLU es ESTA entrada
                 // (`role='flu'`, la que escribe `logFluReply`). Antes ADEMAS se adjuntaba

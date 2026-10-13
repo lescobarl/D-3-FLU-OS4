@@ -16,6 +16,7 @@ import { buildSyncTuple } from '../core/db/syncTuple';
 import { useIntegrationStore } from '../store/integrationStore';
 import type { ConversationEntry } from '../types/bridge';
 import { logCaughtError } from '../lib/caughtError';
+import { SYSTEM_EVENT_PREFIX } from '../lib/systemEventLog';
 
 const MAX_LOADED_ROWS = 180; // OS2: conversationLogMax
 
@@ -142,20 +143,17 @@ export function useConversationPersistence(participantId?: string) {
                     // Also filter out any entries that contain system event text patterns,
                     // including Gemini's responses TO system events (which don't have
                     // meta.systemEvent marker but contain the emotional text).
-                    const SYSTEM_EVENT_PATTERNS = [
-                        '[FLU recuerda]',
-                        '[FLU remembers]',
-                        'Me enojé porque levanté la mano',
-                        'I got upset because I raised my hand',
-                        'Me siento realmente molesto y triste porque levanté la mano',
-                        'I feel really upset and sad because I raised my hand',
-                    ];
+                    // P9.83: el filtro es ESTRUCTURAL. Fuera la lista de literales (6 textos
+                    // que habia que mantener a mano y se rompia al reescribir una frase): se
+                    // descartan el PROPIO evento (marca `systemEvent`), su RESPUESTA (marca
+                    // `systemEventReply`, la pone el escritor unico) y, por compatibilidad con
+                    // filas ya guardadas, el texto que abre con el prefijo del dueno.
                     const entries = allEntries.filter((entry) => {
-                        if (entry.meta?.systemEvent) return false;
+                        if (entry.meta?.systemEvent || entry.meta?.systemEventReply) return false;
                         const text = entry.text || '';
-                        return !SYSTEM_EVENT_PATTERNS.some((pattern) =>
-                            text.includes(pattern)
-                        );
+                        return !SYSTEM_EVENT_PREFIX.es && !SYSTEM_EVENT_PREFIX.en
+                            ? true
+                            : !text.includes(SYSTEM_EVENT_PREFIX.es) && !text.includes(SYSTEM_EVENT_PREFIX.en);
                     });
 
                     const filteredCount = allEntries.length - entries.length;
