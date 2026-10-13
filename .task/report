@@ -5571,3 +5571,28 @@ GUARD 9862de2: los DOS ordenes + superviviente canonico + etiqueta == supervivie
 CONTROL NEGATIVO MEDIDO: con speakerDiarization de 7e77a2d -> 1 failed; con aae01b5 -> 6/6.
 Alcance (0.23): CUBIERTO=la fusion sin dependencia del orden, con guard que discrimina CUAL sobrevive;
   NO CUBIERTO=DoD-producto y recuento real en sala.
+
+==============================================================================
+2026-10-12 (noche) - D9.1 (decision del dueno) y P9.73 (LIMITE DECLARADO)
+==============================================================================
+D9.1 - CERRADO. El dueno aprobo por escrito (chat 2026-10-12 14:27: "Propuesta APROBADA...
+  Aplica R1 + R2 + los numeros (cap 2000 - minVoiced 350 - relax 0)") y los valores se
+  APLICARON en 98f4358 (fluConfig.js:103-107 + classroomReuseRelax 0). productionClusterReuseThreshold
+  intacto (0.66). Efecto colateral declarado: minVoicedMs 350 == el minimo del embedder (de ahi P9.72,
+  cerrado). Revert disponible: git revert 98f4358.
+  Evidencia del cierre: los 11 casos del DoD que afirmaban los valores viejos quedaron alineados (P9.86)
+  y npm run gate esta VERDE.
+  Alcance (0.23): CUBIERTO=aprobacion + aplicacion + revert; NO CUBIERTO=el juicio del dueno en pantalla.
+
+P9.73 - LIMITE DECLARADO (no se deduplica). Revisiones del ASR con PREFIJO DISTINTO: la MISMA locucion
+  (mismo dictado) puede acabar en DOS filas cuando el ASR reescribe los primeros ~24 caracteres.
+  MEDIDO 2026-10-12 (arnes fiel ingress->commit->fila): interim + FINAL de una locucion larga y despues
+  un FINAL REVISADO con otro prefijo => 2 filas; control con otra locucion real => 2 filas (correcto).
+  POR QUE NO SE DEDUPLICA: la dedupe agresiva ya se intento y ROMPIO turnos legitimos
+  (tests/transcriptionDedupLoss.test.ts documenta el daño); el dedupe actual es por texto EXACTO
+  (turnStream.js) y lo identico ya se deduplica. Un umbral de similitud sobre el prefijo no distingue
+  "revision del mismo dictado" de "dos ordenes distintas que empiezan igual" sin un caso REAL del dueno.
+  DECISION: se declara el LIMITE (el repo conserva la puerta exacta) y se cierra el item como declarado.
+  Si el dueno aporta el caso real (frase + las 2 filas con hora), se reabre con su umbral medido.
+  Alcance (0.23): CUBIERTO=la medicion del caso y la puerta exacta con transcriptionDedupLoss como muro;
+  NO CUBIERTO=la dedupe por similitud (rechazada a proposito sin medicion del dueno).
