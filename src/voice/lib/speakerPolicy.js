@@ -127,18 +127,22 @@ export function shouldSkipPreviewDiarize({
 
 export { isWeakAsrSpeakerEvidence, listConfiguredTranscriptHardRules } from './fluTranscriptPause.js'
 
-/** Sticky para commit cuando no hay revisión ASR del mismo turno. */
+/**
+ * Sticky para commit cuando no hay revision ASR del mismo turno.
+ *
+ * El NOMBRE no se inventa. ANTES, una frase CORTA devolvia el PRIMARIO de la sesion —el
+ * participante activo de la base, sembrado al arrancar— y la fila salia con SU nombre sin
+ * ninguna medida de voz: "el nombre se pega por ETIQUETA / por el participante de la base,
+ * no por la VOZ" (defecto medido por el dueno 2026-10-13). Ahora la etiqueta de la fila la
+ * decide la VOZ medida (preflight) o el DATO del mandato ("soy X"); sin ninguna, se conserva
+ * la etiqueta con la que esa voz venia apareciendo.
+ */
 export function resolveCommitStickyFallback({
   sessionPrimary = '',
   lastLogged = '',
   fallback = FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker,
-  phrase = '',
 } = {}) {
-  const primary = normalizeSpeakerLabel(sessionPrimary)
-  if (primary && phrase && isPhraseShortForSpeakerHeuristics(phrase)) {
-    return primary
-  }
-  return lastLogged || sessionPrimary || fallback
+  return lastLogged || fallback || normalizeSpeakerLabel(sessionPrimary)
 }
 
 /**
