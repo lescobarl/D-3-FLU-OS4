@@ -45,7 +45,10 @@ export type { ParticipantRecord } from '../db/fluDatabase';
  * el nombre es su ETIQUETA (diseno del dueno 2026-10-13). Se declara como EXTENSION aqui
  * (el tipo del registro vive en la capa de base de datos) para no tocar su forma.
  */
-export type ParticipantRecordWithVoice = ParticipantRecord & { voiceVector?: number[] };
+export type ParticipantRecordWithVoice = ParticipantRecord & {
+  voiceVector?: number[];
+  voiceVectorModel?: string;
+};
 
 export interface ParticipantInput {
   name: string;
@@ -54,6 +57,8 @@ export interface ParticipantInput {
   speakerLabel?: string;
   /** VECTOR de voz del participante (identidad de la voz; el nombre es su etiqueta). */
   voiceVector?: number[];
+  /** MODELO que genero ese vector: sin el, el vector NO es comparable. */
+  voiceVectorModel?: string;
   profileId?: string;
   ttsVoiceURI?: string;
   ttsVoiceName?: string;
@@ -233,6 +238,7 @@ export function createParticipantRegistry({
       birthday: normalizeBirthday(input.birthday),
       speakerLabel: input.speakerLabel,
       voiceVector: normalizeVoiceVector(input.voiceVector),
+      voiceVectorModel: input.voiceVectorModel ? String(input.voiceVectorModel) : undefined,
       profileId: input.profileId,
       ttsVoiceURI: input.ttsVoiceURI,
       ttsVoiceName: input.ttsVoiceName,

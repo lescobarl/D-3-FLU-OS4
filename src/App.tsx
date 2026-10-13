@@ -201,7 +201,7 @@ import { useFluBridgesLifecycle } from './app/fluBridges';
 import { resolveRowSpeakerLabel } from './voice/lib/conversationRow';
 import { useIdentitySessionRef } from './app/useIdentitySessionRef';
 import { registerSpeakerIdentity } from './voice/lib/speakerIdentityRegister';
-import { matchParticipantByVoice } from './voice/lib/participantVoiceMatch';
+import { resolveVoiceIdentity } from './voice/lib/speakerDirectory';
 import { isAutoSpeakerLabel } from './voice/lib/voiceIdentity';
 import { resolveVoiceParticipants } from './voice/lib/voiceParticipantsSource';
 import { isAIProvider } from './app/appTypeGuards';
@@ -1341,7 +1341,13 @@ function App() {
             // "Hablante N": su nombre, desde este turno y en TODAS sus filas (mismo dueno del
             // registro). Sin coincidencia no se afirma nada (no se mezclan hablantes).
             if (Array.isArray(rawSignature) && rawSignature.length && isAutoSpeakerLabel(speakerName)) {
-                const vozConocida = matchParticipantByVoice(rawSignature, participants.participants);
+                // LAS DOS FUENTES POR LA MISMA REGLA (sesion + base), siempre con el MODELO.
+                const vozConocida = resolveVoiceIdentity(rawSignature, {
+                    candidates: (participants.participants || []).map((p) => {
+                        const voz = p as { voiceVector?: number[]; voiceVectorModel?: string };
+                        return { name: p.name, vector: voz.voiceVector, model: voz.voiceVectorModel };
+                    }),
+                });
                 if (vozConocida?.name) {
                     registerSpeakerIdentity({
                         name: vozConocida.name,

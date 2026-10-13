@@ -17,6 +17,7 @@
 import { getModelId } from './embeddingConfig.js'
 import { compareCosineSignatures, normalizeEmbeddingVector } from './speakerCore.js'
 import { sameVoiceFloor } from './speakerClusters.js'
+import { foldSpeakerKey } from './speakerLabels.js'
 
 /** Modelo que genera los vectores (dueño único: `embeddingConfig.getModelId`). */
 export function voiceVectorModel() {
@@ -31,14 +32,16 @@ const voiceNames = new Map()
  *
  * @param {string} voiceId Id de la voz (`speaker_N` / `speaker_name_x`).
  * @param {string} name Nombre propio dicho/medido para ESA voz.
- * @param {{ vector?: number[] | null }} [options] Vector de esa voz (su timbre), si se midió.
+ * @param {{ vector?: number[] | null, model?: string }} [options] Vector de esa voz (su timbre) y
+ *   el MODELO que lo generó (sin él, el vector no es comparable).
  */
-export function registerVoiceName(voiceId, name, { vector = null } = {}) {
+export function registerVoiceName(voiceId, name, { vector = null, model = voiceVectorModel() } = {}) {
     const id = String(voiceId || '').trim()
     const clean = String(name || '').trim()
     if (!id || !clean) return
     const sig = normalizeEmbeddingVector(Array.isArray(vector) ? vector : [])
-    voiceNames.set(id, { name: clean, vector: sig, model: sig.length ? voiceVectorModel() : '' })
+    // El MODELO viaja SIEMPRE con el vector: sin el, un vector no es comparable.
+    voiceNames.set(id, { name: clean, vector: sig, model: sig.length ? String(model || voiceVectorModel()) : '' })
 }
 
 /** Nombre propio de esa VOZ ('' si no tiene: no se adivina). */
@@ -48,28 +51,50 @@ export function resolveVoiceName(voiceId) {
 }
 
 /**
- * ¿Alguna VOZ registrada en la sesión ES este vector? (emparejamiento por TIMBRE, con el piso de reutilización de voz y SOLO entre vectores del MISMO modelo).
+ * DUENO UNICO de "¿esta VOZ ya es alguien?" — UNA sola regla, para la SESION y la BASE.
+ *
+ * Reglas (mandato del dueno 2026-10-13):
+ *   1. El vector se compara SIEMPRE con su MODELO: un candidato de otro modelo NO se compara.
+ *   2. Empareja si la similitud llega al PISO unico de reutilizacion de voz.
+ *   3. Si DOS identidades distintas pasan el piso, NO se decide: null ("Hablante N").
  *
  * @param {number[]} vector Vector medido del turno.
- * @param {{ model?: string, floor?: number }} [options]
- * @returns {string | null} El id de la voz que ES ese timbre, o null (no se adivina).
+ * @param {{ model?: string, candidates?: Array<{ name?: string, vector?: number[], model?: string }>, floor?: number }} [options]
+ *   `candidates` = VOCES externas (la base de participantes) como datos; la sesion ya esta dentro.
+ * @returns {{ voiceId: string, name: string } | null}
  */
-export function matchDirectoryVoice(vector, { model = voiceVectorModel(), floor = sameVoiceFloor() } = {}) {
+export function resolveVoiceIdentity(vector, { model = voiceVectorModel(), candidates = [], floor = sameVoiceFloor() } = {}) {
     const v = normalizeEmbeddingVector(Array.isArray(vector) ? vector : [])
     if (!v.length) return null
-    let bestId = null
-    let bestSim = -1
+    const modelo = String(model || '')
+    const comparables = []
     voiceNames.forEach((entry, id) => {
+        // La SESION tambien cuenta SIN nombre: la pregunta "¿que VOZ es esta?" tiene que poder
+        // responder aunque esa voz todavia no sea nadie (es lo que liga sus turnos a la MISMA clave).
         if (!entry?.vector?.length) return
-        // Modelo distinto = vector NO comparable (se re-embebe; nunca se compara en silencio).
-        if (String(entry.model || '') !== String(model || '')) return
-        const sim = compareCosineSignatures(v, entry.vector)
-        if (sim > bestSim) {
-            bestSim = sim
-            bestId = id
-        }
+        if (String(entry.model || '') !== modelo) return
+        comparables.push({ voiceId: id, name: entry.name || '', vector: entry.vector })
     })
-    return bestSim >= Number(floor) ? bestId : null
+    for (const c of Array.isArray(candidates) ? candidates : []) {
+        const sig = normalizeEmbeddingVector(Array.isArray(c?.vector) ? c.vector : [])
+        const name = String(c?.name || '').trim()
+        if (!sig.length || !name) continue
+        if (String(c?.model || '') !== modelo) continue
+        comparables.push({ voiceId: String(c?.voiceId || ''), name, vector: sig })
+    }
+    // Se agrupa por IDENTIDAD (nombre plegado): la misma persona en sesion y en base es UN candidato.
+    const porIdentidad = new Map()
+    for (const c of comparables) {
+        const sim = compareCosineSignatures(v, c.vector)
+        if (sim < Number(floor)) continue
+        // La IDENTIDAD es el nombre si lo tiene; si aun no es nadie, la propia VOZ (su clave).
+        const k = c.name ? foldSpeakerKey(c.name) : `voice:${c.voiceId}`
+        const prev = porIdentidad.get(k)
+        if (!prev || sim > prev.sim) porIdentidad.set(k, { sim, voiceId: c.voiceId, name: c.name })
+    }
+    if (porIdentidad.size !== 1) return null
+    const [unico] = porIdentidad.values()
+    return { voiceId: unico.voiceId, name: unico.name }
 }
 
 /** Vacía el directorio (reset de sesión). */
@@ -101,7 +126,8 @@ export function rememberVoiceVector(voiceId, vector) {
 export function voiceKeyFor({ voiceId = '', signature = null, floor } = {}) {
     const sig = normalizeEmbeddingVector(Array.isArray(signature) ? signature : [])
     if (sig.length) {
-        const conocido = floor == null ? matchDirectoryVoice(sig) : matchDirectoryVoice(sig, { floor })
+        const conocido = resolveVoiceIdentity(sig, floor == null ? {} : { floor })
+        if (conocido?.voiceId) return conocido.voiceId
         if (conocido) return conocido
     }
     const id = String(voiceId || '').trim()
