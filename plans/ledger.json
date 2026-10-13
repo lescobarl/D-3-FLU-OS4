@@ -4556,6 +4556,12 @@
       "commit": "dd4b1e5",
       "titulo": "REGRESION B.11 introducida por el arreglo de P2: un \"soy Luis\" de CONTEXTO (TV/sala) registraba el nombre.",
       "evidencia": "src/voice/lib/audioMath.js: CERRADO 2026-10-13. RED-ON-OLD MEDIDO con la barrera nueva del dueno tests/duenoB11Contexto.test.ts y el src anterior (git stash del audioMath): \"contexto antepuesto + mandato real: expected Luis to be (vacio)\" -> 1 failed / 1 passed. CAUSA: el arreglo de P2 leia el intro de ANTES de la wake con mustOpen:false, asi que cualquier \"soy X\" del contexto valia. ARREGLO: el intro previo SOLO vale si el mandato TRAS la wake es un FRAGMENTO de intro (isIncompleteNameIntro: el texto, completado con un nombre, casa con los patrones del dueno unico), y el intro previo sigue exigiendo mustOpen. VERDE: los 2 casos de contexto dan vacio y las 2 formas reales del ASR dan el nombre; P2 y P5 siguen verdes. Alcance (0.23): CUBIERTO=la regla de Anexo B.11 con barrera y red-on-old; NO CUBIERTO=el caso real de TV en sala con el ASR en vivo."
+    },
+    {
+      "id": "P10.8",
+      "commit": "f682a3d",
+      "titulo": "El nombre se pegaba por ETIQUETA: una frase corta devolvia el PRIMARIO de la sesion (participante activo de la base).",
+      "evidencia": "src/voice/lib/speakerPolicy.js: CERRADO 2026-10-13. CAUSA MEDIDA: resolveCommitStickyFallback devolvia el PRIMARIO de la sesion cuando la frase era CORTA (isPhraseShortForSpeakerHeuristics) y el primario se siembra del participante activo de la base -> la fila salia con SU nombre sin ninguna medida de voz (lo que el dueno describio como \"el nombre se pega por etiqueta, no por voz; quien manda es el participante activo de la base\"). AHORA la etiqueta la decide la VOZ medida (preflight) o el DATO del mandato (soy X); sin ninguna, se conserva la etiqueta con la que esa voz venia apareciendo. VERDE: gate completo 269 ficheros / 2211 tests + typecheck + build, con las cuatro barreras del dueno (P1/P2/P3/P4/P5, B11) en verde. Alcance (0.23): CUBIERTO=que el nombre no se inventa por el participante de la base; NO CUBIERTO=el reconocimiento POR VOZ (requiere que la medida llegue y que el ancla de firma se persista en la base) y la pantalla del dueno."
     }
   ]
 }
