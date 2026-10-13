@@ -127,5 +127,11 @@ export function getCommandSpeech(
   if (name) {
     text = text.replace(/\{name\}/gi, name)
   }
+  // El marcador es una RANURA, nunca texto: si nadie aporto el dato, la ranura se retira
+  // (defecto medido por el dueno 2026-10-12 21:37: FLU dijo literalmente "Registrado {name}.").
   return text
+    .replace(/\s*\{name\}\s*/gi, '')
+    .replace(/\s+([.,;!?])/g, '$1')
+    .replace(/\s+/g, ' ')
+    .trim()
 }

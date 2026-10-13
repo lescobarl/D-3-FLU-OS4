@@ -2,7 +2,7 @@ import { equalsTrimmed, pickLabel } from '../../lib/textUtils';
 /**
  * Escucha activa: estado, hablantes, finales. Motor de texto en conversationStream.js.
  */
-import { cleanForSpeech, detectWakeIntroducedName, stripDiacritics } from './audioMath.js'
+import { cleanForSpeech, detectWakeIntroducedName, normalizeSpokenCommand, stripDiacritics } from './audioMath.js'
 import { FLU_CONFIG, getActiveListenConfig } from './fluConfig.js'
 import { isProperSpeakerName, nextAvailableSpeakerLabel } from './voiceIdentity.js'
 import { requiresWakeWordForSpeakerName } from './speakerPolicy.js'
@@ -328,13 +328,25 @@ export function matchesListeningAck(phrase = '') {
   })
 }
 
+/**
+ * El cue de cambio de hablante es una ORDEN, no una mencion: el mandato ABRE con el cue.
+ *
+ * Defecto medido (log del dueno, 2026-10-12 21:16): dictando "en la ultima frase no hay
+ * ni cambio de hablante ni ni silencio para que lo escriba" el commit salio
+ * `src=explicit-next name="Hablante 2"` y una sesion de UNA sola voz quedo partida en
+ * "Hablante 1"/"Hablante 2"/"Luis". Antes se buscaba el cue con `includes` en CUALQUIER
+ * posicion del dictado, asi que mencionar el concepto cambiaba de hablante.
+ *
+ * El mandato se lee por su dueno unico de higiene (`normalizeSpokenCommand`: quita wake,
+ * eco del ASR y muletilla) y el cue tiene que encabezarlo. Un lector de cues, una regla.
+ */
 export function detectNextSpeakerPhrase(text = '') {
-  const norm = normalizePhrase(text)
+  const norm = normalizePhrase(normalizeSpokenCommand(text))
   if (!norm) return false
   const phrases = FLU_CONFIG.voiceCommands.nextSpeaker || []
   return phrases.some((sample) => {
     const key = normalizePhrase(sample)
-    return key && norm.includes(key)
+    return key && norm.startsWith(key)
   })
 }
 

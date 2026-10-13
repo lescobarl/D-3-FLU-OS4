@@ -1493,6 +1493,11 @@ export function normalizeCommandForDeterministic(text = '', wakeWords = []) {
 //    ANULABA los cuantificadores universales usando una etiqueta basura.
 const LEADING_NOISE_WORDS = Object.freeze([
   'eh', 'ehh', 'em', 'mmm', 'pues', 'bueno', 'o sea', 'este', 'digamos',
+  // 'ahora' es arranque de mando, no contenido: "ahora habla otra persona" y
+  // "ahora pon una alarma" ordenan lo MISMO que sin el adverbio. Medido 2026-10-12:
+  // sin quitarlo, el cue de cambio de hablante no encabezaba el mandato y la ORDEN
+  // se perdia (el arreglo del cue exige que el mandato ABRA con el cue).
+  'ahora',
 ])
 function stripLeadingNoiseAndEcho(text = '') {
   let out = String(text || '').trim()

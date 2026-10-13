@@ -30,6 +30,33 @@ import { isFragmentOfLocution } from './turnStream';
 let currentTurn: { id: number | string | null; rowId: string | null } = { id: null, rowId: null };
 
 /**
+ * ALIAS de sesion: etiqueta de diarizacion -> NOMBRE de la voz que dijo su nombre.
+ *
+ * Defecto del dueno (2026-10-12: "solo yo hable y a unos les puso Hablante 1 y a otros
+ * Luis" / "le dije ok flu soy luis y no actualizo todos los Hablante 1"): la voz registrada
+ * seguia escribiendo su etiqueta provisional en los turnos sin ventana de audio medida, asi
+ * que UNA voz quedaba partida en dos grafias.
+ *
+ * Lo escribe UN solo dueno (`registerSpeakerIdentity`, el dueno del registro del nombre) y
+ * alcanza SOLO la etiqueta con la que esa voz venia apareciendo: no es un mapa global de
+ * etiquetas (ese mapa fue el defecto retirado: "Hablante 1" de OTRA voz heredaba "Luis").
+ * Se vacia con la sesion (mismo punto que vacia los clusters).
+ */
+const speakerLabelAliases = new Map<string, string>();
+
+/** Fija el nombre registrado de una etiqueta de ESA voz. Dueno: `registerSpeakerIdentity`. */
+export function setSpeakerLabelAlias(label: string, name: string): void {
+    const key = foldSpeakerKey(label);
+    const value = String(name || '').trim();
+    if (!key || !value) return;
+    speakerLabelAliases.set(key, value);
+}
+
+/** Vacia los alias de sesion (reset de conversacion). */
+export function resetSpeakerLabelAliases(): void {
+    speakerLabelAliases.clear();
+}
+/**
  * NO hay mapa etiqueta->nombre. Un dato (la VOZ/firma), un dueno.
  *
  * Existia (`speakerAliases`) para que las filas POSTERIORES de "soy Luis" salieran ya con
@@ -72,6 +99,12 @@ export function resolveRowSpeakerName(
     const raw = String(speakerName || '').trim();
     // El RESPALDO se usa SOLO cuando no hay etiqueta (la fila nunca queda vacia).
     if (!raw) return respaldo;
+    // NOMBRE REGISTRADO de ESA voz (dueno 2026-10-12): una sola voz = una sola grafia. La
+    // etiqueta PROVISIONAL ("Hablante N") pasa a llevar el nombre de la voz que lo dijo,
+    // tambien en los turnos sin ventana de audio medida. Un nombre propio que YA llega en la
+    // fila se escribe TAL CUAL (dueño 2026-10-11): el alias solo sustituye la etiqueta.
+    const alias = isAutoSpeakerLabel(raw) ? speakerLabelAliases.get(foldSpeakerKey(raw)) : '';
+    if (alias) return alias;
     // DUENO UNICO (spec del dueno 2026-10-11): la etiqueta se escribe TAL CUAL. El NOMBRE PROPIO
     // tiene UNA sola via de introduccion (wake + comando); la evidencia de VOZ no lo introduce,
     // solo lo CONFIRMA si ya venia introducido. Por eso NO se asciende la etiqueta al registrado.
@@ -334,19 +367,22 @@ function commitUserTurnRowInner({
     const resolved = resolveRowSpeakerName(speakerName || '', evidenciaAcustica, registeredSpeaker);
     const stamp = typeof timestamp === 'number' ? timestamp : Date.now();
 
-    // 1) Emisión que crece: reemplaza la fila de usuario del turno (una sola).
+    // 1) Emisión que crece: la fila del turno se reutiliza (UNA), pero su TEXTO no se
+    //    reescribe — la conversación solo se INSERTA (spec del dueño 2026-10-12). El texto
+    //    consolidado entra en la INSERCIÓN (el cierre del turno), nunca por mutación
+    //    posterior; aquí solo se COMPLETA el hablante.
     if (replaceLast) {
         for (let i = history.length - 1; i >= turnStart; i -= 1) {
             const entry = history[i];
             if (!entry || entry.role !== 'user') continue;
             const updated = history.map((e) =>
                 e.id === entry.id
-                    ? { ...e, text: raw, speakerName: preserveProperSpeaker(resolved, e.speakerName, evidenciaAcustica), timestamp: stamp }
+                    ? { ...e, speakerName: preserveProperSpeaker(resolved, e.speakerName, evidenciaAcustica), timestamp: stamp }
                     : e,
             );
             store.batchLoadHistory(updated);
             rememberTurn(turnId, entry.id);
-            return { id: entry.id, action: 'replaced' };
+            return { id: entry.id, action: 'reused' };
         }
         // La respuesta de FLU NO puede DERROTAR la accion de fila ya decidida
         // (`replaceLast` = "esta emision reemplaza la ultima"): si la fila de la MISMA
@@ -383,15 +419,11 @@ function commitUserTurnRowInner({
     if (mismoTurnoPorId) {
         const entry = history.find((e) => e.id === currentTurn.rowId);
         if (entry && entry.role === 'user') {
-            const previo = cleanForSpeech(entry.text || '');
-            const masCompleto = norm.length > previo.toLowerCase().length;
             const updated = history.map((e) =>
                 e.id === entry.id
                     ? {
                         ...e,
-                        text: masCompleto ? raw : e.text,
                         speakerName: preserveProperSpeaker(resolved, e.speakerName, evidenciaAcustica),
-                        timestamp: masCompleto ? stamp : e.timestamp,
                     }
                     : e,
             );

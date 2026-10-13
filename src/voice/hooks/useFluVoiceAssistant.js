@@ -65,7 +65,7 @@ import {
 } from '../lib/voiceIdentity'
 import { setSessionPrimarySpeaker } from '../lib/sessionPrimarySpeaker'
 import { applySessionCommandToPrimary } from '../lib/sessionLifecycle.js'
-import { updateTurnRowSpeaker } from '../lib/conversationTurnRow'
+import { updateTurnRowSpeaker, resetSpeakerLabelAliases } from '../lib/conversationTurnRow'
 import { registerSpeakerIdentity } from '../lib/speakerIdentityRegister'
 import {
   getConversationMinVoicedSamples,
@@ -2729,6 +2729,18 @@ const lastResolvedTurnRef = useRef(0)
     ],
   )
 
+  // UN solo emisor de la respuesta HABLADA de un comando de voz. Defecto medido por el
+  // dueno (2026-10-12 21:37): UNA orden produjo DOS "Registrado {name}." y DOS respuestas
+  // de la IA, porque la ruta de conversacion y la ruta pasiva construian cada una su
+  // propia locucion del comando. Una orden, una locucion.
+  const buildCommandSpeech = useCallback(
+    (command, transcript, lang) =>
+      getCommandSpeech(command, lang || language, FLU_CONFIG, {
+        name: detectWakeIntroducedName(transcript, resolvedWakeWords),
+      }),
+    [language, resolvedWakeWords],
+  )
+
   const emitActiveConversationCommand = useCallback(
     async (command, transcript, { conversationCommandPreLogged = false } = {}) => {
       const cleaned = cleanForSpeech(transcript)
@@ -2755,6 +2767,9 @@ const lastResolvedTurnRef = useRef(0)
         lastLogLineAtRef.current = 0
         lastLoggedCaptureRef.current = ''
         setSpeakerClusters([])
+        // Los ALIAS de nombre por voz son de la sesion: con el reset se vacian (mismo
+        // punto que los clusters, su otra mitad).
+        resetSpeakerLabelAliases()
         lastSpeakerRef.current = FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker
         lastLoggedSpeakerRef.current = FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker
         applySessionCommandToPrimary({ transcript: cleaned, sessionPrimarySpeakerRef })
@@ -2869,7 +2884,7 @@ const lastResolvedTurnRef = useRef(0)
       await commitAndResolveTurn({
         capture: cleaned,
         contract: {
-          respuesta_voz: getCommandSpeech(command, language, FLU_CONFIG, { name: detectWakeIntroducedName(cleaned, resolvedWakeWords) }),
+          respuesta_voz: buildCommandSpeech(command, cleaned, language),
           navegacion: {
             comando: command,
             destino: null,
@@ -2886,7 +2901,7 @@ const lastResolvedTurnRef = useRef(0)
         conversationCommandPreLogged,
       })
     },
-    [commitAndResolveTurn, commitSessionTurn, language, persistDialogueSession, phase, releaseTurnAfterLog, clearAutoProcessTimer, seedSessionPrimaryFromActiveName, setSpeakerClusters, resolvedWakeWords],
+    [commitAndResolveTurn, commitSessionTurn, language, persistDialogueSession, phase, releaseTurnAfterLog, clearAutoProcessTimer, seedSessionPrimaryFromActiveName, setSpeakerClusters, resolvedWakeWords, buildCommandSpeech],
   )
 
   const dispatchPassiveVoiceCommand = useCallback(
@@ -3845,7 +3860,7 @@ const lastResolvedTurnRef = useRef(0)
         await commitAndResolveTurn({
           capture: capturedTranscript,
           contract: {
-            respuesta_voz: getCommandSpeech(directCommand, detectedLanguage || language, FLU_CONFIG, { name: detectWakeIntroducedName(capturedTranscript, resolvedWakeWords) }),
+            respuesta_voz: buildCommandSpeech(directCommand, capturedTranscript, detectedLanguage || language),
             navegacion: {
               comando: directCommand,
               destino: null,
@@ -4228,6 +4243,7 @@ const lastResolvedTurnRef = useRef(0)
     conversationActiveRef,
     evaluateDeterministicFastPaths,
     emitActiveConversationCommand,
+    buildCommandSpeech,
     handleWakePolicyOrder,
     emitConversationLog,
     finalizeRecognition,

@@ -28,7 +28,7 @@ import { resolveSpeakerNameFromUtterance } from './speakerPolicy.js'
 import { isProperSpeakerName, normalizeSpeakerLabel } from './voiceIdentity.js'
 import { canonicalSpeakerName } from './speakerLabels.js'
 import { findClusterByLabel, findLabelsWithSharedVoice, mergeSpeakerClustersOnRename, sameVoiceFloor } from './speakerClusters.js'
-import { renameSpeakerRows } from './conversationTurnRow'
+import { renameSpeakerRows, setSpeakerLabelAlias } from './conversationTurnRow'
 import { setSessionPrimarySpeaker } from './sessionPrimarySpeaker.js'
 
 /**
@@ -94,6 +94,10 @@ export function registerSpeakerIdentity({
   // Ancla de la VOZ para el renombre por FIRMA: la del cluster de la etiqueta previa (o la del
   // nombre). Sin firma, el renombre solo alcanza etiquetas vivas.
   const clusterAncla = findClusterByLabel(clusters, clean) || findClusterByLabel(clusters, anchor)
+  // El NOMBRE queda tambien en la ETIQUETA de esa voz (alias de sesion): los turnos
+  // siguientes de la misma voz, SIN ventana de audio medida, llevan el nombre en vez de su
+  // etiqueta provisional. Dueno unico del alias: este registro (no hay mapa global).
+  labels.forEach((label) => setSpeakerLabelAlias(label, clean))
   const rowsChanged = typeof rename === "function" ? rename(labels, clean, { anchorSignature: clusterAncla?.signature || null }) : 0
   // El nombre queda en el CLUSTER de ESA VOZ (un dato: la voz), no en un mapa de
   // etiquetas: los turnos siguientes lo resuelven por FIRMA. Se trabaja sobre una
