@@ -52,7 +52,10 @@ export function labelToSpeakerId(label = '') {
  */
 export function resolveRowSpeakerLabel(row = {}, config = FLU_CONFIG) {
     const id = String(row?.speakerId || '').trim();
-    if (!id) return String(row?.speakerName || row?.speaker || '');
+    // Solo una CLAVE DE VOZ valida identifica por voz: un `speakerId` que no lo es (p. ej. el
+    // id sintetico de un snapshot de preflight) NO se resuelve por voz; la fila muestra la
+    // etiqueta que YA trae escrita, nunca el respaldo generico.
+    if (!id || !isValidSpeakerId(id)) return String(row?.speakerName || row?.speaker || '');
     const name = resolveVoiceName(id);
     if (name) return name;
     return speakerIdToDefaultName(id, config);
