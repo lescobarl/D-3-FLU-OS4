@@ -27,13 +27,17 @@
 import { resolveSpeakerNameFromUtterance } from './speakerPolicy.js'
 import { isProperSpeakerName, normalizeSpeakerLabel } from './voiceIdentity.js'
 import { canonicalSpeakerName } from './speakerLabels.js'
-import { findClusterByLabel, findLabelsWithSharedVoice, mergeSpeakerClustersOnRename, sameVoiceFloor } from './speakerClusters.js'
-import { renameSpeakerRows, setSpeakerLabelAlias, labelsAliasedTo } from './conversationTurnRow'
+import { findClusterByLabel, mergeSpeakerClustersOnRename } from "./speakerClusters.js"
+import { registerVoiceName, voiceKeyFor } from './speakerDirectory.js'
+import { labelToSpeakerId } from './conversationRow.js'
 import { setSessionPrimarySpeaker } from './sessionPrimarySpeaker.js'
 
 /**
- * Registra un nombre propio para la voz activa: alias de sesion + renombrado de las
- * filas de la MISMA voz + hablante PRIMARIO de la sesion.
+ * Registra un nombre propio para la VOZ activa. DUENO UNICO del nombre (mandato del dueno
+ * 2026-10-13): el nombre se pega a la VOZ en el DIRECTORIO (`registerVoiceName`) y NO se
+ * toca ninguna fila (la conversacion es texto insertado; el nombre se resuelve al MOSTRAR).
+ * Ademas: la voz entra en la BASE de participantes con su nombre y su VECTOR, y queda fijada
+ * como hablante PRIMARIO de la sesion.
  *
  * El primario se fija con fuente "presented" por defecto: es la voz DICIENDO su nombre,
  * y la precedencia declarada de `setSessionPrimarySpeaker` (presented > participant >
@@ -49,7 +53,6 @@ import { setSessionPrimarySpeaker } from './sessionPrimarySpeaker.js'
  *   (el dueno de la precedencia decide si escribe).
  * @param {"presented"|"participant"|"resolved"} [params.source] Fuente del primario.
  * @param {(labels: string[], toName: string) => number} [params.rename] Escritor de
- *   filas (inyectado; por defecto el dueno unico `renameSpeakerRows`).
  * @returns {{ registered: boolean, name: string, labels: string[], rowsChanged: number, primarySet: boolean }}
  */
 export function registerSpeakerIdentity({
@@ -58,7 +61,6 @@ export function registerSpeakerIdentity({
   previousLabel = "",
   refs = null,
   source = "presented",
-  rename = renameSpeakerRows,
 } = {}) {
   // P9.78: UNA grafia. El nombre entra canonico (inicial en mayuscula) para que la fila,
   // el alias y la base no partan la MISMA identidad en "luis"/"Luis".
@@ -71,57 +73,22 @@ export function registerSpeakerIdentity({
   // anclaba en `clean`, asi que solo se renombraba ESA etiqueta y los demas turnos de la misma
   // voz (re-clusterizada como Hablante 2/3) quedaban genericos.
   const anchor = normalizeSpeakerLabel(previousLabel)
-  // SUSTITUIR A LA PERSONA, no dar de alta una identidad nueva (spec del dueno 2026-10-11:
-  // "a todo lo que tenia Luis o Hablante X lo debia haber sustituido ... no dar de alta uno
-  // nuevo sino sustituir a esa persona"). Entra la etiqueta del PRIMARIO/PARTICIPANTE: es un
-  // DATO de la persona, no una medida. Medido 2026-10-11 01:21:57: el renombre solo alcanzo la
-  // etiqueta de ese turno ("Juan") y las filas anteriores ("Hablante 1") y las del participante
-  // ("luis") se quedaron como estaban (el cosido por firma no las alcanza: la misma voz midio
-  // bestSim 0.476 frente a "luis").
-  const personLabels = [normalizeSpeakerLabel(refs?.sessionPrimarySpeakerRef?.current || '')]
-  const labels = [
-    ...new Set(
-      [
-        anchor,
-        ...personLabels,
-        // PISO ESTRICTO (el de REUTILIZACION, 0.66): el cosido permisivo metia voces distintas
-        // (la banda de voz DISTINTA medida es 0.58).
-        ...findLabelsWithSharedVoice(clusters, anchor, sameVoiceFloor()),
-        ...findLabelsWithSharedVoice(clusters, clean, sameVoiceFloor()),
-        // Y las etiquetas que YA sabemos de ESA voz (su alias apunta a este nombre): son las
-        // filas que se escribieron con su etiqueta provisional antes de decir su nombre.
-        ...labelsAliasedTo(clean),
-      ].filter(Boolean),
-    ),
-  ]
-  // Ancla de la VOZ para el renombre por FIRMA: la del cluster de la etiqueta previa (o la del
-  // nombre). Sin firma, el renombre solo alcanza etiquetas vivas.
-  const clusterAncla = findClusterByLabel(clusters, clean) || findClusterByLabel(clusters, anchor)
-  // El NOMBRE queda tambien en la ETIQUETA de esa voz (alias de sesion): los turnos
-  // siguientes de la misma voz, SIN ventana de audio medida, llevan el nombre en vez de su
-  // etiqueta provisional. Dueno unico del alias: este registro (no hay mapa global).
-  labels.forEach((label) => setSpeakerLabelAlias(label, clean))
-  const rowsChanged = typeof rename === "function" ? rename(labels, clean, { anchorSignature: clusterAncla?.signature || null }) : 0
-  // El nombre queda en el CLUSTER de ESA VOZ (un dato: la voz), no en un mapa de
-  // etiquetas: los turnos siguientes lo resuelven por FIRMA. Se trabaja sobre una
-  // COPIA y la entrega el escritor unico de clusters (`refs.setClusters`).
-  const clustersRenombrados = labels.reduce(
-    (acc, label) => mergeSpeakerClustersOnRename(acc, label, clean),
-    clusters.map((c) => ({ ...c })),
-  )
-  if (typeof refs?.setClusters === "function") refs.setClusters(clustersRenombrados)
-  const primarySet = setSessionPrimarySpeaker(refs?.sessionPrimarySpeakerRef, clean, source)
-  // P9.79: la VOZ que dice su nombre ENTRA en la BASE de participantes (puerto inyectado
-  // por la app). Antes el nombre quedaba ligado a las filas y el panel, que lee Dexie, no
-  // lo mostraba ("si hay una base de participantes debe de aparecer a la derecha"). El
-  // nombre que entra es el CANONICO del registro: UNA grafia para fila, alias y base.
-  // El puerto avisa de sus fallos (no se silencian aqui).
-  // El VECTOR de ESA voz (la "cadena de numeros" de la diarizacion) viaja con el nombre:
-  // es la identidad que permite reconocerla en OTRA sesion (diseno del dueno 2026-10-13).
+  // El TIMBRE de ESA voz (el vector de su cluster): es su IDENTIDAD.
   const clusterDeLaVoz = findClusterByLabel(clusters, anchor) || findClusterByLabel(clusters, clean)
   const vectorDeLaVoz = Array.isArray(clusterDeLaVoz?.signature) ? clusterDeLaVoz.signature : null
+  // UN DUENO DEL NOMBRE (mandato del dueno 2026-10-13): el nombre se pega a la VOZ en el
+  // DIRECTORIO y no se reescribe NINGUNA fila (la conversacion es texto insertado). La clave
+  // es el TIMBRE cuando se midio: el mismo timbre da la misma voz aunque cambie su etiqueta.
+  const voiceId = voiceKeyFor({ voiceId: labelToSpeakerId(anchor || clean), signature: vectorDeLaVoz })
+  registerVoiceName(voiceId, clean, { vector: vectorDeLaVoz })
+  // El nombre queda tambien en el CLUSTER de ESA voz (dato de la voz) para el cosido de los
+  // turnos siguientes por firma. Copia: la publica el escritor unico de clusters.
+  const clustersRenombrados = mergeSpeakerClustersOnRename(clusters.map((c) => ({ ...c })), anchor, clean)
+  if (typeof refs?.setClusters === "function") refs.setClusters(clustersRenombrados)
+  const primarySet = setSessionPrimarySpeaker(refs?.sessionPrimarySpeakerRef, clean, source)
+  // La VOZ que dice su nombre ENTRA en la BASE de participantes con su NOMBRE y su VECTOR.
   if (typeof refs?.registerParticipant === "function") refs.registerParticipant(clean, clean, vectorDeLaVoz)
-  return { registered: true, name: clean, labels, rowsChanged, primarySet }
+  return { registered: true, name: clean, labels: [anchor].filter(Boolean), rowsChanged: 0, primarySet }
 }
 
 /**

@@ -75,7 +75,8 @@ function entryToRow(entry: ConversationEntry, participantId: string) {
         text: entry.text,
         timestamp: entry.timestamp,
         sentiment: entry.sentiment || '',
-        speakerId: entry.role === 'flu' ? 'flu' : (entry.speakerName || 'usuario'),
+        // La VOZ de la fila (el nombre se resuelve al MOSTRAR, no se persiste en el texto).
+        speakerId: entry.role === 'flu' ? 'flu' : (entry.speakerId || 'usuario'),
         speakerName: entry.speakerName || (entry.role === 'flu' ? 'FLU' : 'Usuario'),
 
         meta: entry.meta || null,

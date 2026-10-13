@@ -16,10 +16,12 @@ import { useIntegrationStore } from '../../store/integrationStore';
 import { cleanForSpeech } from './audioMath';
 import { voiceProbe } from './voiceProbe';
 import { isAutoSpeakerLabel, isProperSpeakerName } from './voiceIdentity';
-import { foldSpeakerKey } from './speakerLabels';
-import { compareCosineSignatures, getFallbackSpeaker } from './speakerCore';
+import { registerVoiceName } from './speakerDirectory.js';
+import { canonicalSpeakerName } from './speakerLabels';
+import { getFallbackSpeaker } from './speakerCore';
+import { labelToSpeakerId } from './conversationRow';
+import { voiceKeyFor } from './speakerDirectory.js';
 import { normalizeRowSignature } from './conversationRow';
-import { sameVoiceBySignature } from './speakerClusters'
 import { isFragmentOfLocution } from './turnStream';
 
 /**
@@ -41,58 +43,11 @@ let currentTurn: { id: number | string | null; rowId: string | null } = { id: nu
  * alcanza SOLO la etiqueta con la que esa voz venia apareciendo: no es un mapa global de
  * etiquetas (ese mapa fue el defecto retirado: "Hablante 1" de OTRA voz heredaba "Luis").
  * Se vacia con la sesion (mismo punto que vacia los clusters).
- */
-const speakerLabelAliases = new Map<string, Set<string>>();
-
-/** Nombres con los que se ha registrado ESA etiqueta (vacio = ninguna voz la ha nombrado). */
-function namesForLabel(label: string): Set<string> | undefined {
-    return speakerLabelAliases.get(foldSpeakerKey(label));
-}
-
 /**
- * NOMBRE de esa etiqueta, SOLO si es INEQUIVOCA: una etiqueta nombrada por DOS voces distintas
- * no resuelve a ninguna (volveria a contaminar: "la misma etiqueta de OTRA voz hereda el
- * nombre"). Con un solo nombre, la etiqueta ES esa voz.
+ * NO hay mapa etiqueta->nombre (mandato del dueno 2026-10-13): el nombre vive en la VOZ
+ * (`speakerDirectory`, `registerVoiceName`). Este modulo NO escribe nombres en la fila:
+ * la fila guarda LA VOZ y el nombre se resuelve al MOSTRAR. Una sola via del nombre.
  */
-function unambiguousNameForLabel(label: string): string {
-    const names = namesForLabel(label);
-    if (!names || names.size !== 1) return '';
-    return names.values().next().value || '';
-}
-
-/** Fija el nombre registrado de una etiqueta de ESA voz. Dueno: `registerSpeakerIdentity`. */
-export function setSpeakerLabelAlias(label: string, name: string): void {
-    const key = foldSpeakerKey(label);
-    const value = String(name || '').trim();
-    if (!key || !value) return;
-    const names = speakerLabelAliases.get(key) || new Set<string>();
-    names.add(value);
-    speakerLabelAliases.set(key, names);
-}
-
-/** Vacia los alias de sesion (reset de conversacion). */
-export function resetSpeakerLabelAliases(): void {
-    speakerLabelAliases.clear();
-}
-
-/**
- * Etiquetas que YA pertenecen a una voz nombrada (las que su alias apunta a ese nombre).
- * Lo consume el dueno del registro al renombrar: con esto el nombre alcanza TODAS las filas
- * de la voz, incluidas las que se escribieron con otra etiqueta provisional antes de que la
- * voz dijera su nombre (punto del dueno: "le dije ok flu soy luis y no actualizo todos los
- * Hablante 1"). Sin esto, el renombre solo alcanzaba la etiqueta de ese turno.
- */
-export function labelsAliasedTo(name: string): string[] {
-    const target = foldSpeakerKey(name);
-    if (!target) return [];
-    const out: string[] = [];
-    speakerLabelAliases.forEach((names, key) => {
-        if (names.size !== 1) return;
-        const value = names.values().next().value || '';
-        if (foldSpeakerKey(value) === target) out.push(key);
-    });
-    return out;
-}
 /**
  * NO hay mapa etiqueta->nombre. Un dato (la VOZ/firma), un dueno.
  *
@@ -140,8 +95,8 @@ export function resolveRowSpeakerName(
     // etiqueta PROVISIONAL ("Hablante N") pasa a llevar el nombre de la voz que lo dijo,
     // tambien en los turnos sin ventana de audio medida. Un nombre propio que YA llega en la
     // fila se escribe TAL CUAL (dueño 2026-10-11): el alias solo sustituye la etiqueta.
-    const alias = isAutoSpeakerLabel(raw) ? unambiguousNameForLabel(raw) : '';
-    if (alias) return alias;
+    // La etiqueta se escribe TAL CUAL: es el id provisional de ESA voz. El nombre propio
+    // NO se estampa aqui (ni por alias ni por continuidad): se resuelve por la VOZ al mostrar.
     // DUENO UNICO (spec del dueno 2026-10-11): la etiqueta se escribe TAL CUAL. El NOMBRE PROPIO
     // tiene UNA sola via de introduccion (wake + comando); la evidencia de VOZ no lo introduce,
     // solo lo CONFIRMA si ya venia introducido. Por eso NO se asciende la etiqueta al registrado.
@@ -218,83 +173,65 @@ function rememberTurn(turnId: number | string | null, rowId: string): void {
  * @param {string} toName nombre identificado (persona registrada)
  * @returns {number} filas cambiadas
  */
+/**
+ * Renombra una VOZ (registro manual del panel). NO toca ninguna fila: la conversacion es
+ * texto insertado; el nombre vive en el directorio y se resuelve al MOSTRAR.
+ *
+ * @param labels Etiquetas/voces a renombrar (se registran por su id de voz).
+ * @param toName Nombre nuevo.
+ * @returns cuantas VOCES quedaron registradas.
+ */
 export function renameSpeakerRows(
     labels: string[],
     toName: string,
-    { anchorSignature = null }: { anchorSignature?: number[] | null } = {},
 ): number {
-    const name = String(toName || '').trim();
-    if (!name || !Array.isArray(labels) || !labels.length) return 0;
-    const normalized = new Set(
-        labels.map((l) => foldSpeakerKey(l)).filter(Boolean),
-    );
-    normalized.add(foldSpeakerKey(name));
-    const store = useIntegrationStore.getState();
-    const history = store.conversationHistory;
-    // FIRMA DE LA FILA: la sustitucion alcanza TAMBIEN las filas cuya etiqueta YA NO existe en
-    // los clusters (medido 2026-10-11: "Hablante 1" no se renombraba). Un solo criterio de
-    // "misma voz", el del dueno (sameVoiceBySignature), nunca el de la etiqueta.
-    const ancla = normalizeRowSignature(anchorSignature) || undefined;
+    const name = canonicalSpeakerName(String(toName || '').trim());
+    if (!name || !Array.isArray(labels)) return 0;
     let changed = 0;
-    const updated = history.map((e) => {
-        if (e.role !== 'user') return e;
-        const current = String(e.speakerName || '').trim();
-        const porEtiqueta = Boolean(current) && normalized.has(foldSpeakerKey(current));
-        const porFirma = Boolean(ancla) && sameVoiceBySignature(compareCosineSignatures(ancla, normalizeRowSignature(e.signature ?? undefined) || []));
-        if (!porEtiqueta && !porFirma) return e;
-        if (current === name) return e;
+    labels.forEach((label) => {
+        const voz = labelToSpeakerId(String(label || ''));
+        if (!voz) return;
+        registerVoiceName(voz, name);
         changed += 1;
-        return { ...e, speakerName: name };
     });
-    if (changed) store.batchLoadHistory(updated);
     return changed;
 }
+/**
+ * La MEDIDA tardia de un turno llega cuando el commit ya escribio la fila. Antes esto
+ * REESCRIBIA el nombre de la fila (segunda via del nombre y mutacion de la conversacion).
+ * Ahora registra el nombre en el DIRECTORIO de la VOZ de ese turno: la conversacion queda
+ * intacta (texto insertado) y TODAS las filas de esa voz se ven con su nombre al MOSTRAR.
+ * Sin evidencia medida no se afirma nada (no se adivina).
+ *
+ * @returns `true` si el nombre quedo registrado para esa voz.
+ */
 export function updateTurnRowSpeaker(
     turnId: number | string | null,
     speakerName: string,
     {
         evidenciaAcustica = false,
-        registeredSpeaker,
+        vector = null,
     }: {
         evidenciaAcustica?: boolean;
         registeredSpeaker?: { registeredLabel?: string; registeredName?: string };
+        vector?: number[] | null;
     } = {},
 ): boolean {
-    // MISMO DUENO que el commit (`resolveRowSpeakerName`): la resolucion tardia aplica
-    // la MISMA regla (etiqueta automatica -> nombre registrado SOLO con evidencia), no
-    // una copia mas pobre: una etiqueta de diarizacion solo asciende al nombre de la
-    // persona registrada CON evidencia acustica, y el nombre propio ya escrito NO se
-    // degrada (defecto del dueno: "le puso a un registro Luis y a los demas los dejo
-    // como hablante dos").
-    const resolved = resolveRowSpeakerName(speakerName, evidenciaAcustica, registeredSpeaker);
-    if (turnId === null || turnId === undefined || !resolved) return false;
+    // El nombre entra CANONICO (una sola grafia para la fila y la base).
+    const name = canonicalSpeakerName(String(speakerName || '').trim());
+    if (turnId === null || turnId === undefined || !name) return false;
+    if (!evidenciaAcustica) return false;
     const rowId =
         recentTurns.get(String(turnId)) ||
         (currentTurn.id === turnId ? currentTurn.rowId : null);
     if (!rowId) return false;
-    const store = useIntegrationStore.getState();
-    const history = store.conversationHistory;
+    const history = useIntegrationStore.getState().conversationHistory;
     const entry = history.find((e) => e.id === rowId);
     if (!entry || entry.role !== 'user') return false;
-    // Una etiqueta AUTOMATICA no pisa el nombre propio ya escrito en la fila.
-    const objetivo = preserveProperSpeaker(resolved, entry.speakerName, evidenciaAcustica, { evidenciaDeTexto: false });
-    voiceProbe('row-update', {
-        ev: evidenciaAcustica === true,
-        turnId,
-        pedido: resolved,
-        actual: String(entry.speakerName || ''),
-        objetivo,
-        cambia: String(entry.speakerName || '').trim() !== objetivo,
-    });
-    if (String(entry.speakerName || '').trim() === objetivo) return false;
-    // La VOZ queda registrada: la etiqueta con la que venia apareciendo pertenece a ese
-    // nombre. Ese dato es el que permite que el nombre alcance sus OTRAS etiquetas mas tarde.
-    if (evidenciaAcustica && isProperSpeakerName(objetivo) && isAutoSpeakerLabel(String(entry.speakerName || ''))) {
-        setSpeakerLabelAlias(String(entry.speakerName || ''), objetivo);
-    }
-    store.batchLoadHistory(
-        history.map((e) => (e.id === rowId ? { ...e, speakerName: objetivo } : e)),
-    );
+    const voz = String(entry.speakerId || '') || labelToSpeakerId(String(entry.speakerName || ''));
+    if (!voz) return false;
+    registerVoiceName(voz, name, { vector });
+    voiceProbe('row-update', { turnId, voz, nombre: name, fila: rowId });
     return true;
 }
 
@@ -425,6 +362,9 @@ function commitUserTurnRowInner({
     }
 
     const resolved = resolveRowSpeakerName(speakerName || '', evidenciaAcustica, registeredSpeaker);
+    // LA VOZ de la fila (no su nombre): el nombre se resuelve al MOSTRAR. La clave es el
+    // TIMBRE cuando se midio (mismo timbre = misma clave aunque cambie la etiqueta).
+    const vozDeLaFila = voiceKeyFor({ voiceId: labelToSpeakerId(resolved), signature });
     const stamp = typeof timestamp === 'number' ? timestamp : Date.now();
 
     // 1) Emisión que crece: la fila del turno se reutiliza (UNA), pero su TEXTO no se
@@ -437,7 +377,10 @@ function commitUserTurnRowInner({
             if (!entry || entry.role !== 'user') continue;
             const updated = history.map((e) =>
                 e.id === entry.id
-                    ? { ...e, speakerName: preserveProperSpeaker(resolved, e.speakerName, evidenciaAcustica), timestamp: stamp }
+                    ? {
+                        ...e,
+                        speakerId: vozDeLaFila,
+                    }
                     : e,
             );
             store.batchLoadHistory(updated);
@@ -483,7 +426,7 @@ function commitUserTurnRowInner({
                 e.id === entry.id
                     ? {
                         ...e,
-                        speakerName: preserveProperSpeaker(resolved, e.speakerName, evidenciaAcustica),
+                        speakerId: vozDeLaFila,
                     }
                     : e,
             );
@@ -499,7 +442,7 @@ function commitUserTurnRowInner({
         id,
         role: 'user',
         text: raw,
-        speakerName: preserveProperSpeaker(resolved, '', evidenciaAcustica) || undefined,
+        speakerId: vozDeLaFila,
         timestamp: stamp,
         sentiment,
         signature: normalizeRowSignature(signature),

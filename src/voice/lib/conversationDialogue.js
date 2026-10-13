@@ -3,6 +3,7 @@
  * Flu usa el mismo mecanismo que los hablantes automáticos (sin canal paralelo).
  */
 import { cleanForSpeech } from './audioMath.js'
+import { resolveRowSpeakerLabel } from './conversationRow';
 import { FLU_CONFIG } from './fluConfig.js'
 import { equalsTrimmed } from '../../lib/textUtils'
 
@@ -60,7 +61,7 @@ export function deriveDialogueHistory(conversationHistory = []) {
   const list = Array.isArray(conversationHistory) ? conversationHistory : []
   return list.map((entry) => ({
     role: entry?.role === 'flu' ? 'assistant' : entry?.role === 'system' ? 'system' : 'user',
-    speaker: entry?.speakerName || (entry?.role === 'flu' ? FLU_DIALOGUE_SPEAKER : FALLBACK_SPEAKER),
+    speaker: resolveRowSpeakerLabel(entry) || (entry?.role === 'flu' ? FLU_DIALOGUE_SPEAKER : FALLBACK_SPEAKER),
     text: entry?.text || '',
     phase: entry?.phase || 'SESION_ACTIVA',
     source: DIALOGUE_SOURCE.LOG,
@@ -78,7 +79,7 @@ export function deriveUserRowSpeakers(conversationHistory = []) {
   const list = Array.isArray(conversationHistory) ? conversationHistory : []
   return list
     .filter((entry) => entry?.role === 'user')
-    .map((entry) => entry?.speakerName || FALLBACK_SPEAKER)
+    .map((entry) => resolveRowSpeakerLabel(entry) || FALLBACK_SPEAKER)
 }
 
 /**
@@ -91,7 +92,7 @@ export function deriveUserLastText(conversationHistory = []) {
     const entry = list[index]
     if (!entry) continue
     const role = String(entry.role || '').toLowerCase()
-    const speaker = String(entry.speakerName || '')
+    const speaker = String(resolveRowSpeakerLabel(entry) || '')
     if (role === 'user' || (speaker && speaker !== FLU_DIALOGUE_SPEAKER)) {
       return String(entry.text || '').trim()
     }

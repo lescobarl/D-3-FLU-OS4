@@ -59,6 +59,11 @@ export interface ConversationEntry {
     /** Nombre del hablante (OS2: speakerName / speaker) */
     speakerName?: string;
     /**
+     * LA VOZ de la fila (id del hablante en la sesión). El NOMBRE no vive aquí: se resuelve
+     * al mostrar (`resolveRowSpeakerLabel`), por la VOZ y contra el directorio/base.
+     */
+    speakerId?: string;
+    /**
      * Participante dueño de la entrada (aislamiento multiusuario del pizarrón).
      * Se sella al crear la fila con el participante activo; sin participante
      * queda sin definir (ruta legacy/global).

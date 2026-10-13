@@ -1,4 +1,5 @@
 // ============================================================
+import { resolveRowSpeakerLabel } from './conversationRow';
 // voiceParticipantsSource — DUEÑO ÚNICO de la LISTA del panel de participantes.
 // ------------------------------------------------------------
 // El panel de "Participantes" muestra la unión de TRES fuentes de la MISMA sesión:
@@ -39,7 +40,8 @@ export function resolveVoiceParticipants({
 } = {}): VoiceParticipantEntry[] {
     const labels = new Set<string>();
     for (let i = 0; i < history.length; i += 1) {
-        const label = String(history[i]?.speakerName || '').trim();
+        // El nombre NO vive en la fila: se resuelve AL MOSTRAR y por la VOZ.
+        const label = String(resolveRowSpeakerLabel(history[i] || {}) || '').trim();
         if (label) labels.add(label);
     }
     // SOLO participantes de ESTA sesión (diseño del dueño 2026-10-13): el panel NO vuelca la

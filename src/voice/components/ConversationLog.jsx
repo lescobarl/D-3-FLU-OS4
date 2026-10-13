@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, memo } from 'react'
 import { formatEmbeddingPreview } from '../lib/audioMath'
 import { formatRowClock } from '../lib/conversationRow'
 import { FLU_CONFIG } from '../lib/fluConfig'
+import { resolveRowSpeakerLabel } from '../lib/conversationRow'
 
 function formatCompactLogText(value = '') {
   return String(value || '').replace(/\s+/g, ' ').trim()
@@ -28,9 +29,8 @@ export const ConversationLog = memo(function ConversationLog({ entries = [], emp
       rows.push({
         id: entry.id,
         clock: formatRowClock(entry) || formatCompactLogText(entry?.timestamp),
-        speakerName: isSystem
-          ? '⚙️ Sistema'
-          : formatCompactLogText(entry?.speakerName ?? entry?.speaker),
+        // El nombre NO vive en la fila: se resuelve AL MOSTRAR y por la VOZ (mandato 2026-10-13).
+        speakerName: isSystem ? '⚙️ Sistema' : resolveRowSpeakerLabel(entry),
         vectorPreview: showEmbeddingPreview ? formatEmbeddingPreview(entry?.signature) : '',
         text: formatCompactLogText(entry?.text ?? entry?.transcript),
         isSystem,

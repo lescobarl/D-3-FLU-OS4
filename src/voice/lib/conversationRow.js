@@ -4,6 +4,7 @@
  */
 import { cleanForSpeech, stripDiacritics } from './audioMath.js'
 import { FLU_CONFIG } from './fluConfig.js'
+import { resolveVoiceName } from './speakerDirectory.js'
 import { normalizeSpeakerLabel, parseSpeakerIndex } from './voiceIdentity.js'
 import { equalsTrimmed } from '../../lib/textUtils'
 
@@ -38,6 +39,23 @@ export function labelToSpeakerId(label = '') {
     .replace(/[^a-z0-9]+/g, '_')
     .replace(/^_+|_+$/g, '')
   return slug ? `speaker_name_${slug}` : SPEAKER_ID_CALCULATING
+}
+
+/**
+ * ETIQUETA VISIBLE de una fila de conversacion: se resuelve AL MOSTRAR y por la VOZ.
+ *
+ * Mandato del dueno (2026-10-13): el NOMBRE no vive en la conversacion (la conversacion es
+ * texto insertado y no se reescribe ninguna fila). La fila guarda LA VOZ (`speakerId`) y
+ * aqui se resuelve su nombre; sin nombre registrado para esa voz, la etiqueta provisional
+ * de su id ("Hablante N"): NO se adivina. FLU, el sistema y las filas viejas que YA traen
+ * su nombre escrito se muestran tal cual (compatibilidad).
+ */
+export function resolveRowSpeakerLabel(row = {}, config = FLU_CONFIG) {
+    const id = String(row?.speakerId || '').trim();
+    if (!id) return String(row?.speakerName || row?.speaker || '');
+    const name = resolveVoiceName(id);
+    if (name) return name;
+    return speakerIdToDefaultName(id, config);
 }
 
 export function speakerIdToDefaultName(speakerId = '', config = FLU_CONFIG) {

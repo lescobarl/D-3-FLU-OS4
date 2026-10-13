@@ -65,7 +65,8 @@ import {
 } from '../lib/voiceIdentity'
 import { setSessionPrimarySpeaker } from '../lib/sessionPrimarySpeaker'
 import { applySessionCommandToPrimary } from '../lib/sessionLifecycle.js'
-import { updateTurnRowSpeaker, resetSpeakerLabelAliases } from '../lib/conversationTurnRow'
+import { updateTurnRowSpeaker } from '../lib/conversationTurnRow'
+import { resetVoiceDirectory } from '../lib/speakerDirectory.js'
 import { registerSpeakerIdentity } from '../lib/speakerIdentityRegister'
 import {
   getConversationMinVoicedSamples,
@@ -2758,7 +2759,7 @@ const lastResolvedTurnRef = useRef(0)
         lastLogLineAtRef.current = 0
         lastLoggedCaptureRef.current = ''
         setSpeakerClusters([])
-        resetSpeakerLabelAliases() // los alias por voz son de la sesion (como los clusters)
+        resetVoiceDirectory() // el nombre por VOZ es de la sesion (como los clusters)
         lastSpeakerRef.current = FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker
         lastLoggedSpeakerRef.current = FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker
         applySessionCommandToPrimary({ transcript: cleaned, sessionPrimarySpeakerRef })
