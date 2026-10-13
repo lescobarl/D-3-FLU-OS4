@@ -222,10 +222,30 @@ export function handleConversationStreamSync(
       windowMs: sameRequestWindowMs(),
     })
   }
-  const ensureTurnId = (isTurn, sameLive) => {
+  // ¿Es el mismo turno por CONTINUIDAD de la locucion? El ASR puede re-entregar
+  // la misma locucion con mas texto (p. ej. "54" -> "54 chars of text") y eso NO
+  // es un turno nuevo: es la misma locucion que crece. El id del turno se acuña
+  // por LOCUCION, no por revision del ASR.
+  const isContinuationOfSameLocution = (text) => {
+    const req = lastRequestRef?.current || { text: '', at: 0 }
+    const prev = String(req.text || '')
+    const next = String(text || '')
+    if (!prev || !next) return false
+    const sinceMs = Date.now() - Number(req.at || 0)
+    const windowMs = sameRequestWindowMs()
+    if (sinceMs >= windowMs) return false
+    // Misma emision (igual tras normalizar)
+    if (isSameEmissionWithinWindow(prev, next, { sinceMs, windowMs })) return true
+    // Continuacion: el texto nuevo empieza con el anterior y es mas largo
+    const prevNorm = cleanForSpeech(prev).toLowerCase()
+    const nextNorm = cleanForSpeech(next).toLowerCase()
+    if (prevNorm.length >= 10 && nextNorm.length > prevNorm.length && nextNorm.startsWith(prevNorm)) return true
+    return false
+  }
+  const ensureTurnId = (isTurn, sameLive, sameLocution = false) => {
     if (!isTurn) return
     if (openPreviewTurnRef.current) return
-    if (sameLive) return
+    if (sameLive || sameLocution) return
     openPreviewTurnRef.current = true
     activeTurnIdRef.current += 1
   }
@@ -234,7 +254,7 @@ export function handleConversationStreamSync(
     // El ID del turno se acuna AL ABRIR el turno y ANTES de la caja: un bloqueo de la frase
     // viva (3b) no puede comerse el bump (wakeRowNoiseGuard: "un PREVIEW de ruido no mueve el
     // id del turno VIVO").
-    ensureTurnId(esTurno(capture), sameRequestAsLastDispatch(capture))
+    ensureTurnId(esTurno(capture), sameRequestAsLastDispatch(capture), isContinuationOfSameLocution(capture))
     // LA FRASE VIVA SOLO ACUMULA (spec del dueno, 2026-10-11): si el ASR reentrega un TROZO
     // contiguo de lo YA MOSTRADO (una COLA, un trozo del medio), manda lo mostrado y el turno
     // no se toca. Antes el recorte solo se bloqueaba por PREFIJO (`wouldShrinkListenLog`), asi
@@ -320,7 +340,7 @@ export function handleConversationStreamSync(
 
   // El id del turno se acuna para todo COMMIT real: la fila lo necesita (antes
   // se acunaba solo con wake y el ruido se quedaba sin fila NI id).
-  ensureTurnId(true, mismaLocucionViva)
+  ensureTurnId(true, mismaLocucionViva, isContinuationOfSameLocution(capture))
 
   // §9 Sella el turno: captura UNA vez su audio (dueño: turnAudioSnapshot.js) con
   // el id YA acuñado, antes de que `finalizeTurnCommit` vacíe el buffer PCM.

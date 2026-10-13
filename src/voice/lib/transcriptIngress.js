@@ -190,28 +190,35 @@ export function flushSrGapSegmentThroughIngress(ctx, { sinceLastResultMs = 0 } =
   const capture = cleanForSpeech(evalResult.capture)
   if (!capture) return { flushed: false, reason: 'empty-capture' }
 
+  // P9.xx: el cierre por srGap usa el texto ACUMULADO (publishedLiveRef) si es
+  // MAS COMPLETO que el estado crudo del ASR. El ASR puede re-entregar un interino
+  // PARCIAL (p. ej. "54" chars) mientras la locucion viva ya acumulo 242 chars;
+  // cerrar con el parcial pierde la cola de la transcripcion.
+  const liveText = cleanForSpeech(ctx.publishedLiveRef?.current || '')
+  const captureFinal = (liveText.length > capture.length) ? liveText : capture
+
   resetInterimControlBuffers(ctx.listenState, ctx.publishedLiveRef, ctx.lastStreamPreviewRef)
 
-  const rowContext = buildIngressRowContext(ctx, capture)
+  const rowContext = buildIngressRowContext(ctx, captureFinal)
   const forceNewRow = shouldForceNewLogRowOnCommit(
-    capture,
+    captureFinal,
     rowContext.lastCommitted,
     rowContext.lastEmitted,
     rowContext,
   )
-  const redundant = !forceNewRow && isRedundantFinal(capture, rowContext)
+  const redundant = !forceNewRow && isRedundantFinal(captureFinal, rowContext)
   if (redundant) {
-    return { flushed: false, reason: 'redundant-vs-log', capture }
+    return { flushed: false, reason: 'redundant-vs-log', capture: captureFinal }
   }
 
-  confirmFinal(ctx.listenState, capture)
-  processListenPacket(ctx.listenState, '', { interim: '', final: capture, reset: true })
+  confirmFinal(ctx.listenState, captureFinal)
+  processListenPacket(ctx.listenState, '', { interim: '', final: captureFinal, reset: true })
 
-  const wakeAnalysis = analyzeWakeTurn(capture, { lastCommitted })
+  const wakeAnalysis = analyzeWakeTurn(captureFinal, { lastCommitted })
   if (wakeAnalysis.hasInlineBoundary) {
-    const wakeSplit = applyWakeTurnCommit(ctx, capture, {
+    const wakeSplit = applyWakeTurnCommit(ctx, captureFinal, {
       source: 'sr-gap',
-      newParagraph: forceNewRow || resolveLogParagraphBreak('', capture, true),
+      newParagraph: forceNewRow || resolveLogParagraphBreak('', captureFinal, true),
       forceNewRow,
     })
     if (wakeSplit.handled) {
@@ -219,33 +226,33 @@ export function flushSrGapSegmentThroughIngress(ctx, { sinceLastResultMs = 0 } =
       return {
         flushed: true,
         dispatched: wakeSplit.reason === 'wake-split-flu',
-        capture,
+        capture: captureFinal,
         reason: wakeSplit.reason || evalResult.reason,
         sinceLastResultMs,
       }
     }
   }
 
-  ctx.tryDispatch?.(capture, { interim: false, source: 'sr-gap' })
+  ctx.tryDispatch?.(captureFinal, { interim: false, source: 'sr-gap' })
 
   // El cierre REAL del segmento se sella SIEMPRE: el `tryDispatch` de arriba puede
   // haber deduplicado (sin escribir fila) o haber respondido. El commit es
   // idempotente (una sola fila por locucion), asi que no hay doble fila.
   const lastRowSrGap = cleanForSpeech(ctx.logRowsTextRef?.current?.at(-1) || '')
-  if (lastRowSrGap && phrasesEquivalent(capture, lastRowSrGap)) {
+  if (lastRowSrGap && phrasesEquivalent(captureFinal, lastRowSrGap)) {
     sealTurnBoundaryAfterFinal(ctx)
     return {
       flushed: false,
       reason: 'already-committed',
-      capture,
+      capture: captureFinal,
       sinceLastResultMs,
     }
   }
 
   ctx.scheduleTurnCommit?.({
-    capture,
-    newParagraph: forceNewRow || resolveLogParagraphBreak('', capture, true),
-    utterance: capture,
+    capture: captureFinal,
+    newParagraph: forceNewRow || resolveLogParagraphBreak('', captureFinal, true),
+    utterance: captureFinal,
     turnCommit: true,
     freshUtterance: true,
     turnBoundary: true,
@@ -259,7 +266,7 @@ export function flushSrGapSegmentThroughIngress(ctx, { sinceLastResultMs = 0 } =
 
   return {
     flushed: true,
-    capture,
+    capture: captureFinal,
     reason: evalResult.reason,
     sinceLastResultMs,
   }
