@@ -254,6 +254,23 @@ describe('G11 voiceSingleSource - las frases de nextSpeaker declaradas tienen co
     it('el detector no es decorativo', () => {
         expect(detectNextSpeakerPhrase('oye flu pon una alarma a las siete')).toBeFalsy()
     })
+
+    // Defecto MEDIDO en el log del dueno (2026-10-12 21:16, sesion de prueba):
+    // mientras dictaba "en la ultima frase no hay ni cambio de hablante ni ni silencio
+    // para que lo escriba" el commit salio `src=explicit-next name="Hablante 2"` y la
+    // sesion (UNA sola voz) quedo partida en "Hablante 1"/"Hablante 2"/"Luis".
+    // El cue era una MENCION dentro del dictado, no una ORDEN: la orden ABRE el mandato.
+    it('una MENCION del cue dentro del dictado NO es una orden de cambio de hablante', () => {
+        const dictado =
+            'en la ultima frase no hay ni cambio de hablante ni ni silencio para que lo escriba entonces eso esta provocando delay'
+        expect(
+            detectNextSpeakerPhrase(dictado),
+            'mencionar "cambio de hablante" no ordena cambiar de hablante',
+        ).toBe(false)
+        // La ORDEN sigue reconociendose: el mandato abre con el cue.
+        expect(detectNextSpeakerPhrase('ok flu cambio de hablante')).toBe(true)
+        expect(detectNextSpeakerPhrase('ahora habla otra persona')).toBe(true)
+    })
 })
 
 // ------------------------------------------------------------
