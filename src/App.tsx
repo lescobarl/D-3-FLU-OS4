@@ -199,7 +199,6 @@ import { localGet, localRemove, localSet } from './core/storage/localStore';
 import { pathForTab, type RightTab, tabFromPath } from './app/tabRoutes';
 import { useFluBridgesLifecycle } from './app/fluBridges';
 import { useIdentitySessionRef } from './app/useIdentitySessionRef';
-import { setParticipantPort } from './voice/lib/speakerIdentityRegister';
 import { resolveVoiceParticipants } from './voice/lib/voiceParticipantsSource';
 import { isAIProvider } from './app/appTypeGuards';
 import { type FastPathExecutedMarks, arbiterDomainRoute, isTurnAlreadyExecuted } from './app/arbiterDomainRoutes';
@@ -1170,19 +1169,16 @@ function App() {
     // participantes debe de aparecer a la derecha). Entra con su speakerLabel para que
     // la voz quede ligada al participante.
     useEffect(() => {
-        const registrarEnLaBase = (name: string) => {
+        if (!identitySessionRef.current) return;
+        // PUERTO unico a la BASE de participantes: el registro del nombre por VOZ entra por
+        // aqui (puente de sesion) y asi su nombre se ve en la seccion de participantes.
+        identitySessionRef.current.registerParticipant = (name: string) => {
             const canonical = String(name || '').trim();
             if (!canonical) return;
             participants.service
                 .register({ name: canonical, speakerLabel: canonical })
                 .catch((err: unknown) => logCaughtError('src/App.tsx: registerParticipant (voz)', err));
         };
-        // UN puerto, DOS consumidores de la MISMA funcion: el puente de sesion y el puerto
-        // del registro de identidad (el hook no siempre construye su `refs` con el puente).
-        if (identitySessionRef.current) {
-            identitySessionRef.current.registerParticipant = registrarEnLaBase;
-        }
-        setParticipantPort(registrarEnLaBase);
     }, [identitySessionRef, participants.service]);
     participantSpeakerRef.current = participantSpeakerForRow;
     const {

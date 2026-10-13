@@ -2729,17 +2729,8 @@ const lastResolvedTurnRef = useRef(0)
     ],
   )
 
-  // UN solo emisor de la respuesta HABLADA de un comando de voz. Defecto medido por el
-  // dueno (2026-10-12 21:37): UNA orden produjo DOS "Registrado {name}." y DOS respuestas
-  // de la IA, porque la ruta de conversacion y la ruta pasiva construian cada una su
-  // propia locucion del comando. Una orden, una locucion.
-  const buildCommandSpeech = useCallback(
-    (command, transcript, lang) =>
-      getCommandSpeech(command, lang || language, FLU_CONFIG, {
-        name: detectWakeIntroducedName(transcript, resolvedWakeWords),
-      }),
-    [language, resolvedWakeWords],
-  )
+  // UN emisor de la respuesta hablada de un comando (dueno 2026-10-12: UNA orden dijo DOS "Registrado ...").
+  const buildCommandSpeech = useCallback((command, transcript, lang) => getCommandSpeech(command, lang || language, FLU_CONFIG, { name: detectWakeIntroducedName(transcript, resolvedWakeWords) }), [language, resolvedWakeWords])
 
   const emitActiveConversationCommand = useCallback(
     async (command, transcript, { conversationCommandPreLogged = false } = {}) => {
@@ -2767,9 +2758,7 @@ const lastResolvedTurnRef = useRef(0)
         lastLogLineAtRef.current = 0
         lastLoggedCaptureRef.current = ''
         setSpeakerClusters([])
-        // Los ALIAS de nombre por voz son de la sesion: con el reset se vacian (mismo
-        // punto que los clusters, su otra mitad).
-        resetSpeakerLabelAliases()
+        resetSpeakerLabelAliases() // los alias por voz son de la sesion (como los clusters)
         lastSpeakerRef.current = FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker
         lastLoggedSpeakerRef.current = FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker
         applySessionCommandToPrimary({ transcript: cleaned, sessionPrimarySpeakerRef })
@@ -2901,7 +2890,7 @@ const lastResolvedTurnRef = useRef(0)
         conversationCommandPreLogged,
       })
     },
-    [commitAndResolveTurn, commitSessionTurn, language, persistDialogueSession, phase, releaseTurnAfterLog, clearAutoProcessTimer, seedSessionPrimaryFromActiveName, setSpeakerClusters, resolvedWakeWords, buildCommandSpeech],
+    [commitAndResolveTurn, commitSessionTurn, language, persistDialogueSession, phase, releaseTurnAfterLog, clearAutoProcessTimer, seedSessionPrimaryFromActiveName, setSpeakerClusters, buildCommandSpeech],
   )
 
   const dispatchPassiveVoiceCommand = useCallback(

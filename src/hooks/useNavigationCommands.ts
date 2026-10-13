@@ -274,7 +274,13 @@ export function useNavigationCommands(
                     transcript,
                     speakerName: speakerName || '',
                     clusters: sesionIdentidad?.speakerClustersRef?.current || [],
-                    refs: { sessionPrimarySpeakerRef: sesionIdentidad?.sessionPrimarySpeakerRef, setClusters: sesionIdentidad?.setClusters },
+                    refs: {
+                        sessionPrimarySpeakerRef: sesionIdentidad?.sessionPrimarySpeakerRef,
+                        setClusters: sesionIdentidad?.setClusters,
+                        // El nombre dicho por VOZ entra en la base de participantes: si esta
+                        // en la base, se ve en la seccion de participantes (punto del dueno).
+                        registerParticipant: sesionIdentidad?.registerParticipant,
+                    },
                 });
                 auditLog.logEvent('command:registrar_participante', 'navigation', uuidv4(), {
                     speaker: registrado.name || speakerName || undefined,
