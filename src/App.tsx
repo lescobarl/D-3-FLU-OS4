@@ -1344,8 +1344,8 @@ function App() {
                 // LAS DOS FUENTES POR LA MISMA REGLA (sesion + base), siempre con el MODELO.
                 const vozConocida = resolveVoiceIdentity(rawSignature, {
                     candidates: (participants.participants || []).map((p) => {
-                        const voz = p as { voiceVector?: number[]; voiceVectorModel?: string };
-                        return { name: p.name, vector: voz.voiceVector, model: voz.voiceVectorModel };
+                        // El esquema del participante ya declara el vector y su modelo.
+                        return { name: p.name, vector: p.voiceVector, model: p.voiceVectorModel };
                     }),
                 });
                 if (vozConocida?.name) {

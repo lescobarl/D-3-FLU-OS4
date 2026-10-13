@@ -40,16 +40,6 @@ function normalizeVoiceVector(vector?: number[]): number[] | undefined {
 // (fuente única de verdad — Regla de oro) y se re-exporta aquí.
 export type { ParticipantRecord } from '../db/fluDatabase';
 
-/**
- * El registro del participante lleva ADEMAS el VECTOR de su voz: la identidad es el vector,
- * el nombre es su ETIQUETA (diseno del dueno 2026-10-13). Se declara como EXTENSION aqui
- * (el tipo del registro vive en la capa de base de datos) para no tocar su forma.
- */
-export type ParticipantRecordWithVoice = ParticipantRecord & {
-  voiceVector?: number[];
-  voiceVectorModel?: string;
-};
-
 export interface ParticipantInput {
   name: string;
   role?: string;
@@ -231,7 +221,7 @@ export function createParticipantRegistry({
 
     const id = newId();
     const t = timestamp();
-    const record: ParticipantRecordWithVoice = {
+    const record: ParticipantRecord = {
       id,
       name,
       role: input.role,

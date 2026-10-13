@@ -247,6 +247,16 @@ export interface ParticipantRecord {
     birthday?: string;
     /** Etiqueta de hablante de la diarización (A3). */
     speakerLabel?: string;
+    /**
+     * VECTOR de voz (la "cadena de numeros" de la diarizacion): la IDENTIDAD de la VOZ; el
+     * nombre es su etiqueta. En otra sesion la misma voz se reconoce por este vector.
+     */
+    voiceVector?: number[];
+    /**
+     * MODELO que genero `voiceVector`. Sin el, el vector NO es comparable: la comparacion
+     * exige el MISMO modelo (nada de comparar en silencio).
+     */
+    voiceVectorModel?: string;
     /** Id del perfil de asistente FLU_PROFILES (A4). */
     profileId?: string;
     /** Voz TTS personalizada (A5). */
