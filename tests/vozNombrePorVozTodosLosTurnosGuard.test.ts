@@ -5,8 +5,9 @@
 // Aplicarlo en TODOS los turnos de esa voz (no solo el primero). Puede salir de la base y
 // actualizarse cuando cambies el nombre en participantes."
 //
-// INVARIANTE: N turnos de la MISMA voz => N filas con el NOMBRE; 0 genericas (salvo cambio de
-// hablante real).
+// INVARIANTE (P9.81 + spec del dueno 2026-10-12: "si al CLUSTER, NO al nombre sin evidencia"):
+// N turnos CON evidencia de esa firma => N filas con el NOMBRE; un turno SIN evidencia =>
+// etiqueta GENERICA. NUNCA el nombre del hablante anterior por el solo hecho de estar ligado.
 //
 // PRUEBA DE DETECTOR (mutacion): si el nombre vuelve a depender de la ETIQUETA (o solo del primer
 // turno), el caso de la voz con DOS etiquetas historicas deja filas genericas y cae.
@@ -67,13 +68,16 @@ describe('el nombre se liga a la VOZ y vale en TODOS sus turnos', () => {
         expect(filas(), 'todos los turnos de esa voz').toEqual(['Luis', 'Luis', 'Luis', 'Hablante 3'])
     })
 
-    it('la VOZ ligada mantiene su nombre en los turnos NUEVOS aunque la medida no llegue', () => {
-        // El commit decide con el nombre LIGADO a la voz (cluster con firma), no por etiqueta.
-        expect(
-            STREAM.includes('isNameBoundToVoice(speakerClustersRef.current, crudo)'),
-            'el commit consulta el vinculo voz->nombre',
-        ).toBe(true)
-        expect(STREAM.includes('nombreLigado'), 'y lo usa para no degradar el nombre').toBe(true)
+    it('el NOMBRE solo se estampa con EVIDENCIA; sin medida la fila cae a generica (P9.81)', () => {
+        // Spec del dueno (2026-10-12): reuso del CLUSTER si; herencia del NOMBRE sin evidencia NO.
+        // El commit levanta el nombre con la MEDIDA (preflight) o con el DATO del mandato ("soy X");
+        // sin ninguna de las dos, el duenio de la regla (`blindSpeakerFallback`, speakerPolicy)
+        // degrada un nombre propio a etiqueta generica (evita "Luis pegado a una voz distinta").
+        expect(STREAM.includes('preflightEvidenceMeasured(preflight)'), 'la evidencia es la MEDIDA').toBe(true)
+        expect(STREAM.includes('FUENTES_CON_IDENTIDAD'), 'y el dato del mandato').toBe(true)
+        expect(STREAM.includes('blindSpeakerFallback(crudo)'), 'el nombre sin evidencia degrada').toBe(true)
+        // Y NO queda el atajo que estampaba el nombre LIGADO sin evidencia del turno (P9.81).
+        expect(STREAM.includes('nombreLigado'), 'sin atajo de nombre sin evidencia').toBe(false)
     })
 })
 
