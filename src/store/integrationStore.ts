@@ -525,32 +525,19 @@ addSystemMessage: (text: string) => {
                     id: nextId(),
                     speakerName: 'FLU',
                 }, get().activePersonId);
-                set((current) => {
-                    const history = current.conversationHistory;
-                    const lastUserIdx = history.length - 1;
-                    // Build new history in a single pass — avoid double array copy
-                    const newHistory = new Array(history.length + 1);
-                    for (let i = 0; i < history.length; i++) {
-                        if (i === lastUserIdx && history[i].role === 'user') {
-                            // Link response to last user message (OS2-style)
-                            newHistory[i] = {
-                                ...history[i],
-                                response: text,
-                                meta: { ...history[i].meta, response: text },
-                            };
-                        } else {
-                            newHistory[i] = history[i];
-                        }
-                    }
-                    newHistory[history.length] = entry;
-                    return {
-                        conversationHistory: newHistory,
-                        sessionStats: {
-                            ...current.sessionStats,
-                            totalFluMessages: current.sessionStats.totalFluMessages + 1,
-                        },
-                    };
-                });
+                // UN ESCRITOR POR FILA (P9.82): la respuesta de FLU es ESTA entrada
+                // (`role='flu'`, la que escribe `logFluReply`). Antes ADEMAS se adjuntaba
+                // al ultimo turno del usuario (`response` / `meta.response`): el MISMO texto
+                // dos veces en el mismo store, tapado por un parche de PRESENTACION en
+                // ConversationLog.jsx. Mismo arreglo que ya tiene `addUserMessage` (duenio de
+                // la fila del usuario: `commitUserTurnRow`).
+                set((current) => ({
+                    conversationHistory: capConversationHistory([...current.conversationHistory, entry]),
+                    sessionStats: {
+                        ...current.sessionStats,
+                        totalFluMessages: current.sessionStats.totalFluMessages + 1,
+                    },
+                }));
             },
 
             setEmotionalState: (state: EmotionalState) => {

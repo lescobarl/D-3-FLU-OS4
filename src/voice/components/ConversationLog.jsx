@@ -17,27 +17,14 @@ export const ConversationLog = memo(function ConversationLog({ entries = [], emp
     // "[FLU recuerda] ...") viven en el historial porque Gemini los usa como
     // contexto, pero NO son filas de conversación: se excluyen de la bitácora
     // (presentación). La fuente única (el store) queda intacta.
+    // P9.82: cada intervencion de FLU es UNA fila (`role='flu'`, la escribe
+    // `logFluReply`). El campo `response` del turno del usuario y el parche de
+    // presentacion que lo escondia se retiraron: no hay duplicado que tapar.
     const visibleEntries = entries.filter((entry) => !entry?.meta?.systemEvent)
-    // FIX duplicación: addFluMessage (integrationStore.ts) escribe la respuesta de FLU
-    // DOS veces: la adjunta al último turno del usuario (campo .response / meta.response)
-    // y ADEMÁS agrega una entrada independiente role='flu' con el mismo texto. Aquí
-    // recolectamos los textos de las entradas FLU independientes para NO volver a pintar
-    // la respuesta adjunta cuando ya se muestra como fila propia (elimina el duplicado
-    // visible en el log SIN tocar el store, que Gemini/persistencia/exportación necesitan).
-    const fluTexts = new Set()
-    for (const entry of visibleEntries) {
-      if (entry.role === 'flu') {
-        fluTexts.add(formatCompactLogText(entry?.text ?? entry?.transcript))
-      }
-    }
     const rows = []
     for (let index = visibleEntries.length - 1; index >= 0; index -= 1) {
       const entry = visibleEntries[index]
       const isSystem = entry.role === 'system'
-      const compactResponse = formatCompactLogText(
-        entry.meta?.response ? entry.meta.response : entry.response || '',
-      )
-      const showResponse = Boolean(compactResponse) && !fluTexts.has(compactResponse)
       rows.push({
         id: entry.id,
         clock: formatRowClock(entry) || formatCompactLogText(entry?.timestamp),
@@ -46,7 +33,6 @@ export const ConversationLog = memo(function ConversationLog({ entries = [], emp
           : formatCompactLogText(entry?.speakerName ?? entry?.speaker),
         vectorPreview: showEmbeddingPreview ? formatEmbeddingPreview(entry?.signature) : '',
         text: formatCompactLogText(entry?.text ?? entry?.transcript),
-        response: showResponse ? compactResponse : '',
         isSystem,
       })
     }
@@ -81,7 +67,6 @@ export const ConversationLog = memo(function ConversationLog({ entries = [], emp
                 <span className="audit-item__vector">{entry.vectorPreview}</span>
               ) : null}
               <p>{entry.text}</p>
-              {entry.response ? <span>{entry.response}</span> : null}
             </div>
           )
         })}

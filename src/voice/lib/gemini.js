@@ -914,7 +914,7 @@ export function buildConversationMessages({
     // OS4: la historia puede llegar con role 'flu' (integrationStore) en lugar de
     // 'assistant' (diálogo de voz). Ambos representan la respuesta de FLU.
     const entryRole = entry?.role === 'assistant' || entry?.role === 'flu' ? 'assistant' : 'user'
-    const text = String(entry?.text || entry?.transcript || entry?.response || entry?.respuesta_voz || '').trim()
+    const text = String(entry?.text || entry?.transcript || entry?.respuesta_voz || '').trim()
     if (!text) continue
 
     const speakerLabel = String(entry?.speaker || '').trim()
@@ -959,10 +959,10 @@ function buildConversationSummaryPrompt({ history = [], language = 'es', role = 
   const conversationText = recentHistory
     .map((entry, index) => {
       const speakerLabel = String(entry?.speaker || entry?.role || (isEnglish ? 'unknown' : 'desconocido')).trim()
+      // P9.82: la respuesta de FLU es su PROPIA fila del historial (una entrada por
+      // intervencion); ya no va adjunta al turno del usuario.
       const transcriptText = String(entry?.transcript || entry?.text || '').trim()
-      const responseText = String(entry?.response || '').trim()
-      const responsePart = responseText ? ` | respuesta: ${responseText}` : ''
-      return `${index + 1}. ${speakerLabel} | transcripcion: ${transcriptText || (isEnglish ? 'none' : 'sin texto')}${responsePart}`
+      return `${index + 1}. ${speakerLabel} | transcripcion: ${transcriptText || (isEnglish ? 'none' : 'sin texto')}`
     })
     .filter(Boolean)
     .join('\n')

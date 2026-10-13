@@ -31,7 +31,7 @@ export function trimDialogueHistory(history = [], max = FLU_CONFIG.limits.contex
 export function appendDialogueEntry(history = [], entry = {}, max = FLU_CONFIG.limits.contextHistoryMax) {
   // OS4: incluye respuesta_voz — las respuestas de Gemini llegan bajo ese campo
   // en el contrato y, si se conserva esa forma, debe persistirse igual que text.
-  const text = cleanForSpeech(entry.text || entry.transcript || entry.response || entry.respuesta_voz || '')
+  const text = cleanForSpeech(entry.text || entry.transcript || entry.respuesta_voz || '')
   if (!text) return [...history]
 
   const speaker =
