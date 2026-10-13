@@ -22,6 +22,7 @@
  * declarado ACOTADO cuenta como corrida acotada (scripts/full-suite-policy.mjs).
  */
 export const GUARD_FILES = [
+    'tests/duenoVozPuntos.test.ts',
     'tests/aiServiceSingleImplGuard.test.ts',
     'tests/arbiterDomainBarrier.test.ts',
     'tests/architecture.test.ts',

@@ -38,12 +38,16 @@ describe('commitUserTurnRow — un solo escritor de la fila del usuario', () => 
         expect(rows[0].text).toBe(FRASE);
     });
 
-    it('emisión que crece REEMPLAZA la fila (1 fila con el texto final)', () => {
+    it('emisión que crece REUTILIZA la fila SIN reescribir su texto (append-only)', () => {
+        // Regla del dueño (2026-10-12): la conversación solo se INSERTA; el texto
+        // consolidado entra en la inserción (el cierre del turno), no por mutación.
+        // Antes esta emisión REEMPLAZABA el texto de la fila ya escrita.
         commitUserTurnRow({ text: 'okay flow', speakerName: 'Hablante 1', replaceLast: true, turnId: 1 });
-        commitUserTurnRow({ text: FRASE, speakerName: 'Hablante 1', replaceLast: true, turnId: 1 });
+        const r = commitUserTurnRow({ text: FRASE, speakerName: 'Hablante 1', replaceLast: true, turnId: 1 });
         const rows = history().filter((e) => e.role === 'user');
         expect(rows).toHaveLength(1);
-        expect(rows[0].text).toBe(FRASE);
+        expect(rows[0].text, 'la fila insertada NO se reescribe').toBe('okay flow');
+        expect(r.action).toBe('reused');
     });
 
     it('el commit final completa el hablante sin agregar fila', () => {

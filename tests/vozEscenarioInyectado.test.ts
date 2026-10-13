@@ -10,7 +10,7 @@
 // ============================================================
 import { describe, it, expect, beforeEach } from 'vitest'
 import { useIntegrationStore } from '../src/store/integrationStore'
-import { commitUserTurnRow, updateTurnRowSpeaker, renameSpeakerRows } from '../src/voice/lib/conversationTurnRow'
+import { commitUserTurnRow, updateTurnRowSpeaker, renameSpeakerRows, resetSpeakerLabelAliases } from '../src/voice/lib/conversationTurnRow'
 import { applyResolvedSpeakerToSessionRefs } from '../src/voice/lib/turnSpeakerCommit'
 import { findLabelsWithSharedVoice } from '../src/voice/lib/speakerClusters'
 
@@ -30,6 +30,9 @@ const userRows = () => useIntegrationStore.getState().conversationHistory.filter
 describe('escenario inyectado: hablantes, registro y renombre de la participacion', () => {
   beforeEach(() => {
     useIntegrationStore.getState().resetConversationHistory()
+    // Aislamiento: los ALIAS de nombre por voz son de SESION (el producto los vacia en el
+    // reset de conversacion). Sin esto, el registro de un caso se filtraba al siguiente.
+    resetSpeakerLabelAliases()
   })
 
   it('la fila escrita sin hablante se COMPLETA cuando el resolutor llega tarde', () => {
