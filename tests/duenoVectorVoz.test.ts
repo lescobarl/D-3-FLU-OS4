@@ -13,7 +13,8 @@
 // NACE ROJO: hoy la base no guarda vector y no hay reconocimiento por voz.
 // ============================================================
 import { describe, expect, it, beforeEach } from 'vitest'
-import { matchParticipantByVoice } from '../src/voice/lib/participantVoiceMatch.js'
+import { resetVoiceDirectory } from '../src/voice/lib/speakerDirectory.js'
+import { resolveVoiceIdentity, voiceVectorModel } from '../src/voice/lib/speakerDirectory.js'
 import { resolveVoiceParticipants } from '../src/voice/lib/voiceParticipantsSource'
 
 /** Vector de LUIS (la "cadena de numeros" de la diarizacion) y uno de OTRA voz. */
@@ -21,30 +22,39 @@ const VECTOR_LUIS = [0.9, 0.4, 0.05, 0.0]
 const VECTOR_LUIS_SIMILAR = [0.88, 0.44, 0.06, 0.02]
 const VECTOR_OTRA = [0.0, 0.05, 0.3, 0.95]
 
+/** La BASE como candidatos de la via UNICA (el vector SIEMPRE con su MODELO). */
+const porVoz = (vector: number[], base: Array<{ name?: string; voiceVector?: number[]; voiceVectorModel?: string }>) =>
+  resolveVoiceIdentity(vector, {
+    candidates: base.map((p) => ({ name: p.name, vector: p.voiceVector, model: p.voiceVectorModel })),
+  })
+
+
 describe('V1 - la base guarda el VECTOR de la voz junto al participante', () => {
+  beforeEach(() => resetVoiceDirectory())
+
   it('un participante con vector se resuelve por SIMILITUD (la voz es la identidad)', () => {
-    const base = [{ name: 'Luis', speakerLabel: 'Hablante 2', voiceVector: VECTOR_LUIS }]
-    const match = matchParticipantByVoice(VECTOR_LUIS_SIMILAR, base)
+    const base = [{ name: 'Luis', speakerLabel: 'Hablante 2', voiceVector: VECTOR_LUIS, voiceVectorModel: voiceVectorModel() }]
+    const match = porVoz(VECTOR_LUIS_SIMILAR, base)
     expect(match?.name, 'el mismo timbre (otra sesion) es Luis').toBe('Luis')
   })
 
   it('una voz DISTINTA no hereda el nombre (no se mezclan hablantes)', () => {
-    const base = [{ name: 'Luis', voiceVector: VECTOR_LUIS }]
-    expect(matchParticipantByVoice(VECTOR_OTRA, base), 'timbre distinto -> nadie').toBe(null)
+    const base = [{ name: 'Luis', voiceVector: VECTOR_LUIS, voiceVectorModel: voiceVectorModel() }]
+    expect(porVoz(VECTOR_OTRA, base), 'timbre distinto -> nadie').toBe(null)
   })
 
   it('sin vector de la voz no se afirma nada', () => {
-    expect(matchParticipantByVoice([], [{ name: 'Luis', voiceVector: VECTOR_LUIS }])).toBe(null)
+    expect(porVoz([], [{ name: 'Luis', voiceVector: VECTOR_LUIS, voiceVectorModel: voiceVectorModel() }])).toBe(null)
   })
 })
 
 // Prueba de DETECTOR: la marca discrimina (el detector no es decorativo).
 describe('PRUEBA DE DETECTOR (el detector no es decorativo: la marca discrimina)', () => {
   it('mutacion: con el piso a 1.0 nada empareja; con el piso real, el mismo timbre SI', () => {
-    const base = [{ name: 'Luis', voiceVector: VECTOR_LUIS }]
-    expect(matchParticipantByVoice(VECTOR_LUIS_SIMILAR, base, { floor: 1 })?.name || null).toBe(null)
-    expect(matchParticipantByVoice(VECTOR_LUIS_SIMILAR, base)?.name).toBe('Luis')
-    expect(matchParticipantByVoice(VECTOR_OTRA, base)?.name || null).toBe(null)
+    const base = [{ name: 'Luis', voiceVector: VECTOR_LUIS, voiceVectorModel: voiceVectorModel() }]
+    expect(resolveVoiceIdentity(VECTOR_LUIS_SIMILAR, { floor: 1.5 })?.name || null).toBe(null)
+    expect(porVoz(VECTOR_LUIS_SIMILAR, base)?.name).toBe('Luis')
+    expect(porVoz(VECTOR_OTRA, base)?.name || null).toBe(null)
   })
 })
 
