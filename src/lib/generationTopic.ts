@@ -1,3 +1,4 @@
+import { resolveRowSpeakerLabel } from '../voice/lib/conversationRow';
 // ============================================================
 // generationTopic.ts — Tema/contenido real para la generación de
 // documento/video desde el estado de conversación (función pura).
@@ -145,7 +146,7 @@ export function buildGenerationTopic(state: GenerationConversationSlice): { tema
         const entry = history[i];
         if (!entry) continue;
         const role = String(entry.role || '').toLowerCase();
-        const speaker = String(entry.speakerName || '');
+        const speaker = String(resolveRowSpeakerLabel(entry) || '');
         if (role === 'user' || (speaker && speaker !== 'FLU' && speaker !== 'flu')) {
             lastUser = (entry.text || '').trim();
             break;

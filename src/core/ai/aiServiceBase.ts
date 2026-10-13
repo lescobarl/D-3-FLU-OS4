@@ -18,6 +18,7 @@
 
 import { v4 as uuidv4 } from 'uuid';
 import { GENERATION_TIMEOUT_MS, TEXT_TOKEN_BUDGETS, isVisualWorkspaceTipo } from '../config/appConfig';
+import { resolveRowSpeakerLabel } from '../../voice/lib/conversationRow';
 import { buildMinuteSystemPrompt } from './prompts';
 import {
     buildMapPrompt,
@@ -63,8 +64,10 @@ import { pickLabel } from '../../lib/textUtils';
  * @param isEnglish Idioma de las etiquetas por defecto.
  */
 export function buildConversationLog(history: AIHistoryEntry[], isEnglish: boolean): string {
+    // El nombre se resuelve AL MOSTRAR y por la VOZ: la IA tiene que ver el MISMO nombre que
+    // el dueno (antes veia la etiqueta cruda / "Usuario" y no sabia quien hablo).
     return history
-        .map((e) => `${e.speakerName || (e.role === 'user' ? (isEnglish ? 'User' : 'Usuario') : 'FLU')}: ${e.text}`)
+        .map((e) => `${resolveRowSpeakerLabel(e) || (e.role === 'user' ? (isEnglish ? 'User' : 'Usuario') : 'FLU')}: ${e.text}`)
         .join('\n');
 }
 

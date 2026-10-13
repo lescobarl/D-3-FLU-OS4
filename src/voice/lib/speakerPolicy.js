@@ -138,11 +138,13 @@ export { isWeakAsrSpeakerEvidence, listConfiguredTranscriptHardRules } from './f
  * la etiqueta con la que esa voz venia apareciendo.
  */
 export function resolveCommitStickyFallback({
-  sessionPrimary = '',
+  sessionPrimary: _sessionPrimary = '',
   lastLogged = '',
   fallback = FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker,
 } = {}) {
-  return lastLogged || fallback || normalizeSpeakerLabel(sessionPrimary)
+  // El PRIMARIO de la sesion (el participante activo de la base) NO es hablante de una fila:
+  // con el, una etiqueta sin voz medida salia con SU nombre ("Luis a la chica").
+  return lastLogged || fallback
 }
 
 /**

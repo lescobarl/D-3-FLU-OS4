@@ -12,6 +12,7 @@
 //   - Obligación #7: Sync tuple [revision, updated_at, deleted]
 // ============================================================
 
+import { resolveRowSpeakerLabel } from '../voice/lib/conversationRow';
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { resolveSafeStorage } from './storage';
@@ -473,7 +474,7 @@ export const useIntegrationStore = create<IntegrationStore>()(
                 if (!normalized) return;
                 set((current) => ({
                     conversationHistory: current.conversationHistory.filter(
-                        (entry) => String(entry.speakerName || '').trim() !== normalized,
+                        (entry) => String(resolveRowSpeakerLabel(entry) || '').trim() !== normalized,
                     ),
                 }));
             },

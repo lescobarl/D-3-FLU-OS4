@@ -4,6 +4,7 @@
  */
 import { cleanForSpeech, speechWords } from './audioMath.js'
 import { FLU_CONFIG } from './fluConfig.js'
+import { resolveRowSpeakerLabel } from './conversationRow'
 import { normalizeSpeakerLabel } from './voiceIdentity.js'
 import { optionalConfigBlock } from './configGuard.js'
 
@@ -44,7 +45,8 @@ export function collapseSnapshotSpeakerRuns(snapshots = []) {
   }
 
   for (const row of rows) {
-    const speaker = normalizeSpeakerLabel(row.speakerName || '')
+    // Por VOZ: el nombre resuelto de esa voz (no la etiqueta cruda).
+    const speaker = normalizeSpeakerLabel(resolveRowSpeakerLabel(row) || '')
     if (!speaker) continue
 
     if (!current) {

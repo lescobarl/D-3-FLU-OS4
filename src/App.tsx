@@ -198,6 +198,7 @@ import { logCaughtError } from './lib/caughtError';
 import { localGet, localRemove, localSet } from './core/storage/localStore';
 import { pathForTab, type RightTab, tabFromPath } from './app/tabRoutes';
 import { useFluBridgesLifecycle } from './app/fluBridges';
+import { resolveRowSpeakerLabel } from './voice/lib/conversationRow';
 import { useIdentitySessionRef } from './app/useIdentitySessionRef';
 import { registerSpeakerIdentity } from './voice/lib/speakerIdentityRegister';
 import { matchParticipantByVoice } from './voice/lib/participantVoiceMatch';
@@ -1032,7 +1033,7 @@ function App() {
         const history = integrationStore.conversationHistory;
         return {
             texts: history.map((e) => e.text || ''),
-            speakers: history.map((e) => e.speakerName || ''),
+            speakers: history.map((e) => resolveRowSpeakerLabel(e) || ''),
         };
     }, [integrationStore.conversationHistory]);
 
@@ -3604,7 +3605,7 @@ const {
             participants.participants.find((p) => p.id === realParticipantId)?.name || '',
         ).trim();
         const userHistory = activeName
-            ? history.filter((e) => e.role === 'user' && String(e.speakerName || '').trim() === activeName)
+            ? history.filter((e) => e.role === 'user' && String(resolveRowSpeakerLabel(e) || '').trim() === activeName)
             : [];
         const scopedHistory = userHistory.length ? userHistory : history;
         const lastAt = Number(scopedHistory[scopedHistory.length - 1]?.timestamp) || 0;
@@ -3799,7 +3800,7 @@ const {
         // Barrido defensivo para filas legacy cuyo speakerId quedó en 'usuario'
         // pero speakerName coincide con el label (speakerName no es índice).
         const legacyRows = await fluDb.conversations
-            .filter((r) => String(r?.speakerName || '').trim() === label)
+            .filter((r) => String(resolveRowSpeakerLabel(r) || '').trim() === label)
             .primaryKeys()
             .catch((e) => { logCaughtError('src/App.tsx', e); return [] as string[]; });
         if (legacyRows.length > 0) {

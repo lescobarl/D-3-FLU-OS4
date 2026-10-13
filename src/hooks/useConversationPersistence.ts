@@ -57,6 +57,8 @@ function rowToEntry(row: ConversationRow): ConversationEntry {
         text: row.text,
         timestamp: row.timestamp,
         sentiment: toConversationSentiment(row.sentiment),
+        // La VOZ de la fila; el nombre se resuelve al MOSTRAR (no se persiste como dato).
+        speakerId: row.speakerId,
         speakerName: row.speakerName,
         meta: row.meta || undefined,
         signature: row.signature || null,
@@ -77,7 +79,8 @@ function entryToRow(entry: ConversationEntry, participantId: string) {
         sentiment: entry.sentiment || '',
         // La VOZ de la fila (el nombre se resuelve al MOSTRAR, no se persiste en el texto).
         speakerId: entry.role === 'flu' ? 'flu' : (entry.speakerId || 'usuario'),
-        speakerName: entry.speakerName || (entry.role === 'flu' ? 'FLU' : 'Usuario'),
+        // FLU/Sistema se identifican; una fila de usuario NO lleva nombre inventado.
+        speakerName: entry.role === 'flu' ? 'FLU' : (entry.speakerName || ''),
 
         meta: entry.meta || null,
         signature: entry.signature || null,

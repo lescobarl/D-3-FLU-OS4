@@ -641,16 +641,12 @@ const lastResolvedTurnRef = useRef(0)
     const skipDefaults = FLU_CONFIG.multiuser?.skipDefaults || {}
     const anonymousName = String(skipDefaults.anonymousName || 'Anónimo').trim().toLowerCase()
     if (name.toLowerCase() === anonymousName) return
-    // PANEL DE PARTICIPANTES: al cambiar el nombre se liga a la VOZ (mismo dueno del registro):
-    // reescribe la BASE de esa voz y los turnos siguientes lo resuelven por FIRMA.
-    registerSpeakerIdentity({
-      name,
-      previousLabel: activeParticipantSpeakerLabel,
-      clusters: speakerClustersRef.current,
-      refs: { setClusters: setSpeakerClusters, sessionPrimarySpeakerRef },
-    })
+    // El PARTICIPANTE ACTIVO es un DATO de la persona, no la identidad de una VOZ (mandato
+    // 2026-10-13: "la etiqueta y el participante activo no nombran a nadie"). Antes esto
+    // registraba su nombre para la voz de su `speakerLabel` SIN medida -> "Luis a la chica".
+    // Solo se fija como primario de la sesion (dato), sin nombrar ninguna voz.
     setSessionPrimarySpeaker(sessionPrimarySpeakerRef, name, 'participant')
-  }, [activeParticipantName, activeParticipantSpeakerLabel, setSpeakerClusters])
+  }, [activeParticipantName])
 
   useEffect(() => {
     seedSessionPrimaryFromActiveName()
@@ -1470,8 +1466,9 @@ const lastResolvedTurnRef = useRef(0)
     updateTurnRowSpeaker(turnId, speakerName, { evidenciaAcustica: evidence === true, registeredSpeaker: participantSpeakerRef.current }) // completa la fila de ESE turno, aunque la medida llegue tarde
     if (Number.isFinite(id)) { if (id < lastResolvedTurnRef.current) return; lastResolvedTurnRef.current = id }
     lastSpeakerRef.current = speakerName; lastLoggedSpeakerRef.current = speakerName
-    registerSpeakerIdentity({ name: speakerName, previousLabel: speakerName, clusters: speakerClustersRef.current, refs: { setClusters: setSpeakerClusters, sessionPrimarySpeakerRef } })
-  }, [participantSpeakerRef, setSpeakerClusters])
+    // El nombre SOLO se afirma con la MEDIDA (lo registra `updateTurnRowSpeaker`, arriba);
+    // aqui no se registra nada por el nombre resuelto (ni por etiqueta ni por primario).
+  }, [participantSpeakerRef])
 
   const scheduleIdentityPreflight = useCallback(
     ({ utterance = '' } = {}) => {

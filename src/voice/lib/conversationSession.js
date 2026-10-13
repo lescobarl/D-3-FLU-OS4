@@ -5,6 +5,7 @@
  * 3. Hablante = continuidad (config-driven) salvo "me llamo…".
  */
 import { logFluAsyncError } from './fluAsyncError.js'
+import { resolveRowSpeakerLabel } from './conversationRow'
 import { cleanForSpeech } from './audioMath.js'
 import { isCalculatingSpeakerId } from './conversationRow.js'
 import { FLU_CONFIG } from './fluConfig.js'
@@ -115,7 +116,8 @@ export function listSessionSpeakers(history = []) {
 
   for (const entry of history) {
     if (isCalculatingSpeakerId(entry?.speakerId)) continue
-    const raw = cleanForSpeech(entry?.speakerName ?? entry?.speaker)
+    // Por VOZ: el nombre RESUELTO de esa voz (no la etiqueta cruda).
+    const raw = cleanForSpeech(resolveRowSpeakerLabel(entry))
     if (!raw || raw.toLowerCase() === 'flu') continue
     for (const part of expandSessionSpeakerNames(raw)) {
       const name = normalizeSpeakerLabel(part) || part

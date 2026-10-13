@@ -37,6 +37,7 @@ import { resolveConfiguredTemperature } from './aiTemperature';
 import { VISUAL_CONFIG } from '../voice/lib/visualConfig';
 import {
     BaseAIService,
+    buildConversationLog,
     type AIVisionAnalysisResult,
     type MinuteRequest,
     type TextCompletionRequest,
@@ -158,9 +159,8 @@ Genera la minuta en formato JSON.`;
         history: AIHistoryEntry[],
     ): Promise<AISummaryResult> {
         const isEnglish = options.language === 'en';
-        const conversationLog = history
-            .map((e) => `${e.speakerName || (e.role === 'user' ? (isEnglish ? 'User' : 'Usuario') : 'FLU')}: ${e.text}`)
-            .join('\n');
+        // Un solo dueno del log hacia la IA (`buildConversationLog`): el nombre va RESUELTO.
+        const conversationLog = buildConversationLog(history, isEnglish);
 
         // Build system prompt (single source of truth — src/core/ai/prompts.ts, Rule #1)
         const systemPrompt = buildMinuteSystemPrompt(isEnglish);
