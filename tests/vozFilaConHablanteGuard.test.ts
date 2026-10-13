@@ -18,6 +18,7 @@ import {
   commitUserTurnRow,
   preserveProperSpeaker,
   renameSpeakerRows,
+  resetSpeakerLabelAliases,
   resolveRowSpeakerName,
   updateTurnRowSpeaker,
 } from '../src/voice/lib/conversationTurnRow'
@@ -42,6 +43,9 @@ function filaDe(turnId: number): string {
 describe('A5 corregida - la etiqueta del resolver se escribe y el renombre sustituye', () => {
   beforeEach(() => {
     useIntegrationStore.setState({ conversationHistory: [], activePersonId: undefined })
+    // Los ALIAS de nombre por voz son de SESION (el producto los vacia al reiniciar la
+    // conversacion): sin esto, el registro de un caso se filtraba al siguiente.
+    resetSpeakerLabelAliases()
   })
 
   it('(util) la fila lleva la ETIQUETA PEDIDA, no el respaldo', () => {

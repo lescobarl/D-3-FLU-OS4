@@ -21,7 +21,7 @@
 // ============================================================
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useIntegrationStore } from '../src/store/integrationStore'
-import { commitUserTurnRow, renameSpeakerRows, resolveRowSpeakerName } from '../src/voice/lib/conversationTurnRow'
+import { commitUserTurnRow, renameSpeakerRows, resolveRowSpeakerName, resetSpeakerLabelAliases } from '../src/voice/lib/conversationTurnRow'
 import {
   registerSpeakerIdentity,
   registerSpeakerIdentityFromCommand,
@@ -97,6 +97,9 @@ describe('B1 - el intro ("soy <nombre>") solo si la orden EMPIEZA en la wake', (
 describe('B2 - la identidad es la VOZ (firma), no la etiqueta', () => {
   beforeEach(() => {
     useIntegrationStore.setState({ conversationHistory: [] })
+    // Aislamiento: los ALIAS de nombre por voz son de SESION (el producto los vacia al
+    // reiniciar la conversacion). Sin esto, el registro de un caso se filtraba al siguiente.
+    resetSpeakerLabelAliases()
   })
 
   const CLUSTERS = [

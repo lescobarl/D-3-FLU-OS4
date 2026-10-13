@@ -141,7 +141,7 @@ describe('la fila del turno se reutiliza por IDENTIDAD de turno', () => {
     > = [
         ['efecto de servicio', { effectOnly: true }, true, true, false],
         ['efecto gana al commit temprano', { effectOnly: true, userCommitOnly: true }, true, true, false],
-        ['commit temprano sin texto aun', { userCommitOnly: true }, false, false, true],
+        ['commit temprano: NO escribe la conversacion (entra al cerrar)', { userCommitOnly: true }, false, false, false],
         ['resolucion con texto', {}, true, true, true],
         ['emision cruda vacia tras limpiar', { rawOnly: true }, false, false, false],
         ['emision cruda hablable', { rawOnly: true }, true, true, true],

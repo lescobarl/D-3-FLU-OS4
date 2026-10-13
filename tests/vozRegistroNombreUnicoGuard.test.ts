@@ -94,9 +94,11 @@ describe('A1 - un solo dueno del registro del nombre propio', () => {
     })
     expect(result.registered).toBe(true)
     expect(speakerRows()).toEqual(['Luz', 'Hablante 2', 'Luz'])
-    // y el nombre NO queda en un mapa de ETIQUETAS: la etiqueta de diarizacion se
-        // escribe TAL CUAL y es la VOZ (el cluster) la que lleva el nombre.
-        expect(resolveRowSpeakerName('Hablante 1', false)).toBe('Hablante 1')
+    // El nombre REGISTRADO pertenece a la VOZ que lo dijo: su etiqueta provisional pasa a
+    // llevar el nombre (spec del dueno 2026-10-12: una sola voz = una sola grafia). Una
+    // etiqueta SIN registro se escribe TAL CUAL.
+        expect(resolveRowSpeakerName('Hablante 1', false)).toBe('Luz')
+        expect(resolveRowSpeakerName('Hablante 3', false)).toBe('Hablante 3')
   })
 
   it('MISMA RUTA: comando y wake-intro dejan el store identico para la misma voz', () => {

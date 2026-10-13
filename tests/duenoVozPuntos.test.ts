@@ -18,7 +18,6 @@ import { FLU_CONFIG } from '../src/voice/lib/fluConfig.js'
 import { getCommandSpeech } from '../src/voice/lib/voiceCommands.js'
 import { resolveTurnSpeakerAtCommit } from '../src/voice/lib/turnSpeakerCommit'
 import { resolveVoiceParticipants } from '../src/voice/lib/voiceParticipantsSource'
-import { setParticipantPort } from '../src/voice/lib/speakerIdentityRegister.js'
 import { isNavSettlePending, setNavSettlePending } from '../src/voice/lib/navSettleFlag.js'
 
 const filas = () => useIntegrationStore.getState().conversationHistory.filter((e) => e.role === 'user')
@@ -158,13 +157,18 @@ describe('P2 - la base de participantes se ve en el panel', () => {
         expect(lista.find((r) => r.label === 'voz A')?.profileId).toBe('p1')
     })
 
-    it('el registro por VOZ entra en la base (un solo puerto)', () => {
+    it('el registro por VOZ entra en la base por el puente de la sesion', () => {
         const altas: string[] = []
-        setParticipantPort((name: string) => {
-            altas.push(name)
+        registerSpeakerIdentity({
+            name: 'Luis',
+            previousLabel: 'Hablante 1',
+            clusters: [],
+            refs: {
+                registerParticipant: (name: string) => {
+                    altas.push(name)
+                },
+            } as never,
         })
-        registerSpeakerIdentity({ name: 'Luis', previousLabel: 'Hablante 1', clusters: [], refs: {} as never })
-        setParticipantPort(null)
         expect(altas, 'el nombre dicho por voz entra en la base').toEqual(['Luis'])
     })
 })

@@ -221,8 +221,10 @@ describe('6. una locucion = una fila (reemision que crece)', () => {
     test('la reemision de 18:12:06 no abre una segunda fila', () => {
         commitUserTurnRow({ text: 'Okay Flow empiezas', turnId: 1 });
         commitUserTurnRow({ text: 'Okay Flow empiezas Okay Flow empieza tu', turnId: 1 });
+        // La reemision NO abre fila nueva y NO reescribe el texto ya insertado: la
+        // conversacion solo se INSERTA (spec del dueno 2026-10-12).
         expect(userRows()).toHaveLength(1);
-        expect(userRows()[0].text).toBe('Okay Flow empiezas Okay Flow empieza tu');
+        expect(userRows()[0].text, 'append-only: la fila insertada no se reescribe').toBe('Okay Flow empiezas');
     });
 
     test('la reemision de 18:12:34 (eco + frase) no abre una segunda fila', () => {

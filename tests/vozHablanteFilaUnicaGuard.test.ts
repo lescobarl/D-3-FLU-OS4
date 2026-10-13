@@ -78,8 +78,10 @@ describe('el speech de un comando no deja placeholders', () => {
 })
 
 describe('PRUEBA DE DETECTOR (el detector no es decorativo)', () => {
-  it('sin params el placeholder sigue ahi (por eso el hook DEBE pasar el nombre)', () => {
-    expect(getCommandSpeech(COMMAND_IDS.REGISTRAR_PARTICIPANTE, 'es', FLU_CONFIG)).toContain('{name}')
+  it('sin params el placeholder NUNCA sale a pantalla', () => {
+    // Regla del dueno (2026-10-12: FLU dijo literalmente "Registrado {name}."): el marcador
+    // es una ranura, no texto. Sin dato, la ranura se retira.
+    expect(getCommandSpeech(COMMAND_IDS.REGISTRAR_PARTICIPANTE, 'es', FLU_CONFIG)).not.toContain('{name}')
   })
 
   it('la cola de identidad queda limpia entre casos', async () => {

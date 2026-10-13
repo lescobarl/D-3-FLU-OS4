@@ -26,7 +26,7 @@
 // ============================================================
 import { beforeEach, describe, expect, it } from 'vitest'
 import { useIntegrationStore } from '../src/store/integrationStore'
-import { commitUserTurnRow, updateTurnRowSpeaker } from '../src/voice/lib/conversationTurnRow'
+import { commitUserTurnRow, updateTurnRowSpeaker, resetSpeakerLabelAliases } from '../src/voice/lib/conversationTurnRow'
 import { resolveConversationSpeaker, isMeasuredIdentityMatch } from '../src/voice/lib/speakerDiarization.js'
 
 const DIM = 64
@@ -144,6 +144,13 @@ describe('C - la evidencia es la COINCIDENCIA medida (un dueno: isMeasuredIdenti
 })
 
 describe('D - la fila del turno se completa aunque la medida llegue tarde', () => {
+  beforeEach(() => {
+    // Aislamiento: el nombre registrado por VOZ queda ligado a la etiqueta de esa voz SOLO
+    // dentro de la sesion (el producto lo vacia al reiniciar la conversacion).
+    useIntegrationStore.setState({ conversationHistory: [] })
+    resetSpeakerLabelAliases()
+  })
+
   it('una medida posterior completa la fila de SU turno (no la del mas reciente)', () => {
     commitUserTurnRow({ text: 'turno diecisiete', speakerName: '', turnId: 17 } as never)
     commitUserTurnRow({ text: 'turno diecinueve', speakerName: '', turnId: 19 } as never)
