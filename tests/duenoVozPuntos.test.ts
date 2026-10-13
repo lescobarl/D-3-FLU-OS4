@@ -138,13 +138,18 @@ describe('P3 - una sola voz: el dictado no inventa hablante', () => {
 // P2 - LA BASE DE PARTICIPANTES SE MUESTRA en la seccion de participantes.
 // ------------------------------------------------------------
 describe('P2 - la base de participantes se ve en el panel', () => {
-    it('un nombre que esta en la BASE aparece en la lista del panel', () => {
-        const lista = resolveVoiceParticipants({
+    it('el panel lista SOLO a quien participo en la SESION (la base no se vuelca)', () => {
+        // Definicion del dueno (2026-10-13): el panel muestra los participantes de ESTA
+        // sesion; la base de participantes se consulta aparte. Quien hablo aparece porque
+        // SUS filas llevan su etiqueta/nombre.
+        const sinHablar = resolveVoiceParticipants({
             history: [],
             profiles: [],
             base: [{ name: 'Luis', speakerLabel: 'Luis' }],
         })
-        expect(lista.map((r) => r.label), 'si esta en la base, se ve').toEqual(['Luis'])
+        expect(sinHablar.map((r) => r.label), 'la base entera NO se lista').toEqual([])
+        const hablo = resolveVoiceParticipants({ history: [{ speakerName: 'luis' }] })
+        expect(hablo.map((r) => r.label), 'el que participo SI').toEqual(['luis'])
     })
 
     it('historial y perfiles siguen apareciendo (no se pierde nada)', () => {
@@ -153,7 +158,7 @@ describe('P2 - la base de participantes se ve en el panel', () => {
             profiles: [{ label: 'voz A', id: 'p1' }],
             base: [{ name: 'Luis' }],
         })
-        expect(lista.map((r) => r.label).sort()).toEqual(['Hablante 1', 'Luis', 'voz A'])
+        expect(lista.map((r) => r.label).sort()).toEqual(['Hablante 1', 'voz A'])
         expect(lista.find((r) => r.label === 'voz A')?.profileId).toBe('p1')
     })
 
