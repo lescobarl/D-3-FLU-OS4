@@ -77,7 +77,7 @@ function entryToRow(entry: ConversationEntry, participantId: string) {
         sentiment: entry.sentiment || '',
         speakerId: entry.role === 'flu' ? 'flu' : (entry.speakerName || 'usuario'),
         speakerName: entry.speakerName || (entry.role === 'flu' ? 'FLU' : 'Usuario'),
-        response: entry.response || '',
+
         meta: entry.meta || null,
         signature: entry.signature || null,
         phase: entry.phase || '',
@@ -151,9 +151,7 @@ export function useConversationPersistence(participantId?: string) {
                     const entries = allEntries.filter((entry) => {
                         if (entry.meta?.systemEvent || entry.meta?.systemEventReply) return false;
                         const text = entry.text || '';
-                        return !SYSTEM_EVENT_PREFIX.es && !SYSTEM_EVENT_PREFIX.en
-                            ? true
-                            : !text.includes(SYSTEM_EVENT_PREFIX.es) && !text.includes(SYSTEM_EVENT_PREFIX.en);
+                        return !text.includes(SYSTEM_EVENT_PREFIX.es) && !text.includes(SYSTEM_EVENT_PREFIX.en);
                     });
 
                     const filteredCount = allEntries.length - entries.length;
