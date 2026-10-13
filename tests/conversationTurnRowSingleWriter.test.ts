@@ -8,6 +8,7 @@
 // emisión que crece reemplace en lugar de duplicar.
 // ============================================================
 import { describe, it, expect, beforeEach } from 'vitest';
+import { resolveRowSpeakerLabel } from '../src/voice/lib/conversationRow';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { commitUserTurnRow } from '../src/voice/lib/conversationTurnRow';
@@ -55,7 +56,7 @@ describe('commitUserTurnRow — un solo escritor de la fila del usuario', () => 
         commitUserTurnRow({ text: FRASE, speakerName: 'Luis', turnId: 1 });         // completa
         const rows = history().filter((e) => e.role === 'user');
         expect(rows).toHaveLength(1);
-        expect(rows[0].speakerName).toBe('Luis');
+        expect(resolveRowSpeakerLabel(rows[0])).toBe('Luis');
     });
 
     it('tras la respuesta de FLU, la misma frase es fila NUEVA (turno distinto)', () => {

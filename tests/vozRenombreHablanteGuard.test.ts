@@ -1,26 +1,22 @@
 // ============================================================
 // vozRenombreHablanteGuard - GUARD del requisito del dueno (#8)
 // ------------------------------------------------------------
-// REQUISITO: "cuando identifique a un hablante especifico toda su participacion
-// debe llevar ese nombre; ejemplo: soy Luis y todo lo que lleve mi hablante debe
-// cambiar a Luis".
+// REQUISITO: "cuando identifique a un hablante especifico toda su participacion debe llevar
+// ese nombre; ejemplo: soy Luis y todo lo que lleve mi hablante debe cambiar a Luis".
 //
-// DEFECTO: la bandera `roomCapture.renameSessionAutoLabelsOnRegister` estaba en
-// true y los helpers (`findLabelsWithSharedVoice`, `mergeSpeakerClustersOnRename`)
-// existian, pero NINGUN consumidor los usaba: la funcion solo estaba anunciada en
-// config. Su participacion anterior conservaba "Hablante N".
-//
-// FIX: `renameSpeakerRows(labels, name)` (dueno unico de la escritura de filas) y
-// el hook lo llama al identificar una persona (applyResolvedSpeaker): las etiquetas
-// que son la MISMA voz las aporta el dueno de los clusters.
-//
-// Nace ROJO (renameSpeakerRows no existia).
+// MANDATO DEL DUENO 2026-10-13 (premisa actualizada): el nombre NO se escribe en las filas ni
+// se reescribe ninguna (la conversacion es texto insertado). El nombre se pega a la VOZ en el
+// DIRECTORIO y se resuelve AL MOSTRAR: por eso TODA la participacion de esa voz lleva su
+// nombre SIN tocar una sola fila. Una VOZ DISTINTA no lo hereda.
 // ============================================================
 import { describe, it, expect, beforeEach } from 'vitest'
 import { useIntegrationStore } from '../src/store/integrationStore'
 import { commitUserTurnRow, renameSpeakerRows } from '../src/voice/lib/conversationTurnRow'
+import { resolveRowSpeakerLabel } from '../src/voice/lib/conversationRow'
+import { resetVoiceDirectory } from '../src/voice/lib/speakerDirectory.js'
 
 const userRows = () => useIntegrationStore.getState().conversationHistory.filter((r) => r.role === 'user')
+const etiquetas = () => userRows().map((r) => resolveRowSpeakerLabel(r))
 
 function sembrar(filas: Array<{ text: string; speaker: string }>) {
   for (const f of filas) {
@@ -31,45 +27,50 @@ function sembrar(filas: Array<{ text: string; speaker: string }>) {
 describe('identificado el hablante, TODA su participacion lleva su nombre', () => {
   beforeEach(() => {
     useIntegrationStore.getState().resetConversationHistory()
+    resetVoiceDirectory()
   })
 
-  it('renombra las filas de su voz (etiquetas de la MISMA voz) y respeta a los demas', () => {
+  it('la voz nombrada lleva su nombre en TODAS sus filas y la otra voz queda intacta', () => {
     sembrar([
       { text: 'hola hola como estan todos', speaker: 'Hablante 1' },
       { text: 'soy luis y estoy probando', speaker: 'Hablante 1' },
       { text: 'hoy me robo el estilo lolita', speaker: 'Hablante 2' },
       { text: 'radicado desde hace muchos anos en andorra', speaker: 'Hablante 2' },
     ])
-    const cambiadas = renameSpeakerRows(['Hablante 1', 'luis'], 'luis')
-    expect(cambiadas).toBe(2)
-    const speakers = userRows().map((r) => r.speakerName)
-    expect(speakers).toEqual(['luis', 'luis', 'Hablante 2', 'Hablante 2'])
+    const antes = userRows()
+    // El registro del nombre: NO reescribe filas (0) y liga el nombre a ESA voz.
+    const registradas = renameSpeakerRows(['Hablante 1'], 'luis')
+    expect(registradas, 'una VOZ registrada').toBe(1)
+    expect(userRows(), 'la conversacion es la MISMA (ninguna fila se reescribe)').toEqual(antes)
+    expect(etiquetas()).toEqual(['Luis', 'Luis', 'Hablante 2', 'Hablante 2'])
   })
 
-  it('las filas ya nombradas no se tocan (no reescribe de mas)', () => {
-    sembrar([{ text: 'ya con nombre', speaker: 'luis' }])
-    expect(renameSpeakerRows(['luis'], 'luis')).toBe(0)
-    expect(userRows()[0].speakerName).toBe('luis')
+  it('una fila ya nombrada se ve igual (el registro no reescribe de mas)', () => {
+    sembrar([{ text: 'ya con nombre', speaker: 'Luis' }])
+    expect(etiquetas()).toEqual(['Luis'])
+    expect(renameSpeakerRows(['Luis'], 'Luis'), 'misma voz, mismo nombre').toBe(1)
+    expect(etiquetas()).toEqual(['Luis'])
   })
 })
 
 describe('PRUEBA DE DETECTOR (el detector no es decorativo)', () => {
   beforeEach(() => {
     useIntegrationStore.getState().resetConversationHistory()
+    resetVoiceDirectory()
   })
 
-  it('NO renombra a un hablante ajeno (discrimina por etiqueta)', () => {
+  it('NO nombra a un hablante ajeno (discrimina por VOZ)', () => {
     sembrar([
       { text: 'uno', speaker: 'Hablante 1' },
       { text: 'dos', speaker: 'Hablante 3' },
     ])
     renameSpeakerRows(['Hablante 1'], 'luis')
-    expect(userRows().map((r) => r.speakerName)).toEqual(['luis', 'Hablante 3'])
+    expect(etiquetas()).toEqual(['Luis', 'Hablante 3'])
   })
 
   it('sin etiquetas no cambia nada (no borra el hablante)', () => {
     sembrar([{ text: 'uno', speaker: 'Hablante 1' }])
     expect(renameSpeakerRows([], 'luis')).toBe(0)
-    expect(userRows()[0].speakerName).toBe('Hablante 1')
+    expect(etiquetas()).toEqual(['Hablante 1'])
   })
 })

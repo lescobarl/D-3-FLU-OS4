@@ -13,8 +13,10 @@
 // Sin `turnId` (compatibilidad) se conserva el criterio posicional.
 // ============================================================
 import { describe, it, expect, beforeEach } from 'vitest';
+import { resolveRowSpeakerLabel } from '../src/voice/lib/conversationRow';
 import { useIntegrationStore } from '../src/store/integrationStore';
 import { commitUserTurnRow, escribeFilaDeUsuario, updateTurnRowSpeaker } from '../src/voice/lib/conversationTurnRow';
+import { resetVoiceDirectory } from '../src/voice/lib/speakerDirectory.js';
 
 /** Marcas `effectOnly: true` en un fuente (mismo criterio del guard). */
 export function effectOnlyMarks(src: string): number {
@@ -37,6 +39,7 @@ const ORDEN = 'Okay Flow siguiente carta';
 describe('la fila del turno se reutiliza por IDENTIDAD de turno', () => {
     beforeEach(() => {
         useIntegrationStore.getState().resetConversationHistory();
+        resetVoiceDirectory();
     });
 
     it('commit temprano + FLU + resolucion del MISMO turno = UNA fila', () => {
@@ -50,7 +53,8 @@ describe('la fila del turno se reutiliza por IDENTIDAD de turno', () => {
         const rows = userRows();
         expect(rows).toHaveLength(1);
         expect(rows[0].text).toBe(ORDEN);
-        expect(rows[0].speakerName).toBe('Hablante 1');
+        // La etiqueta visible se resuelve al MOSTRAR y por la VOZ (mandato 2026-10-13).
+        expect(resolveRowSpeakerLabel(rows[0])).toBe('Hablante 1');
     });
 
     it('las DOS resoluciones del turno (fast-path + IA) siguen siendo una fila', () => {
@@ -59,7 +63,7 @@ describe('la fila del turno se reutiliza por IDENTIDAD de turno', () => {
         commitUserTurnRow({ text: ORDEN, speakerName: 'Hablante 1', turnId: 102 });
 
         expect(userRows()).toHaveLength(1);
-        expect(userRows()[0].speakerName).toBe('Hablante 1');
+        expect(resolveRowSpeakerLabel(userRows()[0])).toBe('Hablante 1');
     });
 
     it('DEFECTO 3: dos ordenes REALES (turnos distintos) son DOS filas aunque FLU no hable', () => {
@@ -208,26 +212,32 @@ describe('reentrega identica - el detector no es decorativo', () => {
 // hablante resuelve DESPUES del commit (7-19 s de cola), asi que la etiqueta caia en
 // el turno SIGUIENTE ("Hablante 1" en el habla de Luis). La fila ya se reutiliza por
 // IDENTIDAD de turno: la resolucion tardia COMPLETA la suya, no la del vecino.
-describe('el hablante que llega tarde COMPLETA su fila (no la del turno siguiente)', () => {
+// Mandato del dueno (2026-10-13): el nombre NO vive en la conversacion (la fila es texto
+// insertado y NO se reescribe). El hablante que llega tarde REGISTRA el nombre para la VOZ
+// de SU turno (`updateTurnRowSpeaker`), y sus filas se ven con el nombre al MOSTRAR; la voz
+// de otro hablante queda intacta. (Antes esta via MUTABA la fila del turno resuelto.)
+describe('el hablante que llega tarde nombra su VOZ (mandato 2026-10-13), no la de otro hablante', () => {
     beforeEach(() => {
         useIntegrationStore.getState().resetConversationHistory();
+        resetVoiceDirectory();
     });
 
-    it('completa la fila del turno resuelto aunque el turno actual sea otro', () => {
+    it('nombra la VOZ del turno resuelto aunque el turno actual sea otra voz', () => {
         commitUserTurnRow({ text: 'hola que tal', speakerName: 'Hablante 1', turnId: 201 });
         fliHabla('Entendido.');
-        commitUserTurnRow({ text: 'otra locucion distinta', speakerName: 'Hablante 1', turnId: 202 });
+        commitUserTurnRow({ text: 'otra locucion distinta', speakerName: 'Hablante 2', turnId: 202 });
 
-        expect(updateTurnRowSpeaker(201, 'luis', { evidenciaAcustica: true })).toBe(true);
+        expect(updateTurnRowSpeaker(201, 'Luis', { evidenciaAcustica: true })).toBe(true);
 
         const rows = userRows();
         expect(rows).toHaveLength(2);
-        expect(rows[0].speakerName, 'la resolucion tardia completa SU fila').toBe('luis');
-        expect(rows[1].speakerName, 'y NO toca la del turno siguiente').toBe('Hablante 1');
+        // La fila NO se reescribe: guarda la VOZ; el nombre se resuelve al MOSTRAR.
+        expect(resolveRowSpeakerLabel(rows[0]), 'la resolucion tardia nombra SU voz').toBe('Luis');
+        expect(resolveRowSpeakerLabel(rows[1]), 'y NO nombra la de otro hablante').toBe('Hablante 2');
     });
 
     it('no hace nada si el turno no tiene fila registrada o el hablante esta vacio', () => {
-        expect(updateTurnRowSpeaker(999, 'luis')).toBe(false);
+        expect(updateTurnRowSpeaker(999, 'Luis')).toBe(false);
         expect(updateTurnRowSpeaker(201, '')).toBe(false);
     });
 });

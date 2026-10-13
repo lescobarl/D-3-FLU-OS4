@@ -25,10 +25,9 @@ import { join, relative } from 'node:path'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { walkFiles } from './_helpers'
 import { useIntegrationStore } from '../src/store/integrationStore'
-import {
-  renameSpeakerRows,
-  resolveRowSpeakerName,
-} from '../src/voice/lib/conversationTurnRow'
+import { renameSpeakerRows } from '../src/voice/lib/conversationTurnRow'
+import { resolveRowSpeakerLabel } from '../src/voice/lib/conversationRow'
+import { resetVoiceDirectory } from '../src/voice/lib/speakerDirectory.js'
 import {
   registerSpeakerIdentity,
   registerSpeakerIdentityFromCommand,
@@ -51,23 +50,31 @@ const CLUSTERS = [
   { label: 'Hablante 2', signature: OTRA_VOZ_VEC },
 ]
 
-/** Store con tres filas de usuario: la voz de 'Hablante 1' y una voz distinta. */
+/**
+ * Store con tres filas de usuario: la voz de 'Hablante 1' y una voz distinta.
+ * FORMA REAL de la fila (mandato 2026-10-13): guarda su VOZ (`speakerId`), no el nombre.
+ * 'Hablante 1' -> speaker_1, 'Hablante 2' -> speaker_2.
+ */
 function seedRows() {
   useIntegrationStore.setState({
     conversationHistory: [
-      { id: 'r1', role: 'user', text: 'hola', speakerName: 'Hablante 1', timestamp: '10:00' },
-      { id: 'r2', role: 'user', text: 'que tal', speakerName: 'Hablante 2', timestamp: '10:01' },
-      { id: 'r3', role: 'user', text: 'bueno', speakerName: 'Hablante 1', timestamp: '10:02' },
+      { id: 'r1', role: 'user', text: 'hola', speakerName: 'Hablante 1', speakerId: 'speaker_1', timestamp: '10:00' },
+      { id: 'r2', role: 'user', text: 'que tal', speakerName: 'Hablante 2', speakerId: 'speaker_2', timestamp: '10:01' },
+      { id: 'r3', role: 'user', text: 'bueno', speakerName: 'Hablante 1', speakerId: 'speaker_1', timestamp: '10:02' },
     ] as any,
   })
 }
 
+/** Etiqueta VISIBLE de cada fila: se resuelve AL MOSTRAR por la VOZ (`speakerId`). */
 function speakerRows(): string[] {
   return useIntegrationStore
     .getState()
     .conversationHistory.filter((e) => e.role === 'user')
-    .map((e) => String(e.speakerName || ''))
+    .map((e) => resolveRowSpeakerLabel(e))
 }
+
+// Aislamiento: el DIRECTORIO de nombres por VOZ (estado de sesion) se vacia entre casos.
+beforeEach(() => resetVoiceDirectory())
 
 describe('A1 - un solo dueno del registro del nombre propio', () => {
   beforeEach(() => {
@@ -82,8 +89,10 @@ describe('A1 - un solo dueno del registro del nombre propio', () => {
       previousLabel: 'Hablante 1',
     })
     expect(result.registered).toBe(true)
+    // El nombre se resuelve AL MOSTRAR por la VOZ: las filas de speaker_1 salen 'Luz'.
     expect(speakerRows()).toEqual(['Luz', 'Hablante 2', 'Luz'])
-    expect(result.rowsChanged).toBe(2)
+    // Mandato 2026-10-13: el registro NO reescribe filas (vive en el DIRECTORIO por VOZ).
+    expect(result.rowsChanged).toBe(0)
   })
 
   it('RUTA DEL COMANDO: REGISTRAR_PARTICIPANTE registra el nombre (antes no registraba nada)', () => {
@@ -94,11 +103,11 @@ describe('A1 - un solo dueno del registro del nombre propio', () => {
     })
     expect(result.registered).toBe(true)
     expect(speakerRows()).toEqual(['Luz', 'Hablante 2', 'Luz'])
-    // El nombre REGISTRADO pertenece a la VOZ que lo dijo: su etiqueta provisional pasa a
-    // llevar el nombre (spec del dueno 2026-10-12: una sola voz = una sola grafia). Una
-    // etiqueta SIN registro se escribe TAL CUAL.
-        expect(resolveRowSpeakerName('Hablante 1', false)).toBe('Luz')
-        expect(resolveRowSpeakerName('Hablante 3', false)).toBe('Hablante 3')
+    // El nombre REGISTRADO pertenece a la VOZ que lo dijo: su etiqueta provisional se
+    // resuelve al nombre por VOZ (mandato 2026-10-13). Una VOZ SIN registro se muestra con
+    // su etiqueta canonica ('Hablante N').
+    expect(resolveRowSpeakerLabel({ speakerId: 'speaker_1' })).toBe('Luz')
+    expect(resolveRowSpeakerLabel({ speakerId: 'speaker_3' })).toBe('Hablante 3')
   })
 
   it('MISMA RUTA: comando y wake-intro dejan el store identico para la misma voz', () => {
@@ -140,7 +149,7 @@ describe('A1 - un solo dueno del registro del nombre propio', () => {
     useIntegrationStore.setState({
       conversationHistory: [
         ...useIntegrationStore.getState().conversationHistory,
-        { id: 'r4', role: 'user', text: 'otro', speakerName: 'Hablante 9', timestamp: '10:03' },
+        { id: 'r4', role: 'user', text: 'otro', speakerName: 'Hablante 9', speakerId: 'speaker_9', timestamp: '10:03' },
       ] as any,
     })
     registerSpeakerIdentity({ name: 'Luz', clusters: CLUSTERS, previousLabel: 'Hablante 1' })
@@ -166,12 +175,15 @@ const CLUSTERS_VOZ_UNICA = [
 ]
 
 function seedFilasDeLaMismaVoz() {
+  // FORMA REAL: la MISMA VOZ re-clusterizada ('Hablante 1'/'3'/'4', mismo timbre) lleva UN
+  // solo `speakerId` (la clave por TIMBRE, `voiceKeyFor`, los une): por eso las tres filas
+  // de esa voz salen con su nombre al registrarlo. 'Hablante 2' es OTRA voz (speaker_2).
   useIntegrationStore.setState({
     conversationHistory: [
-      { id: 'r1', role: 'user', text: 'uno', speakerName: 'Hablante 1', timestamp: '10:00' },
-      { id: 'r2', role: 'user', text: 'dos', speakerName: 'Hablante 3', timestamp: '10:01' },
-      { id: 'r3', role: 'user', text: 'tres', speakerName: 'Hablante 4', timestamp: '10:02' },
-      { id: 'r4', role: 'user', text: 'cuatro', speakerName: 'Hablante 2', timestamp: '10:03' },
+      { id: 'r1', role: 'user', text: 'uno', speakerName: 'Hablante 1', speakerId: 'speaker_1', timestamp: '10:00' },
+      { id: 'r2', role: 'user', text: 'dos', speakerName: 'Hablante 3', speakerId: 'speaker_1', timestamp: '10:01' },
+      { id: 'r3', role: 'user', text: 'tres', speakerName: 'Hablante 4', speakerId: 'speaker_1', timestamp: '10:02' },
+      { id: 'r4', role: 'user', text: 'cuatro', speakerName: 'Hablante 2', speakerId: 'speaker_2', timestamp: '10:03' },
     ] as any,
   })
 }
@@ -256,24 +268,34 @@ describe('A1 hueco 2 - el registro fija el PRIMARIO como presented', () => {
 
 // ============================================================
 // IMPLEMENTACIONES, NO LITERALES (AGENTS 7.7.d): el registro tiene UN modulo. Se
-// cuenta quien IMPLEMENTA el registro (quien calcula el conjunto de etiquetas de la
-// MISMA voz), no quien invoca una funcion suelta.
+// cuenta quien IMPLEMENTA el registro del nombre propio, no quien invoca una funcion
+// suelta.
+//
+// Mandato del dueno 2026-10-13: el nombre de una VOZ sale SOLO de su VOZ (el vector) y
+// se resuelve AL MOSTRAR. El registro = RESOLVER el nombre del enunciado
+// (`resolveSpeakerNameFromUtterance`) Y pegar ese nombre a LA VOZ por el TIMBRE
+// (`voiceKeyFor` + `registerVoiceName`, en el DIRECTORIO `speakerDirectory`).
 // ============================================================
 const ROOT = process.cwd()
-/** Dueno del calculo "que etiquetas son la MISMA voz". */
-const DEFINICION_VOZ_COMPARTIDA = 'src/voice/lib/speakerClusters.js'
-const CALCULO_VOZ_COMPARTIDA = /findLabelsWithSharedVoice\(/
+/** Dueno del NOMBRE de una VOZ (directorio por TIMBRE). */
+const DEFINICION_VOZ_COMPARTIDA = 'src/voice/lib/speakerDirectory.js'
+/** El registro RESUELVE el nombre del enunciado... */
+const RESUELVE_NOMBRE_DEL_ENUNCIADO = /resolveSpeakerNameFromUtterance\(/
+/** ...Y lo pega a la VOZ por su TIMBRE (`voiceKeyFor`). */
+const CLAVE_DE_VOZ_POR_TIMBRE = /voiceKeyFor\(/
 
-/** Modulos que IMPLEMENTAN el registro (calculan las etiquetas de la misma voz). */
+/** Modulos que IMPLEMENTAN el registro (resuelven el enunciado y lo ligan a la VOZ). */
 export function modulosQueRegistran(fuentes: Record<string, string>): string[] {
   return Object.entries(fuentes)
-    .filter(([ruta, texto]) => ruta !== DEFINICION_VOZ_COMPARTIDA && CALCULO_VOZ_COMPARTIDA.test(String(texto)))
+    .filter(([ruta, texto]) => ruta !== DEFINICION_VOZ_COMPARTIDA
+      && RESUELVE_NOMBRE_DEL_ENUNCIADO.test(String(texto))
+      && CLAVE_DE_VOZ_POR_TIMBRE.test(String(texto)))
     .map(([ruta]) => ruta)
     .sort()
 }
 
 describe('A1 - el registro del nombre vive en UN modulo', () => {
-  it('solo el dueno calcula las etiquetas de la MISMA voz', () => {
+  it('solo el dueno resuelve el nombre del enunciado y lo pega a la VOZ por su TIMBRE', () => {
     const fuentes: Record<string, string> = {}
     for (const abs of walkFiles(join(ROOT, 'src'), /\.(js|ts|tsx)$/)) {
       const ruta = relative(ROOT, abs).replace(/\\/g, '/')
@@ -285,14 +307,14 @@ describe('A1 - el registro del nombre vive en UN modulo', () => {
 
   it('PRUEBA DE DETECTOR: una copia inline en otro modulo lo pone ROJO', () => {
     const conCopia = {
-      'src/voice/lib/speakerIdentityRegister.js': 'const l = findLabelsWithSharedVoice(c, n)',
-      'src/voice/hooks/useFluVoiceAssistant.js': 'renameSpeakerRows(findLabelsWithSharedVoice(c, n), n)',
-      [DEFINICION_VOZ_COMPARTIDA]: 'export function findLabelsWithSharedVoice(...) {}',
+      'src/voice/lib/speakerIdentityRegister.js': 'const n = resolveSpeakerNameFromUtterance(t); registerVoiceName(voiceKeyFor({ label, signature }), n)',
+      'src/voice/hooks/useFluVoiceAssistant.js': 'const n = resolveSpeakerNameFromUtterance(t); registerVoiceName(voiceKeyFor({ label, signature }), n)',
+      [DEFINICION_VOZ_COMPARTIDA]: 'export function voiceKeyFor(...) {}',
     }
     expect(modulosQueRegistran(conCopia)).toEqual([
       'src/voice/hooks/useFluVoiceAssistant.js',
       'src/voice/lib/speakerIdentityRegister.js',
     ])
-    expect(modulosQueRegistran({ 'src/a.js': 'soy una copia sin el calculo' })).toEqual([])
+    expect(modulosQueRegistran({ 'src/a.js': 'soy una copia sin el registro' })).toEqual([])
   })
 })

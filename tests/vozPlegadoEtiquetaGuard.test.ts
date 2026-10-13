@@ -23,22 +23,26 @@ import {
   commitUserTurnRow,
   renameSpeakerRows,
 } from '../src/voice/lib/conversationTurnRow'
+import { resolveRowSpeakerLabel } from '../src/voice/lib/conversationRow'
+import { resetVoiceDirectory } from '../src/voice/lib/speakerDirectory.js'
 
 const clusters = () => [
   { label: 'luis', signature: [1, 0, 0] },
   { label: 'Luis', signature: [1, 0, 0] },
 ]
 
+/** Etiqueta VISIBLE de cada fila: se resuelve AL MOSTRAR por la VOZ (`speakerId`). */
 function filas(): string[] {
   return useIntegrationStore
     .getState()
     .conversationHistory.filter((e) => e.role === 'user')
-    .map((e) => String(e.speakerName || ''))
+    .map((e) => resolveRowSpeakerLabel(e))
 }
 
 describe('plegado luis/Luis: una identidad, un cluster', () => {
   beforeEach(() => {
     useIntegrationStore.setState({ conversationHistory: [], activePersonId: undefined })
+    resetVoiceDirectory()
   })
 
   it('(util) la MISMA voz case-insensitive es UN cluster y UN grupo de cosido', () => {
@@ -59,12 +63,16 @@ describe('plegado luis/Luis: una identidad, un cluster', () => {
     expect(uno).toHaveLength(1)
   })
 
-  it('(util) el renombre cubre las DOS grafias de la fila', () => {
+  it('(util) el renombre cubre las DOS grafias de la fila (misma VOZ plegada)', () => {
     commitUserTurnRow({ text: 'hola que tal', speakerName: 'luis', evidenciaAcustica: false, turnId: 1 } as never)
     commitUserTurnRow({ text: 'vamos a comer', speakerName: 'Luis', evidenciaAcustica: false, turnId: 2 } as never)
-    expect(filas()).toEqual(['luis', 'Luis'])
+    // Las DOS grafias dan el MISMO id de VOZ (plegado case-insensitive): sus filas ya salen
+    // con la grafia canonica ('Luis'), aunque la fila no guarde el nombre.
+    expect(filas()).toEqual(['Luis', 'Luis'])
+    // Mandato del dueno 2026-10-13: el registro va por VOZ (DIRECTORIO), NO reescribe filas:
+    // UNA sola VOZ cubre las DOS grafias.
     const cambiadas = renameSpeakerRows(['Luis'], 'Luis Perez')
-    expect(cambiadas, 'las dos grafias son la misma voz').toBe(2)
+    expect(cambiadas, 'una sola VOZ cubre las dos grafias').toBe(1)
     expect(filas()).toEqual(['Luis Perez', 'Luis Perez'])
   })
 

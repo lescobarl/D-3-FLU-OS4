@@ -20,6 +20,7 @@
 // ============================================================
 import { readFileSync } from 'node:fs'
 import { beforeEach, describe, expect, it } from 'vitest'
+import { resolveRowSpeakerLabel } from '../src/voice/lib/conversationRow'
 import { useIntegrationStore } from '../src/store/integrationStore'
 import {
     commitUserTurnRow,
@@ -37,7 +38,7 @@ const LUIS = { registeredLabel: 'Hablante 1', registeredName: 'Luis' }
 function etiquetaDe(_turnId: number): string {
     const h = useIntegrationStore.getState().conversationHistory
     for (let i = h.length - 1; i >= 0; i -= 1) {
-        if (h[i]?.role === 'user') return String(h[i].speakerName || '')
+        if (h[i]?.role === 'user') return String(resolveRowSpeakerLabel(h[i]) || '')
     }
     return ''
 }

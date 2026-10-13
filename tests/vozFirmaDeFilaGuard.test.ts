@@ -1,39 +1,48 @@
 // ============================================================
-// vozFirmaDeFilaGuard - la sustitucion del nombre alcanza TODAS las filas de esa voz.
+// vozFirmaDeFilaGuard - el NOMBRE alcanza TODAS las filas de esa VOZ (por TIMBRE).
 // ------------------------------------------------------------
-// MEDIDO por el dueno (2026-10-11 01:21:57): al registrar el nombre solo se renombro la
-// etiqueta de ese turno; las filas con etiquetas YA EXTINTAS ("Hablante 1") y la del
-// participante ("luis") se quedaron. La sustitucion tiene que vincular la fila por su FIRMA
-// (la voz del turno), no por su etiqueta.
-// PRUEBA DE DETECTOR: el texto sin el vinculo por firma se marca infractor.
+// MEDIDO por el dueno (2026-10-11) y RE-CERRADO con su mandato del 2026-10-13: la etiqueta
+// ("Hablante N") es provisional y puede CAMBIAR para la misma persona; la VOZ (su vector) no.
+// El vinculo de la fila con su voz NO puede ser la etiqueta: tiene que ser el TIMBRE.
+//
+// MECANISMO (una sola via): al escribir la fila se calcula su CLAVE DE VOZ por TIMBRE
+// (`voiceKeyFor` -> `matchDirectoryVoice` -> coseno del dueno unico `compareCosineSignatures`,
+// con el piso unico `sameVoiceFloor`). Dos etiquetas del MISMO timbre dan la MISMA clave y,
+// por tanto, el MISMO nombre al mostrarse. Ninguna fila se reescribe.
+//
+// PRUEBA DE DETECTOR: un escritor que vincule la fila SOLO por etiqueta se marca infractor.
 // ============================================================
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 const ROW = readFileSync('src/voice/lib/conversationTurnRow.ts', 'utf8')
-const POLICY = readFileSync('src/voice/lib/speakerClusters.js', 'utf8')
+const DIRECTORY = readFileSync('src/voice/lib/speakerDirectory.js', 'utf8')
+const CORE = readFileSync('src/voice/lib/speakerCore.js', 'utf8')
 const APP = readFileSync('src/App.tsx', 'utf8')
 
-/** true si el renombre vincula la fila por FIRMA (y no solo por etiqueta). */
-export function renombraPorFirma(src: string): boolean {
-  return /sameVoiceBySignature\(compareCosineSignatures\(ancla/.test(src)
+/** true si el escritor de la fila vincula la VOZ por TIMBRE (y no solo por etiqueta). */
+export function vinculaPorTimbre(src: string): boolean {
+  return /voiceKeyFor\(\{\s*voiceId:\s*labelToSpeakerId\(resolved\),\s*signature\s*\}\)/.test(src)
 }
 
-describe('sustitucion por FIRMA de la fila', () => {
-  it('el renombre usa la FIRMA de la fila ademas de la etiqueta', () => {
-    expect(renombraPorFirma(ROW), 'sin firma, las etiquetas extintas no se renombran').toBe(true)
+describe('el vinculo de la fila con su VOZ es por TIMBRE', () => {
+  it('el escritor calcula la clave de voz por TIMBRE', () => {
+    expect(vinculaPorTimbre(ROW), 'sin timbre, dos etiquetas de la misma persona no se ven con su nombre').toBe(true)
   })
-  it('el criterio de "misma voz" por firma tiene UN dueno', () => {
-    expect(POLICY).toContain('export function sameVoiceBySignature')
-    expect((POLICY.match(/export function sameVoice\w*BySignature/g) || []).length, 'un solo criterio').toBe(1)
+
+  it('el criterio de "misma voz" por timbre tiene UN dueno', () => {
+    expect(DIRECTORY, 'el emparejamiento por timbre vive en el directorio').toContain('compareCosineSignatures')
+    expect((CORE.match(/export function compareCosineSignatures/g) || []).length, 'un solo coseno').toBe(1)
   })
-  it('el escritor GUARDA la firma y App la aporta', () => {
+
+  it('la fila GUARDA su firma y App la aporta (la medida del turno)', () => {
     expect(ROW, 'la fila guarda su firma').toContain('signature: normalizeRowSignature(signature)')
     expect(APP, 'App pasa la firma del turno').toContain('signature: (resolved as { signature?: number[] | null })?.signature ?? null')
   })
-  it('PRUEBA DE DETECTOR (el detector no es decorativo): sin el vinculo por firma se marca', () => {
-    const viejo = 'const porEtiqueta = normalized.has(foldSpeakerKey(current))'
-    expect(renombraPorFirma(viejo), 'el renombre viejo no miraba la firma').toBe(false)
-    expect(renombraPorFirma(ROW)).toBe(true)
+
+  it('PRUEBA DE DETECTOR (el detector no es decorativo): el vinculo SOLO por etiqueta se marca', () => {
+    const viejo = 'const vozDeLaFila = labelToSpeakerId(resolved)'
+    expect(vinculaPorTimbre(viejo), 'vincular solo por etiqueta no basta').toBe(false)
+    expect(vinculaPorTimbre(ROW)).toBe(true)
   })
 })

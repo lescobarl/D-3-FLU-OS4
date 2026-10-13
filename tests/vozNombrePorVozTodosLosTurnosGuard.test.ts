@@ -16,6 +16,8 @@ import { readFileSync } from 'node:fs'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { useIntegrationStore } from '../src/store/integrationStore'
 import { commitUserTurnRow, renameSpeakerRows } from '../src/voice/lib/conversationTurnRow'
+import { resolveRowSpeakerLabel } from '../src/voice/lib/conversationRow'
+import { resetVoiceDirectory } from '../src/voice/lib/speakerDirectory.js'
 import { isNameBoundToVoice, findLabelsWithSharedVoice } from '../src/voice/lib/speakerClusters.js'
 import { registerSpeakerIdentity } from '../src/voice/lib/speakerIdentityRegister.js'
 
@@ -36,10 +38,13 @@ const filas = () =>
     useIntegrationStore
         .getState()
         .conversationHistory.filter((e) => e.role === 'user')
-        .map((e) => String(e.speakerName || ''))
+        .map((e) => resolveRowSpeakerLabel(e))
 
 beforeEach(() => {
     useIntegrationStore.setState({ conversationHistory: [] })
+    // El DIRECTORIO de nombres por VOZ es estado de sesion: se vacia por caso (mandato
+    // 2026-10-13: el nombre vive en la VOZ, no en la fila).
+    resetVoiceDirectory()
 })
 
 describe('el nombre se liga a la VOZ y vale en TODOS sus turnos', () => {
@@ -56,16 +61,19 @@ describe('el nombre se liga a la VOZ y vale en TODOS sus turnos', () => {
     })
 
     it('N turnos de la MISMA voz => N filas con el nombre; 0 genericas (y la otra voz intacta)', () => {
-        commitUserTurnRow({ text: 'turno uno', speakerName: 'Hablante 1', turnId: 1 } as never)
-        commitUserTurnRow({ text: 'turno dos', speakerName: 'Hablante 2', turnId: 2 } as never)
-        commitUserTurnRow({ text: 'turno tres', speakerName: 'Hablante 1', turnId: 3 } as never)
-        commitUserTurnRow({ text: 'otra voz', speakerName: 'Hablante 3', turnId: 4 } as never)
-        expect(filas()).toEqual(['Hablante 1', 'Hablante 2', 'Hablante 1', 'Hablante 3'])
+        // La VOZ es la CLAVE de la fila (mandato 2026-10-13): se mide por FIRMA, asi que las
+        // DOS etiquetas historicas de la misma voz caen en la MISMA clave de fila.
+        commitUserTurnRow({ text: 'turno uno', speakerName: 'Hablante 1', signature: VOZ_A, turnId: 1 } as never)
+        commitUserTurnRow({ text: 'turno dos', speakerName: 'Hablante 2', signature: MISMA_VOZ, turnId: 2 } as never)
+        commitUserTurnRow({ text: 'turno tres', speakerName: 'Hablante 1', signature: VOZ_A, turnId: 3 } as never)
+        commitUserTurnRow({ text: 'otra voz', speakerName: 'Hablante 3', signature: VOZ_B, turnId: 4 } as never)
+        expect(filas()).toEqual(['Hablante 1', 'Hablante 1', 'Hablante 1', 'Hablante 3'])
 
-        // Registro del comando: liga el nombre a la VOZ (dueno unico) y reescribe la BASE.
-        registerSpeakerIdentity({ name: 'Luis', previousLabel: 'Hablante 1', clusters, refs: {} as never })
+        // Registro del comando: liga el nombre a la VOZ (dueno unico). NO reescribe filas.
+        const result = registerSpeakerIdentity({ name: 'Luis', previousLabel: 'Hablante 1', clusters, refs: {} as never })
 
         expect(filas(), 'todos los turnos de esa voz').toEqual(['Luis', 'Luis', 'Luis', 'Hablante 3'])
+        expect(result.rowsChanged, 'el registro no muta filas: la etiqueta se resuelve al MOSTRAR').toBe(0)
     })
 
     it('el NOMBRE solo se estampa con EVIDENCIA; sin medida la fila cae a generica (P9.81)', () => {
@@ -82,10 +90,12 @@ describe('el nombre se liga a la VOZ y vale en TODOS sus turnos', () => {
 })
 
 describe('el NOMBRE sustituye a la PERSONA (no da de alta una identidad nueva)', () => {
-  it('las filas del PARTICIPANTE/primerio pasan al nombre nuevo', () => {
+  it('las filas del PARTICIPANTE/primerio se VEN con el nombre nuevo', () => {
     useIntegrationStore.setState({ conversationHistory: [] })
-    commitUserTurnRow({ text: 'antes', speakerName: 'Hablante 1', evidenciaAcustica: false, turnId: 1 } as never)
-    commitUserTurnRow({ text: 'participante', speakerName: 'luis', evidenciaAcustica: false, turnId: 2 } as never)
+    // Mandato del dueño 2026-10-13: la MISMA voz (misma FIRMA) del participante liga sus
+    // dos filas a la misma clave; el nombre se registra por VOZ y NINGUNA fila se reescribe.
+    commitUserTurnRow({ text: 'antes', speakerName: 'Hablante 1', evidenciaAcustica: false, signature: [1, 0, 0], turnId: 1 } as never)
+    commitUserTurnRow({ text: 'participante', speakerName: 'luis', evidenciaAcustica: false, signature: [1, 0, 0], turnId: 2 } as never)
     const refs = { sessionPrimarySpeakerRef: { current: 'luis' } }
     registerSpeakerIdentity({
       name: 'Juan',
@@ -94,24 +104,26 @@ describe('el NOMBRE sustituye a la PERSONA (no da de alta una identidad nueva)',
       refs,
     })
     expect(
-      useIntegrationStore.getState().conversationHistory.filter((e: any) => e.role === 'user').map((e: any) => e.speakerName).sort(),
-      'la persona entera pasa a su nombre nuevo (incluida su etiqueta de participante)',
+      useIntegrationStore.getState().conversationHistory.filter((e) => e.role === 'user').map((e) => resolveRowSpeakerLabel(e)).sort(),
+      'la persona entera pasa a su nombre nuevo (sus filas se ven con el nombre)',
     ).toEqual(['Juan', 'Juan'])
   })
 })
 
-describe('sustitucion por FIRMA: las etiquetas ya EXTINTAS tambien se renombran', () => {
+describe('sustitucion por la VOZ: las etiquetas ya EXTINTAS se VEN con el nombre', () => {
   it('N filas de la misma voz (etiquetas que ya no estan en los clusters) => N con el nombre', () => {
     useIntegrationStore.setState({ conversationHistory: [] })
     const VOZ = [1, 0, 0]
     commitUserTurnRow({ text: 'uno', speakerName: 'Hablante 1', evidenciaAcustica: false, turnId: 1, signature: VOZ } as never)
     commitUserTurnRow({ text: 'dos', speakerName: 'Hablante 4', evidenciaAcustica: false, turnId: 2, signature: [0.99, Math.sqrt(1 - 0.99 * 0.99), 0] } as never)
     commitUserTurnRow({ text: 'otra voz', speakerName: 'Hablante 7', evidenciaAcustica: false, turnId: 3, signature: [0, 0, 1] } as never)
-    const cambiadas = renameSpeakerRows(['Hablante 1'], 'Luis', { anchorSignature: VOZ })
-    expect(cambiadas, 'las DOS filas de esa voz (una por etiqueta, otra solo por firma)').toBe(2)
+    // `renameSpeakerRows` recibe 2 argumentos (sin `anchorSignature`): registra el nombre
+    // en el DIRECTORIO por la VOZ de esa etiqueta y NO toca ninguna fila (mandato 2026-10-13).
+    const registradas = renameSpeakerRows(['Hablante 1'], 'Luis')
+    expect(registradas, 'una sola VOZ registrada (ya no cuenta "filas cambiadas")').toBe(1)
     expect(
-      useIntegrationStore.getState().conversationHistory.filter((e: any) => e.role === 'user').map((e: any) => e.speakerName),
-      'la voz distinta NO se toca',
+      useIntegrationStore.getState().conversationHistory.filter((e) => e.role === 'user').map((e) => resolveRowSpeakerLabel(e)),
+      'las DOS filas de esa voz (una por etiqueta, otra solo por firma) se VEN con el nombre; la voz distinta NO',
     ).toEqual(['Luis', 'Luis', 'Hablante 7'])
   })
 })

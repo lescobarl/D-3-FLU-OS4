@@ -53,6 +53,8 @@ import { EXPRESSION_MAP } from '../src/avatar/index';
 import { EXPRESSION_REGISTRY, getValidAnimations } from '../src/core/anim/expressionRegistry';
 import { resolveStateExpression } from '../src/core/anim/emotionEngine';
 import { commitUserTurnRow } from '../src/voice/lib/conversationTurnRow';
+import { resolveRowSpeakerLabel } from '../src/voice/lib/conversationRow.js';
+import { resetVoiceDirectory } from '../src/voice/lib/speakerDirectory.js';
 import { detectSentiment } from '../src/store/integrationStore';
 import { FLU_CONFIG } from '../src/voice/lib/fluConfig';
 
@@ -75,6 +77,10 @@ const addUserRow = (text: string, speakerName?: string) => {
 /** Reset the Zustand store to initial state before each test */
 function resetStore() {
     useIntegrationStore.getState().reset();
+    // Aislamiento (mandato 2026-10-13): el registro de NOMBRES por VOZ (speakerDirectory)
+    // es estado de sesion; se vacia junto con el store para no filtrar una voz nombrada
+    // de un test al siguiente.
+    resetVoiceDirectory();
 }
 
 /** Create a minimal ConversationEntry for testing */
@@ -383,8 +389,8 @@ describe('💬 Conversation Memory', () => {
         expect(history).toHaveLength(1);
         expect(history[0].role).toBe('user');
         expect(history[0].text).toBe('Hola FLU');
-        // OS2 parity: default speakerName is 'Hablante 1'
-        expect(history[0].speakerName).toBe('Hablante 1');
+        // OS2 parity: default speakerName is 'Hablante 1' (resuelto al MOSTRAR por la VOZ)
+        expect(resolveRowSpeakerLabel(history[0])).toBe('Hablante 1');
     });
 
     it('debe asignar UUIDv4 a cada entrada', () => {
@@ -984,7 +990,8 @@ describe('👥 Multi-Speaker Conversations', () => {
         const history = useIntegrationStore.getState().conversationHistory;
         expect(history).toHaveLength(scenario.messages.length);
         for (let i = 0; i < scenario.messages.length; i++) {
-            expect(history[i].speakerName).toBe(scenario.messages[i].speaker);
+            // La etiqueta visible se resuelve al MOSTRAR y por la VOZ (mandato 2026-10-13).
+            expect(resolveRowSpeakerLabel(history[i])).toBe(scenario.messages[i].speaker);
         }
     });
 
@@ -995,7 +1002,7 @@ describe('👥 Multi-Speaker Conversations', () => {
         }
         const history = useIntegrationStore.getState().conversationHistory;
         expect(history).toHaveLength(scenario.messages.length);
-        const speakers = new Set(history.map(e => e.speakerName));
+        const speakers = new Set(history.map(e => resolveRowSpeakerLabel(e)));
         expect(speakers.has('Usuario')).toBe(true);
         expect(speakers.has('Soporte')).toBe(true);
     });
@@ -1007,15 +1014,16 @@ describe('👥 Multi-Speaker Conversations', () => {
         }
         const history = useIntegrationStore.getState().conversationHistory;
         expect(history).toHaveLength(scenario.messages.length);
-        const speakers = new Set(history.map(e => e.speakerName));
-        expect(speakers.has('Líder')).toBe(true);
+        const speakers = new Set(history.map(e => resolveRowSpeakerLabel(e)));
+        // Canon de la etiqueta visible (id de voz -> nombre): 'Líder' -> 'Lider'.
+        expect(speakers.has('Lider')).toBe(true);
         expect(speakers.has('Dev')).toBe(true);
     });
 
     it('debe usar default speakerName cuando no se proporciona', () => {
         addUserRow('Hola');
         const history = useIntegrationStore.getState().conversationHistory;
-        expect(history[0].speakerName).toBe('Hablante 1');
+        expect(resolveRowSpeakerLabel(history[0])).toBe('Hablante 1');
     });
 });
 
@@ -2428,8 +2436,8 @@ describe('🎭 Pipeline Emoción/Animación — Validación Funcional', () => {
 
         const history = useIntegrationStore.getState().conversationHistory;
         expect(history).toHaveLength(2);
-        expect(history[0].speakerName).toBe('Hablante 1');
-        expect(history[1].speakerName).toBe('Hablante 2');
+        expect(resolveRowSpeakerLabel(history[0])).toBe('Hablante 1');
+        expect(resolveRowSpeakerLabel(history[1])).toBe('Hablante 2');
         expect(history[0].id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
         expect(history[1].id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
     });

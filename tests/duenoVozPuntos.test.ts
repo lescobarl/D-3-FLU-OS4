@@ -17,6 +17,8 @@ import { registerSpeakerIdentity } from '../src/voice/lib/speakerIdentityRegiste
 import { FLU_CONFIG } from '../src/voice/lib/fluConfig.js'
 import { getCommandSpeech } from '../src/voice/lib/voiceCommands.js'
 import { resolveTurnSpeakerAtCommit } from '../src/voice/lib/turnSpeakerCommit'
+import { resolveRowSpeakerLabel } from '../src/voice/lib/conversationRow'
+import { resetVoiceDirectory } from '../src/voice/lib/speakerDirectory.js'
 import { resolveVoiceParticipants } from '../src/voice/lib/voiceParticipantsSource'
 import { isNavSettlePending, setNavSettlePending } from '../src/voice/lib/navSettleFlag.js'
 
@@ -24,6 +26,8 @@ const filas = () => useIntegrationStore.getState().conversationHistory.filter((e
 
 beforeEach(() => {
     useIntegrationStore.setState({ conversationHistory: [] })
+    // El DIRECTORIO (nombre por VOZ) es estado de SESION.
+    resetVoiceDirectory()
 })
 
 describe('P1 - la conversacion solo se INSERTA (no se reescribe)', () => {
@@ -56,7 +60,7 @@ describe('P5 - el nombre registrado alcanza TODOS los turnos de esa voz', () => 
         commitUserTurnRow({ text: 'dos', speakerName: 'Hablante 1', turnId: 2 } as never)
         registerSpeakerIdentity({ name: 'Luis', previousLabel: 'Hablante 1', clusters: [], refs: {} as never })
         commitUserTurnRow({ text: 'tres', speakerName: 'Hablante 1', turnId: 3, evidenciaAcustica: false } as never)
-        expect(filas().map((e) => e.speakerName), 'solo hablo una voz: todas "Luis"').toEqual([
+        expect(filas().map((e) => resolveRowSpeakerLabel(e)), 'solo hablo una voz: todas "Luis"').toEqual([
             'Luis',
             'Luis',
             'Luis',
@@ -74,7 +78,7 @@ describe('P5 - el nombre registrado alcanza TODOS los turnos de esa voz', () => 
         updateTurnRowSpeaker(3, 'Luis', { evidenciaAcustica: true })
         // El dueno DICE su nombre con la wake: el registro renombra TODA su participacion.
         registerSpeakerIdentity({ name: 'Luis', previousLabel: 'Luis', clusters: [], refs: {} as never })
-        expect(filas().map((e) => e.speakerName), 'todas las filas de esa voz').toEqual([
+        expect(filas().map((e) => resolveRowSpeakerLabel(e)), 'todas las filas de esa voz').toEqual([
             'Luis',
             'Luis',
             'Luis',

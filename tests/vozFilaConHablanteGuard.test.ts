@@ -13,15 +13,10 @@
 // El respaldo se usa SOLO cuando no hay etiqueta.
 // ============================================================
 import { beforeEach, describe, expect, it } from 'vitest'
+import { commitUserTurnRow, preserveProperSpeaker, renameSpeakerRows, resolveRowSpeakerName, updateTurnRowSpeaker } from '../src/voice/lib/conversationTurnRow'
+import { resolveRowSpeakerLabel } from '../src/voice/lib/conversationRow'
+import { resetVoiceDirectory } from '../src/voice/lib/speakerDirectory.js'
 import { useIntegrationStore } from '../src/store/integrationStore'
-import {
-  commitUserTurnRow,
-  preserveProperSpeaker,
-  renameSpeakerRows,
-  resetSpeakerLabelAliases,
-  resolveRowSpeakerName,
-  updateTurnRowSpeaker,
-} from '../src/voice/lib/conversationTurnRow'
 import { applyResolvedSpeakerToSessionRefs } from '../src/voice/lib/turnSpeakerCommit.js'
 import { FLU_CONFIG } from '../src/voice/lib/fluConfig.js'
 
@@ -31,21 +26,21 @@ function filas(): string[] {
   return useIntegrationStore
     .getState()
     .conversationHistory.filter((e) => e.role === 'user')
-    .map((e) => String(e.speakerName || ''))
+    .map((e) => resolveRowSpeakerLabel(e))
 }
 function filaDe(turnId: number): string {
   const entry = useIntegrationStore
     .getState()
     .conversationHistory.find((e) => (e as { turnId?: number }).turnId === turnId)
-  return entry ? String(entry.speakerName || '') : filas()[0]
+  return entry ? resolveRowSpeakerLabel(entry) : filas()[0]
 }
 
 describe('A5 corregida - la etiqueta del resolver se escribe y el renombre sustituye', () => {
   beforeEach(() => {
     useIntegrationStore.setState({ conversationHistory: [], activePersonId: undefined })
-    // Los ALIAS de nombre por voz son de SESION (el producto los vacia al reiniciar la
-    // conversacion): sin esto, el registro de un caso se filtraba al siguiente.
-    resetSpeakerLabelAliases()
+    // Aislamiento de sesion (mandato 2026-10-13): el nombre vive en el DIRECTORIO por VOZ,
+    // que es estado de sesion. Sin vaciarlo, el registro de un caso se filtraba al siguiente.
+    resetVoiceDirectory()
   })
 
   it('(util) la fila lleva la ETIQUETA PEDIDA, no el respaldo', () => {

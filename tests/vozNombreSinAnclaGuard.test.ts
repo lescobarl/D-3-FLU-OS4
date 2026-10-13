@@ -25,8 +25,10 @@
 // autoriza; el vocabulario de razones tiene UN dueno (`isMeasuredIdentityMatch`).
 // ============================================================
 import { beforeEach, describe, expect, it } from 'vitest'
+import { commitUserTurnRow, updateTurnRowSpeaker } from '../src/voice/lib/conversationTurnRow'
+import { resolveRowSpeakerLabel } from '../src/voice/lib/conversationRow'
+import { resetVoiceDirectory } from '../src/voice/lib/speakerDirectory.js'
 import { useIntegrationStore } from '../src/store/integrationStore'
-import { commitUserTurnRow, updateTurnRowSpeaker, resetSpeakerLabelAliases } from '../src/voice/lib/conversationTurnRow'
 import { resolveConversationSpeaker, isMeasuredIdentityMatch } from '../src/voice/lib/speakerDiarization.js'
 
 const DIM = 64
@@ -45,11 +47,13 @@ const filas = () =>
   useIntegrationStore
     .getState()
     .conversationHistory.filter((e) => e.role === 'user')
-    .map((e) => String(e.speakerName || ''))
+    .map((e) => resolveRowSpeakerLabel(e))
 
-// El store de la conversacion se limpia en TODOS los bloques: las filas son el oraculo.
+// El store de la conversacion se limpia en TODOS los bloques, y el DIRECTORIO de nombres
+// por VOZ (estado de sesion) se vacia: las filas son el oraculo y el registro no se filtra.
 beforeEach(() => {
   useIntegrationStore.setState({ conversationHistory: [] })
+  resetVoiceDirectory()
 })
 
 describe('B - un nombre propio NO se afirma sin su ancla', () => {
@@ -137,31 +141,36 @@ describe('C - la evidencia es la COINCIDENCIA medida (un dueno: isMeasuredIdenti
     // Sin evidencia medida: el nombre NO se estampa (esto era el row-update objetivo:"luis").
     updateTurnRowSpeaker(1, 'luis', { evidenciaAcustica: false } as never)
     expect(filas(), 'sin coincidencia medida la fila conserva su etiqueta').toEqual(['Hablante 2'])
-    // Con evidencia medida: si asciende.
+    // Con evidencia medida: si asciende. El nombre entra CANONICO ('luis' -> 'Luis') y se
+    // registra en el DIRECTORIO por VOZ (mandato 2026-10-13): la etiqueta visible cambia,
+    // la fila NO se reescribe.
     updateTurnRowSpeaker(1, 'luis', { evidenciaAcustica: true } as never)
-    expect(filas()).toEqual(['luis'])
+    expect(filas()).toEqual(['Luis'])
   })
 })
 
 describe('D - la fila del turno se completa aunque la medida llegue tarde', () => {
   beforeEach(() => {
-    // Aislamiento: el nombre registrado por VOZ queda ligado a la etiqueta de esa voz SOLO
+    // Aislamiento: el nombre registrado por VOZ queda ligado a la VOZ de esa fila SOLO
     // dentro de la sesion (el producto lo vacia al reiniciar la conversacion).
     useIntegrationStore.setState({ conversationHistory: [] })
-    resetSpeakerLabelAliases()
+    resetVoiceDirectory()
   })
 
   it('una medida posterior completa la fila de SU turno (no la del mas reciente)', () => {
-    commitUserTurnRow({ text: 'turno diecisiete', speakerName: '', turnId: 17 } as never)
-    commitUserTurnRow({ text: 'turno diecinueve', speakerName: '', turnId: 19 } as never)
-    // La medida del turno 17 llega cuando ya existe el 19: completa SU fila.
-    updateTurnRowSpeaker(17, 'Hablante 2', { evidenciaAcustica: true } as never)
+    // Dos VOICES distintas (su `speakerId`) para poder observar que el aviso del 17 no
+    // alcanza a la fila del 19 (mandato 2026-10-13: el nombre se registra por VOZ).
+    commitUserTurnRow({ text: 'turno diecisiete', speakerName: 'Hablante 2', turnId: 17 } as never)
+    commitUserTurnRow({ text: 'turno diecinueve', speakerName: 'Hablante 3', turnId: 19 } as never)
+    // La medida del turno 17 llega cuando ya existe el 19: registra el nombre para la VOZ
+    // de SU fila (el turno 17), sin tocar la fila del 19.
+    updateTurnRowSpeaker(17, 'Luis', { evidenciaAcustica: true } as never)
     const h = useIntegrationStore
       .getState()
       .conversationHistory.filter((e) => e.role === 'user')
-      .map((e) => String(e.speakerName || ''))
-    expect(h[0], 'la fila del turno 17 lleva la etiqueta medida para ESE turno').toBe('Hablante 2')
-    expect(h[1], 'y la del 19 no se toca por el aviso del 17').toBe('Hablante 1')
+      .map((e) => resolveRowSpeakerLabel(e))
+    expect(h[0], 'la fila del turno 17 lleva la etiqueta medida para ESE turno').toBe('Luis')
+    expect(h[1], 'y la VOZ del 19 (otra) no se toca por el aviso del 17').toBe('Hablante 3')
   })
 
   it('control NEGATIVO (el detector no es decorativo): con el guard monotono viejo la fila vieja NO se completaba', () => {

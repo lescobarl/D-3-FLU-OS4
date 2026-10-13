@@ -17,6 +17,8 @@ import { resolveConversationSpeaker } from '../src/voice/lib/speakerDiarization.
 import { FLU_CONFIG } from '../src/voice/lib/fluConfig.js'
 import { useIntegrationStore } from '../src/store/integrationStore'
 import { commitUserTurnRow, renameSpeakerRows } from '../src/voice/lib/conversationTurnRow'
+import { resolveRowSpeakerLabel } from '../src/voice/lib/conversationRow'
+import { resetVoiceDirectory } from '../src/voice/lib/speakerDirectory.js'
 
 type Vec = number[]
 interface Cluster { label: string; signature: Vec }
@@ -43,6 +45,11 @@ const resolveTurn = (t: Turn): string =>
     atTurnBoundary: true,
     allowNewCluster: true,
   } as any)
+
+// Aislamiento: el DIRECTORIO de nombres por VOZ (estado de sesion) se vacia entre casos.
+beforeEach(() => {
+  resetVoiceDirectory()
+})
 
 describe('identidad inyectada: la MISMA voz no cambia de etiqueta entre turnos', () => {
 
@@ -84,17 +91,18 @@ describe('identidad inyectada: el nombre pega en las FILAS escritas (ruta real)'
     useIntegrationStore.getState().resetConversationHistory()
   })
 
-  it('tras identificar "luis", la VOZ lleva el nombre: las filas del MISMO hablante salen "luis" y la mujer intacta', () => {
+  it('tras identificar "luis", la VOZ lleva el nombre: las filas del MISMO hablante salen "Luis" y la mujer intacta', () => {
     commitUserTurnRow({ text: 'hola a todos como estan', speakerName: 'Hablante 1', turnId: 1 })
     commitUserTurnRow({ text: 'soy luis y estoy probando', speakerName: 'Hablante 1', turnId: 2 })
-    // El renombre va por VOZ: la etiqueta de esa voz pasa al nombre (por FIRMA).
+    // Mandato del dueno 2026-10-13: el NOMBRE vive en el DIRECTORIO por VOZ; el registro
+    // (`renameSpeakerRows`) NO reescribe ninguna fila (la conversacion es texto insertado).
+    // La fila guarda su VOZ (`speakerId`) y la etiqueta se resuelve AL MOSTRAR.
     renameSpeakerRows(['Hablante 1'], 'luis')
-    // La voz sigue siendo la MISMA: el dueno de la identidad la resuelve con su nombre,
-    // asi que la fila se escribe con el nombre (no por un mapa de etiquetas).
     commitUserTurnRow({ text: 'sigo hablando yo', speakerName: 'luis', turnId: 3 })
     commitUserTurnRow({ text: 'esta es de sabor de platano', speakerName: 'Hablante 2', turnId: 4 })
     const rows = useIntegrationStore.getState().conversationHistory.filter((r) => r.role === 'user')
-    expect(rows.map((r) => r.speakerName)).toEqual(['luis', 'luis', 'luis', 'Hablante 2'])
+    // El nombre entra CANONICO ('luis' -> 'Luis'); la mujer (otra VOZ) queda intacta.
+    expect(rows.map((r) => resolveRowSpeakerLabel(r))).toEqual(['Luis', 'Luis', 'Luis', 'Hablante 2'])
   })
 })
 

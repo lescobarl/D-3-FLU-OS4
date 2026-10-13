@@ -14,6 +14,7 @@
 // ESTE GUARD mide la PROPIEDAD en las TRES vias de escritura reales.
 // ============================================================
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { resolveRowSpeakerLabel } from '../src/voice/lib/conversationRow'
 import { useIntegrationStore } from '../src/store/integrationStore'
 import { commitUserTurnRow, updateTurnRowSpeaker } from '../src/voice/lib/conversationTurnRow'
 import { createActiveListenState } from '../src/voice/lib/activeListen.js'
@@ -29,7 +30,7 @@ const RESPALDO = String(
 const filasUsuario = () =>
   useIntegrationStore.getState().conversationHistory.filter((e) => e.role === 'user')
 
-const hablantes = () => filasUsuario().map((e) => String(e.speakerName || ''))
+const hablantes = () => filasUsuario().map((e) => String(resolveRowSpeakerLabel(e) || ''))
 
 describe('P9.65 - la fila de usuario SIEMPRE lleva hablante', () => {
   beforeEach(() => {
@@ -61,7 +62,7 @@ describe('P9.65 - la fila de usuario SIEMPRE lleva hablante', () => {
     const { id } = commitUserTurnRow({ text: 'una frase cualquiera', turnId: 5 } as never)
     updateTurnRowSpeaker(5, '' as never)
     const fila = useIntegrationStore.getState().conversationHistory.find((e) => e.id === id)
-    expect(String(fila?.speakerName || '')).toBe(RESPALDO)
+    expect(String(resolveRowSpeakerLabel(fila) || '')).toBe(RESPALDO)
   })
 
   it('TUBERIA REAL: el commit del stream escribe hablante aunque el preflight no este listo', () => {

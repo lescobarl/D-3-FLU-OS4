@@ -20,8 +20,10 @@
 //   el nombre. REGLA: un dato (voz), un dueno; el renombre va por FIRMA del cluster.
 // ============================================================
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { commitUserTurnRow, renameSpeakerRows, resolveRowSpeakerName } from '../src/voice/lib/conversationTurnRow'
+import { resolveRowSpeakerLabel } from '../src/voice/lib/conversationRow'
+import { resetVoiceDirectory } from '../src/voice/lib/speakerDirectory.js'
 import { useIntegrationStore } from '../src/store/integrationStore'
-import { commitUserTurnRow, renameSpeakerRows, resolveRowSpeakerName, resetSpeakerLabelAliases } from '../src/voice/lib/conversationTurnRow'
 import {
   registerSpeakerIdentity,
   registerSpeakerIdentityFromCommand,
@@ -97,9 +99,9 @@ describe('B1 - el intro ("soy <nombre>") solo si la orden EMPIEZA en la wake', (
 describe('B2 - la identidad es la VOZ (firma), no la etiqueta', () => {
   beforeEach(() => {
     useIntegrationStore.setState({ conversationHistory: [] })
-    // Aislamiento: los ALIAS de nombre por voz son de SESION (el producto los vacia al
-    // reiniciar la conversacion). Sin esto, el registro de un caso se filtraba al siguiente.
-    resetSpeakerLabelAliases()
+    // El nombre vive en el DIRECTORIO por VOZ (estado de sesion): se vacia por caso
+    // para que el registro de uno no se filtre al siguiente (mandato 2026-10-13).
+    resetVoiceDirectory()
   })
 
   const CLUSTERS = [
@@ -116,14 +118,12 @@ describe('B2 - la identidad es la VOZ (firma), no la etiqueta', () => {
     expect(resolveRowSpeakerName('Hablante 1', false)).toBe('Hablante 1')
   })
 
-  it('"soy X" renombra SOLO las filas de esa voz (las etiquetas salen de la FIRMA) y la VOZ queda con el nombre', () => {
-    useIntegrationStore.setState({
-      conversationHistory: [
-        { id: 'r1', role: 'user', text: 'hola', speakerName: 'Hablante 1', timestamp: '10:00' },
-        { id: 'r2', role: 'user', text: 'que tal', speakerName: 'Hablante 3', timestamp: '10:01' },
-        { id: 'r3', role: 'user', text: 'bueno', speakerName: 'Hablante 1', timestamp: '10:02' },
-      ] as never,
-    })
+  it('"soy X" registra el nombre en la VOZ (sus filas se VEN con el nombre; la otra voz no se toca)', () => {
+    // Mandato del dueño 2026-10-13: registrar el nombre NO muta ninguna fila (la conversacion
+    // es texto insertado); el nombre se guarda por VOZ y la etiqueta se resuelve AL MOSTRAR.
+    commitUserTurnRow({ text: 'hola', speakerName: 'Hablante 1', turnId: 1 } as never)
+    commitUserTurnRow({ text: 'que tal', speakerName: 'Hablante 3', turnId: 2 } as never)
+    commitUserTurnRow({ text: 'bueno', speakerName: 'Hablante 1', turnId: 3 } as never)
     const setClusters = vi.fn()
     // Las etiquetas de la MISMA voz las decide el dueno de los clusters (por FIRMA).
     const etiquetas = findLabelsWithSharedVoice(CLUSTERS as never, 'Hablante 1')
@@ -139,13 +139,21 @@ describe('B2 - la identidad es la VOZ (firma), no la etiqueta', () => {
     const filas = useIntegrationStore
       .getState()
       .conversationHistory.filter((e) => e.role === 'user')
-      .map((e) => String(e.speakerName || ''))
-    expect(filas, 'las filas de ESA voz pasan al nombre; la otra voz no se toca').toEqual([
+      .map((e) => resolveRowSpeakerLabel(e))
+    expect(filas, 'las filas de ESA voz se ven con su nombre; la otra voz no se toca').toEqual([
       'Luis',
       'Hablante 3',
       'Luis',
     ])
-    expect(result.rowsChanged).toBe(2)
+    // El registro NO reescribe filas: la conversacion es texto insertado (mandato 2026-10-13).
+    expect(result.rowsChanged, 'renombrar no toca filas; la etiqueta se resuelve al MOSTRAR').toBe(0)
+    expect(
+      useIntegrationStore
+        .getState()
+        .conversationHistory.filter((e) => e.role === 'user')
+        .every((e) => !String((e as { speakerName?: string }).speakerName || '')),
+      'ninguna fila guarda el nombre: guarda su VOZ (speakerId)',
+    ).toBe(true)
     // El renombre va por VOZ: el CLUSTER de esa voz queda con el nombre (las filas
     // siguientes lo resuelven por firma, sin mapa de etiquetas).
     expect(setClusters).toHaveBeenCalled()
@@ -154,11 +162,7 @@ describe('B2 - la identidad es la VOZ (firma), no la etiqueta', () => {
   })
 
   it('RUTA DEL COMANDO: registra igual y deja la VOZ con el nombre', () => {
-    useIntegrationStore.setState({
-      conversationHistory: [
-        { id: 'r1', role: 'user', text: 'hola', speakerName: 'Hablante 1', timestamp: '10:00' },
-      ] as never,
-    })
+    commitUserTurnRow({ text: 'hola', speakerName: 'Hablante 1', turnId: 1 } as never)
     const setClusters = vi.fn()
     const result = registerSpeakerIdentityFromCommand({
       transcript: 'okay flu soy Luis',
@@ -167,7 +171,15 @@ describe('B2 - la identidad es la VOZ (firma), no la etiqueta', () => {
       refs: { setClusters, sessionPrimarySpeakerRef: { current: '' } } as never,
     })
     expect(result.registered).toBe(true)
-    expect(result.rowsChanged).toBe(1)
+    // La VOZ queda con el nombre y la fila se VE con el; NO se reescribe fila alguna
+    // (mandato 2026-10-13: el nombre vive en el directorio y se resuelve al MOSTRAR).
+    expect(result.rowsChanged).toBe(0)
+    expect(
+      useIntegrationStore
+        .getState()
+        .conversationHistory.filter((e) => e.role === 'user')
+        .map((e) => resolveRowSpeakerLabel(e)),
+    ).toEqual(['Luis'])
     expect(setClusters).toHaveBeenCalled()
   })
 
