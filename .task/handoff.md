@@ -671,3 +671,16 @@ de P9.64 y contar las filas sin hablante de P9.65.
 - MEDIDO: build 254 items -> 0 (mismos 1306 modulos); typecheck 0; 7 mediciones congeladas
   byte-identicas; DoD ENTERO 203 ficheros VERDE; dev server sin el aviso.
 - PENDIENTES: ninguno (0 en el ledger).
+
+## 2026-10-14 - P11.14 CERRADO: el log del dueno ya no se destruye + DIAGNOSTICO ABIERTO de P1/P2
+
+- Fix (commit f4104a5): el arranque del server rota debug.log -> debug.prev.log (antes lo
+  truncaba: geminiProxy.ts:867) y el relay no re-encola. Probado en arranque real.
+- ABIERTO (requiere SU corrida fresca, el log ya sobrevive): P1 (nombre "Luis" a una voz de
+  mujer) y P2 (transcripcion congelada + volcado). Candidatos medidos en .task/report
+  (P11.14): herencia sin evidencia (speakerDiarization.js:417-426; el hito de retirarla se
+  revirtio al romper su repro del 10-11) y cosido 0.64 vs identidad registrada 0.76; y la
+  caja que bloquea revisiones (conversationStreamCommit.js:288-295) + cierre solo por
+  silencio (P11.12).
+- REGLA NUEVA DEL AGENTE: no se arranca el server sin asumir que debug.log es la evidencia
+  del dueno (ahora rota, pero el arranque sigue vaciando la corrida actual).
