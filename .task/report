@@ -5937,3 +5937,45 @@ lectura/veredicto de cada candidato; NO CUBIERTO=la suite completa, el e2e, la v
 dueno en pantalla, y que los 566 literales se lean UNO A UNO (se clasificaron por clases y
 muestreo). El catalogo de 28 puntos no sustituye a esta medicion.
 ===============================================================================
+
+===============================================================================
+A7 - UN SOLO DUENO DEL INSTRUMENTAL DE MEDIDA (2026-10-14, con autorizacion amplia
+y explicita del dueno)
+===============================================================================
+QUE ERA (medido en la auditoria de codigo del mismo dia): 3 cuerpos duplicados +
+homonimos entre los instrumentos CONGELADOS por hash y el gate: walk
+(auditoria-codigo.mjs:38 == duplication.mjs:183; tambien en audit-metric.mjs y
+auditoria.mjs), readSources (duplication.mjs:182 vs auditoria-codigo.mjs:58), block
+(duplication.mjs:86 == auditoria-codigo.mjs:63), duplicateBodies local
+(auditoria.mjs:117) y sh (hito.mjs:43 == task-gate.mjs:40).
+
+ARREGLO (2 modulos nuevos + 6 consumidores):
+  - scripts/fsScan.mjs (NUEVO, congelado): walkFiles + filtro, readSources, block.
+    El FILTRO de extensiones es del CONSUMIDOR (cada instrumental declara su
+    alcance); el bucle, las rutas y el corte de llaves tienen UN dueno.
+  - scripts/runCmd.mjs (NUEVO, congelado): sh / shRaw.
+  - duplication.mjs, auditoria-codigo.mjs, auditoria.mjs, audit-metric.mjs, hito.mjs
+    y task-gate.mjs importan del dueno (readSources se re-exporta donde era API
+    publica: purposeOwners.mjs + 2 guards). audit-metric conserva su EOL CRLF.
+
+PRUEBA DE QUE EL CRITERIO NO SE MOVIO (misma vara, un solo dueno del bucle):
+  ANTES vs DESPUES, salida BYTE-IDENTICA en 7 mediciones: los 50 ids de
+  audit-metric (uno a uno) | duplication.mjs (ficheros=424 grupos=0 baseline=0) y
+  --violations | auditoria-codigo.mjs (0/7/0/566/0/3) y --self-test (6 senales OK) |
+  auditoria.mjs (catalogo 28/28) | purposeOwners.mjs.
+  scripts/ re-escaneado con las mismas senales: 3 -> 0 cuerpos duplicados;
+  homonimos 5 -> 1 (el que queda es `main` en dos scripts sin relacion). ESLint 0
+  sobre los 8 scripts.
+  RE-CONGELADO: node scripts/task-gate-freeze.mjs (7 ficheros; fsScan/runCmd entran
+  en .task/frozen.json). GATE: paso 0 (congelados) VERDE; la corrida falla DESPUES
+  por ALCANCE (el contrato vigente es de la tarea anterior y su allow no cubre
+  scripts/**), no por los congelados.
+  GUARDAS consumidoras VERDES (8 ficheros): structureDuplicationGuard,
+  purposeOwnershipGuard, auditCodeSignalsGuard, auditVacuityGuard,
+  hygieneIndicatorsGuard, localStorageGatewayGuard, taskGateInvariant, eolGuard.
+  hito.mjs: HITO_DRY=1 node scripts/hito.mjs prep imprime el plan (sh/shRaw vivos).
+
+ALCANCE REAL (0.23): CUBIERTO=la unificacion de las 5 copias con re-congelado y la
+prueba de no-movimiento del criterio (7 mediciones byte-identicas); NO CUBIERTO=la
+suite completa, el e2e y los pasos 1-4 del gate (exigen un contrato de ESTA tarea).
+===============================================================================

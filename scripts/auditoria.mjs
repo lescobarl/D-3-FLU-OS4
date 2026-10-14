@@ -12,11 +12,15 @@
  * Regla: cada hallazgo tiene detector, META y severidad. Un hito es "verde" cuando
  * su(s) hallazgo(s) llegan a META sin subir ningún otro.
  */
-import { readdirSync, readFileSync, statSync, existsSync } from 'node:fs'
+import { readFileSync, existsSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { spawnSync } from 'node:child_process'
 // Detectores reales de V6/V17 (dueno unico compartido con su guard de barrera).
 import { findBrokenImports, findLibraryMonkeyPatches, findMissingEslintConfig } from './audit-detectors.mjs'
+// A7: V18 delega en el dueno del detector (un solo criterio de "mismo cuerpo") y el
+// escaneo usa el dueno unico (fsScan).
+import { duplicateBodies } from './auditoria-codigo.mjs'
+import { readSources, walkFiles } from './fsScan.mjs'
 
 const ROOT = process.cwd()
 const SRC = join(ROOT, 'src')
@@ -30,14 +34,10 @@ const ONLY = onlyArg
   : null
 
 // ---------------- infra de escaneo ----------------
-function walk(dir, acc = []) {
-  for (const entry of readdirSync(dir)) {
-    const p = join(dir, entry)
-    if (statSync(p).isDirectory()) walk(p, acc)
-    else if (/\.(ts|tsx|js|jsx|mjs|cjs)$/.test(entry)) acc.push(p)
-  }
-  return acc
-}
+// A7: el bucle de escaneo tiene UN dueno (scripts/fsScan.mjs); aqui solo se declara
+// el alcance (extensiones) del catalogo.
+const AUDIT_FILTER = (entry) => /\.(ts|tsx|js|jsx|mjs|cjs)$/.test(entry)
+const walk = (dir) => walkFiles(dir, AUDIT_FILTER)
 const rel = (f) => relative(ROOT, f).replace(/\\/g, '/')
 const srcFiles = walk(SRC)
 const testFiles = walk(TESTS)
@@ -113,42 +113,7 @@ function duplicateDefs(files, names, kinds) {
   return out
 }
 
-/** Mismo CUERPO con DISTINTO nombre (heuristica). Reporte, no gate. */
-function duplicateBodies() {
-  const norm = (b) =>
-    b
-      .replace(/\/\/[^\n]*/g, '')
-      .replace(/\/\*[\s\S]*?\*\//g, '')
-      .replace(/`[^`]*`|'[^']*'|"[^"]*"/g, '""')
-      .replace(/\s+/g, ' ')
-      .trim()
-  const groups = new Map()
-  const re =
-    /(?:export\s+)?(?:async\s+)?function\s+([A-Za-z0-9_$]+)\s*\([^)]*\)\s*\{|(?:export\s+)?const\s+([A-Za-z0-9_$]+)\s*=\s*(?:async\s*)?\([^)]*\)\s*=>\s*\{/g
-  for (const f of srcFiles) {
-    const text = readFileSync(f, 'utf8')
-    let m
-    re.lastIndex = 0
-    while ((m = re.exec(text))) {
-      const name = m[1] || m[2]
-      const start = re.lastIndex - 1
-      let depth = 0
-      let i = start
-      for (; i < text.length; i++) {
-        if (text[i] === '{') depth++
-        else if (text[i] === '}') {
-          depth--
-          if (depth === 0) break
-        }
-      }
-      const body = norm(text.slice(start + 1, i))
-      if (body.length < 60) continue
-      if (!groups.has(body)) groups.set(body, [])
-      groups.get(body).push(`${name}@${rel(f)}:${text.slice(0, m.index).split(/\r?\n/).length}`)
-    }
-  }
-  return [...groups.values()].filter((g) => g.length > 1).map((g) => g.join(' ≡ '))
-}
+
 
 /** Cuenta definiciones `export [async] function|const|class <name>` de una lista, en todo src. */
 function countExportFns(files, names) {
@@ -423,7 +388,7 @@ const FINDINGS = [
   {
     id: 'V18', sev: 'media', title: 'Mismo cuerpo con DISTINTO nombre (duplicados renombrados)',
     target: 0,
-    detect: () => duplicateBodies(),
+    detect: () => duplicateBodies(readSources('src')).map((g) => g.join(' ≡ ')),
     note: 'Unificar/renombrar por pares; verificar equivalencia real antes; no forzar los dispares.',
   },
   {

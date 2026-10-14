@@ -1,10 +1,12 @@
 {
   "scripts/task-gate-invariant.mjs": "f58e25bfaa7ceddccac15712fed92e6b716a447802d6fcad3d454ce31f488184",
-  "scripts/hito.mjs": "b616834298d471ff271104c2fe236643f0022c5af4a2731daa4db8f1931c3890",
-  "scripts/auditoria.mjs": "312abb77012f467756d6c4b1d4e66e2172546333b708565b1167a27f646c3b39",
+  "scripts/hito.mjs": "9fce54648d67b965a3483f826e7e113c238c895b21cf311b432b34c016ee87ca",
+  "scripts/auditoria.mjs": "e2e41a85946ec0a9d2e4cca610c195d9374043e7b833e79519bc4b83f3a43ad9",
   "scripts/corregir.mjs": "fda60aca735e1b611d84116562dacfa08d532bd49075b2606f5f0862b48c5df5",
-  "scripts/audit-metric.mjs": "c9d3af02e24f888223ffa6a8585fbf1cd648ea54ed51023b2e5ce6392c9ebe7f",
+  "scripts/audit-metric.mjs": "780e64c59e1c82f07328636465360c9096f44b21a1a9e0195bb21c282883c259",
   "scripts/audit-detectors.mjs": "59f8b992394169e384ec4523c0a499312993903c8a30b3cce3aa154c46320830",
-  "scripts/duplication.mjs": "ee262851dffd275e52aa78a9b61589989e9b5fe845487923117e1339a085e5a7",
-  "scripts/auditoria-codigo.mjs": "b7621ad7ce9fc87a51e3810929b429ebbf484d09b76def6af16d3a26c8695a52"
+  "scripts/duplication.mjs": "3b2d731d752291461b8be1e92ee342f48f51912a0a8ff5ac7883ecbfed022f30",
+  "scripts/auditoria-codigo.mjs": "583c095057fc0f2c3ce7b34f42674f2e3251d728a012269032d5a259d54349d6",
+  "scripts/fsScan.mjs": "7eff22153f4e49ff07edecae8fb0ed09936165dc1ed98a3c025c169bc98110f3",
+  "scripts/runCmd.mjs": "60de2779cdd388debb2f60e82baeb55d6ce44d321da50432f0b226d87cdc1c2b"
 }

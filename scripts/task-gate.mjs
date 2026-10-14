@@ -28,6 +28,8 @@ import { tmpdir } from 'node:os'
 import { spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { evaluateInvariant, parseMetricValue } from './task-gate-invariant.mjs'
+// A7: `sh` tiene UN dueno (scripts/runCmd.mjs).
+import { sh } from './runCmd.mjs'
 
 const CONTRACT = process.env.TASK_CONTRACT || '.task/contract.json'
 const BASELINE = process.env.TASK_BASELINE || '.task/baseline.json'
@@ -35,11 +37,6 @@ const BASELINE = process.env.TASK_BASELINE || '.task/baseline.json'
 const fail = (msg) => {
   console.error(`\n❌ [task-gate] ${msg}\n`)
   process.exit(1)
-}
-
-function sh(cmd) {
-  const r = spawnSync(cmd, { shell: true, encoding: 'utf8' })
-  return { code: r.status === null ? 1 : r.status, out: (r.stdout || '').trim(), err: (r.stderr || '').trim() }
 }
 
 function must(cmd) {

@@ -13,7 +13,8 @@
  * No implementa el refactor: eso lo hace el agente entre `pre` y `post`.
  */
 import { readFileSync, writeFileSync, existsSync } from 'node:fs'
-import { spawnSync } from 'node:child_process'
+// A7: `sh`/`shRaw` tienen UN dueno (scripts/runCmd.mjs).
+import { sh, shRaw } from './runCmd.mjs'
 
 // ------------------------------------------------------------------
 // CONFIGURACIÓN DEL HITO (única fuente dentro del script)
@@ -40,14 +41,6 @@ const DRY = process.env.HITO_DRY === '1' || process.argv.includes('--dry')
 const phaseArg = (process.argv.find((a) => ['prep', 'pre', 'post'].includes(a)) || 'run').toLowerCase()
 
 // ------------------------------------------------------------------
-const sh = (cmd) => {
-  const r = spawnSync(cmd, { shell: true, encoding: 'utf8' })
-  return { code: r.status === null ? 1 : r.status, out: (r.stdout || '').trim(), err: (r.stderr || '').trim() }
-}
-const shRaw = (cmd) => {
-  const r = spawnSync(cmd, { shell: true, encoding: 'utf8' })
-  return { code: r.status === null ? 1 : r.status, out: r.stdout || '', err: r.stderr || '' }
-}
 const step = (label, cmd) => {
   console.log(`  $ ${cmd}`)
   if (DRY) return { code: 0, out: '', err: '' }

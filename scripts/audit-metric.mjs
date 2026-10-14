@@ -8,20 +8,16 @@
  * Congelado por hash en .task/frozen.json (§B14): el agente que ejecuta la
  * tarea NO puede editar este archivo ni la métrica que produce.
  */
-import { readdirSync, readFileSync, statSync, existsSync } from 'node:fs'
+import { readFileSync, existsSync } from 'node:fs'
 import { join, relative } from 'node:path'
+// A7: bucle unico de escaneo (scripts/fsScan.mjs); aqui solo el alcance de las metricas.
+import { walkFiles } from './fsScan.mjs'
 
 const ROOT = process.cwd()
 const SRC = join(ROOT, 'src')
 
-function walk(dir, acc = []) {
-  for (const entry of readdirSync(dir)) {
-    const p = join(dir, entry)
-    if (statSync(p).isDirectory()) walk(p, acc)
-    else if (/\.(ts|tsx|js|jsx|mjs)$/.test(entry)) acc.push(p)
-  }
-  return acc
-}
+const METRIC_FILTER = (entry) => /\.(ts|tsx|js|jsx|mjs)$/.test(entry)
+const walk = (dir) => walkFiles(dir, METRIC_FILTER)
 
 const rel = (f) => relative(ROOT, f).replace(/\\/g, '/')
 const read = (f) => readFileSync(f, 'utf8')

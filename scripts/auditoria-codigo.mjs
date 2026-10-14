@@ -23,8 +23,12 @@
  *   node scripts/auditoria-codigo.mjs              -> reporte (candidatos por senal)
  *   node scripts/auditoria-codigo.mjs --self-test  -> control negativo de cada senal
  */
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
+// A7: escaneo y corte de bloques con UN dueno (scripts/fsScan.mjs); readSources se
+// re-exporta porque tests/auditCodeSignalsGuard.test.ts la consume.
+import { block, readSources } from './fsScan.mjs';
+export { readSources };
 
 // Regla de FAÇADE: un cuerpo que es UNA sola llamada (`return helper(...)`) es un
 // envoltorio que delega en su dueno, NO una copia. El criterio tiene un solo dueno:
@@ -35,14 +39,6 @@ import { isFacade } from './duplication.mjs';
 
 const ROOT = process.cwd();
 
-function walk(dir, acc = []) {
-  for (const entry of readdirSync(dir)) {
-    const p = join(dir, entry);
-    if (statSync(p).isDirectory()) walk(p, acc);
-    else if (/\.(ts|tsx|js|jsx)$/.test(entry) && !entry.endsWith('.d.ts')) acc.push(p);
-  }
-  return acc;
-}
 const rel = (f) => relative(ROOT, f).replace(/\\/g, '/');
 const isComment = (line) => /^\s*(\/\/|\*|\/\*)/.test(line);
 const strip = (s) =>
@@ -55,23 +51,7 @@ const strip = (s) =>
     .replace(/\s+/g, ' ')
     .trim();
 
-export function readSources(root = 'src') {
-  return walk(join(ROOT, root)).map((f) => ({ file: rel(f), source: readFileSync(f, 'utf8') }));
-}
-
 // ---------------------------------------------------------------- senales
-function block(src, openIdx) {
-  let depth = 0;
-  for (let i = openIdx; i < src.length; i += 1) {
-    if (src[i] === '{') depth += 1;
-    else if (src[i] === '}') {
-      depth -= 1;
-      if (depth === 0) return src.slice(openIdx, i + 1);
-    }
-  }
-  return null;
-}
-
 /** 1) Mismo CUERPO (normalizado) en ficheros distintos. */
 export function duplicateBodies(sources, minLines = 3) {
   const groups = new Map();

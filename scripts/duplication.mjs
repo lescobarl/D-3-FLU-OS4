@@ -20,8 +20,13 @@
  *   - tests/structureDuplicationGuard.test.ts  (barrera en `lint:guards`)
  *   - `node scripts/duplication.mjs --violations`  (metrica del gate)
  */
-import { readdirSync, readFileSync, statSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+// A7: el escaneo y el corte de bloques tienen UN dueno (scripts/fsScan.mjs). Este
+// modulo lo importa Y lo re-exporta: readSources es API publica (la consumen
+// scripts/purposeOwners.mjs y tests/purposeOwnershipGuard.test.ts).
+import { block, readSources } from './fsScan.mjs';
+export { readSources };
 
 /** Palabras clave / builtins: lo unico que NO se sustituye en el esqueleto. */
 const KEYWORDS = new Set([
@@ -80,19 +85,6 @@ export function isFacade(body) {
     }
   }
   return false;
-}
-
-/** Cuerpo `{...}` balanceado que empieza en `openIdx` (o null). */
-function block(src, openIdx) {
-  let depth = 0;
-  for (let i = openIdx; i < src.length; i += 1) {
-    if (src[i] === '{') depth += 1;
-    else if (src[i] === '}') {
-      depth -= 1;
-      if (depth === 0) return src.slice(openIdx, i + 1);
-    }
-  }
-  return null;
 }
 
 /** Formas de definicion que el detector DEBE cubrir (7.7.d: la implementacion, no el nombre). */
@@ -176,22 +168,6 @@ export function findFunctions(file, source, minLines = 3, minSkel = 30) {
     out.push({ file, name: ml[1], line: source.slice(0, ml.index).split('\n').length, skel });
   }
   return out;
-}
-
-/** Lee todos los fuentes de `root` (ts/tsx/js/jsx, sin .d.ts). */
-export function readSources(root = 'src') {
-  const walk = (dir, acc = []) => {
-    for (const entry of readdirSync(dir)) {
-      const p = join(dir, entry);
-      if (statSync(p).isDirectory()) walk(p, acc);
-      else if (/\.(ts|tsx|js|jsx)$/.test(entry) && !entry.endsWith('.d.ts')) acc.push(p);
-    }
-    return acc;
-  };
-  return walk(join(process.cwd(), root)).map((f) => ({
-    file: relative(process.cwd(), f).replace(/\\/g, '/'),
-    source: readFileSync(f, 'utf8'),
-  }));
 }
 
 /** Clave estable de un grupo: los `archivo:simbolo` ordenados (sin numero de linea). */
