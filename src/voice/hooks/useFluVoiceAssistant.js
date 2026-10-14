@@ -24,7 +24,7 @@ import {
 import { isNavSettlePending } from '../lib/navSettleFlag'
 import { getFluTimingCfg, getProfileMatchCfg } from '../lib/fluTranscriptMotor.js'
 import { analyzeWakeTurn, requiresWakeWord } from '../lib/wakeTurnCommit.js'
-import { handleConversationStreamSync, buildFinalSpeakerSnapshotResolver } from '../lib/conversationStreamCommit.js'
+import { handleConversationStreamSync, buildFinalSpeakerSnapshotResolver, crearCajaDeLaFrase } from '../lib/conversationStreamCommit.js'
 import { listVoiceProfiles, loadSessionState, saveSessionState, saveVoiceProfile } from '../lib/fluStorage'
 import { requestFluContract } from '../lib/gemini'
 import { buildContractParams } from '../lib/contractParams'
@@ -122,7 +122,6 @@ import {
   applyRecognitionResultWithBoundary,
   createTurnState,
   getTranscriptDelta,
-  monotonicDisplay,
   normalizeTurnCapture,
   resetTurnState,
   waitForCaptureSettle,
@@ -889,6 +888,10 @@ const lastResolvedTurnRef = useRef(0)
     [clearLiveTranscriptTimers],
   )
 
+  // CAJA de la frase viva: la escribe SOLO la API del modulo dueno; el hook no toca el ref.
+  const cajaVivaRef = useRef(null)
+  if (!cajaVivaRef.current) cajaVivaRef.current = crearCajaDeLaFrase({ publishedLiveRef, setLiveTranscript, scheduleLiveTranscriptUpdate })
+
   const flushLiveTranscript = useCallback(() => {
     if (conversationActiveRef?.current) {
       // §9 — UN SOLO ESCRITOR: en conversación activa la frase viva la escribe únicamente `handleConversationStreamSync` (vía syncConversationStream,
@@ -901,10 +904,8 @@ const lastResolvedTurnRef = useRef(0)
     const turnPreview = raw ? cleanForSpeech(raw) : ''
 
     if (turnPreview) {
-      const stable = monotonicDisplay(publishedLiveRef.current, turnPreview)
-      if (stable === publishedLiveRef.current) return
-      publishedLiveRef.current = stable
-      setLiveTranscript(stable)
+      // La entrega del espejo visible la agenda quien llama (publishLive/publishLiveImmediate).
+      cajaVivaRef.current.publicarEnLaCaja(turnPreview, { inmediato: true })
       return
     }
 
@@ -912,8 +913,7 @@ const lastResolvedTurnRef = useRef(0)
       return
     }
 
-    publishedLiveRef.current = ''
-    setLiveTranscript('')
+    cajaVivaRef.current.vaciarLaCaja()
   }, [conversationActiveRef])
 
   const publishLive = useCallback(() => {
@@ -976,9 +976,8 @@ const lastResolvedTurnRef = useRef(0)
     lastLogLineTextRef.current = ''
     lastLogLineAtRef.current = 0
     lastTurnSignatureRef.current = null
-    publishedLiveRef.current = ''
     commitVisibleTranscript('')
-    setLiveTranscript('')
+    cajaVivaRef.current.vaciarLaCaja()
   }, [clearCaptureState, commitVisibleTranscript])
 
   const resetConversationSession = useCallback(() => {
@@ -1068,7 +1067,7 @@ const lastResolvedTurnRef = useRef(0)
 
       const spillPreview = pendingSpillRef.current ? cleanForSpeech(pendingSpillRef.current) : ''
       // La memoria de lo MOSTRADO nunca encoge dentro de la sesion (regla literal).
-      if (spillPreview.length >= publishedLiveRef.current.length) publishedLiveRef.current = spillPreview
+      if (spillPreview) cajaVivaRef.current.publicarEnLaCaja(spillPreview)
       flushLiveTranscript()
     },
     [flushLiveTranscript],
@@ -2617,8 +2616,7 @@ const lastResolvedTurnRef = useRef(0)
       if (!resume) {
         resetActiveListenState(listenStateRef.current)
         pendingSpillRef.current = ''
-        publishedLiveRef.current = ''
-        setLiveTranscript('')
+        cajaVivaRef.current.vaciarLaCaja()
       }
       clearAllCommitTimers()
       clearRecognitionRetryTimer()
@@ -2770,8 +2768,7 @@ const lastResolvedTurnRef = useRef(0)
         lastTurnSignatureRef.current = null
         resetTurnState(turnRef.current)
         pendingSpillRef.current = ''
-        publishedLiveRef.current = ''
-        setLiveTranscript('')
+        cajaVivaRef.current.vaciarLaCaja()
         fluParticipantRef.current?.resetParticipant?.()
       } else if (cleaned) {
         releaseTurnAfterLog(cleaned)

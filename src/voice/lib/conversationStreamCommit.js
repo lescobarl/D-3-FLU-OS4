@@ -2,7 +2,7 @@
  * Preview y commit del stream de conversación (mic → UI/log).
  * Extraído de useFluVoiceAssistant para aislar la ruta syncConversationStream.
  */
-import { cleanForSpeech, detectWakeIntroducedName, formatClock, sameRequestWindowMs, speechWords } from './audioMath.js'
+import { cleanForSpeech, detectWakeIntroducedName, formatClock, sameRequestWindowMs, stripDiacritics } from './audioMath.js'
 import { normalizeMicText } from './speechMerge.js'
 import { resolveInlineWakeAtCommit, isTurnCapture, requiresWakeWord } from './wakeTurnCommit.js'
 import { getAsrSegmentationCfg } from './fluTranscriptMotor.js'
@@ -120,6 +120,196 @@ export function buildFinalSpeakerSnapshotResolver({ createSpeakerAudioResolver, 
  */
 
 /**
+ * Clave comparable de una palabra de la caja: sin caja ni signos, con el texto original
+ * intacto para poder publicar la cola tal cual (el replay midio que la union perdia
+ * mayusculas: 'Daniel' -> 'daniel').
+ * @param {string} palabra
+ * @returns {string}
+ */
+export function claveDePalabra(palabra) {
+  // El plegado de acentos tiene UN dueno (textUtils.stripDiacritics, via audioMath):
+  // aqui solo se quitan los signos, para comparar palabras.
+  return stripDiacritics(String(palabra || '')).replace(/[^\p{L}\p{N}]+/gu, '')
+}
+
+/**
+ * Es la MISMA palabra con otra ortografia: iguales, o una es el ARRANQUE de la otra (el
+ * ASR completa la palabra: 'prueba' -> 'pruebas', 'tar' -> 'tardo'). Nunca con menos de
+ * 3 letras compartidas: 'a'/'al' o 'la'/'las' no son la misma palabra.
+ * @param {string} a
+ * @param {string} b
+ * @returns {boolean}
+ */
+export function mismaPalabraClave(a, b) {
+  if (!a || !b) return false
+  if (a === b) return true
+  const corta = a.length <= b.length ? a : b
+  const larga = a.length <= b.length ? b : a
+  return corta.length >= 2 && larga.startsWith(corta)
+}
+
+/**
+ * Cola NUEVA de una emision: alinea el FINAL de lo mostrado con un tramo de la emision
+ * nueva (el ASR reentrega la cola y sigue) y devuelve SOLO lo que viene DESPUES de ese
+ * tramo, con el texto CRUDO de la emision (mas la letra que completa la ultima palabra
+ * si la emision trae la version larga). Sin solape fiable no se inventa nada: '' =
+ * no hay nada genuino que anadir (bloquear). Nunca quita texto de lo mostrado.
+ * @param {string} mostrado
+ * @param {string} nuevo
+ * @returns {string}
+ */
+export function colaNuevaTrasSolape(mostrado, nuevo) {
+  // La reentrega vive SIEMPRE al final de lo mostrado: se alinea contra la COLA (ventana
+  // acotada) y la cola a anadir no puede estar ya ahi (nada se duplica ni se infla).
+  const VENTANA = 160
+  const crudas = String(mostrado || '').trim().split(/\s+/).filter(Boolean)
+  const crudasNuevas = String(nuevo || '').trim().split(/\s+/).filter(Boolean)
+  if (!crudas.length || crudasNuevas.length < 2) return ''
+  const mostrar = String(mostrado)
+  const colaDeLoMostrado = crudas.slice(-VENTANA)
+  const clavesMostradas = colaDeLoMostrado.map(claveDePalabra)
+  const clavesNuevas = crudasNuevas.map(claveDePalabra)
+
+  /** El tramo de palabras YA esta en la cola de lo mostrado (reentrega: no se aNade). */
+  const yaMostrado = (palabras) => {
+    if (!palabras.length) return true
+    for (let i = 0; i + palabras.length <= clavesMostradas.length; i += 1) {
+      let igual = true
+      for (let j = 0; j < palabras.length; j += 1) {
+        if (clavesMostradas[i + j] !== palabras[j]) { igual = false; break }
+      }
+      if (igual) return true
+    }
+    return false
+  }
+
+  /** La cola es GENUINA: no entera ya en lo mostrado y no ARRANCA con un tramo ya mostrado
+   *  (la reentrega "creciente" de la misma cola repetiria el texto: medido en el replay). */
+  const colaGen = (palabras) => {
+    if (!palabras.length) return false
+    if (yaMostrado(palabras)) return false
+    const arranque = palabras.slice(0, Math.min(6, palabras.length))
+    return arranque.length < 2 || !yaMostrado(arranque)
+  }
+
+  // (A) El SUFIJO de lo mostrado se reentrega dentro de la emision nueva: se anade lo que
+  // viene DESPUES de ese tramo (mas la letra que completa la ultima palabra si viene larga).
+  const tope = Math.min(60, clavesMostradas.length)
+  let fin = -1
+  let largo = 0
+  for (let p = clavesNuevas.length - 1; p >= 0; p -= 1) {
+    if (!mismaPalabraClave(clavesMostradas[clavesMostradas.length - 1], clavesNuevas[p])) continue
+    let k = 1
+    while (
+      k < tope &&
+      k < clavesMostradas.length &&
+      p - k >= 0 &&
+      mismaPalabraClave(clavesMostradas[clavesMostradas.length - 1 - k], clavesNuevas[p - k])
+    ) k += 1
+    if (k > largo) { largo = k; fin = p }
+  }
+  if (fin >= 0 && (largo >= 2 || largo === clavesMostradas.length)) {
+    const crudaMostrada = colaDeLoMostrado[colaDeLoMostrado.length - 1]
+    const crudaNueva = crudasNuevas[fin]
+    const completacion = crudaNueva.length > crudaMostrada.length &&
+      crudaNueva.toLowerCase().startsWith(crudaMostrada.toLowerCase())
+      ? crudaNueva.slice(crudaMostrada.length)
+      : ''
+    const cola = clavesNuevas.slice(fin + 1)
+    if (colaGen(cola)) {
+      return `${mostrar}${completacion} ${crudasNuevas.slice(fin + 1).join(' ')}`
+    }
+    if (!cola.length && completacion) return `${mostrar}${completacion}`
+  }
+
+  // (B) La emision ARRANCA reentregando un tramo de lo mostrado (trozo INTERIOR, P11.16) y
+  // sigue: se anade su cola nueva. Con menos de 2 palabras de tramo no se inventa la union.
+  let mejorK = 0
+  for (let i = 0; i < clavesMostradas.length; i += 1) {
+    let k = 0
+    while (
+      k < clavesNuevas.length &&
+      i + k < clavesMostradas.length &&
+      mismaPalabraClave(clavesMostradas[i + k], clavesNuevas[k])
+    ) k += 1
+    if (k > mejorK) mejorK = k
+  }
+  if (mejorK >= 2) {
+    const cola = clavesNuevas.slice(mejorK)
+    if (colaGen(cola)) {
+      return `${mostrar} ${crudasNuevas.slice(mejorK).join(' ')}`
+    }
+  }
+  return ''
+}
+
+/**
+ * CAJA de la frase viva ("ultima frase"): UNICO escritor de `publishedLiveRef` y de su
+ * espejo visible. UNA sola regla (`publicarEnLaCaja`):
+ *   - la caja vacia o una emision identica no cambian nada;
+ *   - emision que YA contiene lo mostrado -> se aplica la emision (crece);
+ *   - emision mas corta o que no contiene lo mostrado -> se ANADE la cola nueva
+ *     (alineada con el final de lo mostrado) o se BLOQUEA: nunca se sustituye.
+ * El vaciado legitimo (cierre confirmado / parrafo nuevo / reset de sesion) es
+ * `vaciarLaCaja`: NO lo decide la regla de acumulacion.
+ * @param {{ publishedLiveRef?: { current: string }, scheduleLiveTranscriptUpdate?: Function, setLiveTranscript?: Function }} deps
+ * @returns {{ publicarEnLaCaja: Function, vaciarLaCaja: Function }}
+ */
+export function crearCajaDeLaFrase(deps = {}) {
+  const { publishedLiveRef, scheduleLiveTranscriptUpdate, setLiveTranscript } = deps
+  const escribirVisible = (texto, inmediato) => {
+    if (!texto) {
+      if (typeof setLiveTranscript === 'function') setLiveTranscript('')
+      return
+    }
+    if (inmediato && typeof setLiveTranscript === 'function') {
+      setLiveTranscript(texto)
+      return
+    }
+    if (typeof scheduleLiveTranscriptUpdate === 'function') {
+      scheduleLiveTranscriptUpdate(texto)
+      return
+    }
+    if (typeof setLiveTranscript === 'function') setLiveTranscript(texto)
+  }
+  const leer = () => String(publishedLiveRef?.current || '')
+  const publicarEnLaCaja = (texto = '', opciones = {}) => {
+    const nuevo = String(texto || '')
+    const mostrado = leer()
+    if (!nuevo || nuevo === mostrado) {
+      return { aplicado: false, destino: mostrado, previo: mostrado.length }
+    }
+    // Una sola regla: la union con la cola genuina de la emision (o bloqueo).
+    let destino = nuevo
+    if (mostrado) {
+      destino = colaNuevaTrasSolape(mostrado, nuevo)
+      if (!destino || destino.length <= mostrado.length) {
+        return { aplicado: false, destino: mostrado, previo: mostrado.length }
+      }
+    }
+    if (publishedLiveRef) publishedLiveRef.current = destino
+    escribirVisible(destino, Boolean(opciones.inmediato))
+    return { aplicado: true, destino, previo: mostrado.length }
+  }
+  // Vaciado legitimo (cierre confirmado / arranque / parada / reset de sesion). Por
+  // defecto vacia tambien el espejo visible; `{ visible: false }` solo resetea la MEMORIA
+  // (el ancla del parrafo nuevo) y deja la ultima frase en pantalla: borrarla era el
+  // "borra y luego vuelve a poner" medido por el dueno.
+  const vaciarLaCaja = (opciones = {}) => {
+    if (publishedLiveRef) publishedLiveRef.current = ''
+    if (opciones.visible !== false) escribirVisible('', true)
+  }
+  return { publicarEnLaCaja, vaciarLaCaja }
+}
+
+/**
+ * API de la caja: la inyectada por deps si existe; si no, se deriva de los MISMOS deps
+ * (ref de la caja + espejo visible). Una sola implementacion, una sola regla.
+ * @param {object} deps
+ * @returns {{ publicarEnLaCaja: Function, vaciarLaCaja: Function }}
+ */
+
+/**
  * Sincroniza preview o commit del stream de conversación según turnCommit.
  *
  * @param {ConversationStreamCommitDeps} deps
@@ -149,8 +339,6 @@ export function handleConversationStreamSync(
     publishedLiveRef,
     listenStateRef,
     openPreviewTurnRef,
-    scheduleLiveTranscriptUpdate,
-    setLiveTranscript,
     applyConversationSpeaker,
     flushPendingStreamLog,
     logRowsTextRef,
@@ -182,6 +370,10 @@ export function handleConversationStreamSync(
     lastEmittedTurnRef,
   } = deps
 
+  // CAJA ("ultima frase"): TODO pasa por la API de este modulo (un solo escritor, una
+  // sola regla). Ninguna linea de aqui escribe el ref: lo hace la caja.
+  const { publicarEnLaCaja, vaciarLaCaja } = crearCajaDeLaFrase(deps)
+
   if (!conversationActiveRef?.current) return
 
   let capture =
@@ -193,7 +385,7 @@ export function handleConversationStreamSync(
     if (newParagraph || freshUtterance) {
       // Misma regla del cierre: se resetea el ANCLA, no lo PUBLICADO (la "ultima frase"
       // la borra su dueno, el reset de la sesion/voz, no el commit del turno).
-      publishedLiveRef.current = ''
+      vaciarLaCaja({ visible: false })
       openPreviewTurnRef.current = false
     }
     if (import.meta.env.DEV && debugHotPath) fluDebugHot('stream-skip', { reason: 'empty-capture' })
@@ -272,100 +464,14 @@ export function handleConversationStreamSync(
     // medido 2026-10-11 22:36 -> 356 acortamientos APLICADOS y la frase viva "se comia"
     // parte de la transcripcion). Cero excepciones: acorta:true + aplicado = 0.
     const previoLive = publishedLiveRef.current || ''
-    // P11.16 (medido en su log 2026-10-14 16:04:34-16:05:08): Chrome confirma el final TRUNCANDO
-    // la cola y la reentrega como resultado NUEVO que arranca en un trozo INTERIOR de lo mostrado
-    // ("el avion se alejo..." estaba DENTRO de la caja de 846) y sigue con texto nuevo; cada
-    // emision (2..178 chars) era MAS CORTA y quedaba bloqueada 40+ s ("esta congelado, no
-    // transcribe nada"). La caja ANADE la cola nueva: nunca encoge, nunca reemplaza. Si la
-    // emision entera YA esta contenida (trozo puro), no aNade nada y sigue el bloqueo normal.
-    const continuacionTrasSolape = (mostrado, nuevo) => {
-      const m = speechWords(mostrado).map((w) => w.toLowerCase())
-      const n = speechWords(nuevo).map((w) => w.toLowerCase())
-      if (m.length < 2 || n.length < 3) return ''
-      const desde = Math.max(0, m.length - 80)
-      const contiene = (k) => {
-        for (let i = desde; i + k <= m.length; i += 1) {
-          let igual = true
-          for (let j = 0; j < k; j += 1) {
-            if (m[i + j] !== n[j]) { igual = false; break }
-          }
-          if (igual) return true
-        }
-        return false
-      }
-      if (contiene(n.length)) return '' // la emision ENTERA ya esta: trozo puro, no aNade nada
-      // Solape mas largo entre el ARRANQUE de la emision y CUALQUIER tramo de lo mostrado: la
-      // reentrega puede empezar en un trozo interior (medido: 19 palabras de solape; el tope de
-      // 12 cortaba el solape y DUPLICABA el tramo intermedio).
-      let mejor = 0
-      const tope = Math.min(60, n.length - 1)
-      for (let i = desde; i < m.length; i += 1) {
-        let j = 0
-        while (j < tope && i + j < m.length && m[i + j] === n[j]) j += 1
-        if (j > mejor) mejor = j
-      }
-      if (mejor < 2) return ''
-      const colaPalabras = n.slice(mejor)
-      // P11.26-b (medido 2026-10-14 19:00 en su pantalla: la caja TRIPLICABA el fragmento): el
-      // bucle del ASR reentrega la misma frase y la union pegaba la repeticion. La cola que se
-      // va a anadir NO puede estar ya en lo mostrado (en ningun tramo): si lo esta, es reentrega
-      // pura -> no se anade nada y sigue el bloqueo normal. Nada se duplica en la caja.
-      const k = Math.min(4, colaPalabras.length)
-      if (k < 2) return ''
-      for (let i = 0; i + k <= m.length; i += 1) {
-        let igual = true
-        for (let j = 0; j < k; j += 1) {
-          if (m[i + j] !== colaPalabras[j]) { igual = false; break }
-        }
-        if (igual) return ''
-      }
-      const cola = colaPalabras.join(' ')
-      return cola ? `${mostrado} ${cola}` : ''
-    }
-    // 3b: lo mostrado tiene que seguir CONTENIDO en lo nuevo (unico normalizador: cleanForSpeech).
-    const conservaLoMostrado = (mostrado, nuevo) => {
-      const a = String(cleanForSpeech(mostrado) || '').toLowerCase()
-      if (!a) return true
-      return String(cleanForSpeech(nuevo) || '').toLowerCase().includes(a)
-    }
     const esTrozo = isFragmentOfLocution(capture, previoLive)
-    if (previoLive && capture.length < previoLive.length) {
-      const continuacion = continuacionTrasSolape(previoLive, capture)
-      if (continuacion && continuacion.length > previoLive.length) {
-        voiceProbe('live', { turn: activeTurnIdRef.current, resultado: 'aplicado', motivo: 'cola-solapada', acorta: false, fresh: Boolean(freshUtterance), mismaLocucion: false, reemplaza: false, previo: previoLive.length, len: continuacion.length, text: continuacion.slice(0, 220) }) // BANDERA DE DIAGNOSTICO
-        publishedLiveRef.current = continuacion
-        scheduleLiveTranscriptUpdate(continuacion)
-        return
-      }
-      voiceProbe('live', { turn: activeTurnIdRef.current, resultado: 'bloqueado', motivo: esTrozo ? 'trozo' : 'acorta', acorta: true, fresh: Boolean(freshUtterance), mismaLocucion: esTrozo, previo: previoLive.length, len: capture.length, text: capture.slice(0, 220) }) // BANDERA DE DIAGNOSTICO
-      return
-    }
-    // 3b: no basta "no ser mas corta": si lo nuevo YA NO CONTIENE lo mostrado (misma longitud
-    // o MAS larga pero con una palabra perdida, p.ej. "vamos a validar" -> "vamos validar la
-    // transcripcion"), la caja lo BLOQUEA. Nada de lo mostrado desaparece.
-    // ACEPTA LA REVISION (dueno 2026-10-11): el ASR reemite la MISMA locucion corregida; si solo
-    // se exigiera "contener", una revision que cambia una palabra de dentro BLOQUEABA la caja
-    // para siempre (se compara con el texto congelado, que ya nunca contiene). El dueno de "es la
-    // misma revision" ya existe (utterancesSameRevision): se consume, no se inventa.
-    // P11.26-c (medido 2026-10-14 19:00 en su pantalla: la caja TRIPLICABA y podia PERDER la
-    // cola mostrada): la caja NUNCA se sustituye por un texto que no la contiene. Solo puede
-    // CRECER anadiendo la cola nueva genuina (union); si no hay nada nuevo que anadir, se
-    // bloquea. Nada se duplica y nada de lo mostrado desaparece.
-    if (previoLive && !conservaLoMostrado(previoLive, capture)) {
-      const unionLarga = continuacionTrasSolape(previoLive, capture)
-      if (unionLarga && unionLarga.length > previoLive.length) {
-        voiceProbe('live', { turn: activeTurnIdRef.current, resultado: 'aplicado', motivo: 'solape-anadido', acorta: false, fresh: Boolean(freshUtterance), mismaLocucion: false, reemplaza: false, previo: previoLive.length, len: unionLarga.length, text: unionLarga.slice(0, 220) }) // BANDERA DE DIAGNOSTICO
-        publishedLiveRef.current = unionLarga
-        scheduleLiveTranscriptUpdate(unionLarga)
-        return
-      }
-      voiceProbe('live', { turn: activeTurnIdRef.current, resultado: 'bloqueado', motivo: 'no-conserva', acorta: capture.length < previoLive.length, fresh: Boolean(freshUtterance), mismaLocucion: false, previo: previoLive.length, len: capture.length, text: capture.slice(0, 220) }) // BANDERA DE DIAGNOSTICO
-      return
-    }
-    if (capture !== publishedLiveRef.current) {
-      voiceProbe('live', { turn: activeTurnIdRef.current, resultado: 'aplicado', motivo: 'emision-actual', acorta: false, fresh: Boolean(freshUtterance), mismaLocucion: false, reemplaza: true, previo: publishedLiveRef.current.length, len: capture.length, text: capture.slice(0, 220) }) // BANDERA DE DIAGNOSTICO
-      publishedLiveRef.current = capture
-      scheduleLiveTranscriptUpdate(capture)
+    // La CAJA tiene UN dueno y UNA regla: `publicarEnLaCaja` (la fabrica de la caja). Aqui no se
+    // escribe el ref: se pide la publicacion y se registra la decision (sonda de la caja).
+    const publicacion = publicarEnLaCaja(capture)
+    if (publicacion.aplicado) {
+      voiceProbe('live', { turn: activeTurnIdRef.current, resultado: 'aplicado', motivo: publicacion.destino === capture ? 'emision-actual' : (capture.length < publicacion.previo ? 'cola-solapada' : 'solape-anadido'), acorta: false, fresh: Boolean(freshUtterance), mismaLocucion: false, reemplaza: publicacion.destino === capture, previo: publicacion.previo, len: publicacion.destino.length, text: publicacion.destino.slice(0, 220) }) // BANDERA DE DIAGNOSTICO
+    } else {
+      voiceProbe('live', { turn: activeTurnIdRef.current, resultado: 'bloqueado', motivo: capture.length < previoLive.length ? (esTrozo ? 'trozo' : 'acorta') : 'no-conserva', acorta: capture.length < previoLive.length, fresh: Boolean(freshUtterance), mismaLocucion: esTrozo, previo: previoLive.length, len: capture.length, text: capture.slice(0, 220) }) // BANDERA DE DIAGNOSTICO
     }
     if (turnBoundary || atTurnBoundary) {
       const fallbackSpeaker = speaker || getSpeakerLabel(listenStateRef.current)
@@ -755,8 +861,7 @@ export function handleConversationStreamSync(
       // frase arranca de CERO. Es el reset por ITERACION NUEVA (y por pausa de silencio, que es el
       // cierre que la escribe). Con la memoria a "" el dictado siguiente no puede quedar
       // congelado por ser mas corto que el anterior.
-      publishedLiveRef.current = ''
-      if (typeof setLiveTranscript === 'function') setLiveTranscript('')
+      vaciarLaCaja()
     }
   }
   commitTurnToSessionRows(capture, speakerEscrito, { replaceLast })

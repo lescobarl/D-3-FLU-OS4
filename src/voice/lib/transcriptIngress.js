@@ -760,7 +760,14 @@ function ingestInterimChunk({ interim, ctx }) {
   return { handled: false }
 }
 
-export function processMicConversationIngress({ interimChunks = [], finalChunks = [], ctx }) {
+/**
+ * Puerta unica del ingress de conversacion: reinyecta los chunks del ASR (interinos y
+ * finales) en el pipeline del turno. Es la MISMA puerta que usa el hook en produccion
+ * (medida por tests/replayDuenoDiarizacionGuard).
+ * @param {{ interimChunks?: string[], finalChunks?: string[], ctx: object }} [entrada]
+ * @returns {{ handled: boolean, [k: string]: unknown }}
+ */
+export function processMicConversationIngress({ interimChunks = [], finalChunks = [], ctx } = {}) {
   if (!ctx?.conversationActive) return { handled: false }
   const interimPreview = pickBestMicInterim(interimChunks.map((t) => cleanForSpeech(t)))
   const commitList = buildFinalCommitList(finalChunks)
