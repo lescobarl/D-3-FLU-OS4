@@ -26,6 +26,7 @@ import { handleConversationStreamSync } from '../src/voice/lib/conversationStrea
 import { createActiveListenState } from '../src/voice/lib/activeListen.js'
 import { resetTurnSpeakerPreflights } from '../src/voice/lib/turnSpeakerPreflight.js'
 import { FLU_CONFIG } from '../src/voice/lib/fluConfig.js'
+import { normalizeMicText } from '../src/voice/lib/speechMerge.js'
 
 const FRASE = 'el mismo escenario en donde cuando es una frase larga de repente la borra completa de la transcripcion'
 const COLA = 'de la transcripcion'
@@ -53,7 +54,7 @@ function makeDeps(over: Record<string, unknown> = {}) {
     srGapFiredForOpenLineRef: { current: true },
     processConversationFluQueryRef: { current: vi.fn() },
     lastEmittedTranscriptRef: { current: '' },
-    emitConversationLog: vi.fn(() => true),
+    emitConversationLog: vi.fn((_text?: string) => { void _text; return true }),
     createSpeakerAudioResolver: vi.fn(() => () => Promise.resolve({ speakerName: 'Hablante 1' })),
     sessionPrimarySpeakerRef: { current: '' },
     lastLoggedSpeakerRef: { current: '' },
@@ -192,6 +193,19 @@ describe('A - la ultima frase SOLO acumula (lo que se ve)', () => {
     const NUEVO = INTERIOR + ' la aeronave era pilotada por el capitan un experimentado piloto de 53 anos de edad el primer oficial en el puesto que'
     handleConversationStreamSync(deps as never, { capture: NUEVO })
     expect(ultimo(mostrado), 'la caja suma la cola nueva en vez de congelarse').toBe(BOX + ' un experimentado piloto de 53 anos de edad el primer oficial en el puesto que')
+  })
+  it('TARTAMUDEO del ASR en la FILA: el texto se escribe por el dueno unico (no crudo)', () => {
+    // MEDIDO 2026-10-14 18:32 (su corrida): las filas quedaron con el tartamudeo del ASR dentro
+    // ("prueba pruebas pruebas", "trans transcripcion transcripcion", "vi viste viste viste"):
+    // la CAJA pasa por el colapsador pero la FILA escribia el texto crudo. La fila tiene que
+    // usar el mismo normalizador (normalizeMicText) que la caja: una sola definicion de texto.
+    const { deps } = makeDeps()
+    const CRUDO = 'vamos a comprar el helado helado helado helado favorito para todos'
+    handleConversationStreamSync(deps as never, { capture: CRUDO, turnCommit: true, settlesTurn: true })
+    const emitido = String(vi.mocked(deps.emitConversationLog).mock.calls[0]?.[0] || '')
+    const limpio = normalizeMicText(CRUDO)
+    expect(emitido, 'la fila usa el texto normalizado (dueno unico), no el crudo').toBe(limpio)
+    expect(limpio.length, 'el colapso tiene que hacer algo (no es un no-op)').toBeLessThan(CRUDO.length)
   })
   it('la sonda DICE si el acortamiento fue BLOQUEADO o APLICADO (dato concluyente)', () => {
     const { deps } = makeDeps()
