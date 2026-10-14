@@ -5780,3 +5780,61 @@ ALCANCE REAL (0.23): CUBIERTO=el cierre de la ultima frase SOLO por silencio (o 
   tocados) y el gate de contrato (el contrato activo es de la tarea anterior, no de este
   hito).
 ===============================================================================
+
+===============================================================================
+P11.11 - EL ANCLA NO ESTRENA NOMBRE SIN MEDIDA (2026-10-14)
+===============================================================================
+QUE ERA: 2 casos ROJOS PREEXISTENTES y vivos en HEAD en tests/speakerPrimarySeed.test.ts
+(Fase E, d271b1a) que median la etiqueta VIEJA: "sessionPrimary=Juan, sin clusters, voz
+fresca -> crea cluster Juan y etiqueta Juan" (2 de 4 casos: expected Hablante 1 to be Juan).
+
+MEDIDO ANTES DE TOCAR (npx vitest run tests/speakerPrimarySeed.test.ts): 2 failed /
+2 passed. El CODIGO ya cumple la regla nueva: speakerDiarization.js:265-294 crea el ANCLA
+Juan (ensureClusterForLabel) y devuelve el hablante vigente (Hablante 1), con el motivo
+escrito en el propio bloque (registeredIdentityConfirmed: si el ancla aun no existe,
+tampoco; mandatos P10.8/P11.4; medido 2026-10-11: Match name=Luis inClusters=0 + row-update
+a los 7 s). No hay defecto de codigo: era la EXPECTATIVA lo viejo.
+
+DECISION APLICADA (default declarado): mandan los mandatos POSTERIORES del dueno (P10.8/
+P11.4/P11.10: ni la etiqueta ni el participante nombran una voz sin MEDIDA). El test se
+ALINEA: (a) el ancla SI se crea; (b) el turno que la crea NO lleva el nombre. Se anade caso
+de DETECTOR de dos lados (sin ancla no se nombra / con ancla y medida coincidente SI) y el
+fichero se REGISTRA en scripts/guard-files.mjs (antes: fuera de lint:guards, el riesgo que
+el propio item declaraba).
+
+MEDIDO DESPUES: tests/speakerPrimarySeed.test.ts = 5/5 VERDE; guardMutationGuard VERDE (el
+caso de detector satisface P2.4).
+
+ALCANCE REAL (0.23): CUBIERTO=los 2 casos alineados a la regla vigente, el detector de dos
+lados y el registro en lint:guards; NO CUBIERTO=el DoD-producto (su pantalla) y la suite
+completa de CI.
+===============================================================================
+
+===============================================================================
+P9.80 - UNA LOCUCION DE NOMBRE => UNA SOLA RESPUESTA (medicion + barrera, 2026-10-14)
+===============================================================================
+DEFECTO MEDIDO POR EL DUENO (2026-10-12 16:29:42/45): "Registrado Luis." x2 para UNA
+locucion. Habilitadores medidos entonces: la doble FILA (P9.73), la identidad del comando
+viajando al tramo pasivo del split por wake (P9.69) y DOS emisores de la misma respuesta.
+
+MEDIDO HOY con las funciones REALES del despacho (tests/vozRespuestaNombreUnaGuard.test.ts):
+  - split por wake de "okay flu soy luis": tramos=1 ("soy luis"), despachables por la via
+    pasiva = 0 (la wake no se hereda: isCommandAuthorized exige la wake en el propio
+    enunciado);
+  - planConversationDispatch("okay flu soy luis") = dispatch / command /
+    REGISTRAR_PARTICIPANTE (la via UNICA); el arbitro determinista NO resuelve el comando
+    (domain null), luego no hay segunda via que lo levante;
+  - re-entrega del MISMO turno: plan dedup (no vuelve a despachar);
+  - detector: isCommandAuthorized("soy luis") false / ("okay flu soy luis") true;
+  - "soy luis" y "flu soy luis" sin wake: plan skip (no se despachan).
+La respuesta tiene UN emisor en el hook (buildCommandSpeech, 42059e6) y el store la guarda
+UNA vez (P9.82). Barrera NUEVA registrada en lint:guards (con prueba de detector).
+
+CIERRE COMO MEDICION: el defecto no es reproducible con el codigo de hoy y sus habilitadores
+cerraron en b3e8541 (P9.73: id del turno por LOCUCION), beeef07 (P9.69: el tramo pasivo no
+lleva identidad), 42059e6 (emisor unico) y 89c8fb8 (P9.82). No se inventa un rojo.
+
+ALCANCE REAL (0.23): CUBIERTO=la medicion del despacho con funciones reales, la barrera y el
+registro en lint:guards; NO CUBIERTO=el DoD-producto (una corrida real del dueno; si
+volviera a verse Registrado x2, el log reabre el item).
+===============================================================================

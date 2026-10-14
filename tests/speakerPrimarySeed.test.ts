@@ -22,6 +22,15 @@
 // Vectores: 64-D con coseno exacto (L2-normalizados). q(sim) =
 // sim·e0 + √(1−sim²)·e1 → coseno con e0 = sim.
 // ============================================================
+// ------------------------------------------------------------
+// P11.11 (2026-10-14): el nombre ya NO se estampa sin MEDIDA. Los mandatos del dueno
+// (P10.8/P11.4 y la regla registeredIdentityConfirmed: si el ancla aun no existe,
+// tampoco) RETIRARON la conducta Fase E de etiquetar el turno con el nombre: el ANCLA
+// 'Juan' se sigue creando (para poder afirmar el nombre en turnos POSTERIORES con medida),
+// pero el turno que la crea NO se rotula con el nombre (devuelve el hablante vigente).
+// Los 2 casos que median la etiqueta vieja se ALINEAN a la regla nueva (era la
+// expectativa, no el codigo; speakerDiarization.js:265-294).
+// ------------------------------------------------------------
 import { describe, it, expect } from 'vitest';
 import { resolveConversationSpeaker } from '../src/voice/lib/voiceIdentity.js';
 
@@ -64,7 +73,7 @@ const BASE = {
 };
 
 describe('resolveConversationSpeaker — Fase E: seed del participante primario (Juan/Luis)', () => {
-    it('sessionPrimary=Juan, sin clusters, voz fresca → crea cluster Juan y etiqueta "Juan"', () => {
+    it('sessionPrimary=Juan, sin clusters, voz fresca → crea el ANCLA Juan y el turno NO lleva el nombre', () => {
         const clusters: any[] = [];
         const diagnosis: Record<string, unknown> = {};
         const r = resolveConversationSpeaker({
@@ -76,7 +85,8 @@ describe('resolveConversationSpeaker — Fase E: seed del participante primario 
             sessionPrimary: 'Juan',
             diagnosis,
         } as any);
-        expect(r).toBe('Juan');
+        // P11.11: el turno NO se nombra sin MEDIDA; el ANCLA 'Juan' SI se crea (arriba).
+        expect(r).toBe('Hablante 1');
         expect(clusters.map((c) => c.label)).toEqual(['Juan']);
         expect(clusters[0].signature).toBeTruthy();
         expect(diagnosis.reason).toBe('production-primary-create-cluster');
@@ -116,7 +126,7 @@ describe('resolveConversationSpeaker — Fase E: seed del participante primario 
         expect(diagnosis.reason).toBe('production-first-cluster');
     });
 
-    it('sessionPrimary=Juan, cluster auto Hablante 1 con voz distinta → abre cluster Juan (voz genuina)', () => {
+    it('sessionPrimary=Juan, cluster auto Hablante 1 con voz distinta → abre el ANCLA Juan y el turno NO lleva el nombre', () => {
         // La voz del query (e0) NO encaja con Hablante 1 (E1) ni con el último hablante:
         // sim baja → se crea el cluster del participante primario.
         const clusters: any[] = [{ label: 'Hablante 1', signature: E2 }];
@@ -130,8 +140,38 @@ describe('resolveConversationSpeaker — Fase E: seed del participante primario 
             sessionPrimary: 'Juan',
             diagnosis,
         } as any);
-        expect(r).toBe('Juan');
+        // P11.11: ancla creada; el turno NO se nombra (sin coincidencia medida con su voz).
+        expect(r).toBe('Hablante 1');
         expect(clusters.map((c) => c.label)).toEqual(['Hablante 1', 'Juan']);
         expect(diagnosis.reason).toBe('production-primary-create-cluster');
+    });
+
+    it('PRUEBA DE DETECTOR (el detector no es decorativo): el ANCLA da el nombre SOLO con medida que coincide', () => {
+        // Dos lados de la marca: sin ancla, la voz fresca NO se nombra; con ancla 'Juan' y
+        // la MISMA voz del query, el nombre SI se afirma.
+        const sinAncla: any[] = [];
+        const diagA: Record<string, unknown> = {};
+        const fresco = resolveConversationSpeaker({
+            ...BASE,
+            signatureVector: query(0.9),
+            speakerClusters: sinAncla,
+            lastSpeaker: '',
+            lastSignature: null,
+            sessionPrimary: 'Juan',
+            diagnosis: diagA,
+        } as any);
+        const conAncla: any[] = [{ label: 'Juan', signature: query(0.9) }];
+        const diagB: Record<string, unknown> = {};
+        const medido = resolveConversationSpeaker({
+            ...BASE,
+            signatureVector: query(0.9),
+            speakerClusters: conAncla,
+            lastSpeaker: 'Juan',
+            lastSignature: query(0.9),
+            sessionPrimary: 'Juan',
+            diagnosis: diagB,
+        } as any);
+        expect(fresco, 'sin ancla no se afirma el nombre').toBe('Hablante 1');
+        expect(medido, 'con ancla y medida coincidente SI').toBe('Juan');
     });
 });
