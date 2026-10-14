@@ -2142,6 +2142,13 @@
       "estado": "done",
       "evidencia": "MEDIDO 2026-10-12 (guard vozNombreEntraEnLaBaseGuard, caso P9.78): dos llamadas CONCURRENTES a participantRegistry.register (luis y Luis, sin esperar la primera) ven la base VACIA las dos y registran 2 filas [Luis, Luis]; el dedupe es case-insensitive pero lee el estado ANTES de escribir (participantRegistry.ts:193-195). En el flujo real el registro es por turno (secuencial) y no se dispara; riesgo si dos locuciones de nombre llegan pegadas. ACCION: serializar el puerto (o candado tipo anonymousSeedInFlight) si se observa en el log.",
       "origen": "guard-2026-10-12"
+    },
+    {
+      "id": "A7",
+      "titulo": "Duplicacion FUERA de la vara en scripts/: walk/readSources/block/duplicateBodies/sh con 2+ duenos entre instrumentos CONGELADOS por hash y el gate (inmutables por el agente).",
+      "estado": "todo",
+      "evidencia": "MEDIDO 2026-10-14 (auditoria de codigo pedida por el dueno; vara CONGELADA sobre src: duplication.mjs+auditoria-codigo.mjs = 0 duplicados, self-test OK). FUERA DE LA VARA (extra declarado; ampliarla seria tarea nueva): el escaneo de scripts/ (26 ficheros) con las MISMAS senales del auditor da 3 cuerpos duplicados + homonimos: (a) walk: scripts/auditoria-codigo.mjs:38 == scripts/duplication.mjs:183 (mismo filtro de extensiones y recursion), tambien presente en scripts/audit-metric.mjs:17 y scripts/auditoria.mjs:33; (b) readSources: scripts/duplication.mjs:182 vs scripts/auditoria-codigo.mjs:58; (c) block: scripts/duplication.mjs:86 == scripts/auditoria-codigo.mjs:63 (cuerpo identico); (d) duplicateBodies local con su propia normalizacion y conteo de llaves en scripts/auditoria.mjs:117 frente a scripts/auditoria-codigo.mjs:76; (e) sh: scripts/hito.mjs:43 == scripts/task-gate.mjs:40 (cuerpo identico). BLOCKER DECLARADO: los sitios viven en instrumentos CONGELADOS por hash en .task/frozen.json (duplication.mjs, auditoria-codigo.mjs, auditoria.mjs, audit-metric.mjs, hito.mjs) o en el GATE (task-gate.mjs), inmutables por el agente (0.16 + 7.7.g): unificar exige ENMIENDA FORMAL del dueno (declarar el cambio, re-aprobar, nuevo hash) y un commit que re-congele. Propuesta cuando se autorice: un helper unico compartido (p.ej. scripts/lib/scan.mjs con walk/readSources/block/sh) importado por los scripts, con control negativo (romper el helper debe tumbar a los consumidores) y guard de conteo de duenos. IMPACTO: ninguna copia afecta al producto; es el instrumental de medida midiendose a si mismo.",
+      "origen": "auditoria-codigo-2026-10-14"
     }
   ],
   "done": [

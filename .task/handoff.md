@@ -638,3 +638,14 @@ de P9.64 y contar las filas sin hablante de P9.65.
   la fila no se reutiliza/reemplaza a mitad del dictado (P11.12); (2) "okay flu soy X" no
   duplica la respuesta (P9.80) ni estrena nombre sin medida (P11.11); (3) el micro vuelve
   tras morir (P9.76).
+
+## 2026-10-14 - AUDITORIA DE CODIGO (pedida por el dueno): 0 en src, A7 en scripts/
+
+- Vara CONGELADA (.task/frozen.json) sobre src (424 ficheros): duplication.mjs = 0 grupos;
+  auditoria-codigo.mjs = 0 cuerpos duplicados / 0 colisiones / 0 parches; self-test OK.
+- Homonimos (7) y hardcode (3 candidatos) LEIDOS: todo similitud de forma o legitimo
+  (detalle en .task/report, seccion AUDITORIA DE CODIGO 2026-10-14).
+- Archivos: 0 identicos, 0 huerfanos reales (16 explicables), 0 imports rotos.
+- FUERA DE LA VARA: scripts/ con walk/readSources/block/duplicateBodies/sh duplicados entre
+  instrumentos CONGELADOS y el gate -> PENDIENTE NUEVO A7 (todo): requiere ENMIENDA del dueno
+  (nuevo hash de frozen + tocar el gate) antes de unificar.

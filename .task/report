@@ -5869,3 +5869,71 @@ ALCANCE REAL (0.23): CUBIERTO=la senal de confirmacion + el guard con rojo-en-vi
 NO CUBIERTO=el DoD-producto (la corrida en pantalla del dueno: el micro vuelve tras morir,
 ahora con la senal de rebuild restaurada) y la suite completa (CI).
 ===============================================================================
+
+===============================================================================
+AUDITORIA DE CODIGO 2026-10-14 (a peticion del dueno): rutas dobles / archivos / hardcode
+===============================================================================
+ALCANCE Y REGLA DE MEDIR (AGENTS 7.7.g: la vara NO se mueve): instrumentos CONGELADOS por
+hash (.task/frozen.json) sobre src (424 ficheros). Resultado = "0 duplicados CON ESTA
+DEFINICION".
+
+INSTRUMENTOS (los del repo) Y CONTROL NEGATIVO:
+  - node scripts/duplication.mjs -> ficheros=424 grupos=0 baseline=0 (--violations: 0)
+  - node scripts/auditoria-codigo.mjs -> 0 cuerpos duplicados | 7 homonimos | 0 colisiones
+    de export | 566 literales repetidos | 0 parches | 3 hardcode fuera de config
+  - node scripts/auditoria-codigo.mjs --self-test -> OK: las 6 senales disparan con su defecto
+    inyectado y no marcan lo legitimo.
+  - node scripts/auditoria.mjs (catalogo) -> 28/28 en META. OJO: es un CATALOGO de 28 puntos,
+    NO una auditoria del codigo (V10/V14 ya en META).
+
+RUTAS DOBLES (implementaciones): 0 grupos en src. Los 7 homonimos se LEYERON uno a uno:
+similitud de forma con responsable distinto -> runMainThreadFallback (FBX delega en
+fetchFbxJson / voiceId resuelve por tipo), sourceLabel (ImageGrid vs VideoGrid),
+cleanLabel (criterios distintos), pickLabel (par bilingue vs selector por idioma), toUI (por
+entidad), flush (rel? de logs vs segmentador de voz), resetTurn (por motor ASR). NO son
+duplicados (7.7.g).
+
+ARCHIVOS: 0 ficheros identicos (sha256; control negativo medido con copia sintetica: la
+marco). 16 sin import estatico, TODOS explicables: main.tsx (entry), 3 workers cargados por
+URL (fbxLoader.worker.js, micCapture.processor.js, voiceId.worker.js), browserProxy.ts (lo
+importa vite.config.ts), y 11 .d.ts sidecar/tipos (fluWindow, optionalModules, vite-env y los
+6 de componentes/ASR; ConversationLog.d.ts documenta que es deliberado). 0 imports rotos
+(V17, detector real). 0 basura.
+
+HARDCODE: 3 candidatos del instrumento, LEIDOS:
+  - src/server/requestUrl.ts:17 'http://localhost' = base FICTICIA para parsear req.url
+    (documentado; el host no se usa). Legitimo.
+  - src/voice/lib/imageGeneration.js:59 xmlns del SVG = namespace W3C del estandar. Falso
+    positivo conocido (el propio auditor lo documenta).
+  - src/dev/asrLab/AsrLab.tsx:165 modelo del LAB (dev-only) con override
+    VITE_OPENROUTER_AUDIO_MODEL: cumple el estandar V8 (env-overridable, cumple 2.2).
+  URLs de servicio: TODAS en duenos de config (fluConfig.js, sharedConfig.ts, appConfig.ts,
+  musicCatalog.ts). 0 claves de API literales. 0 accesos localStorage con clave literal (el
+  acceso pasa por el dueno unico store/storage.ts; el caso 'flu-creativity' ya se retiro).
+  Eventos DOM: nombres estandar de plataforma; los eventos propios ('branding*') van por
+  catalogo tipado (ConfigHandlerKey) + switch con WARN visible por defecto
+  (src/app/configActions.ts:431).
+
+LITERALES REPETIDOS (566 grupos): clasificados por muestreo -> 158 rutas de import (no
+cuentan), 67 clases CSS (vocabulario visual: el JSX cita la clase del CSS), y el resto
+textos/ids; casos leidos: frases-ejemplo entrecomilladas en COMENTARIOS, superficies de
+comandos PUBLICADAS como dato (NOTE_COMMAND_SURFACE, Anexo B-17), ids de catalogo tipados, y
+nombres de huesos del rig (union BunnyControl en avatar/types/bunny.ts + lista del panel
+tipada CONTRA la union: el tsc bloquea panel->union; el panel es consumidor, no segundo
+dueno).
+
+FUERA DE LA VARA (extra declarado, NO es la metrica; ampliar la vara seria tarea nueva):
+scripts/ (26 ficheros) = 3 cuerpos duplicados + homonimos: walk (auditoria-codigo.mjs:38 ==
+duplication.mjs:183; tambien en audit-metric.mjs:17 y auditoria.mjs:33), readSources
+(duplication.mjs:182 vs auditoria-codigo.mjs:58), block (duplication.mjs:86 ==
+auditoria-codigo.mjs:63), duplicateBodies local (auditoria.mjs:117 vs auditoria-codigo.mjs:76)
+y sh (hito.mjs:43 == task-gate.mjs:40). Los 5 sitios son instrumentos CONGELADOS por hash o
+el gate (inmutables por el agente): NO se tocan aqui; se registran como A7 y exigen ENMIENDA
+del dueno (nuevo hash). tests/: helpers repetidos por diseno del alcance (no es la vara).
+
+ALCANCE REAL (0.23): CUBIERTO=la medicion con los instrumentos congelados (self-test OK), mi
+detector de archivos con control negativo (copia + huerfanos sinteticos marcados), y la
+lectura/veredicto de cada candidato; NO CUBIERTO=la suite completa, el e2e, la validacion del
+dueno en pantalla, y que los 566 literales se lean UNO A UNO (se clasificaron por clases y
+muestreo). El catalogo de 28 puntos no sustituye a esta medicion.
+===============================================================================
