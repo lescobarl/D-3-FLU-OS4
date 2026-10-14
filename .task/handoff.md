@@ -596,3 +596,25 @@ de P9.64 y contar las filas sin hablante de P9.65.
   tuvo DOS respuestas (determinista "Registrado Luis." + LLM "Entendido. Procedere..."), el wake llego
   como "flujo" y no disparo, y el micro se congelo/repite locucion (falta el log para diagnosticarlo).
 - NO CUBIERTO: el DoD-producto (su pantalla/micro); suite completa y E2E completa (exigen autorizacion).
+
+## 2026-10-14 - P11.12 CERRADO: el cierre de la ultima frase es SOLO por silencio
+
+- Mandato del dueno (2026-10-13): el cierre es por SILENCIO o cambio de hablante; la
+  conversacion solo lleva datos consolidados (solo inserts, no updates).
+- Fix (commit aa1cd9f): resolveSrGapTrigger SOLO dispara con silencio real (fuera la rama
+  SIN CONTENIDO NUEVO); evaluateSrGapSegmentCommit sin cierre por contenido y sin los
+  frenos finos (bloqueaban colas cortas de lo ya commiteado); fluConfig sin
+  srGapCommitExtensionMinChars / srGapCommitNoNewContentMinChars. Guard nuevo
+  vozCierreSoloSilencioGuard (6 casos, en lint:guards) con ROJO-EN-VIEJO medido: 2
+  ficheros / 4 casos caen con el src de HEAD; pin P9.68 alineado; pin P9.75 refraseado y
+  verde.
+- Red medida: lint 277 ficheros / 2256 casos + eslint 0; typecheck 0; pnpm test --changed
+  356 ficheros / 4391 casos con SOLO los 2 rojos preexistentes de P11.11.
+- RIESGO VIVO: la congelacion con interinos repetidos (P9.68) pasa a depender del detector
+  de eco committed-echo + rebuild del reconocimiento, no del cierre -> se valida en la
+  corrida del dueno.
+- PENDIENTES vivos: P9.76 (lock del micro al INTENTAR start), P9.80 (la orden de nombre
+  responde DOS veces), P11.11 (los 2 rojos de Fase E en speakerPrimarySeed; DECISION DEL
+  DUENO pendiente: alinear el test a P10.8/P11.4 o devolver la siembra de Fase E).
+- SIGUIENTE: su corrida en pantalla (una locucion larga debe escribirse UNA vez; la fila
+  no debe reutilizarse/reemplazarse a mitad del dictado) + decision sobre P11.11.
