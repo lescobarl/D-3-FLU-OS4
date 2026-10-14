@@ -618,3 +618,23 @@ de P9.64 y contar las filas sin hablante de P9.65.
   DUENO pendiente: alinear el test a P10.8/P11.4 o devolver la siembra de Fase E).
 - SIGUIENTE: su corrida en pantalla (una locucion larga debe escribirse UNA vez; la fila
   no debe reutilizarse/reemplazarse a mitad del dictado) + decision sobre P11.11.
+
+## 2026-10-14 (cierre de serie) - P9.76 + P9.80 + P11.11 CERRADOS: 0 pendientes
+
+- P11.11 (commit f7fb33c): los 2 casos de Fase E se alinean a la regla vigente (el ancla SI
+  se crea; el turno que la crea NO lleva el nombre sin MEDIDA) + detector de dos lados; el
+  fichero entra en lint:guards (antes estaba fuera). 2 failed/2 passed -> 5/5.
+- P9.80 (commit f7fb33c, cierre como MEDICION + barrera): "Registrado Luis." x2 no es
+  reproducible hoy; sus habilitadores cerraron en b3e8541/beeef07/42059e6/89c8fb8. La
+  barrera (vozRespuestaNombreUnaGuard) mide con funciones reales: la via pasiva no despacha
+  el comando (0 tramos con wake propia), el planificador lo resuelve UNA vez y la re-entrega
+  del mismo turno da plan dedup.
+- P9.76 (commit 695aa28): el micro avisa cuando el motor no confirma arranque (confirmed
+  separado de capturing): 2.o start sin onstart = false (recuperacion viva) y 1 sola llamada
+  a start(). Rojo-en-viejo medido (1 de 8 casos con el src de HEAD). Consumidores revisados
+  (el hook usa el false; onboarding lo ignora).
+- PENDIENTES vivos: NINGUNO (`npm run ledger` -> 0 pendientes; 426 cierres registrados).
+- SIGUIENTE (del dueno, su corrida en pantalla): (1) una locucion larga se escribe UNA vez y
+  la fila no se reutiliza/reemplaza a mitad del dictado (P11.12); (2) "okay flu soy X" no
+  duplica la respuesta (P9.80) ni estrena nombre sin medida (P11.11); (3) el micro vuelve
+  tras morir (P9.76).

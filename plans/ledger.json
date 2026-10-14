@@ -40,13 +40,6 @@
       "origen": "medicion-auditoria-2026-10-12"
     },
     {
-      "id": "P9.76",
-      "titulo": "P9.70: el lock al INTENTAR start() retira la senal (false) que disparaba el rebuild inmediato del micro.",
-      "estado": "todo",
-      "evidencia": "MEDIDO 2026-10-12 (desk, speechRecognitionLocal real): dos llamadas a startSpeechRecognition sobre el mismo motor sin evento onstart => start() llamado 1 sola vez y r1=r2=true. El hook usaba el false de la 2.a llamada para stop + retry + rebuildRecognitionRef (useFluVoiceAssistant.js:1248-1262); con el fix esa via YA NO se toma y la recuperacion queda a cargo del watchdog (srGap / stall). En Chrome el mensaje coincidia y antes tambien devolvia true (sin cambio real); el caso afectado es el de mensaje de error NO coincidente (\"already started\" en otro idioma/version). ACCION: validar en pantalla que el micro vuelve tras morir; si no vuelve, devolver false cuando el motor no confirme arranque.",
-      "origen": "medicion-auditoria-2026-10-12"
-    },
-    {
       "id": "P9.77",
       "titulo": "Congelamiento: la tuberia de identidad RE-EMBEBE el mismo turno mientras sigue abierto (sin tope).",
       "estado": "done",
@@ -65,13 +58,6 @@
       "titulo": "La base de participantes no muestra el nombre registrado por VOZ.",
       "estado": "done",
       "evidencia": "DECLARADO (dueno 2026-10-12 16:34:28): 'si hay una base de participantes debe de aparecer aqui a la derecha ... no lo esta poniendo como participante'. El log de la misma ventana muestra 'VozProbe clusters {write:1, labels:[Luis]}' (22:30:13) y commits src=wake-intro name=Luis (22:29:42) + filas 'replaced spk=Luis' (turnos 28, 32, 33, 45, 49): el nombre SI se liga a las filas pero el PANEL no lo lista. Falta medir la cadena registro -> almacen del panel (participantsPanel / integrationStore) con la DB sembrada. CAUSA (codigo, leida 2026-10-12): DOS almacenes SIN puente. El registro por VOZ escribe clusters + primario de sesion (src/voice/lib/speakerIdentityRegister.js:95-103: refs.setClusters + setSessionPrimarySpeaker) y NUNCA `fluDb.participants`; el panel se alimenta SOLO de Dexie (`useParticipants.ts:99` crea el servicio sobre `fluDb.participants` y `:143` es el `register`; App.tsx:1147-1165 lee `participants.participants`). Los UNICOS escritores de `fluDb.participants` son `useParticipants` (panel) y `participantRegistry.seedAnonymous`; ninguna ruta de voz los llama -> 'soy Luis' liga filas pero no crea participante (viola Anexo B.8: un dato, un dueno).",
-      "origen": "reporte-dueno-2026-10-12-1635"
-    },
-    {
-      "id": "P9.80",
-      "titulo": "La orden de nombre responde DOS veces (dos rutas para la MISMA respuesta).",
-      "estado": "todo",
-      "evidencia": "DECLARADO (dueno 2026-10-12 16:29:42 y 16:29:45): 'Registrado Luis.' x2 para UNA sola locucion 'Okay flu Soy Luis'. El contrato vigente (.task/contract.json objetivo 3) EXIGE 'el nombre: UNA via (wake+comando)'. Falta medir las dos rutas en el despacho (determinista REGISTRAR_PARTICIPANTE + LLM). CAUSA (codigo, leida 2026-10-12): la MISMA respuesta 'Registrado {name}.' se construye en DOS emisores de `detectWakeIntroducedName`/`getCommandSpeech`: (a) `emitActiveConversationCommand` -> `commitAndResolveTurn` (src/voice/hooks/useFluVoiceAssistant.js:2870), via pasiva `resolveNavigationCommand`/`planConversationDispatch`; (b) `processCapture` -> rama `directCommand` -> `commitAndResolveTurn` (src/voice/hooks/useFluVoiceAssistant.js:3846), via arbitro determinista `resolveDeterministicCommand` (:3773-3778). ADEMAS el registro del nombre tiene CUATRO disparadores: resolveSpeaker (:1658), applyResolvedSpeaker (:1464-1470), src/voice/lib/turnSpeakerCommit.js:218 (wake-intro) y src/hooks/useNavigationCommands.ts:271 (comando). Dos detectores + dos emisores de la MISMA respuesta; con la doble fila de P9.73 la locucion responde dos veces.",
       "origen": "reporte-dueno-2026-10-12-1635"
     },
     {
@@ -2156,13 +2142,6 @@
       "estado": "done",
       "evidencia": "MEDIDO 2026-10-12 (guard vozNombreEntraEnLaBaseGuard, caso P9.78): dos llamadas CONCURRENTES a participantRegistry.register (luis y Luis, sin esperar la primera) ven la base VACIA las dos y registran 2 filas [Luis, Luis]; el dedupe es case-insensitive pero lee el estado ANTES de escribir (participantRegistry.ts:193-195). En el flujo real el registro es por turno (secuencial) y no se dispara; riesgo si dos locuciones de nombre llegan pegadas. ACCION: serializar el puerto (o candado tipo anonymousSeedInFlight) si se observa en el log.",
       "origen": "guard-2026-10-12"
-    },
-    {
-      "id": "P11.11",
-      "titulo": "2 casos ROJOS PREEXISTENTES y vivos en HEAD (fuera de lint:guards) en tests/speakerPrimarySeed.test.ts (Fase E, d271b1a): el primario de la sesion ya no siembra su cluster/etiqueta -> \"expected Hablante 1 to be Juan\".",
-      "estado": "todo",
-      "evidencia": "tests/speakerPrimarySeed.test.ts: MEDIDO 2026-10-13 (baseline capturado antes del fix P11.10, con el src de HEAD revertido byte a byte): 2 de 4 casos ROJOS -> (a) \"sessionPrimary=Juan, sin clusters, voz fresca -> crea cluster Juan y etiqueta Juan\": expected Hablante 1 to be Juan; (b) \"sessionPrimary=Juan, cluster auto Hablante 1 con voz distinta -> abre cluster Juan (voz genuina)\": expected Hablante 1 to be Juan. NO es del fix P11.10 (falla igual con el src de HEAD). NO se toca en ese hito (fuera de alcance). DECISION PENDIENTE DEL DUENO: el test codifica la siembra de Fase E (`roomCapture.sessionPrimaryCreateCluster: true`, fluConfig.js:220; speakerDiarization.js:269-293), mientras P10.8/P11.4 mandan que NI la etiqueta NI el participante activo nombren una voz sin medida; hay que decidir si se RETIRA/ALINEA el test (regla retirada) o si la siembra vuelve. Riesgo de que nadie lo vea: el fichero no esta en lint:guards y la suite completa no la corre el agente.",
-      "origen": "baseline-p1110-2026-10-13"
     }
   ],
   "done": [
@@ -4644,6 +4623,27 @@
       "titulo": "El cierre de la ULTIMA FRASE se disparaba por CONTENIDO ESTANCADO (P9.68/P9.75) a mitad del dictado: la fila se escribia antes de tiempo y luego habia que ACTUALIZARLA (row reused/replaced). Mandato del dueno 2026-10-13: el cierre es por SILENCIO o cambio de hablante, y la conversacion solo se INSERTA.",
       "evidencia": "src/voice/lib/fluTranscriptPause.js + src/voice/lib/conversationStream.js + src/voice/lib/fluConfig.js: CERRADO 2026-10-14 (commit aa1cd9f = 3 src + guard NUEVO tests/vozCierreSoloSilencioGuard.test.ts (6 casos, en lint:guards) + pin P9.68 de fluTranscriptPause.test.ts alineado + reporte). MEDIDO EN EL LOG DEL DUENO (2026-10-13 03:35:57.980): VozProbe srGap reason=sr-no-new-content sinceResult=1114 (umbral de silencio 3500) -> la fila se escribio a mitad del dictado (row added len=208) y 4 s despues la MISMA locucion seguia creciendo (row reused len=218, commit replace=true). ARREGLO: resolveSrGapTrigger solo dispara con silencio real (fuera la rama SIN CONTENIDO NUEVO; el reason sr-no-new-content desaparece); evaluateSrGapSegmentCommit pierde el cierre por contenido y los frenos finos (extension corta / no-new-content, que bloqueaban colas cortas de lo ya commiteado) -> quedan silencio + texto no identico + freno de texto EXACTO y cooldown; fluConfig sin las 2 claves sin consumidor (+ TRANSCRIPT_PAUSE_KEYS). ROJO-EN-VIEJO MEDIDO (src de HEAD restaurado byte a byte, restauracion con hash identico): 2 ficheros / 4 casos caen (3 del guard: trigger estancado, eval estancado, detector; + el pin P9.68); con el arreglo, VERDE. EVIDENCIA: lint 277 ficheros / 2256 casos VERDE + eslint 0; typecheck exit 0; pnpm test --changed 356 ficheros / 4391 casos con SOLO los 2 rojos preexistentes de P11.11 (speakerPrimarySeed, Fase E) -> 0 fallos NUEVOS. RIESGO DECLARADO: la congelacion con interinos repetidos (P9.68) pasa a depender del detector de eco committed-echo + rebuild del reconocimiento (committedEchoRebuildAfter=3; clearStaleCommittedEchoFromState + touchMeaningfulIngress), no del cierre; se valida en la corrida del dueno. Alcance real (0.23): CUBIERTO=el cierre de la ultima frase SOLO por silencio (o cambio de hablante por su puerta), con guard rojo-en-viejo y la red verde; NO CUBIERTO=el DoD-producto, la suite completa, la E2E acotada (el e2eScope del contrato vigente no lista los 2 ficheros) y el gate de contrato (el contrato activo es de la tarea anterior).",
       "origen": "mandato-dueno-2026-10-13-cierre-silencio"
+    },
+    {
+      "id": "P9.76",
+      "commit": "695aa28",
+      "titulo": "P9.70: el lock al INTENTAR start() retira la senal (false) que disparaba el rebuild inmediato del micro.",
+      "evidencia": "src/voice/lib/speechRecognitionLocal.js: CERRADO 2026-10-14 (commit 695aa28 = src + guard tests/vozReinicioMicroGuard.test.ts actualizado + reporte). MEDIDO ANTES (el item): el lock de P9.70 (captura marcada al INTENTAR start()) hacia que un 2.o start devolviera SIEMPRE true, retirando el false que disparaba la recuperacion (stop + retry + rebuild) del hook (useFluVoiceAssistant.js:1245-1262); con el motor muerto en silencio (sin onend/onerror) el micro podia quedar muerto hasta el watchdog. ARREGLO: se separa INTENTO de CONFIRMACION: capturing (P9.70) se marca al intentar y se limpia en onend/stop/abort; confirmed NUEVO (P9.76) lo marca onstart (y la rama already-started) y lo limpian onend/stop/abort; el 2.o start NO re-arranca (1 sola llamada a start()) pero devuelve confirmed.has(rec) -> false si el motor no confirmo, true si confirmo (idempotente, sin churn); resetActiveRecognitionForTest recrea ambos WeakSet. ROJO-EN-VIEJO MEDIDO (src de HEAD restaurado byte a byte, restauracion con hash identico): 1 de 8 casos cae (expected true to be false); con el arreglo 8/8. Consumidores revisados: el hook usa el false como senal de recuperacion; useOnboardingVoiceCapture ignora el valor. Alcance real (0.23): CUBIERTO=la senal de confirmacion + guard con rojo-en-viejo; NO CUBIERTO=el DoD-producto (su corrida en pantalla: el micro vuelve tras morir) y la suite completa.",
+      "origen": "medicion-auditoria-2026-10-12"
+    },
+    {
+      "id": "P9.80",
+      "commit": "f7fb33c",
+      "titulo": "La orden de nombre responde DOS veces (dos rutas para la MISMA respuesta).",
+      "evidencia": "tests/vozRespuestaNombreUnaGuard.test.ts + scripts/guard-files.mjs: CERRADO COMO MEDICION + BARRERA 2026-10-14 (commit f7fb33c). DEFECTO MEDIDO POR EL DUENO (2026-10-12 16:29:42/45): Registrado Luis. x2 para UNA locucion. HABILITADORES CERRADOS: b3e8541 (P9.73: el id del turno se acuna por LOCUCION: sin doble fila), beeef07 (P9.69: el tramo pasivo del split por wake NO lleva identidad), 42059e6 (emisor unico buildCommandSpeech), 89c8fb8 (P9.82: la respuesta se guarda UNA vez en el store). MEDIDO HOY con funciones REALES: la via pasiva no puede despachar el comando (0 de los tramos del split tienen wake propia; isCommandAuthorized exige la wake en el propio enunciado); planConversationDispatch(okay flu soy luis) = dispatch/command/REGISTRAR_PARTICIPANTE (via UNICA) y el arbitro determinista NO resuelve el comando (domain null: sin segunda via); la re-entrega del MISMO turno da plan dedup; sin wake (soy luis / flu soy luis) el plan es skip. BARRERA NUEVA registrada en lint:guards con prueba de detector. Alcance real (0.23): CUBIERTO=la medicion del despacho con funciones reales y la barrera; NO CUBIERTO=el DoD-producto (una corrida real del dueno; si volviera a verse Registrado x2, el log reabre el item) y la suite completa.",
+      "origen": "reporte-dueno-2026-10-12-1635"
+    },
+    {
+      "id": "P11.11",
+      "commit": "f7fb33c",
+      "titulo": "2 casos ROJOS PREEXISTENTES y vivos en HEAD (fuera de lint:guards) en tests/speakerPrimarySeed.test.ts (Fase E, d271b1a): el primario de la sesion ya no siembra su cluster/etiqueta -> expected Hablante 1 to be Juan.",
+      "evidencia": "tests/speakerPrimarySeed.test.ts + scripts/guard-files.mjs: CERRADO 2026-10-14 (commit f7fb33c = test alineado + detector + registro en lint:guards + reporte). MEDIDO ANTES DE TOCAR: 2 de 4 casos ROJOS preexistentes y vivos en HEAD (expected Hablante 1 to be Juan): median la etiqueta VIEJA de Fase E. El CODIGO ya cumplia la regla nueva (speakerDiarization.js:265-294: crea el ANCLA Juan con ensureClusterForLabel y devuelve el hablante vigente; registeredIdentityConfirmed: si el ancla aun no existe, tampoco; mandatos P10.8/P11.4). DECISION APLICADA (default declarado): mandan los mandatos POSTERIORES del dueno; el test se ALINEA (ancla si, nombre no), gana un detector de dos lados (sin ancla no se nombra / con ancla y medida coincidente SI) y entra en lint:guards (antes fuera: el riesgo que el item declaraba). MEDIDO DESPUES: 5/5 VERDE; guardMutationGuard VERDE. Alcance real (0.23): CUBIERTO=los 2 casos alineados, el detector y el registro en lint:guards; NO CUBIERTO=el DoD-producto (su pantalla) y la suite completa.",
+      "origen": "baseline-p1110-2026-10-13"
     }
   ]
 }
