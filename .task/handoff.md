@@ -660,3 +660,14 @@ de P9.64 y contar las filas sin hablante de P9.65.
 - scripts/: 3 -> 0 cuerpos duplicados; homonimos 5 -> 1 (main, sin relacion). Re-congelado
   (frozen.json, 7 ficheros) y GATE paso 0 VERDE; guardas consumidoras 8/8.
 - PENDIENTES: ninguno (0 en el ledger).
+
+## 2026-10-14 - P11.13 CERRADO: el aviso de Vite por imports sin extension, eliminado de raiz
+
+- Fix (commits b468cb0 + c8c6aa2): 261 imports del grafo del config con su extension real
+  (83 ficheros: src/** + vite.config.ts) + barrera nueva viteConfigNativenessGuard (rojo-en-
+  viejo medido: 261 offenders con el arbol viejo) + reparacion de 5 casos en guards de texto
+  (0.22: commit aparte) + contrato refrescado (base 7ad1b8c, dod con la union de 203 tests).
+- NO se silencio el aviso (VITE_CONFIG_NATIVE_IGNORE_WARNING = supresion, prohibida 2.3).
+- MEDIDO: build 254 items -> 0 (mismos 1306 modulos); typecheck 0; 7 mediciones congeladas
+  byte-identicas; DoD ENTERO 203 ficheros VERDE; dev server sin el aviso.
+- PENDIENTES: ninguno (0 en el ledger).
