@@ -2142,6 +2142,13 @@
       "estado": "done",
       "evidencia": "MEDIDO 2026-10-12 (guard vozNombreEntraEnLaBaseGuard, caso P9.78): dos llamadas CONCURRENTES a participantRegistry.register (luis y Luis, sin esperar la primera) ven la base VACIA las dos y registran 2 filas [Luis, Luis]; el dedupe es case-insensitive pero lee el estado ANTES de escribir (participantRegistry.ts:193-195). En el flujo real el registro es por turno (secuencial) y no se dispara; riesgo si dos locuciones de nombre llegan pegadas. ACCION: serializar el puerto (o candado tipo anonymousSeedInFlight) si se observa en el log.",
       "origen": "guard-2026-10-12"
+    },
+    {
+      "id": "P11.14",
+      "titulo": "El arranque del server TRUNCABA debug.log (evidencia del dueno destruida) y el relay no re-encola: se rota a debug.prev.log.",
+      "estado": "todo",
+      "evidencia": "REPORTADO POR EL DUENO (2026-10-14, tras su corrida): al revisar sus logs para diagnosticar los dos problemas de voz, la sesion NO estaba: MEDIDO que src/server/geminiProxy.ts:867 hacia writeFileSync(debug.log,'') en CADA arranque del server (config del relay) y el relay del cliente NO re-encola los envios fallidos (clientLogRelay.ts: 'un fallo de entrega NO se re-encola') -> la evidencia de la corrida del dueno se destruye en cada arranque (y en esta sesion la destruyeron dos arranques de validacion del agente). ARREGLO: el arranque ROTA el fichero anterior a debug.prev.log (rename) y luego crea debug.log vacio; el checker sigue leyendo debug.log (corrida actual) y la anterior queda preservada. MEDIDO EN VIVO: arranque real -> debug.prev.log = 725 bytes con la mtime original (8:55:16) y debug.log nuevo (941 bytes); typecheck 0 y eslint 0. Alcance real (0.23): CUBIERTO=la rotacion (no se pierde la sesion anterior) y su validacion en un arranque real; NO CUBIERTO=el diagnostico de los dos problemas de voz del dueno (P1 nombre a la mujer / P2 transcripcion congelada + volcado), que exige el log de una corrida fresca (el truncado era LA causa de que no hubiera evidencia).",
+      "origen": "reporte-dueno-2026-10-14-sin-log"
     }
   ],
   "done": [

@@ -6021,3 +6021,46 @@ ALCANCE REAL (0.23): CUBIERTO=el aviso eliminado de raiz (261 extensiones), la b
 rojo-en-viejo medido, las 7 mediciones congeladas intactas y el DoD de 203 ficheros;
 NO CUBIERTO=la suite completa, el e2e y la validacion del dueno en su pantalla.
 ===============================================================================
+
+===============================================================================
+P11.14 - LA EVIDENCIA DEL LOG SE DESTRUIA EN CADA ARRANQUE DEL SERVER (2026-10-14)
+===============================================================================
+REPORTADO: el dueno pidio revisar los logs para diagnosticar DOS problemas de voz (P1: una
+voz de mujer etiquetada con su nombre "Luis"; P2: la transcripcion deja de verse y luego pasa
+de golpe a la conversacion). Al revisar: debug.log solo tenia 8 lineas (un arranque de
+validacion del agente).
+
+MEDIDO: src/server/geminiProxy.ts:867 hacia `writeFileSync(debug.log, '')` en CADA arranque
+del server (config del relay) y el relay del cliente NO re-encola los envios fallidos
+(clientLogRelay.ts: "un fallo de entrega NO se re-encola"). Consecuencia: la sesion del dueno
+se pierde en cada arranque (y aqui la perdieron dos arranques de validacion) -> sin evidencia
+para diagnosticar. ES RESPONSABILIDAD DEL AGENTE: no se arranca el server sin rotar antes.
+
+ARREGLO: el arranque ROTA el fichero anterior a debug.prev.log (rename) y crea debug.log
+vacio; el checker sigue leyendo la corrida actual y la anterior queda preservada.
+MEDIDO EN VIVO: arranque real -> debug.prev.log = 725 bytes (mtime original 8:55:16) +
+debug.log nuevo (941). typecheck 0, eslint 0.
+
+PENDIENTE ABIERTO (el motivo de la revision): P1 y P2 exigen el log de una corrida FRESCA con
+el server ARRIBA (ya no se pierde). Diagnostico de candidatos YA localizado en el codigo:
+  P1 (nombre a la mujer): (a) `production-reuse-no-evidence` (speakerDiarization.js:417-426)
+     heredaba la etiqueta del anterior SIN ninguna evidencia (el ledger ya lo predijo en
+     P9.86: "si el dueno dictamina que una voz distinta NO debe heredar el hablante anterior,
+     hay que REABRIRLO"). El hito de retirarlo se MIDIO y se REVIRTIO en el acto: rompia el
+     repro del dueno del 2026-10-11 ("Hablante 2 fantasma": la MISMA voz a 0.50 conserva la
+     etiqueta) -> la tension (?misma voz con medida sucia, o voz distinta?) no la resuelve un
+     escalar; la resuelve el log.
+     (b) el cosido/renombre usa el piso 0.64 (A3) mientras la identidad registrada exige 0.76
+     (P11.10): una ventana medida 0.64-0.75 puede coser la voz de la mujer al ancla del
+     titular y renombrar SUS filas; candidato a medir con el log.
+  P2 (transcripcion invisible y volcado): la CAJA de la frase viva BLOQUEA (`return`) toda
+     emision que no "conserva lo mostrado" (conversationStreamCommit.js:288-295) -> la caja
+     se queda congelada en la ultima emision aceptada mientras el ASR avanza; el cierre SOLO
+     por silencio (P11.12) hace que el texto llegue a la conversacion de golpe. El escape
+     `utterancesSameRevision` puede no cubrir revisiones largas: a medir con las marcas
+     `live bloqueado motivo=no-conserva` vs `live aplicado` del log.
+
+ALCANCE REAL (0.23): CUBIERTO=la rotacion del log probada en arranque real (la evidencia del
+dueno ya no se pierde); NO CUBIERTO=el diagnostico final de P1/P2, que requiere su corrida
+fresca.
+===============================================================================

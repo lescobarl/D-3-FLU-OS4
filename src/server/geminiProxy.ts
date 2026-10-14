@@ -16,7 +16,7 @@
 // ============================================================
 
 import type { IncomingMessage, ServerResponse } from 'http';
-import { appendFileSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, renameSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 /**
@@ -864,6 +864,16 @@ export function createGeminiMiddleware({ env = {} }: { env?: Record<string, stri
             let clientLogFile: string | null = null;
             try {
                 clientLogFile = resolve(process.cwd(), 'debug.log');
+                // P11.14: el arranque NO borra la sesion anterior: se ROTA a `debug.prev.log`.
+                // Medido 2026-10-14: el truncado borraba la evidencia de la corrida del dueno en
+                // cada arranque (y el relay del cliente NO re-encola: lo entregado se pierde).
+                try {
+                    if (existsSync(clientLogFile)) {
+                        renameSync(clientLogFile, resolve(process.cwd(), 'debug.prev.log'));
+                    }
+                } catch (err: unknown) {
+                    logCaughtError('[geminiProxy] client log: no se pudo rotar debug.log', errorField(err, 'message') || err);
+                }
                 writeFileSync(clientLogFile, '');
             } catch (err: unknown) {
                 clientLogFile = null;
