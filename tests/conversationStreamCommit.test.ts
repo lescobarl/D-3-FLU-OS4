@@ -21,6 +21,7 @@ import {
     scheduleTurnSpeakerPreflight,
 } from '../src/voice/lib/turnSpeakerPreflight.js';
 import { FLU_CONFIG } from '../src/voice/lib/fluConfig.js';
+import { isDuplicateTurnCommit } from '../src/voice/lib/turnStream.js'
 
 // Este fichero mide la SEMANTICA del stream (preview -> commit -> fila -> cierre)
 // con capturas sin wake; la politica "el ruido de fondo no abre fila" (P8.38) se
@@ -507,3 +508,40 @@ describe('P8.43 - un id por peticion (la reentrega no abre locucion nueva)', () 
         expect(deps.emitConversationLog).toHaveBeenCalledTimes(1);
     });
 });
+
+// P11.19 (medido en su log 2026-10-14 17:18): el ASR reentrego la COLA de una locucion ya
+// escrita como SEGMENTO nuevo y quedo en DOS filas ("se repitio esa frase", su pantalla) -
+// "vamos a comprar el helado en esta tienda donde no hay empleados" / "y vamos a comprar el
+// helado en esta tienda donde no hay empleados". Un texto CONTENIDO en la fila ya escrita no
+// es habla nueva: es la MISMA locucion reentregada -> no abre fila.
+describe('P11.19 - la cola de una locucion ya escrita no abre fila nueva (eco de segmento)', () => {
+  const FILA =
+    'Acompaname a comprar el helado favorito de jungkook y vamos a comprar el helado en esta tienda donde no hay empleados'
+  const COLA = 'y vamos a comprar el helado en esta tienda donde no hay empleados'
+
+  it('un segmento nuevo que repite la COLA de la fila anterior es duplicado (no escribe fila)', () => {
+    expect(
+      isDuplicateTurnCommit(COLA, {
+        lastEmitted: FILA,
+        lastCommitted: FILA,
+        lastResultAt: 2000,
+        lastCommitAt: 1000,
+        now: 3000,
+        echoWindowMs: 1200,
+      }),
+    ).toBe(true)
+  })
+
+  it('habla nueva (no contenida en la fila) sigue siendo turno nuevo', () => {
+    expect(
+      isDuplicateTurnCommit('y ahora quiero el de chocolate', {
+        lastEmitted: FILA,
+        lastCommitted: FILA,
+        lastResultAt: 2000,
+        lastCommitAt: 1000,
+        now: 3000,
+        echoWindowMs: 1200,
+      }),
+    ).toBe(false)
+  })
+})
