@@ -272,27 +272,40 @@ export function handleConversationStreamSync(
     // parte de la transcripcion). Cero excepciones: acorta:true + aplicado = 0.
     const previoLive = publishedLiveRef.current || ''
     // P11.16 (medido en su log 2026-10-14 16:04:34-16:05:08): Chrome confirma el final TRUNCANDO
-    // la cola y la reentrega como resultado NUEVO; cada emision arranca en la COLA de lo mostrado
-    // y sigue con texto nuevo, pero es MAS CORTA que la caja y quedaba bloqueada 40+ s ("esta
-    // congelado, no transcribe nada"). Esa emision NO reemplaza ni es un trozo: es la misma
-    // locucion creciendo -> la caja ANADE la parte nueva. Nunca encoge, nunca reemplaza (solo
-    // acumula). Un trozo puro (sin texto nuevo) sigue bloqueado como siempre.
-    const continuacionDesdeLaCola = (mostrado, nuevo) => {
+    // la cola y la reentrega como resultado NUEVO que arranca en un trozo INTERIOR de lo mostrado
+    // ("el avion se alejo..." estaba DENTRO de la caja de 846) y sigue con texto nuevo; cada
+    // emision (2..178 chars) era MAS CORTA y quedaba bloqueada 40+ s ("esta congelado, no
+    // transcribe nada"). La caja ANADE la cola nueva: nunca encoge, nunca reemplaza. Si la
+    // emision entera YA esta contenida (trozo puro), no aNade nada y sigue el bloqueo normal.
+    const continuacionTrasSolape = (mostrado, nuevo) => {
       const m = speechWords(mostrado).map((w) => w.toLowerCase())
       const n = speechWords(nuevo).map((w) => w.toLowerCase())
       if (m.length < 2 || n.length < 3) return ''
-      const max = Math.min(12, m.length - 1, n.length - 1)
-      for (let k = max; k >= 2; k -= 1) {
-        let igual = true
-        for (let i = 0; i < k; i += 1) {
-          if (m[m.length - k + i] !== n[i]) { igual = false; break }
+      const desde = Math.max(0, m.length - 80)
+      const contiene = (k) => {
+        for (let i = desde; i + k <= m.length; i += 1) {
+          let igual = true
+          for (let j = 0; j < k; j += 1) {
+            if (m[i + j] !== n[j]) { igual = false; break }
+          }
+          if (igual) return true
         }
-        if (igual) {
-          const extra = n.slice(k).join(' ')
-          return extra ? `${mostrado} ${extra}` : ''
-        }
+        return false
       }
-      return ''
+      if (contiene(n.length)) return '' // la emision ENTERA ya esta: trozo puro, no aNade nada
+      // Solape mas largo entre el ARRANQUE de la emision y CUALQUIER tramo de lo mostrado: la
+      // reentrega puede empezar en un trozo interior (medido: 19 palabras de solape; el tope de
+      // 12 cortaba el solape y DUPLICABA el tramo intermedio).
+      let mejor = 0
+      const tope = Math.min(60, n.length - 1)
+      for (let i = desde; i < m.length; i += 1) {
+        let j = 0
+        while (j < tope && i + j < m.length && m[i + j] === n[j]) j += 1
+        if (j > mejor) mejor = j
+      }
+      if (mejor < 2) return ''
+      const cola = n.slice(mejor).join(' ')
+      return cola ? `${mostrado} ${cola}` : ''
     }
     // 3b: lo mostrado tiene que seguir CONTENIDO en lo nuevo (unico normalizador: cleanForSpeech).
     const conservaLoMostrado = (mostrado, nuevo) => {
@@ -302,7 +315,7 @@ export function handleConversationStreamSync(
     }
     const esTrozo = isFragmentOfLocution(capture, previoLive)
     if (previoLive && capture.length < previoLive.length) {
-      const continuacion = continuacionDesdeLaCola(previoLive, capture)
+      const continuacion = continuacionTrasSolape(previoLive, capture)
       if (continuacion && continuacion.length > previoLive.length) {
         voiceProbe('live', { turn: activeTurnIdRef.current, resultado: 'aplicado', motivo: 'cola-solapada', acorta: false, fresh: Boolean(freshUtterance), mismaLocucion: false, reemplaza: false, previo: previoLive.length, len: continuacion.length, text: continuacion.slice(0, 220) }) // BANDERA DE DIAGNOSTICO
         publishedLiveRef.current = continuacion

@@ -6179,3 +6179,21 @@ Item P11.17 del ledger. NO se toca main.tsx ni el SW sin la medida (F12 de su pe
    vec=512 (6+ veces por turno, reason resolved-idle) y clusters se reescribe en cada turno;
    candidato de coste, a medir antes de tocar.
 ===============================================================================
+
+===============================================================================
+2026-10-14 - CONGELAMIENTO/PEDIDA (P11.16-H): la caja ANADE la cola nueva tras el solape
+===============================================================================
+DEFECTO MEDIDO (su log 16:04:34-16:05:08): Chrome confirma el final TRUNCANDO la cola y la
+reentrega como resultado NUEVO que arranca en un trozo INTERIOR de lo mostrado ("el avion se
+alejo..." estaba DENTRO de la caja de 846, no al final); cada emision (2..178 chars) era MAS
+CORTA y quedaba BLOQUEADA 40+ s -> "esta congelado, no transcribe nada". El fix anterior
+(cola-solapada) solo cubria el arranque alineado con el FINAL de la caja; por eso seguia
+congelada. ARREGLO: continuacionTrasSolape busca el solape mas largo entre el ARRANQUE de la
+emision y CUALQUIER tramo de lo mostrado (ventana de 80 palabras, tope 60) y ANADE la cola
+nueva; si la emision ENTERA ya esta contenida (trozo puro) se mantiene el bloqueo normal.
+La caja nunca encoge ni reemplaza (sigue "solo acumula"); acorta:true + aplicado = 0 intacto.
+Guard: vozUltimaFraseSoloAcumulaGuard, caso "arranca EN MEDIO de lo mostrado" ROJO antes
+(1 failed / 10 passed) y VERDE con el fix; el tope inicial de 12 palabras se corrigio porque
+cortaba el solape real (19) y DUPLICABA el tramo intermedio. Validacion: 12 ficheros de
+guards de voz/locucion (131 casos) VERDES.
+===============================================================================
