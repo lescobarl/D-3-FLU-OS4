@@ -2144,9 +2144,6 @@ export const FLU_CONFIG = {
       interimOpenLineFlushMs: 0,
       /** Tras N ms sin onresult: commit openLine (TV / SR mudo). CIERRE por silencio ~3,5 s (spec del dueno 2026-10-10). */
       srGapCommitMs: 3500,
-      /** Extensión mínima (chars/palabras) para commit por gap SR vs fila anterior. */
-      srGapCommitExtensionMinChars: 16,
-      srGapCommitNoNewContentMinChars: 12,
       postCommitCooldownMs: 0,
       staleFlushMinWords: 4,
       staleFlushMinWordsDuringCooldown: 5,

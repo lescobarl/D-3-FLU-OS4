@@ -168,15 +168,18 @@ describe('fluTranscriptPause - resolveSrGapTrigger (PRUEBA DE DETECTOR, el detec
     expect(resolveSrGapTrigger({ sinceLastResultMs: 2000, sinceLastCommitMs: 2000 }).fire).toBe(false);
   });
 
-  it('P9.68: SIN CONTENIDO NUEVO cierra aunque el ASR siga entregando interinos (congelacion)', async () => {
+  it('P11.12: el cierre es por SILENCIO real (el contenido estancado NO cierra la ultima frase)', async () => {
     h.config.transcript!.pauseAndWeakAsr!.srGapCommitMs = 10000;
     const { resolveSrGapTrigger } = await import('../src/voice/lib/fluTranscriptPause.js');
-    // Interinos continuos (resultado RECIENTE) pero la locucion SIN crecer 12 s -> cierra.
-    // Antes: `sinceLastResultMs` reciente y no habia silencio -> NUNCA cerraba (78 s sin fila).
-    const congelado = resolveSrGapTrigger({ sinceLastResultMs: 500, sinceLastCommitMs: 12000, hasOpenLine: true, openLineAgeMs: 12000 });
-    expect(congelado.fire, 'sin contenido nuevo SI cierra').toBe(true);
-    expect(congelado.reason).toBe('sr-no-new-content');
-    // La locucion CRECIENDO (contenido reciente) NO cierra.
-    expect(resolveSrGapTrigger({ sinceLastResultMs: 500, sinceLastCommitMs: 12000, hasOpenLine: true, openLineAgeMs: 800 }).fire).toBe(false);
+    // Mandato del dueno 2026-10-13: la ultima frase se vacia por SILENCIO o cambio de hablante.
+    // La rama 'SIN CONTENIDO NUEVO' (P9.68) cerraba a mitad del dictado cuando el ASR iba por
+    // detras (medido 03:35:57: sinceResult=1114 ms y la persona seguia hablando) y la fila
+    // escrita entonces habia que ACTUALIZARLA. El caso 'Chrome repite lo mismo' lo cubre el
+    // detector de eco committed-echo + rebuild del reconocimiento.
+    const estancado = resolveSrGapTrigger({ sinceLastResultMs: 500, sinceLastCommitMs: 12000, hasOpenLine: true, openLineAgeMs: 12000 });
+    expect(estancado.fire, 'sin silencio real NO se cierra la ultima frase').toBe(false);
+    expect(estancado.reason).toBe('sr-active');
+    // Silencio real (>= srGapCommitMs) SI cierra.
+    expect(resolveSrGapTrigger({ sinceLastResultMs: 12000, sinceLastCommitMs: 12000, hasOpenLine: true, openLineAgeMs: 12000 }).fire).toBe(true);
   });
 });

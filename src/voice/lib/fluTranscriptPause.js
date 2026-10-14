@@ -9,8 +9,6 @@ import { voiceProbe } from './voiceProbe'
 export const TRANSCRIPT_PAUSE_KEYS = [
   'interimOpenLineFlushMs',
   'srGapCommitMs',
-  'srGapCommitExtensionMinChars',
-  'srGapCommitNoNewContentMinChars',
   'postCommitCooldownMs',
   'staleFlushMinWords',
   'staleFlushMinWordsDuringCooldown',
@@ -81,15 +79,15 @@ export function srGapSilenceReached(sinceLastResultMs = 0) {
 
 export function resolveSrGapTrigger({ sinceLastResultMs = 0, sinceLastCommitMs = 0, hasOpenLine = true, openLineAgeMs = 0 } = {}) {
   // El trigger PREGUNTA al dueno del tiempo (srGapSilenceReached); NO re-decide el cierre.
-  // DOS caminos, MISMO umbral: (1) SILENCIO (`srGapCommitMs` sin onresult) y (2) SIN
-  // CONTENIDO NUEVO: la locucion lleva `srGapCommitMs` SIN CAMBIAR aunque Chrome siga
-  // entregando interinos repetidos. Antes solo existia (1): con interinos continuos el reloj
-  // de resultado nunca vencia y el turno NO cerraba (congelacion medida 2026-10-12, turn
-  // 15->26: 78 s sin fila). El reloj del CONTENIDO (`openLineStartedAtMs`) es DISTINTO del de
-  // resultado: se reinicia SOLO cuando el texto crece, asi que interinos repetidos no lo tocan.
+  // P11.12 (mandato del dueno 2026-10-13): el cierre de la ULTIMA FRASE es por SILENCIO real
+  // (`srGapCommitMs` sin onresult) o por CAMBIO DE HABLANTE (otra puerta). Se RETIRA el camino
+  // 'SIN CONTENIDO NUEVO' (el texto lleva `srGapCommitMs` sin cambiar aunque Chrome siga
+  // entregando interinos repetidos): cerraba a MITAD del dictado cuando el ASR iba por detras
+  // (medido en su log 03:35:57: sinceResult=1114 ms y la persona seguia hablando) y la fila
+  // escrita entonces habia que ACTUALIZARLA con la cola. El caso 'Chrome repite lo mismo' ya
+  // tiene dueno: el detector de eco committed-echo + rebuild del reconocimiento.
   const silence = srGapSilenceReached(sinceLastResultMs)
-  const noNewContent = !silence && hasOpenLine && srGapSilenceReached(openLineAgeMs)
-  if (!silence && !noNewContent) {
+  if (!silence) {
     return { fire: false, sinceLastResultMs: Number(sinceLastResultMs) || 0, reason: 'sr-active' }
   }
   // Sin locucion viva no hay nada que cerrar: no se sondea. En reposo el srGap
@@ -105,7 +103,8 @@ export function resolveSrGapTrigger({ sinceLastResultMs = 0, sinceLastCommitMs =
   // su sesion del 2026-10-10 15:02-15:14: 26 de 26 srGap por 'sr-live-turn-stale', fila
   // nacida en el "10" y reemplazada 3 veces). El sintoma que perseguia P9.55 (texto que no
   // llegaba a fila) tenia su causa en el DESCARTE del rebuild, cerrado en P9.60.
-  const reason = silence ? 'sr-silence' : 'sr-no-new-content'
+  // P11.12: el temprano return cubre `!silence`; aqui el cierre SIEMPRE es por silencio.
+  const reason = 'sr-silence'
   emitSrGapProbe(reason, { sinceResult: Number(sinceLastResultMs) || 0, sinceCommit: Number(sinceLastCommitMs) || 0, openLineAge: Number(openLineAgeMs) || 0 })
   return {
     fire: true,

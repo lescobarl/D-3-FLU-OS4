@@ -1,14 +1,15 @@
 // ============================================================
-// vozCierrePorContenidoGuard — P9.75
+// vozCierrePorContenidoGuard — P9.75, releido con el mandato P11.12
 // ------------------------------------------------------------
-// MEDIDO (auditoria 2026-10-12, desk audit-hallazgos.test.ts): con el estado COHERENTE
-// (silencio >= srGapCommitMs => el reloj de CONTENIDO tambien vencido) la rama de contenido de
-// `evaluateSrGapSegmentCommit` devuelve flush=true y los portones finos posteriores
-// (conversationStream.js:472-499) quedan INALCANZABLES. Lo que SI sigue vivo es el freno por
-// texto EXACTO (:454-456, comprobado ANTES de la rama) y el arranque sin gap (:445-447).
-// Este guard fija la CONDUCTA (funciones reales, no literales) y trae su discriminador:
-// si alguien retira la rama de contenido, el primer caso cae (verificado revirtiendo
-// conversationStream.js + fluTranscriptPause.js a e61e464~1: 1 failed).
+// P9.75 nacio cuando el cierre tambien disparaba por CONTENIDO estancado. El mandato del
+// dueno 2026-10-13 (P11.12) RETIRA esa rama: la ultima frase se vacia SOLO por silencio (o
+// cambio de hablante). Los casos de este guard SIGUEN VIVOS con la regla nueva —todos
+// alcanzan silencio real (>= srGapCommitMs)— y fijan sobre las funciones REALES:
+//   (a) silencio + cola corta (4 chars) => VUELCA la locucion completa;
+//   (b) freno CONSERVADO: texto EXACTO ya commiteado => no vuelca;
+//   (c) sin gap => no vuelca.
+// Discriminador: si el cierre deja de mirar el reloj de SILENCIO (o el freno exacto
+// desaparece), los casos caen.
 // ============================================================
 import { describe, expect, it } from 'vitest'
 import { evaluateSrGapSegmentCommit } from '../src/voice/lib/conversationStream.js'
@@ -30,8 +31,8 @@ const opts = (over: Record<string, unknown> = {}) => ({
     ...over,
 })
 
-describe('P9.75 - el cierre REAL por gap es el de CONTENIDO estancado', () => {
-    it('extension corta (4 chars) + reloj de contenido vencido => VUELCA', () => {
+describe('P9.75/P11.12 - el cierre por gap: silencio vuelca la cola y el freno exacto se conserva', () => {
+    it('silencio real + cola corta (4 chars) => VUELCA la locucion completa', () => {
         const r = evaluateSrGapSegmentCommit(state(), opts())
         console.log(`  flush=${r.flush} reason=${r.reason} capture="${r.capture}"`)
         expect(r.flush, 'la locucion estancada se vuelca (si no, el turno queda abierto)').toBe(true)

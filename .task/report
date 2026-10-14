@@ -5730,3 +5730,53 @@ ALCANCE REAL (0.23): CUBIERTO=la clave/etiqueta ya no afirma el nombre (resoluci
   el portal y repetir "soy Luis" + una segunda voz), las ramas de continuidad de la
   diarizacion (short-historical/primary-rematch) y los 9/50 turnos sin vector.
 ==============================================================================
+
+===============================================================================
+P11.12 - LA ULTIMA FRASE SE VACIA SOLO POR SILENCIO (2026-10-13/14)
+===============================================================================
+MANDATO DEL DUENO (2026-10-13): "una vez que termina la ultima frase se pasan los datos
+a la conversacion, puede ser por un silencio o cambio de hablante" y "la conversacion
+solo lleva datos consolidados (solo inserts, no updates)".
+
+MEDIDO EN SU LOG (debug.log 2026-10-13 03:35:57.980):
+  VozProbe srGap {"reason":"sr-no-new-content","sinceResult":1114,"sinceCommit":22383,
+  "openLineAge":3597} -> el trigger cerro con 1114 ms desde el ultimo resultado (umbral de
+  silencio srGapCommitMs=3500) por el reloj de CONTENIDO; la fila se escribio entonces
+  (row action=added len=208) y 4 s despues la MISMA locucion seguia creciendo
+  (row action=reused len=218, commit replace=true): la conversacion se ACTUALIZABA.
+
+ARREGLO (3 ficheros):
+  - fluTranscriptPause.resolveSrGapTrigger: SOLO dispara con silencio real; se retira la
+    rama 'SIN CONTENIDO NUEVO' (el reason 'sr-no-new-content' desaparece).
+  - conversationStream.evaluateSrGapSegmentCommit: se retira el cierre por contenido
+    estancado Y los frenos finos ('extension corta' / 'no-new-content'), que con la rama
+    fuera BLOQUEABAN colas cortas de una locucion ya commiteada (transcripcion que nunca
+    llegaba a fila). Queda: silencio + texto no identico al ya escrito => vuelca; unicos
+    frenos: texto EXACTO ya commiteado y cooldown de post-commit.
+  - fluConfig: se retiran las 2 claves sin consumidor (srGapCommitExtensionMinChars,
+    srGapCommitNoNewContentMinChars) y su inventario en TRANSCRIPT_PAUSE_KEYS.
+
+GUARD NUEVO tests/vozCierreSoloSilencioGuard.test.ts (6 casos, en lint:guards):
+  ROJO-EN-VIEJO MEDIDO (src de HEAD restaurado byte a byte, con backup y restauracion de
+  hash identico): 2 ficheros / 4 casos caen -> 3 del guard nuevo (trigger estancado, eval
+  estancado, detector) + el pin P9.68 de tests/fluTranscriptPause.test.ts, alineado al
+  mandato. Con el arreglo: VERDE. El pin P9.75 (vozCierrePorContenidoGuard) sigue verde
+  (sus casos alcanzan silencio real) y solo se refrasearon sus comentarios.
+
+EVIDENCIA: npm run lint = 277 ficheros VERDE + eslint 0 | npm run typecheck = exit 0 |
+  pnpm test (--changed) = 356 ficheros / 4391 casos con SOLO los 2 rojos preexistentes de
+  P11.11 (speakerPrimarySeed, Fase E) -> 0 fallos NUEVOS.
+
+RIESGO DECLARADO: la congelacion con interinos repetidos (P9.68: 78 s sin fila) pasa a
+  depender del detector de eco committed-echo + rebuild del reconocimiento (fluConfig
+  committedEchoRebuildAfter=3; transcriptIngress clearStaleCommittedEchoFromState +
+  touchMeaningfulIngress), NO del cierre; se valida en la corrida del dueno.
+
+ALCANCE REAL (0.23): CUBIERTO=el cierre de la ultima frase SOLO por silencio (o cambio de
+  hablante por su puerta), con guard rojo-en-viejo medido y la red (guards + tipos +
+  eslint) verde; NO CUBIERTO=el DoD-producto (su pantalla: una locucion larga se escribe
+  UNA vez y la fila no se reutiliza/reemplaza a mitad del dictado), la suite completa
+  (gate de CI), la E2E acotada (el e2eScope del contrato vigente no lista los 2 ficheros
+  tocados) y el gate de contrato (el contrato activo es de la tarea anterior, no de este
+  hito).
+===============================================================================

@@ -440,50 +440,25 @@ export function evaluateSrGapSegmentCommit(
   // luego reemplazada). El texto NO se pierde: sigue acumulado en la linea viva y lo
   // escribe el cierre REAL (silencio / onend / cambio de hablante).
   // Mismo dueno del tiempo que el trigger (srGapCommitMs): un solo lector.
-  const contentAgeMs = nowMs - (state?.openLineStartedAtMs || nowMs)
-  const sinContenidoNuevo = srGapSilenceReached(contentAgeMs)
-  if (!srGapSilenceReached(sinceLastResultMs) && !sinContenidoNuevo) {
+  // P11.12 (mandato del dueno 2026-10-13): SOLO SILENCIO real. La rama de 'contenido
+  // estancado' (mismo texto sin crecer) se RETIRA: cerraba a mitad del dictado y luego la
+  // fila habia que ACTUALIZARLA (reused/replaced) — la conversacion solo se INSERTA.
+  if (!srGapSilenceReached(sinceLastResultMs)) {
     return { flush: false, capture: '', reason: 'sr-active' }
   }
 
   const capture = cleanForSpeech(readTurnLive(state) || state?.pendingFinal)
   if (!capture) return { flush: false, capture: '', reason: 'empty-openline' }
 
-
   const prior = cleanForSpeech(lastCommitted)
   if (prior && capture === prior) {
     return { flush: false, capture, reason: 'already-committed' }
   }
-  const extensionChars = prior ? Math.max(0, capture.length - prior.length) : capture.length
-  const extensionWords = prior
-    ? countWordsFromPauseCfg(capture.slice(Math.min(prior.length, capture.length)))
-    : countWordsFromPauseCfg(capture)
-  // Cierre por SIN CONTENIDO NUEVO (congelacion, medido 2026-10-12): la linea VIVA dejo de
-  // crecer aunque el ASR siga entregando interinos repetidos -> se CIERRA, volcando la ultima
-  // frase que aun no esta en la conversacion. Se adelanta al porton de contenido: si no, el
-  // turno quedaba abierto indefinidamente con interinos (78 s sin fila).
-  if (sinContenidoNuevo) {
-    const cooldownContent = Number(cfg.postCommitCooldownMs)
-    if (cooldownContent > 0 && lastCommitAtMs > 0 && nowMs - lastCommitAtMs < cooldownContent) {
-      return { flush: false, capture, reason: 'post-commit-cooldown' }
-    }
-    return { flush: true, capture, reason: 'sr-gap-segment-commit', sinceLastResultMs, openLineAgeMs: contentAgeMs }
-  }
-  if (
-    prior &&
-    utterancesSameRevision(prior, capture) &&
-    extensionChars < Number(cfg.srGapCommitExtensionMinChars) &&
-    extensionWords === 0
-  ) {
-    return { flush: false, capture, reason: 'already-committed' }
-  }
-  if (
-    prior &&
-    utterancesRelate(prior, capture) &&
-    extensionChars < Number(cfg.srGapCommitNoNewContentMinChars)
-  ) {
-    return { flush: false, capture, reason: 'no-new-content' }
-  }
+  // P11.12: la rama de CONTENIDO se retiro (el cierre es por SILENCIO), asi que estos frenos
+  // finos ('extension corta' / 'no-new-content') volvian a estar vivos y BLOQUEABAN colas
+  // cortas de una locucion ya commiteada -> texto que nunca llega a la conversacion (no se
+  // pierde transcripcion). Se retiran: con silencio real y texto NO identico al ya escrito,
+  // la ultima frase se vacia. El unico freno que queda es el cooldown de post-commit.
 
   const cooldown = Number(cfg.postCommitCooldownMs)
   if (cooldown > 0 && lastCommitAtMs > 0 && nowMs - lastCommitAtMs < cooldown) {

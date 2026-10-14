@@ -283,6 +283,7 @@ export const GUARD_FILES = [
     'tests/vozClusterConsolidacionGuard.test.ts',
     'tests/turnSpeakerCommit.test.ts',
     'tests/fluTranscriptPause.test.ts',
+    'tests/vozCierreSoloSilencioGuard.test.ts',
     'tests/assistantVoiceEcho.test.ts',
     'tests/ingressScenarios.test.ts',
     'tests/ingressSimulation.test.ts',
