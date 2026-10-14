@@ -234,4 +234,22 @@ for (const [id, lista] of Object.entries(banderas)) {
 }
 const total = Object.values(banderas).reduce((n, l) => n + l.length, 0);
 console.log('');
+
+// ---- SEPARACION (Fase 0): cosenos por turno contra CADA cluster de la sesion ----
+const conPares = eventos.filter((ev) => ev.tag === 'identity' && ev.data && Array.isArray(ev.data.pares) && ev.data.pares.length);
+if (conPares.length) {
+    const mediana = (xs) => { const s = [...xs].sort((a, b) => a - b); return s.length ? s[Math.floor(s.length / 2)] : 0; };
+    const mejores = conPares.map((ev) => Number(ev.data.pares[0]?.sim) || 0);
+    const segundos = conPares.map((ev) => Number(ev.data.pares[1]?.sim) || 0);
+    const ms = conPares.map((ev) => Number(ev.data.ms) || 0);
+    const rms = conPares.map((ev) => Number(ev.data.rms) || 0);
+    const alLimite = conPares.filter((ev) => (Number(ev.data.pares[0]?.sim) || 0) - (Number(ev.data.pares[1]?.sim) || 0) < 0.05);
+    console.log('');
+    console.log('--- SEPARACION (Fase 0) ---');
+    console.log('  sondas con pares : ' + conPares.length + '  (ms mediana=' + mediana(ms) + ', rms mediana=' + mediana(rms) + ')');
+    console.log('  mejor sim        : mediana=' + mediana(mejores).toFixed(3) + ' min=' + Math.min(...mejores).toFixed(3));
+    console.log('  competidor (2o)  : mediana=' + mediana(segundos).toFixed(3) + ' max=' + Math.max(...segundos).toFixed(3));
+    console.log('  margen mediana   : ' + (mediana(mejores) - mediana(segundos)).toFixed(3));
+    console.log('  al limite (<0.05): ' + alLimite.length + alLimite.slice(0, 3).map((ev) => ' t=' + ev.data.turn + ' [' + (ev.data.pares || []).map((p) => p.label + '=' + p.sim).join(', ') + ']').join(''));
+}
 console.log(total === 0 ? 'RESULTADO: sin defectos medidos en este log.' : `RESULTADO: ${total} hallazgo(s) medido(s).`);

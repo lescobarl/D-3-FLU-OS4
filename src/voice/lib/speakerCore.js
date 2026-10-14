@@ -131,4 +131,22 @@ export function nextAutoSpeakerLabel(clusters = [], reserved = [], { maxSpeakers
   return autoSpeakerLabel(limit, config)
 }
 
-
+/**
+ * FASE 0 (diarizacion, 2026-10-14): payload de la sonda de SEPARACION del turno.
+ * Devuelve la calidad de la ventana (ms, rms) y el coseno del vector del turno contra
+ * CADA cluster de la sesion (top 4, ordenado). Dueno unico del coseno y de la L2: este modulo.
+ */
+export function payloadSeparacionDeTurno(vector = [], clusters = [], snapshot = [], sampleRate = 0) {
+  const v = normalizeEmbeddingVector(Array.isArray(vector) ? vector : [])
+  const pares = (Array.isArray(clusters) ? clusters : [])
+    .filter((c) => Array.isArray(c?.signature) && c.signature.length)
+    .map((c) => ({ label: String(c?.label || ''), sim: Number(compareCosineSignatures(v, normalizeEmbeddingVector(c.signature)).toFixed(3)) }))
+    .sort((a, b) => b.sim - a.sim)
+    .slice(0, 4)
+  const m = snapshot && snapshot.length !== undefined ? snapshot : []
+  let suma = 0
+  for (let i = 0; i < m.length; i += 1) suma += m[i] * m[i]
+  const rms = m.length ? Number(Math.sqrt(suma / m.length).toFixed(5)) : 0
+  const ms = sampleRate ? Math.round((m.length / sampleRate) * 1000) : 0
+  return { ms, rms, pares }
+}

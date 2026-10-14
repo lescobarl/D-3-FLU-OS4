@@ -2184,6 +2184,41 @@
       "estado": "todo",
       "evidencia": "MEDIDO en su log: clusters {\"write\":2,\"labels\":[\"luis\",\"Hablante 1\"]} repetido; identity por turno con vec=512 flip-flop entre name:\"luis\" (17:19:30-47), name:\"Hablante 1\" (17:18:52-17:19:09) y name:\"Hablante 2\" (17:18:33-48, la mujer); commits con written:\"Hablante 1\" (17:18:49, 17:18:52, 17:19:06, 17:19:10, 17:19:54, 17:20:39, 17:20:43); row-update speaker_1 -> \"Luis\" solo una vez (17:20:23). RAIZ: el cluster con etiqueta automatica \"Hablante 1\" es la MISMA VOZ que el cluster \"luis\" (su timbre), pero no se pliega al nombre: cuando la resolucion gana por ese cluster, la fila sale \"Hablante 1\". PENDIENTE (guard ROJO primero): plegar el cluster sin nombre al cluster NOMBRADO cuando su timbre es la misma voz (mismo dueno que la decision: speakerDiarization/speakerDirectory), sin tocar los guards del dueno (vozUnClusterPorVozGuard, speakerSoloCoalesce, voicePreferRegisteredGuard).",
       "origen": "log-dueno-2026-10-14-17h18"
+    },
+    {
+      "id": "P11.21",
+      "titulo": "DIARIZACION Fase 0 (medir la separacion): sonda con el coseno contra CADA cluster de la sesion + calidad de ventana (ms, rms).",
+      "estado": "todo",
+      "evidencia": "APLICADO 2026-10-14: useFluVoiceAssistant.js emite identity {path:sync, ms, rms, pares:[{label,sim}]} y el checker voz:log gana la seccion SEPARACION (mejor sim, competidor, margen, casos al limite). Guards de voz verdes (9 ficheros / 61 casos). PENDIENTE: su corrida de 2 voces (F5) para el histograma misma-voz vs voces-distintas y decidir con datos.",
+      "origen": "plan-diarizacion-2026-10-14"
+    },
+    {
+      "id": "P11.22",
+      "titulo": "DIARIZACION Fase 1: ventana fiable (minimo de habla, descarte de eco/vacia) y firma por CENTROIDE de ventanas limpias; arreglar el atasco del PCM.",
+      "estado": "todo",
+      "evidencia": "MEDIDO: snap=0 con chunks vivos (16:04), TurnAudio snap=0 ms=0 repetido, MicPcm atascado; la medida de un turno decide con UNA ventana sucia. Sin ventana fiable no se decide. Guard previsto: ventana degradada no abre ni fusiona voz.",
+      "origen": "plan-diarizacion-2026-10-14"
+    },
+    {
+      "id": "P11.23",
+      "titulo": "DIARIZACION Fase 2: decision COMPETITIVA con margen (mejor - segundo >= margen; si no, sin asignar y resolver en lote) y voz nueva con evidencia acumulada.",
+      "estado": "todo",
+      "evidencia": "MEDIDO 2026-10-14 17:18-17:41: clusters [luis, Hablante 1] para la MISMA voz y Match clusterMatch=0.66 vs newVoice=0.64 en cada turno: el margen decide dentro del barro. Guards: vozUnClusterPorVozGuard, speakerSoloCoalesce, voicePreferRegisteredGuard deben seguir verdes.",
+      "origen": "plan-diarizacion-2026-10-14"
+    },
+    {
+      "id": "P11.24",
+      "titulo": "DIARIZACION Fase 3 (solo si la Fase 0 lo pide): modelo de timbre mas fuerte (ECAPA-TDNN o WeSpeaker ONNX) detras de config, decidido por A/B con audios reales.",
+      "estado": "todo",
+      "evidencia": "Hoy Xenova/wavlm-base-plus-sv 512-D (fluConfig.js:151). Se decide con el histograma de Fase 0, no por fe.",
+      "origen": "plan-diarizacion-2026-10-14"
+    },
+    {
+      "id": "P11.25",
+      "titulo": "DIARIZACION Fase 4: nombre por VOZ (plegando el cluster automatico dentro del nombrado), enrolamiento al inicio (3-5 s por persona) y panel de correccion por voz.",
+      "estado": "todo",
+      "evidencia": "Es la fase que resuelve su queja 1 (P11.20: speaker_1 renombrado Luis->Hablante 1->Hablante 3). Default del dueno: el nombre registrado manda. La minuta ya existe en el producto: Fase 5 RETIRADA del plan (orden del dueno 2026-10-14).",
+      "origen": "plan-diarizacion-2026-10-14"
     }
   ],
   "done": [

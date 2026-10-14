@@ -169,7 +169,7 @@ import {
   getDialogueContextSlice,
   isFluSpeaker,
 } from '../lib/conversationDialogue.js'
-import { isAutoSpeakerLabel } from '../lib/speakerCore.js';
+import { isAutoSpeakerLabel, payloadSeparacionDeTurno } from '../lib/speakerCore.js';
 import { useParticipantSpeakerRef } from '../../app/useParticipantSpeakerRef';
 import { COMMAND_IDS } from '../lib/commandIds.js'
 import { createEmissionDeduper, shouldSkipCapture } from '../lib/captureDedup.js'
@@ -1594,7 +1594,7 @@ const lastResolvedTurnRef = useRef(0)
           fallbackSpeaker,
         )
         // BANDERA DE DIAGNÓSTICO: decisión de hablante del turno.
-        voiceProbe('identity', { path: 'sync', vec: signatureVector.length, snap: audioSnapshot.length, sr: sampleRate, clusters: speakerClustersRef.current?.length ?? 0, resolved: resolvedSpeakerName, fallback: fallbackSpeaker, last: lastSpeakerRef.current || '' })
+        voiceProbe('identity', { path: 'sync', vec: signatureVector.length, snap: audioSnapshot.length, sr: sampleRate, clusters: speakerClustersRef.current?.length ?? 0, ...payloadSeparacionDeTurno(signatureVector, speakerClustersRef.current, audioSnapshot, sampleRate), resolved: resolvedSpeakerName, fallback: fallbackSpeaker, last: lastSpeakerRef.current || '' })
         return {
           signatureVector,
           speakerName: audioSnapshot.length ? resolvedSpeakerName : '',

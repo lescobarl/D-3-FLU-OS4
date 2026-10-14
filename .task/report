@@ -6197,3 +6197,14 @@ Guard: vozUltimaFraseSoloAcumulaGuard, caso "arranca EN MEDIO de lo mostrado" RO
 cortaba el solape real (19) y DUPLICABA el tramo intermedio. Validacion: 12 ficheros de
 guards de voz/locucion (131 casos) VERDES.
 ===============================================================================
+
+===============================================================================
+2026-10-14 - DIARIZACION: plan registrado (Fases 0-4; minuta RETIRADA: ya existe) + Fase 0 aplicada
+===============================================================================
+ORDEN DEL DUENO: la minuta ya existe en el producto -> fuera del plan; el resto, en marcha.
+FASE 0 (APLICADA): sonda identity con {ms, rms, pares:[{label,sim}]} = coseno del turno contra CADA
+cluster de la sesion + calidad de ventana; el checker voz:log gana la seccion SEPARACION (mejor sim,
+competidor, margen mediano, casos al limite). Guards de voz verdes (9 ficheros / 61 casos).
+PENDIENTE: su corrida de 2 voces (F5) -> histograma misma-voz vs voces-distintas.
+Items del ledger: P11.21..P11.25.
+===============================================================================
