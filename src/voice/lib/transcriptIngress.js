@@ -178,6 +178,25 @@ export function flushSrGapSegmentThroughIngress(ctx, { sinceLastResultMs = 0 } =
   }
 
   const lastCommitted = ctx.logRowsTextRef?.current?.at(-1) || ''
+
+  // P11.9: la LOCUCION VIVA acumulada (publishedLiveRef) es el texto del cierre REAL.
+  // Chrome puede re-entregar un interino PARCIAL (p. ej. "54" chars) de una locucion
+  // que la linea viva ya acumulo entera (242 chars): el buffer crudo del ASR se queda
+  // en el TROZO y los portones del EVAL (already-committed / no-new-content, que
+  // comparan contra la ultima fila) cerraban con el trozo o no cerraban nada. Se
+  // escribe la locucion COMPLETA EN EL OBJETO del estado (mutacion in-place: su
+  // identidad NO cambia, la ven todos los consumidores) ANTES del EVAL, para que el
+  // EVAL, los portones y el commit partan de la referencia COMPLETA.
+  const liveText = cleanForSpeech(ctx.publishedLiveRef?.current || '')
+  if (liveText) {
+    const rawLive = cleanForSpeech(readTurnLive(ctx.listenState) || ctx.listenState.pendingFinal || '')
+    if (liveText.length > rawLive.length) {
+      ctx.listenState.openLine = liveText
+      ctx.listenState.pendingInterim = ''
+      clearPendingFinal(ctx.listenState)
+    }
+  }
+
   const evalResult = evaluateSrGapSegmentCommit(ctx.listenState, {
     sinceLastResultMs,
     lastCommitted,
@@ -190,11 +209,8 @@ export function flushSrGapSegmentThroughIngress(ctx, { sinceLastResultMs = 0 } =
   const capture = cleanForSpeech(evalResult.capture)
   if (!capture) return { flushed: false, reason: 'empty-capture' }
 
-  // P9.xx: el cierre por srGap usa el texto ACUMULADO (publishedLiveRef) si es
-  // MAS COMPLETO que el estado crudo del ASR. El ASR puede re-entregar un interino
-  // PARCIAL (p. ej. "54" chars) mientras la locucion viva ya acumulo 242 chars;
-  // cerrar con el parcial pierde la cola de la transcripcion.
-  const liveText = cleanForSpeech(ctx.publishedLiveRef?.current || '')
+  // La referencia viva ya se sembro en el estado arriba; si aun asi la captura del
+  // EVAL trae mas texto (p. ej. el propio final confirmado), manda la mas completa.
   const captureFinal = (liveText.length > capture.length) ? liveText : capture
 
   resetInterimControlBuffers(ctx.listenState, ctx.publishedLiveRef, ctx.lastStreamPreviewRef)

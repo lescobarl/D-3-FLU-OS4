@@ -5642,3 +5642,45 @@ Alcance real (0.23): CUBIERTO=el esquema como fuente unica del vector y su model
   NO CUBIERTO=la medicion en vivo en la sesion del dueno y su pantalla (DoD-producto); el
   `npm run gate` no se pudo correr para este diff acumulado (80+ ficheros > maxFiles=48 del
   contrato: es un gate POR TAREA, no por sesion).
+
+==============================================================================
+P11.9 - EL CIERRE POR srGap RETIENE LA REFERENCIA VIVA (2026-10-13)
+==============================================================================
+MANDATO DEL DUENO: "En el evento srGap, no se retiene la referencia viva completa
+(publishedLiveRef.current) de 242 caracteres y el buffer se trunca. Localiza el
+handler, realiza la correccion de punteros mutando el objeto in-place para no
+perder la identidad de la referencia."
+
+MEDIDO ANTES (funciones REALES: flushSrGapSegmentThroughIngress ->
+handleConversationStreamSync -> emitConversationLog; arnes
+tests/vozSrGapReferenciaVivaGuard.test.ts):
+  T1 buffer crudo = TROZO de 54 chars IGUAL a la ultima fila y linea viva de 235
+     -> flushed=false reason=already-committed, filas=[54]: la cola se pierde.
+  T2 buffer crudo VACIO y linea viva de 235 -> flushed=false
+     reason=empty-openline, filas=[]: la referencia viva NO se retiene.
+
+ARREGLO (src/voice/lib/transcriptIngress.js, flushSrGapSegmentThroughIngress):
+  la locucion viva acumulada se escribe EN EL OBJETO ctx.listenState (openLine +
+  limpieza de pendingInterim/pendingFinal) ANTES del EVAL, para que el EVAL, sus
+  portones (already-committed / no-new-content) y el commit partan de la
+  referencia COMPLETA; la identidad del objeto NO cambia (mutacion in-place).
+
+MEDIDO DESPUES:
+  T1 filas=[235] (la fila del trozo se REEMPLAZA; replaceLast=true medido en
+  resolveMicCommitAction) | T2 filas=[235] | T3 (linea viva == ultima fila) NO
+  duplica | T4 (trozo distinto, b3e8541) sigue escribiendo la locucion completa |
+  DETECTOR: con la linea viva MENOS completa manda el buffer.
+  GUARD ROJO-EN-VIEJO: con el src de HEAD, 2 de 5 casos caen (T1, T2); con el
+  arreglo, 5/5. Guard registrado en scripts/guard-files.mjs (lint:guards).
+
+EVIDENCIA: npm run lint:guards = 275 ficheros / 2240 casos VERDE | npm run
+typecheck = exit 0 | pnpm test (vitest run --changed) = 16 ficheros / 187 casos
+VERDE | npm run lint:eslint = exit 0 | npm run ledger:check = exit 0 (3
+pendientes: P9.76, P9.80, P11.9).
+
+ALCANCE REAL (0.23): CUBIERTO=el cierre por srGap retiene la referencia viva (2
+casos rojos -> verdes, con el EVAL y el escritor de fila REALES); NO CUBIERTO=el
+DoD-producto (pantalla del dueno con su micro), el e2e, el gate de contrato (no
+hay contrato de esta tarea) y el COMMIT (P11.9 queda "todo" en el ledger hasta
+que el dueno autorice el commit de cierre).
+==============================================================================
