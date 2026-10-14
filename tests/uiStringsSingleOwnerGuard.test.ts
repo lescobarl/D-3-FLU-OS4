@@ -180,7 +180,7 @@ describe('B8 textos de UI - una sola fuente', () => {
 
     it('el catalogo de UI delega la eleccion de idioma en el resolutor canonico', () => {
         const owner = readFileSync(UI_STRINGS_OWNER, 'utf8')
-        expect(owner).toContain("import { pickLabel } from './textUtils'")
+        expect(owner).toContain("import { pickLabel } from './textUtils.ts'")
         expect(ternariosIdioma(owner)).toEqual([])
     })
 })

@@ -5979,3 +5979,45 @@ ALCANCE REAL (0.23): CUBIERTO=la unificacion de las 5 copias con re-congelado y 
 prueba de no-movimiento del criterio (7 mediciones byte-identicas); NO CUBIERTO=la
 suite completa, el e2e y los pasos 1-4 del gate (exigen un contrato de ESTA tarea).
 ===============================================================================
+
+===============================================================================
+P11.13 - EL AVISO DE VITE POR IMPORTS SIN EXTENSION EN EL GRAFO DEL CONFIG (2026-10-14)
+===============================================================================
+REPORTADO POR EL DUENO: al arrancar el dev server, Vite 8.3.4 escupia un aviso largo
+("Your Vite config uses features that are unsupported by configLoader: 'native', which is
+planned to become the default in a future major version"); el server arrancaba bien (aviso,
+no error). Medido: 251 imports + 1 import-de-index SIN extension en el grafo del BUNDLE del
+config (vite.config.ts -> src/server/* -> su cadena transitiva); reproducido tambien en
+`npm run build`.
+
+CAUSA (semantica de Vite MEDIDA, no supuesta): el loader nativo exige extension explicita en
+los imports relativos; los `import type` escritos en modulos DEL BUNDLE tambien cuentan, y
+los modulos alcanzados SOLO por aristas de tipo no entran al bundle (por eso la lista de
+Vite tiene 252 y el paseo completo 261).
+
+ARREGLO: 261 imports con su extension real en 83 ficheros (src/** + vite.config.ts). El
+tsconfig YA traia `allowImportingTsExtensions` + `noEmit` (no se toco). NO se silencio con
+`VITE_CONFIG_NATIVE_IGNORE_WARNING` (la supresion es maquillaje, AGENTS 2.3).
+
+MEDIDO ANTES/DESPUES:
+  - `npm run build`: 254 items de aviso -> 0; 1306 modulos transformados IDENTICO; exit 0.
+  - `npm run typecheck`: exit 0. Dev server: arrancado tras el fix -> aviso AUSENTE; apagado
+    por PID exacto (sin procesos colgados).
+  - Las 7 mediciones CONGELADAS (50 ids de audit-metric; duplication.mjs + --violations;
+    auditoria-codigo.mjs + --self-test; catalogo 28/28; purposeOwners.mjs): BYTE-IDENTICAS
+    antes/despues.
+  - BARRERA NUEVA tests/viteConfigNativenessGuard.test.ts (recorre el grafo con la semantica
+    de Vite; registrada en lint:guards): 0 con el arreglo; ROJO-EN-VIEJO MEDIDO con el stash
+    del fix = 261 offenders. Detector de dos lados incluido.
+  - Guards de TEXTO que fijaban la forma sin extension: 5 casos rojos por el cambio
+    (architecture x2, parsersNormalize, uiStrings, duplicationGuard x2), REPARADOS en commit
+    aparte (0.22) con la expectativa nueva; la expectativa de gemini.ts se REVIRTIO porque
+    ese fichero NO esta en el grafo del config (conserva la forma sin extension).
+  - dodScopeGuard (P7.88): el cambio toca 82 ficheros de src -> el gate se amplio con los
+    tests que los importan (union con el dod anterior: 203 ficheros de test); DoD corrido
+    ENTERO antes del cierre: 203 ficheros VERDE.
+
+ALCANCE REAL (0.23): CUBIERTO=el aviso eliminado de raiz (261 extensiones), la barrera con
+rojo-en-viejo medido, las 7 mediciones congeladas intactas y el DoD de 203 ficheros;
+NO CUBIERTO=la suite completa, el e2e y la validacion del dueno en su pantalla.
+===============================================================================

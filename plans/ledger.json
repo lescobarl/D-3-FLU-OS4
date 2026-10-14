@@ -2142,6 +2142,13 @@
       "estado": "done",
       "evidencia": "MEDIDO 2026-10-12 (guard vozNombreEntraEnLaBaseGuard, caso P9.78): dos llamadas CONCURRENTES a participantRegistry.register (luis y Luis, sin esperar la primera) ven la base VACIA las dos y registran 2 filas [Luis, Luis]; el dedupe es case-insensitive pero lee el estado ANTES de escribir (participantRegistry.ts:193-195). En el flujo real el registro es por turno (secuencial) y no se dispara; riesgo si dos locuciones de nombre llegan pegadas. ACCION: serializar el puerto (o candado tipo anonymousSeedInFlight) si se observa en el log.",
       "origen": "guard-2026-10-12"
+    },
+    {
+      "id": "P11.13",
+      "titulo": "Vite 8.3.4 escupia un aviso de ~250 lineas al arrancar (configLoader nativo): 251+1 imports del grafo del config sin extension.",
+      "estado": "todo",
+      "evidencia": "REPORTADO POR EL DUENO (2026-10-14): al arrancar el dev server, Vite 8.3.4 escupia un aviso largo -Your Vite config uses features that are unsupported by configLoader: native, which is planned to become the default in a future major version-; el server arrancaba bien (aviso, no error). MEDIDO: 251 imports + 1 import-de-index SIN extension en el grafo del BUNDLE del config (vite.config.ts -> src/server/* -> su cadena transitiva); reproducido tambien en npm run build (misma lista). SEMANTICA de Vite medida, no supuesta: los import type de modulos del bundle cuentan; los modulos alcanzados solo por aristas de tipo no entran al bundle (por eso Vite lista 252 y el paseo completo 261). ARREGLO: 261 imports con su extension real en 83 ficheros (src/** + vite.config.ts); el tsconfig ya traia allowImportingTsExtensions+noEmit; NO se silencio con VITE_CONFIG_NATIVE_IGNORE_WARNING (supresion = maquillaje, 2.3). MEDIDO ANTES/DESPUES: build 254 items -> 0 con los MISMOS 1306 modulos; typecheck 0; las 7 mediciones congeladas byte-identicas (50 ids de audit-metric, duplication.mjs + --violations, auditoria-codigo.mjs + --self-test, catalogo 28/28, purposeOwners.mjs); barrera NUEVA tests/viteConfigNativenessGuard.test.ts con rojo-en-viejo medido (stash del fix = 261 offenders); 5 casos de guards de TEXTO reparados en commit aparte (0.22) y la expectativa de gemini.ts revertida (NO esta en el grafo); dodScopeGuard resuelto ampliando el gate (union 203 ficheros de test) y DoD corrido ENTERO = 203 VERDE. ALCANCE REAL (0.23): CUBIERTO=el aviso eliminado de raiz + barrera + mediciones congeladas intactas + DoD; NO CUBIERTO=suite completa, e2e y validacion en pantalla del dueno.",
+      "origen": "reporte-dueno-2026-10-14-warning-vite"
     }
   ],
   "done": [

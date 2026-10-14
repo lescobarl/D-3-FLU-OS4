@@ -87,7 +87,7 @@ describe('parsersNormalizeSingleOwnerGuard — la normalizacion tiene un dueno',
         for (const { file, source } of parserSources()) {
             if (!file.endsWith('agendaCommandParser.ts') && !file.endsWith('nlDateParser.ts')) continue;
             expect(source, `${file} debe importar el dueno`).toMatch(
-                /import\s*\{[^}]*normalizeForMatch(Exact)?[^}]*\}\s*from\s*'\.\.\/\.\.\/lib\/textUtils'/,
+                /import\s*\{[^}]*normalizeForMatch(Exact)?[^}]*\}\s*from\s*'\.\.\/\.\.\/lib\/textUtils\.ts'/,
             );
         }
     });

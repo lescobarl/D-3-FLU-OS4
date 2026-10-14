@@ -112,7 +112,7 @@ describe('IntegrationStore — Uses appConfig [Rule #1]', () => {
 
     it('integrationStore must import DEFAULT_PERSONALITY from appConfig', async () => {
         const src = (await import('fs')).readFileSync('./src/store/integrationStore.ts', 'utf-8');
-        expect(src).toContain("from '../core/config/appConfig'");
+        expect(src).toContain("from '../core/config/appConfig.ts'");
         expect(src).toContain('DEFAULT_PERSONALITY');
         expect(src).toContain('UI_DEFAULTS');
         expect(src).toContain('SENTIMENT_KEYWORDS');
