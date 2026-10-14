@@ -6208,3 +6208,20 @@ competidor, margen mediano, casos al limite). Guards de voz verdes (9 ficheros /
 PENDIENTE: su corrida de 2 voces (F5) -> histograma misma-voz vs voces-distintas.
 Items del ledger: P11.21..P11.25.
 ===============================================================================
+
+===============================================================================
+2026-10-14 18:32 - SU CORRIDA CON EL FIX DE LA CAJA CARGADO: que se midio y que falta
+===============================================================================
+MARCA MEDIDA: cola-solapada aparece 84 veces => el fix del congelamiento (49d8b06) SI estaba
+cargado; la sonda Fase 0 (pares) NO estaba cargada en su pestana (0 eventos) -> esta corrida no
+trae los numeros de separacion.
+1) TARTAMUDEO EN LAS FILAS (duplicacion de pedazos): la causa medida es que la FILA escribia el
+texto CRUDO del ASR; la caja si colapsaba. ARREGLO: el commit pasa el texto por normalizeMicText
+(dueno unico) antes de trocear/emitir. Guard rojo->verde + 10 ficheros / 124 casos verdes.
+2) CADENCIA EN BLOQUES: descartada la debounce (liveTranscriptDebounceMs=32 ms, imperceptible).
+La cadencia sigue la entrega del ASR + las puertas de la caja (84 colas anadidas). Se pincha con
+la linea de tiempo de su proxima corrida (con la sonda cargada) antes de tocar mas.
+3) DESFASE DE UNA FILA (D1=2): la fila de un turno lleva el texto del anterior; abierto.
+4) NOMBRE: medido que el turno de ella cae en speaker_1 (su cluster) y el registro escribe Luis
+en su fila -> es ASIGNACION (Fase 1/2), no la regla del nombre.
+===============================================================================

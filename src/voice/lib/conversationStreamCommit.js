@@ -3,6 +3,7 @@
  * Extraído de useFluVoiceAssistant para aislar la ruta syncConversationStream.
  */
 import { cleanForSpeech, detectWakeIntroducedName, formatClock, sameRequestWindowMs, speechWords } from './audioMath.js'
+import { normalizeMicText } from './speechMerge.js'
 import { resolveInlineWakeAtCommit, isTurnCapture, requiresWakeWord } from './wakeTurnCommit.js'
 import { getAsrSegmentationCfg } from './fluTranscriptMotor.js'
 import { FLU_CONFIG } from './fluConfig.js'
@@ -362,6 +363,11 @@ export function handleConversationStreamSync(
   // El preview ya protegia el recorte por ruido ASR, pero aqui se commiteaba el
   // texto recortado: la fila quedaba mas corta que lo mostrado y se perdia la cola.
   capture = reconcileCommitText(capture, publishedLiveRef.current)
+  // P11.26 (medido 2026-10-14 18:32 en su corrida): las FILAS quedaban con el tartamudeo del ASR
+  // dentro ("prueba pruebas pruebas", "trans transcripcion transcripcion", "vi viste viste viste"):
+  // la caja pasa por el colapsador y la fila escribia el texto CRUDO. Una sola definicion de
+  // texto: la fila usa el MISMO normalizador que la caja (normalizeMicText, dueno unico).
+  capture = normalizeMicText(capture)
 
   const wakeWords = FLU_CONFIG.voiceCommands?.wakeWords || []
   const lastCommittedRow = logRowsTextRef.current.at(-1) || ''
