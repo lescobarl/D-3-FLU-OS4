@@ -6225,3 +6225,66 @@ la linea de tiempo de su proxima corrida (con la sonda cargada) antes de tocar m
 4) NOMBRE: medido que el turno de ella cae en speaker_1 (su cluster) y el registro escribe Luis
 en su fila -> es ASIGNACION (Fase 1/2), no la regla del nombre.
 ===============================================================================
+
+===============================================================================
+2026-10-14 - REPLAY DEL ESCENARIO DEL DUENO (tests/replayDuenoDiarizacionGuard)
+===============================================================================
+Orden del dueno: "tu tienes toda la informacion para reinyectar y recrear el escenario".
+Hecho, SIN su micro:
+  A) CAJA: locucion larga (846) -> final truncado -> reentrega como resultado nuevo mas CORTO
+     -> piezas que antes quedaban bloqueadas; la caja debe ANADIR cada cola nueva, sin congelarse
+     ni duplicar y CONSERVANDO el texto original. El replay CAZO un bug real de mi union:
+     perdia las mayusculas (Daniel -> daniel); arreglado (la cola se toma del texto crudo).
+  B) VOCES: segunda voz con vector ORTOGONAL a la nombrada -> NO puede rotularse con el nombre
+     de la primera. VERDE: con vectores distintos la decision NO hereda el nombre -> la mezcla
+     real de su corrida viene de VECTORES CERCANOS en la medida (ventanas), no de la regla.
+Estado: 5 ficheros / 57 casos verdes (replay + caja + locucion viva + commit).
+===============================================================================
+
+===============================================================================
+2026-10-14 - CAJA: mapa de escritores (7) y PLAN de unificacion registrado
+===============================================================================
+El dueno: "unifica todo". El replay crudo mide la ruta doble: 7 escritores de publishedLiveRef
+(5 en conversationStreamCommit, 7 en el hook; ver plans/caja-unificacion-plan.md) y la regla
+monotona solo en la rama preview 345-376. Objetivo: publicarEnLaCaja/vaciarLaCaja como UNICA
+via (inyectada por deps), migrar los siete puntos, y validar con el replay crudo (0 reemplazos
+intra-turno; caja final ~= lo dictado). Commits: src / tests separados (0.22); debug.log
+archivado antes de cada commit; alinear auditLedgerSync con los items nuevos antes de cerrar.
+===============================================================================
+
+===============================================================================
+2026-10-14 - HITO 1 CAJA: un solo escritor (publicarEnLaCaja / vaciarLaCaja)
+===============================================================================
+Orden del dueno: "Ejecuta la migracion completa a publicarEnLaCaja / vaciarLaCaja como unico
+escritor. Refactoriza todos los puntos de escritura dispersos. No te detengas hasta que el
+replay crudo pase en VERDE con 0 reemplazos dentro de turno y la caja acumule el texto dictado."
+MEDIDO ANTES (HEAD 989539b): 18 actualizaciones, caja final 136 de 49.559 chars emitidos, 3
+reemplazos DENTRO del turno (29->31->37->44) y 11 escrituras del ref (5 en
+conversationStreamCommit + 6 en el hook) con la regla monotona solo en la rama de preview.
+HECHO: la caja pasa a tener UNA via (crearCajaDeLaFrase, conversationStreamCommit):
+  - publicarEnLaCaja(texto): sin nada mostrado -> publica; emision que ya trae lo mostrado (o su
+    cola reentregada) -> anade SOLO la cola genuina; emision mas corta/no relacionada -> BLOQUEA.
+    Nunca sustituye, nunca encoge, nunca duplica (la cola no puede estar ya mostrada ni ARRANCAR
+    con un tramo ya mostrado: la reentrega "creciente" era el inflado medido).
+  - vaciarLaCaja(): vaciado declarado (cierre/arranque/parada/sesion); { visible: false } para el
+    reset del ANCLA (parrafo nuevo), que NO puede borrar la ultima frase (test de conducta).
+  - Solape por palabras tolerante a mayusculas/signos y a palabras COMPLETADAS ('prueba' ->
+    'pruebas', 'tar' -> 'tardo'), con ventana de 160 palabras (sin ventana el coste por evento se
+    disparaba: el replay se colgaba). El plegado de acentos vuelve a su dueno (stripDiacritics).
+  - El hook NO escribe el ref: crea la API una vez (cajaVivaRef) y llama a la API.
+MEDIDO DESPUES (mismo log, misma puerta processMicConversationIngress):
+  replay: eventos=353 turnos(vaciados)=1 actualizaciones=133 | caja final 992 chars | max=992
+  | emitido=49.559 | 0 reemplazos dentro de turno | 0 6-gramas repetidos en la caja final.
+GUARDS: nuevo tests/vozCajaUnSoloEscritorGuard.test.ts (texto: 0 escrituras del ref fuera de la
+fabrica; conducta: no encoge/no sustituye/no duplica; prueba de detector) listado en
+lint:guards; vozUltimaFraseNoSeVaciaGuard cuenta los vaciados por la API (4 escenas declaradas) y
+exige 0 escrituras del ref en el hook. Gates REALES que el cambio rompio y se corrigieron de
+raiz: decisionSingleOwnerGuard + duplicationGuard (plegado de acentos) y godFileSizeGuard
+(useFluVoiceAssistant 4533 > 4530 -> bloque de la caja compactado, 0.13). auditLedgerSync: V7
+(HOY=1 -> 0) era el guard del replay declarado con la variante condicional; pasa a runIf (misma
+semantica: corre cuando existe el log del dueno) y el sensor deja de contarlo como test apagado.
+Alcance real (0.23): CUBIERTO=la caja como via unica + el replay crudo en verde + los guards de
+caja y el gate de guards (0 fallos NUEVOS); NO CUBIERTO=el DoD-producto (su pantalla), la suite
+completa (exige autorizacion) y la parte de voz/diarizacion del log (sin audio no se recomputa
+el worker de embeddings); siguen abiertos la CADENCIA de la caja y el DESFASE de fila (P11.16).
+===============================================================================

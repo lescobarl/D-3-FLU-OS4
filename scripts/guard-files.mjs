@@ -298,8 +298,10 @@ export const GUARD_FILES = [
     'tests/workspaceArtifactPersonIsolation.test.ts',
     'tests/workspacePersonIsolation.test.ts',
     'tests/vozUltimaFraseNoSeVaciaGuard.test.ts',
+    'tests/vozCajaUnSoloEscritorGuard.test.ts',
     'tests/vozEvidenciaPorOmisionGuard.test.ts',
     'tests/configConEfectoGuard.test.ts',
+    'tests/replayDuenoDiarizacionGuard.test.ts',
     'tests/logRevisionGuard.test.ts',
     'tests/vozNombrePorVozTodosLosTurnosGuard.test.ts',
 ]

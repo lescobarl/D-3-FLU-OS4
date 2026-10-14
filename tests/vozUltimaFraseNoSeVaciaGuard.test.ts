@@ -106,9 +106,10 @@ describe('B - la "ultima frase" no se vacia durante la conversacion', () => {
   })
 
   it('los vaciados que quedan son SOLO las escenas declaradas (arranque/parada/sesion)', () => {
-    const vaciados = (HOOK.match(/setLiveTranscript\(''\)/g) || []).length
+    const vaciados = (HOOK.match(/cajaVivaRef\.current\.vaciarLaCaja\(/g) || []).length
     // 4 escenas declaradas: flush pasivo (no conversacion), resetVoiceDisplay (arranque/sesion),
     // parada y reset de sesion. Un vaciado nuevo en la conversacion sube el conteo -> CAE.
     expect(vaciados, 'un vaciado nuevo durante la conversacion no esta declarado').toBe(4)
+    expect(HOOK.includes('publishedLiveRef.current = '), 'el hook no escribe la caja (un solo escritor)').toBe(false)
   })
 })
