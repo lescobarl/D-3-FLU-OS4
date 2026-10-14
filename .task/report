@@ -5684,3 +5684,49 @@ DoD-producto (pantalla del dueno con su micro), el e2e, el gate de contrato (no
 hay contrato de esta tarea) y el COMMIT (P11.9 queda "todo" en el ledger hasta
 que el dueno autorice el commit de cierre).
 ==============================================================================
+
+==============================================================================
+P11.10 - EL NOMBRE SALE DE LA VOZ, NO DE LA CLAVE/ETIQUETA (2026-10-13)
+==============================================================================
+MANDATO DEL DUENO: el reconocimiento de hablantes funciona mal ("uso mi nombre para una
+mujer y luego cambio a hablante 1 todo"). Definicion del dueno: el VECTOR identifica la voz;
+si coincide (SIMILAR) con un participante de la base, esa voz lleva su nombre desde ese
+momento; sin coincidencia sigue siendo "Hablante N".
+
+DIAGNOSTICO (log vivo 03:30:40-03:36:26, 50 preflights de los que 9 sin vector):
+  (a) la etiqueta del turno se decidia por historia/primario de la SESION (Identity
+      reason=production-short-historical x14, primary-rematch x12, reuse-no-evidence x6);
+  (b) el nombre se pegaba a la CLAVE de la etiqueta (row-update voz=speaker_1 nombre=Luis y
+      despues el MISMO speaker_1 sin nombre): la clave se recicla/renombra;
+  (c) la identidad contra la BASE usaba el piso de la SESION (0.66) en vez del de identidad
+      registrada (0.76), y un match solo-de-base devolvia un OBJETO por clave.
+
+ARREGLO (3 ficheros):
+  - speakerClusters.js: registeredVoiceFloor() (dueno del piso de identidad REGISTRADA, 0.76).
+  - speakerDirectory.js: dos pisos (sesion 0.66 / base 0.76) por fuente, con MODELO obligatorio;
+    resolveRowVoiceName() (dueno del nombre de una FILA: con timbre manda el vector; sin
+    coincidencia medida NO hereda el nombre de la clave; el renombre manual sin vector se
+    honra); voiceKeyFor() nunca devuelve un objeto.
+  - conversationRow.js: resolveRowSpeakerLabel() resuelve por la VOZ de la fila (su firma) y,
+    sin coincidencia medida, no afirma un nombre de una clave con nombre.
+
+MEDIDO ANTES/DESPUES (guard NUEVO tests/vozHablantesClaveVozGuard.test.ts, 10 casos):
+  ANTES (src de HEAD): 3 ROJOS -> etiqueta reciclada hereda "Luis"; una voz distinta muestra
+    el nombre ajeno; la BASE casa en 0.70 (banda de sesion).
+  DESPUES: 10/10 verdes, con detector por los dos lados (el mismo caso con el piso de sesion
+    en la base vuelve a casar).
+
+BASELINE DE FALLOS (capturado ANTES de tocar nada): 2 casos ROJOS PREEXISTENTES en
+tests/speakerPrimarySeed.test.ts (Fase E, commit d271b1a) -> 'expected Hablante 1 to be Juan';
+verificado con el src de HEAD revertido. NO se tocan (fuera de alcance) y quedan registrados
+como P11.11. CIERRE: 0 fallos NUEVOS.
+
+EVIDENCIA: lint:guards 276 ficheros / 2250 casos VERDE | typecheck exit 0 | eslint 0 |
+pnpm test (--changed) 235 ficheros / 2815 casos con SOLO los 2 preexistentes de P11.11.
+
+ALCANCE REAL (0.23): CUBIERTO=la clave/etiqueta ya no afirma el nombre (resolucion por VOZ, con
+  la firma de la fila), el piso de la BASE separado del de la sesion y el modelo obligatorio,
+  con guard de comportamiento rojo-en-viejo; NO CUBIERTO=el DoD-producto (tu pantalla: recargar
+  el portal y repetir "soy Luis" + una segunda voz), las ramas de continuidad de la
+  diarizacion (short-historical/primary-rematch) y los 9/50 turnos sin vector.
+==============================================================================

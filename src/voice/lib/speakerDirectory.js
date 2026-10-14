@@ -16,7 +16,7 @@
 
 import { getModelId } from './embeddingConfig.js'
 import { compareCosineSignatures, normalizeEmbeddingVector } from './speakerCore.js'
-import { sameVoiceFloor } from './speakerClusters.js'
+import { registeredVoiceFloor, sameVoiceFloor } from './speakerClusters.js'
 import { foldSpeakerKey } from './speakerLabels.js'
 
 /** Modelo que genera los vectores (dueño único: `embeddingConfig.getModelId`). */
@@ -51,19 +51,50 @@ export function resolveVoiceName(voiceId) {
 }
 
 /**
+ * NOMBRE DE UNA FILA por su VOZ (P11.10): la CLAVE no afirma un nombre propio; lo afirma la VOZ.
+ *
+ * Medido en vivo 2026-10-13: el nombre se pegaba a la clave derivada de la etiqueta
+ * (speaker_N) y la diarizacion la reutiliza/renombra, asi que una mujer acababa mostrando
+ * "Luis". Reglas:
+ *   - fila CON timbre medido: manda el vector. Si casa con una identidad de la sesion -> su
+ *     nombre; si NO casa con ninguna identidad MEDIDA -> '' (no hereda el nombre de la clave).
+ *   - fila CON timbre y clave registrada SIN vector (renombre manual del panel): se honra el
+ *     nombre (decision humana, no una identidad medida de otra voz).
+ *   - fila SIN timbre: como siempre (la clave -> su nombre registrado).
+ *
+ * @param {string} voiceId Clave de voz de la fila.
+ * @param {number[]|null} [signature] Timbre medido de ese turno (si lo hay).
+ * @returns {string} Nombre afirmado ('' si no se puede afirmar).
+ */
+export function resolveRowVoiceName(voiceId, signature = null) {
+    const id = String(voiceId || '').trim()
+    const entry = voiceNames.get(id)
+    const sig = normalizeEmbeddingVector(Array.isArray(signature) ? signature : [])
+    if (sig.length) {
+        const conocida = resolveVoiceIdentity(sig)
+        if (conocida?.name) return conocida.name
+        if (entry?.name && !entry?.vector?.length) return entry.name
+        return ''
+    }
+    return entry?.name || ''
+}
+
+/**
  * DUENO UNICO de "¿esta VOZ ya es alguien?" — UNA sola regla, para la SESION y la BASE.
  *
  * Reglas (mandato del dueno 2026-10-13):
  *   1. El vector se compara SIEMPRE con su MODELO: un candidato de otro modelo NO se compara.
- *   2. Empareja si la similitud llega al PISO unico de reutilizacion de voz.
+ *   2. Empareja si la similitud llega al PISO de su FUENTE: la SESION usa el de reutilizacion
+ *      (0.66) y la BASE el de identidad REGISTRADA (0.76) — entre reuniones la banda de la
+ *      misma voz es mas estrecha y un 0.70 ajeno se daba por "es Luis" (medido en vivo).
  *   3. Si DOS identidades distintas pasan el piso, NO se decide: null ("Hablante N").
  *
  * @param {number[]} vector Vector medido del turno.
- * @param {{ model?: string, candidates?: Array<{ name?: string, vector?: number[], model?: string }>, floor?: number }} [options]
+ * @param {{ model?: string, candidates?: Array<{ name?: string, vector?: number[], model?: string }>, floor?: number, registeredFloor?: number }} [options]
  *   `candidates` = VOCES externas (la base de participantes) como datos; la sesion ya esta dentro.
  * @returns {{ voiceId: string, name: string } | null}
  */
-export function resolveVoiceIdentity(vector, { model = voiceVectorModel(), candidates = [], floor = sameVoiceFloor() } = {}) {
+export function resolveVoiceIdentity(vector, { model = voiceVectorModel(), candidates = [], floor = sameVoiceFloor(), registeredFloor = registeredVoiceFloor() } = {}) {
     const v = normalizeEmbeddingVector(Array.isArray(vector) ? vector : [])
     if (!v.length) return null
     const modelo = String(model || '')
@@ -73,20 +104,20 @@ export function resolveVoiceIdentity(vector, { model = voiceVectorModel(), candi
         // responder aunque esa voz todavia no sea nadie (es lo que liga sus turnos a la MISMA clave).
         if (!entry?.vector?.length) return
         if (String(entry.model || '') !== modelo) return
-        comparables.push({ voiceId: id, name: entry.name || '', vector: entry.vector })
+        comparables.push({ voiceId: id, name: entry.name || '', vector: entry.vector, piso: floor })
     })
     for (const c of Array.isArray(candidates) ? candidates : []) {
         const sig = normalizeEmbeddingVector(Array.isArray(c?.vector) ? c.vector : [])
         const name = String(c?.name || '').trim()
         if (!sig.length || !name) continue
         if (String(c?.model || '') !== modelo) continue
-        comparables.push({ voiceId: String(c?.voiceId || ''), name, vector: sig })
+        comparables.push({ voiceId: String(c?.voiceId || ''), name, vector: sig, piso: registeredFloor })
     }
     // Se agrupa por IDENTIDAD (nombre plegado): la misma persona en sesion y en base es UN candidato.
     const porIdentidad = new Map()
     for (const c of comparables) {
         const sim = compareCosineSignatures(v, c.vector)
-        if (sim < Number(floor)) continue
+        if (sim < Number(c.piso)) continue
         // La IDENTIDAD es el nombre si lo tiene; si aun no es nadie, la propia VOZ (su clave).
         const k = c.name ? foldSpeakerKey(c.name) : `voice:${c.voiceId}`
         const prev = porIdentidad.get(k)
@@ -128,7 +159,8 @@ export function voiceKeyFor({ voiceId = '', signature = null, floor } = {}) {
     if (sig.length) {
         const conocido = resolveVoiceIdentity(sig, floor == null ? {} : { floor })
         if (conocido?.voiceId) return conocido.voiceId
-        if (conocido) return conocido
+        // Un match SOLO de la base no trae clave de sesion: NUNCA se devuelve un objeto.
+        if (conocido) return id
     }
     const id = String(voiceId || '').trim()
     if (sig.length && id) rememberVoiceVector(id, sig)

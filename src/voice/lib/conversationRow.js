@@ -4,7 +4,7 @@
  */
 import { cleanForSpeech, stripDiacritics } from './audioMath.js'
 import { FLU_CONFIG } from './fluConfig.js'
-import { resolveVoiceName } from './speakerDirectory.js'
+import { resolveRowVoiceName } from './speakerDirectory.js'
 import { normalizeSpeakerLabel, parseSpeakerIndex } from './voiceIdentity.js'
 import { equalsTrimmed } from '../../lib/textUtils'
 
@@ -56,8 +56,15 @@ export function resolveRowSpeakerLabel(row = {}, config = FLU_CONFIG) {
     // id sintetico de un snapshot de preflight) NO se resuelve por voz; la fila muestra la
     // etiqueta que YA trae escrita, nunca el respaldo generico.
     if (!id || !isValidSpeakerId(id)) return String(row?.speakerName || row?.speaker || '');
-    const name = resolveVoiceName(id);
+    // P11.10: con TIMBRE medido manda la VOZ (la clave pudo reciclarse en otra persona). Sin
+    // coincidencia medida la fila NO hereda el nombre de la clave.
+    const signature = normalizeRowSignature(row?.signature);
+    const name = resolveRowVoiceName(id, signature);
     if (name) return name;
+    if (signature?.length && id.startsWith('speaker_name_')) {
+        // Voz medida que NO es la identidad de esa clave con nombre: no se afirma su nombre.
+        return String(config?.voiceIdentity?.labels?.fallbackSpeaker || FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker);
+    }
     return speakerIdToDefaultName(id, config);
 }
 
