@@ -2142,13 +2142,6 @@
       "estado": "done",
       "evidencia": "MEDIDO 2026-10-12 (guard vozNombreEntraEnLaBaseGuard, caso P9.78): dos llamadas CONCURRENTES a participantRegistry.register (luis y Luis, sin esperar la primera) ven la base VACIA las dos y registran 2 filas [Luis, Luis]; el dedupe es case-insensitive pero lee el estado ANTES de escribir (participantRegistry.ts:193-195). En el flujo real el registro es por turno (secuencial) y no se dispara; riesgo si dos locuciones de nombre llegan pegadas. ACCION: serializar el puerto (o candado tipo anonymousSeedInFlight) si se observa en el log.",
       "origen": "guard-2026-10-12"
-    },
-    {
-      "id": "P11.14",
-      "titulo": "El arranque del server TRUNCABA debug.log (evidencia del dueno destruida) y el relay no re-encola: se rota a debug.prev.log.",
-      "estado": "todo",
-      "evidencia": "REPORTADO POR EL DUENO (2026-10-14, tras su corrida): al revisar sus logs para diagnosticar los dos problemas de voz, la sesion NO estaba: MEDIDO que src/server/geminiProxy.ts:867 hacia writeFileSync(debug.log,'') en CADA arranque del server (config del relay) y el relay del cliente NO re-encola los envios fallidos (clientLogRelay.ts: 'un fallo de entrega NO se re-encola') -> la evidencia de la corrida del dueno se destruye en cada arranque (y en esta sesion la destruyeron dos arranques de validacion del agente). ARREGLO: el arranque ROTA el fichero anterior a debug.prev.log (rename) y luego crea debug.log vacio; el checker sigue leyendo debug.log (corrida actual) y la anterior queda preservada. MEDIDO EN VIVO: arranque real -> debug.prev.log = 725 bytes con la mtime original (8:55:16) y debug.log nuevo (941 bytes); typecheck 0 y eslint 0. Alcance real (0.23): CUBIERTO=la rotacion (no se pierde la sesion anterior) y su validacion en un arranque real; NO CUBIERTO=el diagnostico de los dos problemas de voz del dueno (P1 nombre a la mujer / P2 transcripcion congelada + volcado), que exige el log de una corrida fresca (el truncado era LA causa de que no hubiera evidencia).",
-      "origen": "reporte-dueno-2026-10-14-sin-log"
     }
   ],
   "done": [
@@ -4665,6 +4658,13 @@
       "titulo": "Vite 8.3.4 escupia un aviso de ~250 lineas al arrancar (configLoader nativo): 251+1 imports del grafo del config sin extension.",
       "evidencia": "vite.config.ts + src/** (83 ficheros): CERRADO 2026-10-14 (commit b468cb0 = 262 imports con extension explicita; commit c8c6aa2 = barrera NUEVA tests/viteConfigNativenessGuard.test.ts + reparacion de criterio de los 5 guards de texto + contrato refrescado). REPORTADO POR EL DUENO: el dev server escupia el aviso de Vite 8.3.4 sobre configLoader native; MEDIDO: 251 imports + 1 import-de-index sin extension en el grafo del bundle del config (vite.config.ts -> src/server/* -> su cadena); reproducido tambien en npm run build. SEMANTICA de Vite medida: los import type de modulos del bundle cuentan; los modulos alcanzados solo por aristas de tipo no entran al bundle (Vite lista 252; el paseo completo 261). ARREGLO: 261 extensiones reales; NO se silencio con VITE_CONFIG_NATIVE_IGNORE_WARNING (2.3). MEDIDO: build 254 items -> 0 con los MISMOS 1306 modulos; typecheck 0; 7 mediciones congeladas byte-identicas; barrera nueva con ROJO-EN-VIEJO medido (stash del fix = 261 offenders); guardas del cambio 6/6 verdes; dodScopeGuard resuelto ampliando el gate (union 203 ficheros de test) y DoD corrido ENTERO = 203 VERDE; dev server arranca sin el aviso (apagado por PID). Alcance real (0.23): CUBIERTO=el aviso eliminado de raiz + barrera + mediciones congeladas intactas + DoD; NO CUBIERTO=suite completa, e2e y validacion en pantalla del dueno.",
       "origen": "reporte-dueno-2026-10-14-warning-vite"
+    },
+    {
+      "id": "P11.14",
+      "commit": "f4104a5",
+      "titulo": "El arranque del server TRUNCABA debug.log (evidencia del dueno destruida) y el relay no re-encola: se rota a debug.prev.log.",
+      "evidencia": "REPORTADO POR EL DUENO (2026-10-14, tras su corrida): al revisar sus logs para diagnosticar los dos problemas de voz, la sesion NO estaba: MEDIDO que src/server/geminiProxy.ts:867 hacia writeFileSync(debug.log,'') en CADA arranque del server (config del relay) y el relay del cliente NO re-encola los envios fallidos (clientLogRelay.ts: 'un fallo de entrega NO se re-encola') -> la evidencia de la corrida del dueno se destruye en cada arranque (y en esta sesion la destruyeron dos arranques de validacion del agente). ARREGLO: el arranque ROTA el fichero anterior a debug.prev.log (rename) y luego crea debug.log vacio; el checker sigue leyendo debug.log (corrida actual) y la anterior queda preservada. MEDIDO EN VIVO: arranque real -> debug.prev.log = 725 bytes con la mtime original (8:55:16) y debug.log nuevo (941 bytes); typecheck 0 y eslint 0. Alcance real (0.23): CUBIERTO=la rotacion (no se pierde la sesion anterior) y su validacion en un arranque real; NO CUBIERTO=el diagnostico de los dos problemas de voz del dueno (P1 nombre a la mujer / P2 transcripcion congelada + volcado), que exige el log de una corrida fresca (el truncado era LA causa de que no hubiera evidencia). CERRADO 2026-10-14 (commit f4104a5 = geminiProxy.ts + reporte + ledger; rotacion probada en arranque real: debug.prev.log = 725 bytes con su mtime + debug.log nuevo).",
+      "origen": "reporte-dueno-2026-10-14-sin-log"
     }
   ]
 }
