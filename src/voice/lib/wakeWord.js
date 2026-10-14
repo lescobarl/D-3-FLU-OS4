@@ -5,7 +5,7 @@
  * Toda limpieza de wake pasa por aquí.
  */
 import { FLU_CONFIG } from './fluConfig.js'
-import { escapeRegExp } from '../../lib/textUtils';
+import { escapeRegExp } from '../../lib/textUtils.ts';
 
 function escapeRe(text = '') {
     return escapeRegExp(String(text))

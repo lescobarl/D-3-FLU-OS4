@@ -1,4 +1,4 @@
-import { pickLabel } from '../../lib/textUtils';
+import { pickLabel } from '../../lib/textUtils.ts';
 /**
  * Pipeline visual: brief de workspace IA → prompt de generación. Sin números mágicos aquí.
  * Inventario: docs/reglas-duras-visual.md · listConfiguredVisualPipelineRules()
@@ -7,9 +7,9 @@ import {
   buildPollinationsImageUrl,
   POLLINATIONS_DEFAULTS,
   VALID_VISUAL_TIPOS,
-} from '../../core/config/sharedConfig'
+} from '../../core/config/sharedConfig.ts'
 import { VISUAL_CONFIG } from './visualConfig.js'
-import { normalizeSpaces, shortText } from '../../lib/textUtils'
+import { normalizeSpaces, shortText } from '../../lib/textUtils.ts'
 
 export const VISUAL_PIPELINE_KEYS = [
   'primary',

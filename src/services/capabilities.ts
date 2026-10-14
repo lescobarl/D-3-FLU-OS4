@@ -4,10 +4,10 @@
 // TS estático NO invalida el cache de system prompt de 5 min del proxy.
 // Importa la playlist desde musicPlayer (sin dependencia circular).
 // ============================================================
-import { FLU_PLAYLIST } from './musicPlayer'
-import { GAME_CATALOG, gameDisplayName } from '../core/games/gameCatalog'
-import { CONTRACT_ACTION_DOMAINS } from '../core/agenda/domainScopedIntent'
-import { buildTutoringRule } from '../core/tutoring/tutoringModel'
+import { FLU_PLAYLIST } from './musicPlayer.ts'
+import { GAME_CATALOG, gameDisplayName } from '../core/games/gameCatalog.ts'
+import { CONTRACT_ACTION_DOMAINS } from '../core/agenda/domainScopedIntent.ts'
+import { buildTutoringRule } from '../core/tutoring/tutoringModel.ts'
 
 export interface CapabilityDef {
   id: string

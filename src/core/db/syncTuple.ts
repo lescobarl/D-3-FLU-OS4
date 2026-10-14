@@ -6,7 +6,7 @@
 // El tipo `SyncTuple` vive en fluDatabase.ts y se re-exporta aquí para que
 // este módulo sea el punto único de la tupla sin duplicar la interfaz.
 // ============================================================
-import type { SyncTuple } from './fluDatabase';
+import type { SyncTuple } from './fluDatabase.ts';
 
 export type { SyncTuple };
 

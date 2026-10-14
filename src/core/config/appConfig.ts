@@ -1,4 +1,4 @@
-import { logCaughtError } from '../../lib/caughtError';
+import { logCaughtError } from '../../lib/caughtError.ts';
 
 // ============================================================
 // AppConfig — Centralized Application Configuration
@@ -58,8 +58,8 @@ import {
     joinApiUrl,
     buildPollinationsImageUrl,
     resolveTextApiKeyFromEnv,
-} from './sharedConfig';
-import { hasLocalStorage, localGet, localSet } from '../storage/localStore';
+} from './sharedConfig.ts';
+import { hasLocalStorage, localGet, localSet } from '../storage/localStore.ts';
 
 export {
     WORKSPACE_TIPOS,
@@ -75,13 +75,13 @@ export {
     FLU_PROFILES,
     getProfileById,
     getDefaultProfile,
-} from './sharedConfig';
+} from './sharedConfig.ts';
 
 export type {
     WorkspaceTipo,
     VisualTipo,
     GenerationWorkspaceTipo,
-} from './sharedConfig';
+} from './sharedConfig.ts';
 
 // -----------------------------------------------------------
 // Storage Keys

@@ -11,7 +11,7 @@
 // del catálogo real. Si el catálogo está vacío, devuelve ''.
 // ============================================================
 
-import { getAmbientes, DEFAULT_AMBIENTE_ID } from './environmentRegistry';
+import { getAmbientes, DEFAULT_AMBIENTE_ID } from './environmentRegistry.ts';
 
 /**
  * Construye el bloque de instrucciones de AMBIENTES para el system prompt.

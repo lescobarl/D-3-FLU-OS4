@@ -19,7 +19,7 @@
  * criterio de cobertura se expone como predicado puro sobre palabras.
  */
 import { FLU_CONFIG } from './fluConfig.js'
-import { useIntegrationStore } from '../../store/integrationStore'
+import { useIntegrationStore } from '../../store/integrationStore.ts'
 
 /** Ventana (ms) tras el fin del habla de FLU en la que su voz puede volver por el micro. */
 export function echoWindowMs(config = FLU_CONFIG) {

@@ -13,9 +13,9 @@
 //   "paso" / "siguiente" → saltar a la siguiente
 // Fin al completar `rounds` preguntas.
 // ============================================================
-import type { GameEngine } from './gameEngine';
-import type { GameSession, GameTurnResult } from './types';
-import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, advanceRound, baseSession, beginGame, buildShuffledState, gameOverResult, gamePrompt, hasAnyToken, hasToken, isEngineCommand, isLastRound, itemAtCursor, normalizeForMatch, resetGameSession, resolveNumericAnswer, turnResult } from './gameUtils';
+import type { GameEngine } from './gameEngine.ts';
+import type { GameSession, GameTurnResult } from './types.ts';
+import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, advanceRound, baseSession, beginGame, buildShuffledState, gameOverResult, gamePrompt, hasAnyToken, hasToken, isEngineCommand, isLastRound, itemAtCursor, normalizeForMatch, resetGameSession, resolveNumericAnswer, turnResult } from './gameUtils.ts';
 
 export interface TriviaQuestion {
     pregunta: string;

@@ -10,7 +10,7 @@
 // Regla #1: sin hardcode; sin DOM, sin Dexie, sin Gemini — 100% puro.
 // ============================================================
 
-import type { TemporalRecurrence, TemporalTrigger } from './temporalTypes';
+import type { TemporalRecurrence, TemporalTrigger } from './temporalTypes.ts';
 
 // ------------------------------------------------------------
 // Constantes de tiempo

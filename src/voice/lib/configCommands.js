@@ -13,14 +13,14 @@
 //   dispararse en conversación casual.
 // ============================================================
 
-import { getFusedPalettes } from '../../core/branding/seasonalPalettes'
-import { VOICE_CONFIG_CATALOG } from '../../core/config/voiceConfigCatalog'
-import { isGameId } from '../../core/games/gameCatalog'
-import { escapeRegExp, normalizeForMatch } from '../../lib/textUtils'
-import { logCaughtError } from '../../lib/caughtError';
-import { AI_PROVIDER_SYNONYMS } from '../../core/config/sharedConfig'
+import { getFusedPalettes } from '../../core/branding/seasonalPalettes.ts'
+import { VOICE_CONFIG_CATALOG } from '../../core/config/voiceConfigCatalog.ts'
+import { isGameId } from '../../core/games/gameCatalog.ts'
+import { escapeRegExp, normalizeForMatch } from '../../lib/textUtils.ts'
+import { logCaughtError } from '../../lib/caughtError.ts';
+import { AI_PROVIDER_SYNONYMS } from '../../core/config/sharedConfig.ts'
 import { FLU_CONFIG } from './fluConfig.js'
-import { resolveSpokenNumber } from '../../lib/spokenNumbers'
+import { resolveSpokenNumber } from '../../lib/spokenNumbers.ts'
 
 // ------------------------------------------------------------
 // Normalización de texto

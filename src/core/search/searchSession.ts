@@ -11,10 +11,10 @@
 // desde FLU_CONFIG.browser.search (config-driven) y las URLs de
 // artículo/embed/watch se construyen desde plantillas del proveedor.
 // ============================================================
-import { isDomainAllowed, normalizeHost } from '../browser/browserSession';
-import type { ResolvedLanguage } from './searchLanguage';
-import { logCaughtError } from '../../lib/caughtError';
-import { AI_PROVIDER_IDS, SEARCH_PROVIDER_IDS } from '../config/sharedConfig'
+import { isDomainAllowed, normalizeHost } from '../browser/browserSession.ts';
+import type { ResolvedLanguage } from './searchLanguage.ts';
+import { logCaughtError } from '../../lib/caughtError.ts';
+import { AI_PROVIDER_IDS, SEARCH_PROVIDER_IDS } from '../config/sharedConfig.ts'
 
 /** Resultado unificado de búsqueda (cualquier proveedor). */
 export interface SearchResult {

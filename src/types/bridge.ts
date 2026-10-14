@@ -5,9 +5,9 @@
 // el avatar 3D (OS1) con los servicios de voz (OS2).
 // ============================================================
 
-import type { AvatarState, AvatarExpression } from '../avatar';
-import type { VisualTipo, WorkspaceTipo } from '../core/config/sharedConfig';
-import type { MusicAction } from '../core/media/musicActions';
+import type { AvatarState, AvatarExpression } from '../avatar/index.ts';
+import type { VisualTipo, WorkspaceTipo } from '../core/config/sharedConfig.ts';
+import type { MusicAction } from '../core/media/musicActions.ts';
 
 /**
  * Estados del ciclo de conversación integrado.

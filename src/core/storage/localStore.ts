@@ -18,7 +18,7 @@
  * poder enterarse. `backupSystem` poda backups antiguos justo al ver el
  * QuotaExceededError, asi que tragarselo aqui romperia esa recuperacion.
  */
-import { logCaughtError } from '../../lib/caughtError';
+import { logCaughtError } from '../../lib/caughtError.ts';
 
 /**
  * Lo que la puerta expone. `length`/`key` son opcionales: los tiene el

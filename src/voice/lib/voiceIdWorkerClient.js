@@ -4,12 +4,12 @@
 import { FLU_CONFIG } from './fluConfig.js'
 import { getEmbeddingConfig } from './embeddingConfig.js'
 import { ROOM_REMATCH_STRICT } from './speakerClusters.js'
-import { REQUEST_TIMEOUT_DEFAULTS } from '../../core/config/sharedConfig'
+import { REQUEST_TIMEOUT_DEFAULTS } from '../../core/config/sharedConfig.ts'
 import { labelToSpeakerId } from './conversationRow.js'
 import { resolveSpeakerIdentityFromVector } from './voiceIdentityResolve.js'
 import { computeSpeakerEmbedding } from './speakerEmbeddingCore.js'
-import { logCaughtError } from '../../lib/caughtError';
-import { relayLog } from '../../lib/clientLogRelay';
+import { logCaughtError } from '../../lib/caughtError.ts';
+import { relayLog } from '../../lib/clientLogRelay.ts';
 import { DEFAULT_SAMPLE_RATE } from './audioConstants.js'
 import { createWorkerPendingBridge } from './workerPendingBridge.js'
 import { scheduleIdle } from './idleSchedule.js'
@@ -22,7 +22,7 @@ const EMBED_TYPES = new Set(['embed'])
 let embedInFlight = false
 let embedPending = null
 
-import { isWorkerRuntime } from '../../lib/workerRuntime'
+import { isWorkerRuntime } from '../../lib/workerRuntime.ts'
 
 // El dueno de la pregunta es src/lib/workerRuntime.ts (antes habia una copia aqui
 // con la guarda extra de `window`, que solo cambia fuera del hilo principal).

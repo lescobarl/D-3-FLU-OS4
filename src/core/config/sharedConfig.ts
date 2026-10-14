@@ -18,8 +18,8 @@
 //   - defaults de OpenRouter / fal.ai / Pollinations
 // ============================================================
 
-import type { FluProfileDefinition } from '../../types/bridge';
-import { logCaughtError } from '../../lib/caughtError';
+import type { FluProfileDefinition } from '../../types/bridge.ts';
+import { logCaughtError } from '../../lib/caughtError.ts';
 
 // -----------------------------------------------------------
 // Env del servidor (inyectado en runtime, sin import.meta.env)

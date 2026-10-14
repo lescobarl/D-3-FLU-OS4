@@ -15,9 +15,9 @@
 //   narrate → sustituye el cuento por escenas externas (Gemini)
 //   Fin al narrar la última escena ("colorín colorado").
 // ============================================================
-import type { GameEngine } from './gameEngine';
-import type { AvatarAnimation, GameNarrativeScene, GameSession, GameTurnResult } from './types';
-import { END_GAME_FRAMES, HELP_CORE_FRAMES, RandomSource, adoptRandom, baseSession, clamp, gameOverResult, hasAnyToken, isEngineCommand, normalizeForMatch, pickRandom, resetGameSession, turnResult } from './gameUtils';
+import type { GameEngine } from './gameEngine.ts';
+import type { AvatarAnimation, GameNarrativeScene, GameSession, GameTurnResult } from './types.ts';
+import { END_GAME_FRAMES, HELP_CORE_FRAMES, RandomSource, adoptRandom, baseSession, clamp, gameOverResult, hasAnyToken, isEngineCommand, normalizeForMatch, pickRandom, resetGameSession, turnResult } from './gameUtils.ts';
 
 export type StoryScene = GameNarrativeScene;
 

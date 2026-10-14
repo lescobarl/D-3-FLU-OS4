@@ -23,7 +23,7 @@
 //     bienestar → 'heart'
 // ============================================================
 
-import type { FluProfile, PersonalityConfig } from '../../types/bridge';
+import type { FluProfile, PersonalityConfig } from '../../types/bridge.ts';
 
 // -----------------------------------------------------------
 // Tipos del catálogo

@@ -14,9 +14,9 @@
 // Multijugador POR NATURALEZA: no importa QUIÉN hable; cualquier grito de
 // "lotería" gana. No se necesita estado por jugador.
 // ============================================================
-import type { GameEngine } from './gameEngine';
-import type { GameSession, GameTurnContext, GameTurnResult } from './types';
-import { BARE_AFFIRMATION_FRAMES, END_GAME_FRAMES, HELP_CORE_FRAMES, RandomSource, adoptRandom, baseSession, gameOverResult, hasAnyToken, hasGameOrderFrame, hasToken, isBareAffirmation, itemAtCursor, matchesEndGameFrames, normalizeForMatch, shuffleOrder, turnResult } from './gameUtils';
+import type { GameEngine } from './gameEngine.ts';
+import type { GameSession, GameTurnContext, GameTurnResult } from './types.ts';
+import { BARE_AFFIRMATION_FRAMES, END_GAME_FRAMES, HELP_CORE_FRAMES, RandomSource, adoptRandom, baseSession, gameOverResult, hasAnyToken, hasGameOrderFrame, hasToken, isBareAffirmation, itemAtCursor, matchesEndGameFrames, normalizeForMatch, shuffleOrder, turnResult } from './gameUtils.ts';
 
 export interface LoteriaCard {
     id: string;

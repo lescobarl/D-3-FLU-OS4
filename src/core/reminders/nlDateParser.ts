@@ -11,9 +11,9 @@
 // Determinista y puro: `now` es inyectable.
 // ============================================================
 
-import { pickTimeOfDay } from '../temporal/timeOfDay';
-import { MONTH_NAMES_ES, WEEKDAYS_ES } from '../temporal/calendarNames';
-import { normalizeForMatch } from '../../lib/textUtils';
+import { pickTimeOfDay } from '../temporal/timeOfDay.ts';
+import { MONTH_NAMES_ES, WEEKDAYS_ES } from '../temporal/calendarNames.ts';
+import { normalizeForMatch } from '../../lib/textUtils.ts';
 
 export interface NlDateTimeResult {
   /** Cómo se interpretó la expresión (para trazas/mensajes). */

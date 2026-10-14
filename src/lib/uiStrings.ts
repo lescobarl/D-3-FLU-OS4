@@ -1,4 +1,4 @@
-import { pickLabel } from './textUtils';
+import { pickLabel } from './textUtils.ts';
 
 /**
  * uiStrings — FUENTE UNICA de las cadenas de UI bilingues (Anexo B8).

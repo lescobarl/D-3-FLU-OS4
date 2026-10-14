@@ -12,8 +12,8 @@
 // Al lado (tutoringProgress) vive la DERIVACION del avance a partir de las
 // minutas: no hay tabla nueva ni segundo almacen (AGENTS 7.7.c).
 // ============================================================
-import { normalizeForMatch, normalizeSpaces } from '../../lib/textUtils';
-import { slugifyPalette } from '../branding/paletaFactory';
+import { normalizeForMatch, normalizeSpaces } from '../../lib/textUtils.ts';
+import { slugifyPalette } from '../branding/paletaFactory.ts';
 
 /** Area de tutoria: id canonico (sin diacriticos, para comparar) + etiqueta legible. */
 export interface TutoringArea {

@@ -9,7 +9,7 @@
 // Devuelve `timeOfDay` en 'HH:MM' (24h) y el texto SIN las horas (`rest`).
 // ============================================================
 
-import { resolveSpokenNumber, spokenNumberAlternation } from '../../lib/spokenNumbers';
+import { resolveSpokenNumber, spokenNumberAlternation } from '../../lib/spokenNumbers.ts';
 
 export interface PickedTimeOfDay {
     timeOfDay: string | null;

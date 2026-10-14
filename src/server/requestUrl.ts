@@ -10,8 +10,8 @@
 // este bloque simplemente se había saltado el criterio.
 // ============================================================
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { sendJson } from './httpJson';
-import { logCaughtError } from '../lib/caughtError';
+import { sendJson } from './httpJson.ts';
+import { logCaughtError } from '../lib/caughtError.ts';
 
 /** Base ficticia solo para parsear el URL del request; el host nunca se usa. */
 const PARSE_BASE_URL = 'http://localhost';

@@ -9,8 +9,8 @@
 // Adding a new expression = adding data here, NOT modifying IF chains.
 // ============================================================
 
-import type { ConversationState, EmotionalState } from '../../types/bridge';
-import { pickText } from '../../lib/uiStrings';
+import type { ConversationState, EmotionalState } from '../../types/bridge.ts';
+import { pickText } from '../../lib/uiStrings.ts';
 /**
  * A single expression definition.
  * Each entry maps an expression name to its animations, context description,

@@ -13,9 +13,9 @@
 //
 // El RNG es inyectable vía options.random para tests deterministas.
 // ============================================================
-import type { GameEngine } from './gameEngine';
-import type { AvatarAnimation, GameSession, GameTurnResult } from './types';
-import { END_GAME_FRAMES, adoptRandom, baseSession, clamp, gameOverResult, matchesEndGameFrames, normalizeForMatch, pickRandom, turnResult } from './gameUtils';
+import type { GameEngine } from './gameEngine.ts';
+import type { AvatarAnimation, GameSession, GameTurnResult } from './types.ts';
+import { END_GAME_FRAMES, adoptRandom, baseSession, clamp, gameOverResult, matchesEndGameFrames, normalizeForMatch, pickRandom, turnResult } from './gameUtils.ts';
 
 export const VERB_ALIASES: Record<AvatarAnimation, readonly string[]> = {
     Dance: ['baila', 'bailar', 'baile', 'dance', 'bailemos'],

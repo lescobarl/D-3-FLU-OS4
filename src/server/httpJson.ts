@@ -8,7 +8,7 @@
 // propagamos errores de escritura.
 // ============================================================
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { logCaughtError } from '../lib/caughtError';
+import { logCaughtError } from '../lib/caughtError.ts';
 
 /** Handler de middleware (forma mínima que necesitan los proxies). */
 export type ProxyMiddlewareHandler = (

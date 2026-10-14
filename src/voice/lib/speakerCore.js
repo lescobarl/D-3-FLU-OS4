@@ -6,7 +6,7 @@
  * en hilo principal). Los textos configurables («Hablante N») viven en FLU_CONFIG.
  */
 import { FLU_CONFIG } from './fluConfig.js'
-import { stripDiacriticsLower } from '../../lib/textUtils';
+import { stripDiacriticsLower } from '../../lib/textUtils.ts';
 
 /** Etiqueta de hablante por defecto (config-driven; nunca un literal fuera de config). */
 export function getFallbackSpeaker(config = FLU_CONFIG) {

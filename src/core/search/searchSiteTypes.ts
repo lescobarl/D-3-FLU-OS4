@@ -10,8 +10,8 @@
 // barra, tiles y resultados sin tocar código.
 // ============================================================
 
-import { FLU_CONFIG } from '../../voice/lib/fluConfig';
-import { normalizeHost } from '../browser/browserSession';
+import { FLU_CONFIG } from '../../voice/lib/fluConfig.js';
+import { normalizeHost } from '../browser/browserSession.ts';
 
 /** Nivel de lectura de un sitio (equivalente a browser.readingLevels). */
 export type SearchSiteLevel = 'simple' | 'detallado' | 'avanzado';

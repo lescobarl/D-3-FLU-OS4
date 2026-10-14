@@ -12,31 +12,31 @@
 // "ok flu, vamos a jugar a las adivinanzas" → adivinanzas.
 // "cambia a trivia" → trivia (cambio con la partida en curso).
 // ============================================================
-import type { GameEngine } from './gameEngine';
-import type { GameId } from './types';
-import { NEGATIVE_INTENT_FRAMES, hasGameOrderFrame, hasToken, normalizeForMatch, turnResult } from './gameUtils';
-import { createSimonDiceEngine } from './simonDice';
-import { createRiddlesEngine } from './riddles';
-import { createVeoVeoEngine } from './veoVeo';
-import { createAdivinaNumeroEngine } from './adivinaNumero';
-import { createCalculoMentalEngine } from './calculoMental';
-import { createPalabrasEncadenadasEngine } from './palabrasEncadenadas';
-import { createQuienSoyEngine } from './quienSoy';
-import { createAhorcadoEngine } from './ahorcado';
-import { createMemoriaSecuenciasEngine } from './memoriaSecuencias';
-import { createTrabalenguasEngine } from './trabalenguas';
-import { createTriviaEngine } from './trivia';
-import { createOrdenaSecuenciaEngine } from './ordenaSecuencia';
-import { createAdivinaCancionEngine } from './adivinaCancion';
-import { createCuentacuentosEngine } from './storyteller';
-import { createCuentoColaborativoEngine } from './cuentoColaborativo';
-import { createRepiteTraduceEngine } from './repiteTraduce';
-import { createCuentaConmigoEngine } from './cuentaConmigo';
-import { createAbecedarioEngine } from './abecedario';
-import { createLoteriaEngine } from './loteria';
-import { createRespiracionEngine } from './respiracion';
-import { createKaraokeEngine } from './karaoke';
-import { createPronunciacionEngine } from './pronunciacion';
+import type { GameEngine } from './gameEngine.ts';
+import type { GameId } from './types.ts';
+import { NEGATIVE_INTENT_FRAMES, hasGameOrderFrame, hasToken, normalizeForMatch, turnResult } from './gameUtils.ts';
+import { createSimonDiceEngine } from './simonDice.ts';
+import { createRiddlesEngine } from './riddles.ts';
+import { createVeoVeoEngine } from './veoVeo.ts';
+import { createAdivinaNumeroEngine } from './adivinaNumero.ts';
+import { createCalculoMentalEngine } from './calculoMental.ts';
+import { createPalabrasEncadenadasEngine } from './palabrasEncadenadas.ts';
+import { createQuienSoyEngine } from './quienSoy.ts';
+import { createAhorcadoEngine } from './ahorcado.ts';
+import { createMemoriaSecuenciasEngine } from './memoriaSecuencias.ts';
+import { createTrabalenguasEngine } from './trabalenguas.ts';
+import { createTriviaEngine } from './trivia.ts';
+import { createOrdenaSecuenciaEngine } from './ordenaSecuencia.ts';
+import { createAdivinaCancionEngine } from './adivinaCancion.ts';
+import { createCuentacuentosEngine } from './storyteller.ts';
+import { createCuentoColaborativoEngine } from './cuentoColaborativo.ts';
+import { createRepiteTraduceEngine } from './repiteTraduce.ts';
+import { createCuentaConmigoEngine } from './cuentaConmigo.ts';
+import { createAbecedarioEngine } from './abecedario.ts';
+import { createLoteriaEngine } from './loteria.ts';
+import { createRespiracionEngine } from './respiracion.ts';
+import { createKaraokeEngine } from './karaoke.ts';
+import { createPronunciacionEngine } from './pronunciacion.ts';
 
 export interface GameIntentEntry {
     id: GameId;
@@ -77,7 +77,7 @@ export const GAME_IDS: readonly GameId[] = Object.freeze([
  * igual el fast-path de voz y los 21 motores. Aqui solo se re-exportan para no
  * romper la superficie publica del catalogo.
  */
-export { END_GAME_FRAMES } from './gameUtils';
+export { END_GAME_FRAMES } from './gameUtils.ts';
 
 /**
  * Con una partida ACTIVA, frases que piden el MENÚ de juegos (no son un turno

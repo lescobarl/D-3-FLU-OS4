@@ -9,7 +9,7 @@
 //   window.__fluClientLog.enable(false)
 // ============================================================
 
-import { FLU_CONFIG } from '../voice/lib/fluConfig';
+import { FLU_CONFIG } from '../voice/lib/fluConfig.js';
 
 type LogLevel = 'LOG' | 'INFO' | 'WARN' | 'ERROR';
 

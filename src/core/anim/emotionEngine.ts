@@ -13,8 +13,8 @@
 //   6. Contextual awareness (sentiment → emotion → expression)
 // ============================================================
 
-import type { AvatarState, AvatarExpression, BunnyAnimation } from '../../avatar';
-import type { ConversationState, EmotionalState } from '../../types/bridge';
+import type { AvatarState, AvatarExpression, BunnyAnimation } from '../../avatar/index.ts';
+import type { ConversationState, EmotionalState } from '../../types/bridge.ts';
 import {
     ACTION_ANIMS,
     EXPRESSION_REGISTRY,
@@ -24,7 +24,7 @@ import {
     getTriggerExpressions,
     getMicroExpressions,
     pickBestExpressionForPersonality,
-} from './expressionRegistry';
+} from './expressionRegistry.ts';
 
 // ── Types ──
 

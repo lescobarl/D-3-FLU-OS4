@@ -14,8 +14,8 @@
 // PALETTE_COLOR_KEYS (seasonalPalettes).
 // ============================================================
 
-import { PALETTE_COLOR_KEYS, type PaletteDefinition } from './seasonalPalettes';
-import { stripDiacriticsLower } from '../../lib/textUtils';
+import { PALETTE_COLOR_KEYS, type PaletteDefinition } from './seasonalPalettes.ts';
+import { stripDiacriticsLower } from '../../lib/textUtils.ts';
 
 // -----------------------------------------------------------
 // Slug de id

@@ -4,7 +4,7 @@ import { VISUAL_CONFIG } from './visualConfig.js'
 import {
   isGenerationWorkspaceTipo,
   isVisualWorkspaceTipo,
-} from '../../core/config/sharedConfig'
+} from '../../core/config/sharedConfig.ts'
 
 const HORARIO_WORKSPACE_MODOS = ['semana', 'dia', 'proxima', 'recordatorios']
 

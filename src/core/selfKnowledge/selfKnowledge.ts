@@ -19,13 +19,13 @@
 // y selfKnowledge.ts NO está en ALLOWED_CONFIG_FILES).
 // ============================================================
 
-import { FLU_CONFIG } from '../../voice/lib/fluConfig';
-import { GAME_CATALOG } from '../games/gameCatalog';
-import { WORKSPACE_TIPOS } from '../config/sharedConfig';
-import { FLU_CAPABILITIES } from '../../services/capabilities';
-import { BUILTIN_SEARCH_SITES, type SearchSite } from '../search/searchSiteTypes';
-import { normalizeHost } from '../browser/browserSession';
-import { stripDiacriticsLower } from '../../lib/textUtils';
+import { FLU_CONFIG } from '../../voice/lib/fluConfig.js';
+import { GAME_CATALOG } from '../games/gameCatalog.ts';
+import { WORKSPACE_TIPOS } from '../config/sharedConfig.ts';
+import { FLU_CAPABILITIES } from '../../services/capabilities.ts';
+import { BUILTIN_SEARCH_SITES, type SearchSite } from '../search/searchSiteTypes.ts';
+import { normalizeHost } from '../browser/browserSession.ts';
+import { stripDiacriticsLower } from '../../lib/textUtils.ts';
 
 /** Categorías del registro de capacidades (contrato §1.1). */
 export type CategoriaCapacidad =

@@ -6,7 +6,7 @@ import { cleanForSpeech, stripDiacritics } from './audioMath.js'
 import { FLU_CONFIG } from './fluConfig.js'
 import { resolveRowVoiceName } from './speakerDirectory.js'
 import { normalizeSpeakerLabel, parseSpeakerIndex } from './voiceIdentity.js'
-import { equalsTrimmed } from '../../lib/textUtils'
+import { equalsTrimmed } from '../../lib/textUtils.ts'
 
 export const SPEAKER_ID_CALCULATING = 'calculando'
 export const SPEAKER_ID_FLU = 'flu'

@@ -15,9 +15,9 @@
 // - Acierto → +1 punto y fin de partida.
 // - "paso" / "no sé" → revela el número y termina.
 // ============================================================
-import type { GameEngine } from './gameEngine';
-import type { GameSession, GameTurnResult } from './types';
-import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, baseSession, clamp, gameOverResult, hasAnyToken, isEngineCommand, normalizeForMatch, resolveNumericAnswer, turnResult } from './gameUtils';
+import type { GameEngine } from './gameEngine.ts';
+import type { GameSession, GameTurnResult } from './types.ts';
+import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, baseSession, clamp, gameOverResult, hasAnyToken, isEngineCommand, normalizeForMatch, resolveNumericAnswer, turnResult } from './gameUtils.ts';
 
 const DEFAULT_MIN = 1;
 const DEFAULT_MAX = 20;

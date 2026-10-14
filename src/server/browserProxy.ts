@@ -7,13 +7,13 @@
 // Registrado como /api/browser/fetch (GET)
 // ============================================================
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { sendJson as sendJsonShared, type MiddlewareHost } from './httpJson';
-import { buildBrowserUrl } from '../core/browser/browserSession';
-import { acceptLanguageHeader } from '../core/search/searchLanguage';
-import { REQUEST_TIMEOUT_DEFAULTS } from '../core/config/sharedConfig';
-import { logCaughtError } from '../lib/caughtError';
-import { parseAllowlist } from './allowlist';
-import { parseRequestUrl } from './requestUrl';
+import { sendJson as sendJsonShared, type MiddlewareHost } from './httpJson.ts';
+import { buildBrowserUrl } from '../core/browser/browserSession.ts';
+import { acceptLanguageHeader } from '../core/search/searchLanguage.ts';
+import { REQUEST_TIMEOUT_DEFAULTS } from '../core/config/sharedConfig.ts';
+import { logCaughtError } from '../lib/caughtError.ts';
+import { parseAllowlist } from './allowlist.ts';
+import { parseRequestUrl } from './requestUrl.ts';
 
 
 const defaultProxyMs = REQUEST_TIMEOUT_DEFAULTS.BROWSER_PROXY_MS;

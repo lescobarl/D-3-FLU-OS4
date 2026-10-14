@@ -10,12 +10,12 @@
 
 import Dexie, { type EntityTable } from 'dexie';
 import { v4 as uuidv4 } from 'uuid';
-import type { EnvironmentDefinition } from '../environments/environmentRegistry';
-import type { PaletteDefinition } from '../branding/seasonalPalettes';
-import type { SearchSite } from '../search/searchSiteTypes';
-import type { AgendaItem } from '../agenda/agendaModel';
-import type { ConversationEntry } from '../../types/bridge';
-import { buildSyncTuple } from './syncTuple';
+import type { EnvironmentDefinition } from '../environments/environmentRegistry.ts';
+import type { PaletteDefinition } from '../branding/seasonalPalettes.ts';
+import type { SearchSite } from '../search/searchSiteTypes.ts';
+import type { AgendaItem } from '../agenda/agendaModel.ts';
+import type { ConversationEntry } from '../../types/bridge.ts';
+import { buildSyncTuple } from './syncTuple.ts';
 
 // -----------------------------------------------------------
 // Sync Tuple — Obligación #7

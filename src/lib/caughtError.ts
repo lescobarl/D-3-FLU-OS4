@@ -39,7 +39,7 @@ export function logCaughtError(context: string, ...details: unknown[]): void {
     } catch {
         /* ignorado: la consola no está disponible en este contexto */
     }
-    void import('./clientLogRelay')
+    void import('./clientLogRelay.ts')
         .then((mod) => mod.relayLog('ERROR', 'catch', message, { detail }))
         .catch((e: unknown) => {
             // Un fallo del relay NO se re-reporta por el registro central: ese

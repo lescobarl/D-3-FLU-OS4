@@ -11,9 +11,9 @@
 //   "paso" / "siguiente" → revela la palabra y salta
 // Gana al completar la palabra; pierde al agotar los intentos.
 // ============================================================
-import type { GameEngine } from './gameEngine';
-import type { GameSession, GameTurnResult } from './types';
-import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, baseSession, beginGame, clamp, gameOverResult, hasAnyToken, hasToken, isEngineCommand, normalizeForMatch, pickRandom, resetGameSession, turnResult } from './gameUtils';
+import type { GameEngine } from './gameEngine.ts';
+import type { GameSession, GameTurnResult } from './types.ts';
+import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, baseSession, beginGame, clamp, gameOverResult, hasAnyToken, hasToken, isEngineCommand, normalizeForMatch, pickRandom, resetGameSession, turnResult } from './gameUtils.ts';
 
 export interface AhorcadoWord {
     palabra: string;

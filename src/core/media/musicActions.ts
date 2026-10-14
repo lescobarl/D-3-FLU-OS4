@@ -8,7 +8,7 @@
 // ============================================================
 
 /** Ids admitidos en `contract.musica.accion`. */
-import { normalizeForMatch } from '../../lib/textUtils';
+import { normalizeForMatch } from '../../lib/textUtils.ts';
 
 export const MUSIC_ACTIONS = ['play_music', 'pause_music', 'stop_music'] as const;
 

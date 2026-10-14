@@ -13,7 +13,7 @@ import {
 } from './conversationRow.js'
 import { resolveConversationSpeaker as matchSpeakerByVoice, getFallbackSpeaker } from './voiceIdentity.js'
 import { isMeasuredIdentityMatch } from './speakerDiarization.js'
-import { relayLog } from '../../lib/clientLogRelay'
+import { relayLog } from '../../lib/clientLogRelay.ts'
 import { DEFAULT_SAMPLE_RATE } from './audioConstants.js'
 
 /**

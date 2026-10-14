@@ -12,7 +12,7 @@
 // a la vez (y las regex se construyen a partir de esta tabla: no hay listas de
 // frases paralelas que puedan divergir).
 // ============================================================
-import { normalizeForMatch } from './textUtils';
+import { normalizeForMatch } from './textUtils.ts';
 
 /** Números hablados en español (0-30, sin acentos: se normaliza antes de buscar). */
 export const SPOKEN_NUMBERS_ES: Readonly<Record<string, number>> = Object.freeze({

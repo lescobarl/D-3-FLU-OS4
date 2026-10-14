@@ -5,11 +5,11 @@ import { detectParticipantFloorCommand } from './participantFloor.js'
 import { compareCosineSignatures, normalizeEmbeddingVector } from './speakerCore.js'
 import { looksLikeTrailingFragment, mergeTranscriptText } from './transcriptDelta.js'
 import { buildWakeWordPattern } from './wakeWord.js'
-import { cleanForSpeech, normalizeSpaces, stripDiacriticsLower as stripDiacritics } from '../../lib/textUtils'
-import { SPEECH_LOCALES } from '../../core/config/localeConfig'
+import { cleanForSpeech, normalizeSpaces, stripDiacriticsLower as stripDiacritics } from '../../lib/textUtils.ts'
+import { SPEECH_LOCALES } from '../../core/config/localeConfig.ts'
 import { DEFAULT_SAMPLE_RATE } from './audioConstants.js'
 import { COMMAND_IDS } from './commandIds.js'
-import { isTutoringGlobalProgressQuery, isTutoringProgressQuery, isTutoringReviewQuery } from '../../core/tutoring/tutoringModel'
+import { isTutoringGlobalProgressQuery, isTutoringProgressQuery, isTutoringReviewQuery } from '../../core/tutoring/tutoringModel.ts'
 
 // Fuente única de normalización de espacios y del plegado NFD
 // (src/lib/textUtils.ts). `stripDiacritics` se re-exporta con el contrato

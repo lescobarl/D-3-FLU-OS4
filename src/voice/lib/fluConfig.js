@@ -1,6 +1,6 @@
 /** Configuración central de FLU. */
-import { OPENROUTER_DEFAULTS, AI_PROVIDER_IDS, SEARCH_PROVIDER_IDS } from '../../core/config/sharedConfig'
-import { SPEECH_LOCALES, DEFAULT_SPEECH_LOCALE, BILINGUAL_LOCALES } from '../../core/config/localeConfig'
+import { OPENROUTER_DEFAULTS, AI_PROVIDER_IDS, SEARCH_PROVIDER_IDS } from '../../core/config/sharedConfig.ts'
+import { SPEECH_LOCALES, DEFAULT_SPEECH_LOCALE, BILINGUAL_LOCALES } from '../../core/config/localeConfig.ts'
 import { DEFAULT_SAMPLE_RATE } from './audioConstants.js'
 import { RESET_AVATAR_COLOR_PHRASES } from './voiceCommandPhrases.js'
 import { COMMAND_IDS } from './commandIds.js'

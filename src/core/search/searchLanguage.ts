@@ -11,10 +11,10 @@
 // idioma→subdominio llegan desde FLU_CONFIG.browser.languageWords
 // y FLU_CONFIG.browser.languageHosts (config-driven).
 // ============================================================
-import { normalizeHost } from '../browser/browserSession';
-import { escapeRegExp, stripDiacritics } from '../../lib/textUtils';
+import { normalizeHost } from '../browser/browserSession.ts';
+import { escapeRegExp, stripDiacritics } from '../../lib/textUtils.ts';
 
-import { normalizeLang } from '../config/localeConfig';
+import { normalizeLang } from '../config/localeConfig.ts';
 export type ResolvedLanguage = 'es' | 'en';
 
 /** Marcadores por idioma: config-driven (browser.languageWords). */

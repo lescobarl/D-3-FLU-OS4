@@ -13,9 +13,9 @@
 //   "paso" / "siguiente" → pasa a la siguiente letra
 // Fin al completar `rounds` letras.
 // ============================================================
-import type { GameEngine } from './gameEngine';
-import type { GameSession, GameTurnResult } from './types';
-import { END_GAME_FRAMES, HELP_CORE_FRAMES, STOPWORDS_ES, adoptRandom, advanceRound, bankItemAt, baseSession, beginGame, buildShuffledState, gameOverResult, hasAnyToken, isEngineCommand, isLastRound, normalizeForMatch, resetGameSession, stripDiacritics, turnResult } from './gameUtils';
+import type { GameEngine } from './gameEngine.ts';
+import type { GameSession, GameTurnResult } from './types.ts';
+import { END_GAME_FRAMES, HELP_CORE_FRAMES, STOPWORDS_ES, adoptRandom, advanceRound, bankItemAt, baseSession, beginGame, buildShuffledState, gameOverResult, hasAnyToken, isEngineCommand, isLastRound, normalizeForMatch, resetGameSession, stripDiacritics, turnResult } from './gameUtils.ts';
 
 export interface AbecedarioItem {
     letra: string;

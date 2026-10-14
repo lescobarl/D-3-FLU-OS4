@@ -27,9 +27,9 @@ export interface MusicSearchClient {
  */
 export type StreamProbe = (url: string, timeoutMs?: number) => Promise<boolean>
 
-import { REQUEST_TIMEOUT_DEFAULTS } from '../core/config/sharedConfig'
-import { logCaughtError } from '../lib/caughtError';
-import { fetchTextEngine } from '../core/ai/httpClient';
+import { REQUEST_TIMEOUT_DEFAULTS } from '../core/config/sharedConfig.ts'
+import { logCaughtError } from '../lib/caughtError.ts';
+import { fetchTextEngine } from '../core/ai/httpClient.ts';
 
 const SEARCH_ROWS = 5
 

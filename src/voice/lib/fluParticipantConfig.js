@@ -3,9 +3,9 @@
  * Defaults en fluConfig.fluParticipant; overrides en localStorage (flu-participant-settings).
  */
 import { FLU_CONFIG } from './fluConfig.js'
-import { logCaughtError } from '../../lib/caughtError';
-import { normalizeLang } from '../../core/config/localeConfig';
-import { hasLocalStorage, localGet, localRemove, localSet } from '../../core/storage/localStore';
+import { logCaughtError } from '../../lib/caughtError.ts';
+import { normalizeLang } from '../../core/config/localeConfig.ts';
+import { hasLocalStorage, localGet, localRemove, localSet } from '../../core/storage/localStore.ts';
 
 export const FLU_PARTICIPANT_STORAGE_KEY = 'flu-participant-settings'
 const LEGACY_ENABLED_KEY = 'flu-participant-enabled'

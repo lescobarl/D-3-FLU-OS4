@@ -14,8 +14,8 @@
 //   - formatGeminiUserMessage  → mensaje representativo
 // ============================================================
 
-import { REQUEST_TIMEOUT_DEFAULTS } from '../config/sharedConfig'
-import { fetchWithDeadline, type DeadlineExceeded } from '../../lib/fetchWithDeadline'
+import { REQUEST_TIMEOUT_DEFAULTS } from '../config/sharedConfig.ts'
+import { fetchWithDeadline, type DeadlineExceeded } from '../../lib/fetchWithDeadline.ts'
 
 export const AI_REQUEST_DEADLINE_MS = REQUEST_TIMEOUT_DEFAULTS.AI_TEXT_MS
 

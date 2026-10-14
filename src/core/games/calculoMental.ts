@@ -13,9 +13,9 @@
 // - Acierto → +1 punto, siguiente operación.
 // - Fin al alcanzar `rounds` operaciones.
 // ============================================================
-import type { GameEngine } from './gameEngine';
-import type { GameSession, GameTurnResult } from './types';
-import { END_GAME_FRAMES, adoptRandom, baseSession, beginGame, clamp, gameOverResult, hasAnyToken, isStopOrSkipCommand, normalizeForMatch, pickRandom, readRounds, resetGameSession, resolveNumericAnswer, roundsOverMessage, turnResult } from './gameUtils';
+import type { GameEngine } from './gameEngine.ts';
+import type { GameSession, GameTurnResult } from './types.ts';
+import { END_GAME_FRAMES, adoptRandom, baseSession, beginGame, clamp, gameOverResult, hasAnyToken, isStopOrSkipCommand, normalizeForMatch, pickRandom, readRounds, resetGameSession, resolveNumericAnswer, roundsOverMessage, turnResult } from './gameUtils.ts';
 
 const DEFAULT_ROUNDS = 3;
 const MAX_ROUNDS = 10;

@@ -1,4 +1,4 @@
-import { normalizeLang } from '../core/config/localeConfig';
+import { normalizeLang } from '../core/config/localeConfig.ts';
 // ============================================================
 // textUtils — Utilidades compartidas de texto
 // ============================================================

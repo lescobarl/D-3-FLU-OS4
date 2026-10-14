@@ -13,9 +13,9 @@
 //   "listo" / "sigue" / contar 1-4 → pasa al siguiente paso
 // Fin al completar `rondas` ciclos (rondas × 2 pasos).
 // ============================================================
-import type { GameEngine } from './gameEngine';
-import type { GameSession, GameTurnResult } from './types';
-import { END_GAME_FRAMES, HELP_CORE_FRAMES, baseSession, beginGame, gameOverResult, hasAnyToken, isEngineCommand, normalizeForMatch, readNumberCfg, resetGameSession, resolveNumericAnswer, turnResult } from './gameUtils';
+import type { GameEngine } from './gameEngine.ts';
+import type { GameSession, GameTurnResult } from './types.ts';
+import { END_GAME_FRAMES, HELP_CORE_FRAMES, baseSession, beginGame, gameOverResult, hasAnyToken, isEngineCommand, normalizeForMatch, readNumberCfg, resetGameSession, resolveNumericAnswer, turnResult } from './gameUtils.ts';
 
 const DEFAULT_RONDAS = 4;
 const MAX_RONDAS = 6;

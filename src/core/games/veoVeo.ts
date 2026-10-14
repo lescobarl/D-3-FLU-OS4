@@ -15,9 +15,9 @@
 //
 // El RNG es inyectable vía options.random para tests deterministas.
 // ============================================================
-import type { GameEngine } from './gameEngine';
-import type { GameSession, GameTurnResult } from './types';
-import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, bankItemAt, baseSession, beginGame, buildShuffledState, hasAnyToken, isEngineCommand, resetGameSession, runGuessTurn, stripDiacritics } from './gameUtils';
+import type { GameEngine } from './gameEngine.ts';
+import type { GameSession, GameTurnResult } from './types.ts';
+import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, bankItemAt, baseSession, beginGame, buildShuffledState, hasAnyToken, isEngineCommand, resetGameSession, runGuessTurn, stripDiacritics } from './gameUtils.ts';
 
 export interface VeoVeoItem {
     nombre: string;

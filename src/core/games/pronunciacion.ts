@@ -18,14 +18,14 @@
 //   "otra" / "siguiente"   -> salta a la siguiente
 // Fin al completar `rounds` palabras.
 // ============================================================
-import type { GameEngine } from './gameEngine';
-import type { GameSession, GameTurnResult } from './types';
-import { END_GAME_FRAMES, HELP_CORE_FRAMES, SKIP_CORE_FRAMES, adoptRandom, advanceRound, bankItemAt, baseSession, beginGame, gameOverResult, gamePrompt, hasAnyToken, hasToken, isEngineCommand, isLastRound, normalizeForMatch, readRounds, resetGameSession, shuffleOrder, turnResult } from './gameUtils';
+import type { GameEngine } from './gameEngine.ts';
+import type { GameSession, GameTurnResult } from './types.ts';
+import { END_GAME_FRAMES, HELP_CORE_FRAMES, SKIP_CORE_FRAMES, adoptRandom, advanceRound, bankItemAt, baseSession, beginGame, gameOverResult, gamePrompt, hasAnyToken, hasToken, isEngineCommand, isLastRound, normalizeForMatch, readRounds, resetGameSession, shuffleOrder, turnResult } from './gameUtils.ts';
 import {
     PRONUNCIACION_BANK,
     pronunciacionWordsByLevel,
     type PronunciacionWord,
-} from '../config/pronunciacionBank';
+} from '../config/pronunciacionBank.ts';
 
 // Reexportado para no romper la superficie publica del motor.
 export { PRONUNCIACION_BANK };

@@ -16,9 +16,9 @@
 //   "sigue" / "paso"   → avanza a la siguiente línea
 // Fin al terminar la letra de la canción.
 // ============================================================
-import type { GameEngine } from './gameEngine';
-import type { GameSession, GameTurnResult } from './types';
-import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, baseSession, beginGame, gameOverResult, hasAnyToken, isEngineCommand, normalizeForMatch, resetGameSession, turnResult } from './gameUtils';
+import type { GameEngine } from './gameEngine.ts';
+import type { GameSession, GameTurnResult } from './types.ts';
+import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, baseSession, beginGame, gameOverResult, hasAnyToken, isEngineCommand, normalizeForMatch, resetGameSession, turnResult } from './gameUtils.ts';
 
 export interface KaraokeSong {
     id: string;          // id espejo de FLU_PLAYLIST (musicPlayer.ts)

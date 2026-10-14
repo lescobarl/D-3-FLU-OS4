@@ -12,9 +12,9 @@
 //   "paso" / "siguiente"   → salta al siguiente ejercicio
 // Fin al completar `rounds` secuencias.
 // ============================================================
-import type { GameEngine } from './gameEngine';
-import type { GameSession, GameTurnResult } from './types';
-import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, advanceRound, bankItemAt, baseSession, buildShuffledState, findTokenIndex, gameOverResult, hasAnyToken, isEngineCommand, isLastRound, normalizeForMatch, resetGameSession, roundsOverMessage, shuffleOrder, turnResult } from './gameUtils';
+import type { GameEngine } from './gameEngine.ts';
+import type { GameSession, GameTurnResult } from './types.ts';
+import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, advanceRound, bankItemAt, baseSession, buildShuffledState, findTokenIndex, gameOverResult, hasAnyToken, isEngineCommand, isLastRound, normalizeForMatch, resetGameSession, roundsOverMessage, shuffleOrder, turnResult } from './gameUtils.ts';
 
 export interface OrdenaPaso {
     texto: string;

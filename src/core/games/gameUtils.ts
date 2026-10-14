@@ -11,7 +11,7 @@
 
 export type RandomSource = () => number;
 
-import type { AvatarAnimation, GameSession, GameTurnResult } from './types';
+import type { AvatarAnimation, GameSession, GameTurnResult } from './types.ts';
 
 /**
  * EPILOGO de un motor: la forma UNICA de un resultado de fin de partida.
@@ -102,8 +102,8 @@ export function clamp(value: number, min: number, max: number): number {
 
 // Normalización de texto: fuente única en src/lib/textUtils.ts.
 // Se importa Y se re-exporta: el binding se usa en este modulo (isExplicitOrderFor).
-import { escapeRegExp, normalizeForMatch } from '../../lib/textUtils';
-export { stripDiacritics, normalizeForMatch } from '../../lib/textUtils';
+import { escapeRegExp, normalizeForMatch } from '../../lib/textUtils.ts';
+export { stripDiacritics, normalizeForMatch } from '../../lib/textUtils.ts';
 
 /**
  * Índice (en el texto normalizado) donde aparece la frase como palabra/token,

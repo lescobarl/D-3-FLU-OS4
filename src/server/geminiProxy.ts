@@ -50,8 +50,8 @@ function writeClientLogLine(file: string | null, line: string, data: unknown): v
         logCaughtError('[geminiProxy] client log: fallo al escribir debug.log', errorField(err, 'message') || err);
     }
 }
-import { sendJson, type MiddlewareHost } from './httpJson';
-import { logCaughtError } from '../lib/caughtError';
+import { sendJson, type MiddlewareHost } from './httpJson.ts';
+import { logCaughtError } from '../lib/caughtError.ts';
 import {
     OPENROUTER_DEFAULTS,
     isLocalTextEndpoint,
@@ -59,7 +59,7 @@ import {
     resolveServerTextApiKey,
     resolveServerTextApiUrl,
     setServerEnv,
-} from '../core/config/sharedConfig';
+} from '../core/config/sharedConfig.ts';
 
 // ─── Import canonical implementations from OS2 ──────────────
 // These are the exact same functions OS2 uses in its Express server.

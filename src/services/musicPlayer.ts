@@ -12,10 +12,10 @@ import {
   type MusicSearchClient,
   type StreamProbe,
   probeStream,
-} from './musicSearch'
-import { MUSIC_CATALOG } from '../core/config/musicCatalog'
-import { normalizeForMatchExact as normalizeForMatch } from '../lib/textUtils'
-import { logCaughtError } from '../lib/caughtError';
+} from './musicSearch.ts'
+import { MUSIC_CATALOG } from '../core/config/musicCatalog.ts'
+import { normalizeForMatchExact as normalizeForMatch } from '../lib/textUtils.ts'
+import { logCaughtError } from '../lib/caughtError.ts';
 
 export interface MusicTrack {
   id: string

@@ -1,6 +1,6 @@
 import { cleanForSpeech } from './audioMath.js'
 import { normalizeConfiguracion } from './configCommands.js'
-import { asMusicAction } from '../../core/media/musicActions'
+import { asMusicAction } from '../../core/media/musicActions.ts'
 import { FLU_CONFIG } from './fluConfig.js'
 import { GEMINI_INFERABLE_COMMAND_IDS } from './voiceCommands.js'
 import { buildVisualGenerationPrompt } from './fluVisualPipeline.js'
@@ -17,8 +17,8 @@ import {
   resolveServerTextApiKey,
   resolveServerTextApiUrl,
   resolveServerTextModel,
-} from '../../core/config/sharedConfig'
-import { STORAGE_KEYS, resolveTextApiKey } from '../../core/config/appConfig'
+} from '../../core/config/sharedConfig.ts'
+import { STORAGE_KEYS, resolveTextApiKey } from '../../core/config/appConfig.ts'
 
 import {
   buildBareVisualFallbackWorkspace,
@@ -33,19 +33,19 @@ import {
   fetchTextEngineResilient,
   REQUEST_TIMEOUT_PRESETS,
   resolveRequestTimeout,
-} from '../../core/ai/httpClient'
-import { buildAnimPrompt } from '../../core/anim/expressionRegistry'
-import { buildCapabilitiesPrompt } from '../../services/capabilities'
-import { buildConfiguracionPrompt } from '../../core/config/voiceConfigCatalog'
-import { buildAmbientePrompt } from '../../core/environments/environmentPrompt'
-import { buildSelfManifestoPrompt } from '../../core/selfKnowledge/selfKnowledge'
-import { postGeminiContractResilient } from '../../services/geminiContractClient'
-import { logCaughtError } from '../../lib/caughtError';
-import { AI_PROVIDER_IDS, POLLINATIONS_DEFAULTS } from '../../core/config/sharedConfig'
-import { localGet } from '../../core/storage/localStore';
+} from '../../core/ai/httpClient.ts'
+import { buildAnimPrompt } from '../../core/anim/expressionRegistry.ts'
+import { buildCapabilitiesPrompt } from '../../services/capabilities.ts'
+import { buildConfiguracionPrompt } from '../../core/config/voiceConfigCatalog.ts'
+import { buildAmbientePrompt } from '../../core/environments/environmentPrompt.ts'
+import { buildSelfManifestoPrompt } from '../../core/selfKnowledge/selfKnowledge.ts'
+import { postGeminiContractResilient } from '../../services/geminiContractClient.ts'
+import { logCaughtError } from '../../lib/caughtError.ts';
+import { AI_PROVIDER_IDS, POLLINATIONS_DEFAULTS } from '../../core/config/sharedConfig.ts'
+import { localGet } from '../../core/storage/localStore.ts';
 
-import { pickText } from '../../lib/uiStrings';
-import { GENERATION_FAILED_SOURCE } from '../../lib/generationTrace';
+import { pickText } from '../../lib/uiStrings.ts';
+import { GENERATION_FAILED_SOURCE } from '../../lib/generationTrace.ts';
 export {
   buildVisualAnchorBlock,
   extractVisualSubject,

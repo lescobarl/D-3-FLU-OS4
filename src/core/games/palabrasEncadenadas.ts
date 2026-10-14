@@ -12,9 +12,9 @@
 // - Enlace válido → +1 y FLU continúa la cadena.
 // - "paso" / "no sé" → cierra la cadena con un resumen.
 // ============================================================
-import type { GameEngine } from './gameEngine';
-import type { GameSession, GameTurnResult } from './types';
-import { END_GAME_FRAMES, STOPWORDS_ES, adoptRandom, baseSession, beginGame, gameOverResult, hasAnyToken, hasToken, isStopOrSkipCommand, normalizeForMatch, pickRandom, readRounds, resetGameSession, stripDiacritics, turnResult } from './gameUtils';
+import type { GameEngine } from './gameEngine.ts';
+import type { GameSession, GameTurnResult } from './types.ts';
+import { END_GAME_FRAMES, STOPWORDS_ES, adoptRandom, baseSession, beginGame, gameOverResult, hasAnyToken, hasToken, isStopOrSkipCommand, normalizeForMatch, pickRandom, readRounds, resetGameSession, stripDiacritics, turnResult } from './gameUtils.ts';
 
 export const WORD_BANK: readonly string[] = Object.freeze([
     'avión', 'auto', 'árbol', 'agua', 'abeja', 'amigo', 'araña',

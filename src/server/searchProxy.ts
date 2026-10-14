@@ -11,7 +11,7 @@
 //  /api/search/video  (GET) — cuadrícula de vídeo (F4)
 // ============================================================
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { sendJson as sendJsonShared, type MiddlewareHost } from './httpJson';
+import { sendJson as sendJsonShared, type MiddlewareHost } from './httpJson.ts';
 import {
   buildProviderRequest,
   capResults,
@@ -23,13 +23,13 @@ import {
   type SearchProviderConfig,
   type SearchResult,
   type SearchResultType,
-} from '../core/search/searchSession';
-import type { ResolvedLanguage } from '../core/search/searchLanguage';
-import { acceptLanguageHeader } from '../core/search/searchLanguage';
-import { REQUEST_TIMEOUT_DEFAULTS } from '../core/config/sharedConfig';
-import { logCaughtError } from '../lib/caughtError';
-import { parseAllowlist } from './allowlist';
-import { parseRequestUrl } from './requestUrl';
+} from '../core/search/searchSession.ts';
+import type { ResolvedLanguage } from '../core/search/searchLanguage.ts';
+import { acceptLanguageHeader } from '../core/search/searchLanguage.ts';
+import { REQUEST_TIMEOUT_DEFAULTS } from '../core/config/sharedConfig.ts';
+import { logCaughtError } from '../lib/caughtError.ts';
+import { parseAllowlist } from './allowlist.ts';
+import { parseRequestUrl } from './requestUrl.ts';
 
 
 const defaultProxyMs = REQUEST_TIMEOUT_DEFAULTS.SEARCH_PROXY_MS;

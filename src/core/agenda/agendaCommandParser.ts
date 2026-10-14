@@ -12,13 +12,13 @@
 // ============================================================
 import {
     parseNlDateTime,
-} from '../reminders/nlDateParser';
-import { pickTimeOfDay, scanTimesOfDay, stripTimesOfDay } from '../temporal/timeOfDay';
-import { parseTimeOfDayToMs, MS_DAY } from '../temporal/scheduleEngine';
-import { WEEKDAYS_ES } from '../temporal/calendarNames';
-import { normalizeSpokenCommand } from '../../voice/lib/audioMath';
-import type { AgendaKind, AgendaTrigger } from './agendaModel';
-import { normalizeForMatchExact } from '../../lib/textUtils';
+} from '../reminders/nlDateParser.ts';
+import { pickTimeOfDay, scanTimesOfDay, stripTimesOfDay } from '../temporal/timeOfDay.ts';
+import { parseTimeOfDayToMs, MS_DAY } from '../temporal/scheduleEngine.ts';
+import { WEEKDAYS_ES } from '../temporal/calendarNames.ts';
+import { normalizeSpokenCommand } from '../../voice/lib/audioMath.js';
+import type { AgendaKind, AgendaTrigger } from './agendaModel.ts';
+import { normalizeForMatchExact } from '../../lib/textUtils.ts';
 
 // La normalizacion tiene dueno en src/lib/textUtils.ts: aqui se usa la variante que NO
 // colapsa espacios internos (contrato exacto), que es el comportamiento que este parser

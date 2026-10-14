@@ -11,9 +11,9 @@
 //   con el título. Correcto → +1 punto. "paso" salta sin puntuar.
 //   Fin al adivinar `rounds` canciones.
 // ============================================================
-import type { GameEngine } from './gameEngine';
-import type { GameSession, GameTurnResult } from './types';
-import { END_GAME_FRAMES, HELP_CORE_FRAMES, RandomSource, SKIP_CORE_FRAMES, adoptRandom, advanceRound, baseSession, beginGame, gameOverResult, hasAnyToken, isEngineCommand, isLastRound, normalizeForMatch, readRounds, resetGameSession, shuffleOrder, turnResult } from './gameUtils';
+import type { GameEngine } from './gameEngine.ts';
+import type { GameSession, GameTurnResult } from './types.ts';
+import { END_GAME_FRAMES, HELP_CORE_FRAMES, RandomSource, SKIP_CORE_FRAMES, adoptRandom, advanceRound, baseSession, beginGame, gameOverResult, hasAnyToken, isEngineCommand, isLastRound, normalizeForMatch, readRounds, resetGameSession, shuffleOrder, turnResult } from './gameUtils.ts';
 
 export interface SongOption {
     id: string;            // = trackId de FLU_PLAYLIST

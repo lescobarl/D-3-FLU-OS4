@@ -1,4 +1,4 @@
-import { localStorePort, type LocalStorePort } from '../core/storage/localStore';
+import { localStorePort, type LocalStorePort } from '../core/storage/localStore.ts';
 
 // ============================================================
 // storage.ts — Almacenamiento de Zustand por la puerta unica

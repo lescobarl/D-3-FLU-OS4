@@ -20,10 +20,10 @@
 // manejador pida la hora.
 // ============================================================
 
-import { parseAgendaCommand } from './agendaCommandParser';
-import type { AgendaKind } from './agendaModel';
+import { parseAgendaCommand } from './agendaCommandParser.ts';
+import type { AgendaKind } from './agendaModel.ts';
 
-import { pickText } from '../../lib/uiStrings';
+import { pickText } from '../../lib/uiStrings.ts';
 /** Forma minima compatible con `ArbiterResult` de App (no importa de App). */
 export interface AgendaDomainIntent {
     matched: boolean;

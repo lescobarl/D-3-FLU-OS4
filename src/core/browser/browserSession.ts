@@ -1,4 +1,4 @@
-import { logCaughtError } from '../../lib/caughtError';
+import { logCaughtError } from '../../lib/caughtError.ts';
 
 // ============================================================
 // browserSession.ts — Lógica pura del Navegador curado (panel)

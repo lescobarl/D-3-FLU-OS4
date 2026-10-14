@@ -14,9 +14,9 @@
 // Incorrecta → reintenta la misma.
 // Fin al alcanzar `rounds` adivinanzas.
 // ============================================================
-import type { GameEngine } from './gameEngine';
-import type { GameSession, GameTurnResult } from './types';
-import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, baseSession, buildShuffledState, gamePrompt, hasAnyToken, isEngineCommand, itemAtCursor, resetGameSession, runGuessTurn, turnResult } from './gameUtils';
+import type { GameEngine } from './gameEngine.ts';
+import type { GameSession, GameTurnResult } from './types.ts';
+import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, baseSession, buildShuffledState, gamePrompt, hasAnyToken, isEngineCommand, itemAtCursor, resetGameSession, runGuessTurn, turnResult } from './gameUtils.ts';
 
 export interface Riddle {
     pregunta: string;

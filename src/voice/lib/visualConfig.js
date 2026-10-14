@@ -2,7 +2,7 @@ import {
   POLLINATIONS_DEFAULTS,
   REMOTE_RESOURCE_URLS,
   VALID_VISUAL_TIPOS,
-} from '../../core/config/sharedConfig'
+} from '../../core/config/sharedConfig.ts'
 
 export const VISUAL_CONFIG = {
   image: {

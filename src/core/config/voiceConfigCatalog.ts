@@ -14,9 +14,9 @@
 // de forma automática, sin tocar el prompt ni el despachador.
 // ============================================================
 
-import { getPaletteKeys } from '../branding/seasonalPalettes';
-import { AI_PROVIDERS, AVAILABLE_TRAITS, AVAILABLE_TONES, FLU_PROFILES, OPENROUTER_DEFAULTS } from './sharedConfig';
-import { getCanonicalWakeWord } from '../../voice/lib/fluConfig';
+import { getPaletteKeys } from '../branding/seasonalPalettes.ts';
+import { AI_PROVIDERS, AVAILABLE_TRAITS, AVAILABLE_TONES, FLU_PROFILES, OPENROUTER_DEFAULTS } from './sharedConfig.ts';
+import { getCanonicalWakeWord } from '../../voice/lib/fluConfig.js';
 
 // ------------------------------------------------------------
 // Tipos del catálogo

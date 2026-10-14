@@ -12,14 +12,14 @@
 //   - Obligación #7: Sync tuple [revision, updated_at, deleted]
 // ============================================================
 
-import { resolveRowSpeakerLabel } from '../voice/lib/conversationRow';
+import { resolveRowSpeakerLabel } from '../voice/lib/conversationRow.js';
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { resolveSafeStorage } from './storage';
+import { resolveSafeStorage } from './storage.ts';
 import { v4 as uuidv4 } from 'uuid';
-import { relayLog } from '../lib/clientLogRelay';
-import { type SyncTuple } from '../core/db/fluDatabase';
-import { buildSyncTuple } from '../core/db/syncTuple';
+import { relayLog } from '../lib/clientLogRelay.ts';
+import { type SyncTuple } from '../core/db/fluDatabase.ts';
+import { buildSyncTuple } from '../core/db/syncTuple.ts';
 import {
     DEFAULT_PERSONALITY,
     UI_DEFAULTS,
@@ -27,9 +27,9 @@ import {
     TOPIC_KEYWORDS,
     FLU_PROFILES,
     getDefaultProfile,
-} from '../core/config/appConfig';
-import { resolveContextualExpression } from '../core/anim/emotionEngine';
-import type { MinuteUIEntry } from '../hooks/useMinuteKnowledge';
+} from '../core/config/appConfig.ts';
+import { resolveContextualExpression } from '../core/anim/emotionEngine.ts';
+import type { MinuteUIEntry } from '../hooks/useMinuteKnowledge.ts';
 import type {
     ConversationState,
     VoiceBridgeEvent,
@@ -44,12 +44,12 @@ import type {
     AdvancedConfig,
     PersonalityConfig,
     FluProfileDefinition,
-} from '../types/bridge';
+} from '../types/bridge.ts';
 import type {
     DocumentContract,
     AppAnalysisContract,
     GenerationJob,
-} from '../types/documentContracts';
+} from '../types/documentContracts.ts';
 
 // -----------------------------------------------------------
 // Tipos del Store

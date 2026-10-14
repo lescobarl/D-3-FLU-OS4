@@ -8,7 +8,7 @@
 // Cumple Rule #1 (no hardcode) y Obligación #2 (JSDoc).
 // ============================================================
 
-import { fetchTextEngine, fetchTextEngineResilient } from '../core/ai/httpClient';
+import { fetchTextEngine, fetchTextEngineResilient } from '../core/ai/httpClient.ts';
 
 /** Endpoint canónico del proxy de contrato (definido UNA sola vez). */
 const GEMINI_CONTRACT_ENDPOINT = '/api/gemini/contract';

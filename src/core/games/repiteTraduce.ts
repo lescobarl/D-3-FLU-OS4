@@ -12,9 +12,9 @@
 //   "paso" / "siguiente"   → salta a la siguiente palabra
 // Fin al completar `rounds` palabras.
 // ============================================================
-import type { GameEngine } from './gameEngine';
-import type { GameSession, GameTurnResult } from './types';
-import { END_GAME_FRAMES, HELP_CORE_FRAMES, SKIP_CORE_FRAMES, adoptRandom, advanceRound, bankItemAt, baseSession, beginGame, buildShuffledState, gameOverResult, gamePrompt, hasAnyToken, hasToken, isEngineCommand, isLastRound, normalizeForMatch, resetGameSession, turnResult } from './gameUtils';
+import type { GameEngine } from './gameEngine.ts';
+import type { GameSession, GameTurnResult } from './types.ts';
+import { END_GAME_FRAMES, HELP_CORE_FRAMES, SKIP_CORE_FRAMES, adoptRandom, advanceRound, bankItemAt, baseSession, beginGame, buildShuffledState, gameOverResult, gamePrompt, hasAnyToken, hasToken, isEngineCommand, isLastRound, normalizeForMatch, resetGameSession, turnResult } from './gameUtils.ts';
 
 export interface RepiteTraduceItem {
     es: string;              // palabra en español

@@ -6,7 +6,7 @@
  * El Worker y el hilo principal consumen el mismo núcleo (speakerCore.js).
  */
 import { FLU_CONFIG } from './fluConfig.js'
-import { VOICE_DIARIZATION_DEFAULTS } from '../../core/config/sharedConfig'
+import { VOICE_DIARIZATION_DEFAULTS } from '../../core/config/sharedConfig.ts'
 import { compareCosineSignatures, normalizeEmbeddingVector, getFallbackSpeaker, hasVoiceMeasurement } from './speakerCore.js'
 import { DEFAULT_SAMPLE_RATE } from './audioConstants.js'
 import {

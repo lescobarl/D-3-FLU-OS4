@@ -10,7 +10,7 @@
  *
  * Modulo hoja respecto a los clientes: no importa ninguno de ellos.
  */
-import { logCaughtError } from '../../lib/caughtError'
+import { logCaughtError } from '../../lib/caughtError.ts'
 
 /**
  * Crea el puente de pendientes de un cliente de worker.

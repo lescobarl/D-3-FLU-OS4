@@ -30,9 +30,9 @@ export default defineConfig(async ({ mode }) => {
     // server-side cuando el cliente no envía apiKey.
     const env = loadEnv(mode, ROOT, '');
     // P6.13: import() dinamico a proposito (ver el shim de arriba).
-    const { createGeminiMiddleware } = await import('./src/server/geminiProxy');
-    const { createBrowserProxy } = await import('./src/server/browserProxy');
-    const { createSearchProxy } = await import('./src/server/searchProxy');
+    const { createGeminiMiddleware } = await import('./src/server/geminiProxy.ts');
+    const { createBrowserProxy } = await import('./src/server/browserProxy.ts');
+    const { createSearchProxy } = await import('./src/server/searchProxy.ts');
     return {
         plugins: [
             react({

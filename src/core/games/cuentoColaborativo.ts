@@ -18,9 +18,9 @@
 //   "paso" / "sigue"       → FLU continúa la historia
 // Fin al completar `turnos` oraciones (contando el inicio).
 // ============================================================
-import type { GameEngine } from './gameEngine';
-import type { GameSession, GameTurnResult } from './types';
-import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, baseSession, beginGame, clamp, gameOverResult, isEngineCommand, normalizeForMatch, resetGameSession, turnResult } from './gameUtils';
+import type { GameEngine } from './gameEngine.ts';
+import type { GameSession, GameTurnResult } from './types.ts';
+import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, baseSession, beginGame, clamp, gameOverResult, isEngineCommand, normalizeForMatch, resetGameSession, turnResult } from './gameUtils.ts';
 
 export interface CuentoItem {
     inicio: string;

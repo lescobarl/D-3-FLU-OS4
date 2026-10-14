@@ -12,9 +12,9 @@
 //   "paso" / "siguiente"  → salta la ronda sin puntuar
 // Fin al completar `rounds` rondas.
 // ============================================================
-import type { GameEngine } from './gameEngine';
-import type { GameSession, GameTurnResult } from './types';
-import { END_GAME_FRAMES, HELP_CORE_FRAMES, SKIP_CORE_FRAMES, adoptRandom, baseSession, beginGame, gameOverResult, hasAnyToken, isEngineCommand, normalizeForMatch, readLongMaxCfg, readRounds, resetGameSession, roundsOverMessage, turnResult } from './gameUtils';
+import type { GameEngine } from './gameEngine.ts';
+import type { GameSession, GameTurnResult } from './types.ts';
+import { END_GAME_FRAMES, HELP_CORE_FRAMES, SKIP_CORE_FRAMES, adoptRandom, baseSession, beginGame, gameOverResult, hasAnyToken, isEngineCommand, normalizeForMatch, readLongMaxCfg, readRounds, resetGameSession, roundsOverMessage, turnResult } from './gameUtils.ts';
 
 export const MEMORY_LETTERS: readonly string[] = Object.freeze([
     'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H',
