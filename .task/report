@@ -6064,3 +6064,84 @@ ALCANCE REAL (0.23): CUBIERTO=la rotacion del log probada en arranque real (la e
 dueno ya no se pierde); NO CUBIERTO=el diagnostico final de P1/P2, que requiere su corrida
 fresca.
 ===============================================================================
+
+===============================================================================
+P11.15 - TRES DEFECTOS MEDIDOS EN SU LOG (2026-10-14): caja congelada / texto perdido /
+sin medida por atasco del PCM
+===============================================================================
+FUENTE: debug.log de su corrida (1036 lineas, 15:54-15:56) + su pantalla. Escenarios
+reportados: "perdida de transcripcion", "mezcla en Hablante 1 a mi con una mujer",
+"se congela y pasa de golpe".
+
+MEDIDO:
+  1) CAJA CONGELADA: 505 sondas `live`; 413 BLOQUEADAS (210 acorta + 133 no-conserva + 70
+     trozo) vs 92 aplicadas. La caja quedaba clavada mientras el ASR avanzaba; el texto
+     llegaba a la conversacion de golpe al cerrar.
+  2) TEXTO PERDIDO: el checker marca D1 (2 turnos con "faltan" palabras) y D5 (10 interinos
+     que no llegaron a fila); la fila 872b0b41 se inserto con 100 chars y los cierres
+     posteriores la REUSARON (`replace`) sin escribir el texto consolidado -> "se perdio un
+     pedazo de lo que dije" (sus palabras).
+  3) SIN MEDIDA (raiz de la mezcla): 9 de 16 preflight `no-vector` (vec=0) y `snap=0` en la
+     mitad de los turnos; la sonda MicPcm muestra el PCM de la app CONGELADO 6 s
+     (15:55:14 -> 15:55:20, total=1440128 constante) mientras el ASR seguia entregando. Sin
+     vector no hay diarizacion y TODOS los turnos caen a la etiqueta sticky "Hablante 1"
+     (su log: `commit{name:"Hablante 1"}` en todos); por esa via la voz de la mujer hereda la
+     etiqueta/el nombre del titular. Su propia voz SI se midio cuando hubo vector
+     (`vec=512 -> name=luis`, correcto).
+
+ARREGLO (3, con duenos unicos existentes):
+  A) conversationStreamCommit.js: una REVISION que NO encoge y pierde <=1 palabra de lo
+     mostrado SE ACEPTA (palabras por `speechWords`) -> la caja se pone al dia sin encoger
+     NUNCA (el criterio "acorta aplicado = 0" sigue en pie; guards de la caja VERDES).
+  B) conversationTurnRow.ts (`replaceLast`): si lo guardado es un FRAGMENTO del texto
+     consolidado que llega, la fila se COMPLETA (nunca encoge), con el dueno unico
+     `isFragmentOfLocution` -> el texto deja de perderse.
+  C) useFluVoiceAssistant.js: el preflight usa `turnAudioForDiarize` (snapshot O chunks
+     vivos) en vez del snapshot solo -> si la ventana del turno quedo vacia por el atasco,
+     la medida sigue siendo posible.
+
+VALIDADO: typecheck 0; build 0; 15 ficheros de guardas VERDES (caja x2, fila/commit x8,
+preflight/identidad x2, techo del hook, srGap, pausa); hook 4528/4530; eslint 0.
+NO CUBIERTO / PENDIENTE: el ATASCO del PCM (6 s sin chunks) es la causa raiz de la falta de
+medida; el arreglo C recupera la medida cuando hay chunks, pero el atasco en si (producer de
+audio / hilo principal ocupado) exige su proxima corrida para medir frecuencia y origen.
+Suite completa y E2E: no corridas.
+===============================================================================
+
+===============================================================================
+P11.15 - CORRECCION DE HONESTIDAD (append-only): A y B RETIRADOS; C se mantiene
+===============================================================================
+El bloque anterior (P11.15, mismo dia) declaro A y B como aplicados. AL MEDIRLOS CON EL
+GATE COMPLETO (pre-commit: lint:guards, 280 ficheros) los dos chocaron con reglas YA
+VALIDADAS DEL DUENO:
+  - B (completar el texto de la fila reusada) rompe DOS guards del dueno:
+    conversationTurnRowSingleWriter ("la fila insertada NO se reescribe: expected okay flow
+    to be okay flow crea una cita") y duenoVozPuntos ("una fila ya escrita NO se muta cuando
+    la locucion crece"). ROJO medido con el fix en el arbol; VERDE con el revert.
+    git checkout -- src/voice/lib/conversationTurnRow.ts
+  - A (aceptar una revision que pierde <=1 palabra) contradice "nada de lo mostrado
+    desaparece" de la regla de la caja; retirado con el fichero completo
+    (git checkout -- src/voice/lib/conversationStreamCommit.js).
+  - C (audio del preflight = turnAudioForDiarize: snapshot O chunks vivos) SE MANTIENE: es
+    el unico de los tres que mide el defecto real de la diarizacion en su log:
+    TurnAudio capture turn=29 snap=0 ms=0 flu=callada total=1440000 chunks=11250 mientras
+    MicPcm total=1440128 chunks=11251 (el PCM SI tenia audio; la VENTANA del snapshot
+    estaba vacia). Sin esto, 9/16 preflight salen no-vector (vec=0) y todos los turnos
+    caen a la etiqueta sticky -> la voz de la mujer hereda Hablante 1 / el nombre.
+
+NUEVA MEDIDA (su corrida 16:04-16:11, checker voz:log sobre debug.log): D1(4), D5(2) y 5
+filas. El defecto REAL de perdida de texto queda acotado y con cadena completa en el item
+P11.16 del ledger:
+  - 16:10:36.426: asrFinal turn=29 "el avion se alejo..." (504) -> commit turn=30 con
+    capture/shown YA en "a la 1:40..." (846) -> row ADDED len=846 = texto VIEJO.
+  - 16:10:36.602: commit turn=32 -> row {action:"reused", id:f050dc99, len:957} SIN escribir
+    texto -> el texto nuevo se DESCARTA (append-only del dueno) -> 107 palabras sin fila.
+  - 16:04:34-16:05:08: caja clavada en 846 con piezas de 2..178 chars bloqueadas ("esta
+    congelado, no transcribe nada", su pantalla) y ninguna fila escrita.
+
+ALCANCE REAL (0.23): CUBIERTO=el arreglo C (validado por la suite de guards completa en el
+pre-commit) y la medida del defecto que A/B intentaban tocar (movida a P11.16 con cadena
+linea a linea). NO CUBIERTO=el defecto de congelacion/perdida en si (plan F/G/H en P11.16,
+NO aplicado: tocar canReplaceLastOnCommit/el volcado exige guard nuevo en ROJO primero) y el
+atasco del PCM como productor (origen por medir).
+===============================================================================

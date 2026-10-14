@@ -39,7 +39,7 @@ import {
 import { noteGameTurn } from '../../core/games/gameSessionStore'
 import { consumesGameTurn, isCatalogLevelGameAction } from '../lib/gameCommands'
 import { relayLog } from '../../lib/clientLogRelay'
-import { captureTurnAudioSnapshot, probePcmBlock, readTurnAudioSnapshot, turnAudioForDiarize } from '../lib/turnAudioSnapshot.js'
+import { captureTurnAudioSnapshot, probePcmBlock, turnAudioForDiarize } from '../lib/turnAudioSnapshot.js'
 import { useIntegrationStore } from '../../store/integrationStore'
 import { fluAsyncErrorHandler } from '../lib/fluAsyncError.js'
 import {
@@ -1454,7 +1454,9 @@ const lastResolvedTurnRef = useRef(0)
         getPreferSpeaker: () => lastLoggedSpeakerRef.current || '',
         getSessionPrimary: () => sessionPrimarySpeakerRef.current || '',
         getReservedLabels: () => [...userSpeakersView.current].filter(Boolean),
-        getCapturedAudio: () => readTurnAudioSnapshot(turnId || activeTurnIdRef.current),
+        // P11.15: sin snapshot (ventana vacia por atasco del PCM) el audio del turno SIGUE en los
+        // chunks vivos; mismo dueno de la eleccion que el stream (turnAudioForDiarize).
+        getCapturedAudio: () => turnAudioForDiarize(turnId || activeTurnIdRef.current, chunksRef.current),
       }),
     [getContinuousBufferAdapter, userSpeakersView],
   )

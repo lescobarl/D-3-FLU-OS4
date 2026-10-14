@@ -684,3 +684,33 @@ de P9.64 y contar las filas sin hablante de P9.65.
   silencio (P11.12).
 - REGLA NUEVA DEL AGENTE: no se arranca el server sin asumir que debug.log es la evidencia
   del dueno (ahora rota, pero el arranque sigue vaciando la corrida actual).
+
+## 2026-10-14 (tarde) - P11.15 APLICADO (solo C); P11.16 ABIERTO con la cadena medida
+
+- HEAD de referencia: 0802400 "fix(voz): el preflight de identidad usa el audio del turno
+  (snapshot O chunks vivos) [P11.15]". Toca SOLO src/voice/hooks/useFluVoiceAssistant.js
+  (+ ledger/report). El hook de pre-commit (lint completo de guards + eslint + typecheck)
+  paso VERDE con ese commit.
+- CONTEXTO: en el turno anterior se intentaron 3 arreglos (A caja-revision, B fila-reuso,
+  C audio-preflight). A y B se RETIRARON con rojo medido: rompen guards del dueno
+  (conversationTurnRowSingleWriter, duenoVozPuntos: "la conversacion solo se INSERTA").
+  C se quedo y es lo unico aplicado. Ver .task/report, seccion "P11.15 - correccion de
+  honestidad".
+- SU LOG DE LAS CORRIDAS 16:04-16:11 ESTA ARCHIVADO (no en el repo) en
+  %TEMP%\flu-debug-owner-2026-10-14-16h04-16h11.log  (1.8 MB). Se movio para que el
+  guard `logRevisionGuard` (revisa la ultima corrida REAL y marca cada bloqueo no-trozo;
+  con su corrida daba ROJO, preexistente al arreglo) pudiera pasar en el pre-commit.
+  Se analiza con:  node scripts/analiza-voz-log.mjs <ruta>
+- PENDIENTE P11.16 (ledger) - DEFECTO REAL MEDIDO, cadena por lineas en el item: (1) el
+  volcado de cierre escribe el texto VIEJO como fila del turno nuevo (commit turn=30 con
+  capture/shown ya en "a la 1:40..." cuando el asrFinal era "el avion se alejo...");
+  (2) el reuso de fila (replace=true) DESCARTA el texto nuevo (regla append-only) -> D5 107
+  palabras sin fila; (3) la caja se clava cuando Chrome confirma un final y abre un
+  resultado mas corto (previa=846, piezas 2..178, 40+ s) y NO se escribe ninguna fila;
+  (4) resetInterimControlBuffers vacia openLine/pendingInterim en cada final sin tocar
+  publishedLiveRef. PLAN F/G/H ya escrito en P11.16 (canReplaceLastOnCommit: cabeza de
+  locucion; capture del volcado = asrFinal del segmento; reset de caja al confirmar).
+  REGLA: primero guard en ROJO (hay que medir con un guard nuevo, no solo con el log).
+- SIGUIENTE: (a) pedir al dueno F5 + una corrida corta para ver si la etiqueta de la voz
+  de la mujer deja de heredar Hablante 1 (midiendo identity vec>0 en la sonda); (b) abrir el
+  contrato de P11.16 con guard ROJO antes de tocar canReplaceLastOnCommit.
