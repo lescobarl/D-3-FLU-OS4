@@ -7,9 +7,12 @@
 // instancia ya activa (el lock solo miraba "hay otra distinta"), y el error se tragaba
 // como si fuera exito.
 //
-// REGLA: el lock de la escucha lo gobiernan los EVENTOS reales (`onstart` marca captura,
-// `onend` la libera) y `startSpeechRecognition` es IDEMPOTENTE mientras captura. Una
-// sola instancia activa: arrancar otra detiene la anterior.
+// REGLA (P9.70 + P9.76): el lock se marca al INTENTAR `start()` (no depende del evento ni
+// del TEXTO del error) y `onstart` CONFIRMA; `onend` libera. `startSpeechRecognition` no
+// re-arranca una escucha ya intentada y devuelve `true` SOLO si el motor confirmo: sin
+// confirmacion devuelve `false` para que el llamante conserve su via de recuperacion
+// (P9.76; el `false` que disparaba el rebuild habia desaparecido con P9.70). Una sola
+// instancia activa: arrancar otra detiene la anterior.
 // ============================================================
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -50,7 +53,7 @@ describe('ciclo de vida del microfono', () => {
     resetActiveRecognitionForTest()
   })
 
-  it('(util) arrancar dos veces la MISMA escucha no la re-arranca (idempotente)', () => {
+  it('P9.70 + P9.76: con onstart CONFIRMADO el 2.o start es true (idempotente, sin churn)', () => {
     const r = fakeRecognition({ throwOnSecondStart: true })
     bindSpeechRecognition(r as never, { onEnd: vi.fn() })
     expect(startSpeechRecognition(r as never)).toBe(true)
@@ -59,14 +62,15 @@ describe('ciclo de vida del microfono', () => {
     expect((r as unknown as { start: { mock: { calls: unknown[] } } }).start.mock.calls.length).toBe(1)
   })
 
-  it('P9.70: el lock se marca al INTENTAR start(), no depende de onstart ni del TEXTO del error', () => {
-    // Sin `onstart` (el motor tarda o no lo emite): antes la guarda (capturing.has) no veia la
-    // captura, el 2.o start() volvia a llamar start() y, si el error no casaba el texto
-    // ('already started'), devolvia false -> el micro no volvia, en silencio.
+  it('P9.70 + P9.76: el lock es del INTENTO; sin onstart NO re-arranca y avisa (false)', () => {
+    // Sin `onstart` (el motor tarda o no lo emite): la guarda no re-arranca (P9.70: el lock es
+    // del INTENTO) y el valor dice que NO hay confirmacion (P9.76), para que el llamante
+    // conserve su via de recuperacion (stop + retry + rebuild). Con onstart, true (caso de
+    // arriba).
     const r = fakeRecognition({ throwOnSecondStart: true })
     bindSpeechRecognition(r as never, {})
     expect(startSpeechRecognition(r as never)).toBe(true)
-    expect(startSpeechRecognition(r as never), 'idempotente aunque NO llegue onstart').toBe(true)
+    expect(startSpeechRecognition(r as never), 'sin confirmacion el 2.o start avisa (false)').toBe(false)
     expect(
       (r as unknown as { start: { mock: { calls: unknown[] } } }).start.mock.calls.length,
       'P9.70: no se re-arranca (el lock es del INTENTO)',

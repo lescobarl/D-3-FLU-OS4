@@ -5838,3 +5838,34 @@ ALCANCE REAL (0.23): CUBIERTO=la medicion del despacho con funciones reales, la 
 registro en lint:guards; NO CUBIERTO=el DoD-producto (una corrida real del dueno; si
 volviera a verse Registrado x2, el log reabre el item).
 ===============================================================================
+
+===============================================================================
+P9.76 - EL MICRO AVISA CUANDO EL MOTOR NO CONFIRMA ARRANQUE (2026-10-14)
+===============================================================================
+DEFECTO (declarado en P9.70/P9.76): el lock de P9.70 se marca al INTENTAR start(), asi que
+un 2.o start sobre la misma instancia devolvia SIEMPRE true; con eso desaparecia el false
+que disparaba la recuperacion (stop + retry + rebuild) en useFluVoiceAssistant.js:1245-1262,
+y si el motor moria en silencio (sin onend/onerror) el micro podia quedarse muerto hasta el
+watchdog.
+
+ARREGLO (src/voice/lib/speechRecognitionLocal.js): se separa INTENTO de CONFIRMACION.
+  - capturing (P9.70) se marca al intentar start() y se limpia en onend/stop/abort.
+  - confirmed NUEVO (P9.76): lo marca onstart (y la rama explicita already started); lo
+    limpian onend/stop/abort.
+  - el 2.o start NO re-arranca (sigue habiendo 1 sola llamada a start()) pero devuelve
+    confirmed.has(rec) -> false si el motor no confirmo, para que el llamante conserve su
+    via de recuperacion. Con onstart confirmado sigue siendo true (sin churn).
+  - resetActiveRecognitionForTest recrea ambos WeakSet (no se pueden vaciar).
+
+MEDIDO (tests/vozReinicioMicroGuard.test.ts, actualizado):
+  - sin onstart: 2.o start = false y 1 sola llamada a start() (ROJO-EN-VIEJO MEDIDO: con el
+    src de HEAD 1 de 8 casos cae, "expected true to be false"; con el arreglo 8/8);
+  - con onstart: 2.o start = true (idempotente, sin churn);
+  - onend libera el lock y permite reanudar; una sola escucha activa (detiene la anterior).
+Consumidores revisados: useFluVoiceAssistant (usa el false como senal de recuperacion) y
+useOnboardingVoiceCapture (ignora el valor) - sin cambios.
+
+ALCANCE REAL (0.23): CUBIERTO=la senal de confirmacion + el guard con rojo-en-viejo medido;
+NO CUBIERTO=el DoD-producto (la corrida en pantalla del dueno: el micro vuelve tras morir,
+ahora con la senal de rebuild restaurada) y la suite completa (CI).
+===============================================================================

@@ -40,16 +40,17 @@ export function bindSpeechRecognition(recognition, handlers = {}) {
 
   const onStart = handlers.onStart || null
   const onEnd = handlers.onEnd || null
-  // El ciclo de vida del lock lo gobiernan los EVENTOS reales del motor, no el
-  // llamante: `onstart` marca captura y `onend` la libera. Sin esto el lock se
-  // quedaba pegado tras `onend` (el motor ya paro) o se creia "capturando" antes
-  // de arrancar.
+  // El ciclo de vida del lock: la captura se marca al INTENTAR start() (P9.70) y
+  // `onstart` CONFIRMA el arranque (P9.76); `onend` libera las dos marcas. Sin esto el
+  // lock quedaba pegado tras `onend` o se creia "capturando" antes de arrancar.
   recognition.onstart = (event) => {
     capturing.add(recognition)
+    confirmed.add(recognition)
     if (onStart) onStart(event)
   }
   recognition.onend = (event) => {
     capturing.delete(recognition)
+    confirmed.delete(recognition)
     if (activeRecognition === recognition) activeRecognition = null
     if (onEnd) onEnd(event)
   }
@@ -66,8 +67,10 @@ export function bindSpeechRecognition(recognition, handlers = {}) {
 // ============================================================
 let activeRecognition = null
 
-/** Instancias que estan CAPTURANDO ahora mismo (se marca en `onstart`, se limpia en `onend`). */
-const capturing = new WeakSet()
+/** Instancias con start() INTENTADO (P9.70: se marca al intentar; se limpia en `onend`/stop). */
+let capturing = new WeakSet()
+/** Instancias cuyo arranque CONFIRMO el motor (`onstart`) - P9.76. */
+let confirmed = new WeakSet()
 
 /** Instancia que está capturando ahora mismo (o null). Solo lectura. */
 export function getActiveRecognition() {
@@ -77,6 +80,10 @@ export function getActiveRecognition() {
 /** Solo para tests: limpia el lock entre casos. */
 export function resetActiveRecognitionForTest() {
   activeRecognition = null
+  // Los WeakSet no se pueden vaciar: se recrean (reset solo de tests; si olvidara las
+  // marcas, el caso siguiente mediria el estado del anterior).
+  capturing = new WeakSet()
+  confirmed = new WeakSet()
 }
 
 export function startSpeechRecognition(recognition) {
@@ -84,7 +91,11 @@ export function startSpeechRecognition(recognition) {
   // YA capturando: un segundo `start()` lanza `InvalidStateError: recognition has
   // already started` (medido en la sesion del dueno). No se re-arranca ni se
   // instancia otra escucha; el motor ya esta capturando.
-  if (activeRecognition === recognition && capturing.has(recognition)) return true
+  // P9.76: el lock NO re-arranca (1 sola llamada a start()) pero el valor dice si el motor
+  // CONFIRMO el arranque (`onstart`). Sin confirmar devuelve false para que el llamante
+  // conserve su via de recuperacion (stop + retry + rebuild): antes devolvia true siempre
+  // y esa senal desaparecia (el micro podia quedarse muerto en silencio).
+  if (activeRecognition === recognition && capturing.has(recognition)) return confirmed.has(recognition)
   if (activeRecognition && activeRecognition !== recognition) {
     // Otra instancia estaba capturando: se detiene antes de arrancar esta.
     stopSpeechRecognition(activeRecognition)
@@ -103,8 +114,10 @@ export function startSpeechRecognition(recognition) {
         logCaughtError('[catch] src/voice/lib/speechRecognitionLocal.js', error);
     const message = String(error?.message || error).toLowerCase()
     if (message.includes('already') && message.includes('start')) {
+      // El motor DICE que ya esta arrancado: confirmacion explicita (P9.76).
       activeRecognition = recognition
       capturing.add(recognition)
+      confirmed.add(recognition)
       return true
     }
     return false
@@ -114,6 +127,7 @@ export function startSpeechRecognition(recognition) {
 export function stopSpeechRecognition(recognition) {
   if (!recognition) return
   capturing.delete(recognition)
+  confirmed.delete(recognition)
   try {
     recognition.stop()
   } catch (error) {
@@ -129,6 +143,7 @@ export function stopSpeechRecognition(recognition) {
 export function abortSpeechRecognition(recognition) {
   if (!recognition) return
   capturing.delete(recognition)
+  confirmed.delete(recognition)
   try {
     if (typeof recognition.abort === 'function') recognition.abort()
     else recognition.stop()
