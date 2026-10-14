@@ -18,7 +18,7 @@ import { FLU_CONFIG } from '../src/voice/lib/fluConfig.js'
 import { getCommandSpeech } from '../src/voice/lib/voiceCommands.js'
 import { resolveTurnSpeakerAtCommit } from '../src/voice/lib/turnSpeakerCommit'
 import { resolveRowSpeakerLabel } from '../src/voice/lib/conversationRow'
-import { resetVoiceDirectory } from '../src/voice/lib/speakerDirectory.js'
+import { resetVoiceDirectory, registerVoiceName, resolveVoiceName, resolveVoiceIdentity } from '../src/voice/lib/speakerDirectory.js'
 import { resolveVoiceParticipants } from '../src/voice/lib/voiceParticipantsSource'
 import { isNavSettlePending, setNavSettlePending } from '../src/voice/lib/navSettleFlag.js'
 
@@ -199,5 +199,56 @@ describe('P4 - la bandera de bloqueo vence sola (no congela)', () => {
         expect(isNavSettlePending(), 'VENCIDO: no bloquea mas capturas').toBe(false)
         setNavSettlePending(false)
         vi.useRealTimers()
+    })
+})
+
+// ------------------------------------------------------------
+// P5b - UNA ETIQUETA AUTOMATICA NO ES UN NOMBRE (medido en su log 2026-10-14 16:34-16:38):
+// row-update voz=speaker_1 "Luis" -> "Hablante 1" -> "Hablante 3" y sus filas (ya con su
+// nombre) acabaron mostrando "Hablante 3". El dueno: "no esta alineado a ninguna definicion
+// del hablante", "esta renombrando todos los hablantes y eso provoca problemas de performance".
+// Regla: "Hablante N" es la AUSENCIA de nombre; el dueno unico del nombre (speakerDirectory)
+// no la registra y no pisa un nombre ya afirmado. El TIMBRE de la voz SI se registra (liga
+// sus turnos aunque todavia no sea nadie).
+// ------------------------------------------------------------
+describe('P5b - la etiqueta automatica no degrada el nombre de la VOZ', () => {
+    beforeEach(() => {
+        resetVoiceDirectory()
+        useIntegrationStore.setState({ conversationHistory: [] })
+    })
+
+    it('registrar "Hablante N" NO cambia el nombre ya afirmado de esa VOZ', () => {
+        registerVoiceName('speaker_1', 'Luis')
+        registerVoiceName('speaker_1', 'Hablante 1')
+        registerVoiceName('speaker_1', 'Hablante 3')
+        expect(resolveVoiceName('speaker_1'), 'la voz conserva su nombre').toBe('Luis')
+    })
+
+    it('el camino REAL (medida tardia de un turno) tampoco degrada el nombre', () => {
+        commitUserTurnRow({ text: 'uno', speakerName: 'Hablante 1', turnId: 21 } as never)
+        updateTurnRowSpeaker(21, 'Luis', { evidenciaAcustica: true })
+        expect(resolveVoiceName('speaker_1')).toBe('Luis')
+        commitUserTurnRow({ text: 'dos', speakerName: 'Hablante 1', turnId: 22 } as never)
+        updateTurnRowSpeaker(22, 'Hablante 1', { evidenciaAcustica: true })
+        commitUserTurnRow({ text: 'tres', speakerName: 'Hablante 1', turnId: 23 } as never)
+        updateTurnRowSpeaker(23, 'Hablante 3', { evidenciaAcustica: true })
+        expect(resolveVoiceName('speaker_1'), 'el nombre no se degrada a etiqueta').toBe('Luis')
+    })
+
+    it('sin nombre pero CON timbre, la VOZ queda registrada (liga sus turnos)', () => {
+        registerVoiceName('speaker_9', '', { vector: [1, 0, 0] })
+        expect(resolveVoiceName('speaker_9')).toBe('')
+        expect(resolveVoiceIdentity([1, 0, 0])?.voiceId).toBe('speaker_9')
+    })
+})
+
+// PRUEBA DE DETECTOR (el detector no es decorativo): un NOMBRE PROPIO si se registra.
+describe('P5b - el detector no es decorativo: el nombre propio manda', () => {
+    it('un nombre propio SI se registra; el vacio no inventa nada', () => {
+        resetVoiceDirectory()
+        registerVoiceName('speaker_1', 'Jorge')
+        expect(resolveVoiceName('speaker_1')).toBe('Jorge')
+        registerVoiceName('speaker_2', '   ')
+        expect(resolveVoiceName('speaker_2')).toBe('')
     })
 })

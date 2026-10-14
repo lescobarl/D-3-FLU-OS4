@@ -81,6 +81,54 @@ describe('bloques largos: la locucion NUEVA no puede reemplazar la fila anterior
   })
 })
 
+// ------------------------------------------------------------
+// P11.16 - MEDIDO 2026-10-14 16:10:36 (su log): Chrome trunco el final de una locucion larga y
+// reentrego la COLA como resultado NUEVO. El commit de la segunda pidio replaceLast (comparten
+// un BLOQUE) y el reuso DESCARTO su texto (la fila solo se INSERTA): 107 palabras que no
+// llegaron a ninguna fila (checker D5). La CABEZA decide: una locucion que SIGUE empieza donde
+// empezo el ancla; una que arranca en la COLA del ancla es OTRA locucion -> fila NUEVA.
+// ------------------------------------------------------------
+const ANCLA_CON_COLA =
+  'para alzar el vuelo en unos cuantos segundos el avion se alejo perdiendose en el cielo negro de esa noche la aeronave era pilotada por el capitan un experimentado piloto de 53 anos de edad'
+const LOCUCION_NUEVA_DESDE_LA_COLA =
+  'el avion se alejo perdiendose en el cielo negro de esa noche la aeronave era pilotada por el capitan un experimentado piloto de 53 anos de edad el primer oficial El vuelo transcurria con normalidad y a las pocas horas la torre de control de la Ciudad de Mexico recibio el mensaje del piloto'
+
+describe('P11.16 - la locucion que arranca en la COLA no reutiliza la fila (su texto no se descarta)', () => {
+  beforeEach(() => {
+    useIntegrationStore.getState().resetConversationHistory()
+  })
+
+  it('el commit de la locucion NUEVA no pide replaceLast sobre el ancla', () => {
+    const action = resolveLogRowAction({
+      activeLogStream: false,
+      newParagraph: false,
+      turnBoundary: false,
+      turnCommit: true,
+      lastEmitted: ANCLA_CON_COLA,
+      lastCommitted: ANCLA_CON_COLA,
+      capture: LOCUCION_NUEVA_DESDE_LA_COLA,
+      logRowContext: {},
+    })
+    expect(action.replaceLast, 'reusar la fila DESCARTA el texto de la locucion nueva').toBe(false)
+  })
+
+  it('escenario real: DOS filas, los dos textos completos (nada de la locucion nueva se pierde)', () => {
+    commitUserTurnRow({ text: ANCLA_CON_COLA, turnId: 61 })
+    const action = resolveLogRowAction({
+      activeLogStream: false,
+      newParagraph: false,
+      turnBoundary: false,
+      turnCommit: true,
+      lastEmitted: ANCLA_CON_COLA,
+      lastCommitted: ANCLA_CON_COLA,
+      capture: LOCUCION_NUEVA_DESDE_LA_COLA,
+      logRowContext: {},
+    })
+    commitUserTurnRow({ text: LOCUCION_NUEVA_DESDE_LA_COLA, turnId: 62, replaceLast: action.replaceLast })
+    const rows = userRows()
+    expect(rows.map((r) => r.text)).toEqual([ANCLA_CON_COLA, LOCUCION_NUEVA_DESDE_LA_COLA])
+  })
+})
 describe('PRUEBA DE DETECTOR (el detector no es decorativo): discrimina progreso real de colapso', () => {
   it('marca la revision ASR de UN token (com -> Comes pollo) como progreso', () => {
     expect(collapseMarker('com', 'Comes pollo')).toBe(true)

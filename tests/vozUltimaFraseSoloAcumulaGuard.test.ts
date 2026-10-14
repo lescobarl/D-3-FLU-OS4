@@ -162,6 +162,21 @@ describe('A - la ultima frase SOLO acumula (lo que se ve)', () => {
     expect(ultimo(mostrado)).toBe('otra cosa distinta que digo ahora')
   })
 
+  it('un resultado NUEVO que ARRANCA en la cola de lo mostrado ANADE lo nuevo (no se congela)', () => {
+    // MEDIDO 2026-10-14 16:04:34-16:05:08 (su log): Chrome confirmo el final TRUNCANDO la cola y
+    // la reentrego como resultado NUEVO; cada emision (2..178 chars) era MAS CORTA que la caja
+    // (previo=846) y quedo BLOQUEADA 40+ s: "esta congelado, no transcribe nada". La emision
+    // arranca en la COLA de lo mostrado y sigue con texto nuevo: es la MISMA locucion creciendo
+    // -> la caja ANADE la parte nueva (nunca encoge, nunca reemplaza).
+    const { deps, mostrado } = makeDeps()
+    const cola = FRASE.split(' ').slice(-5).join(' ')
+    const nuevo = cola + ' y sigue hablando aqui'
+    handleConversationStreamSync(deps as never, { capture: FRASE })
+    handleConversationStreamSync(deps as never, { capture: nuevo })
+    expect(ultimo(mostrado), 'la caja suma lo nuevo en vez de congelarse').toBe(FRASE + ' y sigue hablando aqui')
+    const live = vi.mocked(voiceProbe).mock.calls.filter((c) => c[0] === 'live').map((c) => c[1] as { resultado?: string; acorta?: boolean })
+    expect(live.filter((o) => o.resultado === 'aplicado' && o.acorta === true), 'acorta:true + aplicado = 0').toEqual([])
+  })
   it('la sonda DICE si el acortamiento fue BLOQUEADO o APLICADO (dato concluyente)', () => {
     const { deps } = makeDeps()
     handleConversationStreamSync(deps as never, { capture: FRASE })
