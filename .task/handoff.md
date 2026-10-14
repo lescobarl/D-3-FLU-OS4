@@ -649,3 +649,14 @@ de P9.64 y contar las filas sin hablante de P9.65.
 - FUERA DE LA VARA: scripts/ con walk/readSources/block/duplicateBodies/sh duplicados entre
   instrumentos CONGELADOS y el gate -> PENDIENTE NUEVO A7 (todo): requiere ENMIENDA del dueno
   (nuevo hash de frozen + tocar el gate) antes de unificar.
+
+## 2026-10-14 - A7 CERRADO: un solo dueno del instrumental (autorizacion amplia del dueno)
+
+- Fix (commit 7c427f6): scripts/fsScan.mjs (walkFiles/readSources/block) + scripts/runCmd.mjs
+  (sh/shRaw); los 6 consumidores (duplication, auditoria-codigo, auditoria, audit-metric,
+  hito, task-gate) importan del dueno; readSources sigue exportada donde era API publica.
+- LA VARA NO SE MOVIO: 7 mediciones byte-identicas antes/despues (los 50 ids de audit-metric,
+  duplication.mjs, auditoria-codigo.mjs + self-test, catalogo 28/28, purposeOwners.mjs).
+- scripts/: 3 -> 0 cuerpos duplicados; homonimos 5 -> 1 (main, sin relacion). Re-congelado
+  (frozen.json, 7 ficheros) y GATE paso 0 VERDE; guardas consumidoras 8/8.
+- PENDIENTES: ninguno (0 en el ledger).
