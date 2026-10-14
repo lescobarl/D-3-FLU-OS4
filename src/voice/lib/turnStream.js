@@ -148,6 +148,11 @@ export function isDuplicateTurnCommit(
   if (!capture || !lastCommitAt) return false
   const prior = lastEmitted || lastCommitted
   if (!prior) return false
+  // P11.19 (medido en su log 2026-10-14 17:18): la COLA de una locucion YA ESCRITA llega como
+  // SEGMENTO nuevo (Chrome reentrega el tramo) y quedaba en DOS filas ("se repitio esa frase",
+  // su pantalla). Un texto CONTENIDO en la fila ya escrita no es habla nueva: es la misma
+  // locucion reentregada -> no abre fila.
+  if (isFragmentOfLocution(capture, prior)) return true
   const hayResultadoNuevo = lastResultAt > lastCommitAt
   // Un "resultado nuevo" con el MISMO texto DENTRO de la ventana de eco es el MISMO evento
   // re-entregado por el ASR (doble final ~0,3-0,7 s), no habla nueva: UNA locucion = UN commit.

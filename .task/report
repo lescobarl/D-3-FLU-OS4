@@ -6158,3 +6158,24 @@ was already rendering; no hay root.unmount en src) y un pageerror removeChild. E
 mostraria pantalla de error, no blanco: el blanco apunta a pestana muerta o root desmontado.
 Item P11.17 del ledger. NO se toca main.tsx ni el SW sin la medida (F12 de su pestana o repro).
 ===============================================================================
+
+===============================================================================
+2026-10-14 17:18-17:20 - SU CORRIDA: duplicado en dos filas (ARREGLADO) y etiqueta de su voz
+===============================================================================
+1) DUPLICADO (su queja 2, "esta repitiendo conversacion en dos bloques"): la COLA de la
+   locucion ya escrita llego como SEGMENTO nuevo y quedo en DOS filas (fila: "...vamos a
+   comprar el helado en esta tienda donde no hay empleados" / siguiente fila: "y vamos a
+   comprar el helado en esta tienda donde no hay empleados"). ARREGLO: isDuplicateTurnCommit
+   (dueno unico del dedupe) marca duplicado cuando la captura esta CONTENIDA en la fila ya
+   escrita. Guard conversationStreamCommit P11.19: ROJO antes (1 failed / 23 passed), VERDE
+   despues (24/24); 10 ficheros de guards (134 casos) verdes.
+2) ETIQUETA (su queja 1, "no me reconocio, me puso hablante uno en lugar de Luis"): su voz
+   quedo en DOS clusters ("luis" y "Hablante 1"; clusters write=2 labels ["luis","Hablante 1"])
+   y la resolucion salta entre ellos; los commits salen written:"Hablante 1". La misma voz, dos
+   etiquetas: el cluster automatico NO se pliega al cluster con su nombre. Item P11.20 ABIERTO
+   (guard ROJO primero; due?o de la decision: speakerDiarization/speakerDirectory; no tocar
+   vozUnClusterPorVozGuard / speakerSoloCoalesce / voicePreferRegisteredGuard a ciegas).
+3) LENTITUD ("de repente se alenta"): la sonda identity dispara el preflight repetido con
+   vec=512 (6+ veces por turno, reason resolved-idle) y clusters se reescribe en cada turno;
+   candidato de coste, a medir antes de tocar.
+===============================================================================

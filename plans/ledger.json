@@ -2170,6 +2170,20 @@
       "estado": "todo",
       "evidencia": "MEDIDO en su log (row-update: turnId=4 voz=speaker_1 nombre=Luis; turnId=16 nombre=Hablante 1; turnId=31/33/39/41 nombre=Hablante 3) y en su pantalla (\"lo que ya estaba con Luis lo cambio a hablante uno\", \"creo un hablante tres y reemplazo todos los hablantes uno\", \"esta renombrando todos los hablantes y eso provoca problemas de performance\"). ARREGLO: speakerDirectory.registerVoiceName (dueno unico del nombre) no registra una etiqueta automatica (isAutoSpeakerLabel) y NUNCA pisa el nombre ya afirmado de esa voz; el TIMBRE SI se registra aunque no tenga nombre (liga sus turnos). Guard: duenoVozPuntos P5b (3 casos), ROJO antes (3 failed / 14 passed) y VERDE despues (17 passed). Validado ademas con 12 ficheros de guards de voz/hablante (111 casos).",
       "origen": "log-dueno-2026-10-14-16h34"
+    },
+    {
+      "id": "P11.19",
+      "titulo": "MEDIDO 2026-10-14 17:18: la COLA de una locucion ya escrita llego como SEGMENTO nuevo y quedo en DOS filas (\"se repitio esa frase\").",
+      "estado": "todo",
+      "evidencia": "MEDIDO en su log 17:18-17:20 (FILAS: \"Acompaname a comprar el helado favorito de jungkook y vamos a comprar el helado en esta tienda donde no hay empleados\" + fila siguiente \"y vamos a comprar el helado en esta tienda donde no hay empleados\") y en su pantalla (\"esta repitiendo ahora conversacion en dos bloques\", \"en la siguiente iteracion repite lo mismo, se repitio esa frase\"). ARREGLO: isDuplicateTurnCommit (turnStream.js, DUENO UNICO del dedupe) marca duplicado cuando la captura esta CONTENIDA en la fila ya escrita (isFragmentOfLocution) -> no abre fila. Guard: conversationStreamCommit.test P11.19 (ROJO antes: 1 failed / 23 passed; VERDE despues). Validado con 10 ficheros de guards (134 casos).",
+      "origen": "log-dueno-2026-10-14-17h18"
+    },
+    {
+      "id": "P11.20",
+      "titulo": "MEDIDO 2026-10-14 17:18: su voz quedo en DOS clusters (\"luis\" y \"Hablante 1\") y la resolucion salta entre ellos -> commits written:\"Hablante 1\" (su queja 1: \"no me reconocio, me puso con hablante uno en lugar de Luis\").",
+      "estado": "todo",
+      "evidencia": "MEDIDO en su log: clusters {\"write\":2,\"labels\":[\"luis\",\"Hablante 1\"]} repetido; identity por turno con vec=512 flip-flop entre name:\"luis\" (17:19:30-47), name:\"Hablante 1\" (17:18:52-17:19:09) y name:\"Hablante 2\" (17:18:33-48, la mujer); commits con written:\"Hablante 1\" (17:18:49, 17:18:52, 17:19:06, 17:19:10, 17:19:54, 17:20:39, 17:20:43); row-update speaker_1 -> \"Luis\" solo una vez (17:20:23). RAIZ: el cluster con etiqueta automatica \"Hablante 1\" es la MISMA VOZ que el cluster \"luis\" (su timbre), pero no se pliega al nombre: cuando la resolucion gana por ese cluster, la fila sale \"Hablante 1\". PENDIENTE (guard ROJO primero): plegar el cluster sin nombre al cluster NOMBRADO cuando su timbre es la misma voz (mismo dueno que la decision: speakerDiarization/speakerDirectory), sin tocar los guards del dueno (vozUnClusterPorVozGuard, speakerSoloCoalesce, voicePreferRegisteredGuard).",
+      "origen": "log-dueno-2026-10-14-17h18"
     }
   ],
   "done": [
