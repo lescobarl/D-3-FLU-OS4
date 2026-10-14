@@ -177,6 +177,22 @@ describe('A - la ultima frase SOLO acumula (lo que se ve)', () => {
     const live = vi.mocked(voiceProbe).mock.calls.filter((c) => c[0] === 'live').map((c) => c[1] as { resultado?: string; acorta?: boolean })
     expect(live.filter((o) => o.resultado === 'aplicado' && o.acorta === true), 'acorta:true + aplicado = 0').toEqual([])
   })
+  it('un resultado NUEVO que arranca EN MEDIO de lo mostrado ANADE su cola nueva (no se congela)', () => {
+    // MEDIDO 2026-10-14 16:04:34-16:05:08 (su log): Chrome confirmo el final TRUNCANDO la cola y
+    // la reentrego como resultado NUEVO que arranca en un trozo INTERIOR de la caja de 846
+    // ("el avion se alejo..." estaba DENTRO, no al final) y sigue con texto nuevo; cada emision
+    // (2..178 chars) era MAS CORTA y quedo bloqueada 40+ s ("esta congelado, no transcribe nada").
+    // La caja ANADE su cola nueva: nunca encoge, nunca reemplaza, y un trozo puro no aNade nada.
+    const { deps, mostrado } = makeDeps()
+    const CABEZA = 'a la 1:40 de la madrugada del miercoles 31 de octubre de 1979 el vuelo numero 2605 de la hoy extinta empresa Western Airlines iniciaba su despegue'
+    const INTERIOR = 'el avion se alejo perdiendose en el cielo negro de esa noche'
+    const BOX = CABEZA + ' ' + INTERIOR + ' la aeronave era pilotada por el capitan'
+    handleConversationStreamSync(deps as never, { capture: BOX })
+    expect(ultimo(mostrado)).toBe(BOX)
+    const NUEVO = INTERIOR + ' la aeronave era pilotada por el capitan un experimentado piloto de 53 anos de edad el primer oficial en el puesto que'
+    handleConversationStreamSync(deps as never, { capture: NUEVO })
+    expect(ultimo(mostrado), 'la caja suma la cola nueva en vez de congelarse').toBe(BOX + ' un experimentado piloto de 53 anos de edad el primer oficial en el puesto que')
+  })
   it('la sonda DICE si el acortamiento fue BLOQUEADO o APLICADO (dato concluyente)', () => {
     const { deps } = makeDeps()
     handleConversationStreamSync(deps as never, { capture: FRASE })
