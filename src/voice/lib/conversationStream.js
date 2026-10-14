@@ -1115,14 +1115,28 @@ export function resolveLogRowAction({
    * turnCommit: replaceLast solo si duplicado exacto, revisión ASR del mismo enunciado
    * o extensión progresiva. Nunca si el candidato es un sufijo huérfano recortado.
    */
+  // P11.16 (medido en su log 2026-10-14 16:10:36): una locucion NUEVA puede compartir un BLOQUE
+  // con la COLA del ancla (Chrome trunco el final y reentrego la cola aparte). Reusar la fila
+  // DESCARTA el texto de la nueva (la fila solo se INSERTA): su log dejo 107 palabras sin fila
+  // (D5: "se sigue perdiendo cuando es una frase larga se pierde ya no la mete"). La CABEZA
+  // decide: una locucion que crece o que SIGUE empieza donde empezo el ancla. Una que arranca
+  // en su COLA es OTRA locucion -> fila NUEVA (su texto no se descarta).
+  const empiezaComoElAncla = (anchor = '', candidate = '') => {
+    const aw = speechWords(anchor)
+    const nw = speechWords(candidate)
+    if (aw.length <= 1 || nw.length <= 1) return true
+    let shared = 0
+    while (shared < aw.length && shared < nw.length && aw[shared].toLowerCase() === nw[shared].toLowerCase()) shared += 1
+    return shared >= 2 || (shared >= 1 && aw.length <= 3)
+  }
   const canReplaceLastOnCommit = (anchor = '', candidate = '') => {
     const a = cleanForSpeech(anchor)
     const n = cleanForSpeech(candidate)
     if (!a || !n) return false
     if (a === n) return true
     if (isHarmfulSuffixShrink(a, n)) return false
-    if (utterancesSameRevision(a, n)) return true
-    if (n.length > a.length && utterancesAsrProgress(a, n)) return true
+    if (utterancesSameRevision(a, n)) return empiezaComoElAncla(a, n)
+    if (n.length > a.length && utterancesAsrProgress(a, n)) return empiezaComoElAncla(a, n)
     return false
   }
 

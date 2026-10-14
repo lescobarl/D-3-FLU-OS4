@@ -15,7 +15,7 @@
 // ============================================================
 
 import { getModelId } from './embeddingConfig.js'
-import { compareCosineSignatures, normalizeEmbeddingVector } from './speakerCore.js'
+import { compareCosineSignatures, isAutoSpeakerLabel, normalizeEmbeddingVector } from './speakerCore.js'
 import { registeredVoiceFloor, sameVoiceFloor } from './speakerClusters.js'
 import { foldSpeakerKey } from './speakerLabels.js'
 
@@ -37,11 +37,20 @@ const voiceNames = new Map()
  */
 export function registerVoiceName(voiceId, name, { vector = null, model = voiceVectorModel() } = {}) {
     const id = String(voiceId || '').trim()
+    if (!id) return
     const clean = String(name || '').trim()
-    if (!id || !clean) return
+    const previo = voiceNames.get(id)?.name || ''
+    // UNA ETIQUETA AUTOMATICA NO ES UN NOMBRE (mandato: dos voces parecidas se quedan como
+    // "Hablante N"): no se registra y NUNCA pisa el nombre ya afirmado de esa voz. MEDIDO en
+    // su log 2026-10-14 16:34-16:38: row-update voz=speaker_1 "Luis" -> "Hablante 1" ->
+    // "Hablante 3", y sus filas (ya con su nombre) acabaron mostrando "Hablante 3".
+    const nombre = isAutoSpeakerLabel(clean) ? previo : clean
     const sig = normalizeEmbeddingVector(Array.isArray(vector) ? vector : [])
     // El MODELO viaja SIEMPRE con el vector: sin el, un vector no es comparable.
-    voiceNames.set(id, { name: clean, vector: sig, model: sig.length ? String(model || voiceVectorModel()) : '' })
+    // Sin nombre NI timbre no hay nada que registrar; con TIMBRE SI: la voz queda guardada para
+    // poder responder "que VOZ es esta" (liga sus turnos) aunque todavia no sea nadie.
+    if (!nombre && !sig.length) return
+    voiceNames.set(id, { name: nombre, vector: sig, model: sig.length ? String(model || voiceVectorModel()) : '' })
 }
 
 /** Nombre propio de esa VOZ ('' si no tiene: no se adivina). */

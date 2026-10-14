@@ -6145,3 +6145,16 @@ linea a linea). NO CUBIERTO=el defecto de congelacion/perdida en si (plan F/G/H 
 NO aplicado: tocar canReplaceLastOnCommit/el volcado exige guard nuevo en ROJO primero) y el
 atasco del PCM como productor (origen por medir).
 ===============================================================================
+
+===============================================================================
+HALLAZGO 2026-10-14 16:28:29 - portal en blanco (pestana muerta), servidor OK
+===============================================================================
+El dev server responde HTTP 200 y sirve todos los modulos; un navegador headless limpio
+ARRANCA la app y renderiza la UI (body 724 chars): el arranque no esta roto. Sus logs de
+cliente se cortan EN SECO a las 16:28:29.504 en mitad de un dictado largo (turn 44), con una
+misma frase repetida 4 veces ([WAKE] comando sin wake, phrase los resultados que buscas). En la
+carga headless salen 2 warnings de React (Attempted to synchronously unmount a root while React
+was already rendering; no hay root.unmount en src) y un pageerror removeChild. ErrorBoundary
+mostraria pantalla de error, no blanco: el blanco apunta a pestana muerta o root desmontado.
+Item P11.17 del ledger. NO se toca main.tsx ni el SW sin la medida (F12 de su pestana o repro).
+===============================================================================

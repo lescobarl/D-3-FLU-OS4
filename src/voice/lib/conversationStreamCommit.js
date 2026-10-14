@@ -2,7 +2,7 @@
  * Preview y commit del stream de conversación (mic → UI/log).
  * Extraído de useFluVoiceAssistant para aislar la ruta syncConversationStream.
  */
-import { cleanForSpeech, detectWakeIntroducedName, formatClock, sameRequestWindowMs } from './audioMath.js'
+import { cleanForSpeech, detectWakeIntroducedName, formatClock, sameRequestWindowMs, speechWords } from './audioMath.js'
 import { resolveInlineWakeAtCommit, isTurnCapture, requiresWakeWord } from './wakeTurnCommit.js'
 import { getAsrSegmentationCfg } from './fluTranscriptMotor.js'
 import { FLU_CONFIG } from './fluConfig.js'
@@ -271,6 +271,29 @@ export function handleConversationStreamSync(
     // medido 2026-10-11 22:36 -> 356 acortamientos APLICADOS y la frase viva "se comia"
     // parte de la transcripcion). Cero excepciones: acorta:true + aplicado = 0.
     const previoLive = publishedLiveRef.current || ''
+    // P11.16 (medido en su log 2026-10-14 16:04:34-16:05:08): Chrome confirma el final TRUNCANDO
+    // la cola y la reentrega como resultado NUEVO; cada emision arranca en la COLA de lo mostrado
+    // y sigue con texto nuevo, pero es MAS CORTA que la caja y quedaba bloqueada 40+ s ("esta
+    // congelado, no transcribe nada"). Esa emision NO reemplaza ni es un trozo: es la misma
+    // locucion creciendo -> la caja ANADE la parte nueva. Nunca encoge, nunca reemplaza (solo
+    // acumula). Un trozo puro (sin texto nuevo) sigue bloqueado como siempre.
+    const continuacionDesdeLaCola = (mostrado, nuevo) => {
+      const m = speechWords(mostrado).map((w) => w.toLowerCase())
+      const n = speechWords(nuevo).map((w) => w.toLowerCase())
+      if (m.length < 2 || n.length < 3) return ''
+      const max = Math.min(12, m.length - 1, n.length - 1)
+      for (let k = max; k >= 2; k -= 1) {
+        let igual = true
+        for (let i = 0; i < k; i += 1) {
+          if (m[m.length - k + i] !== n[i]) { igual = false; break }
+        }
+        if (igual) {
+          const extra = n.slice(k).join(' ')
+          return extra ? `${mostrado} ${extra}` : ''
+        }
+      }
+      return ''
+    }
     // 3b: lo mostrado tiene que seguir CONTENIDO en lo nuevo (unico normalizador: cleanForSpeech).
     const conservaLoMostrado = (mostrado, nuevo) => {
       const a = String(cleanForSpeech(mostrado) || '').toLowerCase()
@@ -279,6 +302,13 @@ export function handleConversationStreamSync(
     }
     const esTrozo = isFragmentOfLocution(capture, previoLive)
     if (previoLive && capture.length < previoLive.length) {
+      const continuacion = continuacionDesdeLaCola(previoLive, capture)
+      if (continuacion && continuacion.length > previoLive.length) {
+        voiceProbe('live', { turn: activeTurnIdRef.current, resultado: 'aplicado', motivo: 'cola-solapada', acorta: false, fresh: Boolean(freshUtterance), mismaLocucion: false, reemplaza: false, previo: previoLive.length, len: continuacion.length, text: continuacion.slice(0, 220) }) // BANDERA DE DIAGNOSTICO
+        publishedLiveRef.current = continuacion
+        scheduleLiveTranscriptUpdate(continuacion)
+        return
+      }
       voiceProbe('live', { turn: activeTurnIdRef.current, resultado: 'bloqueado', motivo: esTrozo ? 'trozo' : 'acorta', acorta: true, fresh: Boolean(freshUtterance), mismaLocucion: esTrozo, previo: previoLive.length, len: capture.length, text: capture.slice(0, 220) }) // BANDERA DE DIAGNOSTICO
       return
     }
