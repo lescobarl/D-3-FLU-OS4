@@ -305,7 +305,21 @@ export function handleConversationStreamSync(
         if (j > mejor) mejor = j
       }
       if (mejor < 2) return ''
-      const cola = n.slice(mejor).join(' ')
+      const colaPalabras = n.slice(mejor)
+      // P11.26-b (medido 2026-10-14 19:00 en su pantalla: la caja TRIPLICABA el fragmento): el
+      // bucle del ASR reentrega la misma frase y la union pegaba la repeticion. La cola que se
+      // va a anadir NO puede estar ya en lo mostrado (en ningun tramo): si lo esta, es reentrega
+      // pura -> no se anade nada y sigue el bloqueo normal. Nada se duplica en la caja.
+      const k = Math.min(4, colaPalabras.length)
+      if (k < 2) return ''
+      for (let i = 0; i + k <= m.length; i += 1) {
+        let igual = true
+        for (let j = 0; j < k; j += 1) {
+          if (m[i + j] !== colaPalabras[j]) { igual = false; break }
+        }
+        if (igual) return ''
+      }
+      const cola = colaPalabras.join(' ')
       return cola ? `${mostrado} ${cola}` : ''
     }
     // 3b: lo mostrado tiene que seguir CONTENIDO en lo nuevo (unico normalizador: cleanForSpeech).
@@ -333,7 +347,18 @@ export function handleConversationStreamSync(
     // se exigiera "contener", una revision que cambia una palabra de dentro BLOQUEABA la caja
     // para siempre (se compara con el texto congelado, que ya nunca contiene). El dueno de "es la
     // misma revision" ya existe (utterancesSameRevision): se consume, no se inventa.
-    if (previoLive && !conservaLoMostrado(previoLive, capture) && !utterancesSameRevision(previoLive, capture)) {
+    // P11.26-c (medido 2026-10-14 19:00 en su pantalla: la caja TRIPLICABA y podia PERDER la
+    // cola mostrada): la caja NUNCA se sustituye por un texto que no la contiene. Solo puede
+    // CRECER anadiendo la cola nueva genuina (union); si no hay nada nuevo que anadir, se
+    // bloquea. Nada se duplica y nada de lo mostrado desaparece.
+    if (previoLive && !conservaLoMostrado(previoLive, capture)) {
+      const unionLarga = continuacionTrasSolape(previoLive, capture)
+      if (unionLarga && unionLarga.length > previoLive.length) {
+        voiceProbe('live', { turn: activeTurnIdRef.current, resultado: 'aplicado', motivo: 'solape-anadido', acorta: false, fresh: Boolean(freshUtterance), mismaLocucion: false, reemplaza: false, previo: previoLive.length, len: unionLarga.length, text: unionLarga.slice(0, 220) }) // BANDERA DE DIAGNOSTICO
+        publishedLiveRef.current = unionLarga
+        scheduleLiveTranscriptUpdate(unionLarga)
+        return
+      }
       voiceProbe('live', { turn: activeTurnIdRef.current, resultado: 'bloqueado', motivo: 'no-conserva', acorta: capture.length < previoLive.length, fresh: Boolean(freshUtterance), mismaLocucion: false, previo: previoLive.length, len: capture.length, text: capture.slice(0, 220) }) // BANDERA DE DIAGNOSTICO
       return
     }

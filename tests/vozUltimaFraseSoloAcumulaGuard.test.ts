@@ -207,6 +207,17 @@ describe('A - la ultima frase SOLO acumula (lo que se ve)', () => {
     expect(emitido, 'la fila usa el texto normalizado (dueno unico), no el crudo').toBe(limpio)
     expect(limpio.length, 'el colapso tiene que hacer algo (no es un no-op)').toBeLessThan(CRUDO.length)
   })
+  it('una reentrega del LOOP del ASR no vuelve a pegar lo ya mostrado (no triplica)', () => {
+    // MEDIDO 2026-10-14 19:00 (su pantalla): la ultima frase salia TRIPLICADA
+    // ("...como se llama en la ultima frase y aqui esta... y aqui esta..."). El bucle del ASR
+    // reentrega la MISMA frase y la union pegaba la repeticion. La cola a anadir no puede estar
+    // ya en lo mostrado.
+    const { deps, mostrado } = makeDeps()
+    const BOX = 'como se llama en la ultima frase y aqui esta el detalle completo de la prueba de hoy'
+    handleConversationStreamSync(deps as never, { capture: BOX })
+    handleConversationStreamSync(deps as never, { capture: 'como se llama en la ultima frase y aqui esta como se llama en la ultima frase y aqui esta' })
+    expect(ultimo(mostrado), 'nada se triplica en la caja').toBe(BOX)
+  })
   it('la sonda DICE si el acortamiento fue BLOQUEADO o APLICADO (dato concluyente)', () => {
     const { deps } = makeDeps()
     handleConversationStreamSync(deps as never, { capture: FRASE })
