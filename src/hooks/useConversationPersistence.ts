@@ -203,6 +203,24 @@ export function useConversationPersistence(participantId?: string) {
     const savedLengthRef = useRef(historyLength);
     const savedEpochRef = useRef(conversationEpoch);
 
+    // P4 - CONSOLIDACION: la fila se escribe en la base cuando se CONSOLIDA (su voz o su texto
+    // cambian: nombrar una voz, completar un fragmento), no solo al insertarse. Suscripcion SIN
+    // render (no toca el estado de React) y solo se suben las entradas que CAMBIARON de objeto.
+    useEffect(() => {
+        const persistidas = new Map<string, object>();
+        const guardarCambiadas = (historial: ConversationEntry[]) => {
+            const cambiadas = historial.filter((e) => persistidas.get(String(e.id)) !== e);
+            if (!cambiadas.length) return;
+            cambiadas.forEach((e) => persistidas.set(String(e.id), e));
+            fluDb.conversations.bulkPut(cambiadas.map((entry) => entryToRow(entry, scope))).catch((err) => {
+                logCaughtError('[ConversationPersistence] Error consolidando la fila', err);
+            });
+        };
+        guardarCambiadas(useIntegrationStore.getState().conversationHistory);
+        const soltar = useIntegrationStore.subscribe((estado) => guardarCambiadas(estado.conversationHistory));
+        return () => soltar();
+    }, [scope]);
+
     useEffect(() => {
         if (historyLength > savedLengthRef.current) {
             // New entries were added — batch save all at once

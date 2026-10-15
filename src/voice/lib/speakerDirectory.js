@@ -51,6 +51,19 @@ export function registerVoiceName(voiceId, name, { vector = null, model = voiceV
     // poder responder "que VOZ es esta" (liga sus turnos) aunque todavia no sea nadie.
     if (!nombre && !sig.length) return
     voiceNames.set(id, { name: nombre, vector: sig, model: sig.length ? String(model || voiceVectorModel()) : '' })
+    // P5 - UNA VOZ = UNA CLAVE: el MISMO timbre en dos claves partia la etiqueta ("unos Luis y
+    // otros Hablante 1"). Nombrar un timbre nombra TODAS las claves de ese timbre (piso unico:
+    // piso unico (sameVoiceFloor). Sin vector no se adivina: solo se nombra la clave dicha.
+    if (sig.length) {
+        const piso = sameVoiceFloor()
+        voiceNames.forEach((entrada, clave) => {
+            if (clave === id || entrada?.name === nombre) return
+            if (!entrada?.vector?.length) return
+            if (compareCosineSignatures(sig, entrada.vector) >= piso) {
+                voiceNames.set(clave, { ...entrada, name: nombre })
+            }
+        })
+    }
 }
 
 /** Nombre propio de esa VOZ ('' si no tiene: no se adivina). */
@@ -149,7 +162,15 @@ export function rememberVoiceVector(voiceId, vector) {
     if (!id || !sig.length) return
     const prior = voiceNames.get(id)
     if (prior?.name) return
-    voiceNames.set(id, { name: '', vector: sig, model: voiceVectorModel() })
+    // P5 - UNA VOZ = UNA CLAVE (el nombre llega ANTES que la segunda clave del mismo timbre):
+    // la clave nueva hereda el nombre de la clave ya nombrada si el timbre esta dentro del piso.
+    const piso = sameVoiceFloor()
+    let nombreDelTimbre = ''
+    voiceNames.forEach((entrada) => {
+        if (nombreDelTimbre || !entrada?.name || !entrada?.vector?.length) return
+        if (compareCosineSignatures(sig, entrada.vector) >= piso) nombreDelTimbre = entrada.name
+    })
+    voiceNames.set(id, { name: nombreDelTimbre, vector: sig, model: voiceVectorModel() })
 }
 
 /**

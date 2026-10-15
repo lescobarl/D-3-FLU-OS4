@@ -77,7 +77,7 @@ export function srGapSilenceReached(sinceLastResultMs = 0) {
   return gapMs > 0 && Number(sinceLastResultMs) >= gapMs
 }
 
-export function resolveSrGapTrigger({ sinceLastResultMs = 0, sinceLastCommitMs = 0, hasOpenLine = true, openLineAgeMs = 0 } = {}) {
+export function resolveSrGapTrigger({ sinceLastResultMs = 0, sinceLastCommitMs = 0, hasOpenLine = true, openLineAgeMs = 0, speakerChanged = false } = {}) {
   // El trigger PREGUNTA al dueno del tiempo (srGapSilenceReached); NO re-decide el cierre.
   // P11.12 (mandato del dueno 2026-10-13): el cierre de la ULTIMA FRASE es por SILENCIO real
   // (`srGapCommitMs` sin onresult) o por CAMBIO DE HABLANTE (otra puerta). Se RETIRA el camino
@@ -86,6 +86,13 @@ export function resolveSrGapTrigger({ sinceLastResultMs = 0, sinceLastCommitMs =
   // (medido en su log 03:35:57: sinceResult=1114 ms y la persona seguia hablando) y la fila
   // escrita entonces habia que ACTUALIZARLA con la cola. El caso 'Chrome repite lo mismo' ya
   // tiene dueno: el detector de eco committed-echo + rebuild del reconocimiento.
+  // P4 - LAS DOS PUERTAS DEL CIERRE REAL: SILENCIO o CAMBIO DE HABLANTE. El cambio de hablante
+  // cierra YA (no espera al silencio): era el "se congela y escribe de golpe" cuando hablaba el
+  // siguiente. Sin locucion viva no hay nada que cerrar.
+  if (speakerChanged && hasOpenLine) {
+    emitSrGapProbe('sr-speaker-change', { sinceResult: Number(sinceLastResultMs) || 0, sinceCommit: Number(sinceLastCommitMs) || 0, openLineAge: Number(openLineAgeMs) || 0 })
+    return { fire: true, sinceLastResultMs: Number(sinceLastResultMs) || 0, reason: 'sr-speaker-change' }
+  }
   const silence = srGapSilenceReached(sinceLastResultMs)
   if (!silence) {
     return { fire: false, sinceLastResultMs: Number(sinceLastResultMs) || 0, reason: 'sr-active' }
