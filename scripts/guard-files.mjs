@@ -302,6 +302,7 @@ export const GUARD_FILES = [
     'tests/cajaConversacionSim.test.ts',
     'tests/conversacionInsertaNoReescribeGuard.test.tsx',
     'tests/cierreRealYCaraUnicaGuard.test.ts',
+    'tests/reinyeccionTodos.test.ts',
     'tests/vozEvidenciaPorOmisionGuard.test.ts',
     'tests/configConEfectoGuard.test.ts',
     'tests/replayDuenoDiarizacionGuard.test.ts',
