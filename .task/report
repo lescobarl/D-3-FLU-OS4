@@ -6316,3 +6316,18 @@ Alcance real (0.23): CUBIERTO=los tres cambios y sus guards + la aritmetica de l
 NO CUBIERTO=el cierre por locucion estabilizada (declarado con su motivo y su mandato), el plegado
 de la voz partida (audio real: Fases 2/4 de diarizacion) y el DoD-producto (pantalla del dueno).
 ===============================================================================
+===============================================================================
+2026-10-14 - P11.29 CIERRE REAL (silencio O cambio de hablante) + UNA VOZ = UNA CLAVE
+===============================================================================
+Orden del dueno: la fila se escribe UNICAMENTE al cierre real por silencio o cambio de hablante
+(regla en fluTranscriptPause.js) y se consolida en useConversationPersistence.ts.
+HECHO: resolveSrGapTrigger expone las DOS puertas (el cambio de hablante cierra ya, reason
+sr-speaker-change; sin locucion viva no cierra); la persistencia CONSOLIDA (bulkPut de las filas
+que cambian: voz nombrada, fragmento completado) ademas de las nuevas; y nombrar un timbre
+nombra TODAS sus claves (piso sameVoiceFloor), tambien si la segunda clave aparece despues.
+RECHAZADO CON EVIDENCIA: escribir la fila en el borde del turno rompio 10 guards P9.59/P9.60 y el
+replay -> revertido (git checkout) y la regla va por la puerta declarada.
+GUARD: tests/cierreRealYCaraUnicaGuard.test.ts (7 casos, en lint:guards).
+Alcance real (0.23): CUBIERTO=las dos puertas, la consolidacion y el plegado por timbre;
+NO CUBIERTO=el disparo de speakerChanged desde el watchdog y el DoD-producto.
+===============================================================================
