@@ -193,6 +193,16 @@ export interface IntegrationActions {
     addSystemMessage: (text: string) => void;
     /** Cargar historial completo desde DB (sin side effects) */
     batchLoadHistory: (entries: ConversationEntry[]) => void;
+    /**
+     * Actualizacion DIRIGIDA de la VOZ de una fila (idempotente). La conversacion solo cambia
+     * de hablante cuando se le dice ("ok soy X") o al restaurarla, y toca UNA entrada.
+     */
+    setEntrySpeaker: (id: string, speakerId: string) => void;
+    /**
+     * Completa el texto de la fila que era FRAGMENTO de la locucion (misma fila, una entrada):
+     * el texto consolidado entra UNA vez y no se reescribe despues.
+     */
+    completeEntryFragment: (id: string, text: string) => void;
     /** Eliminar del historial todas las entradas de un hablante (por speakerName) */
     removeConversationEntriesBySpeaker: (label: string) => void;
     /** Cambiar estado emocional */
@@ -467,6 +477,28 @@ export const useIntegrationStore = create<IntegrationStore>()(
 
             batchLoadHistory: (entries: ConversationEntry[]) => {
                 set({ conversationHistory: capConversationHistory(entries) });
+            },
+
+            setEntrySpeaker: (id: string, speakerId: string) => {
+                const actual = get().conversationHistory.find((e) => e.id === id);
+                if (!actual) return;
+                if (String(actual.speakerId || '') === String(speakerId || '')) return;
+                set((current) => ({
+                    conversationHistory: current.conversationHistory.map((e) =>
+                        e.id === id ? { ...e, speakerId } : e,
+                    ),
+                }));
+            },
+
+            completeEntryFragment: (id: string, text: string) => {
+                const actual = get().conversationHistory.find((e) => e.id === id);
+                if (!actual) return;
+                if (String(actual.text || '') === String(text || '')) return;
+                set((current) => ({
+                    conversationHistory: current.conversationHistory.map((e) =>
+                        e.id === id ? { ...e, text } : e,
+                    ),
+                }));
             },
 
             removeConversationEntriesBySpeaker: (label: string) => {

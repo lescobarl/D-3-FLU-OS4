@@ -375,15 +375,8 @@ function commitUserTurnRowInner({
         for (let i = history.length - 1; i >= turnStart; i -= 1) {
             const entry = history[i];
             if (!entry || entry.role !== 'user') continue;
-            const updated = history.map((e) =>
-                e.id === entry.id
-                    ? {
-                        ...e,
-                        speakerId: vozDeLaFila,
-                    }
-                    : e,
-            );
-            store.batchLoadHistory(updated);
+            // P2: actualizacion DIRIGIDA e idempotente (no se reconstruye la conversacion).
+            store.setEntrySpeaker(entry.id, vozDeLaFila);
             rememberTurn(turnId, entry.id);
             return { id: entry.id, action: 'reused' };
         }
@@ -400,12 +393,10 @@ function commitUserTurnRowInner({
             const rawEsTrozo = isFragmentOfLocution(raw, previo);
             const previoEsTrozo = !rawEsTrozo && isFragmentOfLocution(previo, raw);
             if (rawEsTrozo || previoEsTrozo) {
-                const completa = rawEsTrozo ? previo : raw;
-                if (completa !== previo) {
-                    store.batchLoadHistory(
-                        history.map((e) => (e.id === ultima.id ? { ...e, text: completa } : e)),
-                    );
-                }
+                // P1 insert-only: el texto de una fila se decide UNA vez, en su insercion. Lo
+                // unico que se COMPLETA es una fila que era FRAGMENTO de la locucion (misma fila,
+                // dirigido): texto ya consolidado NO se reescribe jamas.
+                if (previoEsTrozo) store.completeEntryFragment(ultima.id, raw);
                 rememberTurn(turnId, ultima.id);
                 return { id: ultima.id, action: rawEsTrozo ? 'reused' : 'replaced' };
             }
@@ -422,15 +413,8 @@ function commitUserTurnRowInner({
     if (mismoTurnoPorId) {
         const entry = history.find((e) => e.id === currentTurn.rowId);
         if (entry && entry.role === 'user') {
-            const updated = history.map((e) =>
-                e.id === entry.id
-                    ? {
-                        ...e,
-                        speakerId: vozDeLaFila,
-                    }
-                    : e,
-            );
-            store.batchLoadHistory(updated);
+            // P2: actualizacion DIRIGIDA e idempotente (no se reconstruye la conversacion).
+            store.setEntrySpeaker(entry.id, vozDeLaFila);
             rememberTurn(turnId, entry.id);
             return { id: entry.id, action: 'reused' };
         }
