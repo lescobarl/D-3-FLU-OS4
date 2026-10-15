@@ -50,25 +50,18 @@ describe('PRUEBA DE DETECTOR (el marcador no es decorativo)', () => {
   })
 })
 
-describe('P5 - una voz = una clave: nombrar un timbre nombra TODAS sus claves', () => {
-  it('el nombre dicho DESPUES cubre la otra clave del mismo timbre', () => {
+describe('P5 - el nombre NO se propaga a otra clave (regresion medida en su corrida del 15: 5 claves y TODO salia como Luis)', () => {
+  it('nombrar una clave NO nombra otra clave', () => {
     resetVoiceDirectory()
     rememberVoiceVector('voz-b', [1, 0, 0, 0])
     registerVoiceName('voz-a', 'Luis', { vector: [0.99, 0.01, 0, 0] })
-    expect(resolveVoiceName('voz-b'), 'la segunda clave del mismo timbre ya es Luis').toBe('Luis')
+    expect(resolveVoiceName('voz-b'), 'otra voz no hereda el nombre').toBe('')
   })
-
-  it('la clave nueva que llega DESPUES del nombre tambien lo hereda', () => {
+  it('la clave nueva tampoco hereda un nombre ajeno', () => {
     resetVoiceDirectory()
     registerVoiceName('voz-a', 'Luis', { vector: [1, 0, 0, 0] })
     rememberVoiceVector('voz-b', [0.99, 0.01, 0, 0])
-    expect(resolveVoiceName('voz-b')).toBe('Luis')
-  })
-
-  it('un timbre ORTOGONAL NO hereda el nombre (sin evidencia no se adivina)', () => {
-    resetVoiceDirectory()
-    registerVoiceName('voz-a', 'Luis', { vector: [1, 0, 0, 0] })
-    rememberVoiceVector('voz-c', [0, 1, 0, 0])
-    expect(resolveVoiceName('voz-c')).toBe('')
+    expect(resolveVoiceName('voz-b')).toBe('')
   })
 })
+
