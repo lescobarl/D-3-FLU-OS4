@@ -621,6 +621,7 @@ const lastResolvedTurnRef = useRef(0)
   const ingressEchoStreakRef = useRef(0)
   const lastEchoAtRef = useRef(0)
   const srGapFiredForOpenLineRef = useRef(false)
+  const ultimoIndiceHablanteRef = useRef(NaN) // P4: ultimo indice (cambio = cierre real)
   const ingressBindingsRef = useRef({})
   const ingressRuntimeRef = useRef(null)
 
@@ -4383,7 +4384,10 @@ const lastResolvedTurnRef = useRef(0)
           publishedLiveRef.current ||
           readStreamDisplay(listenStateRef.current),
         )
-        const srGap = resolveSrGapTrigger({ sinceLastResultMs: sinceResult, sinceLastCommitMs: lastCommitAtRef.current > 0 ? now - lastCommitAtRef.current : 0, hasOpenLine: Boolean(openLine), openLineAgeMs: now - (listenStateRef.current?.openLineStartedAtMs || now) })
+        const indiceHablante = Number(listenStateRef.current?.speakerIndex ?? 0)
+        const speakerChanged = Number.isFinite(ultimoIndiceHablanteRef.current) && indiceHablante !== ultimoIndiceHablanteRef.current
+        ultimoIndiceHablanteRef.current = indiceHablante
+        const srGap = resolveSrGapTrigger({ sinceLastResultMs: sinceResult, sinceLastCommitMs: lastCommitAtRef.current > 0 ? now - lastCommitAtRef.current : 0, hasOpenLine: Boolean(openLine), openLineAgeMs: now - (listenStateRef.current?.openLineStartedAtMs || now), speakerChanged })
         if (srGap.fire && !srGapFiredForOpenLineRef.current) {
           srGapFiredForOpenLineRef.current = true
           ingressRuntimeRef.current?.pushSrGapEvent?.({ sinceLastResultMs: srGap.sinceLastResultMs })

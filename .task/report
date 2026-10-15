@@ -6331,3 +6331,19 @@ GUARD: tests/cierreRealYCaraUnicaGuard.test.ts (7 casos, en lint:guards).
 Alcance real (0.23): CUBIERTO=las dos puertas, la consolidacion y el plegado por timbre;
 NO CUBIERTO=el disparo de speakerChanged desde el watchdog y el DoD-producto.
 ===============================================================================
+
+===============================================================================
+2026-10-14 - P11.30 CIERRE REAL: el watchdog YA dispara el cambio de hablante + medicion 17h18
+===============================================================================
+PUNTO 1 CERRADO: el watchdog pasa speakerChanged (ultimo indice de hablante del estado) a
+resolveSrGapTrigger -> la puerta del cambio de hablante se dispara de verdad.
+MEDIDO: replay del ultimo log = 133 actualizaciones, caja 992, 0 reemplazos; 69 casos verdes
+(caja/srGap/estabilidad); typecheck y eslint limpios.
+PUNTO 2 MEDIDO (17h18, 300/927 eventos, codigo actual): caja=1498, 76 actualizaciones,
+0 reemplazos, repetidos6Caja=20 (el ASR emitio 453 repeticiones en esa sesion).
+CANDIDATO RECHAZADO Y REVERTIDO: la memoria completa del anti-duplicado no movio la metrica
+(20 -> 20). Las 20 repeticiones quedan SIN ATRIBUIR (posible eco del ASR o repeticion cruzando
+el vaciado declarado): no se declaran arregladas.
+Alcance real (0.23): CUBIERTO=el disparo + la no-regresion; NO CUBIERTO=la atribucion de las
+20 y el plegado biometrico (necesita el audio del dueno).
+===============================================================================
