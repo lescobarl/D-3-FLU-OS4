@@ -300,6 +300,7 @@ export const GUARD_FILES = [
     'tests/vozUltimaFraseNoSeVaciaGuard.test.ts',
     'tests/vozCajaUnSoloEscritorGuard.test.ts',
     'tests/cajaConversacionSim.test.ts',
+    'tests/conversacionInsertaNoReescribeGuard.test.tsx',
     'tests/vozEvidenciaPorOmisionGuard.test.ts',
     'tests/configConEfectoGuard.test.ts',
     'tests/replayDuenoDiarizacionGuard.test.ts',
