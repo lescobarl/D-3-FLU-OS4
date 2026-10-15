@@ -6288,3 +6288,31 @@ caja y el gate de guards (0 fallos NUEVOS); NO CUBIERTO=el DoD-producto (su pant
 completa (exige autorizacion) y la parte de voz/diarizacion del log (sin audio no se recomputa
 el worker de embeddings); siguen abiertos la CADENCIA de la caja y el DESFASE de fila (P11.16).
 ===============================================================================
+
+===============================================================================
+2026-10-14 - P11.28 CONVERSACION: prueba de escritorio (30 hablantes/600 filas) + los 3 cambios
+===============================================================================
+Orden del dueno: "la prueba de escritorio debe de ser una simulacion del escenario con la solucion
+que propones ... esa simulacion sera la especificacion exacta que vas a implementar".
+SIMULACION (commit 0fccee9, tests/cajaConversacionSim.test.ts, en lint:guards): 30 hablantes x 20
+turnos = 600 filas, 6 emisiones por turno = 3.600. Medido paso a paso:
+  HOY      renders=1.258.500 copiasArray=3.600 mutTexto=600 gapMax=5 disco=180.300 filas
+           nombrePerdido=13 nombreAjeno=3
+  P1 insert-only: mutTexto 600 -> 0
+  P2 voz dirigida+idempotente: copiasArray 3.600 -> 0 (renders 1.258.500 -> 180.300)
+  P3 mapa O(1) + filas memoizadas: renders 180.300 -> 600 (= N)
+  P4 cierre por locucion estabilizada: gapMax 5 -> 1, disco 180.300 -> 600 filas (NO IMPLEMENTADO
+     por mandato: fluTranscriptPause.js:80-110 exige cierre por silencio/cambio de hablante)
+  P5 una voz = una clave: nombrePerdido 13 -> 0 y nombreAjeno 3 -> 0 (NO IMPLEMENTADO: exige el
+     audio real; la herencia ciega ya estaba bloqueada en speakerPolicy.js:161-165)
+IMPLEMENTADO (commit d04fab0): insert-only (el texto se decide UNA vez; solo se COMPLETA una fila
+que era FRAGMENTO, dirigido), setEntrySpeaker(id, voz) dirigido e idempotente, y FilaDeConversacion
+memoizada + cache de filas por identidad de entrada.
+MEDIDO (guard tests/conversacionInsertaNoReescribeGuard.test.tsx, en lint:guards): dos turnos = dos
+inserts y CERO batchLoadHistory; el trozo no acorta el texto; completar un fragmento no toca otras
+filas; anadir una entrada dibuja UNA fila (formatRowClock 1 llamada vs 30); un cambio de voz
+redibuja SOLO la suya. Gate: 284 ficheros / 2299 casos en verde.
+Alcance real (0.23): CUBIERTO=los tres cambios y sus guards + la aritmetica de la simulacion;
+NO CUBIERTO=el cierre por locucion estabilizada (declarado con su motivo y su mandato), el plegado
+de la voz partida (audio real: Fases 2/4 de diarizacion) y el DoD-producto (pantalla del dueno).
+===============================================================================
