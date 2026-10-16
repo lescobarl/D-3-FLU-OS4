@@ -80,6 +80,12 @@ export function buildFinalSpeakerSnapshotResolver({ createSpeakerAudioResolver, 
  * @property {boolean} [forceNewRowOnSegment]
  * @property {boolean} [settlesTurn] Cierre REAL del turno (onend/srGap/wake-split):
  *   un `final` de SEGMENTO de Chrome NO lo declara.
+ * @property {number} [preflightTurnId] Turno cuyo preflight ya ESPERO el llamador
+ *   (`primeTurnSpeakerPreflight`, dueno unico de la espera). El cierre consume ESE
+ *   slot: sin el, el sorteo del turno siguiente (`ensureTurnId`) dejaba el commit
+ *   leyendo un slot vacio y la evidencia medida no llegaba a la fila (medido en el
+ *   log del dueno 2026-10-15: `Preflight turn=29 ready=true` y `commit turn=30
+ *   preReady=false`, 34/34 commits).
  */
 
 /**
@@ -328,6 +334,9 @@ export function handleConversationStreamSync(
     diarize = false,
     atTurnBoundary = false,
     forceNewRowOnSegment = false,
+    // La espera del preflight la hizo el LLAMADOR con el id del turno que resolvia:
+    // el cierre consume ESE slot, no el del turno siguiente (ver el typedef).
+    preflightTurnId = null,
     // CIERRE REAL del turno (onend / srGap / split por wake). Un `final` de SEGMENTO
     // de Chrome NO lo declara: la fila de conversacion no se escribe a mitad del
     // dictado (medido 2026-10-08 por el dueno: al llegar al 9 ya estaba "vaciada").
@@ -519,7 +528,7 @@ export function handleConversationStreamSync(
   const ambientRowBlocked = mismaLocucionViva
 
   // El id del turno se acuna para todo COMMIT real: la fila lo necesita (antes
-  // se acunaba solo con wake y el ruido se quedaba sin fila NI id).
+  // se acuñaba solo con wake y el ruido se quedaba sin fila NI id).
   ensureTurnId(true, mismaLocucionViva, isContinuationOfSameLocution(capture))
 
   // §9 Sella el turno: captura UNA vez su audio (dueño: turnAudioSnapshot.js) con
@@ -638,7 +647,11 @@ export function handleConversationStreamSync(
   markCommitPerfNow()
   const turnId = activeTurnIdRef.current
   const preflight = finalizeTurnIdentityPipeline(
-    turnId,
+    // El slot que el LLAMADOR esperó (ver el typedef). Si no hay espera previa —la
+    // ruta del comando y el commit sin preview— se consume el turno del commit.
+    Number.isFinite(Number(preflightTurnId)) && Number(preflightTurnId) > 0
+      ? Number(preflightTurnId)
+      : turnId,
     buildFinalSpeakerSnapshotResolver({ createSpeakerAudioResolver, phrase, turnId }),
     // §9 El cluster del turno se persiste POR EL DUEÑO UNICO (`setSpeakerClusters`)
     // cuando el snapshot final resuelve — aunque sea despues del commit. Sin esto el
