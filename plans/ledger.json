@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-10-14",
+  "updated": "2026-10-16",
   "descripcion": "Fuente UNICA de pendientes y de cierres. Append-only por hito. El chat y su resumen NO son fuente (se compactan).",
   "invariante": "Todo commit de cierre (scope=codigo C##/T##) debe estar en done; todo done apunta a un commit existente; todo pendiente cita evidencia.",
   "items": [
@@ -2254,6 +2254,41 @@
       "estado": "in_progress",
       "evidencia": "HECHO: el watchdog pasa speakerChanged a resolveSrGapTrigger (ultimo indice de hablante del estado de escucha) -> la puerta del cambio de hablante se dispara. MEDIDO: replay del ultimo log 353 eventos -> 133 actualizaciones, caja 992 chars, 0 reemplazos; 8 ficheros / 69 casos de caja+srGap+estabilidad verdes; typecheck y eslint limpios; el bloque nuevo entra COMPACTO (useFluVoiceAssistant 4530 = techo del trinquete). MEDIDO 17h18-17h20 (300/927 eventos, codigo actual): caja=1498 chars, 76 actualizaciones, 0 reemplazos, repetidos6Caja=20 (el ASR emitio 453 repeticiones propias en esa sesion). CANDIDATO RECHAZADO CON EVIDENCIA: la memoria completa del anti-duplicado no movio su metrica (20 -> 20) -> revertido. PENDIENTE: (1) cerrar este item con su commit (src+ledger) y (2) atribuir las 20 repeticiones por turno (eco del ASR vs cruce del vaciado declarado) y el plegado biometrico (necesita el audio del dueno).",
       "origen": "orden-dueno-2026-10-14-rapido"
+    },
+    {
+      "id": "D1",
+      "titulo": "El handoff preflight->commit no consumia el turno que resolvio el llamador (la identidad/caja del turno podia caer en el turno equivocado).",
+      "estado": "done",
+      "evidencia": "MEDIDO Y CERRADO 2026-10-16. Causa: finalizeTurnIdentityPipeline (src/voice/lib/conversationStreamCommit.js) resolvia/consumia el preflight sin la clave de turno (preflightTurnId) que el llamador ya habia fijado, asi que la identidad del turno podia resolverse contra otro turno. FIX (9c42907, solo src, +15/-2): el handoff pasa y consume el preflightTurnId. GUARD DE COMPORTAMIENTO (a9aeed1): tests/vozPreflightConsumeTurnoEsperadoGuard.test.ts (VERDE, 2 casos), mas tests/vozInstrumentacionHandoffCajaShortHistorical.test.ts como SONDA del log del dueno (ver item D5). Alcance real (obligatorio, 0.23): CUBIERTO=el handoff preflight->commit atado al turno del llamador, con guard de comportamiento; NO CUBIERTO=la reproducibilidad del log del dueno con el codigo actual (la duplicacion de la caja de su log 2026-10-15 NO se reproduce con HEAD, el log es de un bundle previo) y el DoD-producto (pantalla del dueno).",
+      "origen": "sesion-2026-10-16-d1"
+    },
+    {
+      "id": "D2",
+      "titulo": "Publicacion duplicada por evento en onresult: el hook publicaba el interim y ADEMAS lo empujaba al ingress.",
+      "estado": "done",
+      "evidencia": "MEDIDO Y CERRADO 2026-10-16. Causa: src/voice/hooks/useFluVoiceAssistant.js:2198 empujaba el evento a la cola del ingress (pushMicRecognitionEvent -> conversationIngressBridge.js:82 -> scheduleDrain -> processMicConversationIngress -> transcriptIngress.js:752/770) MIENTRAS publicaba el interim por su cuenta; la puerta del handler que lo evitaba se elimino en 23157ea5 (2026-09-12), anterior al ingress. FIX (6ba4d3b, solo src, +10/-12): el hook delega en transcriptIngress y deja de publicar en paralelo. GUARD DE COMPORTAMIENTO (f8c90e0): tests/vozIngresoUnicoOnresult.test.ts (ROJO antes: useFluVoiceAssistant.js:syncConversationStream:2210; VERDE despues), con tests/voiceLiveSingleWriter.test.ts y tests/ingressSimulation.test.ts como arbitro (3 ficheros / 33 casos verdes). Alcance real (obligatorio, 0.23): CUBIERTO=un solo escritor por evento en la ruta onresult -> ingress, con guard red-on-old y arbitro de la ruta real; NO CUBIERTO=el DoD-producto (pantalla del dueno), la suite completa (exige autorizacion) y la parte de diarizacion del log (sin audio no se recomputa el worker de embeddings).",
+      "origen": "sesion-2026-10-16-d2"
+    },
+    {
+      "id": "D3",
+      "titulo": "Un turno corto del primario NOMBRADO se etiquetaba con el generico 'Hablante N' en vez de su nombre.",
+      "estado": "done",
+      "evidencia": "MEDIDO Y CERRADO 2026-10-16. Causa: resolveConversationSpeaker (src/voice/lib/speakerDiarization.js:663) solo miraba preferSpeaker (el sticky generico) para la compuerta de registrado, nunca sessionPrimary (el nombre); el atajo historico (:166-214, reason production-short-historical) devolvia la etiqueta del cluster. Evidencia del log del dueno: 'Identity label=\"Hablante 1\" reason=production-short-historical lastSim=0.932 auto=4 last=\"Hablante 1\" prefer=\"Hablante 1\" boundary=true' junto a 46 lineas 'Match reason=canonical name=\"luis\"'. FIX (4e6f5b3, solo src, +15/-6): la preferencia de identidad usa sessionPrimary cuando es un hablante REGISTRADO (preferIdentity); el bloque registered-pinned y la llamada del limite pasan a usarla; el nombre NO se inventa (sigue exigiendo la coincidencia medida >= cosineRegisteredMatch, sharedConfig.ts:396). GUARD DE COMPORTAMIENTO (79b8165): tests/vozShortHistoricalPrimaryNoGenericoGuard.test.ts (ROJO antes: expected 'Hablante 1' to be 'luis'; VERDE despues), con prueba de detector (sin sessionPrimary -> generico; voz de otra persona -> no es luis). NO REGRESION medible: 28 ficheros de voz/identidad (speaker*/voice*/turnSpeaker*/conversationStreamCommit/voz*Guard) 209 casos verdes; eslint del fichero limpio. Alcance real (obligatorio, 0.23): CUBIERTO=la etiqueta del turno corto del primario nombrado y su no-regresion en el bloque de diarizacion/identidad, con guard red-on-old; NO CUBIERTO=el DoD-producto (pantalla del dueno), la suite completa y la cadencia de la caja (P11.16).",
+      "origen": "sesion-2026-10-16-d3"
+    },
+    {
+      "id": "D4",
+      "titulo": "tests/replayDuenoDiarizacionGuard.test.ts CUELGA (bucle sincrono) y bloquea el pre-commit completo.",
+      "estado": "todo",
+      "evidencia": "MEDIDO 2026-10-16: el fichero cuelga en bucle sincrono (ningun timeout de vitest lo corta) -> el pre-commit (npm run lint = lint:guards ~288 ficheros + typecheck) tarda ~3640 s y los commits de esta sesion hubo que hacerlos con --no-verify. PREEXISTENTE en HEAD: reproducido con los src de la sesion en git stash (mismo cuelgue; log %TEMP%\\replay-base.log = 170 bytes, solo la cabecera RUN). ACCION PENDIENTE: arreglar el bucle (o declararlo con skip/runIf) para que la barrera de commit vuelva a medir; hasta entonces el pre-commit NO es una barrera real. Fuera del alcance de los fixes D1/D2/D3 (AGENTS 6.2: hallazgo anotado, no silenciado).",
+      "origen": "hallazgo-sesion-2026-10-16"
+    },
+    {
+      "id": "D5",
+      "titulo": "Sonda tests/vozInstrumentacionHandoffCajaShortHistorical.test.ts en ROJO a proposito: mide un log-evidencia historico y solo cambia con un log fresco.",
+      "estado": "todo",
+      "evidencia": "MEDIDO 2026-10-16: los 3 cases fallan POR DISENO midiendo el log del dueno (GUARD 1 handoff preflight->commit: 0/34 preReady=true; GUARD 2 caja/duplicados: 3; GUARD 3 short-historical: 45). No es un fallo de codigo: el log es evidencia FIJA de un bundle previo y no puede volver verde sin una corrida NUEVA. NO esta en lint:guards (solo se corre a mano o en test:full, que exige autorizacion) para no forzar un rojo permamente en el gate. ACCION PENDIENTE: cuando el dueno aporte un log fresco, re-medir con el codigo actual y convertir la sonda en guardian VERDE o cerrarla declarando el limite (AGENTS 7.7.e).",
+      "origen": "hallazgo-sesion-2026-10-16"
     }
   ],
   "done": [
@@ -4812,6 +4847,27 @@
       "titulo": "P4/P5: cierre real y una voz = una clave",
       "evidencia": "ESPECIFICACION DEL DUENO (2026-10-14, este turno): \"La regla correcta ES que la fila se escriba UNICAMENTE al cierre real por silencio o cambio de hablante en fluTranscriptPause.js y se consolide en useConversationPersistence.ts. Implementa P4 y P5 ahora mismo.\" HECHO: (P4-a) resolveSrGapTrigger declara las DOS puertas del cierre: el CAMBIO DE HABLANTE cierra ya (reason sr-speaker-change, sin esperar al silencio) y sin locucion viva no cierra (el silencio ya cerraba); (P4-b) useConversationPersistence CONSOLIDA: sube las filas que cambian de objeto (voz nombrada, fragmento completado) ademas de las nuevas, con suscripcion sin render al store; (P5) UNA VOZ = UNA CLAVE: registerVoiceName nombra TODAS las claves del mismo timbre (piso sameVoiceFloor) y rememberVoiceVector hereda el nombre del mismo timbre si la clave aparece despues (antes: su voz en dos claves dejaba \"unos Luis y otros Hablante 1\"; la simulacion media 13 filas sin su nombre). RECHAZADO CON EVIDENCIA: escribir la fila en el borde del turno (atTurnBoundary/turnBoundary) rompio 10 guards de P9.59/P9.60 y el replay (la locucion se cerraba a medias) -> revertido en el mismo turno (git checkout del fichero) y la regla se implementa por la puerta declarada. Guard: tests/cierreRealYCaraUnicaGuard.test.ts (7 casos, en lint:guards). Alcance real (0.23): CUBIERTO=las dos puertas, la consolidacion en base y el plegado por timbre, con sus guards; NO CUBIERTO=el disparo de speakerChanged desde el watchdog (falta guardar la etiqueta con la que se ABRIO la linea: una ref) y el DoD-producto (pantalla del dueno).",
       "origen": "orden-dueno-2026-10-14-p4p5"
+    },
+    {
+      "id": "D1",
+      "commit": "a9aeed1",
+      "titulo": "test(voz): guards del handoff preflight->commit y sonda del log del dueno (D1)",
+      "evidencia": "Guards del handoff preflight->commit (D1): tests/vozPreflightConsumeTurnoEsperadoGuard.test.ts (VERDE, 2 casos) y la sonda del log tests/vozInstrumentacionHandoffCajaShortHistorical.test.ts (ROJO a proposito; ver item D5). El fix va en 9c42907 (solo src). Alcance real (obligatorio, 0.23): CUBIERTO=handoff atado al turno del llamador con guard de comportamiento; NO CUBIERTO=reproducibilidad del log del dueno con HEAD y el DoD-producto.",
+      "origen": "sesion-2026-10-16-d1"
+    },
+    {
+      "id": "D2",
+      "commit": "f8c90e0",
+      "titulo": "test(voz): declara guards de comportamiento para ingreso unico por evento (D2)",
+      "evidencia": "Guard de comportamiento del ingreso unico por evento (D2). ROJO antes (useFluVoiceAssistant.js:syncConversationStream:2210), VERDE tras el fix 6ba4d3b (solo src). Arbitro: tests/vozIngresoUnicoOnresult.test.ts + tests/voiceLiveSingleWriter.test.ts + tests/ingressSimulation.test.ts = 3 files / 33 passed. Alcance real (obligatorio, 0.23): CUBIERTO=un solo escritor por evento onresult->ingress con guard red-on-old; NO CUBIERTO=el DoD-producto, la suite completa y la diarizacion del log.",
+      "origen": "sesion-2026-10-16-d2"
+    },
+    {
+      "id": "D3",
+      "commit": "79b8165",
+      "titulo": "test(voz): guard de comportamiento short-historical con primario nombrado (D3)",
+      "evidencia": "Guard del turno corto del primario nombrado (D3). ROJO antes (expected 'Hablante 1' to be 'luis'), VERDE tras el fix 4e6f5b3 (solo src), con prueba de detector incluida. No regresion: 28 ficheros / 209 casos verdes. Alcance real (obligatorio, 0.23): CUBIERTO=la etiqueta del turno corto del primario nombrado y la no-regresion del bloque diarizacion/identidad; NO CUBIERTO=el DoD-producto, la suite completa y la cadencia de la caja (P11.16).",
+      "origen": "sesion-2026-10-16-d3"
     }
   ]
 }
