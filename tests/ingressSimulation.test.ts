@@ -412,3 +412,26 @@ describe('ingress SIM - dictado 1..40: no se pierde NINGUN numero', () => {
         expect(faltan, `faltan del dictado: [${faltan.join(' ')}] en: ${todo}`).toEqual([]);
     });
 });
+
+// ============================================================
+// UNICO ESCRITOR DEL PREVIEW (defecto 2, 2026-10-16): el ingress publica el
+// preview EXACTAMENTE una vez por evento. La otra puerta (handler `onresult` del
+// hook) DELEGA en el ingress y NO publica por su cuenta; esa mitad la fija
+// tests/voiceLiveSingleWriter.test.ts sobre el fuente del hook.
+// ============================================================
+describe('ingress SIM - una sola publicacion de preview por evento', () => {
+    it('un evento interino publica el preview UNA vez', () => {
+        const h = createHarness();
+        h.inject(chromeEvent([{ transcript: 'hola' }], 0));
+        expect(h.previews).toHaveLength(1);
+        expect(h.previews[0]).toBe('hola');
+    });
+
+    it('N eventos interinos publican N previews (no 2N)', () => {
+        const h = createHarness();
+        h.inject(chromeEvent([{ transcript: 'uno' }], 0));
+        h.inject(chromeEvent([{ transcript: 'uno dos' }], 0));
+        h.inject(chromeEvent([{ transcript: 'uno dos tres' }], 0));
+        expect(h.previews).toHaveLength(3);
+    });
+});

@@ -308,4 +308,5 @@ export const GUARD_FILES = [
     'tests/replayDuenoDiarizacionGuard.test.ts',
     'tests/logRevisionGuard.test.ts',
     'tests/vozNombrePorVozTodosLosTurnosGuard.test.ts',
+    'tests/vozIngresoUnicoOnresult.test.ts',
 ]
