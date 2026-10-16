@@ -41,3 +41,9 @@ guards-result.txt
 last-result.txt
 *-result.txt
 *-output.txt
+
+# --- basura del entorno local (no se commitea: se ignora) ---
+devserver.out
+dscode/
+pnpm-lock.yaml
+pnpm-workspace.yaml
