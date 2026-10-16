@@ -707,7 +707,16 @@ export function resolveConversationSpeaker({
   const strictCosine = roomCfg.strictCosineDiarization !== false
   const boundaryAllowsNew = roomCfg.turnBoundaryAllowNewCluster === true
   const allowNew = allowNewCluster && (!atTurnBoundary || boundaryAllowsNew)
-  const preferIsRegistered = pinRegistered && isRegisteredSpeakerLabel(preferSpeaker)
+  // La preferencia de IDENTIDAD es el NOMBRE del participante activo (`sessionPrimary`)
+  // cuando esta presente: el `preferSpeaker` que llega del commit es el sticky
+  // ("Hablante N"), asi que la compuerta "registrado" buscaba una etiqueta generica y el
+  // nombre quedaba muerto (defecto 3 medido 2026-10-15: 45 turnos cortos rotulados
+  // "Hablante N" con `Match reason=canonical name="luis"`). El nombre NO se inventa: la
+  // via que lo afirma sigue exigiendo coincidencia MEDIDA contra su ancla (REGISTERED_MATCH).
+  const sessionPrimaryLabel = normalizeSpeakerLabel(sessionPrimary)
+  const preferIdentity =
+    pinRegistered && isRegisteredSpeakerLabel(sessionPrimaryLabel) ? sessionPrimaryLabel : preferSpeaker
+  const preferIsRegistered = pinRegistered && isRegisteredSpeakerLabel(preferIdentity)
   const boundaryRelax = Number(roomCfg.turnBoundaryMatchRelax) || 2.35
   const reabsorbMargin = Number(roomCfg.turnBoundaryClusterReabsorbMargin) || VOICE_DIARIZATION_DEFAULTS.turnBoundaryClusterReabsorbMargin
   const autoClusterCount = speakerClusters.filter(
@@ -749,8 +758,8 @@ export function resolveConversationSpeaker({
     return effectiveSticky
   }
 
-  if (preferIsRegistered && pinRegistered && preferSpeaker) {
-    const pinnedCluster = findClusterByLabel(speakerClusters, preferSpeaker)
+  if (preferIsRegistered && pinRegistered && preferIdentity) {
+    const pinnedCluster = findClusterByLabel(speakerClusters, preferIdentity)
     if (pinnedCluster?.signature?.length) {
       const pinnedSimilarity = compareCosineSignatures(vector, pinnedCluster.signature)
       if (pinnedSimilarity >= REGISTERED_MATCH) {
@@ -761,8 +770,8 @@ export function resolveConversationSpeaker({
         // que todo pasaba el umbral y la sala entera quedaba con un solo nombre.
         // La deriva natural del titular la absorbe la ruta normal (nearest
         // neighbour), que exige más evidencia que este atajo.
-        note({ reason: 'registered-pinned-rematch', speaker: preferSpeaker, clusterSimilarity: pinnedSimilarity })
-        return preferSpeaker
+        note({ reason: 'registered-pinned-rematch', speaker: preferIdentity, clusterSimilarity: pinnedSimilarity })
+        return preferIdentity
       }
       // La voz NO coincide con el perfil registrado: NO se fuerza el nombre;
       // se continúa para asignar el hablante real (evita "voz distinta → nombre
@@ -786,7 +795,7 @@ export function resolveConversationSpeaker({
       lastSpeaker,
       lastSignature,
       sessionPrimary: normalizeSpeakerLabel(sessionPrimary) || '',
-      preferSpeaker,
+      preferSpeaker: preferIdentity,
       utteranceText,
       voicedSampleCount,
       sampleRate,
