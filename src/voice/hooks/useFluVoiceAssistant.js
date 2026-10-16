@@ -2202,17 +2202,12 @@ const lastResolvedTurnRef = useRef(0)
               fluDebugHot('history-error', { detail: String(error?.message || error) })
             }
           }
-          // §9 — ÚNICO escritor: el preview lo publica `handleConversationStreamSync`
-          // (vía syncConversationStream, turnCommit:false). Este handler NO escribe
-          // la frase viva: antes había dos escritores → alternancia/ciclo.
-          const liveText = cleanForSpeech(finalText || interim)
-          if (liveText) {
-            syncConversationStream({
-              capture: liveText,
-              utterance: liveText,
-              turnCommit: false,
-            })
-          }
+          // §9 — ÚNICO escritor: el preview lo publica el INGRESS (vía
+          // syncConversationStream desde transcriptIngress, turnCommit:false).
+          // Este handler DELEGA (pushMicRecognitionEvent) y NO escribe la frase
+          // viva: antes había DOS publicaciones por evento (esta + el ingress) →
+          // alternancia/ciclo y cola duplicada en la caja. Ver
+          // tests/voiceLiveSingleWriter.test.ts y tests/ingressSimulation.test.ts.
           return
         }
 
@@ -2428,7 +2423,6 @@ const lastResolvedTurnRef = useRef(0)
       requestRecognitionRestart,
       scheduleAutoProcess,
       readActiveSnapshot,
-      syncConversationStream,
       setError,
       resolvedWakeWords,
       userRowsTextView,
@@ -2696,6 +2690,10 @@ const lastResolvedTurnRef = useRef(0)
             speaker: result.speaker,
             utterance: capture,
             turnCommit: true,
+            // El cierre consume el preflight de ESTE turno (el que se acaba de
+            // esperar): si no, el sorteo del turno siguiente lo dejaba leyendo un
+            // slot vacio y la evidencia medida no llegaba a la fila.
+            preflightTurnId: turnId,
           })
         }
 
