@@ -16,15 +16,24 @@ import { join } from 'path';
 function loadLog() {
   const candidates = [
     process.env.FLU_VOZ_LOG,
-    join(process.env.TEMP || '', 'flu-debug-owner-2026-10-15-12h16-12h20.log'),
-    join(process.env.TEMP || '', 'flu-debug-owner-2026-10-14-18h26-18h33.log'),
-  ].filter(Boolean);
-  for (const p of candidates) if (existsSync(p)) return { path: p, raw: readFileSync(p, 'utf8') };
-  throw new Error('Sin log de voz de evidencia. Define FLU_VOZ_LOG con la ruta.');
+    join(process.env.TEMP || process.env.TMP || '', 'flu-debug-owner-2026-10-15-12h16-12h20.log'),
+    join(process.env.TEMP || process.env.TMP || '', 'flu-debug-owner-2026-10-14-18h26-18h33.log'),
+  ].filter(Boolean) as string[]
+  for (const p of candidates) {
+    if (p && existsSync(p)) return { path: p, raw: readFileSync(p, 'utf8') }
+  }
+  throw new Error('Sin log de voz de evidencia. Define FLU_VOZ_LOG con la ruta.')
 }
 
-function parseProbe(raw, tag) {
-  return [...raw.matchAll(new RegExp('VozProbe ' + tag + ' (\\{[^}]+\\})', 'g'))].map((m) => JSON.parse(m[1]));
+function parseProbe(raw: string, tag: string) {
+  const re = new RegExp('VozProbe ' + tag + ' (\\{[^}]+\\})', 'g')
+  const out: any[] = []
+  for (const m of raw.matchAll(re)) {
+    try {
+      out.push(JSON.parse(m[1]))
+    } catch {}
+  }
+  return out
 }
 
 describe('voz instrumentacion ROJA: handoff preflight->commit, caja D1, short-historical', () => {
