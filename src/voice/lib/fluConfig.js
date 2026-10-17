@@ -151,7 +151,7 @@ export const FLU_CONFIG = {
         modelId: 'Xenova/wavlm-base-plus-sv',
         targetSampleRate: 16000,
         minSampleRatio: 0.35,
-        quantized: true,
+        quantized: false,
       },
       roomCapture: {
         pruneGhostClusters: false, // borraba el cluster recien escrito -> inClusters=0
