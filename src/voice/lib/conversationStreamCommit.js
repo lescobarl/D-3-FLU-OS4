@@ -285,13 +285,20 @@ export function crearCajaDeLaFrase(deps = {}) {
     if (!nuevo || nuevo === mostrado) {
       return { aplicado: false, destino: mostrado, previo: mostrado.length }
     }
-    // Una sola regla: la union con la cola genuina de la emision (o bloqueo).
+    // Enmienda 2026-10-16 (dueno): la caja refleja la emision ACTUAL de la locucion en curso.
+    // Solo un TROZO contiguo de lo mostrado (una truncacion del ASR: "borra y deja dos o tres
+    // palabras") se BLOQUEA. Una revision mas corta o CORREGIDA de la misma locucion SI
+    // actualiza: antes cualquier emision mas corta se bloqueaba ("la caja SOLO ACUMULA") y la
+    // frase viva se quedaba congelada a mitad de dictado (22 -> 40). El dueno del trozo sigue
+    // siendo `isFragmentOfLocution` (una sola regla).
     let destino = nuevo
+    if (mostrado && isFragmentOfLocution(nuevo, mostrado)) {
+      return { aplicado: false, destino: mostrado, previo: mostrado.length }
+    }
     if (mostrado) {
-      destino = colaNuevaTrasSolape(mostrado, nuevo)
-      if (!destino || destino.length <= mostrado.length) {
-        return { aplicado: false, destino: mostrado, previo: mostrado.length }
-      }
+      // Reentrega que crece: se conserva lo mostrado y se anade su cola genuina.
+      const union = colaNuevaTrasSolape(mostrado, nuevo)
+      if (union && union.length > mostrado.length) destino = union
     }
     if (publishedLiveRef) publishedLiveRef.current = destino
     escribirVisible(destino, Boolean(opciones.inmediato))
@@ -478,7 +485,7 @@ export function handleConversationStreamSync(
     // escribe el ref: se pide la publicacion y se registra la decision (sonda de la caja).
     const publicacion = publicarEnLaCaja(capture)
     if (publicacion.aplicado) {
-      voiceProbe('live', { turn: activeTurnIdRef.current, resultado: 'aplicado', motivo: publicacion.destino === capture ? 'emision-actual' : (capture.length < publicacion.previo ? 'cola-solapada' : 'solape-anadido'), acorta: false, fresh: Boolean(freshUtterance), mismaLocucion: false, reemplaza: publicacion.destino === capture, previo: publicacion.previo, len: publicacion.destino.length, text: publicacion.destino.slice(0, 220) }) // BANDERA DE DIAGNOSTICO
+      voiceProbe('live', { turn: activeTurnIdRef.current, resultado: 'aplicado', motivo: publicacion.destino === capture ? 'emision-actual' : 'solape-anadido', acorta: publicacion.destino.length < publicacion.previo, fresh: Boolean(freshUtterance), mismaLocucion: false, reemplaza: publicacion.destino === capture, previo: publicacion.previo, len: publicacion.destino.length, text: publicacion.destino.slice(0, 220) }) // BANDERA DE DIAGNOSTICO
     } else {
       voiceProbe('live', { turn: activeTurnIdRef.current, resultado: 'bloqueado', motivo: capture.length < previoLive.length ? (esTrozo ? 'trozo' : 'acorta') : 'no-conserva', acorta: capture.length < previoLive.length, fresh: Boolean(freshUtterance), mismaLocucion: esTrozo, previo: previoLive.length, len: capture.length, text: capture.slice(0, 220) }) // BANDERA DE DIAGNOSTICO
     }
@@ -490,7 +497,7 @@ export function handleConversationStreamSync(
       applyConversationSpeaker(phrase, fallbackSpeaker, {
         force: forceWakeDiarize || diarize,
         atTurnBoundary: true,
-        allowNewCluster: false,
+        allowNewCluster: true,
       })
     }
     if (import.meta.env.DEV && debugHotPath) {
