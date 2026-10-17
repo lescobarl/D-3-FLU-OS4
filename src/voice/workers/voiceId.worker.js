@@ -23,14 +23,18 @@ env.allowRemoteModels = true
 env.useBrowserCache = true
 
 let modelBundlePromise = null
+// Dtype REALMENTE cargado por el worker (sonda de diarizacion 2026-10-16): permite
+// confirmar en el log que el worker cargo fp32/q8, no solo lo que dice la config.
+let loadedDtype = ''
 
 async function ensureModel(modelId = getModelId(), quantized = true) {
   if (!modelBundlePromise) {
     const dtype = quantized === false ? 'fp32' : 'q8'
+    loadedDtype = dtype
     modelBundlePromise = Promise.all([
       AutoProcessor.from_pretrained(modelId),
       AutoModel.from_pretrained(modelId, { dtype }),
-    ]).then(([processor, model]) => ({ processor, model, modelId }))
+    ]).then(([processor, model]) => ({ processor, model, modelId, dtype }))
   }
   return modelBundlePromise
 }
@@ -58,14 +62,14 @@ self.onmessage = async (event) => {
   try {
     if (type === 'preload') {
       const cfg = getEmbeddingConfig()
-      await ensureModel(payload.modelId || getModelId(cfg), payload.quantized !== false)
-      reply(true, { ready: true, modelId: payload.modelId || getModelId(cfg) })
+      const bundle = await ensureModel(payload.modelId || getModelId(cfg), payload.quantized !== false)
+      reply(true, { ready: true, modelId: bundle.modelId, dtype: bundle.dtype })
       return
     }
 
     if (type === 'embed') {
       const vector = await embedAudio(payload)
-      reply(true, { vector, dim: vector.length })
+      reply(true, { vector, dim: vector.length, dtype: loadedDtype })
       return
     }
 

@@ -14,6 +14,7 @@ import { DEFAULT_SAMPLE_RATE } from './audioConstants.js'
 import { createWorkerPendingBridge } from './workerPendingBridge.js'
 import { scheduleIdle } from './idleSchedule.js'
 import { countVoicedSamples } from './voicedActivity.js'
+import { voiceProbe } from './voiceProbe.ts'
 
 let seq = 0
 const workerRequestMs = REQUEST_TIMEOUT_DEFAULTS.WORKER_MS
@@ -21,6 +22,15 @@ const EMBED_TYPES = new Set(['embed'])
 
 let embedInFlight = false
 let embedPending = null
+// SONDA (2026-10-16): una sola linea `embedModel` por sesion con el dtype que el
+// WORKER confirmo haber cargado (fp32/q8). Cierra la duda "la config dice fp32 pero
+// el worker cacheo q8". No es traza masiva: se emite UNA vez.
+let embedModelLogged = false
+function logEmbedModel(modelId, dtype) {
+  if (embedModelLogged || typeof window === 'undefined') return
+  embedModelLogged = true
+  voiceProbe('embedModel', { modelId: modelId || '', dtype: dtype || '' })
+}
 
 import { isWorkerRuntime } from '../../lib/workerRuntime.ts'
 
@@ -201,6 +211,7 @@ async function embedAudioInternal(samples, sampleRate = DEFAULT_SAMPLE_RATE) {
     if (typeof window !== 'undefined') throw error
     return runMainThreadFallback('embed', { ...payload, samples: samplesFromPayload(payload) })
   })
+  logEmbedModel(payload.modelId, result?.dtype)
   return Array.isArray(result?.vector) ? result.vector : []
 }
 
@@ -336,6 +347,9 @@ export function preloadVoiceIdWorker() {
   return post('preload', {
     modelId: cfg.modelId || '',
     quantized: cfg.quantized !== false,
+  }).then((res) => {
+    logEmbedModel(res?.modelId || cfg.modelId || '', res?.dtype)
+    return res
   })
 }
 

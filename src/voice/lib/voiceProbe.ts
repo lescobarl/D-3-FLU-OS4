@@ -12,7 +12,7 @@
 // (cero coste). El rele de logs se carga DIFERIDO para no cerrar ciclos con la
 // configuracion.
 // ============================================================
-import { logCaughtError } from '../../lib/caughtError'
+import { logCaughtError } from '../../lib/caughtError.ts'
 
 let enabled = false
 try {
@@ -46,7 +46,7 @@ export function voiceProbe(tag: string, data: Record<string, unknown> = {}): voi
     logCaughtError('[catch] src/voice/lib/voiceProbe.ts', error)
     return
   }
-  import('../../lib/clientLogRelay')
+  import('../../lib/clientLogRelay.ts')
     .then((mod) => mod?.relayLog?.('LOG', 'VozProbe', `${tag} ${payload}`))
     .catch((error) => logCaughtError('[catch] src/voice/lib/voiceProbe.ts', error))
 }

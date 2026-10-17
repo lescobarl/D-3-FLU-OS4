@@ -13,6 +13,8 @@ import {
 } from './conversationRow.js'
 import { resolveConversationSpeaker as matchSpeakerByVoice, getFallbackSpeaker } from './voiceIdentity.js'
 import { isMeasuredIdentityMatch } from './speakerDiarization.js'
+import { payloadSeparacionDeTurno } from './speakerCore.js'
+import { getEmbeddingConfig } from './embeddingConfig.js'
 import { relayLog } from '../../lib/clientLogRelay.ts'
 import { DEFAULT_SAMPLE_RATE } from './audioConstants.js'
 
@@ -21,16 +23,29 @@ import { DEFAULT_SAMPLE_RATE } from './audioConstants.js'
  * `diagnosis.lastSim` (el nombre que escriben TODAS las vias del resolutor). Antes
  * leia `lastTurnSimilarity`, que la via PRINCIPAL no escribe -> `lastSim=0.000` en
  * TODAS las lineas (ciego 39/39, medido en la sesion del dueno).
- * @param {{ label?: string, diagnosis?: object, lastSpeaker?: string, preferSpeaker?: string, atTurnBoundary?: boolean, workingClusters?: unknown[] }} [ctx]
+ * @param {{ label?: string, diagnosis?: object, lastSpeaker?: string, preferSpeaker?: string, atTurnBoundary?: boolean, workingClusters?: unknown[], signatureVector?: number[], voicedSampleCount?: number }} [ctx]
  * @returns {string}
  */
-export function formatIdentityDiagnosis({ label = '', diagnosis = {}, lastSpeaker = '', preferSpeaker = '', atTurnBoundary = false, workingClusters = [] } = {}) {
+export function formatIdentityDiagnosis({ label = '', diagnosis = {}, lastSpeaker = '', preferSpeaker = '', atTurnBoundary = false, workingClusters = [], signatureVector = [], voicedSampleCount = 0 } = {}) {
   const d = diagnosis || {}
   const lastSim = Number(d.lastSim ?? 0).toFixed(3)
   const auto = d.autoClusterCount ?? (Array.isArray(workingClusters) ? workingClusters.length : 0)
   const best = Number(d.bestSim)
   const bestTxt = Number.isFinite(best) ? ` bestSim=${best.toFixed(3)} best="${d.bestLabel || ''}"` : ''
-  return `label="${label}" reason=${d.reason || ''} lastSim=${lastSim} auto=${auto} last="${lastSpeaker || ''}" prefer="${preferSpeaker || ''}" boundary=${Boolean(atTurnBoundary)}${bestTxt}`
+  // SONDA DE VECTORES (2026-10-16): para MEDIR la separacion real entre voces en cada
+  // resolucion. `dtype` confirma el modelo cargado (fp32/q8, raiz del fix de diarizacion);
+  // `vec`/`voiced` son la calidad de la ventana; `pares` es el coseno del vector del turno
+  // contra CADA cluster (dueño del coseno: speakerCore.payloadSeparacionDeTurno). El
+  // sufijo se AÑADE al final: el prefijo del instrumento no cambia (guards de lastSim).
+  const embCfg = getEmbeddingConfig()
+  const dtype = embCfg.quantized === false ? 'fp32' : 'q8'
+  const vec = Array.isArray(signatureVector) ? signatureVector.length : 0
+  const paresTxt = vec
+    ? payloadSeparacionDeTurno(signatureVector, workingClusters, [], 0).pares
+      .map((p) => `${p.label}:${p.sim}`)
+      .join(',')
+    : ''
+  return `label="${label}" reason=${d.reason || ''} lastSim=${lastSim} auto=${auto} last="${lastSpeaker || ''}" prefer="${preferSpeaker || ''}" boundary=${Boolean(atTurnBoundary)}${bestTxt} dtype=${dtype} vec=${vec} voiced=${Number(voicedSampleCount) || 0} pares=[${paresTxt}]`
 }
 
 /**
@@ -88,7 +103,7 @@ export function resolveSpeakerIdentityFromVector(
       }) || fallbackSpeaker
   }
   if (typeof window !== 'undefined') {
-    relayLog('LOG', 'Identity', formatIdentityDiagnosis({ label, diagnosis, lastSpeaker, preferSpeaker, atTurnBoundary, workingClusters }))
+    relayLog('LOG', 'Identity', formatIdentityDiagnosis({ label, diagnosis, lastSpeaker, preferSpeaker, atTurnBoundary, workingClusters, signatureVector: vector, voicedSampleCount }))
   }
 
   const matched = workingClusters.find(
