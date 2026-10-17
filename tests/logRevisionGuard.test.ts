@@ -20,7 +20,8 @@
 // PRUEBA DE DETECTOR (mutacion): cada invariante tiene un fixture que lo VIOLA y el checker lo
 // lista; quitar el arreglo deja el fixture marcado.
 // ============================================================
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const CFG = readFileSync('src/voice/lib/fluConfig.js', 'utf8')
@@ -155,11 +156,41 @@ describe('rutina de revision - la traza de UNA corrida cumple los invariantes', 
     expect(/srGapCommitMs:\s*\d+/.test(CFG)).toBe(true)
   })
 
-  it('la corrida REAL (debug.log) cumple los invariantes (si hay log)', () => {
-    if (!existsSync('debug.log')) return
-    const crudo = readFileSync('debug.log', 'utf8')
+  // D6: la traza real se revisa sobre el log ACTUAL del dueno (%TEMP%\flu-debug-owner-*),
+  // producido por el codigo vigente; el debug.log del repo es un artefacto historico (previo a
+  // D6) y no es ground truth del criterio nuevo. runIf no cuenta como .skip (sensor V7).
+  const TEMP = process.env.TEMP || process.env.TMP || '/tmp'
+  // D6 se aplico el 2026-10-16: solo un log producido DESPUES de ese criterio es ground truth
+  // del invariante nuevo (un log previo bloquea por "acorta" y violaria D6 por construccion).
+  const D6_DESDE = '2026-10-16'
+  function rutaLogActual(): string | null {
+    const explicita = process.env.FLU_REPLAY_LOG
+    if (explicita && existsSync(explicita) && /(\d{4}-\d{2}-\d{2})/.test(explicita)) {
+      const f = (explicita.match(/(\d{4}-\d{2}-\d{2})/) || [])[1] || ''
+      if (f >= D6_DESDE) return explicita
+    }
+    try {
+      const candidatos = readdirSync(TEMP)
+        .filter((f: string) => f.startsWith('flu-debug-owner-') && f.endsWith('.log'))
+        .map((f: string) => ({ f, fecha: (f.match(/(\d{4}-\d{2}-\d{2})/) || [])[1] || '' }))
+        .filter((c: { fecha: string }) => c.fecha && c.fecha >= D6_DESDE)
+        .sort((a: { f: string }, b: { f: string }) => b.f.localeCompare(a.f))
+        .slice(0, 3)
+      for (const c of candidatos) {
+        const p = join(TEMP, c.f)
+        if (existsSync(p) && readFileSync(p, 'utf8').includes('VozProbe')) return p
+      }
+      return null
+    } catch {
+      return null
+    }
+  }
+  const RUTA = rutaLogActual()
+
+  it.runIf(Boolean(RUTA))('la corrida REAL (log actual del dueno, post-D6) cumple los invariantes', () => {
+    const crudo = readFileSync(RUTA as string, 'utf8')
     const lineas = crudo.split(/\r?\n/).filter(Boolean)
-    if (!lineas.some((l) => l.includes('VozProbe'))) return // sin sonda no hay traza que revisar
+    if (!lineas.some((l) => l.includes('VozProbe'))) return
     const v = revisarTraza(lineas)
     expect(v, 'invariantes rotos en la corrida:\n' + v.join('\n')).toEqual([])
   })

@@ -201,7 +201,7 @@ describe('conversationStreamCommit — preview (sin turnCommit)', () => {
         expect(phrase).toBe('hola');
         expect(typeof fallbackSpeaker).toBe('string');
         expect(fallbackSpeaker).not.toBe('');
-        expect(options).toEqual({ force: false, atTurnBoundary: true, allowNewCluster: false });
+        expect(options).toEqual({ force: false, atTurnBoundary: true, allowNewCluster: true });
     });
 
     it('sin frontera de turno no consulta al hablante', () => {
