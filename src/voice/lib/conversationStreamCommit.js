@@ -279,30 +279,35 @@ export function crearCajaDeLaFrase(deps = {}) {
     if (typeof setLiveTranscript === 'function') setLiveTranscript(texto)
   }
   const leer = () => String(publishedLiveRef?.current || '')
+  // TURNO DEL BOCETO: a que locucion pertenece lo que la caja muestra. La caja solo
+  // acumula dentro de la MISMA locucion; un turno distinto parte limpio.
+  let turnoDelBoceto = null
   const publicarEnLaCaja = (texto = '', opciones = {}) => {
     const nuevo = String(texto || '')
     const mostrado = leer()
     if (!nuevo || nuevo === mostrado) {
       return { aplicado: false, destino: mostrado, previo: mostrado.length }
     }
-    // Enmienda 2026-10-16 (dueno): la caja refleja la emision ACTUAL de la locucion en curso.
-    // Solo un TROZO contiguo de lo mostrado (una truncacion del ASR: "borra y deja dos o tres
-    // palabras") se BLOQUEA. Una revision mas corta o CORREGIDA de la misma locucion SI
-    // actualiza: antes cualquier emision mas corta se bloqueaba ("la caja SOLO ACUMULA") y la
-    // frase viva se quedaba congelada a mitad de dictado (22 -> 40). El dueno del trozo sigue
-    // siendo `isFragmentOfLocution` (una sola regla).
+    const turnoActivo = opciones.turnId ?? null
+    // FRONTERA POR IDENTIDAD: lo mostrado pertenece a OTRO turno -> no se hereda ni se
+    // fusiona por texto (evita "se borra y luego vuelve a poner" al cruzar locuciones).
+    const cambioDeTurno =
+      Boolean(mostrado) && turnoDelBoceto !== null && turnoActivo !== null && turnoDelBoceto !== turnoActivo
     let destino = nuevo
-    if (mostrado && isFragmentOfLocution(nuevo, mostrado)) {
-      return { aplicado: false, destino: mostrado, previo: mostrado.length }
+    if (!cambioDeTurno) {
+      if (mostrado && isFragmentOfLocution(nuevo, mostrado)) {
+        return { aplicado: false, destino: mostrado, previo: mostrado.length }
+      }
+      if (mostrado) {
+        // Reentrega que crece: se conserva lo mostrado y se anade su cola genuina.
+        const union = colaNuevaTrasSolape(mostrado, nuevo)
+        if (union && union.length > mostrado.length) destino = union
+      }
     }
-    if (mostrado) {
-      // Reentrega que crece: se conserva lo mostrado y se anade su cola genuina.
-      const union = colaNuevaTrasSolape(mostrado, nuevo)
-      if (union && union.length > mostrado.length) destino = union
-    }
+    turnoDelBoceto = turnoActivo ?? turnoDelBoceto
     if (publishedLiveRef) publishedLiveRef.current = destino
     escribirVisible(destino, Boolean(opciones.inmediato))
-    return { aplicado: true, destino, previo: mostrado.length }
+    return { aplicado: true, destino, previo: cambioDeTurno ? 0 : mostrado.length }
   }
   // Vaciado legitimo (cierre confirmado / arranque / parada / reset de sesion). Por
   // defecto vacia tambien el espejo visible; `{ visible: false }` solo resetea la MEMORIA
@@ -310,6 +315,7 @@ export function crearCajaDeLaFrase(deps = {}) {
   // "borra y luego vuelve a poner" medido por el dueno.
   const vaciarLaCaja = (opciones = {}) => {
     if (publishedLiveRef) publishedLiveRef.current = ''
+    turnoDelBoceto = null
     if (opciones.visible !== false) escribirVisible('', true)
   }
   return { publicarEnLaCaja, vaciarLaCaja }
@@ -483,7 +489,7 @@ export function handleConversationStreamSync(
     const esTrozo = isFragmentOfLocution(capture, previoLive)
     // La CAJA tiene UN dueno y UNA regla: `publicarEnLaCaja` (la fabrica de la caja). Aqui no se
     // escribe el ref: se pide la publicacion y se registra la decision (sonda de la caja).
-    const publicacion = publicarEnLaCaja(capture)
+    const publicacion = publicarEnLaCaja(capture, { turnId: activeTurnIdRef.current })
     if (publicacion.aplicado) {
       voiceProbe('live', { turn: activeTurnIdRef.current, resultado: 'aplicado', motivo: publicacion.destino === capture ? 'emision-actual' : 'solape-anadido', acorta: publicacion.destino.length < publicacion.previo, fresh: Boolean(freshUtterance), mismaLocucion: false, reemplaza: publicacion.destino === capture, previo: publicacion.previo, len: publicacion.destino.length, text: publicacion.destino.slice(0, 220) }) // BANDERA DE DIAGNOSTICO
     } else {
@@ -814,7 +820,15 @@ export function handleConversationStreamSync(
           segmentRowsEmitted = true
         }
       }
-      commitTurnToSessionRows(segmentText, segmentSpeaker, { replaceLast: segmentReplace })
+      const turnIdParaVaciar = preflightTurnId ?? activeTurnIdRef?.current ?? null
+      commitTurnToSessionRows(segmentText, segmentSpeaker, {
+        replaceLast: segmentReplace,
+        turnId: turnIdParaVaciar,
+      })
+      // VACIAR CAJA: pending -> committed para ese turno (una sola via del vaciado)
+      if (turnIdParaVaciar !== null && turnIdParaVaciar !== undefined) {
+        vaciarLaCaja({ visible: false })
+      }
       replaceNext = false
     }
 

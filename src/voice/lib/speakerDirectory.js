@@ -69,7 +69,10 @@ export function resolveVoiceName(voiceId) {
  *     nombre; si NO casa con ninguna identidad MEDIDA -> '' (no hereda el nombre de la clave).
  *   - fila CON timbre y clave registrada SIN vector (renombre manual del panel): se honra el
  *     nombre (decision humana, no una identidad medida de otra voz).
- *   - fila SIN timbre: como siempre (la clave -> su nombre registrado).
+ *   - fila SIN timbre: NO se consulta el directorio (freeze 2026-10-17). El nombre vive
+ *     CONGELADO en la fila (lo escribe el registro/directorio al identificar su voz); la clave
+ *     del directorio NO puede nombrar una fila que no lo trae escrito, o una etiqueta de
+ *     etiqueta reutilizada por otra voz heredaria el nombre (la mujer salia "Luis").
  *
  * @param {string} voiceId Clave de voz de la fila.
  * @param {number[]|null} [signature] Timbre medido de ese turno (si lo hay).
@@ -85,7 +88,7 @@ export function resolveRowVoiceName(voiceId, signature = null) {
         if (entry?.name && !entry?.vector?.length) return entry.name
         return ''
     }
-    return entry?.name || ''
+    return ''
 }
 
 /**
@@ -165,13 +168,13 @@ export function rememberVoiceVector(voiceId, vector) {
  */
 export function voiceKeyFor({ voiceId = '', signature = null, floor } = {}) {
     const sig = normalizeEmbeddingVector(Array.isArray(signature) ? signature : [])
+    const id = String(voiceId || '').trim()
     if (sig.length) {
         const conocido = resolveVoiceIdentity(sig, floor == null ? {} : { floor })
         if (conocido?.voiceId) return conocido.voiceId
         // Un match SOLO de la base no trae clave de sesion: NUNCA se devuelve un objeto.
         if (conocido) return id
     }
-    const id = String(voiceId || '').trim()
     if (sig.length && id) rememberVoiceVector(id, sig)
     return id
 }

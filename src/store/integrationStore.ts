@@ -199,6 +199,13 @@ export interface IntegrationActions {
      */
     setEntrySpeaker: (id: string, speakerId: string) => void;
     /**
+     * CONGELA el nombre visible de una fila (mandato del dueno 2026-10-17): al identificar una
+     * voz, su nombre se escribe en la fila y NO se vuelve a resolver desde el directorio. Una
+     * etiqueta reutilizada por otra voz no hereda el nombre (la mujer dejaba de salir "Luis").
+     * Write-once: no pisa un nombre propio ya congelado.
+     */
+    setEntrySpeakerName: (id: string, speakerName: string) => void;
+    /**
      * Completa el texto de la fila que era FRAGMENTO de la locucion (misma fila, una entrada):
      * el texto consolidado entra UNA vez y no se reescribe despues.
      */
@@ -486,6 +493,18 @@ export const useIntegrationStore = create<IntegrationStore>()(
                 set((current) => ({
                     conversationHistory: current.conversationHistory.map((e) =>
                         e.id === id ? { ...e, speakerId } : e,
+                    ),
+                }));
+            },
+
+            setEntrySpeakerName: (id: string, speakerName: string) => {
+                const actual = get().conversationHistory.find((e) => e.id === id);
+                if (!actual) return;
+                const next = String(speakerName || '').trim();
+                if (!next || String(actual.speakerName || '').trim() === next) return;
+                set((current) => ({
+                    conversationHistory: current.conversationHistory.map((e) =>
+                        e.id === id ? { ...e, speakerName: next } : e,
                     ),
                 }));
             },

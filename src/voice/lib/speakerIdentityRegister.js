@@ -30,6 +30,7 @@ import { canonicalSpeakerName } from './speakerLabels.js'
 import { findClusterByLabel, mergeSpeakerClustersOnRename } from "./speakerClusters.js"
 import { registerVoiceName, voiceKeyFor } from './speakerDirectory.js'
 import { labelToSpeakerId } from './conversationRow.js'
+import { freezeVoiceName } from './conversationTurnRow'
 import { setSessionPrimarySpeaker } from './sessionPrimarySpeaker.js'
 
 /**
@@ -81,6 +82,10 @@ export function registerSpeakerIdentity({
   // es el TIMBRE cuando se midio: el mismo timbre da la misma voz aunque cambie su etiqueta.
   const voiceId = voiceKeyFor({ voiceId: labelToSpeakerId(anchor || clean), signature: vectorDeLaVoz })
   registerVoiceName(voiceId, clean, { vector: vectorDeLaVoz })
+  // FREEZE (mandato del dueno 2026-10-17): toda la participacion YA MOSTRADA de esa voz pasa a
+  // llevar el nombre, ESCRITO en la fila (no se re-resuelve desde el directorio). Solo las filas
+  // con etiqueta escrita; una voz distinta que reutilice la clave no se pinta.
+  const rowsChanged = freezeVoiceName(voiceId, clean)
   // El nombre queda tambien en el CLUSTER de ESA voz (dato de la voz) para el cosido de los
   // turnos siguientes por firma. Copia: la publica el escritor unico de clusters.
   const clustersRenombrados = mergeSpeakerClustersOnRename(clusters.map((c) => ({ ...c })), anchor, clean)
@@ -88,7 +93,7 @@ export function registerSpeakerIdentity({
   const primarySet = setSessionPrimarySpeaker(refs?.sessionPrimarySpeakerRef, clean, source)
   // La VOZ que dice su nombre ENTRA en la BASE de participantes con su NOMBRE y su VECTOR.
   if (typeof refs?.registerParticipant === "function") refs.registerParticipant(clean, clean, vectorDeLaVoz)
-  return { registered: true, name: clean, labels: [anchor].filter(Boolean), rowsChanged: 0, primarySet }
+  return { registered: true, name: clean, labels: [anchor].filter(Boolean), rowsChanged, primarySet }
 }
 
 /**

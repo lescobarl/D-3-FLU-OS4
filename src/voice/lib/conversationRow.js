@@ -5,7 +5,7 @@
 import { cleanForSpeech, stripDiacritics } from './audioMath.js'
 import { FLU_CONFIG } from './fluConfig.js'
 import { resolveRowVoiceName } from './speakerDirectory.js'
-import { normalizeSpeakerLabel, parseSpeakerIndex } from './voiceIdentity.js'
+import { normalizeSpeakerLabel, parseSpeakerIndex, isProperSpeakerName } from './voiceIdentity.js'
 import { equalsTrimmed } from '../../lib/textUtils.ts'
 
 export const SPEAKER_ID_CALCULATING = 'calculando'
@@ -51,13 +51,19 @@ export function labelToSpeakerId(label = '') {
  * su nombre escrito se muestran tal cual (compatibilidad).
  */
 export function resolveRowSpeakerLabel(row = {}, config = FLU_CONFIG) {
+    const escrita = String(row?.speakerName || row?.speaker || '').trim();
+    // FREEZE (mandato del dueno 2026-10-17): un NOMBRE PROPIO congelado en la fila se muestra
+    // tal cual y NUNCA se re-resuelve desde el directorio. Una etiqueta AUTOMATICA escrita no
+    // manda: la fila muestra la etiqueta de SU VOZ (clave por timbre cuando se midio), asi que
+    // una voz distinta que reutiliza la clave no hereda el nombre (la mujer salia "Luis").
+    if (escrita && isProperSpeakerName(escrita)) return escrita;
     const id = String(row?.speakerId || '').trim();
     // Solo una CLAVE DE VOZ valida identifica por voz: un `speakerId` que no lo es (p. ej. el
     // id sintetico de un snapshot de preflight) NO se resuelve por voz; la fila muestra la
     // etiqueta que YA trae escrita, nunca el respaldo generico.
-    if (!id || !isValidSpeakerId(id)) return String(row?.speakerName || row?.speaker || '');
+    if (!id || !isValidSpeakerId(id)) return escrita;
     // P11.10: con TIMBRE medido manda la VOZ (la clave pudo reciclarse en otra persona). Sin
-    // coincidencia medida la fila NO hereda el nombre de la clave.
+    // firma NO se consulta el directorio: la fila usa su etiqueta provisional (freeze).
     const signature = normalizeRowSignature(row?.signature);
     const name = resolveRowVoiceName(id, signature);
     if (name) return name;
@@ -65,7 +71,7 @@ export function resolveRowSpeakerLabel(row = {}, config = FLU_CONFIG) {
         // Voz medida que NO es la identidad de esa clave con nombre: no se afirma su nombre.
         return String(config?.voiceIdentity?.labels?.fallbackSpeaker || FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker);
     }
-    return speakerIdToDefaultName(id, config);
+    return speakerIdToDefaultName(id, config) || escrita;
 }
 
 export function speakerIdToDefaultName(speakerId = '', config = FLU_CONFIG) {

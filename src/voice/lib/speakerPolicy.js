@@ -144,7 +144,15 @@ export function resolveCommitStickyFallback({
 } = {}) {
   // El PRIMARIO de la sesion (el participante activo de la base) NO es hablante de una fila:
   // con el, una etiqueta sin voz medida salia con SU nombre ("Luis a la chica").
-  return lastLogged || fallback
+  const sticky = normalizeSpeakerLabel(lastLogged)
+  if (sticky) return sticky
+  const respaldo = normalizeSpeakerLabel(fallback)
+  // Sin historial ni respaldo: '' (no se inventa una etiqueta ni un nombre).
+  if (!respaldo) return ''
+  // El respaldo del caller puede ser un NOMBRE PROPIO (la etiqueta del listen state tras
+  // wake). Un nombre no se afirma sin evidencia: se degrada al label generico
+  // (blindSpeakerFallback, el dueno unico de esa decision).
+  return blindSpeakerFallback(respaldo)
 }
 
 /**

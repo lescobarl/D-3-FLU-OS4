@@ -19,7 +19,7 @@ import { isAutoSpeakerLabel, isProperSpeakerName } from './voiceIdentity';
 import { registerVoiceName } from './speakerDirectory.js';
 import { canonicalSpeakerName } from './speakerLabels';
 import { getFallbackSpeaker } from './speakerCore';
-import { labelToSpeakerId } from './conversationRow';
+import { labelToSpeakerId, speakerIdToDefaultName } from './conversationRow';
 import { voiceKeyFor } from './speakerDirectory.js';
 import { normalizeRowSignature } from './conversationRow';
 import { isFragmentOfLocution } from './turnStream';
@@ -30,6 +30,30 @@ import { isFragmentOfLocution } from './turnStream';
  * del turno: temprano y de resolucion) en vez de por posicion respecto a FLU.
  */
 let currentTurn: { id: number | string | null; rowId: string | null } = { id: null, rowId: null };
+
+/**
+ * ¿El `speakerId` de la fila es un NOMBRE propio (`speaker_name_*`)? Solo ese es
+ * write-once: un placeholder auto (`speaker_N`) si se completa (commit temprano ->
+ * resolucion con el hablante medido).
+ */
+function esNombrePropioDeFila(speakerId?: string | null): boolean {
+    return String(speakerId || '').startsWith('speaker_name_');
+}
+
+/**
+ * CONGELA el hablante RESUELTO en la fila (freeze 2026-10-17): el nombre se escribe en la fila
+ * y no se re-resuelve desde el directorio. No DEGRADA un nombre propio ya congelado con una
+ * etiqueta automatica.
+ */
+function freezeResolvedSpeakerName(
+    store: { conversationHistory: Array<{ id: string; speakerName?: string }>; setEntrySpeakerName: (id: string, name: string) => void },
+    rowId: string,
+    resolved: string,
+): void {
+    const actual = String(store.conversationHistory.find((e) => e.id === rowId)?.speakerName || '').trim();
+    if (isProperSpeakerName(actual) && !isProperSpeakerName(resolved)) return;
+    store.setEntrySpeakerName(rowId, resolved);
+}
 
 /**
  * ALIAS de sesion: etiqueta de diarizacion -> NOMBRE de la voz que dijo su nombre.
@@ -192,6 +216,36 @@ export function renameSpeakerRows(
         const voz = labelToSpeakerId(String(label || ''));
         if (!voz) return;
         registerVoiceName(voz, name);
+        // FREEZE: el nombre queda escrito en las filas ya mostradas de esa voz (se resuelve
+        // desde la fila, no desde el directorio).
+        freezeVoiceName(voz, name);
+        changed += 1;
+    });
+    return changed;
+}
+
+/**
+ * CONGELA el nombre de una voz en las filas que YA muestran su etiqueta (freeze del dueno
+ * 2026-10-17): al identificar una voz ("soy Luis"), toda su participacion pasa a llevar el
+ * nombre, escrito EN LA FILA, y no se vuelve a resolver desde el directorio. Solo se congelan
+ * filas con etiqueta ESCRITA (auto o propia): una fila sin nombre escrito NO hereda nada (su
+ * etiqueta provisional basta), de modo que una voz DISTINTA que reutilice la clave no se pinta.
+ * Write-once: no pisa un nombre propio ya congelado distinto.
+ *
+ * @returns cuantas filas se congelaron.
+ */
+export function freezeVoiceName(voiceId: string, speakerName: string): number {
+    const voz = String(voiceId || '').trim();
+    const name = canonicalSpeakerName(String(speakerName || '').trim());
+    if (!voz || !name) return 0;
+    const store = useIntegrationStore.getState();
+    let changed = 0;
+    store.conversationHistory.forEach((e) => {
+        if (e.role !== 'user') return;
+        if (String(e.speakerId || '') !== voz) return;
+        const actual = String(e.speakerName || '').trim();
+        if (!actual || actual === name) return;
+        store.setEntrySpeakerName(e.id, name);
         changed += 1;
     });
     return changed;
@@ -228,9 +282,19 @@ export function updateTurnRowSpeaker(
     const history = useIntegrationStore.getState().conversationHistory;
     const entry = history.find((e) => e.id === rowId);
     if (!entry || entry.role !== 'user') return false;
-    const voz = String(entry.speakerId || '') || labelToSpeakerId(String(entry.speakerName || ''));
-    if (!voz) return false;
+    const vozDeEtiqueta = String(entry.speakerId || '') || labelToSpeakerId(String(entry.speakerName || ''));
+    if (!vozDeEtiqueta) return false;
+    // UNA VOZ, UNA CLAVE: con timbre medido el nombre se pega a la VOZ resuelta por su
+    // firma (`voiceKeyFor`), NUNCA a la clave derivada de la ETIQUETA ("Hablante 1" ->
+    // `speaker_1`), que la reutiliza otra persona al diarizar con la misma etiqueta. Sin
+    // esa separacion, "Luis" quedaba colgado de `speaker_1` y la mujer que diariza
+    // "Hablante 1" heredaba su nombre (medido en el log del dueno 2026-10-17: las
+    // intervenciones de la mujer salian como "Luis").
+    const voz = voiceKeyFor({ voiceId: vozDeEtiqueta, signature: vector });
     registerVoiceName(voz, name, { vector });
+    // FREEZE del nombre en ESTA fila (mandato 2026-10-17): el nombre queda congelado aqui y no
+    // se re-resuelve desde el directorio; una voz distinta que reutilice la clave no lo hereda.
+    useIntegrationStore.getState().setEntrySpeakerName(rowId, name);
     voiceProbe('row-update', { turnId, voz, nombre: name, fila: rowId });
     return true;
 }
@@ -365,6 +429,10 @@ function commitUserTurnRowInner({
     // LA VOZ de la fila (no su nombre): el nombre se resuelve al MOSTRAR. La clave es el
     // TIMBRE cuando se midio (mismo timbre = misma clave aunque cambie la etiqueta).
     const vozDeLaFila = voiceKeyFor({ voiceId: labelToSpeakerId(resolved), signature });
+    // FREEZE (mandato del dueno 2026-10-17): la fila nace con su etiqueta CONGELADA — la MISMA
+    // que renderiza su VOZ (canonica por id: "luis" -> "Luis", "Lider" con su canon), no la
+    // grafia cruda del aporte. Una voz distinta que reutilice la clave no la hereda.
+    const etiquetaDeLaFila = speakerIdToDefaultName(vozDeLaFila);
     const stamp = typeof timestamp === 'number' ? timestamp : Date.now();
 
     // 1) Emisión que crece: la fila del turno se reutiliza (UNA), pero su TEXTO no se
@@ -375,27 +443,34 @@ function commitUserTurnRowInner({
         for (let i = history.length - 1; i >= turnStart; i -= 1) {
             const entry = history[i];
             if (!entry || entry.role !== 'user') continue;
-            // P2: actualizacion DIRIGIDA e idempotente (no se reconstruye la conversacion).
+            // WRITE-ONCE del NOMBRE: un `speaker_name_*` ya commiteado no se reescribe (el
+            // nombre propio no se mueve). Un placeholder auto (`speaker_N`) si se completa.
+            if (esNombrePropioDeFila(entry.speakerId)) {
+                rememberTurn(turnId, entry.id);
+                return { id: entry.id, action: 'reused' };
+            }
             store.setEntrySpeaker(entry.id, vozDeLaFila);
+            freezeResolvedSpeakerName(store, entry.id, etiquetaDeLaFila);
             rememberTurn(turnId, entry.id);
             return { id: entry.id, action: 'reused' };
         }
-        // La respuesta de FLU NO puede DERROTAR la accion de fila ya decidida
-        // (`replaceLast` = "esta emision reemplaza la ultima"): si la fila de la MISMA
-        // locucion quedo ANTES de esa respuesta, se reutiliza. El criterio de "es el
-        // mismo texto, mas corto/largo" es el DUENO UNICO de la recompuesta
-        // (`isFragmentOfLocution`). Medido (log del dueno): la locucion con wake
-        // "voy a decir el comando Okay flu Soy Luis" dejo DOS filas (turn=12 y turn=13,
-        // la 2.a recortada encima de la respuesta de FLU).
+        // RECORTE POSTERIOR (P9.67): si el texto es un TROZO contiguo de la última fila de
+        // usuario (o al revés), la fila se REUTILIZA aunque el turno haya cambiado — el wake
+        // recorta la locución y el commit va con el turno vivo; el dueno de ese criterio es
+        // `isFragmentOfLocution` (uno solo). Fundir por texto no reescribe lo ya commitado
+        // (write-once arriba), solo evita la segunda fila del recorte.
         const ultima = [...history].reverse().find((e) => e?.role === 'user');
         if (ultima) {
             const previo = String(ultima.text || '');
             const rawEsTrozo = isFragmentOfLocution(raw, previo);
             const previoEsTrozo = !rawEsTrozo && isFragmentOfLocution(previo, raw);
             if (rawEsTrozo || previoEsTrozo) {
-                // P1 insert-only: el texto de una fila se decide UNA vez, en su insercion. Lo
-                // unico que se COMPLETA es una fila que era FRAGMENTO de la locucion (misma fila,
-                // dirigido): texto ya consolidado NO se reescribe jamas.
+                // P1 insert-only: el texto de una fila se decide UNA vez, en su insercion.
+                // WRITE-ONCE del NOMBRE: un nombre propio ya commiteado no se reescribe.
+                if (!esNombrePropioDeFila(ultima.speakerId)) {
+                    store.setEntrySpeaker(ultima.id, vozDeLaFila);
+                    freezeResolvedSpeakerName(store, ultima.id, etiquetaDeLaFila);
+                }
                 if (previoEsTrozo) store.completeEntryFragment(ultima.id, raw);
                 rememberTurn(turnId, ultima.id);
                 return { id: ultima.id, action: rawEsTrozo ? 'reused' : 'replaced' };
@@ -413,8 +488,14 @@ function commitUserTurnRowInner({
     if (mismoTurnoPorId) {
         const entry = history.find((e) => e.id === currentTurn.rowId);
         if (entry && entry.role === 'user') {
-            // P2: actualizacion DIRIGIDA e idempotente (no se reconstruye la conversacion).
+            // WRITE-ONCE del NOMBRE: un nombre propio ya commiteado no se reescribe; un
+            // placeholder auto si se completa (commit temprano -> resolucion).
+            if (esNombrePropioDeFila(entry.speakerId)) {
+                rememberTurn(turnId, entry.id);
+                return { id: entry.id, action: 'reused' };
+            }
             store.setEntrySpeaker(entry.id, vozDeLaFila);
+            freezeResolvedSpeakerName(store, entry.id, etiquetaDeLaFila);
             rememberTurn(turnId, entry.id);
             return { id: entry.id, action: 'reused' };
         }
@@ -427,6 +508,7 @@ function commitUserTurnRowInner({
         role: 'user',
         text: raw,
         speakerId: vozDeLaFila,
+        speakerName: etiquetaDeLaFila,
         timestamp: stamp,
         sentiment,
         signature: normalizeRowSignature(signature),
