@@ -228,8 +228,9 @@ export function renameSpeakerRows(
  * CONGELA el nombre de una voz en las filas que YA muestran su etiqueta (freeze del dueno
  * 2026-10-17): al identificar una voz ("soy Luis"), toda su participacion pasa a llevar el
  * nombre, escrito EN LA FILA, y no se vuelve a resolver desde el directorio. Solo se congelan
- * filas con etiqueta ESCRITA (auto o propia): una fila sin nombre escrito NO hereda nada (su
- * etiqueta provisional basta), de modo que una voz DISTINTA que reutilice la clave no se pinta.
+ * filas con etiqueta ESCRITA (auto o propia): una fila sin rotulo no tiene evidencia de esa voz
+ * (el insert no estampa sin medida, regla del dueno 2026-10-08) y NO hereda nada, de modo que
+ * una voz DISTINTA que reutilice la clave no se pinta (defecto "la mujer sale Luis" del log).
  * Write-once: no pisa un nombre propio ya congelado distinto.
  *
  * @returns cuantas filas se congelaron.
@@ -433,6 +434,14 @@ function commitUserTurnRowInner({
     // que renderiza su VOZ (canonica por id: "luis" -> "Luis", "Lider" con su canon), no la
     // grafia cruda del aporte. Una voz distinta que reutilice la clave no la hereda.
     const etiquetaDeLaFila = speakerIdToDefaultName(vozDeLaFila);
+    // ROTULO PROPIO: la fila solo lleva `speakerName` cuando el resolver aporto identidad de
+    // ESTE turno (etiqueta de diarizacion distinta del RESPALDO, nombre propio del texto o
+    // medida). El respaldo no se escribe: es lo que su VOZ ya muestra al renderizar, y
+    // estamparlo dejaba una etiqueta generica escrita en filas sin evidencia (regla del dueno
+    // 2026-10-08, e2e `A3`: sin evidencia la fila queda SIN hablante escrito).
+    const respaldoHablante = String(getFallbackSpeaker() || '').trim();
+    const hayRotuloPropio =
+        evidenciaAcustica || String(resolved || '').trim() !== respaldoHablante;
     const stamp = typeof timestamp === 'number' ? timestamp : Date.now();
 
     // 1) Emisión que crece: la fila del turno se reutiliza (UNA), pero su TEXTO no se
@@ -450,7 +459,7 @@ function commitUserTurnRowInner({
                 return { id: entry.id, action: 'reused' };
             }
             store.setEntrySpeaker(entry.id, vozDeLaFila);
-            freezeResolvedSpeakerName(store, entry.id, etiquetaDeLaFila);
+            if (hayRotuloPropio) freezeResolvedSpeakerName(store, entry.id, etiquetaDeLaFila);
             rememberTurn(turnId, entry.id);
             return { id: entry.id, action: 'reused' };
         }
@@ -469,7 +478,7 @@ function commitUserTurnRowInner({
                 // WRITE-ONCE del NOMBRE: un nombre propio ya commiteado no se reescribe.
                 if (!esNombrePropioDeFila(ultima.speakerId)) {
                     store.setEntrySpeaker(ultima.id, vozDeLaFila);
-                    freezeResolvedSpeakerName(store, ultima.id, etiquetaDeLaFila);
+                    if (hayRotuloPropio) freezeResolvedSpeakerName(store, ultima.id, etiquetaDeLaFila);
                 }
                 if (previoEsTrozo) store.completeEntryFragment(ultima.id, raw);
                 rememberTurn(turnId, ultima.id);
@@ -495,7 +504,7 @@ function commitUserTurnRowInner({
                 return { id: entry.id, action: 'reused' };
             }
             store.setEntrySpeaker(entry.id, vozDeLaFila);
-            freezeResolvedSpeakerName(store, entry.id, etiquetaDeLaFila);
+            if (hayRotuloPropio) freezeResolvedSpeakerName(store, entry.id, etiquetaDeLaFila);
             rememberTurn(turnId, entry.id);
             return { id: entry.id, action: 'reused' };
         }
@@ -508,7 +517,10 @@ function commitUserTurnRowInner({
         role: 'user',
         text: raw,
         speakerId: vozDeLaFila,
-        speakerName: etiquetaDeLaFila,
+        // SIN ROTULO PROPIO no se escribe nada en la fila (regla del dueno 2026-10-08,
+        // e2e `A3`): sin medida ni etiqueta propia la fila queda SIN hablante escrito y su
+        // rotulo lo da su VOZ al MOSTRAR. El respaldo jamas se estampa aqui.
+        ...(hayRotuloPropio ? { speakerName: etiquetaDeLaFila } : {}),
         timestamp: stamp,
         sentiment,
         signature: normalizeRowSignature(signature),
