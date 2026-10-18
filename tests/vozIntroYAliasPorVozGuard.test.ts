@@ -145,15 +145,16 @@ describe('B2 - la identidad es la VOZ (firma), no la etiqueta', () => {
       'Hablante 3',
       'Luis',
     ])
-    // El registro NO reescribe filas: la conversacion es texto insertado (mandato 2026-10-13).
-    expect(result.rowsChanged, 'renombrar no toca filas; la etiqueta se resuelve al MOSTRAR').toBe(0)
+    // AMEND (freeze 2026-10-17, mandato del dueno): el registro CONGELA el nombre en las filas
+    // YA MOSTRADAS de esa voz (antes no tocaba ninguna fila: mandato 2026-10-13, invertido).
+    expect(result.rowsChanged, 'el registro congela las filas de ESA voz (freeze)').toBe(2)
     expect(
       useIntegrationStore
         .getState()
         .conversationHistory.filter((e) => e.role === 'user')
-        .every((e) => !String((e as { speakerName?: string }).speakerName || '')),
-      'ninguna fila guarda el nombre: guarda su VOZ (speakerId)',
-    ).toBe(true)
+        .map((e) => String((e as { speakerName?: string }).speakerName || '')),
+      'cada fila guarda su etiqueta CONGELADA (la otra voz NO hereda el nombre)',
+    ).toEqual(['Luis', 'Hablante 3', 'Luis'])
     // El renombre va por VOZ: el CLUSTER de esa voz queda con el nombre (las filas
     // siguientes lo resuelven por firma, sin mapa de etiquetas).
     expect(setClusters).toHaveBeenCalled()
@@ -171,9 +172,10 @@ describe('B2 - la identidad es la VOZ (firma), no la etiqueta', () => {
       refs: { setClusters, sessionPrimarySpeakerRef: { current: '' } } as never,
     })
     expect(result.registered).toBe(true)
-    // La VOZ queda con el nombre y la fila se VE con el; NO se reescribe fila alguna
-    // (mandato 2026-10-13: el nombre vive en el directorio y se resuelve al MOSTRAR).
-    expect(result.rowsChanged).toBe(0)
+    // La VOZ queda con el nombre y sus filas ya mostradas lo CONGELAN en la fila.
+    // AMEND (freeze 2026-10-17, mandato del dueno): antes no se tocaba fila alguna
+    // (mandato 2026-10-13: el nombre vivia en el directorio y se resolvia al MOSTRAR).
+    expect(result.rowsChanged).toBe(1)
     expect(
       useIntegrationStore
         .getState()

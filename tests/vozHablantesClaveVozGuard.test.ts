@@ -66,9 +66,12 @@ describe('P11.10 - la fila resuelve su nombre por la VOZ, no por la clave', () =
     expect(resolveRowSpeakerLabel(fila)).toBe('Luis')
   })
 
-  it('compatibilidad: una fila SIN firma sigue resolviendo por la clave (no se toca)', () => {
+  it('AMEND (freeze 2026-10-17): una fila SIN firma NO hereda el nombre de la clave', () => {
     registerVoiceName('speaker_1', 'Luis', { vector: V_LUIS })
-    expect(resolveRowSpeakerLabel({ speakerId: 'speaker_1' })).toBe('Luis')
+    // Sin firma no se consulta el directorio: la clave reciclada pintaba a otra voz (la mujer
+    // salia "Luis"). La fila muestra la etiqueta canonica de SU clave; el nombre propio solo
+    // entra CONGELADO en la fila (registro/medida).
+    expect(resolveRowSpeakerLabel({ speakerId: 'speaker_1' })).toBe('Hablante 1')
     expect(resolveRowSpeakerLabel({ speakerId: 'speaker_name_luis' })).toBe('Luis')
   })
 

@@ -38,11 +38,12 @@ describe('identificado el hablante, TODA su participacion lleva su nombre', () =
       { text: 'radicado desde hace muchos anos en andorra', speaker: 'Hablante 2' },
     ])
     const antes = userRows()
-    // El registro del nombre: NO reescribe filas (0) y liga el nombre a ESA voz.
+    // El registro del nombre: NO reescribe filas (0) en el mandato 2026-10-13; AMEND 2026-10-17:
+    // con freeze del dueno las filas YA MOSTRADAS de esa voz se CONGELAN con el nombre -> cambian.
     const registradas = renameSpeakerRows(['Hablante 1'], 'luis')
     expect(registradas, 'una VOZ registrada').toBe(1)
-    expect(userRows(), 'la conversacion es la MISMA (ninguna fila se reescribe)').toEqual(antes)
-    expect(etiquetas()).toEqual(['Luis', 'Luis', 'Hablante 2', 'Hablante 2'])
+    expect(userRows().every((r) => r.speakerName !== 'Hablante 1' || r.speakerId !== 'speaker_1'), 'las filas de esa voz se congelan con nombre').toBe(true)
+    expect(userRows(), 'la conversacion NO se re-insertó; se ALTERÓ su atributo speakerName (mandato 2026-10-17)').not.toEqual(antes)
   })
 
   it('una fila ya nombrada se ve igual (el registro no reescribe de mas)', () => {

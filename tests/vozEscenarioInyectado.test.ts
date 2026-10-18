@@ -115,9 +115,12 @@ describe('escenario inyectado: hablantes, registro y renombre de la participacio
     // La ETIQUETA no es un alias de nadie: el nombre lo lleva LA VOZ que lo dijo (su
     // timbre). Una fila nueva de ESA voz se ve con su nombre; y una VOZ DISTINTA que trae
     // otra etiqueta NO lo hereda (ese era el defecto que barría otras voces).
+    // FREEZE (mandato del dueno 2026-10-17): una fila NUEVA SIN medida no hereda el nombre de
+    // la clave de su voz; conserva su etiqueta provisional. El nombre llega a sus filas por el
+    // congelado del registro (filas ya mostradas) o por la medida, que lo escribe EN la fila.
     const tarde = commitUserTurnRow({ text: 'turno escrito sin hablante', turnId: 3 })
     updateTurnRowSpeaker(3, 'Hablante 1')
-    expect(resolveRowSpeakerLabel(userRows().find((row) => row.id === tarde.id) || {}), 'misma VOZ').toBe('Luis')
+    expect(resolveRowSpeakerLabel(userRows().find((row) => row.id === tarde.id) || {}), 'misma VOZ sin medida: provisional').toBe('Hablante 1')
 
     commitUserTurnRow({ text: 'habla la otra persona', speakerName: 'Hablante 2', turnId: 4 })
     expect(resolveRowSpeakerLabel(userRows().at(-1) || {}), 'otra VOZ: no hereda').toBe('Hablante 2')

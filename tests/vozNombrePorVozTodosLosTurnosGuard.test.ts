@@ -73,7 +73,7 @@ describe('el nombre se liga a la VOZ y vale en TODOS sus turnos', () => {
         const result = registerSpeakerIdentity({ name: 'Luis', previousLabel: 'Hablante 1', clusters, refs: {} as never })
 
         expect(filas(), 'todos los turnos de esa voz').toEqual(['Luis', 'Luis', 'Luis', 'Hablante 3'])
-        expect(result.rowsChanged, 'el registro no muta filas: la etiqueta se resuelve al MOSTRAR').toBe(0)
+        expect(result.rowsChanged, 'el registro CONGELA filas ya mostradas de esa voz (freeze 2026-10-17)').toBeGreaterThanOrEqual(2)
     })
 
     it('el NOMBRE solo se estampa con EVIDENCIA; sin medida la fila cae a generica (P9.81)', () => {

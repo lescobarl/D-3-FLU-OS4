@@ -128,23 +128,38 @@ describe('P9.17 el store no es un segundo escritor de la fila', () => {
     });
 });
 
-// P9.47 - el store NO escribe el hablante de una fila YA existente. El UNICO sitio
-// que escribe el hablante de la fila del usuario es `commitUserTurnRow`
-// (conversationTurnRow.ts). Un mutador del store que reescriba `speakerName` de una
-// entrada existente es un SEGUNDO escritor del MISMO dato (ruta doble latente):
-// `setConversationEntrySpeaker` lo era (0 llamadores) y se retiro. La barrera lo fija
-// por FORMA (spread de la entrada), no por nombre.
+// P9.47 - UN SOLO escritor del nombre de una fila en el store.
+// AMEND (freeze 2026-10-17, mandato del dueno): el nombre se CONGELA EN LA FILA al identificar su
+// VOZ, asi que el store SI necesita un mutador del nombre. Sigue habiendo UNO SOLO — el del freeze
+// (`setEntrySpeakerName`) — y ningun SEGUNDO escritor (spread de la entrada): `setConversationEntrySpeaker`
+// lo era (0 llamadores) y se retiro. La barrera lo fija por FORMA (spread de la entrada) y por
+// DUENO (la clave del mutador que lo contiene), no por nombre literario.
 export function rowSpeakerWriters(src: string): string[] {
     return src.match(/\{\s*\.\.\.\s*\w+\s*,\s*speakerName/g) || [];
 }
 
-describe('P9.47 el store no escribe el hablante de una fila existente', () => {
+/** Clave del mutador del store que CONTIENE cada escritor del nombre ('' si no se puede leer). */
+export function rowSpeakerWriterOwners(src: string): string[] {
+    const re = /\{\s*\.\.\.\s*\w+\s*,\s*speakerName/g;
+    const owners: string[] = [];
+    for (const m of src.matchAll(re)) {
+        const antes = src.slice(0, m.index);
+        const claves = [...antes.matchAll(/(\w+)\s*:\s*\(/g)];
+        owners.push(claves.length ? claves[claves.length - 1][1] : '');
+    }
+    return owners;
+}
+
+describe('P9.47 un solo escritor del nombre de fila en el store', () => {
     const storeSrc = () =>
         readFileSync(join(process.cwd(), 'src', 'store', 'integrationStore.ts'), 'utf8');
 
-    it('ningun mutador del store reescribe el hablante de la fila (escritor unico)', () => {
+    it('el UNICO escritor del nombre de una fila es el del freeze', () => {
         const hits = rowSpeakerWriters(storeSrc());
-        expect(hits, `escritores del hablante en el store: ${JSON.stringify(hits)}`).toHaveLength(0);
+        expect(hits, `escritores del hablante en el store: ${JSON.stringify(hits)}`).toHaveLength(1);
+        expect(rowSpeakerWriterOwners(storeSrc()), 'el escritor unico es el del freeze').toEqual([
+            'setEntrySpeakerName',
+        ]);
     });
 
     it('el segundo escritor retirado NO vuelve', () => {
@@ -160,5 +175,13 @@ describe('P9.47 - el detector no es decorativo (prueba de mutacion)', () => {
         expect(rowSpeakerWriters('{ ...e, speakerName }')).toHaveLength(1);
         expect(rowSpeakerWriters("speakerName: 'FLU'")).toHaveLength(0);
         expect(rowSpeakerWriters('{ ...entry, text }')).toHaveLength(0);
+    });
+
+    it('un SEGUNDO escritor cambia el conteo y los duenos', () => {
+        const src =
+            'setEntrySpeakerName: (id: string, speakerName: string) => { (...{ ...e, speakerName }) } ' +
+            'otroMutador: (id) => { (...{ ...x, speakerName }) }';
+        expect(rowSpeakerWriters(src)).toHaveLength(2);
+        expect(rowSpeakerWriterOwners(src)).toEqual(['setEntrySpeakerName', 'otroMutador']);
     });
 });

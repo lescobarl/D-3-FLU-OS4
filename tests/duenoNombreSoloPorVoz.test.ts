@@ -7,6 +7,9 @@
 //       nombre + su speakerLabel) pueden pegarle un nombre a una voz.
 //   (2) "Que TODO consumidor vea el nombre RESUELTO, no la etiqueta cruda": lo que ve la IA
 //       (minuta/resumen/contexto) tiene que ser el MISMO nombre resuelto que ve el dueno.
+// AMEND 2026-10-17 (freeze del dueno): el nombre se CONGELA en la FILA (no se re-resuelve desde
+// el directorio), asi que N2 siembra la fila con su nombre congelado; la fila sin nombre escrito
+// NO hereda de la clave.
 // NACE ROJO.
 // ============================================================
 import { afterEach, describe, expect, it } from 'vitest'
@@ -53,7 +56,7 @@ describe('N2 - lo que ve la IA es el nombre RESUELTO (no la etiqueta cruda)', ()
     registerVoiceName('speaker_1', 'Luis')
     const log = buildConversationLog(
       [
-        { role: 'user', text: 'hola a todos', speakerId: 'speaker_1' },
+        { role: 'user', text: 'hola a todos', speakerId: 'speaker_1', speakerName: 'Luis' },
         { role: 'flu', text: 'Hola Luis', speakerName: 'FLU' },
       ] as never,
       false,
@@ -69,7 +72,9 @@ describe('N2 - lo que ve la IA es el nombre RESUELTO (no la etiqueta cruda)', ()
 
   it('los hablantes de la sesion se listan por su VOZ resuelta', () => {
     registerVoiceName('speaker_1', 'Luis')
-    const speakers = listSessionSpeakers([{ role: 'user', text: 'hola', speakerId: 'speaker_1' }] as never)
+    const speakers = listSessionSpeakers([
+      { role: 'user', text: 'hola', speakerId: 'speaker_1', speakerName: 'Luis' },
+    ] as never)
     expect(speakers).toContain('Luis')
   })
 })

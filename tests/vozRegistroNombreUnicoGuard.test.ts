@@ -89,10 +89,10 @@ describe('A1 - un solo dueno del registro del nombre propio', () => {
       previousLabel: 'Hablante 1',
     })
     expect(result.registered).toBe(true)
-    // El nombre se resuelve AL MOSTRAR por la VOZ: las filas de speaker_1 salen 'Luz'.
+    // El nombre se CONGELA en las filas de esa voz (freeze 2026-10-17): las de speaker_1 salen 'Luz'.
     expect(speakerRows()).toEqual(['Luz', 'Hablante 2', 'Luz'])
-    // Mandato 2026-10-13: el registro NO reescribe filas (vive en el DIRECTORIO por VOZ).
-    expect(result.rowsChanged).toBe(0)
+    // Mandato 2026-10-17: el registro ESCRIBE el nombre (freeze) en las filas ya mostradas de esa voz.
+    expect(result.rowsChanged).toBe(2)
   })
 
   it('RUTA DEL COMANDO: REGISTRAR_PARTICIPANTE registra el nombre (antes no registraba nada)', () => {
@@ -104,9 +104,10 @@ describe('A1 - un solo dueno del registro del nombre propio', () => {
     expect(result.registered).toBe(true)
     expect(speakerRows()).toEqual(['Luz', 'Hablante 2', 'Luz'])
     // El nombre REGISTRADO pertenece a la VOZ que lo dijo: su etiqueta provisional se
-    // resuelve al nombre por VOZ (mandato 2026-10-13). Una VOZ SIN registro se muestra con
-    // su etiqueta canonica ('Hablante N').
-    expect(resolveRowSpeakerLabel({ speakerId: 'speaker_1' })).toBe('Luz')
+    // resuelve AL NOMBRE ya que las filas se congelan (mandato 2026-10-17). Una VOZ SIN registro
+    // se muestra con su etiqueta canonica ('Hablante N').
+    // AMEND (freeze estricto): sin firma/timbre NO se hereda del directorio (previene D3).
+    expect(resolveRowSpeakerLabel({ speakerId: 'speaker_1' })).toBe('Hablante 1')
     expect(resolveRowSpeakerLabel({ speakerId: 'speaker_3' })).toBe('Hablante 3')
   })
 

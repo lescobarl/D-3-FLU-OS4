@@ -5,12 +5,16 @@
  * la única vía es wake + comando". El dueño invirtió esa regla: el nombre de una voz sale SOLO
  * de su VOZ (su vector/medida) y se resuelve AL MOSTRAR; la fila guarda LA VOZ, no el nombre.
  *
- * INVARIANTE NUEVO:
- *   (a) la fila de usuario NO guarda nombre: guarda su VOZ (`speakerId`);
- *   (b) la etiqueta VISIBLE se resuelve con `resolveRowSpeakerLabel` (el nombre de esa VOZ si
- *       está registrado; si no, la etiqueta provisional de su id: NO se adivina);
- *   (c) una VOZ CON nombre registrado (por la medida, con evidencia) lo lleva en TODAS sus
- *       filas sin reescribir ninguna;
+ * AMEND (freeze 2026-10-17, mandato del dueño): la premisa "la fila NO guarda el nombre y
+ * ninguna mutación la toca" se invierte otra vez. El nombre se CONGELA EN LA FILA al identificar
+ * su VOZ (freeze): la fila guarda su VOZ (`speakerId`) y su etiqueta CONGELADA (`speakerName`),
+ * y NUNCA se re-resuelve desde el directorio. Motivo medido (log del dueño 2026-10-17): con el
+ * repintado por directorio, la clave reutilizada `speaker_1` hacía que la mujer saliera "Luis".
+ *
+ * INVARIANTE NUEVO (freeze):
+ *   (a) la fila guarda su VOZ (`speakerId`) y su etiqueta CONGELADA (`speakerName`);
+ *   (b) la etiqueta VISIBLE se resuelve con `resolveRowSpeakerLabel` DESDE LA FILA (congelada);
+ *   (c) una VOZ CON nombre registrado (medida) lo CONGELA en sus filas (la fila cambia UNA vez);
  *   (d) una VOZ DISTINTA nunca hereda el nombre de otra.
  */
 import { describe, expect, it, beforeEach } from 'vitest';
@@ -52,11 +56,11 @@ describe('P8.40b/P9.48 - el nombre vive en la VOZ y se resuelve AL MOSTRAR', () 
     resetVoiceDirectory();
   });
 
-  it('la fila NO guarda el nombre: guarda su VOZ', () => {
+  it('la fila guarda su VOZ y CONGELA la etiqueta de esa VOZ (freeze 2026-10-17)', () => {
     commitUserTurnRow({ text: 'hola hola como estan', speakerName: 'Hablante 1', turnId: 1 });
     const row = filas()[0];
     expect(String((row as { speakerId?: string })?.speakerId || ''), 'la fila lleva la VOZ').toBe('speaker_1');
-    expect((row as { speakerName?: string })?.speakerName, 'y NO el nombre').toBeUndefined();
+    expect((row as { speakerName?: string })?.speakerName, 'y la etiqueta CONGELADA de su VOZ').toBe('Hablante 1');
   });
 
   it('sin nombre de esa VOZ no se adivina: etiqueta provisional', () => {
@@ -70,13 +74,13 @@ describe('P8.40b/P9.48 - el nombre vive en la VOZ y se resuelve AL MOSTRAR', () 
     expect(ultima()).toBe('Hablante 1');
   });
 
-  it('la MISMA voz CON su nombre registrado (medida) lo lleva SIN reescribir la fila', () => {
+  it('la MISMA voz CON su nombre registrado (medida) lo CONGELA en la fila (freeze)', () => {
     const { id } = commitUserTurnRow({ text: 'hola hola como estan', speakerName: 'Hablante 1', turnId: 1 });
-    const antes = filas()[0];
-    // La medida tardía registra el nombre de ESA VOZ (no toca la fila).
+    // La medida tardía CONGELA el nombre de ESA VOZ EN SU fila (freeze 2026-10-17): la fila
+    // cambia UNA vez y deja de depender del directorio.
     expect(updateTurnRowSpeaker(1, 'Luis', { evidenciaAcustica: true })).toBe(true);
     const despues = filas().find((e) => e.id === id);
-    expect(despues, 'la fila es la MISMA (ninguna mutación)').toEqual(antes);
+    expect((despues as { speakerName?: string })?.speakerName, 'el nombre queda CONGELADO en la fila').toBe('Luis');
     expect(resolveRowSpeakerLabel(despues || {}), 'y se VE con el nombre de su voz').toBe('Luis');
   });
 

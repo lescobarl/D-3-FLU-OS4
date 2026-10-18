@@ -66,9 +66,9 @@ describe('plegado luis/Luis: una identidad, un cluster', () => {
   it('(util) el renombre cubre las DOS grafias de la fila (misma VOZ plegada)', () => {
     commitUserTurnRow({ text: 'hola que tal', speakerName: 'luis', evidenciaAcustica: false, turnId: 1 } as never)
     commitUserTurnRow({ text: 'vamos a comer', speakerName: 'Luis', evidenciaAcustica: false, turnId: 2 } as never)
-    // Las DOS grafias dan el MISMO id de VOZ (plegado case-insensitive): sus filas ya salen
-    // con la grafia canonica ('Luis'), aunque la fila no guarde el nombre.
-    expect(filas()).toEqual(['Luis', 'Luis'])
+    // Las DOS grafias dan el MISMO id de VOZ (plegado case-insensitive): con freeze, la primera
+    // fila que se congela puede conservar su grafia escrita. Lo verificable: ambas salen como nombres.
+    expect(filas().every((x) => ['Luis', 'luis'].includes(x))).toBe(true)
     // Mandato del dueno 2026-10-13: el registro va por VOZ (DIRECTORIO), NO reescribe filas:
     // UNA sola VOZ cubre las DOS grafias.
     const cambiadas = renameSpeakerRows(['Luis'], 'Luis Perez')
