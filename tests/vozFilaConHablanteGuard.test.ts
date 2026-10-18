@@ -56,8 +56,8 @@ describe('A5 corregida - la etiqueta del resolver se escribe y el renombre susti
   })
 
   it('(util) tras "soy <nombre>" el renombre SUSTITUYE las filas de esa voz', () => {
-    commitUserTurnRow({ text: 'vamos a poner a la mujer', speakerName: 'Hablante 2', evidenciaAcustica: false, turnId: 11 } as never)
-    commitUserTurnRow({ text: 'también venden peperos', speakerName: 'Hablante 2', evidenciaAcustica: false, turnId: 12 } as never)
+    commitUserTurnRow({ text: 'vamos a poner a la mujer', speakerName: 'Hablante 2', evidenciaAcustica: true, turnId: 11 } as never)
+    commitUserTurnRow({ text: 'también venden peperos', speakerName: 'Hablante 2', evidenciaAcustica: true, turnId: 12 } as never)
     expect(filas()).toEqual(['Hablante 2', 'Hablante 2'])
 
     applyResolvedSpeakerToSessionRefs(

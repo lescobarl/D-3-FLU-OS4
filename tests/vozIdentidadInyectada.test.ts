@@ -92,14 +92,14 @@ describe('identidad inyectada: el nombre pega en las FILAS escritas (ruta real)'
   })
 
   it('tras identificar "luis", la VOZ lleva el nombre: las filas del MISMO hablante salen "Luis" y la mujer intacta', () => {
-    commitUserTurnRow({ text: 'hola a todos como estan', speakerName: 'Hablante 1', turnId: 1 })
-    commitUserTurnRow({ text: 'soy luis y estoy probando', speakerName: 'Hablante 1', turnId: 2 })
+    commitUserTurnRow({ text: 'hola a todos como estan', speakerName: 'Hablante 1', evidenciaAcustica: true, turnId: 1 })
+    commitUserTurnRow({ text: 'soy luis y estoy probando', speakerName: 'Hablante 1', evidenciaAcustica: true, turnId: 2 })
     // Mandato del dueno 2026-10-13: el NOMBRE vive en el DIRECTORIO por VOZ; el registro
     // (`renameSpeakerRows`) NO reescribe ninguna fila (la conversacion es texto insertado).
     // La fila guarda su VOZ (`speakerId`) y la etiqueta se resuelve AL MOSTRAR.
     renameSpeakerRows(['Hablante 1'], 'luis')
-    commitUserTurnRow({ text: 'sigo hablando yo', speakerName: 'luis', turnId: 3 })
-    commitUserTurnRow({ text: 'esta es de sabor de platano', speakerName: 'Hablante 2', turnId: 4 })
+    commitUserTurnRow({ text: 'sigo hablando yo', speakerName: 'luis', evidenciaAcustica: true, turnId: 3 })
+    commitUserTurnRow({ text: 'esta es de sabor de platano', speakerName: 'Hablante 2', evidenciaAcustica: true, turnId: 4 })
     const rows = useIntegrationStore.getState().conversationHistory.filter((r) => r.role === 'user')
     // El nombre entra CANONICO ('luis' -> 'Luis'); la mujer (otra VOZ) queda intacta.
     expect(rows.map((r) => resolveRowSpeakerLabel(r))).toEqual(['Luis', 'Luis', 'Luis', 'Hablante 2'])

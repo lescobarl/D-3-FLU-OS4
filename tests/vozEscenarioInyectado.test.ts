@@ -46,10 +46,10 @@ describe('escenario inyectado: hablantes, registro y renombre de la participacio
   })
 
   it('identificado Luis, TODA su participacion pasa a "luis" y la mujer conserva su etiqueta', () => {
-    commitUserTurnRow({ text: 'hola hola como estan todos', speakerName: 'Hablante 1', turnId: 1 })
-    commitUserTurnRow({ text: 'soy luis y estoy probando la transcripcion', speakerName: 'Hablante 1', turnId: 2 })
-    commitUserTurnRow({ text: 'hoy me robo el estilo lolita', speakerName: 'Hablante 2', turnId: 3 })
-    commitUserTurnRow({ text: 'radicado desde hace muchos anos en andorra', speakerName: 'Hablante 2', turnId: 4 })
+    commitUserTurnRow({ text: 'hola hola como estan todos', speakerName: 'Hablante 1', evidenciaAcustica: true, turnId: 1 })
+    commitUserTurnRow({ text: 'soy luis y estoy probando la transcripcion', speakerName: 'Hablante 1', evidenciaAcustica: true, turnId: 2 })
+    commitUserTurnRow({ text: 'hoy me robo el estilo lolita', speakerName: 'Hablante 2', evidenciaAcustica: true, turnId: 3 })
+    commitUserTurnRow({ text: 'radicado desde hace muchos anos en andorra', speakerName: 'Hablante 2', evidenciaAcustica: true, turnId: 4 })
 
     // El dueno de clusters dice QUE etiquetas son la MISMA voz que "luis".
     const labels = findLabelsWithSharedVoice(clusters, 'luis', 0.78)
@@ -64,9 +64,9 @@ describe('escenario inyectado: hablantes, registro y renombre de la participacio
   it('RUTA REAL, sin microfono: "soy Luis" renombra la participacion del hablante que venia hablando', () => {
     // Las filas de ESE hablante estaban como "Hablante 1" (su etiqueta automatica);
     // la mujer, "Hablante 2".
-    commitUserTurnRow({ text: 'hola hola como estan todos', speakerName: 'Hablante 1', turnId: 1 })
-    commitUserTurnRow({ text: 'estoy probando la transcripcion', speakerName: 'Hablante 1', turnId: 2 })
-    commitUserTurnRow({ text: 'hoy me robo el estilo lolita', speakerName: 'Hablante 2', turnId: 3 })
+    commitUserTurnRow({ text: 'hola hola como estan todos', speakerName: 'Hablante 1', evidenciaAcustica: true, turnId: 1 })
+    commitUserTurnRow({ text: 'estoy probando la transcripcion', speakerName: 'Hablante 1', evidenciaAcustica: true, turnId: 2 })
+    commitUserTurnRow({ text: 'hoy me robo el estilo lolita', speakerName: 'Hablante 2', evidenciaAcustica: true, turnId: 3 })
 
     const clusters = [
       { label: 'Hablante 1', signature: [1, 0, 0] },
@@ -91,7 +91,7 @@ describe('escenario inyectado: hablantes, registro y renombre de la participacio
   })
 
   it('el nombre PEGA para lo siguiente POR VOZ; la etiqueta desnuda no lo arrastra', () => {
-    commitUserTurnRow({ text: 'hola hola como estan todos', speakerName: 'Hablante 1', turnId: 1 })
+    commitUserTurnRow({ text: 'hola hola como estan todos', speakerName: 'Hablante 1', evidenciaAcustica: true, turnId: 1 })
     applyResolvedSpeakerToSessionRefs(
       { speakerName: 'luis', source: 'wake-intro' },
       {

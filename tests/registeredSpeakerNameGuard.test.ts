@@ -57,7 +57,9 @@ describe('P8.40b/P9.48 - el nombre vive en la VOZ y se resuelve AL MOSTRAR', () 
   });
 
   it('la fila guarda su VOZ y CONGELA la etiqueta de esa VOZ (freeze 2026-10-17)', () => {
-    commitUserTurnRow({ text: 'hola hola como estan', speakerName: 'Hablante 1', turnId: 1 });
+    // AMEND (regla del dueno 2026-10-08 / e2e A3): la etiqueta SOLO se estampa con la MEDIDA
+    // del turno; sin evidencia la fila nace sin rotulo (no hay nada que congelar aun).
+    commitUserTurnRow({ text: 'hola hola como estan', speakerName: 'Hablante 1', evidenciaAcustica: true, turnId: 1 });
     const row = filas()[0];
     expect(String((row as { speakerId?: string })?.speakerId || ''), 'la fila lleva la VOZ').toBe('speaker_1');
     expect((row as { speakerName?: string })?.speakerName, 'y la etiqueta CONGELADA de su VOZ').toBe('Hablante 1');

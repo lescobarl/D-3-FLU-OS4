@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-10-16",
+  "updated": "2026-10-18",
   "descripcion": "Fuente UNICA de pendientes y de cierres. Append-only por hito. El chat y su resumen NO son fuente (se compactan).",
   "invariante": "Todo commit de cierre (scope=codigo C##/T##) debe estar en done; todo done apunta a un commit existente; todo pendiente cita evidencia.",
   "items": [
@@ -4903,6 +4903,14 @@
       "titulo": "test(voz): alinea los 4 guards de la caja a la spec nueva (bloquea solo trozo) (D6)",
       "evidencia": "Enmienda 2026-10-16 (AGENTS 0.B.14) autorizada por el dueno. src 4008fdc: allowNewCluster:false->true y publicarEnLaCaja bloquea SOLO un trozo contiguo (isFragmentOfLocution); una revision mas corta/corregida de la MISMA locucion SI actualiza; la sonda declara acorta honesto. Guards 57c9ee7: los 4 reescritos y VERDES (conversationStreamCommit:204 allowNewCluster:true; logRevisionGuard exige el dueno unico isFragmentOfLocution y valida la corrida real SOLO sobre log POST-D6; vozCajaUnSoloEscritor y vozUltimaFraseSoloAcumula alineados). D3 re-medido (vozShortHistoricalPrimaryNoGenericoGuard 3/3, ampara allowNewCluster:true). Gates: lint:guards 289 files (2323 passed, 1 skipped por runIf), typecheck y eslint limpios. Alcance real (obligatorio, 0.23): CUBIERTO=los 4 guards de la caja segun la spec nueva + la no-regresion de diarizacion/identidad; NO CUBIERTO=el DoD-producto (pantalla del dueno) y la medicion real de diarizacion (D7/D8, requiere corrida fresca).",
       "origen": "sesion-2026-10-16-d6"
+    },
+    {
+      "id": "P11.18",
+      "commit": "acebd3b",
+      "titulo": "P5b MEDIDO 2026-10-14 16:34-16:38: la ETIQUETA AUTOMATICA pisaba el NOMBRE de la voz (speaker_1: Luis -> Hablante 1 -> Hablante 3) y renombraba toda su participacion.",
+      "evidencia": "src/voice/lib/conversationTurnRow.ts:435,472; src/voice/lib/conversationRow.js:resolveRowSpeakerLabel (freeze); src/voice/lib/speakerDirectory.js:resolveRowVoiceName (sin firma -> sin herencia); src/store/integrationStore.ts:setEntrySpeakerName (unico escritor). Freeze de nombre en fila (acebd3b/ee2883c).",
+      "origen": "sesion-2026-10-18-freeze-voz",
+      "alcance": "Alcance real (obligatorio, 0.23): CUBIERTO=freeze del nombre en la fila, corte de herencia por directorio, escritor unico (setEntrySpeakerName) y validacion con los guards de voz (34 test files / 486 tests); NO CUBIERTO=DoD-producto (pantalla del dueno) y E2E de sala completo (voz-locucion-unica 4/4 verde, voz-escenario-dueno en curso / flake aislado)."
     }
   ]
 }

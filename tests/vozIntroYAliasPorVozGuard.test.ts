@@ -121,9 +121,9 @@ describe('B2 - la identidad es la VOZ (firma), no la etiqueta', () => {
   it('"soy X" registra el nombre en la VOZ (sus filas se VEN con el nombre; la otra voz no se toca)', () => {
     // Mandato del dueño 2026-10-13: registrar el nombre NO muta ninguna fila (la conversacion
     // es texto insertado); el nombre se guarda por VOZ y la etiqueta se resuelve AL MOSTRAR.
-    commitUserTurnRow({ text: 'hola', speakerName: 'Hablante 1', turnId: 1 } as never)
-    commitUserTurnRow({ text: 'que tal', speakerName: 'Hablante 3', turnId: 2 } as never)
-    commitUserTurnRow({ text: 'bueno', speakerName: 'Hablante 1', turnId: 3 } as never)
+    commitUserTurnRow({ text: 'hola', speakerName: 'Hablante 1', evidenciaAcustica: true, turnId: 1 } as never)
+    commitUserTurnRow({ text: 'que tal', speakerName: 'Hablante 3', evidenciaAcustica: true, turnId: 2 } as never)
+    commitUserTurnRow({ text: 'bueno', speakerName: 'Hablante 1', evidenciaAcustica: true, turnId: 3 } as never)
     const setClusters = vi.fn()
     // Las etiquetas de la MISMA voz las decide el dueno de los clusters (por FIRMA).
     const etiquetas = findLabelsWithSharedVoice(CLUSTERS as never, 'Hablante 1')
@@ -163,7 +163,7 @@ describe('B2 - la identidad es la VOZ (firma), no la etiqueta', () => {
   })
 
   it('RUTA DEL COMANDO: registra igual y deja la VOZ con el nombre', () => {
-    commitUserTurnRow({ text: 'hola', speakerName: 'Hablante 1', turnId: 1 } as never)
+    commitUserTurnRow({ text: 'hola', speakerName: 'Hablante 1', evidenciaAcustica: true, turnId: 1 } as never)
     const setClusters = vi.fn()
     const result = registerSpeakerIdentityFromCommand({
       transcript: 'okay flu soy Luis',

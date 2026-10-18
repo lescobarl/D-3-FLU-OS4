@@ -20,7 +20,7 @@ const etiquetas = () => userRows().map((r) => resolveRowSpeakerLabel(r))
 
 function sembrar(filas: Array<{ text: string; speaker: string }>) {
   for (const f of filas) {
-    commitUserTurnRow({ text: f.text, speakerName: f.speaker, turnId: `t-${f.text}` })
+    commitUserTurnRow({ text: f.text, speakerName: f.speaker, evidenciaAcustica: true, turnId: `t-${f.text}` })
   }
 }
 

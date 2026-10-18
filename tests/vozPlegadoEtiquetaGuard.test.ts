@@ -64,8 +64,8 @@ describe('plegado luis/Luis: una identidad, un cluster', () => {
   })
 
   it('(util) el renombre cubre las DOS grafias de la fila (misma VOZ plegada)', () => {
-    commitUserTurnRow({ text: 'hola que tal', speakerName: 'luis', evidenciaAcustica: false, turnId: 1 } as never)
-    commitUserTurnRow({ text: 'vamos a comer', speakerName: 'Luis', evidenciaAcustica: false, turnId: 2 } as never)
+    commitUserTurnRow({ text: 'hola que tal', speakerName: 'luis', evidenciaAcustica: true, turnId: 1 } as never)
+    commitUserTurnRow({ text: 'vamos a comer', speakerName: 'Luis', evidenciaAcustica: true, turnId: 2 } as never)
     // Las DOS grafias dan el MISMO id de VOZ (plegado case-insensitive): con freeze, la primera
     // fila que se congela puede conservar su grafia escrita. Lo verificable: ambas salen como nombres.
     expect(filas().every((x) => ['Luis', 'luis'].includes(x))).toBe(true)

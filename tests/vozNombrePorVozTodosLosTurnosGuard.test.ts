@@ -63,10 +63,10 @@ describe('el nombre se liga a la VOZ y vale en TODOS sus turnos', () => {
     it('N turnos de la MISMA voz => N filas con el nombre; 0 genericas (y la otra voz intacta)', () => {
         // La VOZ es la CLAVE de la fila (mandato 2026-10-13): se mide por FIRMA, asi que las
         // DOS etiquetas historicas de la misma voz caen en la MISMA clave de fila.
-        commitUserTurnRow({ text: 'turno uno', speakerName: 'Hablante 1', signature: VOZ_A, turnId: 1 } as never)
-        commitUserTurnRow({ text: 'turno dos', speakerName: 'Hablante 2', signature: MISMA_VOZ, turnId: 2 } as never)
-        commitUserTurnRow({ text: 'turno tres', speakerName: 'Hablante 1', signature: VOZ_A, turnId: 3 } as never)
-        commitUserTurnRow({ text: 'otra voz', speakerName: 'Hablante 3', signature: VOZ_B, turnId: 4 } as never)
+    commitUserTurnRow({ text: 'turno uno', speakerName: 'Hablante 1', evidenciaAcustica: true, signature: VOZ_A, turnId: 1 } as never)
+    commitUserTurnRow({ text: 'turno dos', speakerName: 'Hablante 2', evidenciaAcustica: true, signature: MISMA_VOZ, turnId: 2 } as never)
+    commitUserTurnRow({ text: 'turno tres', speakerName: 'Hablante 1', evidenciaAcustica: true, signature: VOZ_A, turnId: 3 } as never)
+    commitUserTurnRow({ text: 'otra voz', speakerName: 'Hablante 3', evidenciaAcustica: true, signature: VOZ_B, turnId: 4 } as never)
         expect(filas()).toEqual(['Hablante 1', 'Hablante 1', 'Hablante 1', 'Hablante 3'])
 
         // Registro del comando: liga el nombre a la VOZ (dueno unico). NO reescribe filas.

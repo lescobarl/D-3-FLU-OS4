@@ -59,8 +59,10 @@ describe('P5 - el nombre registrado alcanza TODOS los turnos de esa voz', () => 
     // YA MOSTRADAS de esa voz; una fila NUEVA posterior SIN medida no lo hereda (freeze: sin
     // firma no se consulta el directorio, o la clave reciclada pintaria a otra voz).
     it('un turno NUEVO de la misma voz (sin medida) NO hereda; se congela al medirlo', () => {
-        commitUserTurnRow({ text: 'uno', speakerName: 'Hablante 1', turnId: 1 } as never)
-        commitUserTurnRow({ text: 'dos', speakerName: 'Hablante 1', turnId: 2 } as never)
+        // Los dos primeros turnos son MEDIDOS (etiqueta de diarizacion escrita en la fila);
+        // el tercero llega sin medida y su rotulo lo da la VOZ al mostrar (A3).
+        commitUserTurnRow({ text: 'uno', speakerName: 'Hablante 1', evidenciaAcustica: true, turnId: 1 } as never)
+        commitUserTurnRow({ text: 'dos', speakerName: 'Hablante 1', evidenciaAcustica: true, turnId: 2 } as never)
         registerSpeakerIdentity({ name: 'Luis', previousLabel: 'Hablante 1', clusters: [], refs: {} as never })
         commitUserTurnRow({ text: 'tres', speakerName: 'Hablante 1', turnId: 3, evidenciaAcustica: false } as never)
         expect(filas().map((e) => resolveRowSpeakerLabel(e)), 'las ya mostradas se congelan; la nueva sin medida, provisional').toEqual([
@@ -75,9 +77,9 @@ describe('P5 - el nombre registrado alcanza TODOS los turnos de esa voz', () => 
     // tiene que alcanzarlas TAMBIEN (no solo los turnos siguientes). FREEZE: el registro ancla
     // en la ETIQUETA con la que esa voz venia apareciendo (su clave de voz) y congela esas filas.
     it('el nombre alcanza las filas escritas con la etiqueta PROVISIONAL anterior', () => {
-        commitUserTurnRow({ text: 'uno', speakerName: 'Hablante 1', turnId: 1 } as never)
-        commitUserTurnRow({ text: 'dos', speakerName: 'Hablante 1', turnId: 2 } as never)
-        commitUserTurnRow({ text: 'tres', speakerName: 'Hablante 1', turnId: 3 } as never)
+        commitUserTurnRow({ text: 'uno', speakerName: 'Hablante 1', evidenciaAcustica: true, turnId: 1 } as never)
+        commitUserTurnRow({ text: 'dos', speakerName: 'Hablante 1', evidenciaAcustica: true, turnId: 2 } as never)
+        commitUserTurnRow({ text: 'tres', speakerName: 'Hablante 1', evidenciaAcustica: true, turnId: 3 } as never)
         // La identidad llega por AUDIO en un turno: queda registrada la etiqueta de esa voz.
         updateTurnRowSpeaker(3, 'Luis', { evidenciaAcustica: true })
         // El dueno DICE su nombre con la wake: el registro congela TODA su participacion.
