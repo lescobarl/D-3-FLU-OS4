@@ -43,6 +43,7 @@ import {
   isProgressiveExtension,
   isAssistantVoiceEcho,
 } from './conversationStream.js'
+import { collapseAdjacentWordRepeat } from './speechMerge.js'
 import { fluTrace } from './fluTrace.js'
 import { shouldDiarizeInterimAtTurnBoundary } from './speakerPolicy.js'
 import { shouldForceNewLogRowOnCommit } from './ingressGuards.js'
@@ -52,6 +53,23 @@ import { VOICE_DIARIZATION_DEFAULTS } from '../../core/config/sharedConfig'
 
 /** Ventana en la que un fragmento que coincide con la voz de FLU se cuenta como eco. */
 const ASSISTANT_ECHO_WINDOW_MS = VOICE_DIARIZATION_DEFAULTS.assistantEchoWindowMs
+
+/**
+ * Canon de una frase SIN el tartamudeo de UNA palabra contigua (dueno de la regla:
+ * `collapseAdjacentWordRepeat` en speechMerge). Medido d4c1c8f3: Chrome emite
+ * variantes donde una repite una palabra seguida ("puso Cloud" + "puso Cloud Cloud";
+ * "…tanto porque" + "…tanto tanto porque") y "la mas completa gana" se quedaba con la
+ * tartamudeada. Preserva mayusculas (compara case-insensitive): sirve para COMPARAR
+ * variantes y para fijar el texto que se commitea en la fila.
+ * @param {string} value
+ * @returns {string}
+ */
+export function canonSinTartamudeo(value = '') {
+  return collapseAdjacentWordRepeat(
+    String(value || '').replace(/\s+/g, ' ').trim().split(/\s+/).filter(Boolean),
+    { datosNumericos: true, longitudMinima: 4 },
+  ).join(' ')
+}
 
 function buildFinalCommitList(finalChunks = []) {
   const normalized = finalChunks
@@ -64,6 +82,10 @@ function buildFinalCommitList(finalChunks = []) {
   // Canoniza quitando espacios: Chrome manda alternativas del MISMO result con
   // distinto espaciado ("1 2 3" vs "123") que no deben contarse como frases nuevas.
   const canon = (value) => String(value || '').replace(/\s+/g, '').toLowerCase()
+  // Canon CON el tartamudeo de UNA palabra contigua colapsado (dueno: speechMerge).
+  // La variante tartamudeada NUNCA gana por longitud: su diferencia con la hermana
+  // es ruido, no contenido.
+  const canonColapsado = (value) => String(canonSinTartamudeo(value) || '').toLowerCase().replace(/\s+/g, '')
   for (const capture of normalized) {
     const last = commits.at(-1) || ''
     if (!last) {
@@ -72,6 +94,8 @@ function buildFinalCommitList(finalChunks = []) {
     }
     const cLast = canon(last)
     const cCapture = canon(capture)
+    const cColLast = canonColapsado(last)
+    const cColCapture = canonColapsado(capture)
     if (
       capture === last ||
       capture.startsWith(last) ||
@@ -80,13 +104,26 @@ function buildFinalCommitList(finalChunks = []) {
       cLast.startsWith(cCapture) ||
       cCapture.startsWith(cLast) ||
       utterancesSameRevision(last, capture) ||
-      utterancesRelate(last, capture)
+      utterancesRelate(last, capture) ||
+      cColCapture === cColLast
     ) {
       // Misma revisión: Chrome manda alternativas del MISMO result y la más
       // corta puede llegar al final ("1 2 3" → "123" → "1 2"; "… frases" →
       // "ok flu"). Nunca encoger: la alternativa más completa gana. Encoger
       // aquí borraba lo ya dictado (la interacción se perdía).
-      if (cCapture.length >= cLast.length) commits[commits.length - 1] = capture
+      // EXCEPCION al "nunca encoger", SOLO cuando la diferencia es TARTAMUDEO
+      // de UNA palabra contigua corroborado por la variante hermana (d4c1c8f3):
+      // una variante repite una palabra que la otra trae una vez -> gana la
+      // forma sin repeticion. La repeticion no es contenido.
+      if (cColCapture === cColLast) {
+        const repetidaLast = cLast.length > cColLast.length
+        const repetidaCapture = cCapture.length > cColCapture.length
+        if (repetidaLast && !repetidaCapture) commits[commits.length - 1] = capture
+        else if (!repetidaLast && !repetidaCapture && cCapture.length >= cLast.length) commits[commits.length - 1] = capture
+        // Ambas tartamudeadas o solo la nueva: se conserva la previa.
+      } else if (cCapture.length >= cLast.length) {
+        commits[commits.length - 1] = capture
+      }
       continue
     }
     commits.push(capture)
@@ -211,7 +248,11 @@ export function flushSrGapSegmentThroughIngress(ctx, { sinceLastResultMs = 0 } =
 
   // La referencia viva ya se sembro en el estado arriba; si aun asi la captura del
   // EVAL trae mas texto (p. ej. el propio final confirmado), manda la mas completa.
-  const captureFinal = (liveText.length > capture.length) ? liveText : capture
+  // COSTURA DE FILA (medido d4c1c8f3): la locucion viva puede traer el tartamudeo de
+  // UNA palabra ("…cla Cloud Cloud de que…") mientras el final de Chrome era limpio;
+  // el canon colapsa el tartamudeo ANTES de sellar la fila (mismo dueno que la puerta
+  // del final: `canonSinTartamudeo`).
+  const captureFinal = canonSinTartamudeo((liveText.length > capture.length) ? liveText : capture)
 
   resetInterimControlBuffers(ctx.listenState, ctx.publishedLiveRef, ctx.lastStreamPreviewRef)
 
@@ -300,26 +341,26 @@ export function flushRecognitionEndThroughIngress(ctx) {
   // (regla P9.60: el parcial en vuelo se descarta, la confirmada se sella).
   const capture =
     cleanForSpeech(ctx.listenState.pendingFinal) ||
-    readStreamDisplay(ctx.listenState) || cleanForSpeech(ctx.listenState.pendingInterim)
+    readStreamDisplay(ctx.listenState) ||
+    cleanForSpeech(ctx.listenState.pendingInterim) ||
+    // RESCATE DEL CIERRE (defecto 1 del dueno 2026-10-19): los buffers del ASR pueden
+    // llegar limpios (reset o puertas previas) con la frase aun viva en la CAJA
+    // (publishedLiveRef): se veia en ULTIMA FRASE y el onend salia por empty-capture
+    // sin escribir fila. La caja es el texto que el usuario VE: si esta, es la captura.
+    cleanForSpeech(ctx.publishedLiveRef?.current)
   if (!capture) {
     sealPendingInterim(ctx.listenState)
     return { flushed: false, reason: 'empty-capture' }
   }
 
-  if (ctx.tryDispatch?.(capture, { interim: false, source: 'onend' })) {
-    // El dispatch YA escribio la fila de ESTE turno: sellarlo otra vez la DUPLICA
-    // (medido 2026-10-08: P6 -> filas [lechita, lechita] y la continuacion caia a un
-    // 3er turno). El cierre se sella y se SALE; el caso de dispatch DEDUPEADO
-    // (peticion ya registrada por el interim) lo cubre la rama de abajo.
-    sealPendingInterim(ctx.listenState)
-    return { flushed: true, dispatched: true, capture }
-  }
+  // Despacho en segundo plano (fire-and-forget): NO informa si escribio fila.
+  ctx.tryDispatch?.(capture, { interim: false, source: 'onend' })
 
-  // La fila de conversacion se escribe al CIERRE real (onend). El `tryDispatch` de
-  // arriba puede haberla escrito ya (commit temprano de la respuesta); si no (p.ej.
-  // la peticion se dedupeo porque el interim ya la registro), se sella aqui. El
-  // criterio NO puede ser `lastEmittedTranscriptRef` (avanza en cada commit de
-  // SEGMENTO aunque no haya fila): se mide contra la ULTIMA FILA del store.
+  // La fila de conversacion se escribe al CIERRE real (onend) y la decision se toma
+  // contra el estado REAL del store: si la ultima fila ya es esta locucion (commit
+  // temprano o peticion dedupeada por el interim), no se duplica; si no, se sella
+  // aqui. El criterio NO puede ser `lastEmittedTranscriptRef` (avanza en cada commit
+  // de SEGMENTO aunque no haya fila): se mide contra la ULTIMA FILA del store.
   const lastRow = cleanForSpeech(ctx.logRowsTextRef?.current?.at(-1) || '')
   if (lastRow && phrasesEquivalent(capture, lastRow)) {
     sealPendingInterim(ctx.listenState)
@@ -385,6 +426,11 @@ function ingestFinalChunk({ finalChunk, ctx }) {
       atTurnBoundary: true,
       forceNewRow: false,
       forceNewRowOnSegment: false,
+      // TEXTO CERRADO: se volco porque llego OTRA locucion. El commit NO puede
+      // reconciliarlo contra la linea viva (que ya contiene el interino de la nueva):
+      // esa reconciliacion metia la locucion siguiente en esta fila (medido 2026-10-19
+      // 21:18:52: fila de 430 = 315 dichos + 112 ajenos; luego los 112 se repetian).
+      locutionClosed: true,
     })
     clearPendingFinal(ctx.listenState)
   }
@@ -412,7 +458,9 @@ function ingestFinalChunk({ finalChunk, ctx }) {
     } else if (typeof ctx.flushRecognitionOnFinal === 'function') {
       ctx.flushRecognitionOnFinal()
     }
-    sealTurnBoundaryAfterFinal(ctx)
+    // Un final de SEGMENTO NO sella el turno: el cierre REAL llega por onend/srGap
+    // (mandato 2026-10-18). Sellarlo aqui re-acunaba el id en el sr-silence y la
+    // MISMA captura caia como SEGUNDA fila (doble commit medido en debug.log 16:50:01->05).
     return { handled: false, capture, redundant: true }
   }
 
@@ -432,6 +480,12 @@ function ingestFinalChunk({ finalChunk, ctx }) {
     mergedCapture = capture
   }
   let commitCapture = cleanForSpeech(mergedCapture || capture)
+  // COSTURA DE FILA (medido d4c1c8f3): la caja viva puede arrastrar el tartamudeo de
+  // UNA palabra ("puso Cloud Cloud", "…tanto tanto porque") que el final limpio de
+  // Chrome ya corregia; el merge preferia la caja y la fila se commiteaba con el
+  // duplicado. El canon colapsa el tartamudeo ANTES de sellar: una palabra de enfasis
+  // corta ("no no") y el doble genuino de pares ("ya esta ya esta") sobreviven.
+  commitCapture = canonSinTartamudeo(commitCapture)
   if (!bridge) {
     const livePreview = cleanForSpeech(
       ctx.publishedLiveRef?.current || ctx.lastStreamPreviewRef?.current || '',
@@ -518,7 +572,8 @@ function ingestFinalChunk({ finalChunk, ctx }) {
 
   if (redundant) {
     resetInterimControlBuffers(listenState, ctx.publishedLiveRef, ctx.lastStreamPreviewRef)
-    sealTurnBoundaryAfterFinal(ctx)
+    // Un final de SEGMENTO NO sella el turno: el cierre REAL llega por onend/srGap
+    // (mandato 2026-10-18).
     return { handled: false, capture: commitCapture, redundant: true }
   }
 
@@ -543,7 +598,10 @@ function ingestFinalChunk({ finalChunk, ctx }) {
         finalSpeaker: rowContext.finalSpeaker || rowContext.interimSpeaker,
       }))
 
-  sealTurnBoundaryAfterFinal(ctx)
+  // Un final de SEGMENTO NO sella el turno (mandato 2026-10-18): el cierre REAL lo
+  // sella onend/srGap o el wake-split (settlesTurn en applyWakeTurnCommit). Sellarlo
+  // aqui era la raiz del doble commit: el sr-silence acunaba OTRO id con la MISMA
+  // captura y la misma frase caia dos veces (debug.log 16:50:01.920 -> 16:50:05.692).
 
   const wakeSplit = applyWakeTurnCommit(ctx, published, {
     source: 'final',
@@ -598,9 +656,9 @@ function ingestInterimChunk({ interim, ctx }) {
   } = ctx
 
   maybeSwitchLocale(interim)
-  if (tryDispatch(interim, { interim: true, source: 'interim' })) {
-    return { handled: true }
-  }
+  // Despacho en segundo plano (fire-and-forget): el ingress sigue su curso; el
+  // commit de la fila pertenece al escritor unico, no al valor de retorno.
+  tryDispatch(interim, { interim: true, source: 'interim' })
 
   const turnBoundary = !openPreviewTurnRef.current
   const cleanedInterim = cleanForSpeech(interim)

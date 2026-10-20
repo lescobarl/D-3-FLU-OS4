@@ -7,13 +7,16 @@
 // NO fijaba el hablante primario de la sesion; los turnos siguientes iban sin
 // `sessionPrimary` y el diarizador devolvia su etiqueta automatica.
 //
-// Invariante: (a) con primario de sesion, TODOS los turnos de esa voz llevan su
-// nombre; (b) el control inverso: una voz DISTINTA no hereda el nombre.
+// Invariante (MANDATO 2026-10-18): (a) el primario de sesion NO crea el ancla con la
+// primera voz (podia ser la TV); con un ancla REGISTRADA preexistente y medida sostenida,
+// TODOS los turnos de esa voz llevan su nombre; (b) el control inverso: una voz DISTINTA
+// no hereda el nombre ni la etiqueta.
 // ============================================================
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { resolveConversationSpeaker } from '../src/voice/lib/speakerDiarization';
+import { registerSpeakerIdentity } from '../src/voice/lib/speakerIdentityRegister';
 import {
     clearSessionPrimarySpeaker,
     setSessionPrimarySpeaker,
@@ -63,7 +66,8 @@ const turno = (
         speakerClusters: clusters,
         sessionPrimary: 'Luis',
         signatureVector: vector,
-        voicedSampleCount: 48000,
+        // Ventana SOSTENIDA (2.0 s): la medida corta no afirma nombres (mandato 2026-10-18).
+        voicedSampleCount: 96000,
         minVoicedSamples: 12000,
         sampleRate: 48000,
         utteranceText: 'siguiente carta por favor',
@@ -73,28 +77,39 @@ const turno = (
     } as never) as string;
 
 describe('el hablante primario de la sesion conserva su nombre', () => {
-    it('la MISMA voz mantiene el nombre desde que EXISTE su ancla (el primer turno la crea)', () => {
+    it('SIN ancla, la MISMA voz conserva su «Hablante N» estable (el primario no la bautiza)', () => {
         const clusters: { label?: string; signature?: number[] }[] = [];
         const r1 = turno(clusters, vozA);
         const r2 = turno(clusters, vozA, { lastSpeaker: r1 });
         const r3 = turno(clusters, vozA, { lastSpeaker: r2 });
 
-        // CORRECCION DE CRITERIO (7.7.f(3)): el PRIMER turno NO puede llevar el nombre (no
-        // hay ancla contra la que afirmarlo: es el defecto 'nombre sin ancla' del dueno,
-        // 2026-10-11). El turno que CREA el ancla va con etiqueta; los siguientes, con el
-        // nombre.
-        expect(r1).not.toBe('Luis');
+        // MANDATO 2026-10-18: el primer cluster es ANONIMO. Si la primera voz es la TV
+        // (medido en la sesion del dueno), el nombre del onboarding no se le estampa.
+        expect(r1).toBe('Hablante 1');
+        expect(r2).toBe('Hablante 1');
+        expect(r3).toBe('Hablante 1');
+        expect(clusters.some((c) => c.label === 'Luis')).toBe(false);
+    });
+
+    it('con un ancla REGISTRADA preexistente, la MISMA voz mantiene el nombre', () => {
+        // El ancla entra por su DATO ("soy Luis" / registro), no la crea el primer turno.
+        const clusters: { label?: string; signature?: number[] }[] = [
+            { label: 'Luis', signature: vozA },
+        ];
+        const r1 = turno(clusters, vozA);
+        const r2 = turno(clusters, vozA, { lastSpeaker: r1 });
+        expect(r1).toBe('Luis');
         expect(r2).toBe('Luis');
-        expect(r3).toBe('Luis');
     });
 
     it('CONTROL: una voz DISTINTA no hereda el nombre', () => {
-        const clusters: { label?: string; signature?: number[] }[] = [];
+        const clusters: { label?: string; signature?: number[] }[] = [
+            { label: 'Luis', signature: vozA },
+        ];
         const r1 = turno(clusters, vozA);
-        expect(r1).not.toBe('Luis');
-        const r2 = turno(clusters, vozA, { lastSpeaker: r1 });
-        expect(r2).toBe('Luis');
-        const otra = turno(clusters, vozB, { lastSpeaker: r2 });
+        expect(r1).toBe('Luis');
+        // La otra voz no casa el ancla de Luis; recibe su propia etiqueta anonima.
+        const otra = turno(clusters, vozB, { lastSpeaker: r1 });
         expect(otra).not.toBe('Luis');
     });
 
@@ -171,5 +186,102 @@ describe('precedencia del primario de sesion - decide el dueno unico', () => {
         clearSessionPrimarySpeaker(ref);
         expect(ref.current).toBe('');
         expect(setSessionPrimarySpeaker(ref, 'Juan', 'participant')).toBe(true);
+    });
+});
+
+// ============================================================
+// MARCA VERIFICADA del cluster del nombre ("soy X") — d4c1c8f3
+// ------------------------------------------------------------
+// Medido en la sesion 2026-10-20: el cluster de sesion que nacia de "soy Luis" NO
+// llevaba `anchorVerified`, asi que los turnos siguientes de ESA MISMA voz se
+// comparaban con el piso registrado general (0.76); la banda real del dueno contra su
+// ancla (0.629-0.714) no lo alcanzaba y volvia a "Hablante 1". La afirmacion del
+// titular con su medida fresca ES la verificacion del ancla: habilita el piso
+// verificado (0.62). Un cluster con firma AJENA (la mujer pegada a "Luis") no se marca.
+// ============================================================
+describe('"soy X" marca VERIFICADO solo el cluster de SU voz', () => {
+    const cos = (a: number[], b: number[]) => {
+        let d = 0, na = 0, nb = 0;
+        for (let i = 0; i < a.length; i += 1) {
+            d += a[i] * b[i]; na += a[i] * a[i]; nb += b[i] * b[i];
+        }
+        return d / Math.sqrt(na * nb);
+    };
+    // vozC: mezcla controlada de la voz del titular con una ajena, a coseno ~0.72 de
+    // la suya (dentro de la banda medida 0.629-0.714 del dueno; por debajo del piso
+    // registrado 0.76 y por encima del verificado 0.62).
+    const vozC = (() => {
+        let k = 0;
+        for (let t = 0.01; t < 20; t += 0.005) {
+            const s = cos(vozA, vozA.map((x, i) => x + t * vozB[i]));
+            if (s > 0.68 && s < 0.72) { k = t; break; }
+        }
+        const c = vozA.map((x, i) => x + k * vozB[i]);
+        const n = Math.sqrt(c.reduce((acc, x) => acc + x * x, 0));
+        return c.map((x) => x / n);
+    })();
+
+    it('el cluster del nombre queda ancla VERIFICADA y el piso 0.62 afirma al titular', () => {
+        expect(cos(vozA, vozC)).toBeGreaterThan(0.62);
+        expect(cos(vozA, vozC)).toBeLessThan(0.76);
+
+        const clusters: { label?: string; signature?: number[]; anchorVerified?: boolean }[] = [
+            { label: 'Hablante 1', signature: vozA },
+        ];
+        let salida: typeof clusters = clusters;
+        const r = registerSpeakerIdentity({
+            name: 'Luis',
+            clusters,
+            signatureVector: vozA,
+            refs: {
+                setClusters: (c: unknown[]) => { salida = c as typeof clusters; },
+                sessionPrimarySpeakerRef: { current: '' },
+            },
+        });
+        expect(r.registered).toBe(true);
+        const luis = salida.find((c) => c.label === 'Luis');
+        expect(luis?.anchorVerified).toBe(true);
+        // El titular en su banda real afirma el nombre (antes 0.76 lo excluia).
+        expect(turno(salida, vozC, { sessionPrimary: '' })).toBe('Luis');
+    });
+
+    it('FALSIFICACION: el MISMO cluster SIN la marca no afirma al titular (piso 0.76)', () => {
+        const sinMarca: { label?: string; signature?: number[] }[] = [
+            { label: 'Luis', signature: vozA },
+        ];
+        expect(turno(sinMarca, vozC, { sessionPrimary: '' })).not.toBe('Luis');
+    });
+
+    it('un cluster del nombre con firma AJENA no se marca (la mujer no verifica "Luis")', () => {
+        const clusters: { label?: string; signature?: number[]; anchorVerified?: boolean }[] = [
+            { label: 'Luis', signature: vozB },
+        ];
+        let salida: typeof clusters = clusters;
+        registerSpeakerIdentity({
+            name: 'Luis',
+            clusters,
+            signatureVector: vozA,
+            refs: {
+                setClusters: (c: unknown[]) => { salida = c as typeof clusters; },
+                sessionPrimarySpeakerRef: { current: '' },
+            },
+        });
+        expect(salida.find((c) => c.label === 'Luis')?.anchorVerified).not.toBe(true);
+    });
+
+    it('GUARD de fuente: UNA sola escritura de la marca, gateada por la medida', () => {
+        const src = ownerSource();
+        expect((src.match(/anchorVerified\s*=\s*true/g) || []).length).toBe(1);
+        expect(/compareCosineSignatures\(measured,\s*marcado\.signature\)/.test(src)).toBe(true);
+    });
+
+    it('GUARD de fuente (2A): la firma del turno pasivo se calcula SOLO sobre el tramo con voz', () => {
+        const src = hookSource();
+        // El recorte es del dueno unico (`selectVoicedWindow`) y va ANTES de la firma:
+        // la ventana completa con audio ajeno envenenaba el ancla de "soy X" (d4c1c8f3).
+        expect(/selectVoicedWindow\(audioSnapshot,\s*\{\s*sampleRate\s*\}\)/.test(src)).toBe(true);
+        expect(src.indexOf('selectVoicedWindow(audioSnapshot')).toBeLessThan(
+            src.indexOf('computeTurnSignature(ventanaVoz'),
+        );
     });
 });

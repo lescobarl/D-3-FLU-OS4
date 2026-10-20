@@ -93,6 +93,38 @@ export function collapseRepeatedSpeech(text = '') {
 }
 
 /**
+ * Repeticion de UNA palabra contigua (tartamudeo del ASR de una sola palabra):
+ * «Cloud Cloud» -> «Cloud», «tanto tanto» -> «tanto». DUENO UNICO de esta regla;
+ * la consume el canon de variantes del final (`buildFinalCommitList`, medido
+ * d4c1c8f3: filas "puso Cloud Cloud" y "…tampoco tanto tanto porque" commiteadas
+ * porque la variante tartamudeada gana por ser mas larga). Guardas:
+ *  - `datosNumericos`: una palabra numerica es DATO (dictado de cifras) y no se
+ *    colapsa (misma regla que `isNumericBlock`).
+ *  - `longitudMinima`: por debajo no se colapsa (palabras de enfasis como
+ *    «no no», «si si», «muy muy»).
+ * @param {string[]} palabras
+ * @param {{ datosNumericos?: boolean, longitudMinima?: number }} [opciones]
+ * @returns {string[]}
+ */
+export function collapseAdjacentWordRepeat(palabras = [], opciones = {}) {
+  const { datosNumericos = false, longitudMinima = 1 } = opciones
+  const unicas = []
+  for (const palabra of palabras) {
+    const cruda = String(palabra || '')
+    const previa = unicas[unicas.length - 1]
+    const numerica = /^\d+$/.test(cruda)
+    if (
+      previa != null &&
+      cruda.toLowerCase() === String(previa).toLowerCase() &&
+      !(datosNumericos && numerica) &&
+      cruda.length >= longitudMinima
+    ) continue
+    unicas.push(cruda)
+  }
+  return unicas
+}
+
+/**
  * Chrome a veces manda un sufijo suelto («ahí») en un evento previo y luego la
  * frase completa («estás ahí»). El fragmento previo es huérfano: la frase
  * entrante ya lo contiene como palabra final. Se descarta `prev` y NUNCA se

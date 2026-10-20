@@ -15,8 +15,10 @@ import {
 } from './turnStream.js'
 import {
   advancePublishedDisplay,
+  clearPendingFinal,
   detectNextSpeakerPhrase,
   getSpeakerLabel,
+  phrasesEquivalent,
   readSession,
   shouldRefreshStream,
   syncSpeakerIndexFromLabel,
@@ -40,6 +42,7 @@ import { labelToSpeakerId } from './conversationRow.js'
 import { renameSpeakerRows } from './conversationTurnRow'
 
 import { preflightEvidenceMeasured } from './turnSpeakerPreflight.js'
+import { isSessionPrimaryPresented } from './sessionPrimarySpeaker.js'
 import { normalizeSpeakerLabel, isAutoSpeakerLabel } from './voiceIdentity.js'
 import { isSameEmissionWithinWindow } from './captureDedup.js'
 import { DISCARD_REASONS, discardLocution } from './phraseDiscard.js'
@@ -80,6 +83,14 @@ export function buildFinalSpeakerSnapshotResolver({ createSpeakerAudioResolver, 
  * @property {boolean} [forceNewRowOnSegment]
  * @property {boolean} [settlesTurn] Cierre REAL del turno (onend/srGap/wake-split):
  *   un `final` de SEGMENTO de Chrome NO lo declara.
+ * @property {boolean} [locutionClosed] La captura es una locucion YA CONFIRMADA y
+ *   CERRADA (volcado de `pendingFinal`): no se reconcilia contra la linea viva.
+ * @property {boolean} [closeTurnOnly] La orden ya consumio la linea viva: solo se
+ *   CIERRA el turno, sin commitear ni tocar la captura.
+ * @property {boolean} [commandTurn] El commit lo produjo una ORDEN (comando/consulta).
+ *   Con la wake AL INICIO la locucion NO se cierra: el usuario sigue dictando y la caja
+ *   conserva el mandato. La procedencia la lee el pelado del preview para no arrancar
+ *   del texto de una orden que sigue viva.
  * @property {number} [preflightTurnId] Turno cuyo preflight ya ESPERO el llamador
  *   (`primeTurnSpeakerPreflight`, dueno unico de la espera). El cierre consume ESE
  *   slot: sin el, el sorteo del turno siguiente (`ensureTurnId`) dejaba el commit
@@ -120,6 +131,8 @@ export function buildFinalSpeakerSnapshotResolver({ createSpeakerAudioResolver, 
  * @property {import('react').MutableRefObject<string>} lastSpeakerRef
  * @property {import('react').MutableRefObject<number[]|null>} lastTurnSignatureRef
  * @property {import('react').MutableRefObject<string>} lastLogLineTextRef
+ * @property {import('react').MutableRefObject<boolean>} [lastLogLineWasCommandRef] La
+ *   ultima linea commiteada la escribio una ORDEN y su locucion sigue viva.
  * @property {(capture: string, speakerName: string, options?: object) => void} commitTurnToSessionRows
  * @property {import('react').MutableRefObject<{ onTurnCommitted?: () => void }|null>} fluParticipantRef
  * @property {import('react').MutableRefObject<{ text?: string, at?: number }>} [lastRequestRef]
@@ -223,6 +236,21 @@ export function colaNuevaTrasSolape(mostrado, nuevo) {
       : ''
     const cola = clavesNuevas.slice(fin + 1)
     if (colaGen(cola)) {
+      // COSTURA ANTI-TARTAMUDEO (medido d4c1c8f3): la cola puede ARRANCAR repitiendo la
+      // palabra del borde que la caja YA muestra ("…dijo cla Cloud" + "…dijo cla Cloud
+      // Cloud de que" -> la caja acumulaba "Cloud Cloud" y el duplicado se commiteaba).
+      // Esa primera palabra NO es nueva: se descarta (la caja ya la tiene). La palabra
+      // corta de enfasis ("…dijo no no pasa") sobrevive: solo se descarta de 4 letras
+      // o mas (misma regla que `collapseAdjacentWordRepeat`, dueño del canon).
+      const primeraColaA = crudasNuevas[fin + 1]
+      const mismaA = mismaPalabraClave(
+        String(crudaMostrada || '').toLowerCase(),
+        String(primeraColaA || '').toLowerCase(),
+      )
+      if (mismaA && primeraColaA.length >= 4) {
+        const restoA = crudasNuevas.slice(fin + 2)
+        return restoA.length ? `${mostrar}${completacion} ${restoA.join(' ')}` : `${mostrar}${completacion}`
+      }
       return `${mostrar}${completacion} ${crudasNuevas.slice(fin + 1).join(' ')}`
     }
     if (!cola.length && completacion) return `${mostrar}${completacion}`
@@ -243,10 +271,76 @@ export function colaNuevaTrasSolape(mostrado, nuevo) {
   if (mejorK >= 2) {
     const cola = clavesNuevas.slice(mejorK)
     if (colaGen(cola)) {
+      // COSTURA ANTI-TARTAMUDEO (medido d4c1c8f3): la cola puede ARRANCAR con la
+      // palabra que la caja YA muestra al final ("…dijo cla Cloud" + "…dijo Cloud
+      // de que" -> la cola "Cloud de que" reentrega el "Cloud" mostrado). Pasa
+      // cuando la caja pego antes una parcial ("cla", ASR 205) y por eso el
+      // alineado del sufijo (A) no ve la reentrega: la caja acumulaba "cla Cloud
+      // Cloud" y el duplicado se commiteaba en la fila. Esa primera palabra NO es
+      // nueva: si es la MISMA que la ultima mostrada se descarta (la caja ya la
+      // tiene), y si la COMPLETA (el ASR la oyo a medias: "cla" -> "Cloud") se
+      // sustituye la parcial por la forma completa de la emision. El doble
+      // legitimo de la emision ("…dijo no no pasa") sobrevive: solo se resuelve
+      // la palabra que la caja ya muestra.
+      const ultimaMostrada = colaDeLoMostrado[colaDeLoMostrado.length - 1]
+      const primeraCola = crudasNuevas[mejorK]
+      const misma = mismaPalabraClave(
+        String(ultimaMostrada || '').toLowerCase(),
+        String(primeraCola || '').toLowerCase(),
+      )
+      if (misma) {
+        if (primeraCola.length > ultimaMostrada.length) {
+          return crudas.slice(0, -1).concat([primeraCola], crudasNuevas.slice(mejorK + 1)).join(' ')
+        }
+        // Palabra corta de enfasis ("no no"): la emision la repite a proposito y se
+        // conserva (misma guarda que el canon: solo se descarta de 4 letras o mas).
+        if (primeraCola.length >= 4) {
+          const resto = crudasNuevas.slice(mejorK + 1)
+          return resto.length ? `${mostrar} ${resto.join(' ')}` : ''
+        }
+        return `${mostrar} ${crudasNuevas.slice(mejorK).join(' ')}`
+      }
       return `${mostrar} ${crudasNuevas.slice(mejorK).join(' ')}`
     }
   }
   return ''
+}
+
+/**
+ * ¿El texto EMPIEZA por las palabras de `committed`? Compara por clave de palabra
+ * (sin tildes ni signos, misma mayuscula/minuscula): el ASR re-entrega la misma
+ * locucion con otra ortografia en los bordes.
+ * @param {string} text
+ * @param {string} committed
+ * @returns {boolean}
+ */
+export function startsWithCommittedLocution(text = '', committed = '') {
+  const crudas = cleanForSpeech(text).split(/\s+/).filter(Boolean)
+  const previas = cleanForSpeech(committed).split(/\s+/).filter(Boolean)
+  if (!crudas.length || !previas.length || crudas.length < previas.length) return false
+  for (let i = 0; i < previas.length; i += 1) {
+    if (claveDePalabra(crudas[i]) !== claveDePalabra(previas[i])) return false
+  }
+  return true
+}
+
+/**
+ * COLA NUEVA tras una locucion YA COMMITEADA (medido 2026-10-19 23:34:16, turno 52):
+ * Chrome re-entrega el FINAL de la locucion cerrada junto al arranque de la SIGUIENTE
+ * y el ingress lo vuelve a mezclar con la ultima locucion commiteada
+ * (`resolveIngressCaptureText`). Si `capture` EMPIEZA por `committed` y sigue, lo unico
+ * nuevo es lo que viene DESPUES. Devuelve ese texto con la ortografia CRUDA de la
+ * emision (conserva mayusculas) o '' si no hay cola nueva.
+ * @param {string} capture
+ * @param {string} committed
+ * @returns {string}
+ */
+export function tailAfterCommittedLocution(capture = '', committed = '') {
+  const crudas = cleanForSpeech(capture).split(/\s+/).filter(Boolean)
+  if (!startsWithCommittedLocution(capture, committed)) return ''
+  const previas = cleanForSpeech(committed).split(/\s+/).filter(Boolean)
+  if (crudas.length <= previas.length) return ''
+  return crudas.slice(previas.length).join(' ')
 }
 
 /**
@@ -258,25 +352,33 @@ export function colaNuevaTrasSolape(mostrado, nuevo) {
  *     (alineada con el final de lo mostrado) o se BLOQUEA: nunca se sustituye.
  * El vaciado legitimo (cierre confirmado / parrafo nuevo / reset de sesion) es
  * `vaciarLaCaja`: NO lo decide la regla de acumulacion.
- * @param {{ publishedLiveRef?: { current: string }, scheduleLiveTranscriptUpdate?: Function, setLiveTranscript?: Function }} deps
+ * @param {{ publishedLiveRef?: { current: string }, cancelLiveTranscriptUpdate?: Function, scheduleLiveTranscriptUpdate?: Function, setLiveTranscript?: Function }} deps
  * @returns {{ publicarEnLaCaja: Function, vaciarLaCaja: Function }}
  */
 export function crearCajaDeLaFrase(deps = {}) {
-  const { publishedLiveRef, scheduleLiveTranscriptUpdate, setLiveTranscript } = deps
+  const { publishedLiveRef, cancelLiveTranscriptUpdate, scheduleLiveTranscriptUpdate, setLiveTranscript } = deps
   const escribirVisible = (texto, inmediato) => {
-    if (!texto) {
+    const valor = String(texto || '')
+    // ESCRITURA INMEDIATA (vaciado o publicacion sin debounce): primero se CANCELA el
+    // update perezoso pendiente. Sin esto, un debounce programado ANTES del vaciado
+    // escribia su texto viejo DESPUES y la ultima frase "volvia a ponerse" (defecto
+    // medido por el dueno 2026-10-18: la caja tardaba en limpiarse y reaparecia texto).
+    if (inmediato) {
+      if (typeof cancelLiveTranscriptUpdate === 'function') cancelLiveTranscriptUpdate()
+      if (typeof setLiveTranscript === 'function') {
+        setLiveTranscript(valor)
+        return
+      }
+    }
+    if (!valor) {
       if (typeof setLiveTranscript === 'function') setLiveTranscript('')
       return
     }
-    if (inmediato && typeof setLiveTranscript === 'function') {
-      setLiveTranscript(texto)
-      return
-    }
     if (typeof scheduleLiveTranscriptUpdate === 'function') {
-      scheduleLiveTranscriptUpdate(texto)
+      scheduleLiveTranscriptUpdate(valor)
       return
     }
-    if (typeof setLiveTranscript === 'function') setLiveTranscript(texto)
+    if (typeof setLiveTranscript === 'function') setLiveTranscript(valor)
   }
   const leer = () => String(publishedLiveRef?.current || '')
   // TURNO DEL BOCETO: a que locucion pertenece lo que la caja muestra. La caja solo
@@ -295,13 +397,58 @@ export function crearCajaDeLaFrase(deps = {}) {
       Boolean(mostrado) && turnoDelBoceto !== null && turnoActivo !== null && turnoDelBoceto !== turnoActivo
     let destino = nuevo
     if (!cambioDeTurno) {
-      if (mostrado && isFragmentOfLocution(nuevo, mostrado)) {
-        return { aplicado: false, destino: mostrado, previo: mostrado.length }
-      }
       if (mostrado) {
         // Reentrega que crece: se conserva lo mostrado y se anade su cola genuina.
+        // `colaNuevaTrasSolape` es el dueno unico de "que parte de esta emision es
+        // nueva": un trozo PURO devuelve '' (se bloquea) y un trozo con COLA GENUINA
+        // devuelve la union. Antes un `isFragmentOfLocution` previo bloqueaba tambien
+        // el trozo CON habla nueva (medido: 39/54 compactos = 72% de la locucion
+        // completa, "y siguio" se perdia aunque el detector de revision solo cubria el
+        // 80% del trozo, no de la locucion entera). El detector de trozo sigue siendo
+        // el dueno en la recompuesta y en la sonda del preview.
         const union = colaNuevaTrasSolape(mostrado, nuevo)
         if (union && union.length > mostrado.length) destino = union
+        // RE-RECONOCIMIENTO DE LA MISMA LOCUCION: el ASR corrio un tramo que la caja ya
+        // habia pegado (interim caducado: "…la dia" + " hier" pegados -> el ASR dice
+        // "diarizacion"). Sin union, la revision se bloqueaba y la caja se congelaba en
+        // el tramo pegado hasta el volcado del cierre (medido en vivo 2026-10-20,
+        // sesion 97f86c73: el dueno dicto "…con la diarizacion…" y la ultima frase
+        // dejo de transcribirse en pantalla). La caja adopta la emision VIGENTE solo si
+        // DERIVA de lo mostrado (prefijo solido de palabras, umbral corto) y no encoge
+        // en palabras: una emision divergente o mas corta sigue bloqueada (la regla
+        // "jamas se sustituye" sigue valiendo para texto ajeno).
+        // CON EL TURNO ABIERTO LA FRASE VIVA JAMAS SE SUSTITUYE (mandato del dueno
+        // 2026-10-18): una emision mas LARGA pero que NO deriva de lo mostrado no se
+        // aplica. El ASR re-reconoce el arranque de la locucion y cambia letras
+        // (replay del log del dueno: 141 -> 146 chars, "s como se comporta..." ->
+        // "o se comporta...") y antes `destino = nuevo` reemplazaba la caja entera:
+        // ese es el "parece que pierde la transcripcion y luego la recupera" que
+        // reporto el dueno. El reemplazo solo es legitimo al cambiar de TURNO
+        // (arriba) o en el vaciado declarado (`vaciarLaCaja`).
+        else {
+          const mostradas = String(mostrado || '').trim().split(/\s+/).filter(Boolean)
+          const nuevas = nuevo.trim().split(/\s+/).filter(Boolean)
+          let comun = 0
+          while (
+            comun < mostradas.length &&
+            comun < nuevas.length &&
+            mismaPalabraClave(mostradas[comun], nuevas[comun])
+          ) comun += 1
+          const umbral = Math.min(3, mostradas.length)
+          // GLUE AL ARRANQUE DEL TURNO (medido 2026-10-20, sesion 97f86c73): la caja
+          // pego dos interims caducados ("te" + "las" = "te las", 6 chars) y el ASR
+          // re-reconocio el arranque ("te lo escribe..."). El prefijo compartido era de
+          // UNA palabra y el umbral de 2 bloqueaba la correccion: la ultima frase quedo
+          // congelada en 6 chars durante 47 s (sonda live: previo:6, len 13->189, todo
+          // no-conserva). Con lo mostrado CORTO (el turno apenas arranco: <= 4 palabras)
+          // una emision mas larga que comparte su arranque ES la correccion del ASR y se
+          // adopta. El mandato "jamas se sustituye" protege la transcripcion REAL (larga):
+          // con 5+ palabras mostradas sigue rigiendo el umbral de 3 palabras.
+          const adoptaArranqueCorto =
+            mostradas.length <= 4 && comun >= 1 && nuevas.length >= mostradas.length
+          if ((comun >= umbral || adoptaArranqueCorto) && nuevas.length >= mostradas.length) destino = nuevo
+          else return { aplicado: false, destino: mostrado, previo: mostrado.length }
+        }
       }
     }
     turnoDelBoceto = turnoActivo ?? turnoDelBoceto
@@ -329,6 +476,45 @@ export function crearCajaDeLaFrase(deps = {}) {
  */
 
 /**
+ * DUENO UNICO de "el turno vivo se CIERRA": apaga el preview, limpia la locucion viva
+ * (`openLine` / `pendingInterim` / `pendingFinal`) y sella el audio del turno.
+ *
+ * Lo usan los TRES cierres reales: el de un commit (`finalizeTurnCommit`), el de una
+ * locucion ya consumida por una orden (`closeTurnOnly`) y el cierre sin captura. Antes
+ * cada uno repetia su propia lista y a todos les faltaba `pendingFinal`: el final SIN
+ * wake deja ahi el texto confirmado (`transcriptIngress.js`, P9.68-b), asi que el
+ * cierre siguiente lo volcaba como fila de OTRO turno. MEDIDO en el log del dueno
+ * 2026-10-19: filas 430+112 y 468+270 (la cola de una locucion ya commiteada
+ * reaparecia como fila propia) y la linea de 58 chars que sobrevivio a la orden y
+ * luego recorto la locucion de 316 chars.
+ *
+ * @param {object} deps — los MISMOS deps del sync (refs y sellado de audio).
+ */
+function closeLiveTurn(deps) {
+  const {
+    listenStateRef,
+    openPreviewTurnRef,
+    preflightScheduledForTurnRef,
+    srGapFiredForOpenLineRef,
+    flushPcmAfterTurnCommit,
+    turnAudioStartSampleRef,
+    chunkTotalSamplesRef,
+  } = deps
+  openPreviewTurnRef.current = false
+  listenStateRef.current.openLine = ''
+  listenStateRef.current.pendingInterim = ''
+  clearPendingFinal(listenStateRef.current)
+  preflightScheduledForTurnRef.current = false
+  srGapFiredForOpenLineRef.current = false
+  // El PCM del turno NO se vacia en un final de SEGMENTO: la identidad final (y su
+  // embedding) se mide sobre el audio del TURNO. Vaciarlo en cada segmento dejaba
+  // ventanas de 3-900 ms (medido 2026-10-18: snap=128/768, `voz` casi nula) y la
+  // misma voz se separaba de su cluster. Solo el CIERRE REAL llega aqui.
+  flushPcmAfterTurnCommit()
+  turnAudioStartSampleRef.current = chunkTotalSamplesRef.current
+}
+
+/**
  * Sincroniza preview o commit del stream de conversación según turnCommit.
  *
  * @param {ConversationStreamCommitDeps} deps
@@ -354,6 +540,22 @@ export function handleConversationStreamSync(
     // de Chrome NO lo declara: la fila de conversacion no se escribe a mitad del
     // dictado (medido 2026-10-08 por el dueno: al llegar al 9 ya estaba "vaciada").
     settlesTurn = false,
+    // La captura es una locucion YA CONFIRMADA que quedo pendiente (`pendingFinal`) y
+    // se commitea porque llego OTRA locucion: es texto CERRADO y NO puede
+    // reconciliarse contra la linea viva. Reconciliarla metia en su fila el interino
+    // de la locucion SIGUIENTE (medido 2026-10-19 21:18:52: fila de 430 = 315 dichos +
+    // 112 de la locucion siguiente; luego esos 112 se volvian a escribir como cola).
+    locutionClosed = false,
+    // La orden (comando/consulta) YA CONSUMIO la linea viva y su fila la escribio la
+    // ruta de la orden: aqui solo se CIERRA el turno vivo. Sin esto la linea seguia
+    // abierta con el texto consumido, la locucion siguiente se le PEGABA y el srGap
+    // recortaba la captura a su prefijo (medido 2026-10-19 21:21:22: la locucion de
+    // 316 chars se descarto y la fila existente se reescribia con 40).
+    closeTurnOnly = false,
+    // PROCEDENCIA del commit: lo produjo una orden y la locucion sigue viva (wake al
+    // inicio). El pelado del preview lo consulta para NO arrancar del texto de una
+    // orden que el usuario sigue dictando.
+    commandTurn = false,
   } = {},
 ) {
   const {
@@ -366,19 +568,17 @@ export function handleConversationStreamSync(
     logRowsTextRef,
     activeTurnIdRef,
     captureTurnAudio,
-    flushPcmAfterTurnCommit,
     lastCommitAtRef,
     lastOnresultAtRef,
-    turnAudioStartSampleRef,
-    chunkTotalSamplesRef,
-    preflightScheduledForTurnRef,
-    srGapFiredForOpenLineRef,
     processConversationFluQueryRef,
     lastEmittedTranscriptRef,
     emitConversationLog,
     createSpeakerAudioResolver,
     sessionPrimarySpeakerRef,
     lastLoggedSpeakerRef,
+    // Opcional: sin ref, la preferencia por la ultima resolucion medida se desactiva
+    // (el sticky cae a la cadena historica). Produccion lo pasa siempre.
+    lastResolvedSpeakerRef = { current: '' },
     logRowSpeakersRef,
     speakerClustersRef,
     setSpeakerClusters,
@@ -386,17 +586,56 @@ export function handleConversationStreamSync(
     lastSpeakerRef,
     lastTurnSignatureRef,
     lastLogLineTextRef,
+    lastLogLineWasCommandRef,
     commitTurnToSessionRows,
     fluParticipantRef,
     lastRequestRef,
     lastEmittedTurnRef,
+    registerParticipant,
   } = deps
 
   // CAJA ("ultima frase"): TODO pasa por la API de este modulo (un solo escritor, una
   // sola regla). Ninguna linea de aqui escribe el ref: lo hace la caja.
-  const { publicarEnLaCaja, vaciarLaCaja } = crearCajaDeLaFrase(deps)
+  //
+  // DUEÑO UNICO DE LA INSTANCIA: el hook crea la caja UNA vez (`cajaVivaRef`) y la
+  // inyecta. Fabricar una caja nueva por llamada reseteaba `turnoDelBoceto` en cada
+  // sync (la frontera por identidad de turno se perdia) y dejaba dos instancias
+  // vivas sobre la misma frase. Si no viene inyectada, se deriva de los mismos deps.
+  const caja =
+    deps.cajaDeLaFrase && typeof deps.cajaDeLaFrase.publicarEnLaCaja === 'function'
+      ? deps.cajaDeLaFrase
+      : crearCajaDeLaFrase(deps)
+  const { publicarEnLaCaja, vaciarLaCaja } = caja
+
+  // El cierre de una locucion YA CONFIRMADA no borra lo que el usuario esta diciendo
+  // ahora: `visible:false` resetea la MEMORIA de la caja (ancla del parrafo nuevo) y
+  // deja la frase viva en pantalla; su dueno la reemplaza cuando llega la locucion
+  // siguiente. Es la misma regla documentada en `vaciarLaCaja`.
+  const vaciarTrasCierre = () =>
+    locutionClosed ? vaciarLaCaja({ visible: false }) : vaciarLaCaja()
+
+  // PROCEDENCIA de la ultima linea commiteada (`lastLogLineTextRef`): se escribe SIEMPRE
+  // por esta unica via para que el texto y su origen no puedan divergir. `commandTurn`
+  // marca la locucion de una ORDEN que NO se cerro: el preview siguiente puede contenerla
+  // legitimamente y el pelado no debe recortarla. Un commit normal o el cierre la apagan.
+  const marcarUltimaLinea = (texto) => {
+    lastLogLineTextRef.current = texto
+    if (lastLogLineWasCommandRef) lastLogLineWasCommandRef.current = Boolean(commandTurn)
+  }
 
   if (!conversationActiveRef?.current) return
+
+  // CIERRE SIN TEXTO de una locucion YA CONSUMIDA por una orden (comando/consulta).
+  // Va ANTES de calcular la captura: `advancePublishedDisplay` devolveria la linea
+  // viva y este sync no debe commitear nada (la fila la escribio la ruta de la orden).
+  if (closeTurnOnly) {
+    lastCommitAtRef.current = Date.now()
+    // El turno se cerro: lo commiteado ya NO es una locucion viva de orden.
+    if (lastLogLineWasCommandRef) lastLogLineWasCommandRef.current = false
+    vaciarLaCaja()
+    closeLiveTurn(deps)
+    return
+  }
 
   let capture =
     precomputed ||
@@ -410,8 +649,54 @@ export function handleConversationStreamSync(
       vaciarLaCaja({ visible: false })
       openPreviewTurnRef.current = false
     }
+    // CIERRE REAL sin captura (p. ej. un comando consumio la locucion a mitad del
+    // dictado): la caja visible pertenece al turno que ACABA de cerrarse y se vacia
+    // por su dueno. Antes se quedaba pintada para siempre (defecto 5 del dueno) y el
+    // cierre se quedaba a medias: `openLine`/`pendingFinal` sobrevivian y el cierre
+    // siguiente los volcaba como fila de OTRO turno. El cierre es COMPLETO y pasa por
+    // el mismo dueno que el de un commit (`closeLiveTurn`).
+    if (settlesTurn) {
+      lastCommitAtRef.current = Date.now()
+      vaciarLaCaja()
+      closeLiveTurn(deps)
+    }
     if (import.meta.env.DEV && debugHotPath) fluDebugHot('stream-skip', { reason: 'empty-capture' })
     return
+  }
+
+  // LA CAJA NO VUELVE A PINTAR UNA LOCUCION YA COMMITEADA (medido 2026-10-19 23:34:15-16,
+  // sesion 18f3888c, turno 52): tras cerrar la locucion, Chrome re-entrega su FINAL junto
+  // al arranque de la SIGUIENTE y el ingress lo vuelve a mezclar con la ultima locucion
+  // commiteada (`resolveIngressCaptureText`). El preview la repintaba entera (77 = 71 ya
+  // commiteados + " o sea") y la intervencion siguiente se acumulaba encima ("no limpia
+  // ultima frase cuando pasa a conversacion y acumula ahi la siguiente intervencion",
+  // reporte del dueno). La locucion commiteada ya tiene su fila: lo UNICO nuevo es su
+  // cola, y es lo unico que la caja publica.
+  // Se pela SIEMPRE que la captura ARRANQUE por esa locucion, muestre o no la caja el
+  // texto viejo: el commit de segmento que NO vacia la memoria (rama simple, final de
+  // tramo de Chrome) deja la locucion EN PANTALLA y el preview siguiente la repintaba
+  // igual (medido en el replay de la sesion 18f3888c). Un preview ANTERIOR al commit
+  // no entra aqui: `lastLogLineTextRef` aun no es esta locucion.
+  // EXCEPCION: si la linea commiteada la escribio una ORDEN cuya locucion SIGUE VIVA
+  // (wake al inicio: el usuario continua dictando la MISMA frase), la caja conserva el
+  // mandato; pelarlo aqui borraba de la "ultima frase" lo que el usuario acaba de decir
+  // (replay vozReplayDueno20261019Comando, defecto 5).
+  if (!turnCommit && !lastLogLineWasCommandRef?.current) {
+    const locucionCommiteada = String(lastLogLineTextRef?.current || '')
+    if (locucionCommiteada && startsWithCommittedLocution(capture, locucionCommiteada)) {
+      const colaNueva = tailAfterCommittedLocution(capture, locucionCommiteada)
+      // REENTREGA PURA (sin cola nueva): dentro de la ventana de eco es la misma
+      // locucion re-entregada y no hay nada que previsualizar. Fuera de ella es una
+      // REPETICION GENUINA del usuario y se muestra (misma politica que el dedupe del
+      // commit: `isDuplicateTurnCommit`).
+      if (!colaNueva) {
+        const dentroDeEco =
+          Date.now() - Number(lastCommitAtRef?.current || 0) < committedEchoStreakWindowMs()
+        if (dentroDeEco) return
+      } else {
+        capture = colaNueva
+      }
+    }
   }
 
   // El ID del turno nace al ABRIR el turno (una sola vez), no al resolverlo: el
@@ -515,7 +800,10 @@ export function handleConversationStreamSync(
   flushPendingStreamLog()
   // El preview ya protegia el recorte por ruido ASR, pero aqui se commiteaba el
   // texto recortado: la fila quedaba mas corta que lo mostrado y se perdia la cola.
-  capture = reconcileCommitText(capture, publishedLiveRef.current)
+  // EXCEPCION UNICA: `locutionClosed` es texto CERRADO (un final ya confirmado que se
+  // volco porque llego otra locucion). Reconciliarlo contra la linea viva metia en su
+  // fila el interino de la locucion SIGUIENTE (medido 2026-10-19: filas 430 y 468).
+  if (!locutionClosed) capture = reconcileCommitText(capture, publishedLiveRef.current)
   // P11.26 (medido 2026-10-14 18:32 en su corrida): las FILAS quedaban con el tartamudeo del ASR
   // dentro ("prueba pruebas pruebas", "trans transcripcion transcripcion", "vi viste viste viste"):
   // la caja pasa por el colapsador y la fila escribia el texto CRUDO. Una sola definicion de
@@ -570,9 +858,7 @@ export function handleConversationStreamSync(
 
   const finalizeTurnCommit = (closeTurn = false) => {
     finalizeTurnIdentityPipeline(activeTurnIdRef.current)
-    flushPcmAfterTurnCommit()
     lastCommitAtRef.current = Date.now()
-    turnAudioStartSampleRef.current = chunkTotalSamplesRef.current
     // SOLO el cierre REAL limpia la locucion viva y sella el turno. Un `final` de
     // SEGMENTO de Chrome (pausa BREVE dentro del mismo dictado) NO cierra: el texto
     // sigue visible en ULTIMA FRASE hasta el silencio/onend/cambio de hablante.
@@ -580,18 +866,14 @@ export function handleConversationStreamSync(
     // conversacion (medido 2026-10-08 por el dueno: al llegar al 9 ya estaba
     // vaciada, sin silencio real ni cambio de hablante). Mientras no cierre, el id
     // del turno NO avanza (`openPreviewTurnRef` sigue abierto) -> UNA fila.
-    if (closeTurn) {
-      openPreviewTurnRef.current = false
-      // El cierre NO borra lo publicado ni su memoria: la transicion a una locucion NUEVA
-      // la decide el dueno del trozo (`isFragmentOfLocution`: una frase que NO es trozo
-      // reemplaza lo mostrado; un trozo conserva la COMPLETA). Borrar aqui era la via por la
-      // que una COLA del ASR dejaba la frase en dos o tres palabras (log del dueno
-      // 2026-10-11 11:28) y la razon del parpadeo del 2026-10-10.
-      listenStateRef.current.openLine = ''
-      listenStateRef.current.pendingInterim = ''
-      preflightScheduledForTurnRef.current = false
-      srGapFiredForOpenLineRef.current = false
-    }
+    //
+    // El cierre (limpiar la locucion, sellar el audio) lo hace UN solo dueno:
+    // `closeLiveTurn`. El cierre NO borra lo publicado ni su memoria: la transicion a
+    // una locucion NUEVA la decide el dueno del trozo (`isFragmentOfLocution`: una
+    // frase que NO es trozo reemplaza lo mostrado; un trozo conserva la COMPLETA).
+    // Borrar aqui era la via por la que una COLA del ASR dejaba la frase en dos o tres
+    // palabras (log del dueno 2026-10-11 11:28) y la razon del parpadeo del 2026-10-10.
+    if (closeTurn) closeLiveTurn(deps)
     if (fluTailAfterCommit?.action?.kind === 'flu' && fluTailAfterCommit.action.question) {
       void processConversationFluQueryRef.current(
         fluTailAfterCommit.fullCapture,
@@ -674,6 +956,7 @@ export function handleConversationStreamSync(
 
   const stickyFallback = resolveCommitStickyFallback({
     sessionPrimary: sessionPrimarySpeakerRef.current,
+    lastResolved: lastResolvedSpeakerRef.current,
     lastLogged: lastLoggedSpeakerRef.current,
     fallback: fallbackSpeaker,
     phrase,
@@ -750,7 +1033,11 @@ export function handleConversationStreamSync(
   // escrita para esto ("Luis pegado a una voz distinta": medido 2026-10-12 con
   // `reason=production-reuse-no-evidence`). Antes un atajo la saltaba (ya retirado).
   const speakerResuelto =
-    evidenciaAcustica || FUENTES_CON_IDENTIDAD.includes(resolved.source)
+    evidenciaAcustica ||
+    FUENTES_CON_IDENTIDAD.includes(resolved.source) ||
+    // La REVISION del MISMO turno no es continuidad: si el nombre ya lo PRESENTO la
+    // voz en este turno, la revision lo conserva (antes se degradaba a "Hablante N").
+    (resolved.source === 'asr-revision' && isSessionPrimaryPresented(sessionPrimarySpeakerRef))
       ? crudo
       : blindSpeakerFallback(crudo)
   const speakerName = normalizeSpeakerLabel(speakerResuelto)
@@ -795,13 +1082,14 @@ export function handleConversationStreamSync(
           speakerClustersRef,
           setSpeakerClusters,
           renameSpeakerRows,
+          registerParticipant,
         },
       )
       if (resolved.signatureVector?.length) {
         lastTurnSignatureRef.current = resolved.signatureVector
       }
       syncSpeakerIndexFromLabel(listenStateRef.current, segmentSpeaker)
-      lastLogLineTextRef.current = segmentText
+      marcarUltimaLinea(segmentText)
       lastLoggedSpeakerRef.current = segmentSpeaker
       lastSpeakerRef.current = segmentSpeaker
 
@@ -839,6 +1127,15 @@ export function handleConversationStreamSync(
     if (segmentRowsEmitted) {
       lastEmittedTranscriptRef.current = capture
     }
+    // CIERRE REAL del turno troceado: la caja visible tambien termina su turno. Antes
+    // solo se reseteaba la MEMORIA por segmento (`visible:false`) y la ultima frase
+    // quedaba pintada tras pasar a la conversacion (defecto 2 del dueno). Si la
+    // locucion ya estaba confirmada (`locutionClosed`), el vaciado es solo de memoria:
+    // la frase viva en pantalla pertenece al dictado siguiente.
+    // SOLO si el troceo EMITIO fila: vaciar sin emitir perdia la transcripcion (defecto
+    // 1 del dueno). Con `asrSegmentation` apagado este camino no se alcanza; el contrato
+    // se conserva por si el planificador vuelve a activarse.
+    if (settlesTurn && segmentRowsEmitted) vaciarTrasCierre()
     finalizeAndNotify()
 
     if (import.meta.env.DEV && debugHotPath) {
@@ -860,13 +1157,14 @@ export function handleConversationStreamSync(
       speakerClustersRef,
       setSpeakerClusters,
       renameSpeakerRows,
+      registerParticipant,
     },
   )
   if (resolved.signatureVector?.length) {
     lastTurnSignatureRef.current = resolved.signatureVector
   }
   syncSpeakerIndexFromLabel(listenStateRef.current, speakerName)
-  lastLogLineTextRef.current = capture
+  marcarUltimaLinea(capture)
   lastLoggedSpeakerRef.current = speakerName
   lastSpeakerRef.current = speakerName
 
@@ -879,24 +1177,42 @@ export function handleConversationStreamSync(
   // conversacion (medido 2026-10-08 por el dueno: al llegar al 9 ya estaba
   // vaciada). El texto NO se pierde: sigue en la locucion viva (ULTIMA FRASE) y en
   // la fila de SESION; el cierre (onend, srGap, split por wake) la escribe completa.
-  if (refreshNeeded && settlesTurn) {
-    delivered = emitTurnRow(capture, {
-      speakerName: speakerEscrito, evidenciaAcustica,
-      fallbackSpeaker: speakerName,
-      currentClock: formatClock(),
-      replaceLastRawLog: replaceLast,
-      streamUpdate: false,
-      turnCommit: true,
-    })
-    if (delivered) {
-      lastEmittedTranscriptRef.current = capture
-      if (lastEmittedTurnRef) lastEmittedTurnRef.current = activeTurnIdRef.current
-      // RACIONAL DEL DUENO (2026-10-11): la locucion YA se vacio a la conversacion -> la ultima
-      // frase arranca de CERO. Es el reset por ITERACION NUEVA (y por pausa de silencio, que es el
-      // cierre que la escribe). Con la memoria a "" el dictado siguiente no puede quedar
-      // congelado por ser mas corto que el anterior.
-      vaciarLaCaja()
+  if (settlesTurn) {
+    // La fila se escribe si hay REFRESCO o si la frase AUN NO esta en la ultima fila:
+    // un cierre podia llegar con `refreshNeeded:false` (misma marca emitida) y la fila
+    // sin el texto, y el vaciado incondicional la borraba (defecto 1 del dueno
+    // 2026-10-19: se veia en ULTIMA FRASE y nunca pasaba a la conversacion).
+    const yaEstaEnFila = phrasesEquivalent(capture, lastCommittedRow)
+    if (refreshNeeded || !yaEstaEnFila) {
+      delivered = emitTurnRow(capture, {
+        speakerName: speakerEscrito, evidenciaAcustica,
+        fallbackSpeaker: speakerName,
+        currentClock: formatClock(),
+        replaceLastRawLog: replaceLast,
+        streamUpdate: false,
+        turnCommit: true,
+      })
+      if (delivered) {
+        lastEmittedTranscriptRef.current = capture
+        if (lastEmittedTurnRef) lastEmittedTurnRef.current = activeTurnIdRef.current
+      }
     }
+    // RACIONAL DEL DUENO (2026-10-11): la locucion YA se vacio a la conversacion -> la caja
+    // arranca de CERO. Es el reset por ITERACION NUEVA: con la memoria a "" el dictado
+    // siguiente no puede quedar congelado por ser mas corto que el anterior. El cierre es
+    // SIEMPRE un vaciado real a la conversacion (settlesTurn); con el turno ABIERTO la
+    // frase jamas se acorta (ver `publicarEnLaCaja`).
+    //
+    // El vaciado pertenece al CIERRE, pero SOLO cuando la frase quedo A SALVO: se entrego
+    // ahora (`delivered`), ya estaba en la fila (`yaEstaEnFila`) o es re-emision de la
+    // locucion viva (`ambientRowBlocked`: su fila original existe). Si no se entrego y no
+    // esta en fila, la caja NO se vacia: el texto sigue vivo y el cierre siguiente
+    // (onend/srGap) lo rescata — borrarla igual era el defecto 1 del dueno (la frase
+    // desaparecia de ULTIMA FRASE sin haber pasado a la conversacion).
+    //
+    // Si la locucion ya estaba confirmada (`locutionClosed`), la memoria se resetea y
+    // la frase viva se deja en pantalla (pertenece al dictado siguiente).
+    if (delivered || yaEstaEnFila || ambientRowBlocked) vaciarTrasCierre()
   }
   commitTurnToSessionRows(capture, speakerEscrito, { replaceLast })
   // `lastEmittedTranscriptRef` es el texto de la ULTIMA locucion EMITIDA y ademas la FUENTE
