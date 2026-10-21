@@ -13,7 +13,7 @@
 // SKIP (no se inventa el resultado ni se commitea la transcripcion del dueno).
 // ============================================================
 import { describe, expect, it } from 'vitest'
-import { execFileSync } from 'node:child_process'
+import { execFile } from 'node:child_process'
 import { cpSync, existsSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -27,22 +27,37 @@ const CLI = join(ROOT, 'scripts', 'replay.mjs')
 const FIXTURE = join(ROOT, 'tests', 'fixtures', 'replay', 'saludo')
 const CHECKS = join(ROOT, 'tests', 'fixtures', 'replay', 'checks')
 const REPETIDA = join(ROOT, 'tests', 'fixtures', 'replay', 'repetida')
+const SILENCIO = join(ROOT, 'tests', 'fixtures', 'replay', 'silencio')
 const VECTORS = join(ROOT, 'tests', 'fixtures', 'replay', 'vectors')
 const REAL_SESSION = join(tmpdir(), 'flu-recordings', 'd4c1c8f3-76f8-400b-b89e-e8e428cfdff7')
 
-/** Ejecuta el CLI y devuelve exit code + salidas (sin lanzar por exit != 0). */
-function replay(args: string[]): { code: number; stdout: string; stderr: string } {
-  try {
-    const stdout = execFileSync(process.execPath, [VITE_NODE, '--config', CONFIG, CLI, ...args], {
-      cwd: ROOT,
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'pipe'],
-    })
-    return { code: 0, stdout, stderr: '' }
-  } catch (error) {
-    const fallo = error as { status?: number; stdout?: string; stderr?: string }
-    return { code: Number(fallo.status ?? -1), stdout: String(fallo.stdout || ''), stderr: String(fallo.stderr || '') }
-  }
+/**
+ * Ejecuta el CLI y devuelve exit code + salidas (sin lanzar por exit != 0).
+ *
+ * ASINCRONO a proposito (defecto medido, P7.68 en `jsReferenceGuard`): lanzar los ~23
+ * replays con `execFileSync` BLOQUEABA el event loop del worker durante toda la medicion
+ * (~50 s seguidos). Bajo contencion eso pasaba del timeout del RPC de vitest y la corrida
+ * COMPLETA sale roja por `Unhandled Error: [vitest-worker]: Timeout calling "onTaskUpdate"`
+ * con los 289 ficheros y los 2452 tests en verde. Con `execFile` el worker sigue latiendo.
+ * @param {string[]} args argumentos del CLI de replay
+ * @returns {Promise<{ code: number, stdout: string, stderr: string }>}
+ */
+function replay(args: string[]): Promise<{ code: number; stdout: string; stderr: string }> {
+  return new Promise((resolve) => {
+    execFile(
+      process.execPath,
+      [VITE_NODE, '--config', CONFIG, CLI, ...args],
+      { cwd: ROOT, encoding: 'utf8' },
+      (error, stdout, stderr) => {
+        const fallo = error as (NodeJS.ErrnoException & { code?: number | string }) | null
+        resolve({
+          code: fallo ? Number(typeof fallo.code === 'number' ? fallo.code : -1) : 0,
+          stdout: String(stdout || ''),
+          stderr: String(stderr || ''),
+        })
+      },
+    )
+  })
 }
 
 function tmpDir(prefijo: string): string {
@@ -75,10 +90,10 @@ function commitsDe(rows: Array<Record<string, unknown>>): Array<Record<string, u
   return rows.filter((row) => String(row?.kind || '') === 'commit')
 }
 
-describe('replay events - expected aprobado (filas y caja)', () => {
-  it('la fixture coincide: exit 0, todos los checks en OK y las dos marcas inferidas', () => {
+describe('replay events - expected aprobado (filas y caja)', async () => {
+  it('la fixture coincide: exit 0, todos los checks en OK y las dos marcas inferidas', async () => {
     const report = join(tmpDir('replay-ok-'), 'report.json')
-    const out = replay(['--session', FIXTURE, '--mode', 'events', '--expected', join(FIXTURE, 'expected.json'), '--report', report])
+    const out = await replay(['--session', FIXTURE, '--mode', 'events', '--expected', join(FIXTURE, 'expected.json'), '--report', report])
 
     expect(out.stderr, out.stderr).not.toMatch(/error inesperado/)
     expect(out.code, out.stdout + out.stderr).toBe(0)
@@ -94,9 +109,9 @@ describe('replay events - expected aprobado (filas y caja)', () => {
     expect(datos.classification.perdidas).toBe(0)
   })
 
-  it('la caja se guarda CON TIEMPO y sin deduplicar textos iguales (una caja congelada es un dato)', () => {
+  it('la caja se guarda CON TIEMPO y sin deduplicar textos iguales (una caja congelada es un dato)', async () => {
     const report = join(tmpDir('replay-trace-'), 'report.json')
-    replay(['--session', FIXTURE, '--mode', 'events', '--expected', join(FIXTURE, 'expected.json'), '--report', report])
+    await replay(['--session', FIXTURE, '--mode', 'events', '--expected', join(FIXTURE, 'expected.json'), '--report', report])
     const datos = JSON.parse(readFileSync(report, 'utf8'))
     const traza = datos.observed.boxTrace
     expect(traza.length, 'cada actualizacion de la caja deja una entrada').toBeGreaterThan(2)
@@ -109,8 +124,8 @@ describe('replay events - expected aprobado (filas y caja)', () => {
   })
 })
 
-describe('replay events - el expected alterado FALLA (no es decorativo)', () => {
-  it('cambiar una fila del expected da exit 1 con el diff legible', () => {
+describe('replay events - el expected alterado FALLA (no es decorativo)', async () => {
+  it('cambiar una fila del expected da exit 1 con el diff legible', async () => {
     const dir = tmpDir('replay-alt-')
     const esperado = join(dir, 'expected.json')
     const original = JSON.parse(readFileSync(join(FIXTURE, 'expected.json'), 'utf8'))
@@ -118,7 +133,7 @@ describe('replay events - el expected alterado FALLA (no es decorativo)', () => 
     writeFileSync(esperado, JSON.stringify(original, null, 2))
 
     const report = join(dir, 'report.json')
-    const out = replay(['--session', FIXTURE, '--mode', 'events', '--expected', esperado, '--report', report])
+    const out = await replay(['--session', FIXTURE, '--mode', 'events', '--expected', esperado, '--report', report])
 
     expect(out.code, out.stdout + out.stderr).toBe(1)
     const datos = JSON.parse(readFileSync(report, 'utf8'))
@@ -128,31 +143,31 @@ describe('replay events - el expected alterado FALLA (no es decorativo)', () => 
     expect(datos.diffs[0].actual.text).toBe('hola que tal')
   })
 
-  it('un expected SIN aprobar no pasa por bueno (exit 2)', () => {
+  it('un expected SIN aprobar no pasa por bueno (exit 2)', async () => {
     const dir = tmpDir('replay-draft-')
     const esperado = join(dir, 'expected.json')
     const original = JSON.parse(readFileSync(join(FIXTURE, 'expected.json'), 'utf8'))
     original.approved = false
     writeFileSync(esperado, JSON.stringify(original, null, 2))
 
-    const out = replay(['--session', FIXTURE, '--mode', 'events', '--expected', esperado])
+    const out = await replay(['--session', FIXTURE, '--mode', 'events', '--expected', esperado])
 
     expect(out.code, out.stdout + out.stderr).toBe(2)
     expect(out.stderr).toContain('NO esta aprobado')
   })
 })
 
-describe('replay events - checks de CAJA (fixtures sinteticos)', () => {
+describe('replay events - checks de CAJA (fixtures sinteticos)', async () => {
   const fixtures = readdirSync(CHECKS).filter((file) => file.endsWith('.json'))
 
-  it('hay las cinco fixtures de caja exigidas', () => {
+  it('hay las cinco fixtures de caja exigidas', async () => {
     expect(fixtures.sort()).toEqual(
       ['bloque-duplicado.json', 'congelada.json', 'limpia.json', 'perdida-real.json', 'prefijo-creciente.json'].sort(),
     )
   })
 
   for (const file of fixtures) {
-    it(`${file}: el detector enciende EXACTAMENTE lo que debe`, () => {
+    it(`${file}: el detector enciende EXACTAMENTE lo que debe`, async () => {
       const fx = JSON.parse(readFileSync(join(CHECKS, file), 'utf8'))
       const cmp = compareExpected({ observed: fx.observed, expected: fx.expected, options: fx.options })
       const estados = new Map<string, boolean>((cmp.checks as Array<{ name: string; ok: boolean }>).map((check) => [check.name, check.ok]))
@@ -169,7 +184,7 @@ describe('replay events - checks de CAJA (fixtures sinteticos)', () => {
     })
   }
 
-  it('la duplicacion NO se vende como perdida', () => {
+  it('la duplicacion NO se vende como perdida', async () => {
     const fx = JSON.parse(readFileSync(join(CHECKS, 'bloque-duplicado.json'), 'utf8'))
     const cmp = compareExpected({ observed: fx.observed, expected: fx.expected, options: fx.options })
     const estados = new Map<string, boolean>((cmp.checks as Array<{ name: string; ok: boolean }>).map((check) => [check.name, check.ok]))
@@ -178,11 +193,11 @@ describe('replay events - checks de CAJA (fixtures sinteticos)', () => {
   })
 })
 
-describe('replay events - diff con las FILAS FUENTE (turns.ndjson, kind=commit)', () => {
+describe('replay events - diff con las FILAS FUENTE (turns.ndjson, kind=commit)', async () => {
   const dirFuente = join(ROOT, 'tests', 'fixtures', 'replay', 'source')
   const casos = readdirSync(dirFuente).filter((file) => file.endsWith('.json'))
 
-  it('hay las SIETE fixtures de fuente exigidas', () => {
+  it('hay las SIETE fixtures de fuente exigidas', async () => {
     expect(casos.sort()).toEqual(
       [
         'duplicado-fuente.json',
@@ -197,7 +212,7 @@ describe('replay events - diff con las FILAS FUENTE (turns.ndjson, kind=commit)'
   })
 
   for (const file of casos) {
-    it(`${file}: clasifica como dice la especificacion`, () => {
+    it(`${file}: clasifica como dice la especificacion`, async () => {
       const fx = JSON.parse(readFileSync(join(dirFuente, file), 'utf8'))
       const diff = sourceRowDiff(fx.source, fx.observed)
       expect(diff.sourceRows, `${file}: filas de la fuente`).toBe(fx.want.sourceRows)
@@ -209,7 +224,7 @@ describe('replay events - diff con las FILAS FUENTE (turns.ndjson, kind=commit)'
     })
   }
 
-  it('un EXTRA justificado (la fuente repite esa locucion) NO falla; uno sin justificar SI', () => {
+  it('un EXTRA justificado (la fuente repite esa locucion) NO falla; uno sin justificar SI', async () => {
     const corre = (nombre: string) => {
       const fx = JSON.parse(readFileSync(join(dirFuente, nombre), 'utf8'))
       const cmp = compareExpected({
@@ -242,7 +257,7 @@ describe('replay events - diff con las FILAS FUENTE (turns.ndjson, kind=commit)'
     expect(injustificado.fx.want.checkOk).toBe(false)
   })
 
-  it('las VARIANTES declaradas no fallan (misma locucion, otra grafia del ASR)', () => {
+  it('las VARIANTES declaradas no fallan (misma locucion, otra grafia del ASR)', async () => {
     const fx = JSON.parse(readFileSync(join(dirFuente, 'variante.json'), 'utf8'))
     const cmp = compareExpected({
       observed: { rows: fx.observed, boxTrace: [], commits: [], boxAtCommit: [], box: [] },
@@ -254,7 +269,7 @@ describe('replay events - diff con las FILAS FUENTE (turns.ndjson, kind=commit)'
     expect(sourceRowDiff(fx.source, fx.observed).textVariants.length).toBe(fx.want.textVariants)
   })
 
-  it('una VARIANTE conserva los DOS textos originales (no los normaliza en el reporte)', () => {
+  it('una VARIANTE conserva los DOS textos originales (no los normaliza en el reporte)', async () => {
     const fx = JSON.parse(readFileSync(join(dirFuente, 'variante.json'), 'utf8'))
     const diff = sourceRowDiff(fx.source, fx.observed)
     expect(diff.textVariants).toEqual([
@@ -263,7 +278,7 @@ describe('replay events - diff con las FILAS FUENTE (turns.ndjson, kind=commit)'
     ])
   })
 
-  it('los DUPLICADOS de la fuente no son perdidas (29 vs 18 puede ser todo duplicados)', () => {
+  it('los DUPLICADOS de la fuente no son perdidas (29 vs 18 puede ser todo duplicados)', async () => {
     const fuente = Array.from({ length: 29 }, (_, index) => ({ text: `locucion ${index % 16}` }))
     const diff = sourceRowDiff(fuente, fuente.filter((_, index) => index < 16))
     expect(diff.sourceRows).toBe(29)
@@ -277,8 +292,8 @@ describe('replay events - diff con las FILAS FUENTE (turns.ndjson, kind=commit)'
 // cuenta si (a) hubo texto de ASR DISTINTO al mostrado (la caja lo ignoro) o (b) hubo
 // `minEventosActivos` (2) eventos de voz aunque el texto se repita: el ASR avanzo y la
 // caja no se movio, que es exactamente una caja congelada. El SILENCIO no cuenta.
-describe('replay events - congelacion de caja: cuenta ACTIVIDAD del ASR, no solo texto nuevo', () => {
-  it('una REPETICION del ASR con la caja quieta TAMBIEN es congelacion', () => {
+describe('replay events - congelacion de caja: cuenta ACTIVIDAD del ASR, no solo texto nuevo', async () => {
+  it('una REPETICION del ASR con la caja quieta TAMBIEN es congelacion', async () => {
     const traza = [
       { t: 0, text: 'hola que tal', reason: 'publish' },
       { t: 3000, text: '', reason: 'clear' },
@@ -288,11 +303,27 @@ describe('replay events - congelacion de caja: cuenta ACTIVIDAD del ASR, no solo
       { t: 2000, text: 'hola que tal' },
     ]
     const hueco = medirCongelacionCaja(traza, eventos)
-    expect(hueco.maxGapMs).toBe(3000)
+    // La ventana dura 3000 ms, pero se mide hasta la ULTIMA actividad (2000): los 1000 ms
+    // finales son silencio y una caja no puede cambiar cuando nadie habla.
+    expect(hueco.maxGapMs).toBe(2000)
     expect(hueco.motivo).toBe('asr-repetido-sin-cambio')
   })
 
-  it('un SOLO evento de voz no basta (la actividad minima son 2 eventos)', () => {
+  it('el SILENCIO FINAL de una ventana CON actividad no entra en la medida', async () => {
+    const traza = [
+      { t: 0, text: 'hola que tal', reason: 'publish' },
+      { t: 30000, text: '', reason: 'clear' },
+    ]
+    const eventos = [
+      { t: 1000, text: 'hola que tal' },
+      { t: 2000, text: 'hola que tal' },
+    ]
+    const hueco = medirCongelacionCaja(traza, eventos)
+    expect(hueco.maxGapMs, 'la caja solo estuvo quieta 2000 ms CON el ASR hablando').toBe(2000)
+    expect(30000 - 2000, 'los 28 s de silencio no se cuentan').toBeGreaterThan(hueco.maxGapMs)
+  })
+
+  it('un SOLO evento de voz no basta (la actividad minima son 2 eventos)', async () => {
     const traza = [
       { t: 0, text: 'hola', reason: 'publish' },
       { t: 3000, text: '', reason: 'clear' },
@@ -302,7 +333,7 @@ describe('replay events - congelacion de caja: cuenta ACTIVIDAD del ASR, no solo
     expect(hueco.motivo).toBe('')
   })
 
-  it('el SILENCIO no es congelacion (sin eventos de voz no hay nada que se congele)', () => {
+  it('el SILENCIO no es congelacion (sin eventos de voz no hay nada que se congele)', async () => {
     const traza = [
       { t: 0, text: 'hola', reason: 'publish' },
       { t: 9000, text: '', reason: 'clear' },
@@ -310,19 +341,38 @@ describe('replay events - congelacion de caja: cuenta ACTIVIDAD del ASR, no solo
     expect(medirCongelacionCaja(traza, []).maxGapMs).toBe(0)
   })
 
-  it('el texto NUEVO que la caja ignora se reporta con SU motivo', () => {
+  it('el texto NUEVO que la caja ignora se reporta con SU motivo', async () => {
     const traza = [
       { t: 0, text: 'hola', reason: 'publish' },
       { t: 2000, text: '', reason: 'clear' },
     ]
     const hueco = medirCongelacionCaja(traza, [{ t: 500, text: 'hola que tal' }])
-    expect(hueco.maxGapMs).toBe(2000)
+    // Se mide hasta el texto ignorado (500): despues de el no hubo voz, solo silencio.
+    expect(hueco.maxGapMs).toBe(500)
     expect(hueco.motivo).toBe('texto-nuevo-ignorado')
   })
 
-  it('la grabacion sintetica: la caja se queda con la frase vieja mientras el ASR insiste', () => {
+  it('un SILENCIO normal no marca boxStall aunque la caja tarde en cambiar (fixture)', async () => {
+    const report = join(tmpDir('replay-silencio-'), 'report.json')
+    const out = await replay(['--session', SILENCIO, '--mode', 'events', '--report', report])
+
+    const datos = JSON.parse(readFileSync(report, 'utf8'))
+    const caja = datos.observed.boxTrace
+    // La ventana entre cambios dura 4300 ms (el sr-gap del producto cierra en
+    // ultimaVoz + 3500), pero el ASR solo hablo 800 ms: el silencio no cuenta.
+    // Antes del arreglo el mismo caso medía los 4300 ms y marcaba.
+    expect(caja[1].t - caja[0].t).toBe(4300)
+    expect(datos.boxStall.maxGapMs).toBe(800)
+    expect(datos.boxStall.maxGapMs).toBeLessThan(datos.thresholds.boxStallMs)
+    const check = datos.checks.find((c: { name: string }) => c.name === 'boxStall')
+    expect(check.ok, check.detail).toBe(true)
+    expect(out.code, out.stdout + out.stderr).toBe(0) // observacion sin invariante roto
+    expect(datos.status).toBe('observed')
+  })
+
+  it('la grabacion sintetica: la caja se queda con la frase vieja mientras el ASR insiste', async () => {
     const report = join(tmpDir('replay-repetida-'), 'report.json')
-    const out = replay(['--session', REPETIDA, '--mode', 'events', '--box-stall-ms', '500', '--report', report])
+    const out = await replay(['--session', REPETIDA, '--mode', 'events', '--box-stall-ms', '500', '--report', report])
 
     const datos = JSON.parse(readFileSync(report, 'utf8'))
     expect(datos.boxStall.motivo, 'la caja no cambio y el ASR si hablo').toBe('asr-repetido-sin-cambio')
@@ -336,10 +386,10 @@ describe('replay events - congelacion de caja: cuenta ACTIVIDAD del ASR, no solo
 // MODO `vectors`: se re-ejecuta el RESOLUTOR real sobre la firma grabada y el estado
 // PREVIO reconstruido de `turns.ndjson`. El `speaker` de la fuente es el ESPERADO: si se
 // usara como entrada, invertirlo cambiaria la etiqueta OBSERVADA (el test lo falsifica).
-describe('replay vectors - hablantes con el resolutor real', () => {
-  it('dos voces sinteticas: cada commit se etiqueta como declara la fuente (exit 0)', () => {
+describe('replay vectors - hablantes con el resolutor real', async () => {
+  it('dos voces sinteticas: cada commit se etiqueta como declara la fuente (exit 0)', async () => {
     const report = join(tmpDir('replay-vec-'), 'report.json')
-    const out = replay(['--session', VECTORS, '--mode', 'vectors', '--report', report])
+    const out = await replay(['--session', VECTORS, '--mode', 'vectors', '--report', report])
 
     expect(out.stderr, out.stderr).not.toMatch(/error inesperado/)
     expect(out.code, out.stdout + out.stderr).toBe(0)
@@ -357,13 +407,13 @@ describe('replay vectors - hablantes con el resolutor real', () => {
     expect(datos.checks.find((check: { name: string }) => check.name === 'speakers').ok).toBe(true)
   })
 
-  it('el vector cambiado a proposito se DETECTA como mismatch (no se tapa la diferencia)', () => {
+  it('el vector cambiado a proposito se DETECTA como mismatch (no se tapa la diferencia)', async () => {
     const dir = copiaVectors('replay-vec-mism-', (rows) => {
       const commits = commitsDe(rows)
       commits[1].signature = [...(commits[0].signature as number[])]
     })
     const report = join(tmpDir('replay-vec-mism-out-'), 'report.json')
-    const out = replay(['--session', dir, '--mode', 'vectors', '--report', report])
+    const out = await replay(['--session', dir, '--mode', 'vectors', '--report', report])
 
     const datos = JSON.parse(readFileSync(report, 'utf8'))
     expect(out.code, out.stdout + out.stderr).toBe(1)
@@ -375,7 +425,7 @@ describe('replay vectors - hablantes con el resolutor real', () => {
     expect(datos.checks.find((check: { name: string }) => check.name === 'speakers').ok).toBe(false)
   })
 
-  it('sin firma ni duracion NO es concluyente (exit 2): nunca un OK sin evidencia', () => {
+  it('sin firma ni duracion NO es concluyente (exit 2): nunca un OK sin evidencia', async () => {
     const dir = copiaVectors('replay-vec-sinev-', (rows) => {
       for (const commit of commitsDe(rows)) {
         commit.signature = null
@@ -384,7 +434,7 @@ describe('replay vectors - hablantes con el resolutor real', () => {
       }
     })
     const report = join(tmpDir('replay-vec-sinev-out-'), 'report.json')
-    const out = replay(['--session', dir, '--mode', 'vectors', '--report', report])
+    const out = await replay(['--session', dir, '--mode', 'vectors', '--report', report])
 
     const datos = JSON.parse(readFileSync(report, 'utf8'))
     expect(out.code, out.stdout + out.stderr).toBe(2)
@@ -396,12 +446,12 @@ describe('replay vectors - hablantes con el resolutor real', () => {
     expect(datos.checks.find((check: { name: string }) => check.name === 'speakers').ok).toBe(false)
   })
 
-  it('un turno sin evidencia deja el modo en PARTIAL (exit 2): nunca se vende como validacion completa', () => {
+  it('un turno sin evidencia deja el modo en PARTIAL (exit 2): nunca se vende como validacion completa', async () => {
     const dir = copiaVectors('replay-vec-parcial-', (rows) => {
       commitsDe(rows)[0].signature = null
     })
     const report = join(tmpDir('replay-vec-parcial-out-'), 'report.json')
-    const out = replay(['--session', dir, '--mode', 'vectors', '--report', report])
+    const out = await replay(['--session', dir, '--mode', 'vectors', '--report', report])
 
     const datos = JSON.parse(readFileSync(report, 'utf8'))
     expect(datos.speakers.covered).toBe(true)
@@ -418,9 +468,9 @@ describe('replay vectors - hablantes con el resolutor real', () => {
     expect(out.code, out.stdout + out.stderr).toBe(2)
   })
 
-  it('el `speaker` de la FUENTE no es input: invertirlo cambia el VEREDICTO, no la etiqueta observada', () => {
+  it('el `speaker` de la FUENTE no es input: invertirlo cambia el VEREDICTO, no la etiqueta observada', async () => {
     const referencia = join(tmpDir('replay-vec-ref-'), 'report.json')
-    replay(['--session', VECTORS, '--mode', 'vectors', '--report', referencia])
+    await replay(['--session', VECTORS, '--mode', 'vectors', '--report', referencia])
     const observadoSinTocar = JSON.parse(readFileSync(referencia, 'utf8')).speakers.detalle.map(
       (turn: { observed: string }) => turn.observed,
     )
@@ -431,7 +481,7 @@ describe('replay vectors - hablantes con el resolutor real', () => {
       commits[1].speaker = 'Luis'
     })
     const report = join(tmpDir('replay-vec-guard-out-'), 'report.json')
-    const out = replay(['--session', dir, '--mode', 'vectors', '--report', report])
+    const out = await replay(['--session', dir, '--mode', 'vectors', '--report', report])
     const datos = JSON.parse(readFileSync(report, 'utf8'))
 
     // Si el runner leyera el `speaker` fuente, la etiqueta observada habria cambiado.
@@ -441,8 +491,8 @@ describe('replay vectors - hablantes con el resolutor real', () => {
   })
 })
 
-describe('replay events - sesion invalida, sin fidelidad o sin respuesta', () => {
-  it('sesion SIN eventos', () => {
+describe('replay events - sesion invalida, sin fidelidad o sin respuesta', async () => {
+  it('sesion SIN eventos', async () => {
     const dir = tmpDir('replay-vacia-')
     cpSync(FIXTURE, dir, { recursive: true })
     writeFileSync(join(dir, 'events.ndjson'), '')
@@ -450,39 +500,39 @@ describe('replay events - sesion invalida, sin fidelidad o sin respuesta', () =>
     manifest.events = 0
     writeFileSync(join(dir, 'manifest.json'), JSON.stringify(manifest, null, 2))
 
-    const out = replay(['--session', dir, '--mode', 'events', '--expected', join(FIXTURE, 'expected.json')])
+    const out = await replay(['--session', dir, '--mode', 'events', '--expected', join(FIXTURE, 'expected.json')])
 
     expect(out.code, out.stdout + out.stderr).toBe(2)
     expect(out.stderr).toContain('EVENTOS')
   })
 
-  it('sesion INCOMPLETA (el manifiesto declara mas eventos de los que hay)', () => {
+  it('sesion INCOMPLETA (el manifiesto declara mas eventos de los que hay)', async () => {
     const dir = tmpDir('replay-incompleta-')
     cpSync(FIXTURE, dir, { recursive: true })
     const manifest = JSON.parse(readFileSync(join(dir, 'manifest.json'), 'utf8'))
     manifest.events = 99
     writeFileSync(join(dir, 'manifest.json'), JSON.stringify(manifest, null, 2))
 
-    const out = replay(['--session', dir, '--mode', 'events', '--expected', join(FIXTURE, 'expected.json')])
+    const out = await replay(['--session', dir, '--mode', 'events', '--expected', join(FIXTURE, 'expected.json')])
 
     expect(out.code, out.stdout + out.stderr).toBe(2)
     expect(out.stderr).toContain('INCOMPLETA')
   })
 
-  it('sesion SIN manifest: no se adivina nada', () => {
+  it('sesion SIN manifest: no se adivina nada', async () => {
     const dir = tmpDir('replay-sin-manifest-')
-    const out = replay(['--session', dir, '--mode', 'events', '--expected', join(FIXTURE, 'expected.json')])
+    const out = await replay(['--session', dir, '--mode', 'events', '--expected', join(FIXTURE, 'expected.json')])
     expect(out.code).toBe(2)
     expect(out.stderr).toContain('manifest.json')
   })
 
-  it('sin --session no adivina la carpeta', () => {
-    const out = replay(['--mode', 'events', '--expected', join(FIXTURE, 'expected.json')])
+  it('sin --session no adivina la carpeta', async () => {
+    const out = await replay(['--mode', 'events', '--expected', join(FIXTURE, 'expected.json')])
     expect(out.code).toBe(2)
     expect(out.stderr).toContain('falta --session')
   })
 
-  it('un expected APROBADO sobre una sesion SIN fidelidad no valida (exit 2)', () => {
+  it('un expected APROBADO sobre una sesion SIN fidelidad no valida (exit 2)', async () => {
     const dir = tmpDir('replay-sin-fidelidad-')
     cpSync(FIXTURE, dir, { recursive: true })
     const manifest = JSON.parse(readFileSync(join(dir, 'manifest.json'), 'utf8'))
@@ -490,25 +540,25 @@ describe('replay events - sesion invalida, sin fidelidad o sin respuesta', () =>
     manifest.configHash = 'unknown'
     writeFileSync(join(dir, 'manifest.json'), JSON.stringify(manifest, null, 2))
 
-    const out = replay(['--session', dir, '--mode', 'events', '--expected', join(FIXTURE, 'expected.json')])
+    const out = await replay(['--session', dir, '--mode', 'events', '--expected', join(FIXTURE, 'expected.json')])
 
     expect(out.code, out.stdout + out.stderr).toBe(2)
     expect(out.stderr).toContain('fidelidad')
   })
 
-  it('--timeout corto mata el replay con exit 2 y mensaje claro (no se cuelga)', () => {
-    const out = replay(['--session', FIXTURE, '--mode', 'events', '--timeout', '1'])
+  it('--timeout corto mata el replay con exit 2 y mensaje claro (no se cuelga)', async () => {
+    const out = await replay(['--session', FIXTURE, '--mode', 'events', '--timeout', '1'])
 
     expect(out.code, out.stdout + out.stderr).toBe(2)
     expect(out.stderr).toContain('tope de 1 ms')
   })
 })
 
-describe('replay events - marcas inferidas: el turno cierra donde debe', () => {
-  it('sin marcas inferidas la segunda locucion NO se cierra y el diff con la FUENTE lo delata', () => {
+describe('replay events - marcas inferidas: el turno cierra donde debe', async () => {
+  it('sin marcas inferidas la segunda locucion NO se cierra y el diff con la FUENTE lo delata', async () => {
     const dir = tmpDir('replay-nomarks-')
     const report = join(dir, 'report.json')
-    const out = replay(['--session', FIXTURE, '--mode', 'events', '--no-infer-marks', '--report', report])
+    const out = await replay(['--session', FIXTURE, '--mode', 'events', '--no-infer-marks', '--report', report])
 
     const datos = JSON.parse(readFileSync(report, 'utf8'))
     expect(datos.marks.inferred, 'sin inferencia no hay marcas').toBe(0)
@@ -520,39 +570,52 @@ describe('replay events - marcas inferidas: el turno cierra donde debe', () => {
   })
 })
 
-describe.runIf(existsSync(REAL_SESSION))('replay events - grabacion real d4c1c8f3', () => {  it('observa la sesion real y reporta DUPLICACION de caja, no un falso boxLost', () => {
+describe.runIf(existsSync(REAL_SESSION))('replay events - grabacion real d4c1c8f3', async () => {  it('la caja real no duplica bloques, no pierde filas y no se congela (defecto cerrado)', async () => {
     const report = join(tmpDir('replay-real-'), 'report.json')
-    const out = replay(['--session', REAL_SESSION, '--mode', 'events', '--report', report])
+    const out = await replay(['--session', REAL_SESSION, '--mode', 'events', '--report', report])
 
     expect(out.stderr, out.stderr).not.toMatch(/error inesperado/)
     const datos = JSON.parse(readFileSync(report, 'utf8'))
     expect(datos.observed.rows.length, 'la sesion real produce filas').toBeGreaterThan(0)
     expect(datos.applied.speech).toBeGreaterThan(0)
-    // El hallazgo: la caja se DUPLICA en algun commit; ninguna fila perdio su bloque.
-    expect(datos.classification.duplicadas).toBeGreaterThan(0)
-    expect(datos.classification.perdidas).toBe(0)
-    const boxLost = datos.checks.find((check: { name: string }) => check.name === 'boxLost')
-    const boxDuplicated = datos.checks.find((check: { name: string }) => check.name === 'boxDuplicated')
-    expect(boxLost.ok).toBe(true)
-    expect(boxDuplicated.ok).toBe(false)
-    // Modo observacion: no valida golden, pero el invariante roto da exit 1.
+    // Los tres defectos medidos en esta grabacion quedan CERRADOS: la caja no repite bloques
+    // (ni la misma locucion ni la mezcla de dos hipotesis del ASR), no pierde el bloque que
+    // mostraba y no se queda con la frase vieja mientras el ASR dicta la siguiente.
+    expect(datos.classification.duplicadas, 'ninguna caja duplicada').toBe(0)
+    expect(datos.classification.perdidas, 'ninguna fila pierde el bloque de la caja').toBe(0)
+    const estados = new Map(
+      (datos.checks as Array<{ name: string; ok: boolean }>).map((check) => [check.name, check.ok]),
+    )
+    for (const nombre of ['sourceRows', 'noBoxDuplicatedBlock', 'boxDuplicated', 'boxLost', 'boxStall']) {
+      expect(estados.get(nombre), `${nombre} tiene que estar OK`).toBe(true)
+    }
+    // REGRESIONES de las filas que ya estaban bien (no se puede perder texto por elegir
+    // hipotesis): #2 conserva "en", #14 conserva "este", #16 conserva "acabo de abrir el ref".
+    const filas = (datos.observed.rows as Array<{ text: string }>).map((row) => row.text)
+    expect(filas[2]).toContain('en la transcripción')
+    expect(filas[14]).toContain('me encanta este')
+    expect(filas[16]).toContain('acabo de abrir el refri')
+    // #11: la FILA lleva la correccion del ultimo interino ("al 100%"), no la mas larga.
+    expect(filas[11]).toBe('no lo voy a preparar al 100%')
+    expect(datos.boxStall.maxGapMs, 'sin bloqueo de preview').toBeLessThan(datos.thresholds.boxStallMs)
+    // Modo observacion: no valida golden; sin invariante roto, exit 0.
     expect(datos.status).toBe('observed')
-    expect(out.code).toBe(1)
+    expect(out.code, out.stdout + out.stderr).toBe(0)
   })
 
-  it('el borrador de la sesion real NO nace aprobado (no es validacion)', () => {
+  it('el borrador de la sesion real NO nace aprobado (no es validacion)', async () => {
     const dir = tmpDir('replay-real-draft-')
     const draft = join(dir, 'draft.json')
-    const out = replay(['--session', REAL_SESSION, '--mode', 'events', '--draft-expected', draft])
+    const out = await replay(['--session', REAL_SESSION, '--mode', 'events', '--draft-expected', draft])
 
     expect(out.code, out.stdout + out.stderr).toBe(0)
     const datos = JSON.parse(readFileSync(draft, 'utf8'))
     expect(datos.approved).toBe(false)
   })
 
-  it('los HABLANTES de la sesion real quedan en PARTIAL: no es una validacion completa', () => {
+  it('los HABLANTES de la sesion real quedan en PARTIAL: no es una validacion completa', async () => {
     const report = join(tmpDir('replay-real-vec-'), 'report.json')
-    const out = replay(['--session', REAL_SESSION, '--mode', 'vectors', '--report', report])
+    const out = await replay(['--session', REAL_SESSION, '--mode', 'vectors', '--report', report])
 
     expect(out.stderr, out.stderr).not.toMatch(/error inesperado/)
     const datos = JSON.parse(readFileSync(report, 'utf8'))
@@ -568,8 +631,8 @@ describe.runIf(existsSync(REAL_SESSION))('replay events - grabacion real d4c1c8f
   })
 })
 
-describe.skipIf(existsSync(REAL_SESSION))('replay events - grabacion real d4c1c8f3 (SIN grabacion local)', () => {
-  it('SKIP DECLARADO: no hay grabacion local de d4c1c8f3 en %TEMP%/flu-recordings', () => {
+describe.skipIf(existsSync(REAL_SESSION))('replay events - grabacion real d4c1c8f3 (SIN grabacion local)', async () => {
+  it('SKIP DECLARADO: no hay grabacion local de d4c1c8f3 en %TEMP%/flu-recordings', async () => {
     // No se inventa el resultado ni se commitea la transcripcion del dueno. Para correrlo:
     //   1) graba la sesion (el sink la deja en %TEMP%/flu-recordings/<sessionId>)
     //   2) `npm run replay -- --session <carpeta> --mode events --draft-expected <archivo>`

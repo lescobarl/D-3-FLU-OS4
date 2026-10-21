@@ -170,7 +170,8 @@ function buildHarness(app, clock) {
  *      (habia algo nuevo que nunca aparecio), o
  *  (b) hubo `minEventosActivos` eventos de voz o mas (el ASR repitio/murmuro y la caja
  *      se quedo igual: una repeticion con la caja congelada TAMBIEN es congelacion).
- * El silencio (ningun evento) no cuenta.
+ * El silencio no cuenta en ningun sentido: una ventana sin eventos no es congelacion y el
+ * SILENCIO FINAL de una ventana CON actividad tampoco (se mide hasta la ultima voz).
  *
  * @param {Array<{ t: number, text: string }>} boxTrace
  * @param {Array<{ t: number, text: string }>} speechEvents
@@ -191,7 +192,12 @@ export function medirCongelacionCaja(boxTrace = [], speechEvents = [], { minEven
     const textoNuevo = dentro.some((entry) => String(entry.text || '').trim().toLowerCase() !== mostrado)
     const activoRepetido = dentro.length >= minimo
     if (!textoNuevo && !activoRepetido) continue
-    const hueco = hasta - desde
+    // El SILENCIO FINAL de la ventana NO cuenta: se mide hasta la ULTIMA actividad de voz.
+    // Una caja de un turno abierto no puede cambiar cuando nadie habla, y esa espera (en el
+    // producto la acota `srGapCommitMs`) no es una caja congelada. Antes la ventana llegaba
+    // hasta el siguiente cambio y el silencio entraba en la medida (d4c1c8f3: 18,6 s).
+    const ultimaActividad = Number(dentro[dentro.length - 1].t)
+    const hueco = Math.min(hasta, ultimaActividad) - desde
     if (hueco > stall.maxGapMs) {
       stall = {
         maxGapMs: hueco,
@@ -241,7 +247,11 @@ export async function runEventsSession({ session, clock, inferMarks = true, srGa
   globalThis.__replayTimerError = (error) => errors.push(String(error?.message || error))
 
   const speech = session.events.filter((row) => String(row?.event || '') === SPEECH)
-  const gapMs = Number(srGapCommitMs) > 0 ? Number(srGapCommitMs) : 0
+  // Umbral del silencio: el MISMO que usa el producto y UNA sola lectura (config).
+  const gapMs =
+    Number(srGapCommitMs) > 0
+      ? Number(srGapCommitMs)
+      : Number(transcriptPause.getTranscriptPauseCfg?.()?.srGapCommitMs) || 0
   let previousSpeechAt = null
 
   const HANDLED = new Set([SPEECH, SR_GAP, RECOGNITION_END, RECOGNITION_ERROR, REBUILD])
@@ -254,24 +264,28 @@ export async function runEventsSession({ session, clock, inferMarks = true, srGa
       continue
     }
     const t = Number(row?.t)
-    if (Number.isFinite(t)) clock.advanceTo(t)
     const data = row?.data || {}
     try {
-      if (kind === SPEECH) {
-        // SILENCIO grabado como hueco: si entre dos eventos de voz pasa `srGapCommitMs`, el
-        // producto habria disparado su cierre por silencio. Se infiere ANTES de reinyectar
-        // el evento (el silencio ocurrio antes).
-        const hueco = previousSpeechAt != null && Number.isFinite(t) ? t - previousSpeechAt : 0
+      // SILENCIO grabado como hueco: si entre dos eventos de voz pasa `srGapCommitMs`, el
+      // producto habria disparado su cierre por silencio. Se infiere ANTES de mover el
+      // reloj al evento: el cierre del producto ocurre a `ultimaVoz + srGapCommitMs`, que
+      // es ANTERIOR a este evento (con el reloj ya en `t`, el silencio no corria y la caja
+      // de un turno abierto parecia congelada 18,6 s; medido en d4c1c8f3).
+      if (kind === SPEECH && inferMarks && previousSpeechAt != null && Number.isFinite(t)) {
+        const hueco = t - previousSpeechAt
         const silencio = gapMs > 0 ? hueco >= gapMs : transcriptPause.srGapSilenceReached(hueco)
-        if (inferMarks && hueco > 0 && silencio) {
+        if (hueco > 0 && silencio) {
+          if (gapMs > 0) clock.advanceTo(previousSpeechAt + gapMs)
           runtime.pushSrGapEvent({ sinceLastResultMs: hueco })
           applied.srGap += 1
           marks.inferred += 1
           marks.srGapInferred += 1
           runtime.drainAll()
           clock.runDue()
-          clock.advanceTo(t)
         }
+      }
+      if (Number.isFinite(t)) clock.advanceTo(t)
+      if (kind === SPEECH) {
         const burst = buildMicBurstEvent(
           String(data?.kind || '') === 'final' ? { final: data?.text } : { interim: data?.text },
         )

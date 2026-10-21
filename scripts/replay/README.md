@@ -67,7 +67,9 @@ los **infiere de los timestamps** con la regla declarada (y lo cuenta en
 `report.marks`):
 
 1. `sr-gap` cuando entre dos eventos de voz pasa el `srGapCommitMs` de la config
-   (`srGapSilenceReached`, dueño único del umbral);
+   (`srGapSilenceReached`, dueño único del umbral). El cierre se **estampa en el instante
+   del producto** (`última voz + srGapCommitMs`, que es cuando dispararía su temporizador),
+   no en el instante del evento siguiente: con el reloj parado no corría el silencio;
 2. **un** `recognition-end` al terminar la grabación (la sesión acabó).
 
 Si la grabación SÍ trae marcas (`listen|sr-gap`, `listen|recognition-end`,
@@ -95,7 +97,10 @@ instante de cada commit) se mantienen por compatibilidad. La congelación se mid
 2. hubo **≥ 2 eventos de voz** aunque el texto se repita (`minEventosActivos`): el ASR
    avanzó y la caja no se movió → motivo `asr-repetido-sin-cambio`.
 
-El **silencio** (ningún evento de voz en la ventana) **no** es congelación.
+El **silencio** no cuenta en ningún sentido: una ventana sin eventos no es congelación y la
+ventana se mide **hasta la última voz** (el silencio final no suma). Una caja de un turno
+abierto no puede cambiar si nadie habla, y esa espera (en el producto la acota
+`srGapCommitMs`) no es una caja congelada.
 
 ## `expected.json`
 
