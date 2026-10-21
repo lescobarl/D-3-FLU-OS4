@@ -168,6 +168,36 @@ export function mismaPalabraClave(a, b) {
 }
 
 /**
+ * Comparacion de palabras de la CAJA: misma clave sin distinguir mayusculas (el ASR
+ * reescribe "vamos" como "Vamos" en la misma frase).
+ * @param {string} a
+ * @param {string} b
+ * @returns {boolean}
+ */
+function mismaPalabraDeLaCaja(a = '', b = '') {
+  return mismaPalabraClave(claveDePalabra(a).toLowerCase(), claveDePalabra(b).toLowerCase())
+}
+
+/**
+ * La palabra nueva es la MISMA palabra CRECIENDO ("du" -> "dupli" -> "duplica")?
+ *
+ * Exige prefijo ESTRICTO de >= 2 letras: el doble legitimo ("no no") NO crece (claves
+ * iguales) y una palabra distinta que empieza igual ("la" -> "largo") tampoco cuenta
+ * como la misma si no comparte la clave completa del arranque.
+ *
+ * @param {string} mostrada Palabra que la caja ya muestra.
+ * @param {string} nueva Primera palabra de la emision.
+ * @returns {boolean}
+ */
+export function palabraQueCrece(mostrada = '', nueva = '') {
+  const a = claveDePalabra(mostrada).toLowerCase()
+  const b = claveDePalabra(nueva).toLowerCase()
+  if (!a || !b || a === b) return false
+  if (b.length <= a.length) return false
+  return b.startsWith(a)
+}
+
+/**
  * Cola NUEVA de una emision: alinea el FINAL de lo mostrado con un tramo de la emision
  * nueva (el ASR reentrega la cola y sigue) y devuelve SOLO lo que viene DESPUES de ese
  * tramo, con el texto CRUDO de la emision (mas la letra que completa la ultima palabra
@@ -183,7 +213,16 @@ export function colaNuevaTrasSolape(mostrado, nuevo) {
   const VENTANA = 160
   const crudas = String(mostrado || '').trim().split(/\s+/).filter(Boolean)
   const crudasNuevas = String(nuevo || '').trim().split(/\s+/).filter(Boolean)
-  if (!crudas.length || crudasNuevas.length < 2) return ''
+  if (!crudas.length || !crudasNuevas.length) return ''
+  // (0) COMPLETAR LA ULTIMA PALABRA, no pegarla (medido 2026-10-21: la caja mostraba
+  // "du dupli duplica"). El ASR hace CRECER la palabra que la caja ya tiene: se
+  // REEMPLAZA la ultima palabra por la forma completa y el resto de la emision se
+  // anade detras. Antes el caso de UNA sola palabra se descartaba arriba
+  // (`crudasNuevas.length < 2`) y la caja se quedaba con la parcial hasta el final.
+  if (palabraQueCrece(crudas[crudas.length - 1], crudasNuevas[0])) {
+    return crudas.slice(0, -1).concat(crudasNuevas).join(' ')
+  }
+  if (crudasNuevas.length < 2) return ''
   const mostrar = String(mostrado)
   const colaDeLoMostrado = crudas.slice(-VENTANA)
   const clavesMostradas = colaDeLoMostrado.map(claveDePalabra)
@@ -344,6 +383,87 @@ export function tailAfterCommittedLocution(capture = '', committed = '') {
 }
 
 /**
+ * Prefijo COMUN de palabras de dos textos (misma clave de palabra).
+ * @param {string[]} a
+ * @param {string[]} b
+ * @returns {number}
+ */
+function prefijoComunDePalabras(a = [], b = []) {
+  let comun = 0
+  while (comun < a.length && comun < b.length && mismaPalabraDeLaCaja(a[comun], b[comun])) comun += 1
+  return comun
+}
+
+/**
+ * La emision llega al FINAL de lo mostrado (su ultima palabra es la ultima o la penultima)?
+ *
+ * Es la condicion que permite una revision MAS CORTA sin perder el tramo: el ASR re-reconoce
+ * la locucion hasta su final (re-segmenta o corrige palabras), no se queda a mitad.
+ * @param {string[]} mostradas
+ * @param {string[]} nuevas
+ * @returns {boolean}
+ */
+function alcanzaElFinalDeLoMostrado(mostradas = [], nuevas = []) {
+  const ultima = nuevas[nuevas.length - 1]
+  if (!ultima) return false
+  return mostradas.slice(-2).some((palabra) => mismaPalabraDeLaCaja(palabra, ultima))
+}
+
+/**
+ * DUENO UNICO de "esta emision entra en la caja, y como" (2026-10-21).
+ *
+ * Tres desenlaces, una sola regla:
+ *  - `revision`: la emision DERIVA de lo mostrado (arranque estable de >=2 palabras, o el
+ *    prefijo corto cuando la caja apenas tiene unas pocas), NO es un trozo contiguo (el ASR
+ *    a medias no aporta y no puede recortar) y no baja del prefijo ya confirmado. Corrige o
+ *    completa el MISMO tramo, asi que REEMPLAZA: anadirla duplicaria el tramo corregido.
+ *    Si es mas corta, tiene que llegar al FINAL de lo mostrado (re-reconocio el tramo
+ *    entero); asi una frase nueva que solo comparte el arranque no se lleva la caja.
+ *  - `solape`: la emision reentrega la COLA (o un trozo interior) y sigue con habla nueva;
+ *    se anade la cola genuina (`colaNuevaTrasSolape`, que sigue siendo su dueno).
+ *  - `bloqueado`: texto ajeno o trozo puro; la caja no se toca ("jamas se sustituye" para
+ *    lo que no deriva de lo mostrado).
+ *
+ * @param {string} mostrado Lo que la caja muestra ahora.
+ * @param {string} nuevo Emision del ASR.
+ * @returns {{ aplica: boolean, destino: string, motivo: "revision"|"solape"|"bloqueado" }}
+ */
+export function resolverEmisionDeLaCaja(mostrado = '', nuevo = '') {
+  const mostradas = String(mostrado || '').trim().split(/\s+/).filter(Boolean)
+  const nuevas = String(nuevo || '').trim().split(/\s+/).filter(Boolean)
+  const bloqueado = { aplica: false, destino: String(mostrado || ''), motivo: 'bloqueado' }
+  if (!nuevas.length) return bloqueado
+  // La COLA GENUINA la decide `colaNuevaTrasSolape` (su dueno). Se calcula una vez.
+  const union = colaNuevaTrasSolape(mostrado, nuevo)
+  const unionAplica = Boolean(union) && union.length > String(mostrado || '').length
+  const solape = () => ({ aplica: true, destino: union, motivo: 'solape' })
+  if (mostradas.length) {
+    const comun = prefijoComunDePalabras(mostradas, nuevas)
+    // EXTENSION PURA: la caja YA es el arranque de la emision (ninguna palabra mostrada se
+    // corrige). Manda la UNION, que conserva la grafia de la caja (el replay midio que
+    // reemplazar perdia mayusculas: "Daniel" -> "daniel"); solo si no hay cola que anadir
+    // se sigue evaluando como revision.
+    if (comun === mostradas.length && unionAplica) return solape()
+    // ARRANQUE ESTABLE: >=2 palabras compartidas, o el prefijo corto ya existente cuando la
+    // caja apenas tiene unas pocas (glue del arranque del turno: "te las" -> "te lo escribe").
+    const arranqueEstable = comun >= 2 || (mostradas.length <= 4 && comun >= 1)
+    const noEsTrozo = !isFragmentOfLocution(nuevo, mostrado)
+    const noEncojeBajoLoConfirmado = nuevas.length >= comun
+    const crece = nuevas.length >= mostradas.length
+    if (
+      arranqueEstable &&
+      noEsTrozo &&
+      noEncojeBajoLoConfirmado &&
+      (crece || alcanzaElFinalDeLoMostrado(mostradas, nuevas))
+    ) {
+      return { aplica: true, destino: String(nuevo), motivo: 'revision' }
+    }
+  }
+  if (unionAplica) return solape()
+  return bloqueado
+}
+
+/**
  * CAJA de la frase viva ("ultima frase"): UNICO escritor de `publishedLiveRef` y de su
  * espejo visible. UNA sola regla (`publicarEnLaCaja`):
  *   - la caja vacia o una emision identica no cambian nada;
@@ -398,57 +518,14 @@ export function crearCajaDeLaFrase(deps = {}) {
     let destino = nuevo
     if (!cambioDeTurno) {
       if (mostrado) {
-        // Reentrega que crece: se conserva lo mostrado y se anade su cola genuina.
-        // `colaNuevaTrasSolape` es el dueno unico de "que parte de esta emision es
-        // nueva": un trozo PURO devuelve '' (se bloquea) y un trozo con COLA GENUINA
-        // devuelve la union. Antes un `isFragmentOfLocution` previo bloqueaba tambien
-        // el trozo CON habla nueva (medido: 39/54 compactos = 72% de la locucion
-        // completa, "y siguio" se perdia aunque el detector de revision solo cubria el
-        // 80% del trozo, no de la locucion entera). El detector de trozo sigue siendo
-        // el dueno en la recompuesta y en la sonda del preview.
-        const union = colaNuevaTrasSolape(mostrado, nuevo)
-        if (union && union.length > mostrado.length) destino = union
-        // RE-RECONOCIMIENTO DE LA MISMA LOCUCION: el ASR corrio un tramo que la caja ya
-        // habia pegado (interim caducado: "…la dia" + " hier" pegados -> el ASR dice
-        // "diarizacion"). Sin union, la revision se bloqueaba y la caja se congelaba en
-        // el tramo pegado hasta el volcado del cierre (medido en vivo 2026-10-20,
-        // sesion 97f86c73: el dueno dicto "…con la diarizacion…" y la ultima frase
-        // dejo de transcribirse en pantalla). La caja adopta la emision VIGENTE solo si
-        // DERIVA de lo mostrado (prefijo solido de palabras, umbral corto) y no encoge
-        // en palabras: una emision divergente o mas corta sigue bloqueada (la regla
-        // "jamas se sustituye" sigue valiendo para texto ajeno).
-        // CON EL TURNO ABIERTO LA FRASE VIVA JAMAS SE SUSTITUYE (mandato del dueno
-        // 2026-10-18): una emision mas LARGA pero que NO deriva de lo mostrado no se
-        // aplica. El ASR re-reconoce el arranque de la locucion y cambia letras
-        // (replay del log del dueno: 141 -> 146 chars, "s como se comporta..." ->
-        // "o se comporta...") y antes `destino = nuevo` reemplazaba la caja entera:
-        // ese es el "parece que pierde la transcripcion y luego la recupera" que
-        // reporto el dueno. El reemplazo solo es legitimo al cambiar de TURNO
-        // (arriba) o en el vaciado declarado (`vaciarLaCaja`).
-        else {
-          const mostradas = String(mostrado || '').trim().split(/\s+/).filter(Boolean)
-          const nuevas = nuevo.trim().split(/\s+/).filter(Boolean)
-          let comun = 0
-          while (
-            comun < mostradas.length &&
-            comun < nuevas.length &&
-            mismaPalabraClave(mostradas[comun], nuevas[comun])
-          ) comun += 1
-          const umbral = Math.min(3, mostradas.length)
-          // GLUE AL ARRANQUE DEL TURNO (medido 2026-10-20, sesion 97f86c73): la caja
-          // pego dos interims caducados ("te" + "las" = "te las", 6 chars) y el ASR
-          // re-reconocio el arranque ("te lo escribe..."). El prefijo compartido era de
-          // UNA palabra y el umbral de 2 bloqueaba la correccion: la ultima frase quedo
-          // congelada en 6 chars durante 47 s (sonda live: previo:6, len 13->189, todo
-          // no-conserva). Con lo mostrado CORTO (el turno apenas arranco: <= 4 palabras)
-          // una emision mas larga que comparte su arranque ES la correccion del ASR y se
-          // adopta. El mandato "jamas se sustituye" protege la transcripcion REAL (larga):
-          // con 5+ palabras mostradas sigue rigiendo el umbral de 3 palabras.
-          const adoptaArranqueCorto =
-            mostradas.length <= 4 && comun >= 1 && nuevas.length >= mostradas.length
-          if ((comun >= umbral || adoptaArranqueCorto) && nuevas.length >= mostradas.length) destino = nuevo
-          else return { aplicado: false, destino: mostrado, previo: mostrado.length }
-        }
+        // UN SOLO CRITERIO (2026-10-21): la emision solo entra si DERIVA de lo mostrado.
+        // El dueno unico de esa decision es `resolverEmisionDeLaCaja` (revision del mismo
+        // tramo o cola genuina); aqui solo se aplica. Se decide ANTES de la union porque
+        // una REVISION no se "anade": se reemplaza. Antes se anadia su cola y la caja
+        // duplicaba el tramo corregido ("...la diarizacion... transcripcion...").
+        const decision = resolverEmisionDeLaCaja(mostrado, nuevo)
+        if (decision.aplica) destino = decision.destino
+        else return { aplicado: false, destino: mostrado, previo: mostrado.length }
       }
     }
     turnoDelBoceto = turnoActivo ?? turnoDelBoceto
@@ -803,7 +880,15 @@ export function handleConversationStreamSync(
   // EXCEPCION UNICA: `locutionClosed` es texto CERRADO (un final ya confirmado que se
   // volco porque llego otra locucion). Reconciliarlo contra la linea viva metia en su
   // fila el interino de la locucion SIGUIENTE (medido 2026-10-19: filas 430 y 468).
-  if (!locutionClosed) capture = reconcileCommitText(capture, publishedLiveRef.current)
+  // CIERRE (2026-10-21): la caja NO se tira. Con la locucion ABIERTA se reconcilia como
+  // siempre (dueno: `reconcileCommitText`). Con `locutionClosed` (texto ya confirmado que
+  // se vuelca porque llego otra locucion) se adopta la caja SOLO si el final es PARTE de
+  // ella (`isFragmentOfLocution`): un final corto ("mientras") tras interinos largos deja
+  // de llevarse la fila, y un texto AJENO (la caja es de la locucion siguiente) no se
+  // inyecta en esta fila.
+  const cajaDelTurno = String(publishedLiveRef.current || '')
+  if (!locutionClosed) capture = reconcileCommitText(capture, cajaDelTurno)
+  else if (cajaDelTurno && isFragmentOfLocution(capture, cajaDelTurno)) capture = cajaDelTurno
   // P11.26 (medido 2026-10-14 18:32 en su corrida): las FILAS quedaban con el tartamudeo del ASR
   // dentro ("prueba pruebas pruebas", "trans transcripcion transcripcion", "vi viste viste viste"):
   // la caja pasa por el colapsador y la fila escribia el texto CRUDO. Una sola definicion de
