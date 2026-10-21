@@ -1,0 +1,31 @@
+{
+  "name": "limpia",
+  "descripcion": "Control NEGATIVO: una caja que crece bien, sin repeticiones ni huecos raros, y una fila que contiene el bloque. NINGUN check de caja puede encenderse (el detector no es decorativo).",
+  "options": { "boxStallMs": 3500, "dupBlockWords": 4 },
+  "observed": {
+    "rows": [{ "text": "hola que tal", "speaker": "Hablante 1" }],
+    "boxTrace": [
+      { "t": 100, "text": "hola", "reason": "publish" },
+      { "t": 400, "text": "hola que", "reason": "publish" },
+      { "t": 700, "text": "hola que tal", "reason": "publish" },
+      { "t": 1000, "text": "", "reason": "clear" }
+    ],
+    "commits": [{ "t": 1000, "rowIndex": 0, "box": "hola que tal" }],
+    "boxAtCommit": ["hola que tal"],
+    "boxStall": { "maxGapMs": 300, "from": "hola", "to": "hola que tal", "at": 100 }
+  },
+  "expected": {
+    "schemaVersion": 1,
+    "scenario": "limpia",
+    "mode": "events",
+    "approved": true,
+    "expect": {
+      "rowCount": 1,
+      "rows": [{ "text": "hola que tal", "speaker": "Hablante 1" }],
+      "box": ["hola que tal"],
+      "boxDuplicated": 0,
+      "noPrefixDuplication": true
+    }
+  },
+  "want": { "status": "ok", "failing": [], "passing": ["boxLost", "boxDuplicated", "boxStall", "noBoxPrefixDuplication", "noBoxDuplicatedBlock", "noPrefixDuplication"] }
+}

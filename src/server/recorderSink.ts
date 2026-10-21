@@ -23,7 +23,10 @@
 // ============================================================
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { appendFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
-import { join, resolve, sep } from 'node:path';
+import { createHash } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import { dirname, join, resolve, sep } from 'node:path';
 import { tmpdir } from 'node:os';
 import { sendJson, type MiddlewareHost } from './httpJson.ts';
 import { parseRequestUrl } from './requestUrl.ts';
@@ -67,6 +70,78 @@ const TURNS_FILE = 'turns.ndjson';
 const AUDIO_FILE = 'audio.pcm';
 const WAV_FILE = 'audio.wav';
 const MANIFEST_FILE = 'manifest.json';
+/**
+ * VERSION del esquema del manifiesto (la lee el runner de replay: sin ella NO se
+ * reinyecta nada). 1 = manifiestos antiguos (sin fidelidad); 2 = version actual.
+ */
+const MANIFEST_SCHEMA_VERSION = 2;
+/** Ficheros de los que sale `configHash` (la config efectiva del motor de voz). */
+const CONFIG_HASH_FILES = [
+    'src/voice/lib/fluConfig.js',
+    'src/voice/lib/speakerAssignDefaults.js',
+    'src/voice/lib/asr/asrDefaults.js',
+    'src/core/config/sharedConfig.ts',
+];
+
+/**
+ * Huella de la CONFIG con la que se grabo la sesion: sha1 del contenido de los
+ * ficheros de configuracion. Sin ella, dos sesiones con configs distintas parecen
+ * comparables.
+ * @param root raiz del proyecto
+ * @returns cadena `sha1:<hex>` o `unknown`
+ */
+function configHashOf(root: string): string {
+    try {
+        const hash = createHash('sha1');
+        for (const rel of CONFIG_HASH_FILES) {
+            const file = join(root, rel);
+            if (existsSync(file)) hash.update(readFileSync(file));
+        }
+        return `sha1:${hash.digest('hex').slice(0, 12)}`;
+    } catch (error) {
+        logCaughtError('recorderSink.configHash', error);
+        return 'unknown';
+    }
+}
+
+/**
+ * Commit de la app con la que se grabo (best-effort: el sink es SOLO DEV).
+ * @param root raiz del proyecto
+ * @returns hash corto o `unknown`
+ */
+function appCommitOf(root: string): string {
+    try {
+        return execFileSync('git', ['rev-parse', '--short', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim() || 'unknown';
+    } catch (error) {
+        logCaughtError('recorderSink.appCommit', error);
+        return 'unknown';
+    }
+}
+
+/**
+ * Modelos de embedding que aparecen en las instantaneas de turno (`turns.ndjson`).
+ * Es DATO de la grabacion (no una lista a mano).
+ * @param turnsFile ruta del NDJSON de turnos
+ * @returns ids unicos ordenados
+ */
+function modelIdsOf(turnsFile: string): string[] {
+    if (!existsSync(turnsFile)) return [];
+    const ids = new Set<string>();
+    for (const line of readFileSync(turnsFile, 'utf8').split('\n')) {
+        if (!line.trim()) continue;
+        try {
+            const row = JSON.parse(line) as { model?: unknown };
+            const model = typeof row?.model === 'string' ? row.model.trim() : '';
+            if (model) ids.add(model);
+        } catch (error) {
+            logCaughtError('recorderSink.modelIds.parse', error);
+        }
+    }
+    return [...ids].sort();
+}
+
+/** Raiz del proyecto (para `appCommit` y `configHash`). */
+const PROJECT_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 /** Tope de audio por sesión en el server: 2 GB ≈ 6 h de PCM 48 kHz mono 16-bit.
  * El cliente ya no corta el volcado en `maxMinutes` (memoria acotada, disco completo). */
 const MAX_AUDIO_BYTES = 2 * 1024 * 1024 * 1024;
@@ -259,7 +334,18 @@ export function createRecorderStore(rootDir: string): RecorderStore {
                 turns: countLines(join(dir, TURNS_FILE)),
                 audioBytes: pcm.length,
             };
-            writeFileSync(join(dir, MANIFEST_FILE), JSON.stringify({ ...result, meta, finalizedAt: new Date().toISOString() }, null, 2));
+            const manifest = {
+                schemaVersion: MANIFEST_SCHEMA_VERSION,
+                ...result,
+                meta,
+                appCommit: appCommitOf(PROJECT_ROOT),
+                configHash: configHashOf(PROJECT_ROOT),
+                modelIds: modelIdsOf(join(dir, TURNS_FILE)),
+                language: typeof meta.language === 'string' ? meta.language : '',
+                sampleRate,
+                finalizedAt: new Date().toISOString(),
+            };
+            writeFileSync(join(dir, MANIFEST_FILE), JSON.stringify(manifest, null, 2));
             return result;
         },
     };

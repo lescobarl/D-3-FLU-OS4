@@ -1,0 +1,7 @@
+{
+  "name": "variante",
+  "descripcion": "El MISMO tramo con otra grafia (el ASR cambio palabras del final): cuenta como variante, no como falta + sobra. El reporte conserva los DOS textos originales.",
+  "source": [{ "text": "puso Cloud Cloud" }, { "text": "está mal este está con el hablante uno" }],
+  "observed": [{ "text": "puso Cloud" }, { "text": "está mal este está con el hablante 1" }],
+  "want": { "sourceRows": 2, "sourceDuplicates": 0, "missingUnique": 0, "extraUnique": 0, "textVariants": 2 }
+}

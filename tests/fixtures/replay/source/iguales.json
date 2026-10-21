@@ -1,0 +1,7 @@
+{
+  "name": "iguales",
+  "descripcion": "Fuente y replay coinciden (mismo texto normalizado): no falta, no sobra, no hay variantes.",
+  "source": [{ "text": "hola que tal, ¿cómo estás?" }, { "text": "vamos a comer" }],
+  "observed": [{ "text": "hola que tal como estas" }, { "text": "vamos a comer" }],
+  "want": { "sourceRows": 2, "sourceDuplicates": 0, "missingUnique": 0, "extraUnique": 0, "textVariants": 0 }
+}

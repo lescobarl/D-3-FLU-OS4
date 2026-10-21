@@ -1,0 +1,28 @@
+{
+  "name": "prefijo-creciente",
+  "descripcion": "La caja muestra la misma palabra CRECIENDO (\"du\" -> \"du dupli duplica\"): el check de prefijo creciente tiene que encenderse y la caja cuenta como DUPLICADA, no como perdida.",
+  "options": { "boxStallMs": 3500, "dupBlockWords": 4 },
+  "observed": {
+    "rows": [{ "text": "du dupli duplica", "speaker": "Hablante 1" }],
+    "boxTrace": [
+      { "t": 100, "text": "du", "reason": "publish" },
+      { "t": 200, "text": "du dupli duplica", "reason": "publish" }
+    ],
+    "commits": [{ "t": 200, "rowIndex": 0, "box": "du dupli duplica" }],
+    "boxAtCommit": ["du dupli duplica"],
+    "boxStall": { "maxGapMs": 100, "from": "du", "to": "du dupli duplica", "at": 100 }
+  },
+  "expected": {
+    "schemaVersion": 1,
+    "scenario": "prefijo-creciente",
+    "mode": "events",
+    "approved": true,
+    "expect": {
+      "rowCount": 1,
+      "rows": [{ "text": "du dupli duplica", "speaker": "Hablante 1" }],
+      "box": ["du dupli duplica"],
+      "boxDuplicated": 0
+    }
+  },
+  "want": { "status": "mismatch", "failing": ["noBoxPrefixDuplication", "boxDuplicated"], "passing": ["boxLost", "boxStall", "noBoxDuplicatedBlock"] }
+}

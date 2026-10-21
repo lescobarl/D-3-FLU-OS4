@@ -1,0 +1,15 @@
+{
+  "name": "extra-justificado",
+  "_nota": "La fuente REPITE la locucion 'puso Cloud Cloud' y el replay la emitio dos veces con otra grafia del ASR: el sobrante es una repeticion, no una invencion.",
+  "source": [{ "text": "puso Cloud Cloud" }, { "text": "puso Cloud Cloud" }, { "text": "hola que tal" }],
+  "observed": [{ "text": "puso Cloud" }, { "text": "puso claud Cloud" }, { "text": "hola que tal" }],
+  "want": {
+    "sourceRows": 3,
+    "sourceDuplicates": 1,
+    "missingUnique": 0,
+    "extraAceptadas": 1,
+    "extraUnique": 0,
+    "textVariants": 1,
+    "checkOk": true
+  }
+}

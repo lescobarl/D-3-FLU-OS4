@@ -1,0 +1,6 @@
+{"seq":1,"t":1000,"iso":"1970-01-01T00:00:01.000Z","category":"listen","event":"chrome-raw","data":{"t":1000,"stage":"chrome-raw","seq":1,"kind":"interim","text":"hola que tal"}}
+{"seq":2,"t":1400,"iso":"1970-01-01T00:00:01.400Z","category":"listen","event":"chrome-raw","data":{"t":1400,"stage":"chrome-raw","seq":2,"kind":"interim","text":"hola que tal"}}
+{"seq":3,"t":1800,"iso":"1970-01-01T00:00:01.800Z","category":"listen","event":"chrome-raw","data":{"t":1800,"stage":"chrome-raw","seq":3,"kind":"interim","text":"hola que tal"}}
+{"seq":4,"t":2200,"iso":"1970-01-01T00:00:02.200Z","category":"listen","event":"chrome-raw","data":{"t":2200,"stage":"chrome-raw","seq":4,"kind":"final","text":"hola que tal"}}
+{"seq":5,"t":7000,"iso":"1970-01-01T00:00:07.000Z","category":"listen","event":"chrome-raw","data":{"t":7000,"stage":"chrome-raw","seq":5,"kind":"interim","text":"otra cosa"}}
+{"seq":6,"t":7400,"iso":"1970-01-01T00:00:07.400Z","category":"listen","event":"chrome-raw","data":{"t":7400,"stage":"chrome-raw","seq":6,"kind":"final","text":"otra cosa"}}

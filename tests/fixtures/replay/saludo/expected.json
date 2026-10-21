@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "scenario": "saludo",
+  "mode": "events",
+  "approved": true,
+  "approvedNote": "Fixture escrito a mano desde la especificacion: DOS locuciones separadas por un silencio mayor que srGapCommitMs. La primera la cierra el sr-gap inferido de los timestamps; la segunda, el recognition-end del final de la grabacion. Cada una es UNA fila y la caja de cada commit muestra su propia locucion.",
+  "expect": {
+    "rows": [
+      { "text": "hola que tal", "speaker": "Hablante 1" },
+      { "text": "ahora otra cosa", "speaker": "Hablante 1" }
+    ],
+    "rowCount": 2,
+    "noPrefixDuplication": true,
+    "noLostLongBlock": true,
+    "boxDuplicated": 0,
+    "box": ["hola que tal", "ahora otra cosa"]
+  }
+}

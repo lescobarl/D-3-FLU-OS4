@@ -1,0 +1,31 @@
+{
+  "name": "bloque-duplicado",
+  "descripcion": "La caja repite un tramo largo (\"mientras vamos a preparar el menjurje en mientras vamos a preparar el menjurje en ...\"): NO es una perdida de la fila, es una DUPLICACION.",
+  "options": { "boxStallMs": 3500, "dupBlockWords": 4 },
+  "observed": {
+    "rows": [{ "text": "mientras vamos a preparar el menjurje en mi plato", "speaker": "Hablante 1" }],
+    "boxTrace": [
+      { "t": 100, "text": "mientras vamos a preparar el menjurje", "reason": "publish" },
+      {
+        "t": 200,
+        "text": "mientras vamos a preparar el menjurje en mientras vamos a preparar el menjurje en mi plato",
+        "reason": "publish"
+      }
+    ],
+    "commits": [{ "t": 200, "rowIndex": 0, "box": "mientras vamos a preparar el menjurje en mientras vamos a preparar el menjurje en mi plato" }],
+    "boxAtCommit": ["mientras vamos a preparar el menjurje en mientras vamos a preparar el menjurje en mi plato"],
+    "boxStall": { "maxGapMs": 100, "from": "mientras vamos a preparar el menjurje", "to": "duplicada", "at": 100 }
+  },
+  "expected": {
+    "schemaVersion": 1,
+    "scenario": "bloque-duplicado",
+    "mode": "events",
+    "approved": true,
+    "expect": {
+      "rowCount": 1,
+      "rows": [{ "text": "mientras vamos a preparar el menjurje en mi plato", "speaker": "Hablante 1" }],
+      "boxDuplicated": 0
+    }
+  },
+  "want": { "status": "mismatch", "failing": ["noBoxDuplicatedBlock", "boxDuplicated"], "passing": ["boxLost", "boxStall", "noBoxPrefixDuplication"] }
+}

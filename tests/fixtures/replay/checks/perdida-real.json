@@ -1,0 +1,33 @@
+{
+  "name": "perdida-real",
+  "descripcion": "La caja mostraba un bloque largo y LIMPIO y la fila se quedo con el final corto (\"mientras\"): es una PERDIDA de verdad (no una duplicacion).",
+  "options": { "boxStallMs": 3500, "dupBlockWords": 4 },
+  "observed": {
+    "rows": [{ "text": "mientras", "speaker": "Hablante 1" }],
+    "boxTrace": [
+      { "t": 100, "text": "estoy dictando una locucion larga", "reason": "publish" },
+      { "t": 900, "text": "estoy dictando una locucion larga y el reconocedor no cierra la frase", "reason": "publish" },
+      { "t": 1200, "text": "estoy dictando una locucion larga y el reconocedor no cierra la frase mientras", "reason": "publish" }
+    ],
+    "commits": [
+      {
+        "t": 1200,
+        "rowIndex": 0,
+        "box": "estoy dictando una locucion larga y el reconocedor no cierra la frase mientras"
+      }
+    ],
+    "boxAtCommit": ["mientras"],
+    "boxStall": { "maxGapMs": 800, "from": "estoy dictando una locucion larga", "to": "y el reconocedor no cierra la frase", "at": 100 }
+  },
+  "expected": {
+    "schemaVersion": 1,
+    "scenario": "perdida-real",
+    "mode": "events",
+    "approved": true,
+    "expect": {
+      "rowCount": 1,
+      "rows": [{ "text": "mientras", "speaker": "Hablante 1" }]
+    }
+  },
+  "want": { "status": "mismatch", "failing": ["boxLost"], "passing": ["boxDuplicated", "boxStall", "noBoxPrefixDuplication", "noBoxDuplicatedBlock"] }
+}
