@@ -5,6 +5,7 @@ import { DEFAULT_SAMPLE_RATE } from './audioConstants.js'
 import { RESET_AVATAR_COLOR_PHRASES } from './voiceCommandPhrases.js'
 import { COMMAND_IDS } from './commandIds.js'
 import { LOCAL_FALLBACK_DEFAULTS, VAD_DEFAULTS } from './asr/asrDefaults.js'
+import { SPEAKER_ASSIGN } from './speakerAssignDefaults.js'
 
 /** Entorno de desarrollo: los defaults de diagnostico solo se encienden aqui. */
 const IS_DEV = import.meta.env.DEV
@@ -82,7 +83,7 @@ export const FLU_CONFIG = {
   },
   voiceIdentity: {
     labels: {
-      fallbackSpeaker: 'Hablante 1',
+      fallbackSpeaker: 'Hablante 1', pendingSpeaker: SPEAKER_ASSIGN.pendingSpeaker,
       /** Plantilla de etiqueta automática («Hablante {n}») — sin literales quemados. */
       template: 'Hablante {n}',
     },
@@ -136,7 +137,7 @@ export const FLU_CONFIG = {
         /** Margen entre DOS anclas verificadas que compiten por el nombre. */
         verifiedAnchorMargin: 0.05,
         /** Reutilización de cluster en producción (512-D real). */
-        productionClusterReuseThreshold: 0.66,
+        productionClusterReuseThreshold: 0.66, ...SPEAKER_ASSIGN.thresholds,
         shortUtteranceMaxMs: 1500,
         /** Tras N ecos committed-echo consecutivos, rebuild SR (Chrome atascado). */
         committedEchoRebuildAfter: 3,
@@ -246,7 +247,7 @@ export const FLU_CONFIG = {
       maxSensitivity: true,
       conversationUsePassiveAudio: true,
       conversationAutoDiarize: true,
-      conversationTurnAlignedDiarize: true,
+      conversationTurnAlignedDiarize: true, ...SPEAKER_ASSIGN.turnWindow,
       captureRoomAudio: true,
       conversationPassiveAudioDelayMs: 0,
       /** Snapshots de identidad durante interinos (ms). */

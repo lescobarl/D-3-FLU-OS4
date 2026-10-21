@@ -81,8 +81,16 @@ export function parseSpeakerIndex(label = '') {
   return match ? Number(match[1]) : null
 }
 
-export function isAutoSpeakerLabel(label = '') {
-  return /^Hablante\s+\d+$/i.test(String(label || '').trim())
+/**
+ * Etiqueta ANONIMA de la sesion: `Hablante N` o la etiqueta PENDIENTE
+ * (`voiceIdentity.labels.pendingSpeaker`). Las dos son agrupaciones sin identidad,
+ * asi que ninguna puede afirmar ni heredar un nombre propio.
+ */
+export function isAutoSpeakerLabel(label = '', config = FLU_CONFIG) {
+  const text = String(label || '').trim()
+  if (/^Hablante\s+\d+$/i.test(text)) return true
+  const pending = String(config?.voiceIdentity?.labels?.pendingSpeaker || '').trim()
+  return Boolean(pending) && text.toLowerCase() === pending.toLowerCase()
 }
 
 /** Id estable a partir de la etiqueta de hablante («Hablante 3» → speaker_3). */
@@ -90,6 +98,9 @@ export function labelToSpeakerIdSimple(label = '') {
   const text = String(label || '').trim()
   const index = parseSpeakerIndex(text)
   if (index !== null) return `speaker_${index}`
+  // Etiqueta PENDIENTE (config): clave propia y estable. NO es un nombre propio, asi que
+  // no puede acabar en `speaker_name_*` (eso la haria competir como identidad).
+  if (isAutoSpeakerLabel(text)) return 'speaker_pending'
   const slug = stripDiacriticsLower(text)
     .replace(/[^a-z0-9]+/g, '_')
     .replace(/^_+|_+$/g, '')
@@ -110,18 +121,58 @@ export function labelToSpeakerIdSimple(label = '') {
  *
  * @param {Array} clusters clusters de la sesion
  * @param {Array} reserved etiquetas ya reservadas/conocidas
- * @param {{maxSpeakers?: number, config?: object}} [options]
+ * @param {{maxSpeakers?: number, config?: object, highWater?: number}} [options]
  * @returns {string} etiqueta automatica libre
  */
-export function nextAutoSpeakerLabel(clusters = [], reserved = [], { maxSpeakers = 0, config = FLU_CONFIG } = {}) {
-  const known = new Set()
-  // HIGH-WATER de la sesion: una voz NUEVA incrementa 1 y conserva su etiqueta; el
-  // numero NO se recicla aunque su dueno pase a nombre propio (mandato del dueno
-  // 2026-10-18: "voz nueva incrementa 1 en hablante(N)... no se incrementan
-  // arbitrariamente"). El indice sobrevive al renombre en `cluster.autoNumber`
-  // (`mergeSpeakerClustersOnRename`), asi que este calculo es DATO, no un contador de
-  // modulo (que se desincronizaria con la sesion y con los tests).
+/**
+ * Indice automatico de una CLAVE de voz (`speaker_3` -> 3). `null` si la clave no es
+ * automatica (p. ej. `speaker_name_luis`).
+ *
+ * @param {string} key
+ * @returns {number|null}
+ */
+export function autoSpeakerIndexFromKey(key = '') {
+  const match = String(key || '').trim().match(/^speaker_(\d+)$/)
+  return match ? Number(match[1]) : null
+}
+
+/**
+ * HIGH-WATER de la sesion: el indice automatico mas alto ya usado.
+ *
+ * Se deriva de DATOS (no de un contador duplicado): clusters (`autoNumber`/etiqueta),
+ * etiquetas reservadas y las filas del epoch. La fila conserva la clave aunque se borre
+ * el hablante del panel o se poden clusters fantasma, asi que el numero NO se reutiliza.
+ *
+ * @param {{ rows?: Array<object>, clusters?: Array<object>, reserved?: Iterable<string>, epoch?: number|null }} [m]
+ * @returns {number} indice mas alto (0 si no hay ninguno).
+ */
+export function sessionSpeakerHighWater({ rows = [], clusters = [], reserved = [], epoch = null } = {}) {
   let highest = 0
+  const note = (value) => {
+    const index = Number(value)
+    if (Number.isFinite(index) && index > highest) highest = index
+  }
+  for (const cluster of clusters || []) {
+    note(parseSpeakerIndex(cluster?.label))
+    note(cluster?.autoNumber)
+  }
+  for (const label of reserved || []) note(parseSpeakerIndex(label))
+  const sameEpoch = (row) => epoch == null || Number(row?.epoch) === Number(epoch)
+  for (const row of rows || []) {
+    if (!sameEpoch(row)) continue
+    note(autoSpeakerIndexFromKey(row?.speakerId))
+    note(parseSpeakerIndex(row?.speakerName))
+  }
+  return highest
+}
+
+export function nextAutoSpeakerLabel(clusters = [], reserved = [], { maxSpeakers = 0, config = FLU_CONFIG, highWater = 0 } = {}) {
+  const known = new Set()
+  // HIGH-WATER de sesion (dato): el siguiente numero es max+1 y NUNCA reutiliza uno ya
+  // usado, aunque su dueno se haya renombrado, borrado o podado. `highWater` lo aporta
+  // el dueno de la sesion (`sessionSpeakerHighWater` / store); el indice sobrevive al
+  // renombre en `cluster.autoNumber` (`mergeSpeakerClustersOnRename`).
+  let highest = Math.max(0, Number(highWater) || 0)
   const noteIndex = (label) => {
     const index = parseSpeakerIndex(String(label || ''))
     if (index != null) highest = Math.max(highest, index)

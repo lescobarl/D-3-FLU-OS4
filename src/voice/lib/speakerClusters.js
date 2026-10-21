@@ -7,6 +7,7 @@ import { blendEmbeddingVectors, normalizeSpaces } from './audioMath.js'
 import { compareCosineSignatures, hasVoiceMeasurement, isAutoSpeakerLabel, normalizeEmbeddingVector, parseSpeakerIndex } from './speakerCore.js'
 import { foldSpeakerKey, getVoiceIdentityConfig, isRegisteredSpeakerLabel, isProperSpeakerName, canonicalSpeakerName, normalizeSpeakerLabel } from './speakerLabels.js'
 import { getPassiveBufferMs } from './micCapture.js'
+import { SPEAKER_ASSIGN } from './speakerAssignDefaults.js'
 import { DEFAULT_SAMPLE_RATE } from './audioConstants.js'
 
 export const ROOM_REMATCH_STRICT = 0.85
@@ -77,6 +78,54 @@ export function verifiedAnchorFloor(thresholds = null) {
   const cfg = thresholds || getVoiceIdentityConfig()?.capture?.conversationSpeakerThresholds || {}
   const floor = Number(cfg?.cosineVerifiedAnchorMatchThreshold)
   return Number.isFinite(floor) && floor > 0 && floor <= 1 ? floor : 0.62
+}
+
+/**
+ * DUENO UNICO del piso de "esta fila es de una voz CLARAMENTE DISTINTA".
+ *
+ * POR QUE ES OTRO PISO: la clave (`speaker_N`) la asigna la diarizacion y un turno
+ * MEZCLADO puede darsela a dos personas. MEDIDO (debug.log del dueno): MISMA voz
+ * 0.69-0.74, DISTINTA 0.50-0.58. Por DEBAJO de esa banda no hay duda razonable: la fila
+ * es de otra persona y "soy X" NO la renombra aunque comparta clave. Lo consume el
+ * renombre por clave (`renameVoiceRowsByKey`); no es un piso de asignacion de nombre.
+ *
+ * @param {object|null} [thresholds] bloque conversationSpeakerThresholds (o se lee de config)
+ * @returns {number} piso coseno por debajo del cual la voz es OTRA persona
+ */
+export function differentVoiceFloor(thresholds = null) {
+  const cfg = thresholds || getVoiceIdentityConfig()?.capture?.conversationSpeakerThresholds || {}
+  const floor = Number(cfg?.differentVoiceFloor)
+  return Number.isFinite(floor) && floor > 0 && floor <= 1 ? floor : SPEAKER_ASSIGN.differentVoiceFloor
+}
+
+/**
+ * DUENO UNICO del piso para AFIRMAR un nombre propio desde la medida del turno.
+ *
+ * El piso de identidad registrada (0.76) mide contra un ANCLA guardada; este mide la
+ * confianza de la ASIGNACION en la sesion: el nombre solo se afirma si el mejor coseno
+ * llega a `namedAssignFloor` (banda alta de la misma voz) y le saca `namedAssignMargin`
+ * al mejor cluster ALTERNATIVO. Sin margen, dos voces de timbre parecido se reparten el
+ * nombre turno a turno.
+ *
+ * @param {object|null} [thresholds] bloque conversationSpeakerThresholds
+ * @returns {number} piso coseno de asignacion de nombre (0..1)
+ */
+export function namedAssignFloor(thresholds = null) {
+  const cfg = thresholds || getVoiceIdentityConfig()?.capture?.conversationSpeakerThresholds || {}
+  const floor = Number(cfg?.namedAssignFloor)
+  return Number.isFinite(floor) && floor > 0 && floor <= 1 ? floor : SPEAKER_ASSIGN.namedAssignFloor
+}
+
+/**
+ * DUENO UNICO del MARGEN entre el nombre candidato y el mejor cluster alternativo.
+ *
+ * @param {object|null} [thresholds] bloque conversationSpeakerThresholds
+ * @returns {number} margen coseno exigido (0..1)
+ */
+export function namedAssignMargin(thresholds = null) {
+  const cfg = thresholds || getVoiceIdentityConfig()?.capture?.conversationSpeakerThresholds || {}
+  const margin = Number(cfg?.namedAssignMargin)
+  return Number.isFinite(margin) && margin >= 0 && margin <= 1 ? margin : SPEAKER_ASSIGN.namedAssignMargin
 }
 
 /** Solo las últimas N ms de chunks — evita copiar/analizar todo el buffer en cada commit. */

@@ -127,9 +127,31 @@ describe('2 voces reales -> 2 clusters (sin inflado)', () => {
   })
 })
 
-describe('PRUEBA DE DETECTOR: el umbral VIEJO infla (no es decorativo)', () => {
-  it('un umbral de voz nueva DENTRO de la banda de la misma voz abre un cluster por turno', () => {
-    const inflado = simular({ ...THRESHOLDS_REALES, cosineNewVoiceThreshold: 0.70, productionClusterReuseThreshold: 0.78 })
-    expect(inflado.clusters).toBeGreaterThan(2)
+describe('PRUEBA DE DETECTOR: con el umbral VIEJO el sistema NO inventa hablantes', () => {
+  // El umbral VIEJO (0.70 de voz nueva / 0.78 de reutilizacion) cae DENTRO de la banda de
+  // la misma voz: antes cada turno abria un "Hablante N" nuevo (7 clusters para 2 voces).
+  // Fase 1 (2026-10-21): ese umbral ya no INVENTA nada; la medida queda en la ZONA GRIS y el
+  // turno se queda PENDIENTE, que es el comportamiento nuevo que hay que fijar aqui.
+  const PENDIENTE = FLU_CONFIG.voiceIdentity.labels.pendingSpeaker
+
+  it('el umbral viejo deja los turnos de la MISMA voz en PENDIENTE, no en un cluster nuevo', () => {
+    const inflado = simular({
+      ...THRESHOLDS_REALES,
+      cosineNewVoiceThreshold: 0.70,
+      productionClusterReuseThreshold: 0.78,
+    })
+
+    // `etiquetas` viene como "voz=etiqueta": lo que se afirma es la ETIQUETA elegida.
+    const asignadas = inflado.etiquetas.map((e) => e.split('=')[1])
+    // La medida cae en la banda gris -> etiqueta pendiente (ni cluster nuevo ni nombre).
+    expect(asignadas, inflado.etiquetas.join(' | ')).toContain(PENDIENTE)
+    // Y NO se abre un cluster por turno (el defecto medido: 7 etiquetas para 2 voces).
+    expect(inflado.clusters, inflado.etiquetas.join(' | ')).toBeLessThanOrEqual(2)
+  })
+
+  it('con los umbrales REALES el pendiente desaparece: cada voz conserva su etiqueta', () => {
+    const real = simular(THRESHOLDS_REALES)
+    const asignadas = real.etiquetas.map((e) => e.split('=')[1])
+    expect(asignadas).not.toContain(PENDIENTE)
   })
 })

@@ -17,6 +17,7 @@ import { useIntegrationStore } from '../store/integrationStore';
 import type { ConversationEntry } from '../types/bridge';
 import { logCaughtError } from '../lib/caughtError';
 import { SYSTEM_EVENT_PREFIX } from '../lib/systemEventLog';
+import { sessionSpeakerHighWater } from '../voice/lib/speakerCore.js';
 
 const MAX_LOADED_ROWS = 180; // OS2: conversationLogMax
 
@@ -184,6 +185,16 @@ export function useConversationPersistence(participantId?: string) {
                         // Use batchLoadHistory to set all entries at once
                         // without triggering side effects (TTS, state changes)
                         integrationStore.batchLoadHistory(entries);
+
+                        // HIGH-WATER de la sesion tras restaurar: las filas llevan su clave
+                        // (`speaker_N`), asi que el siguiente numero no reutiliza uno usado.
+                        const restaurado = useIntegrationStore.getState();
+                        restaurado.noteSpeakerHighWater(
+                            sessionSpeakerHighWater({
+                                rows: restaurado.conversationHistory,
+                                epoch: restaurado.conversationEpoch,
+                            }),
+                        );
                     }
                 }
             } catch (err) {

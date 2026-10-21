@@ -129,6 +129,14 @@ El pre-commit ejecuta `lint + typecheck` y nunca la suite completa.
 - **EOL:** conserva la del fichero. El repo es mixto (`core.autocrlf=false`, sin
   `.gitattributes`): hay blobs en LF y en CRLF. Cambiar la clase EOL hace que Git
   marque todo el fichero como modificado. Se repara con `npm run fix:eol`.
+- **`git diff --check` y CRLF (convención del entorno):** en un repo mixto, las reglas
+  de espacios por defecto de Git cuentan el CR de cada línea CRLF como *trailing
+  whitespace*, así que marcan cualquier línea añadida a un fichero CRLF (también las de
+  commits anteriores: `git show <sha> --check`). La comprobación correcta aquí declara
+  `cr-at-eol`:
+  `git -c core.whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol diff --check`
+  Ese comando sí caza los espacios/tabuladores reales al final de línea. No se cambia la
+  EOL de una línea para satisfacer al comando sin `cr-at-eol`: eso rompería `eolGuard`.
 - **Vocabulario:** una etiqueta, un sitio. Un conjunto de valores que debe coincidir
   entre subsistemas se declara UNA vez y el resto importa la lista o consulta
   pertenencia por un predicado (`isVisualWorkspaceTipo`). Prohibido re-enumerarlo.

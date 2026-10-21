@@ -56,6 +56,13 @@ export interface ConversationEntry {
     sentiment?: 'positive' | 'negative' | 'neutral' | 'question';
     /** ID único */
     id: string;
+    /**
+     * EPOCH de conversacion al que pertenece la fila (`useIntegrationStore.conversationEpoch`).
+     * El renombre por voz (`renameVoiceRowsByKey`) y el freeze SOLO tocan el epoch actual:
+     * una fila de una conversacion anterior no se reescribe. Las filas legacy sin epoch se
+     * estampan en UN punto (carga/insercion del store), no en cada consumidor.
+     */
+    epoch?: number;
     /** Nombre del hablante (OS2: speakerName / speaker) */
     speakerName?: string;
     /**

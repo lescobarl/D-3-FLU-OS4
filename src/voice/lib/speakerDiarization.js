@@ -14,6 +14,7 @@ import {
   foldSpeakerKey,
   isAutoSpeakerLabel,
   isRegisteredSpeakerLabel,
+  pendingSpeakerLabel,
   normalizeSpeakerLabel,
   nextAvailableSpeakerLabel,
 } from './speakerLabels.js'
@@ -28,14 +29,19 @@ import {
   isShortUtteranceContext,
   isVoiceDistinctFromSticky,
   resolveImmediateShortSpeakerContinuity,
+  namedAssignFloor,
+  namedAssignMargin,
   resolveRoomRematchThreshold,
   sameVoiceFloor,
   updateClusterSignature,
   verifiedAnchorFloor,
 } from './speakerClusters.js'
 
-function nextSessionSpeakerLabel(speakerClusters = [], extraLabels = [], maxAutoSpeakers = 0) {
-  return nextAvailableSpeakerLabel(speakerClusters, extraLabels, { maxSpeakers: maxAutoSpeakers })
+function nextSessionSpeakerLabel(speakerClusters = [], extraLabels = [], maxAutoSpeakers = 0, highWater = 0) {
+  return nextAvailableSpeakerLabel(speakerClusters, extraLabels, {
+    maxSpeakers: maxAutoSpeakers,
+    highWater,
+  })
 }
 
 function diarizationFactor(config = FLU_CONFIG, key, fallback) {
@@ -44,6 +50,28 @@ function diarizationFactor(config = FLU_CONFIG, key, fallback) {
 }
 
 /** Similitud turno-a-turno; ignora lastSignature si la dimensión no coincide con el embedding actual. */
+/**
+ * Mejor similitud contra un cluster que NO es `label`: es la voz ALTERNATIVA con la que un
+ * nombre propio compite por este turno. Lo consume el dueno unico del margen
+ * (`namedAssignmentConfirmed`).
+ *
+ * @param {Array} speakerClusters Clusters de la sesion.
+ * @param {string} label Etiqueta cuya identidad se pretende afirmar.
+ * @param {number[]} vector Medida del turno.
+ * @returns {number} mejor coseno ajeno (-1 si no hay otro cluster con medida).
+ */
+function bestAlternativeSimilarity(speakerClusters = [], label = '', vector = []) {
+  const key = foldSpeakerKey(label)
+  let best = -1
+  for (const cluster of speakerClusters || []) {
+    if (!Array.isArray(cluster?.signature) || !cluster.signature.length) continue
+    if (foldSpeakerKey(cluster?.label) === key) continue
+    const sim = compareCosineSignatures(vector, normalizeEmbeddingVector(cluster.signature))
+    if (sim > best) best = sim
+  }
+  return best
+}
+
 function resolveLastTurnSimilarity(normalized, lastSpeaker, lastSignature, speakerClusters) {
   if (Array.isArray(lastSignature) && lastSignature.length) {
     const lastNorm = normalizeEmbeddingVector(lastSignature)
@@ -118,6 +146,32 @@ function canAssertSpeakerName(label, { backed = false, shortWindow = false } = {
   return !isRegisteredSpeakerLabel(label) || (!shortWindow && backed)
 }
 
+/**
+ * DUENO UNICO del MARGEN de una asignacion con NOMBRE PROPIO (fase 1, 2026-10-21).
+ *
+ * Un nombre no se afirma por llegar al piso: tiene que SACARLE `namedAssignMargin` al mejor
+ * cluster ALTERNATIVO de la sesion. Sin margen, dos voces de timbre parecido se reparten el
+ * nombre turno a turno (la mujer quedaba "Luis" en los turnos mezclados). El piso
+ * (`namedAssignFloor`) se aplica a la asignacion generica; un ANCLA VERIFICADA de la base
+ * conserva su piso medido propio (la MISMA voz mide 0,629-0,714 contra su ancla).
+ *
+ * @param {{ label: string, similarity: number, bestAlternative?: number, shortWindow?: boolean, anchorVerified?: boolean, thresholds?: object }} claim
+ * @returns {boolean}
+ */
+export function namedAssignmentConfirmed({
+  label,
+  similarity,
+  bestAlternative = -1,
+  shortWindow = false,
+  anchorVerified = false,
+  thresholds = {},
+} = {}) {
+  if (!isRegisteredSpeakerLabel(label) || shortWindow) return false
+  if (!anchorVerified && similarity < namedAssignFloor(thresholds)) return false
+  if (bestAlternative < 0) return true
+  return similarity - bestAlternative >= namedAssignMargin(thresholds)
+}
+
 /** Nearest Neighbor en commit de sala: reutiliza clúster más cercano o abre uno nuevo. */
 function resolveProductionSpeakerAtBoundary({
   vector,
@@ -132,6 +186,7 @@ function resolveProductionSpeakerAtBoundary({
   utteranceText = '',
   voicedSampleCount = 0,
   sampleRate = DEFAULT_SAMPLE_RATE,
+  speakerHighWater = 0,
   note,
 }) {
   const normalized = normalizeEmbeddingVector(vector)
@@ -143,8 +198,10 @@ function resolveProductionSpeakerAtBoundary({
   if (!hasVoiceMeasurement(normalized)) {
     // SIN MEDIDA no hay identidad: el respaldo NUNCA es un nombre propio (mandato
     // 2026-10-18 — el nombre del onboarding se estampaba en la primera voz).
-    const keep = anonymousSpeakerLabel(lastSpeaker)
-    note?.({ reason: 'no-vector', speaker: keep, lastSim: 0, bestSim: 0 })
+    // Sin medida no hay identidad NI continuidad: etiqueta PROVISIONAL (config), no el
+    // lastSpeaker (la mujer heredaba la etiqueta del dueno).
+    const keep = pendingSpeakerLabel()
+    note?.({ reason: 'no-vector-pending', speaker: keep, lastSim: 0, bestSim: 0 })
     return keep
   }
   const roomCfg = FLU_CONFIG.voiceIdentity?.capture?.roomCapture || {}
@@ -290,6 +347,22 @@ function resolveProductionSpeakerAtBoundary({
     // (`sameVoiceFloor`) es agrupacion de timbre, no identidad: la mujer medida contra
     // "Luis" dentro de esa banda quedaba renombrada por la via generica.
     if (!canAssertName(label, sim >= registeredFloorFor(label))) continue
+    // MARGEN de asignacion (fase 1): un NOMBRE PROPIO tiene que sacarle
+    // `namedAssignMargin` a la mejor voz ALTERNATIVA. En un turno MEZCLADO (Luis 0,894
+    // vs la mujer 0,835) el nombre no se afirma: la medida no distingue a quien habla.
+    if (
+      isRegisteredSpeakerLabel(label) &&
+      !namedAssignmentConfirmed({
+        label,
+        similarity: sim,
+        bestAlternative: bestAlternativeSimilarity(speakerClusters, label, normalized),
+        anchorVerified: cluster?.anchorVerified === true,
+        shortWindow,
+        thresholds,
+      })
+    ) {
+      continue
+    }
     if (sim > bestSim) {
       bestSim = sim
       bestLabel = label
@@ -340,7 +413,17 @@ function resolveProductionSpeakerAtBoundary({
         primarySim >= primaryFloor &&
         primarySim >= bestSim - SWITCH &&
         (primarySim > lastSim + SWITCH || primaryLabel === lastSpeaker || !lastSpeaker) &&
-        canAssertName(primaryLabel, primarySim >= registeredFloorFor(primaryLabel))
+        canAssertName(primaryLabel, primarySim >= registeredFloorFor(primaryLabel)) &&
+        // MARGEN de asignacion (fase 1): el nombre tiene que sacarle `namedAssignMargin` a la
+        // mejor voz ALTERNATIVA. Un ancla VERIFICADA conserva su regla medida propia.
+        (primaryCluster?.anchorVerified === true ||
+          namedAssignmentConfirmed({
+            label: primaryLabel,
+            similarity: primarySim,
+            bestAlternative: bestAlternativeSimilarity(speakerClusters, primaryLabel, normalized),
+            shortWindow,
+            thresholds,
+          }))
       ) {
         const skipPrimaryRematch =
           classroom &&
@@ -479,16 +562,28 @@ function resolveProductionSpeakerAtBoundary({
   // respaldo generico. La voz nueva se abre cuando hay ventana suficiente para medirla;
   // una frase de 1.1 s no puede partir la sesion en dos "Hablante N".
   if (shortWindow) {
-    if (lastSpeaker && isAutoSpeakerLabel(lastSpeaker)) {
-      return anchorLastSpeaker('production-short-window-continuity')
-    }
-    const fallback = getFallbackSpeaker()
-    note?.({ reason: 'production-short-window-fallback', speaker: fallback, lastSim, bestSim, autoCount })
-    return fallback
+    // Ventana CORTA sin coincidencia medida: ni continuidad ni respaldo generico. La
+    // etiqueta es PROVISIONAL (config) y la fila se completa cuando llega el vector del
+    // audio de ESTE turno: heredar la etiqueta del turno anterior le daba a la mujer la
+    // del dueno (medido: `production-short-window-continuity`).
+    const pending = pendingSpeakerLabel()
+    note?.({ reason: 'production-short-window-pending', speaker: pending, lastSim, bestSim, autoCount })
+    return pending
+  }
+
+  // ASIGNACION POR CENTROIDES (fase 1, 2026-10-21): si la medida cae en la ZONA GRIS
+  // (por debajo de "misma voz" y por encima de "voz nueva") el turno NO se atribuye:
+  // ni cluster nuevo ni etiqueta heredada. La fila queda PENDIENTE y se resuelve con su
+  // propio vector cuando la sesion tenga el cluster.
+  const verdict = classifyVoiceAgainstClusters({ vector: normalized, speakerClusters, thresholds })
+  if (verdict.verdict === 'grey') {
+    const pending = pendingSpeakerLabel()
+    note?.({ reason: 'production-grey-pending', speaker: pending, bestSim: verdict.bestSim, lastSim, autoCount })
+    return pending
   }
 
   if (lastSpeaker && lastSim < NEW_VOICE_OPEN_GATE && bestSim < NEW_VOICE_OPEN_GATE) {
-    const label = nextSessionSpeakerLabel(speakerClusters, reservedLabels, maxAutoSpeakers || hardCap || 0)
+    const label = nextSessionSpeakerLabel(speakerClusters, reservedLabels, maxAutoSpeakers || hardCap || 0, speakerHighWater)
     speakerClusters.push({
       label,
       signature: [...normalized],
@@ -530,7 +625,7 @@ function resolveProductionSpeakerAtBoundary({
       return adoptCluster(lastSpeaker, 'production-grey-zone-cluster-agreement', Math.max(lastSim, bestSim))
     }
     if (!soloSession && bestSim < NEW_VOICE_OPEN_GATE && lastSim < NEW_VOICE_OPEN_GATE) {
-      const label = nextSessionSpeakerLabel(speakerClusters, reservedLabels, maxAutoSpeakers || hardCap || 0)
+      const label = nextSessionSpeakerLabel(speakerClusters, reservedLabels, maxAutoSpeakers || hardCap || 0, speakerHighWater)
       speakerClusters.push({
         label,
         signature: [...normalized],
@@ -546,7 +641,7 @@ function resolveProductionSpeakerAtBoundary({
       return label
     }
     if (!soloSession && bestSim < NEW_VOICE_OPEN_GATE) {
-      const label = nextSessionSpeakerLabel(speakerClusters, reservedLabels, maxAutoSpeakers || hardCap || 0)
+      const label = nextSessionSpeakerLabel(speakerClusters, reservedLabels, maxAutoSpeakers || hardCap || 0, speakerHighWater)
       speakerClusters.push({
         label,
         signature: [...normalized],
@@ -571,7 +666,7 @@ function resolveProductionSpeakerAtBoundary({
     // Dueño unico del "siguiente Hablante N" (high-water de la sesion): una etiqueta
     // automatica no se toma del respaldo, que puede quedar por debajo del maximo ya
     // emitido si el primer cluster paso a nombre propio.
-    const label = nextSessionSpeakerLabel(speakerClusters, reservedLabels, maxAutoSpeakers || hardCap || 0)
+    const label = nextSessionSpeakerLabel(speakerClusters, reservedLabels, maxAutoSpeakers || hardCap || 0, speakerHighWater)
     speakerClusters.push({
       label,
       signature: [...normalized],
@@ -588,7 +683,7 @@ function resolveProductionSpeakerAtBoundary({
     if (bestLabel) return adoptCluster(bestLabel, 'production-solo-coalesce', bestSim)
   }
 
-  const label = nextSessionSpeakerLabel(speakerClusters, reservedLabels, maxAutoSpeakers || hardCap || 0)
+  const label = nextSessionSpeakerLabel(speakerClusters, reservedLabels, maxAutoSpeakers || hardCap || 0, speakerHighWater)
   speakerClusters.push({
     label,
     signature: [...normalized],
@@ -611,6 +706,7 @@ function resolveRoomNearestNeighbor({
   preferSpeaker = '',
   lastSpeaker = '',
   lastSignature = null,
+  speakerHighWater = 0,
   note,
 }) {
   if (!speakerClusters.some((cluster) => Array.isArray(cluster?.signature) && cluster.signature.length)) {
@@ -719,7 +815,7 @@ function resolveRoomNearestNeighbor({
     }
   }
 
-  const label = nextSessionSpeakerLabel(speakerClusters, reservedLabels, maxAutoSpeakers)
+  const label = nextSessionSpeakerLabel(speakerClusters, reservedLabels, maxAutoSpeakers, speakerHighWater)
   speakerClusters.push({
     label,
     signature: [...normalized],
@@ -756,6 +852,7 @@ export function resolveConversationSpeaker({
   allowNewCluster = true,
   reservedLabels = [],
   sessionPrimary = '',
+  speakerHighWater = 0,
   diagnosis = null,
 } = {}) {
   const note = (patch) => {
@@ -776,7 +873,7 @@ export function resolveConversationSpeaker({
   if (!hasVoiceMeasurement(vector)) {
     // SIN MEDIDA no hay identidad: la etiqueta se conserva SOLO si es ANONIMA; un
     // nombre propio (el del onboarding / lastLogged) NO se hereda (mandato 2026-10-18).
-    const keep = anonymousSpeakerLabel(lastSpeaker || preferSpeaker || getFallbackSpeaker())
+    const keep = pendingSpeakerLabel()
     note({ reason: 'no-vector', speaker: keep })
     return keep
   }
@@ -842,7 +939,7 @@ export function resolveConversationSpeaker({
   if (!voicedSampleCount || voicedSampleCount < minVoicedSamples) {
     // Sin audio suficiente no hay medida: NUNCA se afirma un nombre propio; se
     // conserva la etiqueta anonima con la que venia esa voz (mandato 2026-10-18).
-    const keep = anonymousSpeakerLabel(effectiveSticky)
+    const keep = pendingSpeakerLabel()
     note({ reason: 'insufficient-voiced', voicedSampleCount, minVoicedSamples, speaker: keep })
     return keep
   }
@@ -853,7 +950,18 @@ export function resolveConversationSpeaker({
       const pinnedSimilarity = compareCosineSignatures(vector, pinnedCluster.signature)
       // Nombre propio: coincidencia REGISTRADA y ventana SOSTENIDA. En una frase de
       // ~1 s la medida fluctua dentro de la banda de "misma voz" y no afirma nada.
-      if (pinnedSimilarity >= registeredFloorFor(preferIdentity) && canAssertName(preferIdentity, true)) {
+      if (
+        pinnedSimilarity >= registeredFloorFor(preferIdentity) &&
+        canAssertName(preferIdentity, true) &&
+        (pinnedCluster?.anchorVerified === true ||
+          namedAssignmentConfirmed({
+            label: preferIdentity,
+            similarity: pinnedSimilarity,
+            bestAlternative: bestAlternativeSimilarity(speakerClusters, preferIdentity, vector),
+            shortWindow: shortUtterance,
+            thresholds,
+          }))
+      ) {
         // La firma del cluster del registrado NO se actualiza aquí: es su ancla
         // de identidad. Actualizarla con la voz entrante (updateClusterSignature
         // da más peso al vector nuevo que al acumulado) dejaba que otra voz
@@ -890,6 +998,7 @@ export function resolveConversationSpeaker({
       utteranceText,
       voicedSampleCount,
       sampleRate,
+      speakerHighWater,
       note,
     })
   }
@@ -906,6 +1015,20 @@ export function resolveConversationSpeaker({
     // hija (medida por debajo de la identidad registrada contra el ancla "Luis")
     // ganaba el match generico y heredaba el nombre (mandato 2026-10-18).
     if (!canAssertName(label, similarity >= registeredFloorFor(label))) return
+    // MARGEN de asignacion (fase 1): misma regla que la via de limite.
+    if (
+      isRegisteredSpeakerLabel(label) &&
+      !namedAssignmentConfirmed({
+        label,
+        similarity,
+        bestAlternative: bestAlternativeSimilarity(speakerClusters, label, vector),
+        anchorVerified: cluster?.anchorVerified === true,
+        shortWindow: shortUtterance,
+        thresholds,
+      })
+    ) {
+      return
+    }
     if (similarity > clusterSimilarity) {
       clusterSimilarity = similarity
       clusterMatch = cluster
@@ -970,7 +1093,18 @@ export function resolveConversationSpeaker({
       const pinnedCluster = findClusterByLabel(speakerClusters, preferSpeaker)
       if (pinnedCluster?.signature?.length) {
         const pinnedSimilarity = compareCosineSignatures(vector, pinnedCluster.signature)
-        if (pinnedSimilarity >= registeredFloorFor(preferSpeaker) && canAssertName(preferSpeaker, true)) {
+        if (
+          pinnedSimilarity >= registeredFloorFor(preferSpeaker) &&
+          canAssertName(preferSpeaker, true) &&
+          (pinnedCluster?.anchorVerified === true ||
+            namedAssignmentConfirmed({
+              label: preferSpeaker,
+              similarity: pinnedSimilarity,
+              bestAlternative: bestAlternativeSimilarity(speakerClusters, preferSpeaker, vector),
+              shortWindow: shortUtterance,
+              thresholds,
+            }))
+        ) {
           // Mismo criterio que el pin de arriba: la firma del cluster del
           // registrado es su ancla y NO se mezcla con la voz entrante.
           note({ reason: 'room-pinned-rematch', speaker: preferSpeaker, clusterSimilarity: pinnedSimilarity })
@@ -1022,6 +1156,7 @@ export function resolveConversationSpeaker({
       preferSpeaker,
       lastSpeaker,
       lastSignature,
+      speakerHighWater,
       note,
     })
   }
@@ -1237,7 +1372,7 @@ export function resolveConversationSpeaker({
     const anyAuto = speakerClusters.find((c) => isAutoSpeakerLabel(c?.label))
     if (anyAuto) return anyAuto.label
     if (allowNew || allowNewDespiteBoundary) {
-      const label = nextSessionSpeakerLabel(speakerClusters, reservedLabels, maxAutoSpeakers)
+      const label = nextSessionSpeakerLabel(speakerClusters, reservedLabels, maxAutoSpeakers, speakerHighWater)
       speakerClusters.push({ label, signature: [...vector], signatureHistory: [[...vector]] })
       note({ reason: 'unbacked-registered-sticky', speaker: label })
       return label
@@ -1249,7 +1384,7 @@ export function resolveConversationSpeaker({
     if (!allowNew && !allowNewDespiteBoundary) {
       return stickyFallback()
     }
-    const label = nextSessionSpeakerLabel(speakerClusters, reservedLabels, maxAutoSpeakers)
+    const label = nextSessionSpeakerLabel(speakerClusters, reservedLabels, maxAutoSpeakers, speakerHighWater)
     speakerClusters.push({ label, signature: [...vector], signatureHistory: [[...vector]] })
     note({ reason: 'new-cluster', speaker: label, clusterSimilarity, lastSim: lastSimilarity })
     return label
@@ -1305,6 +1440,42 @@ const RAZONES_CON_COINCIDENCIA_MEDIDA = new Set([
   'production-grey-zone-cluster-agreement',
   'registered-pinned-rematch',
 ])
+
+/**
+ * DUENO UNICO de la ASIGNACION POR CENTROIDES de una medida contra los clusters de la sesion.
+ *
+ * Tres veredictos, un solo criterio (config-driven):
+ *  - `known`: el coseno alcanza el piso de "misma voz" (`sameVoiceFloor`) -> se asigna la
+ *    etiqueta del cluster;
+ *  - `grey`: cae entre "voz nueva" y "misma voz" -> NO se atribuye (el turno queda
+ *    PENDIENTE);
+ *  - `new`: por debajo de "voz nueva" -> la voz abre/usa su propio cluster.
+ *
+ * Es el criterio que consume el recalculo de filas INCIERTAS (`resolvePendingSpeakerRows`)
+ * cuando aparece un cluster nuevo, y la decision de zona gris de la via de limite.
+ *
+ * @param {{ vector?: number[], speakerClusters?: Array, thresholds?: object }} [input]
+ * @returns {{ verdict: "known"|"grey"|"new"|"unknown", label: string, bestSim: number }}
+ */
+export function classifyVoiceAgainstClusters({ vector = [], speakerClusters = [], thresholds = {} } = {}) {
+  const normalized = normalizeEmbeddingVector(vector)
+  if (!hasVoiceMeasurement(normalized)) return { verdict: 'unknown', label: '', bestSim: -1 }
+  let label = ''
+  let bestSim = -1
+  for (const cluster of speakerClusters || []) {
+    if (!Array.isArray(cluster?.signature) || !cluster.signature.length) continue
+    const sim = compareCosineSignatures(normalized, normalizeEmbeddingVector(cluster.signature))
+    if (sim > bestSim) {
+      bestSim = sim
+      label = String(cluster?.label || '').trim()
+    }
+  }
+  if (!label) return { verdict: 'new', label: '', bestSim }
+  if (bestSim >= sameVoiceFloor(thresholds)) return { verdict: 'known', label, bestSim }
+  const newVoice = cosineThreshold(thresholds, 'cosineNewVoiceThreshold', VOICE_DIARIZATION_DEFAULTS.cosineNewVoice)
+  if (bestSim >= newVoice) return { verdict: 'grey', label: '', bestSim }
+  return { verdict: 'new', label: '', bestSim }
+}
 
 export function isMeasuredIdentityMatch(reason = '') {
   return RAZONES_CON_COINCIDENCIA_MEDIDA.has(String(reason || ''))

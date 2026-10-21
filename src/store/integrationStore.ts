@@ -122,6 +122,13 @@ export interface IntegrationState {
      * usuario lo pide, nunca por un historial vacío transitorio.
      */
     conversationEpoch: number;
+    /**
+     * HIGH-WATER de etiquetas automaticas de la sesion (el numero mas alto usado).
+     * Monotonico dentro del epoch: borrar un hablante o podar clusters fantasma NO lo
+     * baja (el numero no se reutiliza). Se reinicia SOLO al incrementar `conversationEpoch`.
+     * Lo lee `nextAutoSpeakerLabel` (dueno unico del siguiente numero).
+     */
+    speakerHighWater: number;
     /** Estado emocional actual del avatar */
     emotionalState: EmotionalState;
     /** Historial de eventos (para depuración) */
@@ -186,6 +193,8 @@ export interface IntegrationActions {
 
     /** Añadir una entrada al historial de conversación */
     addConversationEntry: (entry: ConversationEntry) => void;
+    /** Sube (nunca baja) el high-water con el indice de una etiqueta automatica. */
+    noteSpeakerHighWater: (index: number) => void;
     /** Detectar sentimiento de un texto y añadirlo al historial */
     addUserMessage: (text: string, speakerName?: string) => void;
     addFluMessage: (text: string, meta?: ConversationEntry['meta']) => void;
@@ -372,6 +381,7 @@ const initialState: IntegrationState = {
     lastResponse: '',
     conversationHistory: [],
     conversationEpoch: 0,
+    speakerHighWater: 0,
     emotionalState: 'neutral',
     eventLog: [],
     config: defaultConfig,
@@ -479,14 +489,39 @@ export const useIntegrationStore = create<IntegrationStore>()(
 
             addConversationEntry: (entry: ConversationEntry) => {
                 const tagged = withActivePersonId(entry, get().activePersonId);
+                // EPOCH de la fila: se sella AQUI (unico punto de las filas nuevas) con el
+                // epoch vigente; una fila que ya trae el suyo (replay) lo conserva.
+                const conEpoch = {
+                    ...tagged,
+                    epoch: Number.isFinite(Number(tagged.epoch)) ? Number(tagged.epoch) : get().conversationEpoch,
+                };
                 set((current) => ({
-                    conversationHistory: capConversationHistory([...current.conversationHistory, tagged]),
+                    conversationHistory: capConversationHistory([...current.conversationHistory, conEpoch]),
                 }));
+            },
+
+            /**
+             * HIGH-WATER de la sesion: sube con el indice de una etiqueta automatica y NUNCA
+             * baja (borrar hablante o podar clusters no reutiliza numeros). Escritor UNICO.
+             */
+            noteSpeakerHighWater: (index: number) => {
+                const n = Number(index);
+                if (!Number.isFinite(n) || n <= 0) return;
+                set((current) =>
+                    n > current.speakerHighWater ? { speakerHighWater: n } : {},
+                );
             },
 
 
             batchLoadHistory: (entries: ConversationEntry[]) => {
-                set({ conversationHistory: capConversationHistory(entries) });
+                // MIGRACION UNICA de filas legacy (sin `epoch`): se estampan con el epoch
+                // vigente al cargar. Ningun consumidor tiene que adivinar el epoch.
+                const epoch = get().conversationEpoch;
+                const conEpoch = (Array.isArray(entries) ? entries : []).map((entry) => ({
+                    ...entry,
+                    epoch: Number.isFinite(Number(entry?.epoch)) ? Number(entry.epoch) : epoch,
+                }));
+                set({ conversationHistory: capConversationHistory(conEpoch) });
             },
 
             setEntrySpeaker: (id: string, speakerId: string, options?: { signature?: number[] | null }) => {
@@ -645,6 +680,8 @@ addSystemMessage: (text: string) => {
                 set((current) => ({
                     conversationHistory: [],
                     conversationEpoch: current.conversationEpoch + 1,
+                    // Nuevo epoch = numeracion nueva: el high-water arranca en 0.
+                    speakerHighWater: 0,
                 }));
             },
 
@@ -652,6 +689,7 @@ addSystemMessage: (text: string) => {
                 set((current) => ({
                     conversationHistory: [],
                     conversationEpoch: current.conversationEpoch + 1,
+                    speakerHighWater: 0,
                     lastResponse: '',
                     currentTranscript: '',
                     lastCommittedTranscript: '',

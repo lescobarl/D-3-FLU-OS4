@@ -8,6 +8,7 @@ import {
   consumeTurnSpeakerPreflight,
   peekTurnSpeakerPreflight,
   resetTurnSpeakerPreflights,
+  resetSessionSpeakerSnapshots,
 } from './turnSpeakerPreflight.js'
 
 const timersByTurn = new Map()
@@ -197,6 +198,9 @@ export function primeTurnSpeakerPreflight(turnId, runFinalSnapshot, { onClusters
 export function resetTurnIdentityPipeline() {
   stopAllContinuousIdentityPipelines()
   resetTurnSpeakerPreflights()
+  // El ledger de medidas de la sesion tambien es estado de sesion: sin esto, un reinicio
+  // reasignaria filas nuevas con medidas de la conversacion anterior.
+  resetSessionSpeakerSnapshots()
 }
 
 export { consumeTurnSpeakerPreflight, resetTurnSpeakerPreflights }

@@ -280,8 +280,12 @@ describe('piso de evidencia: una ventana sin VOZ medida no abre un "Hablante N" 
       allowNewCluster: true,
     } as any)
 
-  it('conserva el hablante anterior en vez de inventar uno nuevo', () => {
-    expect(resolverPiso(VENTANA_SIN_VOZ)).toBe('Hablante 1')
+  // CAMBIO DECLARADO (2026-10-21, fase 1 de diarizacion): sin VOZ medida el turno recibe
+  // la etiqueta PROVISIONAL de config (no la del turno anterior: heredarla le daba a la
+  // mujer la etiqueta del dueno). El proposito del guard se conserva: NO se inventa un
+  // "Hablante N" nuevo.
+  it('sin voz medida no se inventa hablante: etiqueta PROVISIONAL, no la anterior', () => {
+    expect(resolverPiso(VENTANA_SIN_VOZ)).toBe('Hablante ?')
   })
 
   it('una voz DISTINTA con evidencia suficiente (0.58) si abre hablante nuevo', () => {
@@ -292,7 +296,7 @@ describe('piso de evidencia: una ventana sin VOZ medida no abre un "Hablante N" 
     expect(resolverPiso([0, 1, 0])).toBe('Hablante 2')
   })
 
-  it('sin vector no se inventa etiqueta', () => {
-    expect(resolverPiso([])).toBe('Hablante 1')
+  it('sin vector no se inventa etiqueta (pendiente, nunca la del turno anterior)', () => {
+    expect(resolverPiso([])).toBe('Hablante ?')
   })
 })

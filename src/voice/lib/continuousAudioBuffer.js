@@ -11,6 +11,8 @@ import {
 } from './micCapture.js'
 import { flattenChunksTail } from './voiceIdentity.js'
 import { DEFAULT_SAMPLE_RATE } from './audioConstants.js'
+import { selectVoicedWindow } from './voicedActivity.js'
+import { SPEAKER_ASSIGN } from './speakerAssignDefaults.js'
 
 function sumChunkLengths(chunks = []) {
   return chunks.reduce((sum, chunk) => sum + (chunk?.length || 0), 0)
@@ -107,6 +109,19 @@ export class ContinuousAudioBuffer {
           turnEnd,
         )
       }
+    }
+
+    // FASE 1 (2026-10-21): se mide el ULTIMO TRAMO CONTIGUO DE VOZ del turno, no los
+    // 2 s completos. Un turno con dos voces promediaba ambas y su vector casaba con el
+    // ancla del primario (0.894 medido) aunque hablara otra persona. Reutiliza el UNICO
+    // VAD (`selectVoicedWindow` -> `isVoicedFrame`): no se crea otro predicado de voz.
+    if (captureCfg.conversationTurnLastVoicedSpan !== false && window.length) {
+      const voicedSpan = selectVoicedWindow(window, {
+        sampleRate: this.sampleRate,
+        maxGapMs: Number(captureCfg.conversationTurnVoicedGapMs) || SPEAKER_ASSIGN.turnVoicedGapMs,
+        prefer: 'last',
+      })
+      if (voicedSpan.length) return voicedSpan
     }
 
     return window

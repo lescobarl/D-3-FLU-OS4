@@ -51,11 +51,42 @@ describe('FREEZE: la fila congela su nombre; una etiqueta reutilizada no lo here
     expect(etiqueta('r2'), 'una voz distinta NO hereda el nombre de la clave reutilizada').toBe('Hablante 1')
   })
 
-  it('PRUEBA DE DETECTOR (el detector no es decorativo): si la herencia por directorio vuelve, este caso cae', () => {
-    // Fila NUEVA sin nombre propio escrito y sin firma: no hay de donde heredar.
-    sembrar([fila('r9', 'speaker_1')])
-    registerSpeakerIdentity({ name: 'Luis', clusters: [], previousLabel: 'Hablante 1' })
-    expect(etiqueta('r9'), 'sin nombre congelado en la fila, la etiqueta provisional (no el directorio)').toBe('Hablante 1')
+  it(
+    'CAMBIO DECLARADO (2026-10-21): la fila de la MISMA clave/epoch TAMBIEN se renombra',
+    () => {
+      // El renombre por CLAVE (mandato 2026-10-21) escribe el nombre en TODAS las filas de
+      // la voz del epoch, tengan o no nombre escrito/firma. Antes solo se congelaba la fila
+      // que ya traia nombre, y "soy Luis" dejaba filas de la MISMA voz en "Hablante 1".
+      // La proteccion contra la HERENCIA POR DIRECTORIO sigue siendo el caso anterior: una
+      // fila de la MISMA clave creada DESPUES del renombre NO hereda el nombre.
+      sembrar([fila('r9', 'speaker_1')])
+      registerSpeakerIdentity({ name: 'Luis', clusters: [], previousLabel: 'Hablante 1' })
+      expect(etiqueta('r9'), 'la voz registrada pasa TODA su participacion al nombre').toBe('Luis')
+    },
+  )
+
+  it('la VOZ CONTRARIA bajo la misma clave no se renombra: la firma manda sobre la clave', () => {
+    // Firma de la voz del dueno (base canonica) y firma de OTRA persona (ortogonal).
+    const vozLuis = new Array(16).fill(0)
+    vozLuis[0] = 1
+    const vozAjena = new Array(16).fill(0)
+    vozAjena[7] = 1
+
+    sembrar([
+      fila('r1', 'speaker_1', { speakerName: 'Hablante 1', signature: vozLuis }),
+      fila('r2', 'speaker_1', { speakerName: 'Hablante 1', signature: vozAjena }),
+    ])
+    registerSpeakerIdentity({
+      name: 'Luis',
+      clusters: [],
+      previousLabel: 'Hablante 1',
+      signatureVector: vozLuis,
+    })
+
+    // La fila del titular pasa al nombre; la de la OTRA voz conserva su etiqueta anonima
+    // aunque comparta clave: la clave agrupa turnos, no personas.
+    expect(etiqueta('r1')).toBe('Luis')
+    expect(etiqueta('r2'), 'la mujer no sale Luis').toBe('Hablante 1')
   })
 
   it('el nombre congelado es WRITE-ONCE: un registro posterior de otra clave no lo mueve', () => {

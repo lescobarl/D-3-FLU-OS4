@@ -155,7 +155,10 @@ describe('raiz B · diarizacion: la voz del dueno conserva su nombre en turno so
     expect(diagnosis.reason).toBe('production-reidentify')
   })
 
-  it('FALSIFICADOR: la MISMA voz y similitudes con 500 ms vuelve a ser continuidad anonima', () => {
+  // CAMBIO DECLARADO (2026-10-21, fase 1): la ventana corta sigue sin afirmar el NOMBRE
+  // (proposito del falsificador), pero tampoco hereda ya la etiqueta del turno anterior:
+  // sin coincidencia medida el turno queda PENDIENTE y se completa con su propio vector.
+  it('FALSIFICADOR: con 500 ms no se afirma el nombre ni se hereda la etiqueta anterior', () => {
     const clusters: any[] = [
       { label: 'Luis', signature: [...VOZ_LUIS], signatureHistory: [[...VOZ_LUIS]] },
       { label: 'Hablante 1', signature: [...VOZ_HABLANTE_1], signatureHistory: [[...VOZ_HABLANTE_1]] },
@@ -173,8 +176,8 @@ describe('raiz B · diarizacion: la voz del dueno conserva su nombre en turno so
       thresholds: FLU_CONFIG.voiceIdentity.capture.conversationSpeakerThresholds,
       diagnosis,
     } as any)
-    expect(speaker).toBe('Hablante 1')
-    expect(diagnosis.reason).toBe('production-short-window-continuity')
+    expect(speaker).toBe('Hablante ?')
+    expect(diagnosis.reason).toBe('production-short-window-pending')
   })
 })
 

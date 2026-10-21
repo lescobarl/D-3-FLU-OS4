@@ -68,6 +68,7 @@ export function resolveSpeakerIdentityFromVector(
     preferSpeaker = '',
     reservedLabels = [],
     sessionPrimary = '',
+    speakerHighWater = 0,
   } = {},
 ) {
   const captureCfg = getVoiceIdentityCaptureConfig()
@@ -98,6 +99,7 @@ export function resolveSpeakerIdentityFromVector(
         allowNewCluster,
         reservedLabels,
         sessionPrimary,
+        speakerHighWater,
         minVoicedSamples: getConversationMinVoicedSamples(sampleRate),
         minVoicedSamplesForNew: getConversationMinVoicedForNewSamples(sampleRate),
         diagnosis,

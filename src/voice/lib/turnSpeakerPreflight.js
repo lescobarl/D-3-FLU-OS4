@@ -13,8 +13,51 @@ import { enqueueSpeakerIdentityJob } from './voiceIdentityQueue.js'
 import { FLU_CONFIG } from './fluConfig.js'
 import { DEFAULT_SAMPLE_RATE } from './audioConstants.js'
 import { relayLog } from '../../lib/clientLogRelay'
+import { SPEAKER_ASSIGN } from './speakerAssignDefaults.js'
+import { classifyVoiceAgainstClusters } from './speakerDiarization.js'
+import { resolvePendingSpeakerRows } from './conversationTurnRow'
 
 const preflightByTurn = new Map()
+
+/**
+ * LEDGER DE SESION de medidas de voz (fase 1 de diarizacion, 2026-10-21).
+ *
+ * `preflightByTurn` es por TURNO y se consume al cerrar la fila: la medida de un turno
+ * desaparecia del proceso en cuanto la fila se escribia, asi que una voz no podia
+ * reasignarse cuando su cluster aparecia despues. Aqui sobreviven TODAS las medidas de la
+ * sesion (una entrada por snapshot, acotada por config) y son la unica fuente para
+ * recalcular las filas INCIERTAS. No sustituye a los clusters: los alimenta.
+ */
+const sessionLedger = []
+
+function ledgerMax() {
+  const configured = Number(FLU_CONFIG.voiceIdentity?.capture?.preflightLedgerMax)
+  return Number.isFinite(configured) && configured > 0 ? configured : SPEAKER_ASSIGN.preflightLedgerMax
+}
+
+/**
+ * Anota una medida en el ledger de la sesion (escritor UNICO del ledger).
+ * @param {number} turnId Turno de la medida.
+ * @param {object} entry Medida (vector, etiqueta, motivo).
+ */
+function noteSessionSnapshot(turnId, entry) {
+  sessionLedger.push({ turnId, ...entry })
+  const max = ledgerMax()
+  while (sessionLedger.length > max) sessionLedger.shift()
+}
+
+/**
+ * Medidas de voz de la SESION (copia): fuente unica del recalculo de filas inciertas.
+ * @returns {Array<object>}
+ */
+export function getSessionSpeakerSnapshots() {
+  return sessionLedger.map((entry) => ({ ...entry }))
+}
+
+/** Vacia el ledger (reinicio de sesion). */
+export function resetSessionSpeakerSnapshots() {
+  sessionLedger.length = 0
+}
 
 /** Umbral de fusion de clusters: el de REUTILIZACION ("misma voz"). Medido: misma
  *  voz 0.69-0.74, distinta 0.58 -> el umbral (0.66) cae entre las dos bandas; NO se
@@ -122,6 +165,32 @@ export function scheduleTurnSpeakerPreflight(turnId, run, { onClusters, onResolv
     onClusters(capAndFuseSpeakerClusters(clusters, { maxAuto: autoSpeakerCap(), floor: clusterMergeFloor() }))
   }
 
+  /**
+   * RECALCULO de filas INCIERTAS cuando aparece un cluster NUEVO (fase 1, 2026-10-21).
+   *
+   * Solo se tocan las filas con etiqueta PENDIENTE (`voiceIdentity.labels.pendingSpeaker`):
+   * una fila ya resuelta no se reescribe por una medida posterior. La decision la toma el
+   * dueno unico de la asignacion por centroides (`classifyVoiceAgainstClusters`).
+   *
+   * @param {object} result Resultado del snapshot que abrio el cluster.
+   */
+  const reconcilePendingRows = (result) => {
+    const vector = Array.isArray(result?.signatureVector)
+      ? result.signatureVector
+      : Array.isArray(result?.vector)
+        ? result.vector
+        : []
+    if (!vector.length || !Array.isArray(result?.workingClusters)) return
+    const verdict = classifyVoiceAgainstClusters({
+      vector,
+      speakerClusters: result.workingClusters,
+      thresholds: FLU_CONFIG.voiceIdentity?.capture?.conversationSpeakerThresholds,
+    })
+    if (verdict.verdict !== 'known') return
+    // El LEDGER es la fuente de la medida: resuelve tambien las filas que nacieron SIN firma.
+    resolvePendingSpeakerRows(result.workingClusters, { snapshots: getSessionSpeakerSnapshots() })
+  }
+
   const prior = preflightByTurn.get(id)
   preflightByTurn.set(id, {
     ...(prior?.ready
@@ -155,7 +224,10 @@ export function scheduleTurnSpeakerPreflight(turnId, run, { onClusters, onResolv
         // FINAL resuelve despues: sus clusters se persisten igual, o el primer
         // cluster del turno se pierde para siempre y ninguna voz se puede separar
         // (defecto medido: `Match inClusters=0` en todos los turnos).
-        if (!continuous || abrioVozNueva(result)) emitClusters(result?.workingClusters)
+        if (!continuous || abrioVozNueva(result)) {
+          emitClusters(result?.workingClusters)
+          reconcilePendingRows(result)
+        }
         notifyResolvedForTurn(result)
         return
       }
@@ -189,6 +261,8 @@ export function scheduleTurnSpeakerPreflight(turnId, run, { onClusters, onResolv
         reason: result?.reason || '',
         evidence: result?.evidence === true,
       }
+      // LEDGER: la medida se anota ANTES de cualquier consume del turno.
+      noteSessionSnapshot(id, snapshotEntry)
       const snapshots = [...(slot.snapshots || []), snapshotEntry]
       preflightByTurn.set(id, {
         ready: true,
@@ -211,7 +285,12 @@ export function scheduleTurnSpeakerPreflight(turnId, run, { onClusters, onResolv
           FLU_CONFIG.voiceIdentity?.capture?.roomCapture?.deferClusterWritesUntilCommit !== false
         // La voz NUEVA no espera el snapshot final (puede no llegar con audio): su
         // cluster se persiste en cuanto la medida lo crea (ver `abrioVozNueva`).
-        if (!defer || abrioVozNueva(result)) emitClusters(result.workingClusters)
+        if (!defer || abrioVozNueva(result)) {
+          emitClusters(result.workingClusters)
+          // Un cluster NUEVO es la unica ocasion de reasignar: solo se tocan las filas
+          // INCIERTAS (etiqueta pendiente), nunca una fila ya resuelta.
+          reconcilePendingRows(result)
+        }
       }
       // SONDA POR TURNO (2026-10-18): la linea lleva TODO lo necesario para recrear
       // el escenario sin cruzar lineas por orden: el turno, la REGLA que decidio, la

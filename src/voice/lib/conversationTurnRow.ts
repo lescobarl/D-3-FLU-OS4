@@ -18,9 +18,10 @@ import { voiceProbe } from './voiceProbe';
 import { isAutoSpeakerLabel, isProperSpeakerName } from './voiceIdentity';
 import { compareCosineSignatures } from './speakerCore';
 import { registerVoiceName, resolveVoiceIdentity } from './speakerDirectory.js';
-import { sameVoiceFloor } from './speakerClusters.js';
-import { canonicalSpeakerName, normalizeSpeakerLabel } from './speakerLabels';
-import { getFallbackSpeaker } from './speakerCore';
+import { differentVoiceFloor, sameVoiceFloor } from './speakerClusters.js';
+import { classifyVoiceAgainstClusters, namedAssignmentConfirmed } from './speakerDiarization.js';
+import { canonicalSpeakerName, normalizeSpeakerLabel, pendingSpeakerLabel } from './speakerLabels';
+import { autoSpeakerIndexFromKey, getFallbackSpeaker } from './speakerCore';
 import { labelToSpeakerId, resolveRowSpeakerLabel, speakerIdToDefaultName } from './conversationRow';
 import { voiceKeyFor } from './speakerDirectory.js';
 import { normalizeRowSignature } from './conversationRow';
@@ -83,6 +84,9 @@ function freezeResolvedSpeakerName(
 function resolveRowVisibleLabel(resolved: string, vozDeLaFila: string): string {
     const label = normalizeSpeakerLabel(String(resolved || '').trim());
     if (isProperSpeakerName(label)) return canonicalSpeakerName(label);
+    // La etiqueta PENDIENTE es de CONFIG y dice "no se sabe aun": se escribe TAL CUAL.
+    // Derivarla de su clave le inventaria un numero de hablante que no tiene.
+    if (label === pendingSpeakerLabel()) return label;
     return speakerIdToDefaultName(vozDeLaFila);
 }
 
@@ -202,40 +206,150 @@ export function preserveProperSpeaker(
 const recentTurns = new Map<string, string>();
 const RECENT_TURNS_MAX = 8;
 
+/** Mapa inverso fila -> turno: la medida del turno se busca por la FILA (ledger). */
+const turnByRow = new Map<string, string>();
+
 function rememberTurn(turnId: number | string | null, rowId: string): void {
     if (turnId === null || turnId === undefined || !rowId) return;
     recentTurns.set(String(turnId), rowId);
+    turnByRow.set(String(rowId), String(turnId));
     if (recentTurns.size > RECENT_TURNS_MAX) {
         const oldest = recentTurns.keys().next().value;
-        if (oldest != null) recentTurns.delete(oldest);
+        if (oldest != null) {
+            const viejaFila = recentTurns.get(oldest);
+            recentTurns.delete(oldest);
+            if (viejaFila) turnByRow.delete(String(viejaFila));
+        }
     }
 }
 
 /**
- * COMPLETA el hablante de la fila de un turno YA registrado (mismo dueno: la fila
- * se reutiliza por IDENTIDAD de turno). Devuelve `true` si la fila cambio.
+ * Evidencia de un turno de la sesion: su medida (`signatureVector`) y el turno al que
+ * pertenece. Es lo que el preflight entrega desde el LEDGER (`getSessionSpeakerSnapshots`).
  */
+export interface PendingRowEvidence {
+    turnId?: number;
+    signatureVector?: number[];
+}
+
 /**
- * Renombra TODA la participacion de una voz YA identificada (requisito del dueno:
- * "cuando identifique a un hablante especifico toda su participacion debe llevar
- * ese nombre; soy Luis y todo lo que lleve mi hablante debe cambiar a luis").
+ * Etiqueta que le corresponde a una fila INCIERTA, decidida por los DUENOS UNICOS.
  *
- * Quien sabe QUE etiquetas son la MISMA voz es el dueno de los clusters
- * (`findLabelsWithSharedVoice`); aqui solo se escriben las filas, con el MISMO
- * escritor unico (`batchLoadHistory`) que el resto de la conversacion.
+ * - Que la voz este DENTRO de la sesion lo dice `classifyVoiceAgainstClusters` (known/grey/new);
+ *   en zona gris NO se asigna nada: la fila sigue pendiente.
+ * - Que un NOMBRE PROPIO se pueda afirmar lo dice `namedAssignmentConfirmed` (piso + margen
+ *   sobre la mejor voz ALTERNATIVA). Si el nombre no pasa, se usa la mejor etiqueta ANONIMA y,
+ *   si tampoco la hay, la fila sigue pendiente: nunca se escribe el nombre de otra persona.
  *
- * @param {string[]} labels etiquetas que pertenecen a esa voz (incluye el nombre)
- * @param {string} toName nombre identificado (persona registrada)
- * @returns {number} filas cambiadas
+ * @param clusters Clusters de la sesion (con `label`, `signature` y `anchorVerified`).
+ * @param vector Medida de la fila (su firma o la de su turno).
+ * @param floor Piso de "misma voz" (config).
+ * @returns La etiqueta y la CLAVE de la voz elegidas, o `null` sin evidencia suficiente.
  */
+function pickPendingRowLabel(
+    clusters: Array<{ label?: string | null; signature?: number[] | null; anchorVerified?: boolean }>,
+    vector: number[],
+    floor: number,
+): { label: string; speakerId: string } | null {
+    const verdict = classifyVoiceAgainstClusters({ vector, speakerClusters: clusters });
+    if (verdict.verdict !== 'known') return null;
+    const medidos = clusters
+        .map((cluster) => ({
+            label: String(cluster?.label || '').trim(),
+            signature: normalizeRowSignature(cluster?.signature),
+            anchorVerified: cluster?.anchorVerified === true,
+        }))
+        .filter(
+            (cluster): cluster is { label: string; signature: number[]; anchorVerified: boolean } =>
+                Boolean(cluster.label && cluster.signature?.length),
+        );
+    let mejorNombre: { label: string; signature: number[]; sim: number } | null = null;
+    let mejorAnonima: { label: string; signature: number[]; sim: number } | null = null;
+    for (const cluster of medidos) {
+        const sim = compareCosineSignatures(cluster.signature, vector);
+        if (sim < floor) continue;
+        if (isProperSpeakerName(cluster.label)) {
+            const alternativas = medidos
+                .filter((otro) => otro.label !== cluster.label)
+                .map((otro) => compareCosineSignatures(otro.signature, vector));
+            const bestAlternative = alternativas.length ? Math.max(...alternativas) : -1;
+            const vale = namedAssignmentConfirmed({
+                label: cluster.label,
+                similarity: sim,
+                bestAlternative,
+                anchorVerified: cluster.anchorVerified,
+            });
+            if (!vale) continue;
+            if (!mejorNombre || sim > mejorNombre.sim) mejorNombre = { ...cluster, sim };
+        } else if (!mejorAnonima || sim > mejorAnonima.sim) {
+            mejorAnonima = { ...cluster, sim };
+        }
+    }
+    const elegida = mejorNombre || mejorAnonima;
+    if (!elegida) return null;
+    return {
+        label: elegida.label,
+        speakerId: voiceKeyFor({ voiceId: labelToSpeakerId(elegida.label), signature: elegida.signature }),
+    };
+}
+
 /**
- * Renombra una VOZ (registro manual del panel). NO toca ninguna fila: la conversacion es
- * texto insertado; el nombre vive en el directorio y se resuelve al MOSTRAR.
+ * Resuelve las filas INCIERTAS (etiqueta PENDIENTE) contra las medidas de la sesion.
  *
- * @param labels Etiquetas/voces a renombrar (se registran por su id de voz).
- * @param toName Nombre nuevo.
- * @returns cuantas VOCES quedaron registradas.
+ * Es el UNICO sitio que reescribe una fila pendiente. Tres reglas:
+ *  1. la asignacion la decide el dueno unico (`pickPendingRowLabel`: centroides + margen), asi
+ *     que nunca se escribe el nombre de otra persona por "ser el mas parecido";
+ *  2. una fila SIN firma se resuelve con la medida de SU TURNO (ledger del preflight,
+ *     `getSessionSpeakerSnapshots`): el commit recuerda turno -> fila;
+ *  3. ademas de `speakerName` se actualiza `speakerId` (la CLAVE de la voz) y se estampa la
+ *     firma con la que se decidio, para que el renombre por clave encuentre la fila despues.
+ *
+ * @param clusters Clusters de la sesion.
+ * @param {{ epoch?: number, floor?: number, snapshots?: PendingRowEvidence[] }} [options]
+ * @returns cuantas filas salieron de pendiente.
  */
+export function resolvePendingSpeakerRows(
+    clusters: Array<{ label?: string | null; signature?: number[] | null; anchorVerified?: boolean }> = [],
+    {
+        epoch,
+        floor = sameVoiceFloor(),
+        snapshots = [],
+    }: { epoch?: number; floor?: number; snapshots?: PendingRowEvidence[] } = {},
+): number {
+    const pending = pendingSpeakerLabel();
+    if (!clusters.length || !pending) return 0;
+    const store = useIntegrationStore.getState();
+    const epochVigente = Number(store.conversationEpoch);
+    const epochActual = Number.isFinite(Number(epoch)) ? Number(epoch) : epochVigente;
+    // Medida por TURNO (ledger): evidencia de las filas que no traen firma propia.
+    const porTurno = new Map<string, number[]>();
+    for (const evidencia of snapshots) {
+        const vector = normalizeRowSignature(evidencia?.signatureVector);
+        if (!vector || !Number.isFinite(Number(evidencia?.turnId))) continue;
+        porTurno.set(String(evidencia.turnId), vector);
+    }
+    let changed = 0;
+    for (const e of store.conversationHistory) {
+        if (e.role !== 'user') continue;
+        if (String(e.speakerName || '').trim() !== pending) continue;
+        const epochDeLaFila = Number.isFinite(Number(e.epoch)) ? Number(e.epoch) : epochVigente;
+        if (epochDeLaFila !== epochActual) continue;
+        // Firma de la fila o, si no tiene, la de SU turno: la fila puede nacer sin medida y
+        // el ledger guarda el vector con el que se decidio ese turno.
+        const deSuTurno =
+            normalizeRowSignature(e.signature) ||
+            porTurno.get(turnByRow.get(String(e.id)) || '') ||
+            null;
+        if (!deSuTurno) continue;
+        const elegida = pickPendingRowLabel(clusters, deSuTurno, floor);
+        if (!elegida) continue;
+        store.setEntrySpeaker(e.id, elegida.speakerId, { signature: deSuTurno });
+        store.setEntrySpeakerName(e.id, elegida.label);
+        changed += 1;
+    }
+    return changed;
+}
+
 export function renameSpeakerRows(
     labels: string[],
     toName: string,
@@ -252,6 +366,91 @@ export function renameSpeakerRows(
         freezeVoiceName(voz, name);
         changed += 1;
     });
+    return changed;
+}
+
+/**
+ * Renombra las filas de UNA VOZ por su CLAVE (`speakerId`), sin exigir piso de firma.
+ *
+ * Defecto que cierra (2026-10-21): "soy Luis" sobre `speaker_1` solo renombraba las filas
+ * con firma suficiente; las filas de esa MISMA clave sin medida (o con medida debil) se
+ * quedaban en "Hablante 1". El renombre por clave NO necesita el timbre: la clave ES la
+ * identidad de la voz en la sesion; el piso de firma sigue gobernando el cosido del GRUPO
+ * (`freezeVoiceName`, otras etiquetas de la misma voz).
+ *
+ * Reglas (una sola): filas `role === "user"` del epoch pedido, `speakerId === voiceId`;
+ * NO se pisa un nombre propio DISTINTO sin prueba de que la fila es ESA voz (misma
+ * excepcion write-once que el freeze: la firma de la fila, si la hay, la prueba).
+ * El piso de firma NO se exige para renombrar; solo resuelve la excepcion.
+ *
+ * GUARDIA CONSERVADORA de identidad (mandato 2026-10-21, riesgo "la mujer sale Luis"):
+ * la CLAVE la asigna la diarizacion y puede ser COMPARTIDA por dos personas cuando el
+ * turno llega mezclado. Por eso una fila ANONIMA que SI tiene firma y cuya similitud con
+ * las medidas de la voz queda POR DEBAJO de `differentVoiceFloor` (banda MEDIDA de voz
+ * distinta) NO se renombra: su timbre dice que es otra persona. Una fila sin firma no
+ * tiene evidencia en contra y se renombra (arreglo de huerfanos); una fila con firma
+ * COMPATIBLE (>= ese piso) tambien.
+ *
+ * @param voiceId Clave de la voz (`speaker_1`, `speaker_name_luis`, ...).
+ * @param speakerName Nombre propio a escribir (se canoniza).
+ * @param {{ epoch?: number, signatures?: Array<number[] | null | undefined>, floor?: number, differentFloor?: number }} [options]
+ *   `epoch` a tocar (por defecto el vigente); `signatures` medidas de la voz (prueba de
+ *   misma voz); `floor` piso de "misma voz"; `differentFloor` piso de "voz CLARAMENTE
+ *   distinta" (config `differentVoiceFloor`).
+ * @returns cuantas filas se reescribieron.
+ */
+export function renameVoiceRowsByKey(
+    voiceId: string,
+    speakerName: string,
+    {
+        epoch,
+        signatures = [],
+        floor = sameVoiceFloor(),
+        differentFloor = differentVoiceFloor(),
+    }: {
+        epoch?: number;
+        signatures?: Array<number[] | null | undefined>;
+        floor?: number;
+        differentFloor?: number;
+    } = {},
+): number {
+    const voz = String(voiceId || '').trim();
+    const name = canonicalSpeakerName(String(speakerName || '').trim());
+    if (!voz || !name) return 0;
+    const store = useIntegrationStore.getState();
+    const epochVigente = Number(store.conversationEpoch)
+    const epochActual = Number.isFinite(Number(epoch)) ? Number(epoch) : epochVigente;
+    const medidos = (Array.isArray(signatures) ? signatures : [])
+        .map((sig) => normalizeRowSignature(sig))
+        .filter((sig): sig is number[] => Boolean(sig?.length));
+    let changed = 0;
+    for (const e of store.conversationHistory) {
+        if (e.role !== 'user') continue;
+        // Sin epoch = fila legacy: cuenta como del epoch vigente (migracion unica aparte).
+        const epochDeLaFila = Number.isFinite(Number(e.epoch)) ? Number(e.epoch) : epochVigente;
+        if (epochDeLaFila !== epochActual) continue;
+        if (String(e.speakerId || '') !== voz) continue;
+        const actual = String(e.speakerName || '').trim();
+        const rowSignature = normalizeRowSignature(e.signature);
+        // Mejor similitud de la FILA contra las medidas de la voz (una sola lectura).
+        const bestSim = rowSignature && medidos.length
+            ? medidos.reduce((best, sig) => Math.max(best, compareCosineSignatures(sig, rowSignature)), -1)
+            : -1;
+        const mismaVozPorFirma = bestSim >= floor;
+        // Write-once entre identidades: un nombre propio DISTINTO solo se reescribe si la
+        // FIRMA de la fila prueba que es la MISMA voz (la excepcion declarada de "soy X").
+        if (actual && isProperSpeakerName(actual) && actual !== name) {
+            if (!mismaVozPorFirma) continue;
+        }
+        // GUARDIA de voz CONTRARIA: una fila ANONIMA con firma CLARAMENTE por debajo del
+        // piso de "voz distinta" es otra persona, aunque la diarizacion le diera la misma
+        // clave (turno mezclado). No se renombra: la clave NO es la persona.
+        const anonima = !actual || !isProperSpeakerName(actual);
+        if (anonima && bestSim >= 0 && bestSim < differentFloor) continue;
+        if (actual === name) continue;
+        store.setEntrySpeakerName(e.id, name);
+        changed += 1;
+    }
     return changed;
 }
 
@@ -294,7 +493,14 @@ export function freezeVoiceName(
         vector = null,
         signatures = [],
         floor = sameVoiceFloor(),
-    }: { vector?: number[] | null; signatures?: Array<number[] | null | undefined>; floor?: number } = {},
+        epoch,
+    }: {
+        vector?: number[] | null;
+        signatures?: Array<number[] | null | undefined>;
+        floor?: number;
+        /** Epoch a tocar (por defecto el vigente): una fila de otra conversacion NO se reescribe. */
+        epoch?: number;
+    } = {},
 ): number {
     const voz = String(voiceId || '').trim();
     const name = canonicalSpeakerName(String(speakerName || '').trim());
@@ -303,9 +509,15 @@ export function freezeVoiceName(
         .map((sig) => normalizeRowSignature(sig))
         .filter((sig): sig is number[] => Boolean(sig?.length));
     const store = useIntegrationStore.getState();
+    const epochVigente = Number(store.conversationEpoch)
+    const epochActual = Number.isFinite(Number(epoch)) ? Number(epoch) : epochVigente;
     let changed = 0;
     store.conversationHistory.forEach((e) => {
         if (e.role !== 'user') return;
+        // SOLO el epoch vigente: la conversacion anterior no se reescribe. Sin epoch =
+        // fila legacy (cuenta como vigente; la migracion real las estampa al cargar).
+        const epochDeLaFila = Number.isFinite(Number(e.epoch)) ? Number(e.epoch) : epochVigente;
+        if (epochDeLaFila !== epochActual) return;
         const rowSignature = normalizeRowSignature(e.signature);
         const sameVoiceBySignature = Boolean(
             medidos.length &&
@@ -428,6 +640,11 @@ export interface UserTurnRowInput {
     evidenciaAcustica?: boolean;
     /** FIRMA de la voz del turno (para sustituir el nombre en TODAS las filas de esa voz). */
     signature?: number[] | null;
+    /**
+     * Epoch de la fila. Por defecto lo toma del store (`useIntegrationStore.getState()`):
+     * el llamador solo lo fija en replay/tests. El renombre por voz filtra por este dato.
+     */
+    epoch?: number;
     /** Sentimiento de la locucion (lo calcula quien la captura); por defecto 'neutral'. */
     sentiment?: 'positive' | 'negative' | 'neutral' | 'question';
     /** Reloj inyectable (por defecto Date.now()). */
@@ -527,13 +744,15 @@ function commitUserTurnRowInner({
     registeredSpeaker,
     signature = null,
     sentiment = 'neutral',
+    epoch,
 }: UserTurnRowInput): UserTurnRowResult {
     const raw = String(text || '');
     const norm = cleanForSpeech(raw).toLowerCase();
     if (!norm) return { id: null, action: 'skipped' };
     const store = useIntegrationStore.getState();
     const history = store.conversationHistory;
-
+    // EPOCH de la fila: dueno del dato = el store; el input solo lo fija en replay/tests.
+    const epochDeLaFila = Number.isFinite(Number(epoch)) ? Number(epoch) : store.conversationEpoch;
     // Frontera del turno actual: todo lo posterior a la última respuesta de FLU.
     let turnStart = 0;
     for (let i = history.length - 1; i >= 0; i -= 1) {
@@ -547,6 +766,9 @@ function commitUserTurnRowInner({
     // LA VOZ de la fila (no su nombre): el nombre se resuelve al MOSTRAR. La clave es el
     // TIMBRE cuando se midio (mismo timbre = misma clave aunque cambie la etiqueta).
     const vozDeLaFila = voiceKeyFor({ voiceId: labelToSpeakerId(resolved), signature });
+    // HIGH-WATER de la sesion: la clave automatica de esta fila fija el numero usado (nunca
+    // baja; borrar un hablante o podar clusters no lo toca). Escritor unico: esta puerta.
+    store.noteSpeakerHighWater(autoSpeakerIndexFromKey(vozDeLaFila) ?? 0);
     // FREEZE (mandato del dueno 2026-10-17): la fila nace con su etiqueta CONGELADA — la
     // etiqueta que RESOLVIO la diarizacion para ESTE turno, canonica ("luis" -> "Luis"), no
     // la grafia cruda del aporte. Antes se escribia SIEMPRE `speakerIdToDefaultName(voz)`, y
@@ -636,6 +858,7 @@ function commitUserTurnRowInner({
     store.addConversationEntry({
         id,
         role: 'user',
+        epoch: epochDeLaFila,
         text: raw,
         speakerId: vozDeLaFila,
         // SIN ROTULO PROPIO no se escribe nada en la fila (regla del dueno 2026-10-08,

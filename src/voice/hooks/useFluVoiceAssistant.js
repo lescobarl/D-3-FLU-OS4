@@ -1526,6 +1526,9 @@ const lastResolvedTurnRef = useRef(0)
         preferSpeaker: lastLoggedSpeakerRef.current || '',
         reservedLabels: reservedSpeakerLabels(userSpeakersView.current),
         sessionPrimary: sessionPrimarySpeakerRef.current || '',
+        // HIGH-WATER de la sesion (dato del store): el resolutor devuelve max+1 y no
+        // reutiliza un numero aunque su dueno se haya renombrado o borrado.
+        speakerHighWater: useIntegrationStore.getState().speakerHighWater,
       })
       // El resolutor decide SOBRE COPIAS (`workingClusters`): el ref solo se escribe aqui.
       setSpeakerClusters(identity.workingClusters)

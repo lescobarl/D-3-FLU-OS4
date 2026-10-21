@@ -303,8 +303,11 @@ export function rmsOfBlocks(blocks, { sampleRate = DEFAULT_SAMPLE_RATE, windowMs
  *   voz del llamador decide si alcanza; aqui NO se fabrica voz.
  *
  * @param {Float32Array|number[]} samples Ventana del turno (mono, [-1,1]).
- * @param {{ sampleRate?: number, maxSamples?: number, frameMs?: number, rmsFloor?: number, maxGapMs?: number }} [opts]
+ * @param {{ sampleRate?: number, maxSamples?: number, frameMs?: number, rmsFloor?: number, maxGapMs?: number, prefer?: "longest"|"last" }} [opts]
  *   `maxSamples` acota el tramo devuelto (0/ausente = toda la ventana).
+ *   `prefer: "last"` devuelve el ULTIMO tramo contiguo de voz (el que el ASR acaba de
+ *   confirmar); "longest" (defecto) el de mas voz. Un turno con DOS voces se mide sobre
+ *   una sola: promediarlas era lo que arrastraba el nombre del primario.
  * @returns {Float32Array} Tramo con voz (copia), o la cola si no hay voz.
  */
 export function selectVoicedWindow(
@@ -315,6 +318,7 @@ export function selectVoicedWindow(
     frameMs = getVadFrameMs(),
     rmsFloor = getVadEnergyThreshold(),
     maxGapMs = 500,
+    prefer = 'longest',
   } = {},
 ) {
   const data = samples && samples.length ? samples : null
@@ -347,6 +351,7 @@ export function selectVoicedWindow(
 
   // Tramos: una pausa de mas de `maxGapMs` los separa (dos voces/frases distintas).
   const gapFrames = Math.max(1, Math.round(Number(maxGapMs) / Math.max(1, Number(frameMs))))
+  const runs = []
   let best = null
   let current = null
   for (let f = 0; f < frameCount; f += 1) {
@@ -356,14 +361,18 @@ export function selectVoicedWindow(
       current.voiced += 1
     } else {
       current = { first: f, last: f, voiced: 1 }
+      runs.push(current)
       if (!best || current.voiced > best.voiced) best = current
       continue
     }
     if (current.voiced > best.voiced) best = current
   }
 
-  let startSample = best.first * frame
-  let endSample = Math.min(data.length, (best.last + 1) * frame)
+  // El tramo con mas voz (defecto) o el ULTIMO contiguo (`prefer: "last"`): el turno
+  // puede traer dos voces separadas por una pausa y se mide UNA, no la mezcla.
+  const chosen = prefer === 'last' && runs.length ? runs[runs.length - 1] : best
+  let startSample = chosen.first * frame
+  let endSample = Math.min(data.length, (chosen.last + 1) * frame)
   if (limit > 0 && endSample - startSample > limit) {
     // Mas voz que el tope: se queda el tramo MAS RECIENTE (el final del turno es el
     // que el ASR acaba de confirmar).

@@ -37,7 +37,7 @@ import { findClusterByLabel, findLabelsWithSharedVoice, findNearestCluster, merg
 import { registerVoiceName, voiceKeyFor } from './speakerDirectory.js'
 import { labelToSpeakerId } from './conversationRow.js'
 import { compareCosineSignatures, hasVoiceMeasurement, isAutoSpeakerLabel, normalizeEmbeddingVector } from './speakerCore.js'
-import { freezeVoiceName } from './conversationTurnRow'
+import { freezeVoiceName, renameVoiceRowsByKey } from './conversationTurnRow'
 import { setSessionPrimarySpeaker } from './sessionPrimarySpeaker.js'
 import { voiceProbe } from './voiceProbe'
 
@@ -136,16 +136,26 @@ export function registerSpeakerIdentity({
   ].filter((sig) => Array.isArray(sig) && sig.length && hasVoiceMeasurement(sig))
   let rowsChanged = 0
   if (voiceId) {
-    // La clave PRIMARIA (la de la voz medida) y la de CADA etiqueta del grupo: una voz
-    // partida en dos etiquetas deja filas con claves distintas y todas son de la MISMA
-    // persona. Solo tienen voz las filas ya escritas; una fila nueva sin medida NO hereda.
+    // CLAVE PRIMARIA: renombre por CLAVE, SIN piso de firma (mandato 2026-10-21). La clave
+    // ES la voz de la sesion: sus filas del epoch van con el nombre aunque no tengan medida
+    // suficiente o no tengan ninguna. Antes solo se renombraban las que pasaban el piso y
+    // "soy Luis" sobre `speaker_1` dejaba filas en "Hablante 1".
+    rowsChanged += renameVoiceRowsByKey(voiceId, clean, { signatures: voiceSignatures })
+    // FREEZE por FIRMA (dueno 2026-10-17): alcanza las filas de esa MISMA voz que llevan
+    // OTRA clave (la diarizacion partio la voz). El renombre por clave no las ve porque su
+    // `speakerId` difiere. Una voz partida queda, por tanto, con TODAS sus filas al nombre.
     const clavesDeLaVoz = new Set([voiceId])
     if (evidenciaDeEtiqueta) {
       for (const label of etiquetasDeLaVoz) {
         clavesDeLaVoz.add(voiceKeyFor({ voiceId: labelToSpeakerId(label), signature: null }))
       }
     }
+    const hayMedidasDeLaVoz = voiceSignatures.length > 0
     for (const clave of clavesDeLaVoz) {
+      // Sin MEDIDAS, el freeze por la clave primaria no aporta: manda el renombre por clave
+      // (que respeta el write-once). El freeze se reserva para alcanzar filas de OTRA clave
+      // con FIRMA, y para eso necesita medidas de la voz.
+      if (clave === voiceId && !hayMedidasDeLaVoz) continue
       // PISO VERIFICADO (0.62) en la via "soy X": la identidad la afirma el titular con su
       // medida fresca y la MISMA voz mide 0.629–0.714 contra su ancla de la base; con el
       // piso por defecto (0.66) sus filas entre 0.629 y 0.66 quedaban sin renombrar
