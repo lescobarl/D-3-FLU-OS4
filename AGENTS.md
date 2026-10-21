@@ -4,9 +4,9 @@
 
 Este repositorio se valida con **typecheck, linters y pruebas funcionales**. No hay
 gates de metadatos, ledger de pendientes, auditoría del historial de Git, reglas de
-alcance de commits, contratos de proceso ni autorizaciones artificiales para correr
-la suite. La calidad se demuestra con el software funcionando y con pruebas que
-ejecutan el flujo real.
+alcance de commits ni contratos de proceso. La calidad se demuestra con el software
+funcionando y con pruebas que ejecutan el flujo real. **La suite completa está
+PROHIBIDA en local**: la corre el CI (§1.15).
 
 ---
 
@@ -33,12 +33,12 @@ ejecutan el flujo real.
 | ESLint | `npm run lint:eslint` |
 | Test rápido (archivo tocado) | `npm run test:file <ruta>` |
 | Test de cambios | `npm test` |
-| Suite completa | `npm run test:full` |
+| Suite completa (solo CI / autorización expresa) | `npm run test:full` |
 | Gate de entrega | `npm run gate` |
 | E2E | `npm run e2e` |
 | Build | `npm run build` |
 
-`npm run gate` ejecuta `typecheck + lint + test:full`; no audita Git ni metadatos.
+`npm run gate` ejecuta `typecheck + lint`; no corre la suite completa (prohibida, §1.15) ni audita Git.
 El pre-commit ejecuta `lint + typecheck` y nunca la suite completa.
 
 ---
@@ -84,6 +84,16 @@ El pre-commit ejecuta `lint + typecheck` y nunca la suite completa.
     tags) salvo petición expresa del usuario en ese turno.
 14. **No warnings `act()`** ni tests dependientes de timing. Tests deterministas
     (fake timers, `act()`), sin depender de la carga de la máquina.
+15. **PROHIBIDO ejecutar la suite completa.** Solo la corre el CI (`CI=true` es
+    autorización expresa) o una sesión humana que lo pida en ESE turno
+    (`FLU_AUTH_FULL_SUITE=1`). El agente NO la corre por iniciativa propia ni pone
+    la variable: validar un cambio es `test:file` / `test:grep` / `npm test`
+    (`--changed`) + `lint` + `typecheck`. Prohibidos también los atajos
+    equivalentes (`npx vitest run` sin filtro, `vitest run` sin ruta,
+    `test:coverage`). La barrera es mecánica, con DOS puertas y UN criterio
+    (`scripts/full-suite-policy.mjs`): `vitest.config.ts` —por donde pasa cualquier
+    corrida— y `scripts/require-full-suite-auth.mjs` (script npm). Guard de
+    conducta: `tests/fullSuitePathBarrier.test.ts`.
 
 ---
 
@@ -144,11 +154,27 @@ El pre-commit ejecuta `lint + typecheck` y nunca la suite completa.
 
 ### Al cerrar una tarea
 
-- `npm run gate` (typecheck + lint + suite completa) o, si el entorno no lo permite,
-  `npm run test:full` + `npm run build`.
+- `npm run gate` (typecheck + lint) + `npm run build`. La suite completa NO se
+  corre en local: es del CI (§1.15); si el usuario la pidió, se anota.
 - `npm run e2e` para los flujos de UI afectados.
 - Si un test falla, se corrige la causa raíz; no se ajusta el test para tapar el
   defecto salvo que el test mida una regla obsoleta, y entonces se declara.
+
+### Suite completa: prohibida por defecto
+
+- **Qué se bloquea:** `vitest run`/`bench` sin ruta de test y sin
+  `--changed`/`-t`/`--related`/`--shard`. El VALOR de un flag no es un filtro
+  (`--reporter dot` sigue siendo suite completa).
+- **Qué abre la puerta:** `CI=true`/`GITHUB_ACTIONS` (los pone la plataforma) o
+  `FLU_AUTH_FULL_SUITE=1` pedido por el usuario en ese turno. El agente no pone la
+  variable: "verificar que no rompí nada" no es un pedido.
+- **Atajo declarado (no es puerta trasera):** `--config vitest.guards.config.ts`
+  acota porque su `include` es `GUARD_FILES`; la política lo declara como dato y el
+  guard comprueba que ese include sigue siendo la lista.
+- **Modo watch** (`npm run test:watch`) no se bloquea: es interactivo, pero también
+  corre el repo entero; se usa solo cuando el humano lo está viendo.
+- **Un incumplimiento no se disfraza:** si se corrió, se anota en el reporte; no se
+  presenta como "validación".
 
 ### Reglas de los tests
 
@@ -215,7 +241,7 @@ El pre-commit ejecuta `lint + typecheck` y nunca la suite completa.
 2. **Prohibido volcar contexto completo.** Se lee el fragmento o bloque nuevo.
 3. **Ventana mínima de logs:** solo la marca o línea relevante.
 4. **Verificación por niveles:** test del archivo tocado → typecheck → gate al
-   cierre. No correr todo por cada edición.
+   cierre. No correr todo por cada edición (la suite completa está prohibida, §1.15).
 5. **No re-verificar lo ya verde** sin que el código haya cambiado.
 6. **Delegar lo instrumental:** búsquedas y exploración a subagentes; el principal
    sintetiza.

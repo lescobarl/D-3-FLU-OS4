@@ -14,7 +14,7 @@
     "test:file": "vitest run --reporter=dot --silent=true",
     "test:grep": "vitest run --reporter=dot --silent -t",
     "test:affected": "vitest run --changed --reporter=dot --silent",
-    "test:full": "vitest run",
+    "test:full": "node scripts/require-full-suite-auth.mjs && vitest run",
     "verify:fast": "node scripts/fix-eol.mjs && npm run typecheck && npm run lint:eslint",
     "fix:eol": "node scripts/fix-eol.mjs",
     "test:watch": "vitest",
@@ -26,7 +26,7 @@
     "e2e:flu": "playwright test flu-settings-panel.spec.ts",
     "sync:ffmpeg": "node scripts/sync-ffmpeg-core.mjs",
     "postinstall": "node scripts/sync-ffmpeg-core.mjs",
-    "gate": "npm run typecheck && npm run lint && npm run test:full",
+    "gate": "npm run typecheck && npm run lint",
     "voz:log": "node scripts/analiza-voz-log.mjs",
     "lint:guards": "vitest run --config vitest.guards.config.ts",
     "prepare": "node scripts/install-hooks.mjs"

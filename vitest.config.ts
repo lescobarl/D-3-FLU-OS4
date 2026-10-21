@@ -1,6 +1,15 @@
 import { defineConfig } from 'vitest/config';
 import { fileURLToPath } from 'url';
 import { availableParallelism } from 'node:os';
+import { assertSuiteScope } from './scripts/full-suite-policy.mjs';
+
+// BARRERA DE LA SUITE COMPLETA (AGENTS.md §1.15: PROHIBIDO ejecutarla).
+// Vive AQUI, y no solo en el script npm `test:full`, porque este modulo lo carga
+// vitest en TODA corrida (npm, npx, IDE): bloquear aqui cierra el camino, no el
+// nombre del comando. El criterio es UNO (`scripts/full-suite-policy.mjs`); esta
+// linea solo lo aplica: sin filtro y sin autorizacion el proceso no arranca.
+// Lo mide tests/fullSuitePathBarrier.test.ts con un proceso REAL, no el texto.
+assertSuiteScope();
 
 const ROOT = fileURLToPath(new URL('.', import.meta.url));
 
