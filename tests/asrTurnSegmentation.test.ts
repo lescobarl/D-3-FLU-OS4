@@ -34,8 +34,8 @@ const CAPTURE = `hola profesora ${PRIOR} ${NOVEL_TAIL}`;
 const runs = (...speakers: string[]) => speakers.map((speaker) => ({ speaker, weight: 2, signatureVector: [1] }));
 
 describe('asrTurnSegmentation — configuracion', () => {
-    it('el troceo esta encendido y sus umbrales son los del contrato', () => {
-        expect(cfg.enabled).not.toBe(false);
+    it('el troceo esta APAGADO (mandato del dueno 2026-10-19: cortaba la frase en pedazos) y sus umbrales se conservan en config', () => {
+        expect(cfg.enabled).toBe(false);
         expect(cfg.minSpeakerRuns).toBeGreaterThanOrEqual(2);
         expect(cfg.minSnapshotsPerRun).toBeGreaterThanOrEqual(2);
         expect(Number(cfg.minCaptureWordsToSplit)).toBeGreaterThan(0);
@@ -140,8 +140,15 @@ describe('asrTurnSegmentation — prior embebido', () => {
 describe('asrTurnSegmentation — plan de commit', () => {
     const preflight = { snapshots: [snap('Hablante 2', [1, 0]), snap('Hablante 2', [1, 1]), snap('Hablante 3', [2, 0]), snap('Hablante 3', [2, 1])] };
 
+    // El troceo esta APAGADO en produccion (mandato del dueno 2026-10-19: cortaba la
+    // frase en pedazos). Aqui se prueba el planificador con su config de TEST encendida:
+    // es una capability dormida en config, no borrada, y sus puertas siguen bajo prueba.
+    const configConTroceo = { transcript: { asrSegmentation: { ...cfg, enabled: true } } };
+    const planear = (options: Parameters<typeof planAsrTurnSegments>[0]) =>
+        planAsrTurnSegments({ ...options, config: configConTroceo });
+
     it('trocea: omite el tramo ya commitido y asigna hablantes distintos', () => {
-        const plan = planAsrTurnSegments({
+        const plan = planear({
             phrase: CAPTURE,
             priorTexts: [PRIOR],
             priorSpeakers: ['Hablante 3'],
@@ -159,7 +166,7 @@ describe('asrTurnSegmentation — plan de commit', () => {
         // cambio de hablante"). El minimo de palabras no puede descartar texto.
         const cola = `${NOVEL_TAIL} y despues corregimos el examen de sociales y preparamos la exposicion del proyecto final`;
         const capture = `y luego ${PRIOR} ${cola}`;
-        const plan = planAsrTurnSegments({
+        const plan = planear({
             phrase: capture,
             priorTexts: [PRIOR],
             priorSpeakers: ['Hablante 3'],
@@ -173,7 +180,7 @@ describe('asrTurnSegmentation — plan de commit', () => {
     });
 
     it('sin evidencia de dos hablantes (1 racha estable) no trocea', () => {
-        const plan = planAsrTurnSegments({
+        const plan = planear({
             phrase: CAPTURE,
             priorTexts: [PRIOR],
             priorSpeakers: ['Hablante 3'],
@@ -185,7 +192,7 @@ describe('asrTurnSegmentation — plan de commit', () => {
     });
 
     it('diarizacion oscilante: no trocea aunque haya prior embebido', () => {
-        const plan = planAsrTurnSegments({
+        const plan = planear({
             phrase: CAPTURE,
             priorTexts: [PRIOR],
             priorSpeakers: ['Hablante 3'],
@@ -204,7 +211,7 @@ describe('asrTurnSegmentation — plan de commit', () => {
     });
 
     it('un candidato corto no se trocea (por debajo de las palabras minimas)', () => {
-        const plan = planAsrTurnSegments({
+        const plan = planear({
             phrase: 'una frase cortita',
             priorTexts: [PRIOR],
             priorSpeakers: ['Hablante 3'],
@@ -216,7 +223,7 @@ describe('asrTurnSegmentation — plan de commit', () => {
     });
 
     it('un prior VALIDO en el arranque del texto tambien corta (el tramo nuevo es lo que sigue)', () => {
-        const plan = planAsrTurnSegments({
+        const plan = planear({
             phrase: CAPTURE,
             priorTexts: ['hola profesora'],
             priorSpeakers: ['Hablante 3'],
@@ -228,7 +235,7 @@ describe('asrTurnSegmentation — plan de commit', () => {
     });
 
     it('sin preflight no hay troceo: el snapshot es la evidencia', () => {
-        const plan = planAsrTurnSegments({
+        const plan = planear({
             phrase: CAPTURE,
             priorTexts: [PRIOR],
             priorSpeakers: ['Hablante 3'],

@@ -1015,8 +1015,11 @@ describe('👥 Multi-Speaker Conversations', () => {
         const history = useIntegrationStore.getState().conversationHistory;
         expect(history).toHaveLength(scenario.messages.length);
         const speakers = new Set(history.map(e => resolveRowSpeakerLabel(e)));
-        // Canon de la etiqueta visible (id de voz -> nombre): 'Líder' -> 'Lider'.
-        expect(speakers.has('Lider')).toBe(true);
+        // ENMIENDA DECLARADA (2026-10-19): el canon cambio. Antes la etiqueta visible se
+        // derivaba del id de voz (`speaker_name_lider` -> 'Lider', sin tilde); hoy la decide
+        // el RESOLVER del turno y se canoniza con `canonicalSpeakerName` (dueño unico de la
+        // grafia), que CONSERVA la tilde: 'Líder' es la grafia correcta del nombre.
+        expect(speakers.has('Líder')).toBe(true);
         expect(speakers.has('Dev')).toBe(true);
     });
 

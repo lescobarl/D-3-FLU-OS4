@@ -12,13 +12,40 @@
  * reventaba en la recoleccion (throw en el cuerpo del describe) en cualquier maquina sin
  * el log del dueno. Con un log fresco, vuelve a exigir los 3 invariantes (y FALLA si el
  * defecto sigue).
+ *
+ * ACTUALIDAD MEDIDA (2026-10-18): la fecha del nombre es un proxy GRUESO; un log del
+ * MISMO dia capturado ANTES del ultimo cambio de `src/` mide un bundle anterior. Medido:
+ * el log de 14:40 (0/17 preReady, D1=2) parecia defecto de HEAD y era del bundle previo
+ * a los fixes de las 15:02. Un log solo es ground truth si se capturo DESPUES del
+ * ultimo cambio de `src/`; si no, se salta igual que si no hubiera log. No se borra
+ * evidencia: el log viejo sigue en TEMP y se juzga cuando haya uno posterior.
  */
 import { describe, it, expect } from 'vitest';
-import { readFileSync, existsSync, readdirSync } from 'fs';
+import { readFileSync, existsSync, readdirSync, statSync } from 'fs';
 import { join } from 'path';
 
 const TEMP = process.env.TEMP || process.env.TMP || ''
 const FRESH_FROM = '2026-10-16'
+
+/** Mtime mas reciente de `src/`: el codigo que el log debe estar midiendo. */
+export function ultimoCambioDeSrc(dir = join(process.cwd(), 'src')): number {
+  let ultimo = 0
+  for (const entrada of readdirSync(dir, { withFileTypes: true })) {
+    const ruta = join(dir, entrada.name)
+    ultimo = Math.max(ultimo, entrada.isDirectory() ? ultimoCambioDeSrc(ruta) : statSync(ruta).mtimeMs)
+  }
+  return ultimo
+}
+
+/**
+ * ¿El log se capturo despues del ultimo cambio de `src/`?
+ * @param capturadoMs mtime del log (el vigilante lo copia mientras crece).
+ * @param ultimoSrcMs mtime mas reciente de `src/`.
+ * @returns `true` solo si el log puede medir el codigo vigente.
+ */
+export function logEsDeCodigoVigente(capturadoMs: number, ultimoSrcMs: number): boolean {
+  return capturadoMs >= ultimoSrcMs
+}
 
 function fechaDe(ruta: string): string {
   const m = ruta.match(/(\d{4}-\d{2}-\d{2})/)
@@ -26,6 +53,7 @@ function fechaDe(ruta: string): string {
 }
 
 function loadLog(): { path: string; raw: string } | null {
+  const ultimoSrc = ultimoCambioDeSrc()
   let enTemp: string[] = []
   try {
     enTemp = readdirSync(TEMP)
@@ -36,6 +64,8 @@ function loadLog(): { path: string; raw: string } | null {
     .filter((p): p is string => Boolean(p))
     .filter((p) => existsSync(p))
     .filter((p) => { const f = fechaDe(p); return Boolean(f) && f >= FRESH_FROM })
+    // Solo logs posteriores al ultimo cambio de src: uno anterior mide otro bundle.
+    .filter((p) => logEsDeCodigoVigente(statSync(p).mtimeMs, ultimoSrc))
     .sort((a, b) => b.localeCompare(a))
   for (const p of candidates) {
     const raw = readFileSync(p, 'utf8')
@@ -56,6 +86,16 @@ function parseProbe(raw: string, tag: string) {
   }
   return out
 }
+
+describe('voz instrumentacion - el detector de ACTUALIDAD no es decorativo', () => {
+  it('un log anterior al ultimo cambio de src NO es ground truth; uno posterior SI', () => {
+    // Entrada infractora: el log de 14:40 contra los fixes de 15:02.
+    expect(logEsDeCodigoVigente(1000, 2000)).toBe(false)
+    // Entradas legitimas: mismo instante y captura posterior.
+    expect(logEsDeCodigoVigente(2000, 2000)).toBe(true)
+    expect(logEsDeCodigoVigente(2001, 2000)).toBe(true)
+  })
+});
 
 describe('voz instrumentacion ROJA: handoff preflight->commit, caja D1, short-historical', () => {
   it.runIf(LOG !== null)('GUARD 1 handoff preflight->commit: todo commit debe tener preReady=true (hoy 0/34 -> FALLA)', () => {

@@ -33,14 +33,19 @@ vi.mock('../src/core/db/fluDatabase.js', () => ({
     fluDb: { participants: { nombre: 'tabla-participantes' }, onboardingStates: { nombre: 'tabla-onboarding' } },
 }));
 
-vi.mock('../src/core/multiuser/participantRegistry.js', () => ({
-    createParticipantRegistry: (opciones: unknown) => {
-        dobles.argumentos = opciones;
-        dobles.crearRegistro(opciones);
-        return dobles.registro;
-    },
-    resolveKindRole: () => 'Estudiante',
-}));
+vi.mock('../src/core/multiuser/participantRegistry.js', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('../src/core/multiuser/participantRegistry.js')>();
+    return {
+        // Misma constante que el modulo real (una sola fuente del nombre del canal).
+        PARTICIPANTS_CHANGED_CHANNEL: actual.PARTICIPANTS_CHANGED_CHANNEL,
+        createParticipantRegistry: (opciones: unknown) => {
+            dobles.argumentos = opciones;
+            dobles.crearRegistro(opciones);
+            return dobles.registro;
+        },
+        resolveKindRole: () => 'Estudiante',
+    };
+});
 
 vi.mock('../src/core/onboarding/onboardingService.js', () => ({
     createOnboardingService: (opciones: unknown) => {

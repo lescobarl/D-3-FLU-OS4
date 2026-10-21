@@ -100,9 +100,15 @@ describe('A6 - una voz = un cluster (tope + fusion)', () => {
 })
 
 
-describe('REPRO del dueno 2026-10-11 - sin evidencia medida NO se abre voz nueva', () => {
-  it('misma voz a coseno 0.5 del cluster, lastSpeaker = esa voz => conserva la anterior (Hablante 1)', () => {
+describe('REPRO del dueno 2026-10-11, CORREGIDO 2026-10-18: una medida que no casa es OTRA voz', () => {
+  it('coseno 0.5 sostenido contra el cluster anterior => NO hereda "Hablante 1": abre su etiqueta', () => {
+    // La expectativa anterior era "sin evidencia no se acuna una etiqueta nueva" (reuso
+    // de la etiqueta del anterior). Medido en vivo, ese reuso fue el defecto: el dueno y
+    // la nina quedaron bajo UNA etiqueta ("Hablante 1", lastSim 0.143/0.192/0.380/0.374)
+    // y "soy Luis" ya no podia separarlos. Regla del dueno: voz distinta = etiqueta
+    // distinta; prohibido heredar por cercania, participante activo o ultimo hablante.
     const clusters: any[] = [{ label: 'Hablante 1', signature: v(1) }]
+    const diagnosis: Record<string, unknown> = {}
     const out = resolveConversationSpeaker({
       speakerClusters: clusters,
       sessionPrimary: '',
@@ -115,8 +121,10 @@ describe('REPRO del dueno 2026-10-11 - sin evidencia medida NO se abre voz nueva
       utteranceText: 'esta es una frase de prueba para voz',
       atTurnBoundary: true,
       allowNewCluster: true,
+      diagnosis,
     } as never)
-    expect(out, 'sin evidencia no se acuna una etiqueta nueva').toBe('Hablante 1')
-    expect(clusters.length, 'un cluster por voz, no dos').toBe(1)
+    expect(out, 'la voz distinta NO hereda la etiqueta del anterior').toBe('Hablante 2')
+    expect(diagnosis.reason).toBe('production-forced-new-voice')
+    expect(clusters.length, 'un cluster por VOZ: la voz distinta tiene el suyo').toBe(2)
   })
 })

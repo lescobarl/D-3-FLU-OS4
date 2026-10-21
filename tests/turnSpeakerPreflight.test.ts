@@ -141,10 +141,16 @@ describe('turnSpeakerPreflight — slot por turno', () => {
         expect(peekTurnSpeakerPreflight(2)).toBe(null);
     });
 
-    // REGLA VIGENTE (2026-10-07, medida en el log del dueno): el aviso que COMPLETA la
-    // fila lo da SOLO el snapshot FINAL. El tick CONTINUO calienta la cache del embedding
-    // pero NO escribe clusters NI avisa del hablante: si avisara, la fila se reescribiria
-    // varias veces por turno (la misma persona salia Hablante 1, luego 2, luego 4).
+    // REGLA VIGENTE (2026-10-07, medida en el log del dueno; ENMIENDA 2026-10-20 por
+    // b218404f): el aviso que COMPLETA la fila lo da SOLO el snapshot FINAL. El tick
+    // CONTINUO calienta la cache del embedding pero NO escribe clusters NI avisa del
+    // hablante: si avisara, la fila se reescribiria varias veces por turno (la misma
+    // persona salia Hablante 1, luego 2, luego 4).
+    // EXCEPCION (b218404f): un tick continuo que ABRE una voz NUEVA —mas clusters al
+    // salir que al entrar, con el conjunto de entrada conocido— si persiste y avisa:
+    // el snapshot FINAL puede llegar sin audio (turno ya sellado por el commit) y sin
+    // esto la sesion se queda con UN cluster y la voz nueva hereda la etiqueta sticky
+    // (medido: 18 escrituras con labels:["Luis"] y la mujer pegada a "Hablante 1").
     it('el continuo ni escribe clusters ni avisa; el aviso lo da el snapshot FINAL', async () => {
         const onClusters = vi.fn();
         const onResolvedFinal = vi.fn();
@@ -167,7 +173,70 @@ describe('turnSpeakerPreflight — slot por turno', () => {
         expect(resuelto).not.toHaveBeenCalled();
         expect(peekTurnSpeakerPreflight(2)!.continuous).toBe(true);
     });
+
+    it('un continuo que ABRE una voz nueva persiste el cluster y avisa (b218404f)', async () => {
+        const onClusters = vi.fn();
+        const onResolved = vi.fn();
+        scheduleTurnSpeakerPreflight(3, fuerte('Hablante 4', { inputClusters: [] }), {
+            onClusters,
+            onResolved,
+            continuous: true,
+        });
+        await flush();
+        expect(onClusters).toHaveBeenCalledWith([{ label: 'Hablante 4' }]);
+        expect(onResolved).toHaveBeenCalledWith(
+            expect.objectContaining({ speakerName: 'Hablante 4', turnId: 3 }),
+        );
+        expect(peekTurnSpeakerPreflight(3)!.continuous).toBe(true);
+    });
+
+    it('un continuo que NO abre voz (mismos clusters de entrada) sigue diferido', async () => {
+        const onClusters = vi.fn();
+        const onResolved = vi.fn();
+        scheduleTurnSpeakerPreflight(
+            4,
+            fuerte('Hablante 5', { inputClusters: [{ label: 'Hablante 5' }] }),
+            { onClusters, onResolved, continuous: true },
+        );
+        await flush();
+        expect(onClusters).not.toHaveBeenCalled();
+        expect(onResolved).not.toHaveBeenCalled();
+    });
 });
+
+    // MEDIDO EN d4c1c8f3: el aviso SOLO viaja con MEDIDA. El snapshot FINAL de un
+    // turno ya sellado podia resolver sin audio (reason 'no-audio', vector vacio)
+    // y aun asi avisaba del hablante de RESPALDO: ese aviso pisaba la ultima
+    // resolucion medida y la fila siguiente heredaba la etiqueta equivocada (la
+    // mujer quedaba batida entre "Hablante 1" y "Hablante 2").
+    it('un final sin medida (no-audio) NO avisa aunque el slot ya se consumio', async () => {
+        const onResolved = vi.fn();
+        scheduleTurnSpeakerPreflight(
+            5,
+            () =>
+                Promise.resolve({
+                    speakerName: fallbackLabel,
+                    speakerId: '',
+                    signatureVector: [],
+                    workingClusters: [{ label: fallbackLabel }],
+                    reason: 'no-audio',
+                }),
+            { onResolved },
+        );
+        consumeTurnSpeakerPreflight(5); // el commit sello el turno: el final resuelve tarde
+        await flush();
+        expect(onResolved, 'sin vector no hay aviso de identidad').not.toHaveBeenCalled();
+    });
+
+    it('el MISMO final tardio CON medida sigue avisando (la fila se completa)', async () => {
+        const onResolved = vi.fn();
+        scheduleTurnSpeakerPreflight(6, fuerte('Hablante 2'), { onResolved });
+        consumeTurnSpeakerPreflight(6);
+        await flush();
+        expect(onResolved).toHaveBeenCalledWith(
+            expect.objectContaining({ speakerName: 'Hablante 2', turnId: 6 }),
+        );
+    });
 
 describe('turnSpeakerPreflight — resolutor de audio del turno', () => {
     it('sin buffer responde no-audio con el hablante de respaldo', async () => {

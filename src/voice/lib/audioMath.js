@@ -481,10 +481,25 @@ export function peelWakeQuestionEcho(
   for (const source of echoSources) {
     const srcWords = speechWords(source)
     if (!srcWords.length) continue
+    // La COMPARACION se hace normalizada en AMBOS lados (minusculas + sin
+    // acentos): la fuente viene de `speechWords` (minúsculas con acentos) y el
+    // prefijo conservaba mayúsculas, así que un eco con mayúsculas ("Error HTTP
+    // de Gemini...") no casaba NUNCA y pasaba entero (medido 2026-10-20, sesion
+    // 97f86c73: el 402 de FLU se despacho como pregunta del usuario).
+    const srcText = srcWords.map((w) => normalizeVoiceCommandText(w).toLowerCase()).join(' ')
+    // ECO COMPLETO (el ASR repite TODO el mensaje de FLU, 11 palabras): el tope
+    // de 8 palabras dejaba viva la cola ("creditos en openrouter") como pregunta
+    // despachada. Si la pregunta ENTERA cubre la fuente y es un tramo contiguo
+    // de ella, no queda pregunta: se pela completa (la forma devuelta conserva
+    // la original del resto, aquí vacía).
+    const probe = words.map((w) => normalizeVoiceCommandText(w).toLowerCase()).join(' ')
+    if (echoChunkCovers(words, srcWords, coverageFloor) && srcText.includes(probe)) {
+      return ''
+    }
     for (let len = Math.min(8, words.length - 1); len >= 1; len -= 1) {
-      const prefixStr = normalizeVoiceCommandText(words.slice(0, len).join(' '))
-      const srcTail = srcWords.slice(-len).join(' ')
-      const srcHead = srcWords.slice(0, len).join(' ')
+      const prefixStr = normalizeVoiceCommandText(words.slice(0, len).join(' ')).toLowerCase()
+      const srcTail = srcText.split(' ').slice(-len).join(' ')
+      const srcHead = srcText.split(' ').slice(0, len).join(' ')
       if (prefixStr !== srcTail && prefixStr !== srcHead) continue
       // B2: el trozo debe CUBRIR la fuente (eco real) para poder recortarse.
       if (!echoChunkCovers(words.slice(0, len), srcWords, coverageFloor)) continue

@@ -30,6 +30,10 @@ vi.mock('../src/voice/lib/voiceIdWorkerClient.js', () => ({
 }))
 
 import { createTurnSpeakerAudioResolver } from '../src/voice/lib/turnSpeakerPreflight.js'
+import {
+  captureTurnAudioSnapshot,
+  capturedTurnAudio,
+} from '../src/voice/lib/turnAudioSnapshot.js'
 
 function emptyLiveBuffer() {
   return {
@@ -94,6 +98,42 @@ describe('diarización — el audio del turno lo captura su dueño único (no el
     await resolver()
     const sent = resolveSpeakerFromAudio.mock.calls[0][0] as Float32Array
     expect(sent.length).toBe(2)
+  })
+
+  it('turno SELLADO sin snapshot => no-audio aunque el buffer vivo tenga audio de OTRO turno', async () => {
+    // MEDIDO (log del dueño 2026-10-18): el preflight tardío del turno 11 leyó 10.088 /
+    // 18.509 ms del buffer vivo (audio de otros turnos + eco del TTS) y creó un
+    // "Hablante 2" con similitud 0.091. Un turno sellado sin SU audio no se mide.
+    const SELLADO = 901
+    const ACTIVO = 902
+    const liveAdapter = {
+      getTurnStartSample: () => 0,
+      snapshotTurnWindow: () => new Float32Array(192000),
+    }
+    const resolver = buildResolver({
+      getAudioBuffer: () => liveAdapter,
+      getCapturedAudio: () => capturedTurnAudio(SELLADO, ACTIVO),
+    })
+    const result = await resolver()
+    expect(result.reason, 'no hay audio de ESE turno').toBe('no-audio')
+    expect(resolveSpeakerFromAudio, 'no se mide el buffer de otro turno').not.toHaveBeenCalled()
+  })
+
+  it('turno SELLADO con su snapshot usa SU audio, no el del turno activo', async () => {
+    const SELLADO = 903
+    const ACTIVO = 904
+    captureTurnAudioSnapshot(SELLADO, { buildWindow: () => new Float32Array([1, 2, 3]) })
+    const liveAdapter = {
+      getTurnStartSample: () => 0,
+      snapshotTurnWindow: () => new Float32Array([9, 9, 9, 9, 9, 9]),
+    }
+    const resolver = buildResolver({
+      getAudioBuffer: () => liveAdapter,
+      getCapturedAudio: () => capturedTurnAudio(SELLADO, ACTIVO),
+    })
+    await resolver()
+    const sent = resolveSpeakerFromAudio.mock.calls[0][0] as Float32Array
+    expect(sent.length, 'la ventana es la del turno sellado').toBe(3)
   })
 })
 

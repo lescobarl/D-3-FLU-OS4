@@ -88,6 +88,9 @@ vi.mock('../src/voice/lib/turnIdentityPipeline.js', async (original) => ({
 vi.mock('../src/voice/lib/voiceLocalFallback', () => ({
   createLocalRecognition: vi.fn(() => null),
   shouldUseLocalFallback: vi.fn(() => false),
+  prewarmLocalRecognition: vi.fn(() => true),
+  installLocalRecognition: vi.fn(() => null),
+  resolveSilentDegrade: vi.fn(() => ({ degrade: false, voicedMs: 0, sinceSrResultMs: 0, log: '' })),
 }));
 
 vi.mock('../src/voice/lib/turnSpeakerPreflight.js', () => ({

@@ -12,6 +12,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMicCaptureWorkletNode, wireMicCapturePipeline } from '../src/voice/lib/micCaptureBridge.js';
 import { DEFAULT_SAMPLE_RATE, DEFAULT_TARGET_SAMPLE_RATE } from '../src/voice/lib/audioConstants.js';
+import {
+    clearSessionRecording,
+    disableSessionRecorder,
+    enableSessionRecorder,
+    getSessionRecordingSnapshot,
+} from '../src/voice/lib/sessionRecorder.js';
 
 class PuertaFalsa {
     onmessage: ((event: { data: unknown }) => void) | null = null;
@@ -92,6 +98,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+    disableSessionRecorder();
+    clearSessionRecording();
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
 });
@@ -211,6 +219,20 @@ describe('micCaptureBridge — bloques de PCM', () => {
         expect(onPcmBlock).toHaveBeenCalledTimes(2);
         expect([...(onPcmBlock.mock.calls[0][0] as Float32Array)]).toEqual([2]);
         expect([...(onPcmBlock.mock.calls[1][0] as Float32Array)]).toEqual([4]);
+    });
+
+    it('la grabación de sesión conserva TODOS los bloques aunque processEvery descarte', async () => {
+        enableSessionRecorder();
+        const { puerta } = await conPuente({ processEvery: 2, sampleRate: DEFAULT_TARGET_SAMPLE_RATE });
+
+        // Cuatro bloques de 4 muestras: el pipeline procesa 2, el WAV debe tener 4.
+        for (let i = 0; i < 4; i += 1) {
+            puerta.emitir({ type: 'pcm', samples: new Float32Array([0, 0, 0, 0]) });
+        }
+
+        const snapshot = getSessionRecordingSnapshot();
+        expect(snapshot.audio.sampleRate).toBe(DEFAULT_TARGET_SAMPLE_RATE);
+        expect(snapshot.audio.samples).toBe(16);
     });
 
     it('el PCM para el STT sale en int16 con los valores del contrato', async () => {

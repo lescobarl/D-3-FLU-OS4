@@ -20,6 +20,7 @@ import { FLU_CONFIG } from '../voice/lib/fluConfig';
 import { fluDb, type ParticipantRecord } from '../core/db/fluDatabase';
 import {
   createParticipantRegistry,
+  PARTICIPANTS_CHANGED_CHANNEL,
   resolveKindRole,
   type ParticipantInput,
   type ParticipantPatch,
@@ -32,6 +33,7 @@ import { DEFAULT_VOICE_CONFIG, STORAGE_KEYS } from '../core/config/appConfig';
 import { createOnboardingService } from '../core/onboarding/onboardingService';
 import { logCaughtError } from '../lib/caughtError';
 import { localGet, localRemove } from '../core/storage/localStore';
+import { voiceVectorModel } from '../voice/lib/speakerDirectory';
 
 /** Gateway único de la tabla onboardingStates (C44: un solo escritor). */
 const onboardingGateway = createOnboardingService({ db: fluDb.onboardingStates });
@@ -130,12 +132,34 @@ export function useParticipants({ now }: UseParticipantsOptions = {}): UsePartic
   );
 
   // Carga inicial: garantiza que "Anónimo Estudiante" exista desde el primer
-  // arranque (default activo, no eliminable) y luego refresca el listado.
+  // arranque (default activo, no eliminable), limpia las anclas de voz que no son
+  // evidencia (sin verificar, o de otro modelo|dtype) y refresca el listado.
   useEffect(() => {
     seedAnonymous()
+      // HIGIENE (mandato 2026-10-18): un vector sin verificar o de otro modelo|dtype es
+      // basura — sembraba el nombre equivocado. Se borra el ANCLA, jamás al participante.
+      .then(() => service.invalidateVoiceAnchors({ model: voiceVectorModel() }))
       .catch((e) => logCaughtError('src/hooks/useParticipants.ts: seedAnonymous', e))
       .finally(() => refresh().catch((e) => logCaughtError('src/hooks/useParticipants.ts: refresh', e)));
-  }, [seedAnonymous, refresh]);
+  }, [seedAnonymous, refresh, service]);
+
+  // REGISTRO VIVO ENTRE PESTANAS: si OTRA pestana de la app registra un participante o
+  // fija su ancla («ok flu soy luis» en /conversation), esta sesion refresca la base y
+  // sus clusters de diarizacion se re-siembran con el ancla nueva (dueno del canal:
+  // `participantRegistry`, misma constante). Sin esto la sesion ya abierta seguia con
+  // 0 anclas toda la prueba y la voz conocida caia a «Hablante N» (medido 2026-10-20).
+  useEffect(() => {
+    if (typeof BroadcastChannel === 'undefined') return;
+    const channel = new BroadcastChannel(PARTICIPANTS_CHANGED_CHANNEL);
+    const onChanged = () => {
+      refresh().catch((e) => logCaughtError('src/hooks/useParticipants.ts: cross-tab refresh', e));
+    };
+    channel.addEventListener('message', onChanged);
+    return () => {
+      channel.removeEventListener('message', onChanged);
+      channel.close();
+    };
+  }, [refresh]);
 
   /** Registra un participante y refresca el listado. */
   const register = useCallback(

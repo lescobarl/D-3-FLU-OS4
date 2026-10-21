@@ -166,7 +166,7 @@ describe('REPLAY CRUDO por el INGRESS (datos del log, sin texto fabricado)', () 
     const violaciones: string[] = []
     segmentos.forEach((seg, indice) => {
       for (let i = 1; i < seg.length; i += 1) {
-        if (!seg[i].includes(seg[i - 1])) violaciones.push('turno ' + indice + ' paso ' + i + ': reemplazo ' + seg[i - 1].length + ' -> ' + seg[i].length)
+        if (!seg[i].includes(seg[i - 1])) violaciones.push('turno ' + indice + ' paso ' + i + ': reemplazo ' + seg[i - 1].length + ' -> ' + seg[i].length + ' | antes=' + JSON.stringify(seg[i - 1].slice(-60)) + ' | ahora=' + JSON.stringify(seg[i].slice(-60)))
       }
     })
     const totalEmitido = eventos.reduce((suma, e) => suma + [...e.interims, ...e.finals].reduce((s, t) => s + t.length, 0), 0)

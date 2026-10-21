@@ -16,7 +16,7 @@
  * HALLAZGO: si la config declara `birthdayNearLabel`, la ventana de dias NO se ve en
  * pantalla (la ventana solo aparece en el texto de reserva del componente).
  */
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { ContactsPanel } from '../src/components/ContactsPanel.js';
 import { FLU_CONFIG } from '../src/voice/lib/fluConfig.js';
@@ -118,7 +118,9 @@ describe('ContactsPanel - alta', () => {
         escribir('contacts-add-birthday', '1990-01-02');
         escribir('contacts-add-notes', '  nota  ');
 
-        enviar();
+        await act(async () => {
+            enviar();
+        });
 
         expect(onAdd).toHaveBeenCalledWith({
             name: 'Luis',
@@ -137,7 +139,9 @@ describe('ContactsPanel - alta', () => {
         escribir('contacts-add-name', 'Luis');
         fireEvent.change(screen.getByTestId('contacts-add-participant'), { target: { value: 'p1' } });
 
-        enviar();
+        await act(async () => {
+            enviar();
+        });
 
         expect(onAdd).toHaveBeenCalledWith(
             expect.objectContaining({ participantId: 'p1', participantName: 'Ana' }),
@@ -158,7 +162,9 @@ describe('ContactsPanel - alta', () => {
         escribir('contacts-add-name', 'Luis');
         escribir('contacts-add-phone', '600');
 
-        enviar();
+        await act(async () => {
+            enviar();
+        });
 
         await vi.waitFor(() => {
             expect((screen.getByTestId('contacts-add-name') as HTMLInputElement).value).toBe('');
@@ -186,11 +192,15 @@ describe('ContactsPanel - alta', () => {
         montar({ onAdd });
         escribir('contacts-add-name', 'Luis');
 
-        enviar();
-        enviar();
+        await act(async () => {
+            enviar();
+            enviar();
+        });
 
         expect(onAdd).toHaveBeenCalledTimes(1);
-        resolver();
+        await act(async () => {
+            resolver();
+        });
         await vi.waitFor(() => {
             expect((screen.getByTestId('contacts-add-name') as HTMLInputElement).disabled).toBe(false);
         });

@@ -42,14 +42,14 @@ describe('A4 - el primario sobrevive al reinicio de escucha', () => {
   })
 
   it('los turnos siguientes salen con el nombre (el primario conservado manda, con su ancla)', () => {
-    // CORRECCION DE CRITERIO (7.7.f(3)): el nombre exige COINCIDENCIA con su ancla; el
-    // primer turno la crea y va con etiqueta, el segundo ya lo afirma.
-    const clusters: { label?: string; signature?: number[] }[] = []
+    // MANDATO 2026-10-18: el primario NO crea el ancla (la primera voz podia ser la TV);
+    // el nombre exige un ancla REGISTRADA que ya exista y una ventana SOSTENIDA.
+    const sinAncla: { label?: string; signature?: number[] }[] = []
     const primero = resolveConversationSpeaker({
-      speakerClusters: clusters,
+      speakerClusters: sinAncla,
       sessionPrimary: 'Luz',
       signatureVector: vozA,
-      voicedSampleCount: 48000,
+      voicedSampleCount: 96000,
       minVoicedSamples: 12000,
       sampleRate: 48000,
       utteranceText: 'siguiente carta por favor',
@@ -57,20 +57,22 @@ describe('A4 - el primario sobrevive al reinicio de escucha', () => {
       allowNewCluster: true,
     } as never)
     expect(primero, 'sin ancla no se afirma el nombre').not.toBe('Luz')
-    expect(
-      resolveConversationSpeaker({
-        speakerClusters: clusters,
-        sessionPrimary: 'Luz',
-        signatureVector: vozA,
-        lastSpeaker: String(primero),
-        voicedSampleCount: 48000,
-        minVoicedSamples: 12000,
-        sampleRate: 48000,
-        utteranceText: 'siguiente carta por favor',
-        atTurnBoundary: true,
-        allowNewCluster: true,
-      } as never),
-    ).toBe('Luz')
+    expect(sinAncla.some((c) => c.label === 'Luz'), 'el primario no se convierte en ancla').toBe(false)
+
+    const conAncla: { label?: string; signature?: number[] }[] = [{ label: 'Luz', signature: vozA }]
+    const conNombre = resolveConversationSpeaker({
+      speakerClusters: conAncla,
+      sessionPrimary: 'Luz',
+      signatureVector: vozA,
+      lastSpeaker: String(primero),
+      voicedSampleCount: 96000,
+      minVoicedSamples: 12000,
+      sampleRate: 48000,
+      utteranceText: 'siguiente carta por favor',
+      atTurnBoundary: true,
+      allowNewCluster: true,
+    } as never)
+    expect(conNombre, 'con su ancla registrada y medida sostenida, el nombre SI').toBe('Luz')
   })
 
   it('PRUEBA DE DETECTOR (el detector no es decorativo): el criterio es la lista de config', () => {

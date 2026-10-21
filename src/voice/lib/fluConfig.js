@@ -99,6 +99,15 @@ export const FLU_CONFIG = {
        *  aquí y puede afinarse desde config. */
       recognition: {
         fallbackErrors: ['network', 'no-speech'],
+        /** SR vivo pero MUDO (caso 45aeb8e2): si el micro tiene VOZ y el
+         *  reconocedor no ha producido NINGUN resultado en esta ventana, se
+         *  degrada al motor local (Whisper WASM). Debe ser MENOR que el
+         *  silentMicStallMs de la conversacion (4200): la degradacion se decide
+         *  antes de que el rebuild de Chrome reinicie sus relojes. */
+        silentDegradeMs: 3500,
+        /** Voz minima en el PCM (ms) para aceptar la degradacion: silencio
+         *  real con SR mudo NO degrada (es el caso normal de pausa). */
+        silentDegradeMinVoicedMs: 400,
       },
       conversationSpeakerTailMs: 2000,
       /** Tope de ventana de audio en límite de turno (ms). */
@@ -119,12 +128,15 @@ export const FLU_CONFIG = {
         /** Caída de similitud coseno que indica cambio abrupto de voz en ingress. */
         abruptSimilarityDrop: 0.08,
         cosineRegisteredMatchThreshold: 0.76,
+        /** Piso de match contra un ANCLA VERIFICADA (participantes). Medido 2026-10-19
+         * (sesion 18f3888c): misma voz 0.629-0.714, distinta 0.29-0.58. */
+        cosineVerifiedAnchorMatchThreshold: 0.62,
+        /** Margen entre DOS anclas verificadas que compiten por el nombre. */
+        verifiedAnchorMargin: 0.05,
         /** Distancia coseno máxima para pegar al hablante del turno anterior. */
         lastTurnSignatureContinuityDistance: 0.075,
         /** Reutilización de cluster en producción (512-D real). */
         productionClusterReuseThreshold: 0.66,
-        /** Banda MEDIDA de "voz DISTINTA": por DEBAJO no hay evidencia de ninguna voz. */
-        cosineDistinctVoiceThreshold: 0.58,
         shortUtteranceMaxMs: 1500,
         /** Tras N ecos committed-echo consecutivos, rebuild SR (Chrome atascado). */
         committedEchoRebuildAfter: 3,
@@ -216,8 +228,8 @@ export const FLU_CONFIG = {
          * (no «Hablante N»). Solo aplica con participante real (no anónimo/default).
          */
         seedSessionPrimaryFromActiveParticipant: true,
-        /** Crear el cluster del participante primario si aún no existe (primer turno). */
-        sessionPrimaryCreateCluster: true,
+        // `sessionPrimaryCreateCluster` SE RETIRO (mandato 2026-10-18): bendecia a la PRIMERA
+        // voz que sonara (la TV) con el nombre. Un nombre solo entra por DATO o medida.
       },
       /** Factores de diarización (sin hardcode): los literales 0.82/0.88/0.92/0.95/… viven aquí. */
       diarizationFactors: {
@@ -1973,6 +1985,15 @@ export const FLU_CONFIG = {
     agentSink: IS_DEV,
     agentSinkMs: 1200,
   },
+  /** Grabación de sesión (audio + eventos) para diagnóstico; APAGADA por defecto.
+   * Encender: __fluDev.recorder.enable() · Descargar: __fluDev.recorder.download(). */
+  recorder: {
+    enabled: false,
+    /** Tope de audio del WAV LOCAL por sesión; el volcado al server sigue completo. */
+    maxMinutes: 10,
+    /** Tope de eventos retenidos (ring: descarta los más viejos). */
+    maxEvents: 20000,
+  },
   /**
    * Juegos de entretenimiento (catálogo en src/core/games/gameCatalog).
    * La fuente de verdad de cada motor es 100% local y determinista;
@@ -2065,14 +2086,11 @@ export const FLU_CONFIG = {
      */
     asr: {
       provider: 'whisper-wasm',
-      /** §9 UN solo modelo (`tiny`) para final e interim: sin contención de CPU
-       *  (antes corrían `base`+`tiny` a la vez) ni doble memoria. */
+      /** §9 UN solo modelo (`tiny`): sin contención de CPU ni doble memoria. */
       modelId: 'Xenova/whisper-tiny',
       language: 'es',
-      /**
-       * dtype fp32. El q8 COMPLETO NO es viable: el decoder cuantizado falla en
-       * ORT Web (WASM). Medido en escritorio: `tiny` fp32 ≈1.3 s por 4 s de audio.
-       */
+      /** dtype fp32: el q8 COMPLETO NO es viable (decoder cuantizado falla en ORT
+       *  Web/WASM). Medido en escritorio: `tiny` fp32 ≈1.3 s por 4 s de audio. */
       dtype: 'fp32',
       /** Tasa objetivo del modelo (Hz). */
       targetSampleRate: 16000,
@@ -2085,8 +2103,7 @@ export const FLU_CONFIG = {
         'Conversación en español con el asistente. Palabras clave: ' +
         `${FLU_WAKE_WORDS.filter((word) => word.endsWith(' flu')).join(', ')}, ` +
         'estás ahí, cuéntame, busca en la web, recuérdame, anota.',
-      /** Parciales en vivo (interim): la "última frase" se escribe mientras se
-       *  escucha. El COMMIT de la conversación sigue siendo solo con el final. */
+      /** Parciales en vivo (interim); el COMMIT sigue siendo solo con el final. */
       partialsEnabled: true,
       partialIntervalMs: 1000,
       /** Ventana de audio del interim. Se usa el TURNO COMPLETO (tope 10 s ≥
@@ -2124,12 +2141,10 @@ export const FLU_CONFIG = {
     stripPriorTurnsEscalateAfterRows: 0,
     /** En last-only: recortar como máximo los últimos N turnos del interino acumulativo. */
     stripPriorTurnsRecentMax: 6,
-    /**
-     * Un final ASR con varios timbres → varias filas (snapshots de identidad + reparto de texto).
-     * Captura y transcribe todo; mejora etiquetas en salón / aula.
-     */
+    /** APAGADO (mandato del dueno 2026-10-19): partir UN final en varias filas cortaba la
+     * frase en pedazos (defecto 3/6). Unico cierre legal: cambio de participante o silencio. */
     asrSegmentation: {
-      enabled: true,
+      enabled: false,
       /** Solo partir cuando un turno previo ya commitido aparece embebido + voz nueva. */
       minSpeakerRuns: 2,
       minSnapshotsPerRun: 2,
@@ -2230,10 +2245,11 @@ export const FLU_CONFIG = {
  /** Wake words + alias ASR (Chrome confunde flu → flow/blue/flo).
   *  Fuente única: FLU_WAKE_WORDS (§9.4). Configurable en Ajustes. */
  wakeWords: [...FLU_WAKE_WORDS],
- /** CONTINUIDAD por defecto: la voz del usuario SIEMPRE se refleja (su fila se
-  *  escribe); la wake solo decide si FLU RESPONDE. Ponlo en true (aula/casa) para
-  *  exigir la wake en CADA turno (sin ella, la captura ni siquiera abre fila). */
- requireWakeAlways: false,
+ /** CONTINUIDAD: la voz del usuario SIEMPRE se refleja (su fila se escribe); la wake
+  *  solo decide si FLU RESPONDE. ENCENDIDO (mandato del dueno 2026-10-20, sesion
+  *  97f86c73): wake en CADA turno; sin ella el dictado libre iba a la IA y el eco
+  *  del TTS de FLU se commiteaba como fila del usuario. */
+ requireWakeAlways: true,
  resetAvatarColors: RESET_AVATAR_COLOR_PHRASES,
     openListening: [
       'abrir escucha',

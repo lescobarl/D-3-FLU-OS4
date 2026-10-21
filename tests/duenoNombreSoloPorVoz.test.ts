@@ -33,6 +33,26 @@ describe('N1 - ni la etiqueta ni el participante ACTIVO nombran a nadie', () => 
     expect(sticky, 'sin etiqueta no se inventa el nombre del participante').toBe('')
   })
 
+  it('la ultima voz RESUELTA por medida se prefiere al ultimo log (el sticky sigue la VOZ)', () => {
+    // Medido en d4c1c8f3: la mujer se resolvio "Hablante 2" y el commit del turno
+    // siguiente leia "Hablante 1" porque un final sellado SIN audio pisaba
+    // `lastLogged` con el fallback. La resolucion MEDIDA manda; sin ella se
+    // conserva la etiqueta historica.
+    const sticky = resolveCommitStickyFallback({
+      lastResolved: 'Hablante 2',
+      lastLogged: 'Hablante 1',
+      fallback: '',
+    } as never)
+    expect(sticky, 'la resolucion medida manda sobre el ultimo log').toBe('Hablante 2')
+
+    const sinResolucion = resolveCommitStickyFallback({
+      lastResolved: '',
+      lastLogged: 'Hablante 1',
+      fallback: '',
+    } as never)
+    expect(sinResolucion, 'sin resolucion medida se conserva la etiqueta historica').toBe('Hablante 1')
+  })
+
   it('el efecto del PARTICIPANTE ACTIVO no registra el nombre de ninguna voz', () => {
     const hook = readFileSync('src/voice/hooks/useFluVoiceAssistant.js', 'utf8')
     // El efecto del participante activo: fija el PRIMARIO (dato de sesion) y NO puede llamar al

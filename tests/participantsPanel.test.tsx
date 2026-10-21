@@ -82,10 +82,12 @@ describe('ParticipantsPanel - etiquetas, roles y lista', () => {
         expect(screen.getByTestId('participants-remove-p1')).toBeTruthy();
     });
 
-    it('borrar manda el id', () => {
+    it('borrar manda el id', async () => {
         const { onRemove } = montar({ items: [{ id: 'p1', name: 'Luis' }] });
 
-        fireEvent.click(screen.getByTestId('participants-remove-p1'));
+        await act(async () => {
+            fireEvent.click(screen.getByTestId('participants-remove-p1'));
+        });
 
         expect(onRemove).toHaveBeenCalledWith('p1');
     });
@@ -113,12 +115,14 @@ describe('ParticipantsPanel - alta', () => {
         expect(boton.disabled).toBe(false);
     });
 
-    it('registra con los campos recortados y undefined en los vacios', () => {
+    it('registra con los campos recortados y undefined en los vacios', async () => {
         const { onRegister } = montar();
         escribir('participants-add-name', '  Ana ');
         escribir('participants-add-speaker', '  ');
 
-        enviar();
+        await act(async () => {
+            enviar();
+        });
 
         expect(onRegister).toHaveBeenCalledWith({
             name: 'Ana',
@@ -209,11 +213,13 @@ describe('ParticipantsPanel - perfil de comunicacion (FASE P)', () => {
         expect((screen.getByTestId('participants-profile-tone-p1') as HTMLSelectElement).value).toBe(TONE_OPTIONS[0]);
     });
 
-    it('elegir un nivel llama a onSetManual con el nombre de la persona', () => {
+    it('elegir un nivel llama a onSetManual con el nombre de la persona', async () => {
         const onSetManual = vi.fn(async () => ({}));
         conPerfil({ onSetManual });
 
-        fireEvent.change(screen.getByTestId('participants-profile-level-p1'), { target: { value: 'simple' } });
+        await act(async () => {
+            fireEvent.change(screen.getByTestId('participants-profile-level-p1'), { target: { value: 'simple' } });
+        });
 
         expect(onSetManual).toHaveBeenCalledWith('p1', { explanationLevel: 'simple' }, 'Luis');
     });
@@ -243,7 +249,7 @@ describe('ParticipantsPanel - perfil de comunicacion (FASE P)', () => {
         consola.mockRestore();
     });
 
-    it('el boton de restablecer solo aparece si hay algo manual', () => {
+    it('el boton de restablecer solo aparece si hay algo manual', async () => {
         const { unmount } = render(
             <ParticipantsPanel
                 items={[{ id: 'p1', name: 'Luis' } as never]}
@@ -260,7 +266,9 @@ describe('ParticipantsPanel - perfil de comunicacion (FASE P)', () => {
         const onResetPerson = vi.fn(async () => true);
         conPerfil({ onResetPerson, profiles: [{ participantId: 'p1', manualTone: TONE_OPTIONS[0] }] });
 
-        fireEvent.click(screen.getByTestId('participants-profile-reset-p1'));
+        await act(async () => {
+            fireEvent.click(screen.getByTestId('participants-profile-reset-p1'));
+        });
 
         expect(onResetPerson).toHaveBeenCalledWith('p1');
     });

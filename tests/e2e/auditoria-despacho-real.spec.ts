@@ -170,8 +170,14 @@ test.describe('🔍 AUDITORÍA REAL del despacho determinista (Point F)', () => 
         await driveTranscript(page, 'apunta comprar pan');
 
         const records = await readStore(page, 'notes');
+        // Se busca por CONTENIDO, no por posición: las claves son UUIDv4 y
+        // `getAll()` ordena por clave (orden aleatorio, NO de inserción).
+        // Ademas el demo-seed DEV siembra 'Super'/'Leer capítulo 3'/'Pagar la luz'
+        // cuando se activa el usuario, asi que `[length-1]` media una regla que
+        // no existe y fallaba de forma intermitente segun el UUID mayor.
         expect(records.length).toBeGreaterThan(0);
-        const note = records[records.length - 1];
+        const note = records.find((r) => String(r?.label || '').includes('comprar pan'));
+        expect(note, 'la nota "comprar pan" debe estar persistida').toBeTruthy();
         expect(note.label).toContain('comprar pan');
         await captureScreenshot(page, SHOTS_DIR, '6-nota.png');
     });

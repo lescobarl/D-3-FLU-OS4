@@ -73,6 +73,33 @@ describe('transcriptionDedupLoss — isRedundantFinal (ingress)', () => {
         });
         expect(r).toBe(false);
     });
+
+    // Defecto medido 2026-10-18 (tests/e2e/tutoria-avance.spec.ts): la segunda
+    // locución de ese flujo («ok flu como voy») es PREFIJO de la primera («ok flu
+    // como voy en inglés») y se descartaba como redundante aunque llegara segundos
+    // después: fila perdida y sin despacho. La pausa real ya declaraba «turno
+    // nuevo» para la igualdad exacta; el mismo criterio vale para el prefijo.
+    it('un PREFIJO tras pausa real es un turno NUEVO (no eco)', () => {
+        const r = isRedundantFinal('ok flu como voy', {
+            lastCommitted: 'ok flu como voy en ingles',
+            lastEmitted: 'ok flu como voy en ingles',
+            preview: '',
+            openPreview: false,
+            msSinceLastCommit: 5000,
+        });
+        expect(r).toBe(false);
+    });
+
+    it('el MISMO prefijo dentro de la ventana de eco sigue colapsando (doble final)', () => {
+        const r = isRedundantFinal('ok flu como voy', {
+            lastCommitted: 'ok flu como voy en ingles',
+            lastEmitted: 'ok flu como voy en ingles',
+            preview: '',
+            openPreview: false,
+            msSinceLastCommit: 300,
+        });
+        expect(r).toBe(true);
+    });
 });
 
 describe('transcriptionDedupLoss — resolveLogRowAction (commit tras pausa)', () => {

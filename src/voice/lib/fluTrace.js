@@ -4,6 +4,7 @@
  * Volcar: __fluDev.trace.dump() / __fluDev.trace.download()
  */
 import { FLU_CONFIG } from './fluConfig.js'
+import { recordSessionEvent } from './sessionRecorder.js'
 import { logCaughtError } from '../../lib/caughtError';
 import { hasLocalStorage, localGet, localSet } from '../../core/storage/localStore';
 
@@ -159,6 +160,8 @@ export function setFluTraceSessionProvider(provider) {
  * @param {Record<string, unknown>} [data]
  */
 export function fluTrace(category, event, data = {}) {
+  // La grabación de sesión conserva la traza aunque el ring de trace esté apagado.
+  recordSessionEvent('trace', `${category}/${event}`, data)
   if (!IS_DEV || !enabled) return
   const row = {
     t: Date.now(),

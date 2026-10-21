@@ -2,11 +2,8 @@
 /**
  * audit-metric — métricas de los contratos de saneamiento (SOLO LECTURA).
  *
- * Imprime UN entero en stdout. El task-gate lo parsea con parseMetricValue.
+ * Imprime UN entero en stdout.
  * Uso: node scripts/audit-metric.mjs <id>
- *
- * Congelado por hash en .task/frozen.json (§B14): el agente que ejecuta la
- * tarea NO puede editar este archivo ni la métrica que produce.
  */
 import { readFileSync, existsSync } from 'node:fs'
 import { join, relative } from 'node:path'

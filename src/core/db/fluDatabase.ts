@@ -257,6 +257,12 @@ export interface ParticipantRecord {
      * exige el MISMO modelo (nada de comparar en silencio).
      */
     voiceVectorModel?: string;
+    /**
+     * `true` SOLO si `voiceVector` se capturo de una MEDIDA real de esa voz con el modelo
+     * vigente. Un ancla sin verificar (o de otro modelo|dtype) es basura: la higiene de
+     * arranque la borra conservando el participante (defecto medido 2026-10-18).
+     */
+    voiceAnchorVerified?: boolean;
     /** Id del perfil de asistente FLU_PROFILES (A4). */
     profileId?: string;
     /** Voz TTS personalizada (A5). */

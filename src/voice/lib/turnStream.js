@@ -3,7 +3,7 @@
  * - Interino → preview («Última frase»), nunca fila en el log
  * - Final → único commit al log + sesión archivada
  */
-import { cleanForSpeech, speechWords } from './audioMath.js'
+import { cleanForSpeech, speechWords, stripDiacritics } from './audioMath.js'
 import { phrasesEquivalent, wouldShrinkListenLog } from './activeListen.js'
 import {
   processListenPacket,
@@ -69,9 +69,65 @@ export function applyMicPreview(
  * No afecta a las extensiones ("intervencion" -> "intervencion 2"): eso es
  * crecimiento y la guarda deja pasar.
  */
+/** Minimo de compactos del trozo para aceptar una REVISION (una frase corta no). */
+const REVISION_MIN_COMPACT = 40
+/** Cobertura minima del tramo contiguo comun sobre el trozo (medido: 0.910 y 0.859). */
+const REVISION_MIN_COVERAGE = 0.8
+/** Tope de celdas de la DP; por encima se conserva solo la via exacta. */
+const REVISION_MAX_PAIR_CELLS = 1000000
+
+/** Texto de comparacion: sin acentos, minusculas y solo alfanumericos. */
+function compactForRevision(text = '') {
+  return stripDiacritics(cleanForSpeech(text)).replace(/[^a-z0-9]+/g, '')
+}
+
 /**
- * true si `part` es un FRAGMENTO CONTIGUO de `whole` (todas sus palabras, en orden y
- * seguidas). Un trozo del ASR a mitad de frase lo cumple; una frase nueva no.
+ * Longitud del tramo CONTIGUO mas largo comun a `a` y `b` (subcadena, no
+ * subsecuencia: "comer plato" NO es trozo de "vamos a comer del plato",
+ * aunque las palabras aparezcan en ese orden).
+ */
+function longestCommonRun(a = '', b = '') {
+  if (!a || !b) return 0
+  let best = 0
+  let prev = new Uint32Array(b.length + 1)
+  let cur = new Uint32Array(b.length + 1)
+  for (let i = 1; i <= a.length; i += 1) {
+    for (let j = 1; j <= b.length; j += 1) {
+      if (a[i - 1] === b[j - 1]) {
+        cur[j] = prev[j - 1] + 1
+        if (cur[j] > best) best = cur[j]
+      } else {
+        cur[j] = 0
+      }
+    }
+    const swap = prev
+    prev = cur
+    cur = swap
+  }
+  return best
+}
+
+/**
+ * P11.20 (medido en su log 2026-10-19 21:18/21:19): Chrome re-entrega la COLA de
+ * una locucion ya emitida como REVISION —re-oye el limite con otra palabra
+ * ("con que hablante lo pone" -> "con que habla te lo pone")— y la contiguidad
+ * EXACTA de palabras deja de reconocerla: la cola se escribio como fila nueva
+ * (430+112 y 468+270 en su pantalla). Una revision es la MISMA locucion si su
+ * tramo contiguo comun cubre >=80% del trozo. Se exige trozo largo (>=40
+ * compactos) para que una frase nueva y corta no pueda cumplirlo por azar.
+ */
+function isAsrRevisionOfLocution(part = '', whole = '') {
+  const cp = compactForRevision(part)
+  const cw = compactForRevision(whole)
+  if (cp.length < REVISION_MIN_COMPACT || cp.length >= cw.length) return false
+  if (cp.length * cw.length > REVISION_MAX_PAIR_CELLS) return false
+  return longestCommonRun(cp, cw) >= Math.ceil(cp.length * REVISION_MIN_COVERAGE)
+}
+
+/**
+ * true si `part` es un FRAGMENTO de `whole`: contiguo exacto (todas sus palabras,
+ * en orden y seguidas) o la REVISION del ASR de la misma locucion (tramo contiguo
+ * comun >=80%). Un trozo del ASR a mitad de frase lo cumple; una frase nueva no.
  */
 export function isFragmentOfLocution(part = '', whole = '') {
   const p = speechWords(part)
@@ -84,7 +140,7 @@ export function isFragmentOfLocution(part = '', whole = '') {
     }
     if (ok) return true
   }
-  return false
+  return isAsrRevisionOfLocution(part, whole)
 }
 
 /**

@@ -14,14 +14,23 @@
 // da a ese timbre). El nombre se pega a ESA voz; la etiqueta es solo su nombre provisional.
 // ============================================================
 
-import { getModelId } from './embeddingConfig.js'
+import { getEmbeddingConfig, getModelId } from './embeddingConfig.js'
 import { compareCosineSignatures, isAutoSpeakerLabel, normalizeEmbeddingVector } from './speakerCore.js'
-import { registeredVoiceFloor, sameVoiceFloor } from './speakerClusters.js'
-import { foldSpeakerKey } from './speakerLabels.js'
+import { registeredVoiceFloor, sameVoiceFloor, verifiedAnchorFloor } from './speakerClusters.js'
+import { foldSpeakerKey, isProperSpeakerName } from './speakerLabels.js'
 
-/** Modelo que genera los vectores (dueño único: `embeddingConfig.getModelId`). */
+/**
+ * CLAVE DE COMPARABILIDAD del vector: modelo + dtype del embedder (dueno unico:
+ * `embeddingConfig`). El dtype FALTABA: un vector del modelo en `quantized:true` se
+ * comparaba contra uno `fp32` como si fueran el mismo espacio (medido en el log del
+ * dueno 2026-10-18: su ancla de la base casaba a 0.44 con su propia voz y se sembraba
+ * igual). Dos vectores solo son comparables si coinciden modelo Y dtype.
+ */
 export function voiceVectorModel() {
-    return String(getModelId() || '')
+    const modelId = String(getModelId() || '')
+    if (!modelId) return ''
+    const cfg = getEmbeddingConfig() || {}
+    return `${modelId}|${cfg.quantized === true ? 'q8' : 'fp32'}`
 }
 
 /** voz (id de sesión) -> { name, vector, model }. */
@@ -39,18 +48,37 @@ export function registerVoiceName(voiceId, name, { vector = null, model = voiceV
     const id = String(voiceId || '').trim()
     if (!id) return
     const clean = String(name || '').trim()
-    const previo = voiceNames.get(id)?.name || ''
+    const prior = voiceNames.get(id)
+    const previo = prior?.name || ''
     // UNA ETIQUETA AUTOMATICA NO ES UN NOMBRE (mandato: dos voces parecidas se quedan como
     // "Hablante N"): no se registra y NUNCA pisa el nombre ya afirmado de esa voz. MEDIDO en
     // su log 2026-10-14 16:34-16:38: row-update voz=speaker_1 "Luis" -> "Hablante 1" ->
     // "Hablante 3", y sus filas (ya con su nombre) acabaron mostrando "Hablante 3".
     const nombre = isAutoSpeakerLabel(clean) ? previo : clean
+    // UNA ETIQUETA AUTOMATICA NO RE-ANCLA UNA IDENTIDAD YA AFIRMADA (medido 2026-10-19
+    // 21:23:08): `row-update {... nombre:"Hablante 3", medida:512 }` sobre la clave `speaker_1`
+    // (que ya era "Luis") escribia el vector del TURNO como ancla de la voz con nombre: la
+    // ventana de la mujer quedaba pegada a "Luis" y su fila se seguia viendo "Luis" aunque la
+    // etiqueta medida dijera otra cosa. Una etiqueta automatica es la clave PROVISIONAL de una
+    // voz, no una afirmacion de identidad: si la voz ya tiene nombre propio, no la toca.
+    if (isAutoSpeakerLabel(clean) && previo && isProperSpeakerName(previo)) return
     const sig = normalizeEmbeddingVector(Array.isArray(vector) ? vector : [])
+    // UN REGISTRO SIN TIMBRE NO BORRA EL TIMBRE DE LA VOZ: el renombre del panel y la
+    // resolucion tardia llegan sin vector, y antes `{vector: []}` pisaba el ancla que esa
+    // voz ya tenia (la identidad entre turnos se perdia en silencio).
+    const vectorDeLaVoz = sig.length
+        ? sig
+        : normalizeEmbeddingVector(Array.isArray(prior?.vector) ? prior.vector : [])
+    const modeloDeLaVoz = sig.length ? String(model || voiceVectorModel()) : String(prior?.model || '')
     // El MODELO viaja SIEMPRE con el vector: sin el, un vector no es comparable.
     // Sin nombre NI timbre no hay nada que registrar; con TIMBRE SI: la voz queda guardada para
     // poder responder "que VOZ es esta" (liga sus turnos) aunque todavia no sea nadie.
-    if (!nombre && !sig.length) return
-    voiceNames.set(id, { name: nombre, vector: sig, model: sig.length ? String(model || voiceVectorModel()) : '' })
+    if (!nombre && !vectorDeLaVoz.length) return
+    voiceNames.set(id, {
+        name: nombre,
+        vector: vectorDeLaVoz,
+        model: vectorDeLaVoz.length ? modeloDeLaVoz : '',
+    })
 }
 
 /** Nombre propio de esa VOZ ('' si no tiene: no se adivina). */
@@ -102,28 +130,41 @@ export function resolveRowVoiceName(voiceId, signature = null) {
  *   3. Si DOS identidades distintas pasan el piso, NO se decide: null ("Hablante N").
  *
  * @param {number[]} vector Vector medido del turno.
- * @param {{ model?: string, candidates?: Array<{ name?: string, vector?: number[], model?: string }>, floor?: number, registeredFloor?: number }} [options]
+ * @param {{ model?: string, candidates?: Array<{ name?: string, vector?: number[], model?: string, verified?: boolean }>, floor?: number, registeredFloor?: number }} [options]
  *   `candidates` = VOCES externas (la base de participantes) como datos; la sesion ya esta dentro.
- * @returns {{ voiceId: string, name: string } | null}
+ *   Un candidato con `verified: true` es un ANCLA VERIFICADA de la base y usa SU piso
+ *   (`verifiedAnchorFloor`, medido 0.629–0.714 con la MISMA voz), no el registrado general.
+ * @returns {{ voiceId: string, name: string, vector: number[] } | null} `vector` es el ANCLA
+ *   CONOCIDA que hizo el match (sesion o base), NO la medida consultada: el reconocimiento
+ *   aplica el nombre con ese ancla (mandato 2026-10-19).
  */
 export function resolveVoiceIdentity(vector, { model = voiceVectorModel(), candidates = [], floor = sameVoiceFloor(), registeredFloor = registeredVoiceFloor() } = {}) {
     const v = normalizeEmbeddingVector(Array.isArray(vector) ? vector : [])
     if (!v.length) return null
     const modelo = String(model || '')
+    const pisoVerificado = verifiedAnchorFloor()
     const comparables = []
     voiceNames.forEach((entry, id) => {
         // La SESION tambien cuenta SIN nombre: la pregunta "¿que VOZ es esta?" tiene que poder
         // responder aunque esa voz todavia no sea nadie (es lo que liga sus turnos a la MISMA clave).
         if (!entry?.vector?.length) return
         if (String(entry.model || '') !== modelo) return
-        comparables.push({ voiceId: id, name: entry.name || '', vector: entry.vector, piso: floor })
+        // UN NOMBRE PROPIO EXIGE EL PISO DE IDENTIDAD REGISTRADA, no el de "misma voz":
+        // la banda de "misma voz" es timbre parecido, y ahi la voz de la hija se llevaba
+        // "Luis" (medido en el log del dueno). Una voz SIN nombre sigue agrupando por
+        // timbre; un caller puede endurecer el piso, nunca rebajarlo.
+        const piso = entry.name ? Math.max(Number(floor), Number(registeredFloor)) : floor
+        comparables.push({ voiceId: id, name: entry.name || '', vector: entry.vector, piso })
     })
     for (const c of Array.isArray(candidates) ? candidates : []) {
         const sig = normalizeEmbeddingVector(Array.isArray(c?.vector) ? c.vector : [])
         const name = String(c?.name || '').trim()
         if (!sig.length || !name) continue
         if (String(c?.model || '') !== modelo) continue
-        comparables.push({ voiceId: String(c?.voiceId || ''), name, vector: sig, piso: registeredFloor })
+        // ANCLA VERIFICADA: su piso es el propio (medido 0.629–0.714 con la MISMA voz).
+        // Un candidato sin la marca conserva el piso registrado general.
+        const pisoBase = c?.verified === true ? pisoVerificado : Number(registeredFloor)
+        comparables.push({ voiceId: String(c?.voiceId || ''), name, vector: sig, piso: pisoBase })
     }
     // Se agrupa por IDENTIDAD (nombre plegado): la misma persona en sesion y en base es UN candidato.
     const porIdentidad = new Map()
@@ -133,16 +174,62 @@ export function resolveVoiceIdentity(vector, { model = voiceVectorModel(), candi
         // La IDENTIDAD es el nombre si lo tiene; si aun no es nadie, la propia VOZ (su clave).
         const k = c.name ? foldSpeakerKey(c.name) : `voice:${c.voiceId}`
         const prev = porIdentidad.get(k)
-        if (!prev || sim > prev.sim) porIdentidad.set(k, { sim, voiceId: c.voiceId, name: c.name })
+        // El vector del match viaja con la identidad: es el ANCLA CONOCIDA (base o sesion)
+        // para aplicar el nombre sin re-anclar con la medida del turno (reconocimiento vs
+        // registro, mandato 2026-10-19).
+        if (!prev || sim > prev.sim) {
+            // `piso` viaja con la identidad: el desempate contra una voz anonima de la
+            // sesion compara con el piso de SU fuente (ancla verificada o registrada).
+            porIdentidad.set(k, { sim, voiceId: c.voiceId, name: c.name, vector: c.vector, piso: c.piso })
+        }
+    }
+    // UNA VOZ ANONIMA DE LA SESION NO ES OTRA IDENTIDAD (medido 2026-10-19): la sesion
+    // aprende el timbre en su primer turno (`voiceKeyFor` -> `rememberVoiceVector`) SIN
+    // nombre; la base ya tiene ESA MISMA voz con nombre. Antes las dos pasaban el piso y
+    // `size !== 1` devolvia null, asi que la voz conocida se quedaba "Hablante N" toda la
+    // sesion ("el primero le puso hablante 1"). Si el timbre anonimo casa con UNA SOLA
+    // identidad CON NOMBRE al piso registrado, es la misma persona y manda la identidad con
+    // nombre; si casa con dos o con ninguna, no se adivina (sigue null).
+    if (porIdentidad.size > 1) {
+        const conNombre = [...porIdentidad.values()].filter((c) => c.name && c.vector?.length)
+        for (const [k, c] of [...porIdentidad.entries()]) {
+            if (c.name || !c.vector?.length) continue
+            // El piso es el de CADA identidad con nombre: un ancla verificada de la base se
+            // compara con su piso propio; la sesion, con el registrado general.
+            const duenos = conNombre.filter(
+                (n) => compareCosineSignatures(c.vector, n.vector) >= Number(n.piso),
+            )
+            if (duenos.length === 1) porIdentidad.delete(k)
+        }
     }
     if (porIdentidad.size !== 1) return null
     const [unico] = porIdentidad.values()
-    return { voiceId: unico.voiceId, name: unico.name }
+    return { voiceId: unico.voiceId, name: unico.name, vector: unico.vector }
 }
 
 /** Vacía el directorio (reset de sesión). */
 export function resetVoiceDirectory() {
     voiceNames.clear()
+}
+
+/**
+ * Copia COMPLETA del directorio para la grabación de sesión (diagnóstico).
+ * Incluye los vectores enteros: es el único modo de reconstruir por qué una voz
+ * recibió (o no) un nombre. Solo lectura; no altera el estado.
+ *
+ * @returns {Array<{ voiceId: string, name: string, model: string, vector: number[] }>}
+ */
+export function getVoiceDirectorySnapshot() {
+    const out = []
+    voiceNames.forEach((entry, voiceId) => {
+        out.push({
+            voiceId,
+            name: entry?.name || '',
+            model: entry?.model || '',
+            vector: Array.isArray(entry?.vector) ? entry.vector.slice() : [],
+        })
+    })
+    return out
 }
 
 /** Deja el TIMBRE ligado a una clave de voz (aunque aún no tenga nombre). */

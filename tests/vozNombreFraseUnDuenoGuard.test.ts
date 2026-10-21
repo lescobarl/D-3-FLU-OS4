@@ -128,7 +128,8 @@ describe('flicker de "ultima frase" - el commit NO borra lo publicado', () => {
     // RACIONAL DEL DUENO (2026-10-11): la locucion YA se vacio a la CONVERSACION, asi que la
     // ultima frase arranca de CERO (nueva iteracion = nueva ultima frase). NO es un flicker:
     // el texto ya esta en su fila; sin este reset el dictado nuevo se quedaba congelado por
-    // ser mas corto que el anterior (medido: 543 bloqueos con previo=382).
+    // ser mas corto que el anterior (medido: 543 bloqueos con previo=382). El vaciado ocurre
+    // SOLO en el cierre real (settlesTurn): con el turno abierto la caja jamas se acorta.
     expect(deps.publishedLiveRef.current, 'la memoria arranca de cero').toBe('');
     expect(deps.setLiveTranscript).toHaveBeenCalledWith('');
   });

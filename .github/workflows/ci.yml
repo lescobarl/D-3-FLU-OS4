@@ -1,8 +1,5 @@
 # ============================================================
-# CI — Gate de entrega (suite completa + build + E2E)
-# ============================================================
-# La suite completa NO corre en cada commit (pre-commit ligero:
-# AGENTS.md §6). Corre aquí, una vez por push/PR.
+# CI — Validación funcional (lint + tipos + tests + build + E2E)
 # ============================================================
 name: CI
 
@@ -13,15 +10,10 @@ on:
 
 jobs:
   quality:
-    name: Unit + Guards + Build
+    name: Unit + Lint + Build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          # El ledger valida con `git cat-file -e` que cada commit C## existe y
-          # `git log` cuenta commits. Con el fetch-depth:1 por defecto el clon
-          # solo tiene 1 commit -> taskLedgerGuard falla en CI (pasaba en local).
-          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
@@ -35,18 +27,13 @@ jobs:
       - name: Instalar dependencias
         run: npm ci
 
-      - name: Guards (lint rule pragmática del proyecto)
+      - name: Linters
         run: npm run lint
 
-      - name: Puerta de tipos
+      - name: Typecheck
         run: npm run typecheck
 
-      # El gate de contrato (`npm run gate`) verifica UN contrato de tarea
-      # (.task/contract.json) contra su base. No es un gate de repo: en CI
-      # fallaria siempre que el arbol haya avanzado respecto a esa base.
-      # La cobertura de repo la dan los guards (lint), los tipos y la suite.
-
-      - name: Suite completa de unit
+      - name: Tests funcionales
         run: npm run test:full
 
       - name: Build
@@ -58,11 +45,6 @@ jobs:
     needs: quality
     steps:
       - uses: actions/checkout@v4
-        with:
-          # El ledger valida con `git cat-file -e` que cada commit C## existe y
-          # `git log` cuenta commits. Con el fetch-depth:1 por defecto el clon
-          # solo tiene 1 commit -> taskLedgerGuard falla en CI (pasaba en local).
-          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:

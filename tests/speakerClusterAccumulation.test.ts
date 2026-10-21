@@ -60,8 +60,9 @@ describe('la captura del turno impone un minimo de audio (no ventanas casi vacia
       minSamples: 43200, // minimo exigido (0.9 s @48k)
     })
     // R1: la ventana NO puede empezar antes del turno (antes se ensanchaba a 43200 y
-    // metia audio PRE-turno: la voz de FLU, medido 67-83%). Una ventana SIN voz cae al
-    // reuso (production-reuse-no-evidence), no abre etiqueta.
+    // metia audio PRE-turno: la voz de FLU, medido 67-83%). Una ventana SIN voz no trae
+    // medida (`no-vector`) y NO abre etiqueta (el reuso sin evidencia se retiro el
+    // 2026-10-18: voz distinta = etiqueta distinta).
     expect(w.length, 'R1: se queda en el turno, no en el minimo').toBe(384)
   })
 
@@ -185,12 +186,12 @@ describe('el detector no es decorativo (prueba de mutación)', () => {
 })
 
 /** Resolutor que devuelve un hablante concreto (para la puerta de la etiqueta). */
-const resuelve = (speakerName: string) => () =>
+const resuelve = (speakerName: string, workingLabel = speakerName) => () =>
   Promise.resolve({
     speakerId: `spk-${speakerName}`,
     speakerName,
     signatureVector: [1, 0, 0],
-    workingClusters: [{ label: speakerName }],
+    workingClusters: workingLabel ? [{ label: workingLabel }] : [],
     reason: 'resolved-idle',
   })
 
@@ -209,17 +210,14 @@ const resuelve = (speakerName: string) => () =>
 describe('solo el snapshot FINAL rotula la fila', () => {
   it('un tick continuo no avisa ni con la etiqueta persistida ni con un nombre propio', async () => {
     const onResolved = vi.fn()
-    const clusters = [{ label: 'Hablante 2' }]
 
     scheduleTurnSpeakerPreflight(3, resuelve('Hablante 2'), {
       onResolved,
       continuous: true,
-      getSpeakerClusters: () => clusters,
     })
     scheduleTurnSpeakerPreflight(4, resuelve('luis'), {
       onResolved,
       continuous: true,
-      getSpeakerClusters: () => clusters,
     })
     await flush()
     expect(onResolved, 'un tick parcial no puede reescribir la fila').not.toHaveBeenCalled()
@@ -227,22 +225,23 @@ describe('solo el snapshot FINAL rotula la fila', () => {
 
   it('el snapshot FINAL si rotula, y respeta la puerta de etiquetas inventadas', async () => {
     const onResolved = vi.fn()
-    scheduleTurnSpeakerPreflight(5, resuelve('Hablante 9'), {
+    // La puerta compara contra los clusters DEL SNAPSHOT (`workingClusters`), no contra un
+    // ref del llamante que puede ir un tick por detras: un resolutor que AFIRMA una etiqueta
+    // que su propia vista no conoce ES la vista parcial que inventaba "Hablante 4/5".
+    scheduleTurnSpeakerPreflight(5, resuelve('Hablante 9', 'Hablante 2'), {
       onResolved,
       continuous: false,
-      getSpeakerClusters: () => [{ label: 'Hablante 2' }],
     })
     await flush()
     expect(onResolved).not.toHaveBeenCalled()
 
-    scheduleTurnSpeakerPreflight(6, resuelve('luis'), {
+    scheduleTurnSpeakerPreflight(6, resuelve('luis', 'Hablante 2'), {
       onResolved,
       continuous: false,
-      getSpeakerClusters: () => [{ label: 'Hablante 2' }],
     })
     await flush()
     expect(onResolved).toHaveBeenCalledWith(
-      expect.objectContaining({ speakerName: 'luis', turnId: 6 }),
+      expect.objectContaining({ speakerName: 'luis', turnId: 6, vector: [1, 0, 0] }),
     )
   })
 })

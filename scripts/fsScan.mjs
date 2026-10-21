@@ -5,9 +5,6 @@
  *
  * El FILTRO de extensiones es del CONSUMIDOR (cada instrumental declara su alcance);
  * lo que vive aqui es el bucle, la resolucion de rutas y el corte de llaves.
- *
- * Congelado por hash en .task/frozen.json: la definicion de "que ficheros entran"
- * en las metricas no puede cambiar sin enmienda (AGENTS 7.7.g).
  */
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative } from 'node:path'

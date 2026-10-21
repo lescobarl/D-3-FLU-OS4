@@ -273,6 +273,11 @@ export function useNavigationCommands(
                 const registrado = registerSpeakerIdentityFromCommand({
                     transcript,
                     speakerName: speakerName || '',
+                    // La VOZ que dice el nombre es la del TURNO: su timbre medido lo ata a ESA
+                    // voz (no a la etiqueta heredada ni a la continuidad). Sin esta firma el
+                    // nombre quedaba en la clave de la etiqueta y solo cambiaba la ultima
+                    // intervencion (defecto medido por el dueno 2026-10-18).
+                    signatureVector: sesionIdentidad?.getLastTurnSignature?.() || null,
                     clusters: sesionIdentidad?.speakerClustersRef?.current || [],
                     refs: {
                         sessionPrimarySpeakerRef: sesionIdentidad?.sessionPrimarySpeakerRef,

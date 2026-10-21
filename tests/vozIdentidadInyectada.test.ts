@@ -19,6 +19,9 @@ import { useIntegrationStore } from '../src/store/integrationStore'
 import { commitUserTurnRow, renameSpeakerRows } from '../src/voice/lib/conversationTurnRow'
 import { resolveRowSpeakerLabel } from '../src/voice/lib/conversationRow'
 import { resetVoiceDirectory } from '../src/voice/lib/speakerDirectory.js'
+import { consolidateSpeakerClusters } from '../src/voice/lib/speakerClusters.js'
+import { foldSpeakerKey } from '../src/voice/lib/speakerLabels.js'
+import { isAutoSpeakerLabel } from '../src/voice/lib/speakerCore.js'
 
 type Vec = number[]
 interface Cluster { label: string; signature: Vec }
@@ -26,7 +29,9 @@ interface Cluster { label: string; signature: Vec }
 // Anclas: dos voces DISTINTAS y ortogonales (coseno 0).
 const LUIS: Vec = [1, 0, 0, 0]
 const MUJER: Vec = [0, 1, 0, 0]
-// Variacion natural de la MISMA voz (banda real medida: 0.70-0.79).
+// Variacion natural de la MISMA voz. La banda medida de "misma voz" llega hasta ~0.74,
+// pero MANDATO 2026-10-18: un NOMBRE PROPIO solo se afirma desde `registeredVoiceFloor`
+// (identidad registrada), porque en esa banda la voz de la hija se llevaba "Luis".
 const luisVar = (cos: number): Vec => [cos, Math.sqrt(1 - cos * cos), 0, 0]
 const mujerVar = (cos: number): Vec => [0, cos, Math.sqrt(1 - cos * cos), 0]
 
@@ -53,12 +58,22 @@ beforeEach(() => {
 
 describe('identidad inyectada: la MISMA voz no cambia de etiqueta entre turnos', () => {
 
-  it('con el primario "luis" tras identificarse, TODOS sus turnos son "luis"', () => {
+  it('con el primario "luis" y medida de identidad, TODOS sus turnos son "luis"', () => {
     const clusters: Cluster[] = [{ label: 'luis', signature: LUIS }]
-    const nombres = [0.74, 0.71, 0.78, 0.73].map((c) => resolveTurn({
+    const nombres = [0.80, 0.77, 0.78, 0.76].map((c) => resolveTurn({
       v: luisVar(c), clusters, prefer: 'luis', lastSpeaker: 'Hablante 2', lastSignature: MUJER,
     }))
     expect(new Set(nombres)).toEqual(new Set(['luis']))
+  })
+
+  it('POR DEBAJO del piso de identidad la voz NO se nombra (banda de "misma voz")', () => {
+    // 0.74 es timbre parecido, no identidad: antes se estampaba "luis" y la mujer
+    // medida ahi quedaba rotulada con el nombre ajeno (defecto del log del dueno).
+    const clusters: Cluster[] = [{ label: 'luis', signature: LUIS }]
+    const out = resolveTurn({
+      v: luisVar(0.74), clusters, prefer: 'luis', lastSpeaker: 'Hablante 2', lastSignature: MUJER,
+    })
+    expect(out).not.toBe('luis')
   })
 
   it('la mujer NUNCA se rotula "luis" (su voz no llega a la ancla del nombre)', () => {
@@ -79,7 +94,7 @@ describe('identidad inyectada: la MISMA voz no cambia de etiqueta entre turnos',
       if (!clusters.some((c) => c.label === nombre)) clusters.push({ label: nombre, signature: voice })
       return nombre
     }
-    const nombres = [run(luisVar(0.75)), run(mujerVar(0.76)), run(luisVar(0.72)), run(mujerVar(0.74)), run(luisVar(0.78))]
+    const nombres = [run(luisVar(0.80)), run(mujerVar(0.76)), run(luisVar(0.78)), run(mujerVar(0.74)), run(luisVar(0.79))]
     expect(clusters.length).toBeLessThanOrEqual(2)
     expect(nombres.filter((n) => n === 'luis')).toHaveLength(3)
     expect(nombres.filter((n) => n !== 'luis')).toHaveLength(2)
@@ -118,30 +133,51 @@ describe('PRUEBA DE DETECTOR (el detector no es decorativo)', () => {
 
 // P9.64 + H8 (MEDIDO 2026-10-12): la MISMA persona con el cluster en otra caja ("luis" del
 // historico) y el primario "Luis" producia DOS etiquetas Y DOS clusters (ruta doble de DATOS).
-// El canonico es el del primario y los clusters de la misma persona se FUSIONAN.
 //
-// P9.74 (MEDIDO 2026-10-12, DOS ordenes): comprobar solo `n === 1` y la etiqueta devuelta NO
-// distingue el defecto: la version que elegia el cluster con `findClusterByLabel` devolvia "Luis"
-// con `n === 1` y, en el orden `[luis, Luis]`, dejaba vivo el cluster DUPLICADO ("luis") y borraba
-// el PRIMARIO. Por eso aqui se exige, en LOS DOS ordenes: (a) un cluster por persona, (b) que el
-// superviviente sea el CANONICO exacto, y (c) que la etiqueta devuelta sea la del superviviente.
+// DUEÑO DEL DUPLICADO (mandato 2026-10-18): la fusion de las dos grafias vive en
+// `consolidateSpeakerClusters` (la consume `capAndFuseSpeakerClusters` en el preflight), que
+// pliega por identidad ('luis' == 'Luis') y deja UN cluster. El resolver ya no fusiona
+// nombres: el mandato retira los nombres de la ventana corta, y `utteranceText: 'si'` es
+// ventana corta -> el turno conserva una etiqueta ANONIMA (nunca un nombre por cercania).
 describe('P9.64 + H8: la MISMA persona no lleva DOS etiquetas NI DOS clusters', () => {
-  it('los DOS ordenes: sobrevive el canonico y la etiqueta coincide con el superviviente', () => {
+  it('los DOS ordenes: la consolidacion deja UN cluster con una sola identidad', () => {
+    const ordenes: Array<Array<'luis' | 'Luis'>> = [['luis', 'Luis'], ['Luis', 'luis']]
+    for (const orden of ordenes) {
+      const clusters: Cluster[] = orden.map((label) => ({ label, signature: LUIS }))
+      const fusionados = consolidateSpeakerClusters(clusters)
+      const etiqueta = `orden=[${orden.join(', ')}]`
+      expect(fusionados.length, `${etiqueta}: un cluster por persona, quedo ${JSON.stringify(fusionados.map((c) => c.label))}`).toBe(1)
+      expect(foldSpeakerKey(fusionados[0].label), `${etiqueta}: la identidad plegada es la misma`).toBe(foldSpeakerKey('Luis'))
+    }
+  })
+
+  it('ventana CORTA: el resolver no afirma ningun nombre propio (la etiqueta es anonima)', () => {
     const ordenes: Array<Array<'luis' | 'Luis'>> = [['luis', 'Luis'], ['Luis', 'luis']]
     for (const orden of ordenes) {
       const clusters: Cluster[] = orden.map((label) => ({ label, signature: LUIS }))
       const out = resolveConversationSpeaker({
-        signatureVector: luisVar(0.75), speakerClusters: clusters,
+        signatureVector: luisVar(0.80), speakerClusters: clusters,
         thresholds: FLU_CONFIG.voiceIdentity.capture.conversationSpeakerThresholds,
-        sessionPrimary: 'Luis', lastSpeaker: 'luis', voicedSampleCount: 86400, sampleRate: 48000,
+        sessionPrimary: 'Luis', lastSpeaker: 'luis',
+        // VENTANA CORTA = AUDIO corto (mandato 2026-10-19: la duracion manda cuando hay
+        // medida). Antes este caso usaba 1.8 s de voz y solo el conteo de palabras lo daba
+        // por corto: esa regla es la que dejaba al dueno en "Hablante 1" (log 2026-10-19).
+        voicedSampleCount: 48000, sampleRate: 48000,
         atTurnBoundary: true, allowNewCluster: true, utteranceText: 'si',
       } as never)
-      const etiquetas = clusters.map((c) => String(c.label))
-      const etiqueta = `orden=[${orden.join(', ')}]`
-      expect(out, `${etiqueta}: la etiqueta devuelta`).toBe('Luis')
-      expect(etiquetas.length, `${etiqueta}: un cluster por persona, quedo clusters=${JSON.stringify(etiquetas)}`).toBe(1)
-      expect(etiquetas[0], `${etiqueta}: NO puede sobrevivir el duplicado`).toBe('Luis')
-      expect(out, `${etiqueta}: la fila y el cluster deben coincidir`).toBe(etiquetas[0])
+      expect(isAutoSpeakerLabel(out), `orden=[${orden.join(', ')}]: "${out}" no es una identidad medida`).toBe(true)
     }
+  })
+
+  it('DETECTOR positivo: con ancla unica y ventana SOSTENIDA el nombre SI se afirma', () => {
+    const clusters: Cluster[] = [{ label: 'Luis', signature: LUIS }]
+    const out = resolveConversationSpeaker({
+      signatureVector: luisVar(0.80), speakerClusters: clusters,
+      thresholds: FLU_CONFIG.voiceIdentity.capture.conversationSpeakerThresholds,
+      sessionPrimary: 'Luis', lastSpeaker: '', voicedSampleCount: 96000, sampleRate: 48000,
+      atTurnBoundary: true, allowNewCluster: true,
+      utteranceText: 'esta es una frase sostenida para medir la voz',
+    } as never)
+    expect(out).toBe('Luis')
   })
 })

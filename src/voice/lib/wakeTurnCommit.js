@@ -194,6 +194,12 @@ export function requiresWakeWord(conversationActive = false, config = FLU_CONFIG
 /**
  * Guardia de commit: separa pasivo TV de cola flu si la captura aún llega mezclada.
  *
+ * El corte en la wake SOLO procede cuando hay COLA FLU que despachar (`fluTail`): esa
+ * cola se entrega a la IA por su propia ruta y no se pierde. En un COMANDO no hay cola
+ * flu: el texto tras la wake ES la orden y recortarlo la borraba de la transcripcion y
+ * de la fila (medido 2026-10-19 21:20:48: "Okay flu soy Luis" cortado a "digo El
+ * Comando para que le ponga nombre"). Sin cola flu la captura va COMPLETA.
+ *
  * `wakeWordMatched` viaja con el resultado: es el MISMO analisis del turno
  * (no un segundo criterio) el que decide si la captura lleva la wake word, que es
  * lo que separa un turno de usuario del ruido de fondo en conversacion activa.
@@ -207,7 +213,8 @@ export function resolveInlineWakeAtCommit(capture = '', lastCommitted = '') {
   if (
     wakeAnalysis.hasInlineBoundary &&
     wakeAnalysis.passiveOnly &&
-    wakeAnalysis.passiveOnly.length < wakeAnalysis.cleaned.length
+    wakeAnalysis.passiveOnly.length < wakeAnalysis.cleaned.length &&
+    wakeAnalysis.fluTail
   ) {
     return {
       capture: wakeAnalysis.passiveOnly,

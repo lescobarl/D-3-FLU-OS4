@@ -260,7 +260,15 @@ export function resolveDeterministicCommand(text = '', options = {}) {
  */
 export function resolveStatefulDomains(text = '', options = {}) {
   const { language = 'es', now } = options || {}
-  const transcript = String(text || '').trim()
+  // B.11 — el mandato EMPIEZA en la wake word. Los resolutores de estado anclan
+  // sus gramaticas al inicio (`resolveMusicIntent` exige verbo + objeto al
+  // principio), asi que reciben el texto YA normalizado por el dueno unico de
+  // higiene: crudo con wake inline ("Okay Flow pon musica relajante") la orden de
+  // musica no casaba y se perdia en silencio; el turno caia al contrato del LLM
+  // (que respondia con el juego activo). Esta funcion es pura e idempotente: sin
+  // wake ni ruido devuelve el mismo texto. La frase canonica de la fila NO se
+  // toca: eso lo decide el llamador (`utterance`).
+  const transcript = normalizeSpokenCommand(text)
   const game = transcript ? resolveGameCommandFromText(transcript, { language, now }) : null
   // MUSICA (reproducir/parar/pausar), resuelta por su dueno (core/media/musicActions):
   // se expone con la MISMA forma que los otros dominios de estado (`{ accion }`).

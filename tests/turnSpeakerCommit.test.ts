@@ -71,6 +71,26 @@ describe('turnSpeakerCommit — wake-intro y explicit-next', () => {
         });
     });
 
+    it('«ok flu soy Luis» con voz MEDIDA → el nombre viaja con la firma del turno', () => {
+        // Mandato 2026-10-18: el rename se ata a la VOZ que dice el nombre, no a la
+        // etiqueta de continuidad (que puede ser de otra persona). El test anterior es
+        // el CONTROL: sin medida no se emiten campos vacios, el campo existe si hay dato.
+        const firma = [0.1, 0.2, 0.3];
+        const clusters = [{ label: 'Hablante 1', signature: [...firma] }];
+        const r = resolveTurnSpeakerAtCommit({
+            phrase: 'ok flu soy Luis',
+            wakeWords: ['ok flu'],
+            preflight: { ready: true, speakerName: 'Hablante 1', signatureVector: firma, workingClusters: clusters },
+        } as any);
+        expect(r).toEqual({
+            speakerId: 'speaker_name_luis',
+            speakerName: 'Luis',
+            source: 'wake-intro',
+            signatureVector: firma,
+            workingClusters: clusters,
+        });
+    });
+
     it('«ahora habla otra persona» con Hablante 1 → explicit-next / Hablante 2', () => {
         const r = resolveTurnSpeakerAtCommit({
             phrase: 'ahora habla otra persona',

@@ -218,7 +218,13 @@ export function useConfigPersistence(): ConfigPersistence {
     // unico de la decision (requiresWakeWord -> FLU_CONFIG.voiceCommands.requireWakeAlways).
     useEffect(() => {
         const apply = (wakeAlways: boolean | undefined) => {
-            if (FLU_CONFIG.voiceCommands) FLU_CONFIG.voiceCommands.requireWakeAlways = wakeAlways === true;
+            // Solo un valor REAL del configurador pisa el default de la config: antes
+            // `wakeAlways === true` estampaba `false` cuando el checkbox jamas se habia
+            // tocado (valor ausente), y la puerta de wake quedaba abierta sin que el
+            // usuario lo pidiera (medido 2026-10-20, sesion 97f86c73).
+            if (FLU_CONFIG.voiceCommands && typeof wakeAlways === 'boolean') {
+                FLU_CONFIG.voiceCommands.requireWakeAlways = wakeAlways;
+            }
         };
         apply(useIntegrationStore.getState().voiceConfig?.requireWakeAlways);
         return useIntegrationStore.subscribe((state) => apply(state.voiceConfig?.requireWakeAlways));

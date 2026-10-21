@@ -4,6 +4,17 @@ import { BrowserRouter } from 'react-router-dom';
 import App from './App';
 import { FLU_CONFIG } from './voice/lib/fluConfig';
 import { logCaughtError } from './lib/caughtError';
+import {
+    DEV_VALIDATION_CHANNEL,
+    DEV_VALIDATION_PARAM,
+    runDevValidationCommand,
+} from './lib/devValidationReset';
+import {
+    configureSessionSink,
+    createHttpSessionSink,
+    disableSessionRecorder,
+    enableSessionRecorder,
+} from './voice/lib/sessionRecorder.js';
 import './index.css';
 
 // Declaración global del tipo de window.FLU_CONFIG (asignado abajo).
@@ -17,6 +28,44 @@ declare global {
 // este global en src/). Publicarlo en produccion no aporta y expone la config interna.
 if (import.meta.env.DEV) {
   window.FLU_CONFIG = FLU_CONFIG;
+
+  // Grabación de sesión durable (SOLO DEV): el PCM, los eventos y las
+  // instantáneas con vectores completos se vuelcan al dev-server mientras la
+  // pestaña vive. Ver src/server/recorderSink.ts.
+  configureSessionSink(createHttpSessionSink());
+
+  // Control del AGENTE (archivo control.json del dev-server): `capture` enciende
+  // o apaga la bandera y `command` ejecuta un comando de preparación UNA vez
+  // (el servidor lo consume al leerlo). Así la validación no depende de que el
+  // dueño escriba una URL ni de que recuerde limpiar la base.
+  const devCommand = new URLSearchParams(window.location.search).get(DEV_VALIDATION_PARAM);
+  void (async () => {
+    let control: { capture?: boolean; command?: string } | null = null;
+    try {
+      const res = await fetch('/__flu/recorder/status');
+      if (res.ok) control = await res.json();
+    } catch (err) {
+      logCaughtError('recorder.control', err);
+    }
+    if (!control) control = {};
+    if (control.capture === true) enableSessionRecorder();
+    if (control.capture === false) disableSessionRecorder();
+    const command = control.command || devCommand;
+    if (command) {
+      await runDevValidationCommand(command).catch((err) =>
+        logCaughtError('devValidationReset', err),
+      );
+    }
+  })();
+
+  // El comando avisa por este canal cuando la base cambió: las demás pestañas
+  // recargan su estado en memoria (una baja en IndexedDB no se refleja sola).
+  if (typeof BroadcastChannel !== 'undefined') {
+    const devChannel = new BroadcastChannel(DEV_VALIDATION_CHANNEL);
+    devChannel.onmessage = (event) => {
+      if (event.data?.type === 'reload') window.location.reload();
+    };
+  }
 }
 
 // Registrar el Service Worker de la PWA (notificaciones/offscreen).

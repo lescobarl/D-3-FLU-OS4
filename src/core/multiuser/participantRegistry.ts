@@ -15,6 +15,7 @@
 // ============================================================
 
 import { dayKey, isDayKey } from '../../lib/dateKey'
+import { logCaughtError } from '../../lib/caughtError'
 import { v4 as uuidv4 } from 'uuid';
 import { addAuditLog, type ParticipantRecord } from '../db/fluDatabase';
 import { buildSyncTuple, makeTupleTimestamp } from '../db/syncTuple';
@@ -24,6 +25,29 @@ import { INVALID_INPUT } from '../../lib/resultReasons';
 import type { InvalidInput } from '../../lib/resultReasons';
 import { listAliveByName } from '../db/entityMutations';
 import { normalizeEmbeddingVector } from '../../voice/lib/speakerCore';
+
+/**
+ * Canal de difusion de cambios del registro de participantes ENTRE PESTANAS de la
+ * misma app. Un registro hecho en una pestana (p. ej. «ok flu soy luis» en la de
+ * /conversation) debe refrescar la base que la sesion viva de OTRA pestana ya cargo:
+ * sin esto, sus clusters de diarizacion seguian sin el ancla nueva toda la sesion y
+ * la voz conocida caia a «Hablante N» (medido en vivo 2026-10-20, sesion 97f86c73).
+ * El consumidor es `useParticipants` (misma constante, un solo canal).
+ */
+export const PARTICIPANTS_CHANGED_CHANNEL = 'flu-participants-changed'
+
+/** Difunde el cambio (no-op donde no exista BroadcastChannel: tests/node). */
+function notifyParticipantsChanged(): void {
+  try {
+    if (typeof BroadcastChannel !== 'undefined') {
+      new BroadcastChannel(PARTICIPANTS_CHANGED_CHANNEL).postMessage({ at: Date.now() })
+    }
+  } catch (error) {
+    // El canal es un aviso de refresco, nunca una ruta de datos: si falla, el estado
+    // local ya quedo escrito y la otra pestana refrescara en su siguiente escritura.
+    logCaughtError('src/core/multiuser/participantRegistry.ts: notifyParticipantsChanged', error)
+  }
+}
 
 /** Vector de voz normalizado (vacio si no hay dato). Dueno del calculo: speakerCore. */
 function normalizeVoiceVector(vector?: number[]): number[] | undefined {
@@ -49,6 +73,8 @@ export interface ParticipantInput {
   voiceVector?: number[];
   /** MODELO que genero ese vector: sin el, el vector NO es comparable. */
   voiceVectorModel?: string;
+  /** Marca el vector como ancla VERIFICADA (medida real con el modelo vigente). */
+  voiceAnchorVerified?: boolean;
   profileId?: string;
   ttsVoiceURI?: string;
   ttsVoiceName?: string;
@@ -62,6 +88,15 @@ export interface ParticipantPatch {
   role?: string;
   birthday?: string;
   speakerLabel?: string;
+  /**
+   * Re-ancla la VOZ medida del participante (con su modelo: sin el no es comparable).
+   * `null` BORRA el ancla (higiene de arranque: un vector sin verificar es basura).
+   */
+  voiceVector?: number[] | null;
+  /** MODELO (modelo|dtype) que genero `voiceVector`. `null` lo borra. */
+  voiceVectorModel?: string | null;
+  /** Verificacion del ancla; sin vector o con vector sustituido, no sobrevive sola. */
+  voiceAnchorVerified?: boolean;
   profileId?: string;
   ttsVoiceURI?: string;
   ttsVoiceName?: string;
@@ -221,14 +256,18 @@ export function createParticipantRegistry({
 
     const id = newId();
     const t = timestamp();
+    const voiceVector = normalizeVoiceVector(input.voiceVector);
     const record: ParticipantRecord = {
       id,
       name,
       role: input.role,
       birthday: normalizeBirthday(input.birthday),
       speakerLabel: input.speakerLabel,
-      voiceVector: normalizeVoiceVector(input.voiceVector),
+      voiceVector,
       voiceVectorModel: input.voiceVectorModel ? String(input.voiceVectorModel) : undefined,
+      // Solo un vector realmente guardado puede quedar VERIFICADO: la marca sin vector
+      // seria un ancla declarada sin evidencia (basura de la base).
+      voiceAnchorVerified: voiceVector && input.voiceAnchorVerified === true ? true : undefined,
       profileId: input.profileId,
       ttsVoiceURI: input.ttsVoiceURI,
       ttsVoiceName: input.ttsVoiceName,
@@ -241,6 +280,7 @@ export function createParticipantRegistry({
     };
     await db.add(record);
     await addAuditLog('participant.register', 'participant', id, null, { name: record.name }, 'participantRegistry');
+    notifyParticipantsChanged();
     return { ok: true, record };
     })();
     registerInFlight.set(claveAlta, alta);
@@ -351,12 +391,33 @@ export function createParticipantRegistry({
     if (!name) return { ok: false, reason: INVALID_INPUT };
 
     const previous = { ...row };
+    // RE-ANCLAJE de la voz: el alta por nombre no duplica un participante existente; su
+    // timbre medido se fija aqui. Sin esta via, un registro con ancla vieja/incomparable
+    // seguia sin reconocerse y el nombre no llegaba a sus turnos (defecto del dueno 2026-10-18).
+    // `null` es el BORRADO EXPLICITO del ancla (higiene): `undefined` conserva.
+    const replacesVector = patch.voiceVector !== undefined;
+    const voiceVector = replacesVector
+      ? normalizeVoiceVector(patch.voiceVector ?? undefined)
+      : row.voiceVector;
+    const voiceVectorModel = patch.voiceVectorModel !== undefined
+      ? (patch.voiceVectorModel ? String(patch.voiceVectorModel) : undefined)
+      : (replacesVector && !voiceVector ? undefined : row.voiceVectorModel);
+    // La marca de VERIFICADO pertenece al vector concreto: un vector sustituto no hereda
+    // la verificacion del anterior (seria declarar medido algo que no se midio).
+    const voiceAnchorVerified = !voiceVector
+      ? undefined
+      : patch.voiceAnchorVerified === true
+        ? true
+        : (replacesVector ? undefined : row.voiceAnchorVerified);
     const updated: ParticipantRecord = {
       ...row,
       name,
       role: patch.role === undefined ? row.role : patch.role,
       birthday: patch.birthday === undefined ? row.birthday : normalizeBirthday(patch.birthday),
       speakerLabel: patch.speakerLabel === undefined ? row.speakerLabel : patch.speakerLabel,
+      voiceVector,
+      voiceVectorModel,
+      voiceAnchorVerified,
       profileId: patch.profileId === undefined ? row.profileId : patch.profileId,
       ttsVoiceURI: patch.ttsVoiceURI === undefined ? row.ttsVoiceURI : patch.ttsVoiceURI,
       ttsVoiceName: patch.ttsVoiceName === undefined ? row.ttsVoiceName : patch.ttsVoiceName,
@@ -368,7 +429,40 @@ export function createParticipantRegistry({
     };
     await db.put(updated);
     await addAuditLog('participant.update', 'participant', id, previous, { name: updated.name }, 'participantRegistry');
+    notifyParticipantsChanged();
     return { ok: true, record: copyRecord(updated) };
+  };
+
+  /**
+   * HIGIENE DE ANCLAS DE VOZ: un vector solo sirve si se midio con el modelo|dtype
+   * vigente y quedo VERIFICADO. Los demás son basura (casaban a 0.44 con su propia voz
+   * y sembraban un nombre ajeno); se borran conservando al PARTICIPANTE y se audita.
+   *
+   * @param model clave de comparabilidad vigente (`voiceVectorModel()`)
+   * @returns cuántos anclas se invalidaron
+   */
+  const invalidateVoiceAnchors = async ({ model }: { model?: string } = {}): Promise<number> => {
+    const all = await db.toArray();
+    let invalidated = 0;
+    for (const row of all) {
+      if (row.sync?.deleted) continue;
+      if (!Array.isArray(row.voiceVector) || row.voiceVector.length === 0) continue;
+      const comparable = Boolean(model) && row.voiceVectorModel === model;
+      if (comparable && row.voiceAnchorVerified === true) continue;
+      const result = await upsert(row.id, { voiceVector: null, voiceVectorModel: null, voiceAnchorVerified: false });
+      if (!result.ok) continue;
+      await addAuditLog(
+        'participant.invalidate-voice-anchor',
+        'participant',
+        row.id,
+        { voiceVectorModel: row.voiceVectorModel, voiceAnchorVerified: row.voiceAnchorVerified === true },
+        { name: row.name, reason: comparable ? 'unverified' : 'model-mismatch', model: model || '' },
+        'participantRegistry',
+      );
+      invalidated += 1;
+    }
+    if (invalidated > 0) notifyParticipantsChanged();
+    return invalidated;
   };
 
   const get = async (id: string): Promise<ParticipantRecord | undefined> => {
@@ -396,6 +490,7 @@ export function createParticipantRegistry({
     };
     await db.put(updated);
     await addAuditLog('participant.remove', 'participant', id, row, updated, 'participantRegistry');
+    notifyParticipantsChanged();
     return true;
   };
 
@@ -472,6 +567,7 @@ export function createParticipantRegistry({
   return {
     register,
     upsert,
+    invalidateVoiceAnchors,
     get,
     list,
     remove,

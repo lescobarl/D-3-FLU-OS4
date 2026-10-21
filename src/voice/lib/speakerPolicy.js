@@ -11,7 +11,8 @@
  */
 import { FLU_CONFIG } from './fluConfig.js'
 import { detectWakeIntroducedName } from './audioMath.js'
-import { isAutoSpeakerLabel, isProperSpeakerName, normalizeSpeakerLabel } from './voiceIdentity.js'
+import { isAutoSpeakerLabel, normalizeSpeakerLabel } from './voiceIdentity.js'
+import { anonymousSpeakerLabel } from './speakerLabels.js'
 import { isPhraseShortForSpeakerHeuristics } from './fluTranscriptPause.js'
 import { optionalConfigBlock } from './configGuard.js'
 import { parseSpeakerIndex } from './speakerCore.js';
@@ -76,7 +77,16 @@ export function anchorResolvedToLastLogged(
   if (!sticky || !resolved || resolved === sticky) return resolved
   if (explicitNextSpeaker || wakeIntro) return resolved
   if (weakAsrEvidence) {
-    if (primary && isPhraseShortForSpeakerHeuristics(phrase)) return primary
+    // El PRIMARIO (participante activo) NO se estampa sin medida: solo si el audio de
+    // ESTE turno lo midio como su voz (preflightSpeaker === primary).
+    if (primary && normalizeSpeakerLabel(preflightSpeaker) === primary && isPhraseShortForSpeakerHeuristics(phrase)) return primary
+    // CORROBORACION DEL PREFLIGHT (defecto 6 del dueno 2026-10-19): con ASR debil el
+    // sticky es el ultimo logueado (= el dueno) y el salto de etiqueta se devolvia a el:
+    // la mujer quedaba MEZCLADA en sus filas. Si el preflight de ESTE turno (la MEDIDA
+    // del audio) coincide con la etiqueta RESUELTA (una automatica, p. ej. su propio
+    // «Hablante 2»), el salto NO es un fantasma: es una voz distinta real y se conserva.
+    // Solo con preflight listo; sin el, manda el sticky (comportamiento anterior).
+    if (preflightReady && isAutoSpeakerLabel(resolved) && normalizeSpeakerLabel(preflightSpeaker) === resolved) return resolved
     return sticky
   }
   if (
@@ -99,6 +109,7 @@ export function anchorResolvedToLastLogged(
   if (stickyIdx > 0 && resolvedIdx > stickyIdx + 1) return sticky
   if (
     primary &&
+    normalizeSpeakerLabel(preflightSpeaker) === primary &&
     stickyIdx > parseAutoSpeakerIndex(primary) &&
     resolvedIdx > parseAutoSpeakerIndex(primary) &&
     isPhraseShortForSpeakerHeuristics(phrase)
@@ -139,9 +150,16 @@ export { isWeakAsrSpeakerEvidence, listConfiguredTranscriptHardRules } from './f
  */
 export function resolveCommitStickyFallback({
   sessionPrimary: _sessionPrimary = '',
+  lastResolved = '',
   lastLogged = '',
   fallback = FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker,
 } = {}) {
+  // La ultima voz RESUELTA POR MEDIDA manda: si llega una resolucion medida (con vector) y
+  // luego commits sin medida propia, la fila sigue esa VOZ y no la etiqueta que otros
+  // caminos pisan (medido en d4c1c8f3: un final sellado sin audio pisaba `lastLogged` y la
+  // mujer quedaba batida entre "Hablante 1" y "Hablante 2" en filas consecutivas).
+  const resolved = normalizeSpeakerLabel(lastResolved)
+  if (resolved) return resolved
   // El PRIMARIO de la sesion (el participante activo de la base) NO es hablante de una fila:
   // con el, una etiqueta sin voz medida salia con SU nombre ("Luis a la chica").
   const sticky = normalizeSpeakerLabel(lastLogged)
@@ -167,7 +185,7 @@ export function resolveCommitStickyFallback({
  * el nombre propio lo pone la via acustica cuando de verdad coincide.
  */
 export function blindSpeakerFallback(label = '') {
-  const clean = normalizeSpeakerLabel(label)
-  if (!clean) return FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker
-  return isProperSpeakerName(clean) ? FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker : clean
+  // Ruta unica: la regla vive en `anonymousSpeakerLabel` (speakerLabels), que tambien
+  // consumen la diarizacion y el hook. Antes esta era OTRA copia de la misma decision.
+  return anonymousSpeakerLabel(label)
 }

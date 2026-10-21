@@ -25,12 +25,18 @@ export interface IdentitySessionRefs {
   /** Escritor unico de los clusters (el renombre por VOZ lo necesita). */
   setClusters: (clusters: unknown[]) => void;
   /**
+   * TIMBRE medido del ultimo turno commiteado. Lo consume el comando "soy X": sin la
+   * firma, el nombre no se podia atar a la VOZ que lo dijo y solo cambiaba la ultima
+   * intervencion (defecto medido por el dueno 2026-10-18).
+   */
+  getLastTurnSignature?: () => number[] | null;
+  /**
    * P9.79: PUERTO a la BASE de participantes. Lo rellena la app (el hook solo publica
    * los refs de sesion) y lo consume el registro del nombre: la voz que dice su nombre
    * ENTRA en la base, no solo en las filas. Sin esto el nombre quedaba ligado a las
    * filas y el panel (que lee Dexie) no lo mostraba.
    */
-  registerParticipant?: (name: string, speakerLabel?: string) => void | Promise<unknown>;
+  registerParticipant?: (name: string, speakerLabel?: string, voiceVector?: number[] | null) => void | Promise<unknown>;
 }
 
 /**

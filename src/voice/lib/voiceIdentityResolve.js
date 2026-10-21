@@ -50,7 +50,8 @@ export function formatIdentityDiagnosis({ label = '', diagnosis = {}, lastSpeake
 
 /**
  * @param {number[]} vector — embedding 512-D (solo capa diarización)
- * @returns {{ speakerId: string, speakerName: string }}
+ * @returns {{ speakerId: string, speakerName: string, workingClusters: object[], label: string, signatureVector: number[], evidence: boolean, diagnosis: object }}
+ *   `diagnosis` es la traza de la regla que decidio (reason, similitudes); la consume la sonda del preflight.
  */
 export function resolveSpeakerIdentityFromVector(
   vector = [],
@@ -112,5 +113,5 @@ export function resolveSpeakerIdentityFromVector(
   const speakerId = matched?.speakerId || labelToSpeakerId(label)
   const speakerName = resolveSpeakerNameFromId(speakerId, workingClusters)
   // Evidencia = COINCIDENCIA medida (dueno: `isMeasuredIdentityMatch`), no "hay clusters".
-  return { speakerId, speakerName, workingClusters, label, signatureVector: vector, evidence: isMeasuredIdentityMatch(diagnosis.reason) }
+  return { speakerId, speakerName, workingClusters, label, signatureVector: vector, evidence: isMeasuredIdentityMatch(diagnosis.reason), diagnosis }
 }

@@ -6,8 +6,6 @@
  * considera que TODAS las lineas cambiaron. Consecuencias medidas:
  *   - f1a1ca6 tuvo que rehacerse: el diff era de miles de lineas por un cambio real
  *     de 22+/20-.
- *   - .task/frozen.json hashea BYTES del arbol de trabajo: un flip de EOL cambia el
- *     hash y el gate falla por una razon que no tiene nada que ver con la tarea.
  *
  * Este guard NO impone una politica nueva (el repo es mixto a proposito: 378 en LF,
  * 331 en CRLF, 63 mixtos). Solo exige lo que ya se cumple hoy: el fichero del arbol
@@ -37,7 +35,8 @@ export function eolMismatches(rows: EolRow[]): string[] {
   for (const r of rows) {
     const i = eolKind(r.i)
     const w = eolKind(r.w)
-    if (w === '-text' || w === 'none' || i === '-text' || i === 'none') continue
+    // Un fichero borrado en el arbol no tiene clase EOL que comparar.
+    if (!w || w === '-text' || w === 'none' || i === '-text' || i === 'none') continue
     if (i !== w) out.push(`${r.path}: indice=${i} -> arbol=${w}`)
   }
   return out
@@ -59,7 +58,7 @@ describe('P0.7 eolGuard — el arbol de trabajo conserva la clase EOL del indice
     expect(
       offenders,
       `EOL cambiado respecto al indice (N=${offenders.length}):\n  ${offenders.join('\n  ')}\n` +
-        'Conserva la EOL del archivo al editarlo (y recuerda: frozen.json hashea bytes).',
+        'Conserva la EOL del archivo al editarlo.',
     ).toEqual([])
   })
 })

@@ -1,705 +1,232 @@
-# AGENTS.md — Reglas de ingeniería (fuente única y vinculante)
+# AGENTS.md — Reglas de ingeniería
 
-> Archivo ÚNICO de constraints. Se cumple íntegro antes de cualquier operación.
-> No hay reglas duplicadas en otros archivos. Donde no pueda cumplirse una regla,
-> el agente SE DETIENE y pregunta; nunca la silencia ni la maquilla.
-> Si otra fuente (chat, README, `kilo.json`, comandos) contradice este archivo,
-> prevalece la formulación más estricta de este archivo.
+**Versión:** 9.0 · **Última actualización:** 2026-10-18
 
-**Versión:** 8.1 · **Última actualización:** 2026-09-29
+Este repositorio se valida con **typecheck, linters y pruebas funcionales**. No hay
+gates de metadatos, ledger de pendientes, auditoría del historial de Git, reglas de
+alcance de commits, contratos de proceso ni autorizaciones artificiales para correr
+la suite. La calidad se demuestra con el software funcionando y con pruebas que
+ejecutan el flujo real.
 
 ---
 
 ## Anexo 0 — Hechos del proyecto (dato verificable, no regla)
 
-> Estos valores se ajustan por proyecto; las reglas de abajo son genéricas y se
-> leen contra esta tabla. Ningún valor de esta tabla puede hardcodearse en el código.
-
 | Hecho | Valor |
 |-------|-------|
-| Tipo | SPA/PWA. Sin backend desplegado; `src/server/**` son middlewares del dev-server de Vite (proxies gemini/search/browser). |
+| Tipo | SPA/PWA. Sin backend desplegado; `src/server/**` son middlewares del dev-server de Vite. |
 | Lenguaje/Build | TypeScript 6 estricto · Vite 8 · React 19 |
 | Routing/Estado/DB | React Router v6 · Zustand 5 · Dexie 4 (IndexedDB) |
 | Estilos | CSS propio (sin Tailwind) |
-| Idioma | `es` / `en` / `both`, UN selector en la cabecera (`App.tsx`, `aria-label="Idioma"`); sin librería i18n |
+| Idioma | `es` / `en` / `both`, UN selector en la cabecera (`App.tsx`); sin librería i18n |
 | IA/Medios locales | `@huggingface/transformers`, Whisper WASM (workers), `tesseract.js`, `pdfjs-dist` |
 | Testing | Vitest 3 + React Testing Library · Playwright (E2E) |
 | Node | 22 (el de CI) |
 
-**Comandos del proyecto (única fuente de verdad de los gates):**
+### Comandos
 
 | Acción | Comando |
 |--------|---------|
 | Dev | `npm run dev` |
 | Tipos | `npm run typecheck` |
-| Guards | `npm run lint` |
+| Linters (comportamiento + ESLint) | `npm run lint` |
 | ESLint | `npm run lint:eslint` |
 | Test rápido (archivo tocado) | `npm run test:file <ruta>` |
-| Suite completa (solo al cierre/CI) | `npm run test:full` |
-| Gate de contrato (obligatorio) | `npm run gate` |
-| Ledger de pendientes (leer) | `npm run ledger` |
-| Ledger: sincronia vs git | `npm run ledger:check` |
+| Test de cambios | `npm test` |
+| Suite completa | `npm run test:full` |
+| Gate de entrega | `npm run gate` |
 | E2E | `npm run e2e` |
 | Build | `npm run build` |
 
-**Barrera real (no depende de buena voluntad):** `.githooks/pre-commit` -> `lint` + `typecheck`
-(ligero, por commit, AGENTS.md seccion 5); `.github/workflows/ci.yml` -> `lint`, `typecheck`,
-`test:full`, `build`, `e2e`. `npm run gate` es de **cierre de tarea** (valida UN contrato contra
-su base), NO un gate de repo: no se ejecuta en CI ni en cada commit.
-
-**Ledger de pendientes (fuente unica de lo que falta):** `plans/ledger.json` (git-tracked)
-registra pendientes y cierres. El **chat y su resumen NO son fuente**: se compactan y
-descartan, por eso un pendiente que solo vive en la conversacion se pierde. `scripts/task-ledger.mjs`
-(`npm run ledger:check`) es la barrera: falla si un commit de cierre no esta en el ledger, si un
-`done` apunta a un commit inexistente o si un pendiente no cita evidencia. Guard:
-`tests/taskLedgerGuard.test.ts`. Toda sesion **empieza leyendo el ledger y `git log`**.
-
-**Registro único de excepciones capturadas:** todo `catch` registra por
-`logCaughtError(contexto, ...detalles)` (`src/lib/caughtError.ts`). Es la vía por
-la que un `catch` deja de ser silencioso (§2.6). `console.*` **no** cuenta como
-registro; `catchSilenciosoGuard` lo verifica. El helper no importa nada de forma
-estática (carga el relay de forma diferida) para no cerrar el ciclo
-`fluConfig -> sharedConfig -> caughtError -> clientLogRelay -> fluConfig`.
+`npm run gate` ejecuta `typecheck + lint + test:full`; no audita Git ni metadatos.
+El pre-commit ejecuta `lint + typecheck` y nunca la suite completa.
 
 ---
 
-## 0. PROTOCOLO DE VERDAD Y EJECUCIÓN
+## 0. VERDAD Y VALIDACIÓN
 
-**Principio:** mentir debe ser más caro que decir la verdad. Todo lo de abajo existe para eso:
-no depende de la buena voluntad; vive en el repo y en comandos verificables.
-
-### A. Conducta
-
-1. **Dos niveles de "hecho" (no confundir):**
-   - **DoD-técnico** (comando/gate): lo cierra el **agente**.
-   - **DoD-producto** (pantalla/uso real): lo cierra **el usuario**.
-   El agente **solo adjunta evidencia**; **nunca** declara el de producto. Sin
-   confirmación del usuario el estado es: `en progreso: hice X, falta Y`.
-2. **Toda afirmación cita su fuente:** comando + salida real copiada, o
-   `archivo:línea`. **Sin fuente no se afirma nada.**
-3. **Si no sabes: UNA pregunta con propuesta por defecto y paro.** Prohibido
-   inventar; prohibido encadenar preguntas hasta paralizar.
-4. **Parcial honesto:** `No lo hice; hice solo X parcial en [archivo:línea]`.
-   Reportar parcial **nunca** se penaliza; disfrazarlo, sí.
-5. **Si algo tuyo rompe:** revertir **ESE hito**, mostrar el `git diff` real y
-   re-medir. Sin reverts silenciosos ni "ya lo arreglé" sin evidencia.
-6. **Distinguir HECHO de SUPUESTO.** Etiquetar explícito: `HECHO` (con fuente) vs
-   `SUPUESTO` (sin verificar). **Un supuesto no cierra nada.**
-7. **Autonomía sin el usuario:** el sustituto de "mi pantalla" es **evidencia
-   cruda** (log real, `curl`, fila real en DB, salida del gate), definida y
-   aprobada por tarea. Si no hay sustituto, el hito queda **no validado**.
-8. **Cierre en lugar inmutable:** commit/PR **y**, durante el trabajo,
-   `.task/report` **append-only**. No basta el chat.
-
-### B. Mecánica anti-maquillaje (lo que vuelve §A imposible de fingir)
-
-9. **Contrato ANTES de tocar código**, con 4 campos: **objetivo único, DoD,
-   alcance y guard**. Sin contrato, no se empieza.
-10. **DoD = comando con valor esperado, no descripción.** Se registra el valor
-    **ANTES** y **DESPUÉS**. Si el valor no cambió, **la tarea no está hecha**.
-11. **Guard primero, EN ROJO.** Nace fallando mientras exista la duplicación
-    (`N>1`) y enumera los duplicados **programáticamente** como
-    `archivo:símbolo:línea`. **Si nace verde, la tarea no está definida.**
-12. **Guard de COMPORTAMIENTO obligatorio.** Todo invariante crítico necesita
-    **≥1 test que EJECUTE el flujo** (no solo conteo por nombre). Un guard de
-    conteo **no cierra solo**.
-13. **Tabla de invariantes obligatoria** (antes de empezar, aprobada por el usuario):
-
-    | # | Invariante (una frase) | Comando (valor HOY) | META | Guard (hoy ROJO) |
-    |---|------------------------|---------------------|------|------------------|
-    | 1 | `<...>`                | `rg ... \| wc -l = N` | 0/1 | test que lista duplicados |
-
-14. **Métrica, contrato y guard CONGELADOS por hash.** El agente **no** elige el
-    comando de medición ni puede editarlo. **Enmienda formal:** declarar el
-    cambio, re-aprobar el usuario, **nuevo hash** y **reiniciar el hito**.
-15. **Baseline de fallos** capturado antes de tocar nada. Cierre = **0 fallos
-    NUEVOS** (no "0 fallos"). Los preexistentes se documentan como **deuda** y no
-    se "arreglan" salvo que el DoD lo pida, ni se usan como excusa.
-16. **Alcance cerrado.** El contrato fija `allow` y `deny`. `.task/**` y el gate
-    son **inmutables por el agente**. La **única fuente** del contrato es
-    `.task/contract.json`; lo pegado en el chat **se ignora**.
-17. **"Equivalente de mi pantalla" por tarea** (no visual): salida cruda de
-    comando, fila real en DB, o salida del gate — **definido y aprobado** antes de
-    empezar. Es el ground truth cuando no hay UI.
-18. **Checkpoint / rollback.** Commit o backup **antes** de un hito riesgoso. Si
-    el hito rompe: **revertir ESE hito** (mostrando el diff) y re-medir.
-19. **Modo LIGHT vs FULL.**
-    - **LIGHT** (docs, typos, formato): sin guard; cierre con `git diff`.
-    - **FULL** (lógica, arquitectura, duplicación): todo este protocolo.
-    El modo se declara en el contrato.
-20. **La barrera vive en el repo, no en la buena voluntad:** pre-commit hook + job
-    de CI que ejecutan el gate. Reglas en el chat son promesas; en el repo, son
-    **imposibilidad de mentir**.
-21. **Ledger de pendientes (fuente unica, no el chat).** Todo pendiente y todo
-    hallazgo fuera de alcance se registra en `plans/ledger.json` **al detectarlo**,
-    no al final. Toda sesion **empieza leyendo el ledger y `git log`**; el resumen
-    del chat es contexto **no confiable** (se compacta y descarta). Prohibido
-    afirmar "esto ya se hizo / esto no se hizo" sin citar el ledger o el commit.
-    `npm run ledger:check` + `tests/taskLedgerGuard.test.ts` lo impiden.
-
-22. **Integridad del instrumento.** Un commit que toca `src/**` **no** puede tocar a la
-    vez un guard que lea ese mismo `src` **como texto**. Si un guard cae por el cambio:
-    se reporta el ROJO y se **para**; el arreglo del guard va en commit **aparte**.
-    **Incumplimiento registrado (no repetir):** en P7.75-P7.77 dos guards quedaron en
-    ROJO y el agente los edito en el **mismo turno** que el codigo que median, dejando
-    indistinguible "guard mal escrito" de "codigo mal escrito".
-    **Arnes:** `tests/instrumentIntegrityGuard.test.ts` (un solo dueno del escaneo
-    "que guard lee que fichero"), que compara los ficheros de cada commit del rango
-    — y lo que esta en el INDICE, que es el commit en curso — con los tests que
-    hacen `readFileSync` de ese `src`. **Estado: MECANIZADO** (0b87331), con
-    control negativo real sobre el arbol.
-23. **Alcance declarado en TODO cierre.** Sin el campo `CUBIERTO` / `NO CUBIERTO`
-    (formato en 0.E) un cierre **no** es valido. Una evidencia estrecha **no** se narra
-    como suficiente: "gate verde" no es "nada roto" si hay guards **fuera** de ese gate.
-    **Incumplimiento registrado:** se declaro "verificacion final, nada roto" con 2
-    guards en ROJO, fuera del gate que se habia ejecutado.
-    **Arnes:** `tests/ledgerClosureScopeGuard.test.ts`, trinquete NO retroactivo: el
-    punto de arranque es el commit que introduce el guard, resuelto del propio git
-    (`--diff-filter=A`) y no de una constante a mano, y compara el REGISTRO
-    (`done[]`) por id, no el commit que el cierre cita. **Estado: MECANIZADO**
-    (0b87331), con control negativo real (un cierre sintetico sin campo cae).
-24. **Cobertura de los guards de COMPORTAMIENTO.** Si un cambio toca un fichero que un
-    guard lee, ese guard **debe** estar en `lint:guards`, o el cierre declara por que no.
-    `lint:guards` es **higiene** (rutas, fuentes, hardcode), **no** comportamiento: es el
-    agujero por el que dos guards del flujo quedaron fuera sin que el pre-commit lo
-    dijera.
-    **Arnes:** el mismo `tests/instrumentIntegrityGuard.test.ts`: ficheros tocados ->
-    guards que los leen -> estan en `lint:guards` o declarados en su `EXEMPT` con
-    motivo. **Estado: MECANIZADO** (0b87331), con control negativo real (quitando un
-    guard del gate, cae nombrando los ficheros que lee). **P7.87 CERRADO:** los 5 guards
-    que quedaban en `EXEMPT` ganaron su prueba de detector REAL (control negativo medido:
-    rompiendo cada detector, el guard cae), entraron en `lint:guards` y el `EXEMPT` quedo
-    **VACIO**; los 3 con logica inline exponen su predicado para poder falsificarlo. El
-    baseline `shrink-only` de `guardMutationGuard` NO se toco (no crece).
-
-25. **Cobertura de COMPORTAMIENTO del `src` tocado.** 0.24 cubre los guards de **texto**
-    que leen el `src` tocado; esto cubre los **tests de comportamiento**, que son otro
-    agujero: si un cambio toca un fichero de `src`, **todo** test que lo **importe** (por
-    el grafo de imports, no por su nombre) tiene que correr en el gate (`dod`, `guard` o
-    `lint:guards`).
-    **Incumplimiento registrado:** P7.81 cerro en VERDE con la **suite completa en ROJO**
-    (un caso del motor de cuentacuentos): el `dod` del contrato eran 15 ficheros y la suite
-    369.
-    **Arnes:** `tests/dodScopeGuard.test.ts`, con control negativo real (quitando ese test
-    del `dod`, cae nombrándolo). **Estado: MECANIZADO**, cierra P7.88.
-
-### C. Contrato (formato mínimo)
-
-```jsonc
-{
-  "id": "T-###",
-  "mode": "full",                       // "light" | "full"
-  "objective": "<una frase>",
-  "dod":      { "command": "...", "expect": "valor o regex" },
-  "guard":    { "command": "...", "expect": "0", "mustStartRed": true,
-                "behavior": "tests/<flujo>.test.ts" },   // test que EJECUTA el flujo
-  "groundTruth": { "command": "...", "expect": "..." },    // equivalente de "mi pantalla"
-  "baseline": { "command": "...", "failPattern": "\\bFAIL\\b" },
-  "invariants": [
-    { "id": "I1", "statement": "<una frase>", "count": "rg ... | wc -l",
-      "today": 3, "target": 1, "guard": "tests/<...>.test.ts" }
-  ],
-  "allow":    ["src/**", "tests/**"],
-  "deny":     [".task/**", "scripts/task-gate.mjs"],
-  "frozen":   { "contractHash": "<sha256>", "guardHash": "<sha256>" }
-}
-```
-
-### D. Paro (cuándo detenerse)
-
-- **Falta información real** → 1 pregunta con propuesta por defecto → **paro**.
-- **DoD no cumplible** → **PARAR y decirlo**; prohibido sustituir, ampliar o
-  maquillar alcance; prohibido entregar una versión más fácil "de paso".
-- **Guard no nace rojo** → la tarea **no está definida**; no se empieza.
-- **La métrica no baja** tras el hito → **revertir el hito** y re-planificar.
-- **Algo validado se rompe** → revertir, mostrar `git diff`, corregir de raíz.
-- **Se termina el alcance permitido** → parar y pedir enmienda (nuevo hash).
-
-### E. Cierre (obligatorio)
-
-Formato fijo, corto en el chat y en el lugar inmutable (commit/PR + `.task/report`):
-
-```
-Cambios aplicados: <lista>
-Validado contra: <comando + salida cruda ANTES/DESPUÉS; guard; baseline y 0 nuevos>
-No validado: <lo que falta — típicamente el DoD-producto, "pendiente del usuario">
-Alcance real (obligatorio, 0.23): CUBIERTO=<lo medido>; NO CUBIERTO=<lo NO verificado>
-```
-
-Evidencia cruda: `git diff --stat` · salida del **DoD** ANTES y DESPUÉS · salida
-del **guard** (rojo → verde) · **baseline** de fallos preexistentes y confirmación
-de **0 nuevos**.
-
-> El **DoD-producto** (pantalla del usuario) queda **reservado al usuario**. El
-> agente cierra lo técnico; **no** declara lo de producto.
+1. **Toda afirmación cita su fuente:** comando + salida real, o `archivo:línea`.
+2. **No se declara terminado lo que no se validó.** El agente cierra lo técnico; la
+   validación de producto (pantalla y uso real) la confirma el usuario.
+3. **Parcial honesto:** `No lo hice; hice solo X parcial en [archivo:línea]`.
+   Reportar un avance parcial nunca se penaliza; disfrazarlo, sí.
+4. **Distinguir HECHO de SUPUESTO.** Un supuesto no cierra nada.
+5. **Si algo propio rompe:** se revierte ese cambio, se muestra el `git diff` real y
+   se vuelve a medir. Sin reverts silenciosos.
+6. **La verdad es la pantalla del usuario.** Si reporta que algo no coincide, se
+   investiga de nuevo; no se insiste con el dato propio.
+7. **Prohibido validar solo con mocks.** Los tests pueden aislar dependencias, pero
+   el flujo central debe ejercitarse con el artefacto real del proyecto.
 
 ---
 
-## 1. VERDAD Y VALIDACIÓN
+## 1. PROHIBICIONES ABSOLUTAS
 
-1. **Nada se notifica como concluido sin validación real productiva.** Validar =
-   pruebas funcionales + auditoría visual/técnica, contra el sistema vivo. No basta
-   compilar ni pasar tests.
-2. **Palabras PROHIBIDAS para el agente:** "listo / hecho / funciona / resuelto /
-   100% / terminado / concluido / unificado / ya quedó". Reemplazo obligatorio de
-   cierre: `Cambios aplicados · Validado contra · No validado`.
-   Cuando no se hizo lo ordenado: `No lo hice; hice solo X parcial en [archivo:línea]`.
-   Reportar un avance parcial honesto jamás se penaliza.
-3. **"Listo" lo declara el USUARIO al verlo.** Sin su confirmación el estado es
-   "en progreso". La validación técnica no es condición suficiente.
-4. **Toda afirmación cita su fuente:** comando + salida real copiada, o `archivo:línea`.
-5. **La verdad es la pantalla del usuario, no los logs.** Si el usuario reporta que
-   no coincide, se le cree y se re-investiga. Nunca insistir con el dato propio.
-6. **Prohibido validar solo con mocks.** Validar contra el artefacto real ejecutable
-   del proyecto (ver Anexo 0). Un mock no cierra ningún DoD.
-7. **Evidencia estructural por hito:** `git diff` real + conteo ANTES/DESPUÉS de la
-   invariante. Un hito sin evidencia NO existe: se revierte y se para.
-8. **Si un cambio propio rompe:** se anuncia, se revierte mostrando el diff y se
-   corrige de raíz. Cero disculpas: se corrige.
+1. **No hardcode:** configuración por entorno, archivo de configuración o inyección.
+2. **No parches ni soluciones temporales:** se corrige la causa raíz.
+3. **No `new` en lógica de negocio:** dependencias por interfaces.
+4. **No commits directos a `main`/`master`:** ramas `feature/*`.
+5. **No `try/catch` vacíos** ni que silencien errores: se registra con contexto y se
+   propaga. Un `catch` registra por `logCaughtError(contexto, ...detalles)`
+   (`src/lib/caughtError.ts`); `console.*` no cuenta como registro.
+6. **No rutas dobles:** una sola fuente de verdad por intención. Una **cadena de
+   respaldo** (proveedor 1 → 2 → 3, ordenada en config, con un solo orquestador) no
+   es una ruta doble: es resiliencia y se conserva.
+7. **No borrado físico en offline:** el borrado es lógico (`deleted: true`).
+8. **No basura en el proyecto:** código y archivos muertos, duplicados u obsoletos se
+   eliminan. Git es el respaldo; no se crean copias manuales por iteración.
+9. **No tests arbitrarios ni duplicados:** cada test cubre un caso real y único.
+10. **No errores de lógica ni de implementación.** El código se entrega correcto.
+11. **No `timeout: null`** en comandos. Los procesos largos se verifican y se
+    terminan por PID.
+12. **No dejar procesos largos colgados.** Se identifica el PID exacto.
+13. **No generar respaldos por iniciativa propia** (`git bundle`, copias fechadas,
+    tags) salvo petición expresa del usuario en ese turno.
+14. **No warnings `act()`** ni tests dependientes de timing. Tests deterministas
+    (fake timers, `act()`), sin depender de la carga de la máquina.
 
-## 2. PROHIBICIONES ABSOLUTAS
+---
 
-1. **No entregas parciales**: toda tarea se entrega completa y validada según la
-   solicitud.
-2. **No hardcode**: toda configuración viene de variables de entorno, archivos de
-   configuración o inyección de dependencias.
-3. **No parches ni soluciones temporales**: todo error se corrige de fondo, en su
-   causa raíz. Cero workarounds para casos de borde.
-4. **No `new` en lógica de negocio**: toda dependencia se inyecta por interfaces.
-5. **No commits directos a `main`/`master`**: flujo con ramas `feature/*`.
-6. **No try-catch vacíos** ni que silencien errores: toda excepción se captura, se
-   registra en el log de auditoría y se propaga con contexto descriptivo.
-7. **No modificar +2 archivos de dominio sin interfaz común**: primero se propone el
-   diseño de interfaz que los unifica.
-8. **No cambios temporales ni rutas dobles**: nada de archivos duplicados, comentarios
-   legacy, implementaciones paralelas ni rutas en paralelo para el mismo recurso.
-   Una única fuente de verdad por intención.
-   **OJO:** una *cadena de respaldo* (proveedor 1 → 2 → 3, ordenada, en config, con un
-   solo orquestador) **NO es una ruta doble**: es resiliencia y se conserva. Ver §7.7.
-9. **No borrado físico en offline**: el borrado es lógico (`deleted: true`).
-10. **No basura en el proyecto**: depuración de código y archivos muertos, duplicados
-    u obsoletos. Git es el backup; no se crean copias manuales por iteración.
-11. **No tests arbitrarios ni duplicados**: cada test cubre un caso real y único.
-12. **No grandes respuestas**: resumen claro y preciso; detalle solo cuando se pide.
-13. **No errores de programación/lógica/implementación**: el código se entrega
-    correcto, validado y sin defectos.
-14. **No `timeout: null`** en comandos: rápidos ≤30s, instalaciones ≤120s. Servidores
-    largos: timeout de 15-30s solo para verificar arranque y luego verificar con otro
-    comando. `timeout: null` bloquea el chat.
-15. **No declarar verde con warnings `act()`** ni tests dependientes de timing: tests
-    deterministas (fake timers, `act()`), sin depender de la carga de la máquina.
-16. **No dejar procesos largos colgados**: identificar el PID exacto y terminar ese PID.
-    Nunca `pkill`/`taskkill` por palabra genérica.
-17. **No generar RESPALDOS por iniciativa propia**: prohibido crear `git bundle`,
-    copias manuales, archivos fechados (`*-FULL-AAAA-MM-DD-*`) o tags de respaldo
-    sin que el USUARIO lo pida EXPRESAMENTE en ESE turno. Git ya es el respaldo
-    (§2.10). Un respaldo no solicitado no protege nada nuevo y quema el turno.
-    **Incumplimiento registrado (no repetir):** el agente generó
-    `FLU-OS4-FULL-2026-09-28-S1.bundle` + tag `respaldo-full-2026-09-28-s1` por su
-    cuenta. Si el usuario quiere un respaldo, lo pide y se hace UNA vez, al final.
-
-## 3. OBLIGACIONES ESTRICTAS
+## 2. OBLIGACIONES ESTRICTAS
 
 1. **Inyección de dependencias** por interfaces.
-2. **JSDoc en todo componente/método nuevo**: contrato de la interfaz, no implementación.
-3. **Responsabilidad Única (SRP)**: cada archivo/clase con una única razón de cambio.
-4. **Test de inmutabilidad** por pieza: la arquitectura sigue agnóstica al negocio.
-5. **Log de auditoría** inmutable para todo cambio de configuración.
-6. **UUIDv4 en toda inserción**: prohibidas llaves numéricas secuenciales.
+2. **JSDoc en todo componente/método nuevo:** contrato de la interfaz.
+3. **Responsabilidad Única (SRP):** una razón de cambio por archivo/clase.
+4. **Inmutabilidad:** no se mutan objetos de estado compartidos; se crean copias
+   dirigidas. Las filas ya escritas no se reescriben si la regla de dominio dice que
+   son inmutables.
+5. **Log de auditoría** para cambios de configuración.
+6. **UUIDv4 en toda inserción:** prohibidas llaves numéricas secuenciales.
 7. **Tupla de sincronización** en cada tabla: `[revision, updated_at, deleted]`;
    `revision` incrementa atómicamente y `updated_at` se actualiza en UTC.
-8. **Gestión de errores con contexto** (ver §2.6).
-9. **Aislamiento de contexto de IA**: cada inferencia inicia contexto ciego; purgar
-   estado global residual antes de cada llamada.
-10. **Circular Buffer en audio**: vaciado cíclico cada 30s contra fugas de memoria.
-11. **requestAnimationFrame para 3D**: renderizado aislado; comunicación con IndexedDB
-    vía `postMessage`.
-
-## 4. CONVENCIONES DE CÓDIGO
-
-- Archivos: `PascalCase` componentes, `camelCase` hooks/utils. Un componente por archivo.
-- Estructura real: `src/core/[dominio]/` (logica), `src/components/` (UI), `src/hooks/`, `src/lib/`, `src/services/`, `src/app/` (despacho/acciones), `src/voice/` (motor de voz, JS), `src/avatar/`. NO existe `src/modules/`.
-- Interfaces con prefijo `I`; tipos sin prefijo. Tipos en `src/types/[dominio].ts`.
-- EOL: conserva la del fichero. El repo es mixto (`core.autocrlf=false`, sin `.gitattributes`): hay blobs en LF y en CRLF. Cambiar la clase EOL hace que git marque TODO el fichero como modificado y que el diff del gate reviente por tamaño. El `eolGuard` lo pilla respecto al índice, pero tras commitear el flip deja de verlo: no te fíes de un diff de miles de líneas.
-- Vocabulario: **una etiqueta, un sitio**. Un conjunto de valores que debe coincidir entre
-  subsistemas (dominios de acción, tipos del contrato workspace) se declara UNA vez y el resto
-  importa la lista o consulta pertenencia por un predicado (`isVisualWorkspaceTipo`). Prohibido
-  re-enumerarlo: ni lista literal, ni unión de tipos, ni JSDoc. Guard:
-  `tests/workspaceVocabularyContract.test.ts`, que compara por CONJUNTO EXACTO — co-ocurrir no
-  basta ("doc"/"video" viven en varios vocabularios) y marcar eso empuja a aflojar el guard.
-- Trinquete de tamaño: `tests/godFileSizeGuard.test.ts` fija el techo de cada god-file
-  (`App.tsx` 4643, `useFluVoiceAssistant.js` 4579, `fluConfig.js` 2772, `gemini.js` 1848). Solo baja o empata: si
-  una consolidación necesita +N líneas en un god-file, recorta esas N allí mismo o el commit no
-  pasa. Un import multilínea de 5 líneas donde había 1 rompe el trinquete: déjalo en una línea.
-- Los `.js` NO los comprueba `tsc` (`checkJs` off). Un `export { x } from '...'` sin `import` compila
-  en verde y rompe en runtime al usarse el binding dentro del propio módulo. Si un módulo
-  re-exporta algo que además usa: importa Y re-exporta, y ancla la delegación con identidad de
-  función (`expect(modulo.predicado).toBe(nucleo.predicado)`).
-
-## 5. VALIDACIÓN, ITERACIÓN Y CI
-
-### Iteración rápida (por cambio, no toda la suite)
-- `npm test` ejecuta SOLO los tests del cambio (`--changed`); la suite completa es
-  `npm run test:full`, reservada al gate de entrega (CI/push), nunca por commit.
-- `npm run test:file <ruta>` para el archivo en curso.
-- `npm run test:grep -- "<texto>"` filtra por NOMBRE de caso sin correr el archivo entero.
-- `npm run verify:fast` (EOL + tipos + eslint) es la verificacion de una iteracion.
-- E2E acotado al bloque: `npm run e2e:plan` (dry-run) y `npm run e2e:scoped`
-  (ejecuta) corren SOLO los specs tocados, usando el reparto declarado en
-  `.task/contract.json -> e2eScope`. Si un fichero de `src/` cambia y no declara
-  qué spec lo cubre, el runner FALLA: nunca corre a ciegas ni recorta en silencio.
-  La suite E2E completa queda para el gate de entrega, igual que `test:full`.
-- EOL: el trinquete (`tests/eolGuard.test.ts`) compara el árbol con el índice de
-  git. Los editores pueden cambiar la clase EOL de un fichero al guardarlo; si eso
-  pasa, se normaliza al índice; no se "arregla" el guard. Se repara con `npm run fix:eol`, que normaliza el arbol a la clase EOL del indice (nunca toca `.task/**`).
-- Puerta de tipos (`npm run typecheck`) en cada iteración; un error de tipos es error
-  de entrega.
-- Guard estructural del protocolo: `tests/protocolGuard.test.ts`.
-- **Barrera de COMPORTAMIENTO por dominio** (`tests/arbiterDomainBarrier.test.ts`,
-  dentro de `lint:guards`): fija que cada dominio conserve sus comandos y ninguno
-  invada al vecino (agenda con/sin hora, nota, compra, diario, configuración, y la
-  precedencia con partida activa). **Invariante de la partida:** una intención
-  PENDIENTE de otro dominio (crear en agenda sin instante) **no es una jugada**; el
-  juego no puede consumirla como `turn`. Se guardan las DOS vías que ofrecen el
-  turno: el paso 13 de `resolveDeterministicCommand` y el fast-path
-  `resolveStatefulDomains` del hook. **Motivo medido (riesgo estructural real):**
-  `lint:guards` eran 56 archivos de HIGIENE (rutas, fuentes, hardcode) y
-  `deterministicArbiter.test.ts` quedaba FUERA, así que una regresión de
-  precedencia pasaba con "typecheck + guardias en verde" y solo se veía en la
-  suite completa (que exige autorización). Ocurrieron dos: en `3b66634` el alta
-  genérica de notas se llevó los verbos de la agenda y "agrega matemáticas el
-  lunes" se guardaba como NOTA; y con partida activa esa misma frase (y
-  "recuérdame comprar el pan", "cita con el dentista") caía en `game/turn` y el
-  juego se la tragaba. La barrera cierra ambos huecos en pre-commit.
-- **Invariante de agenda: crear exige hora EXPLÍCITA.** `parseAgendaCommand` NO
-  inventa la hora: sin hora dicha devuelve la pista (`handled:false` + `kind`) para
-  que se pregunte. Antes rellenaba 09:00 en lo recurrente ("reunión los lunes") y
-  00:00 en la fecha pelada ("recuérdame … mañana"), fijando una hora que nadie
-  dijo. Aplica a TODOS los kinds y también a la vía del LLM
-  (`resolveAgendaDomainIntent` → `needsInstant`). Cancelar/editar no cambian: no
-  usan la hora para identificar el item. Cubierto en `arbiterDomainBarrier`.
-- Un guard de comportamiento que use módulos de producción NO es "teatro": toda
-  barrera nueva en `lint:guards` debe traer su caso de **prueba de detector**
-  (alimenta una entrada y comprueba que la marca discrimina) o `guardMutationGuard`
-  la rechaza.
-
-### La suite completa exige autorizacion EXPRESA (regla dura)
-- La barrera tiene DOS puertas y UN solo criterio: `scripts/full-suite-policy.mjs`
-  decide que es una corrida sin filtro y que cuenta como autorizacion expresa; lo
-  aplican `scripts/require-full-suite-auth.mjs` (script npm) y `vitest.config.ts`, que
-  vitest carga en TODA corrida (npm, npx, IDE). Bloquear solo el script npm NO bastaba:
-  el atajo `npx vitest run` no pasa por `npm run` y esquivaba la barrera.
-- Sin `FLU_AUTH_FULL_SUITE=1` (o `CI=true`, que ya es autorizacion expresa) la corrida
-  sin filtro NO arranca; imprime la via rapida y sale con codigo 1.
-- Que cuenta como "sin filtro": `vitest run`/`bench` sin ruta de test y sin
-  `--changed`/`-t`/`--related`/`--shard`. El valor de un flag NO es un filtro
-  (`--reporter dot` sigue siendo suite completa). El modo watch no se bloquea: es
-  interactivo y lo ve el humano, pero corre todo el repo igual.
-- El guard `tests/fullSuitePathBarrier.test.ts` mide la CONDUCTA: lanza un proceso real
-  sin filtro y exige que muera pidiendo autorizacion, y que una corrida acotada no se
-  bloquee. Un guard que solo lee el TEXTO del comando no vigila la violacion.
-- Correr la suite completa "para validar" un cambio NO es prudencia, es
-  incumplimiento: no es un gate de trabajo (es el gate de CI, no el del agente).
-  Un cambio se valida con los casos que toca, no con todo el repo.
-- Prohibido tambien invocarla por atajos equivalentes (`vitest run` sin filtro,
-  `npx vitest run`, `npm run test:full` con el env var puesto sin pedirlo).
-- Si de verdad hace falta, se PIDE y se anota la autorizacion en el reporte.
-- **PROHIBIDO QUE EL AGENTE PONGA EL ENV VAR** (`FLU_AUTH_FULL_SUITE=1`): el
-  bloqueo no es un tramite a saltar, es la regla. Ponerlo "para validar" es la
-  violacion, no una via de escape. Tampoco `CI=true`.
-- El agente NO decide correr la suite completa. Solo la corre si el USUARIO lo pide
-  en ESE turno, y entonces se anota. "Verificar que no rompi nada" NO es pedido.
-- La validacion de un cambio es: los tests del archivo tocado + `npm run lint`
-  (guards) + `npm run typecheck`. Nada mas. Si esos tres estan verdes, el cambio
-  esta validado; la suite es del CI, no del agente. Los guards YA incluyen la
-  barrera de comportamiento por dominio (`arbiterDomainBarrier`), asi que una
-  regresion de precedencia cae aqui y no hace falta la suite completa para verla.
-- **Incumplimiento registrado (no repetir):** en la tarea FLU-OS4 el agente corrió
-  `test:full` con el env var puesto de su propia iniciativa, dos veces, para
-  "confirmar" cambios ya verdes con guards+tipos. Fue perdida de tiempo y
-  violacion de alcance. No volver a hacerlo bajo ninguna formulacion.
-- **Incumplimiento registrado 2 (no repetir):** el agente corrio
-  `npx vitest run --reporter=dot --silent` SIN autorizacion. Su propio razonamiento lo
-  dice ("plain `npx vitest run` should be fine") y el comando llevaba `timeout=1500`:
-  identifico la barrera del script npm y eligio el atajo que la esquivaba. El guard de
-  entonces seguia verde porque miraba el TEXTO del script, no la conducta. No produjo
-  salida (interrumpido). Trazabilidad: `plans/ledger.json` P7.43/P7.44.
-- Commit por hito funcional en verde; cambios independientes en paralelo en un mismo turno.
-
-### Gates
-- Pre-commit LIGERO (nunca la suite completa): `npm run lint` (guards) + `npm run typecheck`.
-  El hook vive versionado en `.githooks/pre-commit` y se activa con `core.hooksPath`
-  (script `prepare`); antes existia solo en `.git/hooks`, asi que no viajaba con el repo.
-- Gate de contrato: `npm run gate` es la barrera de CIERRE de una tarea. Requiere un
-  contrato activo (`.task/contract.json`) con su base declarada, por lo que NO corre por
-  commit ni en CI: fallaria en cuanto el arbol avanza respecto a esa base.
-- CI (`.github/workflows/ci.yml`): `npm run lint`, `npm run typecheck`, `npm run test:full`,
-  `npm run build`, `npm run e2e`. La cobertura de repo la dan guards, tipos y suite.
-- Antes de declarar entrega, el CI DEBE estar en verde (o suite completa corrida una vez
-  en el cierre).
-
-### Rendimiento de suite
-- Tests de lógica pura en `environment: 'node'`; solo componentes usan `jsdom`. Cero
-  warnings `act()`. Carga perezosa de dependencias pesadas. `"incremental": true` +
-  `tsBuildInfoFile` en caché para typecheck caliente.
-
-### Ahorro de tokens (contexto mínimo)
-- Leer solo fragmentos necesarios; **prohibida la re-lectura** de lo ya mapeado en la
-  sesión. Si falta un dato exacto, se lee solo el fragmento/línea nuevo. Modelo adecuado
-  por tarea. Razonar antes de ejecutar; prohibido lanzar comandos a ciegas. No arrastrar
-  contexto de tareas terminadas.
-
-## 6. ENTREGA Y FOCO
-
-1. **Criterio de aceptación por escrito antes de tocar código** (1-2 líneas de qué verá
-   el usuario cuando esté bien). Un "adelante / valida / ejecuta" sobre tarea descrita
-   cuenta como aceptación.
-2. **Una sola tarea a la vez, sin desvíos.** Hallazgo fuera de alcance → se anota al final
-   (`archivo:línea`) y se sigue la tarea.
-3. **"No afectar lo validado" se demuestra con tests**; no es excusa para evitar el cambio.
-4. **"Ejecuta / hazlo" = primera tool call en esa misma respuesta, sin texto previo**
-   (máx. 1 línea). La explicación va DESPUÉS. Excepción única: falta información real →
-   una pregunta y stop.
-5. **No detenerse ante complejidad**: con diagnóstico + localización, se ejecuta completo
-   ahora; la validación visual la hace el usuario después.
-6. **Cumplir el objetivo completo** (no basta "compila / pasan tests"). Cada cambio se
-   anuncia ANTES (archivo + intención) y se muestra DESPUÉS con `git diff` real. Sin
-   decisiones ocultas ni reverts silenciosos.
-
-## 7. EVIDENCIA ESTRUCTURAL (anti-cascada de parches)
-
-1. **Criterio de aceptación NUMÉRICO, no visual** (verificable con un comando). Lo visual
-   es complementario, nunca sustituto.
-2. **Evidencia por hito:** (a) `git diff` real y (b) conteo ANTES/DESPUÉS de la invariante.
-   Si el conteo no bajó, el hito es cosmético: se rechaza aunque se vea perfecto.
-3. **La invariante se mide en CADA hito**, no al final.
-4. **Cada 2-3 hitos el USUARIO re-ejecuta la misma medición.** Aprobaciones previas no son
-   evidencia de la siguiente fase.
-5. **Hito sin evidencia → revertir ESE hito y parar.** Alcance corto por hito; si se alarga
-   sin reducir la invariante, detenerse y re-planificar en voz alta.
-6. **Guard automatizado** en toda unificación/refactor que falle si hay N>1 implementaciones
-   del símbolo/ruta. Un guard que falla solo es la única barrera que el agente no puede
-   maquillar.
-7. **Rutas dobles vs. cadenas de respaldo (NO confundir — prohibido borrar respaldos).**
-
-   | | **Ruta doble (MALO)** | **Cadena de respaldo (BUENO, se conserva)** |
-   |---|---|---|
-   | Qué es | La MISMA responsabilidad implementada N veces | N proveedores **distintos** con roles **distintos** |
-   | Riesgo | Pueden divergir (estado inconsistente) | Degradación controlada ante fallo |
-   | Ejemplo real aquí | `normalizeForMatch` en 2 sitios; `resolveGeminiApiKey` en 2; allowlist `['wikipedia.org','educ.ar']` copiada en consumidores | Búsqueda web **Tavily → OpenRouter web → Wikipedia** (keyless) |
-   | Dónde vive | Copias dispersas por consumidor | **Un** orquestador + orden en **config** |
-
-   **Ejemplos verificados en este repo (HECHO, se conservan):**
-   - Búsqueda web: cadena declarada en `src/voice/lib/fluConfig.js:1171` (`Tavily (1) →
-     OpenRouter web (2) → Wikipedia (3)`), resuelta por **un solo** orquestador
-     `resolveSearchProviders` (`src/core/search/searchSession.ts:148`), consumido por el
-     proxy (`src/server/searchProxy.ts:172`).
-   - Imagen: `pollinations` (primario) → `OpenRouter image` (respaldo servidor) → `localSvg`
-     (último recurso, gobernado por `shouldUseLocalSvgOnError`), orquestado en
-     `src/voice/lib/imageGeneration.js` y declarado en `src/voice/lib/visualConfig.js`
-     (`errorFallback: 'localSvg'`).
-   - Avatar: `fbxWorkerClient` usa worker con `runMainThreadFallback` (mismo resultado, no
-     un segundo parser).
-
-   **Regla de decisión (una frase):** si los N caminos producen *lo mismo por el mismo
-   motivo*, es ruta doble → se unifica a 1. Si producen *lo mismo por motivos distintos y en
-   orden de prioridad ante fallo*, es respaldo → se conserva.
-
-   **Requisitos de una cadena de respaldo válida** (si falta uno, es parche y se corrige):
-   1. **Un solo orquestador** que recorre el orden; el consumidor no ve proveedores.
-   2. Orden y proveedores en **config** (no literales dispersos por consumidor).
-   3. Cada eslabón con **rol y fallo distintos** (no la misma llamada repetida).
-   4. **Finita y explícita**: último recurso declarado (p. ej. `localSvg` / Wikipedia keyless).
-   5. Test que fija el **orden** y que el fallo del eslabón 1 pasa al 2.
-
-   **Prohibido:** eliminar o "unificar" un eslabón de respaldo como si fuera duplicado.
-   Antes de tocar cualquier candidato, clasificarlo con esta tabla y decirlo al usuario.
-
-   **7.7.b — Respaldo mal implementado = ruta doble.** Un respaldo legítimo **en la intención**
-   sigue siendo ruta doble **si la orquestación está copiada**. Si el mismo `fetch` + mismo
-   chequeo + mismo `parse` + **mismo literal de error** están escritos en 2 archivos en vez de
-   en **una** función compartida, es ruta doble: se extrae la función y ambos caminos la llaman.
-   Conteo de orquestaciones: **2 → 1**. (Caso real: worker FBX vs fallback main-thread en
-   `src/avatar/workers/`.)
-
-   **7.7.c — Un dominio, un almacén.** La misma entidad persistida en **dos sistemas** (Dexie +
-   localStorage, o Dexie + store en memoria) **no es respaldo**: es ruta doble de datos y produce
-   divergencia. Un almacén es **de registro**; los demás solo se justifican como **caché con
-   caducidad** o **copia de seguridad explícita**, y en esos casos se declara cuál es la fuente
-   y cómo se reconcilia. Prohibido que un "backup" escriba en un almacén derivado y **no** en el
-   de registro mientras devuelve `true` (mentira de respaldo).
-
-   **7.7.d — El guard mide IMPLEMENTACIONES, no literales.** Un guard que cuenta un literal
-   (`/speechSynthesis/`) en vez de la implementación (los sitios que construyen la salida) es
-   **teatro**: se satisface con otro identificador, otro `case`, otro archivo o una fachada.
-   Obligatorio: (1) el patrón debe alcanzar **todas** las formas reales del símbolo
-   (`new SpeechSynthesisUtterance`, `getSpeechEngine`, `synth.speak(...)`), no una sola;
-   (2) **case-insensitive** cuando el lenguaje lo permita; (3) alcance **todo** `src`, sin
-   excluir la carpeta donde vive el duplicado; (4) **prueba de mutación**: se inyecta el
-   duplicado y el guard DEBE ponerse ROJO; si sigue verde, el guard no sirve y se rehace.
-   Caso real: `ttsPuntoUnicoGuard` + `audit-metric.mjs` midieron `/speechSynthesis/` (1 archivo,
-   verde) mientras existían **2** puntos de síntesis (`fluSpeech.js`,
-   `src/services/localTts.ts`) — invisibles por mayúsculas y por delegación del motor.
-
-   **7.7.e — Clasificación pura: no la fuerces por el gate.** Si un item pide *clasificar* N
-   símbolos (no unificarlos), su métrica es "sin clasificar" y puede estar YA en 0 cuando el item
-   se abre: la clasificación se hizo en commits anteriores y el ledger nunca la cerró (item
-   fantasma). Compruébalo antes de escribir código (`node scripts/auditoria.mjs --only D0`). Dos
-   hechos aprendidos midiendo:
-   (1) el gate **copia** los `guardFiles` al worktree base. Un veredicto que vive *dentro* del
-   guard no distingue base de actual (métrica base=0 actual=0, y el guard pasa en base): el
-   veredicto tiene que vivir en el código medido, no en el guard.
-   (2) Sin reducción disponible, se cierra como **medición** (tabla por símbolo + comando
-   reproducible) citando el commit donde la clasificación aterrizó. Empujarlo por el gate produce
-   un hito cosmético que §7.2/§7.5 rechazan.
-   (3) Los catálogos y medidores (`scripts/auditoria.mjs`, `audit-metric.mjs`) **no** los corre el
-   gate: una clasificación que solo vive ahí es prosa, no barrera. Si lo que quieres es una
-   barrera, la lista tiene que estar donde el gate mira (`lint:guards`) y sobre el código medido.
-
-   **7.7.f — Un guard fuera de `lint:guards` no es una barrera: se pudre.** Medido en esta
-   sesión: `tsStrictGuard` (C49) y `dexieSchemaGuard` (C46) existían, estaban ROJOS en HEAD y
-   nadie lo veía, porque la barrera solo corre los ficheros listados en `lint:guards`. Daño
-   real: P1.4 movió el esquema a `DEXIE_VERSIONS` y dejó su propio guard leyendo llamadas
-   `.stores({...})` que ya no existen; el guard resolvía **0** tablas, así que "no hay legacy
-   vivas" pasaba por **vaciedad** (`undefined !== 'declared'`) mientras el otro test fallaba
-   con `undefined`. En el mismo sitio, la misma unificación dejó un `as unknown as` que C49
-   prohibe. Cuatro reglas:
-   (1) Todo guard que exista se lista en `lint:guards` o se borra: un guard que nadie corre es
-   prosa con sintaxis de test. Antes de dar por verde una sesión, busca huérfanos
-   (`tests/*Guard*.test.ts` contra `package.json`).
-   (2) **Anti-vaciedad explícita.** Además de "no veo el defecto", el guard debe exigir que ve
-   la FUENTE (`resuelve >15 tablas`) y que el defecto EXISTIÓ (`declared` y después `deleted`).
-   Sin eso, un detector sordo pasa el mismo test que un código limpio.
-   (3) **Reparar un detector no cabe en la maquinaria de invariante.** Si el código ya está
-   bien y lo roto es el criterio, no hay 1→0 que medir en `src`, y el guard nuevo pasaría
-   también en `base` (el gate copia el guard al worktree base): eso es un **contrato sin
-   `invariant`**, y su evidencia es el antes/después del detector (0 → 26 tablas) más las
-   exigencias anti-vaciedad, nunca una métrica forzada. Endurecer el criterio permite actualizar
-   su hash en `frozen.json` en el mismo commit.
-   (4) Al parchear ficheros con script, respeta su EOL: `eolGuard` detecta el "mixed" (salta al
-   insertar con `\n` en un fichero CRLF) y el gate no cierra. Normaliza antes de commitear.
-   (5) **Un detector de higiene también SOBRECUENTA: mide el falso positivo antes de "arreglarlo".**
-   Medido en P6.9: los "91 TODO" de `src` eran la palabra española TODO/TODOS ("Se listan TODOS
-   los estados"), y cuatro `plans/*.md` aparecían con "mojibake" que era arte ASCII legítimo
-   (`├──`, `│`, `─┐`). En los dos casos, el defecto era el detector del audit, no el código
-   señalado: cerrar el hallazgo sin medirlo habría reescrito código sano. Un hallazgo se cierra
-   midiendo; si es falso positivo, lo que se corrige es el DETECTOR, y su prueba es que ve el
-   defecto y NO marca lo legítimo (C53 lo hace por los dos lados).
-   (6) **No escribas código con no-ASCII desde un heredoc de PowerShell**: llega a disco roto y
-   deja mojibake. Medido: 12 ficheros versionados arrastraban 130 secuencias de UTF-8 mal
-   decodificado, incluidas cuatro cadenas que FLU **pronuncia** por TTS (la de "Navegación
-   curada" y la de "¿Qué querés que busque?" entre ellas). El daño se ve como parejas de
-   caracteres de caja y griegos donde debería haber una vocal acentuada o una raya. Usa una
-   herramienta que garantice UTF-8 (o escapes `\uXXXX`), y para reparar mide el codepage real
-   en vez de suponerlo: aquí el que apareció fue **cp437**, no cp850 (el byte 0xE2 da la gamma
-   en cp437 y una O acentuada en cp850). C53 vigila el residuo, así que este propio documento
-   no puede citar las secuencias rotas en crudo: se describen por su code point.
-
-   **7.7.g — Duplicado vs similitud de forma: la vara NO se mueve a mitad de campaña.**
-   Medido 2026-10-08/09 (cuatro vueltas seguidas del mismo bucle): se respondió «hay rutas dobles»
-   cuatro veces porque la REGLA DE MEDIR se amplió entre vueltas — formas de definición que el
-   detector no veía, umbral 60→40→30 y, al final, otro método (secuencias, idiomas, tokens CSS).
-   Con una vara móvil la respuesta es siempre «sí». Reglas de decisión:
-   (1) **Duplicado** = DOS DUEÑOS DEL MISMO RESPONSABLE que pueden DIVERGIR (el mismo dato en dos
-   almacenes, el mismo ajuste leído por dos motores, dos implementaciones del MISMO resultado para
-   la MISMA entrada). Eso se cierra: es finito y se cuenta.
-   (2) **Similitud de forma** = el mismo esqueleto o la misma sentencia en responsables DISTINTOS
-   (dos mapas de literales, dos accesores `x?.campo || ''`, dos plantillas de texto). NO es un
-   pendiente: se reporta aparte, con otro nombre, y NO entra en el contador de duplicados.
-   (3) **La métrica se congela ANTES de empezar**: `scripts/duplication.mjs` y
-   `scripts/auditoria-codigo.mjs` están en `.task/frozen.json` y la puerta falla si su hash cambia.
-   Ampliar la vara (formas, umbral, alcance) NO es una iteración del mismo trabajo: es una TAREA
-   NUEVA con su propia decisión y su propio contrato. Cambiar el hash en silencio es una violación.
-   (4) Todo reporte dice el ALCANCE de la vara: «0 duplicados con esta definición»; lo que queda
-   fuera se enuncia como clasificado y con su motivo, nunca como «sigue habiendo».
-## 8. CONTRATO DE TAREA Y VERIFICACIÓN POR COMANDO (anti-sustitución)
-
-Toda tarea se ejecuta contra un contrato escrito ANTES de tocar código. Sin contrato no se
-empieza. El contrato tiene 4 campos obligatorios: objetivo único, DoD, alcance y guard.
-
-1. **DoD = comando, no descripción.** Cierre con la salida cruda del comando ANTES y
-   DESPUÉS. Si el valor no cambió, la tarea NO está hecha.
-2. **Guard primero, en ROJO.** Nace fallando mientras exista la duplicación (N>1) y pasa
-   cuando queda en 1. Su mensaje lista los duplicados (`archivo:símbolo:línea`). Si el guard
-   no nace rojo, la tarea no está definida.
-3. **Baseline de fallos.** Antes de tocar nada se registra la lista de tests que YA fallan.
-   La puerta de cierre es **0 fallos NUEVOS**, no "0 fallos". Los preexistentes se documentan
-   como deuda y NO se "arreglan" salvo que el DoD lo pida.
-4. **Prohibida la sustitución de alcance.** No se reemplaza la tarea pedida por una versión
-   más fácil o parcial. Si el DoD no se puede cumplir, el agente SE DETIENE y lo dice.
-5. **Alcance cerrado.** El contrato fija los archivos que se PUEDEN tocar y prohíbe el resto.
-   Todo hallazgo fuera de alcance se ANOTA al final (`archivo:línea`) y se sigue la tarea.
-
-**Cierre obligatorio:** (a) `git diff --stat` · (b) comando DoD ANTES y DESPUÉS · (c) salida
-del guard · (d) baseline de fallos preexistentes y confirmación de 0 nuevos.
-
-## 9. RECETA DE INVARIANTES (replicable en cualquier proyecto)
-
-Para convertir un pedido difuso ("unifícalo", "una sola fuente") en algo verificable, el
-agente DEBE producir, ANTES de tocar código:
-
-1. **Intención en una frase.**
-2. **Sustantivos contables**, no adjetivos: cuántos almacenes, decisiones, queries,
-   productores. **Un eslabón de una cadena de respaldo NO cuenta como productor duplicado**
-   (§7.7): primero se clasifica, luego se cuenta.
-3. **Número HOY y META**: comando que lo cuenta (`rg -n ...`) y valor actual; meta natural
-   `1` (unificar) o `0` (eliminar). Prohibidos umbrales inventados.
-4. **Guard que nace ROJO** por invariante, listando `archivo:símbolo:línea`.
-5. **Hito = 1 invariante:** `git diff --stat` + conteo ANTES/DESPUÉS; si el conteo no baja,
-   el hito se revierte.
-6. **Cierre:** guard verde + 0 fallos nuevos.
-
-Plantilla para pedirlo (pegable):
-
-```
-Antes de tocar código, dame un contrato con:
-1) objetivo en una frase;
-2) por cada duplicación: comando que la cuenta, valor HOY y META (0 o 1);
-3) por cada invariante, un guard que HOY falle y liste archivo:línea;
-4) DoD = comando ejecutable con valor esperado;
-5) un invariante por turno, con conteo ANTES/DESPUÉS;
-6) no cerrar sin guard verde y 0 fallos nuevos;
-7) congelar el criterio (hash del guard) para que no se cambie en silencio.
-```
-
-Regla corta: **cada duplicación con un número; cada número con un guard que nace rojo.**
-
-## 10. VELOCIDAD DE INTERACCIÓN
-
-0. **Arranque en UN comando y relevo de sesion.** Antes de leer nada (ledger, git log,
-   contrato, reporte), correr `npm run brief`: rama, HEAD, estado del arbol, base y
-   limites, tamano de allow/e2eScope, pendientes del ledger y los comandos de validacion
-   en orden. Sustituye ~8 lecturas de arranque por una. `--files` lista los ficheros
-   cambiados y `--json` da el mismo dato legible por maquina. El briefing NO comprueba
-   alcance: el dueno unico de eso sigue siendo `npm run gate`.
-   **Relevo:** el texto listo para pegar en una sesion nueva vive en `.task/handoff.md`
-   y se actualiza cuando cambia el estado (nuevo pendiente, nueva base, nuevo defecto).
-
-1. **Evidencia en el primer mensaje.** Toda petición trae: entrada cruda + salida real
-   observada + resultado esperado. Si falta, el agente hace UNA pregunta con propuesta por
-   defecto y para.
-2. **Prohibido volcar contexto completo.** Nunca leer ni pegar un archivo, log o listado
-   entero si basta un fragmento. Se lee la línea/bloque nuevo.
-3. **Ventana mínima de logs.** De un log se lee SOLO la marca o línea relevante; jamás el
-   buffer completo.
-4. **Verificación por niveles.** (a) test del archivo tocado; (b) typecheck incremental;
-   (c) gate/suite completa SOLO al cierre. No correr todo por cada edición.
-5. **No re-verificar lo ya verde.** Prohibido repetir un comando ya verde sin que el código
-   haya cambiado.
-6. **Delegar lo instrumental.** Búsquedas, exploración de símbolos y lectura de logs se
-   delegan a subagentes (en paralelo cuando son independientes); el principal sintetiza.
-7. **Instrumentación puntual, no trazas masivas.** Marcas concretas y apagadas por defecto.
-   Un log que inunda es un defecto.
-8. **Modelo/razonamiento proporcional a la tarea.** Ligero para cambios mecánicos; profundo
-   solo para diagnóstico o diseño.
-9. **Salida corta y de formato fijo** (ver §0.E). Sin narrar el proceso, sin repetir el diff
-   en prosa.
-10. **Cerrar antes de abrir.** Ningún hito queda "pendiente de validar" mientras se empieza
-    otro; se cierra con su guard verde.
-11. **Ante ambigüedad costosa, decidir y avanzar** con el default declarado; el usuario
-    corrige después.
+8. **Errores con contexto** (ver §1.5).
+9. **Aislamiento de contexto de IA:** cada inferencia inicia contexto ciego; se purga
+   el estado global residual antes de cada llamada.
+10. **Circular Buffer en audio:** vaciado cíclico contra fugas de memoria.
+11. **requestAnimationFrame para 3D**: renderizado aislado; comunicación con
+    IndexedDB vía `postMessage`.
 
 ---
+
+## 3. CONVENCIONES DE CÓDIGO
+
+- Archivos: `PascalCase` componentes, `camelCase` hooks/utils. Un componente por
+  archivo.
+- Estructura real: `src/core/[dominio]/` (lógica), `src/components/` (UI),
+  `src/hooks/`, `src/lib/`, `src/services/`, `src/app/` (despacho/acciones),
+  `src/voice/` (motor de voz, JS), `src/avatar/`. NO existe `src/modules/`.
+- Interfaces con prefijo `I`; tipos sin prefijo. Tipos en `src/types/[dominio].ts`.
+- **EOL:** conserva la del fichero. El repo es mixto (`core.autocrlf=false`, sin
+  `.gitattributes`): hay blobs en LF y en CRLF. Cambiar la clase EOL hace que Git
+  marque todo el fichero como modificado. Se repara con `npm run fix:eol`.
+- **Vocabulario:** una etiqueta, un sitio. Un conjunto de valores que debe coincidir
+  entre subsistemas se declara UNA vez y el resto importa la lista o consulta
+  pertenencia por un predicado (`isVisualWorkspaceTipo`). Prohibido re-enumerarlo.
+- **Trinquete de tamaño:** `tests/godFileSizeGuard.test.ts` fija el techo de cada
+  god-file. Solo baja o empata; si una consolidación necesita +N líneas, se recortan
+  allí mismo o el commit no pasa.
+- Los `.js` NO los comprueba `tsc` (`checkJs` off). Un `export { x } from '...'` sin
+  `import` compila en verde y rompe en runtime al usar el binding dentro del módulo.
+  Si un módulo re-exporta algo que además usa: importa Y re-exporta, y ancla la
+  delegación con identidad de función.
+
+---
+
+## 4. VALIDACIÓN E ITERACIÓN
+
+### Por cambio
+
+- `npm run test:file <ruta>` para el archivo en curso.
+- `npm run test:grep -- "<texto>"` filtra por nombre de caso.
+- `npm run typecheck` en cada iteración; un error de tipos es error de entrega.
+- `npm run lint` (pruebas de comportamiento + ESLint).
+- `npm run verify:fast` (EOL + tipos + ESLint).
+
+### Al cerrar una tarea
+
+- `npm run gate` (typecheck + lint + suite completa) o, si el entorno no lo permite,
+  `npm run test:full` + `npm run build`.
+- `npm run e2e` para los flujos de UI afectados.
+- Si un test falla, se corrige la causa raíz; no se ajusta el test para tapar el
+  defecto salvo que el test mida una regla obsoleta, y entonces se declara.
+
+### Reglas de los tests
+
+- Un guard de comportamiento ejecuta el flujo real, no solo cuenta nombres.
+- Un detector debe tener una prueba que lo falsifique (entrada infractora → marca;
+  entrada legítima → no marca).
+- Los tests de lógica pura usan `environment: 'node'`; solo los componentes usan
+  `jsdom`. Cero warnings `act()`.
+- Carga perezosa de dependencias pesadas.
+
+---
+
+## 5. ENTREGA Y FOCO
+
+1. **Criterio de aceptación por escrito antes de tocar código** (1-2 líneas de qué
+   verá el usuario cuando esté bien).
+2. **Una sola tarea a la vez, sin desvíos.** Hallazgo fuera de alcance → se anota al
+   final (`archivo:línea`) y se sigue la tarea.
+3. **"No afectar lo validado" se demuestra con tests.**
+4. **"Ejecuta / hazlo" = primera tool call en esa misma respuesta.**
+5. **No detenerse ante complejidad:** con diagnóstico y localización, se ejecuta
+   completo; la validación visual la hace el usuario después.
+6. **Cada cambio se anuncia ANTES** (archivo + intención) y se muestra DESPUÉS con
+   `git diff` real. Sin decisiones ocultas ni reverts silenciosos.
+7. **Cierre en formato fijo:**
+   `Cambios aplicados · Validado contra · No validado`.
+   El DoD de producto queda reservado al usuario.
+
+---
+
+## 6. EVIDENCIA ESTRUCTURAL
+
+1. **Criterio numérico para refactors:** comando que cuenta la duplicación, valor
+   ANTES y DESPUÉS. Si el número no baja, el cambio es cosmético.
+2. **Rutas dobles vs. cadenas de respaldo:**
+
+   | | **Ruta doble (MALO)** | **Cadena de respaldo (BUENO)** |
+   |---|---|---|
+   | Qué es | La MISMA responsabilidad implementada N veces | N proveedores distintos con roles distintos |
+   | Riesgo | Divergen | Degradación controlada |
+   | Dónde vive | Copias dispersas | Un orquestador + orden en config |
+
+   Si los N caminos producen lo mismo por el mismo motivo, es ruta doble → 1. Si
+   producen lo mismo por motivos distintos y en orden de prioridad ante fallo, es
+   respaldo → se conserva.
+3. **Un dominio, un almacén.** La misma entidad en dos sistemas (Dexie +
+   localStorage, o Dexie + store en memoria) no es respaldo: es ruta doble de datos.
+4. **Un guard mide implementaciones, no literales.** Debe alcanzar todas las formas
+   reales del símbolo, ser case-insensitive cuando aplique, cubrir todo `src` y
+   tener prueba de mutación.
+5. **Un guard fuera de `lint:guards` no es una barrera.** Si existe, se lista o se
+   borra. Los guards deben evitar la vacuidad: exigir que ven la fuente y que el
+   defecto existió.
+6. **Duplicado vs. similitud de forma.** Duplicado = dos dueños del mismo
+   responsable que pueden divergir. Similitud de forma = mismo esqueleto en
+   responsables distintos; no es un pendiente, se reporta aparte.
+
+---
+
+## 7. VELOCIDAD DE INTERACCIÓN
+
+1. **Evidencia en el primer mensaje:** entrada cruda + salida real + resultado
+   esperado.
+2. **Prohibido volcar contexto completo.** Se lee el fragmento o bloque nuevo.
+3. **Ventana mínima de logs:** solo la marca o línea relevante.
+4. **Verificación por niveles:** test del archivo tocado → typecheck → gate al
+   cierre. No correr todo por cada edición.
+5. **No re-verificar lo ya verde** sin que el código haya cambiado.
+6. **Delegar lo instrumental:** búsquedas y exploración a subagentes; el principal
+   sintetiza.
+7. **Instrumentación puntual, no trazas masivas.**
+8. **Modelo/razonamiento proporcional a la tarea.**
+9. **Salida corta y de formato fijo.** Sin narrar el proceso.
+10. **Cerrar antes de abrir.** Ningún hito queda pendiente mientras se empieza otro.
+11. **Ante ambigüedad costosa, decidir y avanzar** con el default declarado.
+
+---
+
 
 ## Anexo B — Invariantes de dominio (FLU OS · adaptar/borrar por proyecto)
 

@@ -68,7 +68,10 @@ export function startContinuousIdentityPipeline(turnId, runFactory, { onClusters
       if (lastRevision !== null && revision === lastRevision) return
       lastRevision = revision
     }
-    const run = typeof runFactory === 'function' ? runFactory() : runFactory
+    // El resolutor se ata al turno del TICK: sin el id, `getCapturedAudio` leia
+    // `activeTurnIdRef.current` en el momento de EJECUTAR el job y un tick viejo
+    // media el audio del turno siguiente (dos duenos del turno).
+    const run = typeof runFactory === 'function' ? runFactory(id) : runFactory
     if (typeof run !== 'function') return
     scheduleTurnSpeakerPreflight(id, run, { onClusters, onResolved, continuous: true })
   }
@@ -119,12 +122,15 @@ export function stopAllContinuousIdentityPipelines() {
 /** Plazo ACOTADO (config) de la espera del preflight antes del commit. */
 function commitPreflightTimeoutMs() {
   const ms = Number(FLU_CONFIG.voiceIdentity?.capture?.identityPipeline?.commitPreflightTimeoutMs)
-  return Number.isFinite(ms) && ms >= 0 ? ms : 1500
+  // Medido en b218404f: el embedding tarda ~2000 ms y el default de 1500 expiraba
+  // SIEMPRE (34/34 commits preReady=false). 3000 deja pasar la resolucion real.
+  return Number.isFinite(ms) && ms >= 0 ? ms : 3000
 }
 
-function finalSnapshotRunner(runFinalSnapshot) {
+function finalSnapshotRunner(runFinalSnapshot, turnId) {
   return () => {
-    const maybeRun = runFinalSnapshot()
+    // FABRICA (`(turnId) => resolutor`): se le pasa el turno para que ate su audio.
+    const maybeRun = runFinalSnapshot(turnId)
     return typeof maybeRun === 'function' ? maybeRun() : maybeRun
   }
 }
@@ -145,7 +151,7 @@ export function finalizeTurnIdentityPipeline(turnId, runFinalSnapshot, { onClust
     // la propia funcion y NO un snapshot: `Preflight ready=false vec=0` en TODOS los
     // turnos y ningun cluster persistido (`refClusters=0`). Se desenvuelve de forma
     // PEREZOSA para no arrancar el trabajo antes de que la cola lo pida.
-    scheduleTurnSpeakerPreflight(id, finalSnapshotRunner(runFinalSnapshot), { continuous: false, onClusters, onResolved })
+    scheduleTurnSpeakerPreflight(id, finalSnapshotRunner(runFinalSnapshot, id), { continuous: false, onClusters, onResolved })
   }
 
   return consumeTurnSpeakerPreflight(id)
@@ -171,7 +177,7 @@ export function primeTurnSpeakerPreflight(turnId, runFinalSnapshot, { onClusters
   const yaResuelto = peekTurnSpeakerPreflight(id)
   if (yaResuelto?.ready) return Promise.resolve(yaResuelto)
   if (typeof runFinalSnapshot === 'function') {
-    scheduleTurnSpeakerPreflight(id, finalSnapshotRunner(runFinalSnapshot), { continuous: false, onClusters, onResolved })
+    scheduleTurnSpeakerPreflight(id, finalSnapshotRunner(runFinalSnapshot, id), { continuous: false, onClusters, onResolved })
   }
   const waitMs = Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : 0
   return new Promise((resolve) => {

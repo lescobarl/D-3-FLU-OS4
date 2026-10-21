@@ -199,8 +199,10 @@ import { localGet, localRemove, localSet } from './core/storage/localStore';
 import { pathForTab, type RightTab, tabFromPath } from './app/tabRoutes';
 import { useFluBridgesLifecycle } from './app/fluBridges';
 import { resolveRowSpeakerLabel } from './voice/lib/conversationRow';
+import { participantVoiceAnchorsForDiarization } from './voice/lib/participantVoiceAnchors';
+import { registerParticipantVoice } from './app/registerParticipantVoice';
 import { useIdentitySessionRef } from './app/useIdentitySessionRef';
-import { registerSpeakerIdentity } from './voice/lib/speakerIdentityRegister';
+import { applyKnownVoiceName } from './voice/lib/speakerIdentityRegister';
 import { resolveVoiceIdentity } from './voice/lib/speakerDirectory';
 import { isAutoSpeakerLabel } from './voice/lib/voiceIdentity';
 import { resolveVoiceParticipants } from './voice/lib/voiceParticipantsSource';
@@ -1162,11 +1164,16 @@ function App() {
         registeredName: activeParticipantNameForVoice || "",
     }), [activeParticipantSpeakerLabelForVoice, activeParticipantNameForVoice]);
     const participantSpeakerRef = useRef(participantSpeakerForRow) // closure fresca (deps [] del callback)
+    // VOZ CONOCIDA EN LA BASE = NOMBRE INMEDIATO (mandato del dueño 2026-10-18): anclas medidas que la sesión siembra.
+    const participantVoiceAnchorsForVoice = useMemo(() => participantVoiceAnchorsForDiarization(participants.participants), [participants.participants]);
 
     // Puente de la sesion de IDENTIDAD (clusters vivos + hablante primario): lo rellena
     // `useFluVoiceAssistant` y lo consume el comando REGISTRAR_PARTICIPANTE, para que las
     // DOS rutas del registro del nombre usen la MISMA evidencia (A1: casos 3 y 4).
     const identitySessionRef = useIdentitySessionRef();
+    // Miembros ESTABLES del puerto (el objeto `participants` no lo es): la dep del efecto
+    // es el servicio y el refresco, no la identidad del contenedor.
+    const { service: participantsService, refresh: refreshParticipants } = participants;
     // P9.79: PUERTO a la BASE de participantes. El registro del nombre por VOZ (unico
     // dueno: registerSpeakerIdentity) escribe el participante AQUI; antes solo escribia
     // las filas y el panel, que lee Dexie, no lo mostraba (si hay una base de
@@ -1177,13 +1184,11 @@ function App() {
         // PUERTO unico a la BASE de participantes: el registro del nombre por VOZ entra por
         // aqui (puente de sesion) y asi su nombre se ve en la seccion de participantes.
         identitySessionRef.current.registerParticipant = (name: string, _label?: string, voiceVector?: number[] | null) => {
-            const canonical = String(name || '').trim();
-            if (!canonical) return;
-            participants.service
-                .register({ name: canonical, speakerLabel: canonical, voiceVector: Array.isArray(voiceVector) ? voiceVector : undefined })
+            registerParticipantVoice(participantsService, name, voiceVector)
+                .then(() => refreshParticipants())
                 .catch((err: unknown) => logCaughtError('src/App.tsx: registerParticipant (voz)', err));
         };
-    }, [identitySessionRef, participants.service]);
+    }, [identitySessionRef, participantsService, refreshParticipants]);
     participantSpeakerRef.current = participantSpeakerForRow;
     const {
         status: voiceStatus,
@@ -1342,18 +1347,14 @@ function App() {
             // registro). Sin coincidencia no se afirma nada (no se mezclan hablantes).
             if (Array.isArray(rawSignature) && rawSignature.length && isAutoSpeakerLabel(speakerName)) {
                 // LAS DOS FUENTES POR LA MISMA REGLA (sesion + base), siempre con el MODELO.
-                const vozConocida = resolveVoiceIdentity(rawSignature, {
-                    candidates: (participants.participants || []).map((p) => {
-                        // El esquema del participante ya declara el vector y su modelo.
-                        return { name: p.name, vector: p.voiceVector, model: p.voiceVectorModel };
-                    }),
-                });
+                const vozConocida = resolveVoiceIdentity(rawSignature, { candidates: participantVoiceAnchorsForDiarization(participants.participants) });
                 if (vozConocida?.name) {
-                    registerSpeakerIdentity({
+                    // RECONOCIMIENTO, NO REGISTRO (2026-10-19): la identidad ya existe; se
+                    // aplica con SU vector (el del match), sin reescribir base/clusters/primario.
+                    applyKnownVoiceName({
                         name: vozConocida.name,
                         previousLabel: speakerName,
-                        clusters: identitySessionRef.current?.speakerClustersRef?.current || [],
-                        refs: identitySessionRef.current || {},
+                        anchorVector: vozConocida.vector,
                     });
                 }
             }
@@ -2445,7 +2446,7 @@ function App() {
         // sessionPrimary en la diarización (config-gated en el hook).
         activeParticipantName: activeParticipantNameForVoice,
         activeParticipantSpeakerLabel: activeParticipantSpeakerLabelForVoice,
-
+        participantVoiceAnchors: participantVoiceAnchorsForVoice,
         identitySession: identitySessionRef,    });
 
 

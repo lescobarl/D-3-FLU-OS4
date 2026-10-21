@@ -17,6 +17,19 @@ export function foldSpeakerKey(label = '') {
 }
 
 /**
+ * Etiquetas que RESERVAN numero de hablante: las voces REALES de la sesion. El RESPALDO
+ * ("sin medida") NO es una voz: si reservara, la primera voz medida nace "Hablante 2"
+ * aunque no exista un "Hablante 1" real (defecto medido 2026-10-18).
+ *
+ * @param {Iterable<string>} labels etiquetas vivas de la sesion
+ * @returns {string[]} etiquetas que cuentan para el high-water de "Hablante N"
+ */
+export function reservedSpeakerLabels(labels = []) {
+  const fallback = foldSpeakerKey(getFallbackSpeaker())
+  return [...(labels || [])].filter((label) => Boolean(label) && foldSpeakerKey(label) !== fallback)
+}
+
+/**
  * DUENO UNICO de la GRAFIA canonica de un nombre propio. Las etiquetas automaticas
  * («Hablante N») y el motor («FLU») se dejan TAL CUAL: no son nombres de persona.
  * Un nombre propio se escribe con la INICIAL EN MAYUSCULA, asi "luis" y "Luis" son
@@ -49,6 +62,25 @@ export function isProperSpeakerName(label = '') {
   if (!text) return false
   if (text.toLowerCase() === 'flu') return false
   return !isAutoSpeakerLabel(text)
+}
+
+/**
+ * DUENO UNICO de la etiqueta de RESPALDO cuando NO hay medida de esta voz.
+ *
+ * Un NOMBRE PROPIO (persona registrada) NUNCA es una etiqueta de respaldo: no se
+ * hereda por continuidad, ni por cercania temporal, ni por ser el participante
+ * activo del onboarding. Sin evidencia acustica de ESTE turno se responde la
+ * etiqueta ANONIMA («Hablante N») — la que ya traia la voz — o el respaldo
+ * generico de config. Las automaticas y el motor pasan tal cual.
+ *
+ * @param {string} [label] Etiqueta que se pretendia heredar.
+ * @param {object} [config] Configuracion (para el respaldo generico).
+ * @returns {string} Etiqueta segura para un turno sin identidad medida.
+ */
+export function anonymousSpeakerLabel(label = '', config = FLU_CONFIG) {
+  const text = normalizeSpeakerLabel(label)
+  if (text && !isProperSpeakerName(text)) return text
+  return getFallbackSpeaker(config)
 }
 
 /** Corrige etiquetas corruptas «Hablante N / Hablante M / …» → un solo hablante. */

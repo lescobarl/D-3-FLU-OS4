@@ -10,6 +10,7 @@
 // ============================================================
 
 import { FLU_CONFIG } from '../voice/lib/fluConfig.js';
+import { recordSessionEvent } from '../voice/lib/sessionRecorder.js';
 
 type LogLevel = 'LOG' | 'INFO' | 'WARN' | 'ERROR';
 
@@ -71,6 +72,9 @@ function scheduleFlush() {
  * @param data - Datos opcionales (objeto)
  */
 export function relayLog(level: LogLevel, tag: string, message: string, data?: unknown): void {
+    // La grabación de sesión NO depende del relay: si su bandera está encendida,
+    // conserva el log aunque el envío al servidor esté apagado.
+    recordSessionEvent('log', `${level}:${tag}`, { message, data });
     if (!enabled) return;
     if (!syncEnabled()) return;
     pending.push({ level, tag, message, data });

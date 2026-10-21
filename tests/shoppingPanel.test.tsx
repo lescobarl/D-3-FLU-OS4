@@ -8,7 +8,7 @@
  * tambien el alta (recorte, limpieza tras guardar, boton deshabilitado sin texto,
  * doble submit frenado) y que el contador de pendientes sale del estado recibido.
  */
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { ShoppingPanel } from '../src/components/ShoppingPanel.js';
 import { FLU_CONFIG } from '../src/voice/lib/fluConfig.js';
@@ -80,16 +80,18 @@ describe('ShoppingPanel - estado y listas', () => {
         expect(screen.getByTestId('shopping-pending-list').children.length).toBe(0);
     });
 
-    it('marcar, borrar y vaciar llaman con el id correcto', () => {
+    it('marcar, borrar y vaciar llaman con el id correcto', async () => {
         const { onToggle, onRemove, onClearChecked } = montar({
             items: [ficha('a', false, 'leche'), ficha('b', true, 'pan')],
         });
 
-        fireEvent.click(screen.getByTestId('shopping-toggle-a'));
-        fireEvent.click(screen.getByTestId('shopping-remove-a'));
-        fireEvent.click(screen.getByTestId('shopping-toggle-b'));
-        fireEvent.click(screen.getByTestId('shopping-remove-b'));
-        fireEvent.click(screen.getByTestId('shopping-clear-checked'));
+        await act(async () => {
+            fireEvent.click(screen.getByTestId('shopping-toggle-a'));
+            fireEvent.click(screen.getByTestId('shopping-remove-a'));
+            fireEvent.click(screen.getByTestId('shopping-toggle-b'));
+            fireEvent.click(screen.getByTestId('shopping-remove-b'));
+            fireEvent.click(screen.getByTestId('shopping-clear-checked'));
+        });
 
         expect(onToggle.mock.calls.map((c) => c[0])).toEqual(['a', 'b']);
         expect(onRemove.mock.calls.map((c) => c[0])).toEqual(['a', 'b']);
@@ -120,7 +122,9 @@ describe('ShoppingPanel - alta', () => {
         const { onAdd } = montar();
         fireEvent.change(entrada(), { target: { value: '  leche  ' } });
 
-        enviar();
+        await act(async () => {
+            enviar();
+        });
 
         expect(onAdd).toHaveBeenCalledWith('leche');
         await vi.waitFor(() => {
@@ -152,7 +156,9 @@ describe('ShoppingPanel - alta', () => {
         montar();
         fireEvent.change(entrada(), { target: { value: 'leche' } });
 
-        enviar();
+        await act(async () => {
+            enviar();
+        });
 
         await vi.waitFor(() => {
             expect(entrada().disabled).toBe(false);

@@ -432,6 +432,20 @@ describe('deterministicArbiter — resolveStatefulDomains', () => {
     expect(result.game).toBeNull();
     expect(result.env).toBeNull();
   });
+
+  it('B.11: el mandato con wake inline resuelve igual que sin wake (música)', () => {
+    // Defecto medido: el fast-path de captura entregaba el transcript CRUDO
+    // ("Okay Flow pon musica relajante") a `resolveMusicIntent`, cuya gramática
+    // ancla verbo+objeto al inicio; la orden se perdía en silencio y el turno
+    // caía al contrato del LLM. El dueño único de higiene del mandato
+    // (`normalizeSpokenCommand`) corta en la wake ANTES de resolver.
+    const sinWake = resolveStatefulDomains('pon musica relajante');
+    const conWake = resolveStatefulDomains('Okay Flow pon musica relajante');
+
+    expect(sinWake.music).toEqual({ accion: 'play_music', cancion: 'relajante' });
+    expect(conWake.music).toEqual(sinWake.music);
+    expect(conWake.game).toBeNull();
+  });
 });
 
 describe('deterministicArbiter — dominios declarados', () => {

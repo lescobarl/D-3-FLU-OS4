@@ -153,6 +153,20 @@ describe('B - la caja solo acumula (conducta)', () => {
     expect(leer().includes('iniciando conversa bien vamos a hacer prueba')).toBe(true)
   })
 
+  it('una revision ASR MAS LARGA que cambia el arranque NO sustituye lo mostrado', () => {
+    // MEDIDO (replay del log del dueno 2026-10-18, por el INGRESS real): la caja
+    // mostraba 141 chars y el ASR re-reconocio el arranque ("s como..." -> "o se...")
+    // con 146 chars; la regla vieja (`destino = nuevo` si era mas larga) SUSTITUIA la
+    // frase entera: el "parece que pierde la transcripcion y luego la recupera".
+    const { caja, leer } = montar()
+    const previo = 's cómo se comporta esto se supone que ya resolvió cloud todo'
+    const revision = 'o se comporta esto se supone que ya resolvió Cloud todo todo'
+    expect(reemplazos([previo, revision]), 'el criterio viejo SI sustituia (control)').toBe(1)
+    caja.publicarEnLaCaja(previo)
+    expect(caja.publicarEnLaCaja(revision).aplicado, 'una revision mas larga que no deriva de lo mostrado no se aplica').toBe(false)
+    expect(leer(), 'con el turno abierto nada se borra: solo crece o se queda').toBe(previo)
+  })
+
   it('vaciado: la API vacia memoria y espejo; { visible: false } respeta la ultima frase', () => {
     const { caja, leer, visible } = montar()
     caja.publicarEnLaCaja('algo previo que se ve')

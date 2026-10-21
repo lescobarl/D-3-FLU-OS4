@@ -1,5 +1,6 @@
 import { cleanForSpeech, detectTranscriptLanguage } from './audioMath.js'
 import { FLU_CONFIG } from './fluConfig.js'
+import { recordFluSpeechEnd } from './echoPolicy.js'
 import { relayLog } from '../../lib/clientLogRelay'
 import { logCaughtError } from '../../lib/caughtError';
 import { SCRIPT_SPEECH_LOCALES, SPEECH_LOCALES } from '../../core/config/localeConfig'
@@ -284,7 +285,12 @@ function speakSingleChunk(spoken, language, overrides = {}) {
         utterance.voice = selectedVoice
       }
 
-      utterance.onend = finish
+      utterance.onend = () => {
+        // El fin REAL del habla de FLU ancla la ventana de eco (echoPolicy): la fila se
+        // escribio antes de hablar, y su timestamp dejaba pasar el eco de la propia voz.
+        recordFluSpeechEnd(Date.now())
+        finish()
+      }
       utterance.onerror = finish
 
       const synth = window.speechSynthesis

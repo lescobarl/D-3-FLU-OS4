@@ -14,6 +14,7 @@ import { useCallback, useMemo, useRef, useState } from 'react'
 import { OPENROUTER_DEFAULTS } from '../../core/config/sharedConfig'
 import { acquireSpeechRecognition } from '../../voice/lib/speechRecognitionLocal'
 import { logCaughtError } from '../../lib/caughtError';
+import { writeAscii } from '../../lib/dataViewAscii.ts'
 import { SPEECH_LOCALES } from '../../core/config/localeConfig'
 import { AI_PROVIDER_IDS } from '../../core/config/sharedConfig'
 import { downsample } from '../../voice/lib/asr/resample.js'
@@ -129,13 +130,10 @@ async function runVosk(_pcm: Float32Array): Promise<ProbeResult> {
 function encodeWav16(samples: Float32Array, sampleRate: number): string {
   const buffer = new ArrayBuffer(44 + samples.length * 2)
   const view = new DataView(buffer)
-  const writeStr = (offset: number, str: string) => {
-    for (let i = 0; i < str.length; i += 1) view.setUint8(offset + i, str.charCodeAt(i))
-  }
-  writeStr(0, 'RIFF')
+  writeAscii(view, 0, 'RIFF')
   view.setUint32(4, 36 + samples.length * 2, true)
-  writeStr(8, 'WAVE')
-  writeStr(12, 'fmt ')
+  writeAscii(view, 8, 'WAVE')
+  writeAscii(view, 12, 'fmt ')
   view.setUint32(16, 16, true)
   view.setUint16(20, 1, true)
   view.setUint16(22, 1, true)
@@ -143,7 +141,7 @@ function encodeWav16(samples: Float32Array, sampleRate: number): string {
   view.setUint32(28, sampleRate * 2, true)
   view.setUint16(32, 2, true)
   view.setUint16(34, 16, true)
-  writeStr(36, 'data')
+  writeAscii(view, 36, 'data')
   view.setUint32(40, samples.length * 2, true)
   let offset = 44
   for (let i = 0; i < samples.length; i += 1, offset += 2) {

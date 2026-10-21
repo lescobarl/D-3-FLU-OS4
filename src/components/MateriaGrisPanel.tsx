@@ -16,6 +16,7 @@ import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
 import { configText } from './configText';
+import { useAsyncAction } from '../hooks/useAsyncAction';
 import type { MateriaGrisRecord, ParticipantRecord } from '../core/db/fluDatabase';
 import type { AwardInput, LeaderboardRow } from '../core/multiuser/materiaGrisService';
 
@@ -43,24 +44,21 @@ export function MateriaGrisPanel({
 
   const [participantId, setParticipantId] = useState('');
   const [action, setAction] = useState('');
-  const [busy, setBusy] = useState(false);
+  const { busy, run } = useAsyncAction('[MateriaGrisPanel]');
 
   const actionEntries = Object.entries(actions);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!participantId || !action || busy) return;
+    if (!participantId || !action) return;
     const participant = participants.find((p) => p.id === participantId);
-    setBusy(true);
-    try {
-      await onAward({
+    await run(() =>
+      onAward({
         participantId,
         participantName: participant?.name,
         action,
-      });
-    } finally {
-      setBusy(false);
-    }
+      }),
+    );
   };
 
   return (

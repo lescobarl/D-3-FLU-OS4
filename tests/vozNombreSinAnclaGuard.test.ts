@@ -12,9 +12,10 @@
 //
 // CAUSAS MEDIDAS (codigo):
 //   B) la rama `production-primary-create-cluster` de `resolveConversationSpeaker` CREABA el
-//      cluster con el nombre del participante y ADEMAS devolvia ese NOMBRE para el turno: la
-//      regla del dueno (`registeredIdentityConfirmed`: "si el ancla aun no existe, tampoco")
-//      quedaba saltada por esa via.
+//      cluster con el nombre del participante y ADEMAS devolvia ese NOMBRE para el turno. FUE
+//      RETIRADA por mandato del dueno (2026-10-18): sembraba el nombre del onboarding con la
+//      PRIMERA voz (la TV) y la dejaba bendecida para siempre. Hoy el ancla con nombre propio
+//      solo entra por su DATO o por identidad registrada; el primer cluster es ANONIMO.
 //   C) `evidenciaAcustica: Boolean(workingClusters?.length)` ("hay clusters" != "coincidio").
 //   D) el relleno tardio descartaba entero el aviso de un turno ANTERIOR
 //      (`id < lastResolvedTurnRef` -> return), asi que la fila de ese turno no se completaba.
@@ -58,7 +59,7 @@ beforeEach(() => {
 
 describe('B - un nombre propio NO se afirma sin su ancla', () => {
 
-  it('sin clusters (inClusters=0) el turno NO se rotula con el nombre del participante; el ancla SI se crea', () => {
+  it('sin clusters el turno NO se rotula con el nombre del participante ni crea su ancla', () => {
     const clusters: Array<{ label: string; signature: number[] }> = []
     const nombre = resolveConversationSpeaker({
       signatureVector: query(0.72),
@@ -75,15 +76,22 @@ describe('B - un nombre propio NO se afirma sin su ancla', () => {
     } as never)
 
     expect(nombre, 'el nombre no se afirma sin coincidencia (regla del dueno)').not.toBe('Luis')
+    // MANDATO 2026-10-18: el primer cluster es ANONIMO. Si la primera voz es la TV, su
+    // etiqueta «Hablante N» es honesta; el nombre del onboarding no se le estampa.
+    expect(nombre).toBe('Hablante 1')
     expect(
-      clusters.some((c) => c.label === 'Luis' && Array.isArray(c.signature) && c.signature.length),
-      'el ANCLA se crea para poder afirmarlo despues',
-    ).toBe(true)
+      clusters.some((c) => c.label === 'Luis'),
+      'el nombre del participante NO se convierte en ancla de una voz arbitraria',
+    ).toBe(false)
   })
 
-  it('el turno SIGUIENTE (ya con ancla) SI afirma el nombre, con coincidencia medida', () => {
-    const clusters: Array<{ label: string; signature: number[] }> = []
-    resolveConversationSpeaker({
+  it('con un ancla REGISTRADA preexistente y coincidencia medida, el nombre SI se afirma', () => {
+    // El ancla entra por su DATO/registro (no la crea la primera voz): aqui ya existe.
+    const clusters: Array<{ label: string; signature: number[] }> = [
+      { label: 'Luis', signature: query(0.72) },
+    ]
+
+    const nombre = resolveConversationSpeaker({
       signatureVector: query(0.72),
       speakerClusters: clusters,
       lastSpeaker: '',
@@ -96,21 +104,7 @@ describe('B - un nombre propio NO se afirma sin su ancla', () => {
       sessionPrimary: 'Luis',
       preferSpeaker: 'Luis',
     } as never)
-
-    const nombre = resolveConversationSpeaker({
-      signatureVector: query(0.72),
-      speakerClusters: clusters,
-      lastSpeaker: 'Hablante 1',
-      lastSignature: query(0.72),
-      voicedSampleCount: VOICED,
-      sampleRate: 48000,
-      utteranceText: TEXTO,
-      atTurnBoundary: true,
-      allowNewCluster: true,
-      sessionPrimary: 'Luis',
-      preferSpeaker: 'Luis',
-    } as never)
-    expect(nombre, 'con el ancla creada, la coincidencia afirma el nombre').toBe('Luis')
+    expect(nombre, 'con el ancla registrada, la coincidencia afirma el nombre').toBe('Luis')
   })
 
   it('control NEGATIVO (el detector no es decorativo): sin ancla la rama VIEJA devolvia el nombre', () => {

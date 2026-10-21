@@ -115,16 +115,31 @@ export function labelToSpeakerIdSimple(label = '') {
  */
 export function nextAutoSpeakerLabel(clusters = [], reserved = [], { maxSpeakers = 0, config = FLU_CONFIG } = {}) {
   const known = new Set()
+  // HIGH-WATER de la sesion: una voz NUEVA incrementa 1 y conserva su etiqueta; el
+  // numero NO se recicla aunque su dueno pase a nombre propio (mandato del dueno
+  // 2026-10-18: "voz nueva incrementa 1 en hablante(N)... no se incrementan
+  // arbitrariamente"). El indice sobrevive al renombre en `cluster.autoNumber`
+  // (`mergeSpeakerClustersOnRename`), asi que este calculo es DATO, no un contador de
+  // modulo (que se desincronizaria con la sesion y con los tests).
+  let highest = 0
+  const noteIndex = (label) => {
+    const index = parseSpeakerIndex(String(label || ''))
+    if (index != null) highest = Math.max(highest, index)
+  }
   for (const cluster of clusters) {
     const label = String(cluster?.label || '').trim()
     if (label) known.add(stripDiacriticsLower(label))
+    noteIndex(label)
+    const number = Number(cluster?.autoNumber)
+    if (Number.isFinite(number) && number > 0) highest = Math.max(highest, number)
   }
   for (const label of reserved) {
     const cleaned = String(label || '').trim()
     if (cleaned) known.add(stripDiacriticsLower(cleaned))
+    noteIndex(cleaned)
   }
   const limit = Number(maxSpeakers) > 0 ? Number(maxSpeakers) : 9999
-  for (let index = 1; index <= limit; index += 1) {
+  for (let index = highest + 1; index <= limit; index += 1) {
     const candidate = autoSpeakerLabel(index, config)
     if (!known.has(stripDiacriticsLower(candidate))) return candidate
   }

@@ -378,9 +378,6 @@ export const AUTONOMY_THRESHOLD_DEFAULTS = {
 export const VOICE_DIARIZATION_DEFAULTS = {
     cosineContinuity: 0.74,
     cosineNewVoice: 0.68,
-    // Banda MEDIDA de "voz DISTINTA" (dueno 2026-10-11): MISMA voz 0.69-0.74, DISTINTA 0.58.
-    // Por DEBAJO de 0.58 no hay evidencia de NINGUNA voz -> no se abre voz nueva.
-    cosineDistinctVoice: 0.58,
     classroomReuseRelax: 0.03,
     classroomNewVoiceRelax: 0.04,
     classroomLastSpeakerSwitchMargin: 0.06,
@@ -394,6 +391,18 @@ export const VOICE_DIARIZATION_DEFAULTS = {
     turnBoundaryClusterReabsorbMargin: 0.035,
     cosineMatch: 0.76,
     cosineRegisteredMatch: 0.72,
+    /** Piso de match contra un ANCLA VERIFICADA de la base de participantes.
+     * Medido en la sesion del dueno (2026-10-19, sesion 18f3888c): la MISMA voz
+     * (Luis) contra su ancla verificada da 0.629–0.714, y una voz DISTINTA
+     * (la mujer) 0.29–0.58. El piso registrado general (0.72) no alcanza para la
+     * MISMA voz y deja a Luis como «Hablante N»; una ancla verificada (el dueno
+     * registro su voz en la base) es evidencia mas fuerte que un cluster anonimo,
+     * por eso su piso es menor. */
+    cosineVerifiedAnchorMatch: 0.62,
+    /** Margen que la mejor ancla verificada debe sacar a OTRA ancla verificada
+     * para ADOPTAR su nombre. Entre anclas compite el nombre; un cluster anonimo
+     * no puede reclamarlo, asi que no entra en el margen. */
+    verifiedAnchorMargin: 0.05,
     continuityBoundaryFactor: 0.82,
     newVoiceBoundaryFactor: 0.88,
     turnBoundaryNewVoiceMultiFactor: 0.72,

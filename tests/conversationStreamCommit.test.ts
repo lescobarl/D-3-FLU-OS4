@@ -22,6 +22,7 @@ import {
 } from '../src/voice/lib/turnSpeakerPreflight.js';
 import { FLU_CONFIG } from '../src/voice/lib/fluConfig.js';
 import { isDuplicateTurnCommit } from '../src/voice/lib/turnStream.js'
+import { setSessionPrimarySpeaker } from '../src/voice/lib/sessionPrimarySpeaker.js'
 
 // Este fichero mide la SEMANTICA del stream (preview -> commit -> fila -> cierre)
 // con capturas sin wake; la politica "el ruido de fondo no abre fila" (P8.38) se
@@ -68,6 +69,7 @@ function makeDeps(over: Record<string, unknown> = {}) {
     ),
     sessionPrimarySpeakerRef: { current: '' },
     lastLoggedSpeakerRef: { current: '' },
+    lastResolvedSpeakerRef: { current: '' },
     logRowSpeakersRef: { current: [] as string[] },
     speakerClustersRef: { current: [] as object[] },
     setSpeakerClusters: vi.fn<(clusters: object[]) => void>(),
@@ -263,9 +265,9 @@ describe('conversationStreamCommit — commit de turno', () => {
 
     it('P9.81: un nombre por CONTINUIDAD sin evidencia NO se estampa (la fila cae a generica)', () => {
         // Log del dueno (2026-10-12): una voz distinta salia con el nombre del hablante
-        // anterior (`Identity label=Hablante 1 reason=production-reuse-no-evidence
-        // lastSim=0.278 best="Luis"`). El commit NO puede levantar un NOMBRE propio sin
-        // evidencia del turno: el duenio de esa regla es `blindSpeakerFallback`
+        // anterior (entonces `Identity label=Hablante 1`, por la rama de reuso sin
+        // evidencia que se RETIRO el 2026-10-18). El commit NO puede levantar un NOMBRE
+        // propio sin evidencia del turno: el duenio de esa regla es `blindSpeakerFallback`
         // (speakerPolicy), que degrada un nombre a etiqueta generica.
         const deps = makeDeps({
             lastLoggedSpeakerRef: { current: 'Luis' },
@@ -353,6 +355,30 @@ describe('conversationStreamCommit — commit de turno', () => {
         expect(deps.fluParticipantRef.current.onTurnCommitted).toHaveBeenCalledTimes(1);
     });
 
+    it('la revision del MISMO turno conserva el nombre PRESENTADO (no lo degrada a generica)', () => {
+        // MEDIDO (log del dueno 2026-10-18, 20:20:53): tras "okay flu soy Luis", la
+        // revision ASR del MISMO turno se commitio como `src=asr-revision name=Luis
+        // written=Hablante 1` y la fila reescrita perdio el nombre. La revision no es
+        // continuidad: el nombre lo PRESENTO la voz en este turno y se conserva.
+        const primary = { current: '' } as { current: string; __sessionPrimaryRank?: number };
+        setSessionPrimarySpeaker(primary, 'Luis', 'presented');
+        const deps = makeDeps({
+            sessionPrimarySpeakerRef: primary,
+            lastEmittedTranscriptRef: { current: 'hola soy luis' },
+            lastLoggedSpeakerRef: { current: 'Luis' },
+            lastSpeakerRef: { current: 'Luis' },
+            logRowSpeakersRef: { current: ['Luis'] },
+            logRowsTextRef: { current: ['hola soy luis'] },
+        });
+        deps.lastCommitAtRef.current = 1000;
+        deps.lastOnresultAtRef.current = 2000;
+
+        handleConversationStreamSync(deps, { capture: 'hola soy luis', turnCommit: true });
+
+        const [, rowSpeaker] = deps.commitTurnToSessionRows.mock.calls[0];
+        expect(String(rowSpeaker || ''), 'la revision del mismo turno no puede quitar el nombre presentado').toBe('Luis');
+    });
+
     it('la revision ASR con texto NUEVO si reemite el log y reemplaza la fila', () => {
         const deps = makeDeps({
             lastEmittedTranscriptRef: { current: 'hola como estas' },
@@ -416,7 +442,7 @@ describe('conversationStreamCommit — commit de turno', () => {
         expect(deps.commitTurnToSessionRows.mock.calls[0][0]).toBe(SEGMENTABLE_CAPTURE);
     });
 
-    it('rama SEGMENTADA: el prior embebido se omite y la voz nueva abre fila propia', async () => {
+    it('con el troceo APAGADO (mandato 2026-10-19) un final con prior embebido es UNA fila completa', async () => {
         const deps = makeDeps({
             logRowsTextRef: { current: [PRIOR_ROW, 'buenos dias a todos'] },
             logRowSpeakersRef: { current: ['Hablante 3', 'Hablante 2'] },
@@ -425,19 +451,16 @@ describe('conversationStreamCommit — commit de turno', () => {
 
         handleConversationStreamSync(deps, { capture: SEGMENTABLE_CAPTURE, turnCommit: true, settlesTurn: true });
 
-        // Solo la voz NUEVA abre fila; el tramo ya commitido no se duplica.
+        // Antes el troceo partia este final en DOS filas y cortaba la frase en pedazos
+        // (defecto 3 del dueno 2026-10-19). Apagado: la locucion completa es UNA fila,
+        // sin omitir tramos ni duplicar el prior embebido.
         expect(deps.emitConversationLog).toHaveBeenCalledTimes(1);
         const [emitText, emitOpts] = deps.emitConversationLog.mock.calls[0] as [string, EmitOptions];
-        // La cabeza corta del hablante ANTERIOR (< minWordsPerSegment) se ABSORBE en la
-        // fila de la voz nueva: el troceo nunca descarta texto (antes se perdia).
-        expect(emitText).toBe(`hola a todos ${NOVEL_TAIL}`);
-        expect(emitText).not.toContain('examen de sociales');
+        expect(emitText).toBe(SEGMENTABLE_CAPTURE);
         expect(emitOpts.turnCommit).toBe(true);
         expect(deps.commitTurnToSessionRows).toHaveBeenCalledTimes(1);
-        const [rowText, rowSpeaker] = deps.commitTurnToSessionRows.mock.calls[0];
-        expect(rowText).toBe(`hola a todos ${NOVEL_TAIL}`);
-        // La fila es de la VOZ NUEVA (la cabeza corta viaja con ella, sin perderse).
-        expect(rowSpeaker).toBe('Hablante 3');
+        const [rowText] = deps.commitTurnToSessionRows.mock.calls[0];
+        expect(rowText).toBe(SEGMENTABLE_CAPTURE);
 
         // El turno cierra igual (una sola ruta de cierre) y deja el texto COMPLETO como marca.
         expect(deps.flushPcmAfterTurnCommit).toHaveBeenCalledTimes(1);

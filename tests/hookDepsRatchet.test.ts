@@ -67,13 +67,6 @@ export function excedidos(
     .map((f) => `${f}: ${medidos[f] || 0} > techo ${techos[f]}`)
 }
 
-/** Numero que el ledger declara para P7.4 ("N violaciones"). */
-export function totalDelLedger(ledger: string): number | null {
-  const ev = JSON.parse(ledger).items.find((i: { id: string }) => i.id === 'P7.4')?.evidencia ?? ''
-  const m = /(\d+)\s+violaciones/.exec(ev)
-  return m ? Number(m[1]) : null
-}
-
 const ROOT = process.cwd()
 
 /**
@@ -145,11 +138,6 @@ describe('P7.4 hookDeps - la deuda de deps de hooks se congela, no se esconde', 
     expect(flojos, 'un fichero bajo de techo: apriétalo (el trinquete solo puede bajar):\n  ' + flojos.join('\n  ')).toEqual([])
   }, 120_000)
 
-  it('el numero del ledger es el numero real (no un comentario que envejece)', async () => {
-    const { total } = await medir()
-    const declarado = totalDelLedger(readFileSync(join(ROOT, 'plans/ledger.json'), 'utf8'))
-    expect(declarado, 'P7.4 debe declarar "N violaciones" en su evidencia').toBe(total)
-  }, 120_000)
 })
 
 /** Un disable de exhaustive-deps sin motivo escrito vuelve a esconder la deuda. */

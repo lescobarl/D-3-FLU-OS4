@@ -15,6 +15,7 @@ vi.mock('../src/lib/clientLogRelay', () => ({ relayLog: vi.fn() }))
 
 import { relayLog } from '../src/lib/clientLogRelay'
 import { voiceProbe, setVoiceProbeEnabled, isVoiceProbeEnabled } from '../src/voice/lib/voiceProbe'
+import { scheduleTurnSpeakerPreflight, resetTurnSpeakerPreflights } from '../src/voice/lib/turnSpeakerPreflight'
 import { commitUserTurnRow } from '../src/voice/lib/conversationTurnRow'
 import { useIntegrationStore } from '../src/store/integrationStore'
 
@@ -58,6 +59,48 @@ describe('sonda de datos de voz', () => {
     const data = JSON.parse(String(rows[0][2]).replace(/^row /, ''))
     expect(data).toMatchObject({ action: 'added', speaker: 'Hablante 1', turnId: 5 })
     expect(String(data.text)).toContain('hola hola')
+  })
+
+  it('la sonda de identidad lleva turno, regla, ventana y pares PRE-decision (se reconstruye sin cruzar lineas)', async () => {
+    // DEFECTO MEDIDO (2026-10-18): la linea `identity` solo traia name/reason de la VIA
+    // ('resolved-idle'), sin turno, sin la regla que decidio y sin similitudes, asi que
+    // el escenario del dueno no se podia recrear con sus propios datos.
+    setVoiceProbeEnabled(true)
+    resetTurnSpeakerPreflights()
+    scheduleTurnSpeakerPreflight(
+      7,
+      () =>
+        Promise.resolve({
+          speakerId: 'speaker_1',
+          speakerName: 'Hablante 1',
+          signatureVector: [1, 0],
+          inputClusters: [{ label: 'luis', signature: [1, 0] }],
+          workingClusters: [{ label: 'Hablante 1', signature: [1, 0] }],
+          diagnosis: { reason: 'production-first-cluster', lastSim: 0, bestSim: 0.74, bestLabel: 'luis' },
+          audioMs: 2100,
+          voicedSampleCount: 48000,
+          evidence: false,
+          reason: 'resolved-idle',
+          atTurnBoundary: true,
+        }),
+      {},
+    )
+    await settle()
+    const identity = probeCalls().filter((c) => String(c[2]).startsWith('identity '))
+    expect(identity.length).toBe(1)
+    const data = JSON.parse(String(identity[0][2]).replace(/^identity /, ''))
+    expect(data).toMatchObject({
+      turn: 7,
+      reason: 'resolved-idle',
+      decision: 'production-first-cluster',
+      name: 'Hablante 1',
+      boundary: true,
+      ms: 2100,
+      voiced: 48000,
+      bestSim: 0.74,
+      bestLabel: 'luis',
+    })
+    expect(data.pares[0]).toMatchObject({ label: 'luis', sim: 1 })
   })
 })
 

@@ -198,6 +198,72 @@ describe('voiceIdentityQueue — descartes (drop stale)', () => {
     });
 });
 
+describe('voiceIdentityQueue — prioridad (final de turno)', () => {
+    it('un FINAL nuevo de OTRO turno reemplaza al final pendiente (ningun turno pierde su final)', async () => {
+        const antes = dropped();
+        const primero = deferred();
+        enqueueSpeakerIdentityJob({ rowId: 'A', run: () => primero.promise });
+        await flush();
+
+        // Final del turno 19 esperando detras del trabajo en vuelo.
+        const run19 = vi.fn();
+        const onDrop19 = vi.fn();
+        enqueueSpeakerIdentityJob({ rowId: 'fin-19', priority: true, run: run19, onDrop: onDrop19 });
+
+        // Final del turno 20: DEBE reemplazar al 19 pendiente. El 19 ya nacio
+        // tarde (su commit consumio el slot) y darle preferencia ciega dejaba a
+        // los turnos siguientes SIN resolucion (medido en d4c1c8f3: 9 turnos
+        // seguidos con cero resoluciones de identidad).
+        const run20 = vi.fn(async () => 'fin-20');
+        enqueueSpeakerIdentityJob({ rowId: 'fin-20', priority: true, run: run20 });
+
+        expect(onDrop19).toHaveBeenCalledWith('superseded-by-newer-final');
+        expect(peekPendingIdentityRowId()).toBe('fin-20');
+        expect(dropped() - antes).toBe(1);
+
+        primero.resolve('A');
+        await flush();
+        expect(run19).not.toHaveBeenCalled();
+        expect(run20).toHaveBeenCalledTimes(1);
+    });
+
+    it('un TICK no supersede al final pendiente (escribir clusters es del final)', async () => {
+        const antes = dropped();
+        const primero = deferred();
+        enqueueSpeakerIdentityJob({ rowId: 'A', run: () => primero.promise });
+        await flush();
+
+        const onDrop19 = vi.fn();
+        enqueueSpeakerIdentityJob({ rowId: 'fin-19', priority: true, run: vi.fn(), onDrop: onDrop19 });
+        enqueueSpeakerIdentityJob({ rowId: 'tick-19', priority: false, run: vi.fn() });
+
+        expect(onDrop19).not.toHaveBeenCalled();
+        expect(dropped() - antes).toBe(0);
+        expect(peekPendingIdentityRowId()).toBe('fin-19');
+
+        primero.resolve('A');
+        await flush();
+    });
+
+    it('mismo turno (mismo rowId) no reencola el final: dedupe', async () => {
+        const antes = dropped();
+        const primero = deferred();
+        enqueueSpeakerIdentityJob({ rowId: 'A', run: () => primero.promise });
+        await flush();
+
+        const onDrop19 = vi.fn();
+        enqueueSpeakerIdentityJob({ rowId: 'fin-19', priority: true, run: vi.fn(), onDrop: onDrop19 });
+        enqueueSpeakerIdentityJob({ rowId: 'fin-19', priority: true, run: vi.fn() });
+
+        expect(onDrop19).not.toHaveBeenCalled();
+        expect(dropped() - antes).toBe(0);
+        expect(peekPendingIdentityRowId()).toBe('fin-19');
+
+        primero.resolve('A');
+        await flush();
+    });
+});
+
 describe('voiceIdentityQueue — caminos de fallo', () => {
     it('con onError el fallo va al manejador (y no al fallback)', async () => {
         const onError = vi.fn();

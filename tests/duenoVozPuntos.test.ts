@@ -172,19 +172,22 @@ describe('P2 - la base de participantes se ve en el panel', () => {
         expect(lista.find((r) => r.label === 'voz A')?.profileId).toBe('p1')
     })
 
-    it('el registro por VOZ entra en la base por el puente de la sesion', () => {
-        const altas: string[] = []
+    it('el registro por VOZ entra en la base por el puente de la sesion, CON su vector medido', () => {
+        const altas: Array<{ name: string; vector?: number[] | null }> = []
         registerSpeakerIdentity({
             name: 'Luis',
             previousLabel: 'Hablante 1',
             clusters: [],
+            signatureVector: [1, 0, 0],
             refs: {
-                registerParticipant: (name: string) => {
-                    altas.push(name)
+                registerParticipant: (name: string, _label?: string, voiceVector?: number[] | null) => {
+                    altas.push({ name, vector: voiceVector })
                 },
             } as never,
         })
-        expect(altas, 'el nombre dicho por voz entra en la base').toEqual(['Luis'])
+        expect(altas.map((alta) => alta.name), 'el nombre dicho por voz entra en la base').toEqual(['Luis'])
+        // MANDATO (2026-10-18): la base compara VECTORES, no nombres; el nombre sin vector es basura.
+        expect(altas[0].vector, 'la base conserva el vector MEDIDO de esa voz').toEqual([1, 0, 0])
     })
 })
 

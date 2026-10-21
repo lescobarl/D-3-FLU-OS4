@@ -8,13 +8,12 @@
 // El mismo timbre abrió H2 por una similitud intermedia.
 //
 // Fix (genérico, config-driven, sin parches):
-//   - roomCapture.soloNewVoiceFactor = 0.82 (config).
-//   - En sesión efectivamente solitaria (1 cluster auto) el umbral de
-//     apertura se aprieta: NEW_VOICE_OPEN = NEW_VOICE_EFF × 0.82.
-//     Con thresholds de producción (NEW_VOICE 0.64 → NEW_VOICE_EFF 0.68)
-//     el límite pasa de 0.68 a 0.5576.
-//   - Sims intermedias (0.5576–0.68) → coalesce al hablante existente.
-//   - Voz genuinamente distinta (sim < 0.5576) → sigue abriendo H2.
+//   - roomCapture.soloNewVoiceFactor (config) aprieta el umbral de apertura en
+//     sesión efectivamente solitaria (1 cluster auto): NEW_VOICE_OPEN =
+//     NEW_VOICE_EFF × factor.
+//   - MANDATO 2026-10-18: `production-reuse-no-evidence` se RETIRÓ. Un turno
+//     SOSTENIDO que no casa con ninguna voz ya NO hereda la etiqueta del anterior
+//     (así se mezclaban dos personas en un solo "Hablante N"): abre SU etiqueta.
 //   - Multi-hablante (≥2 clusters) → NO se altera: sims 0.60 abren H3.
 //
 // Vectores: 64-D con coseno exacto (L2-normalizados, dimensión
@@ -86,11 +85,11 @@ describe('resolveConversationSpeaker — separación sin relajación de solo (ma
         expect(diagnosis.reason).toMatch(/forced-new-voice|new-voice/);
     });
 
-        it('solo (1 cluster) sim 0.50 (POR DEBAJO de la banda de evidencia 0.58) -> NO inventa voz', () => {
-        // P9.86b: por debajo de la banda MEDIDA de voz distinta (cosineDistinctVoice 0.58)
-        // no hay evidencia de ninguna voz: se REUSA la etiqueta del anterior para no abrir
-        // un "Hablante N" fantasma (red anti-fantasma; el diseno dice que con R1 la medida
-        // limpia ya no cae aqui). Antes el test afirmaba la regla previa (gate 0.5576).
+        it('solo (1 cluster) sim 0.50 (POR DEBAJO de la banda de evidencia 0.58) -> voz DISTINTA, etiqueta DISTINTA', () => {
+        // MANDATO 2026-10-18: en un turno SOSTENIDO, una medida que NO casa con la voz
+        // anterior es OTRA voz (lastSim 0.143/0.192/0.380/0.374 en el log del dueno). Antes
+        // se reusaba la etiqueta del anterior (`production-reuse-no-evidence`) y una sola
+        // "Hablante 1" representaba al dueno y a la nina; ese reuso se retiro.
         const clusters: any[] = [{ label: 'Hablante 1', signature: E1 }];
         const diagnosis: Record<string, unknown> = {};
         const r = resolveConversationSpeaker({
@@ -101,9 +100,9 @@ describe('resolveConversationSpeaker — separación sin relajación de solo (ma
             lastSignature: E1,
             diagnosis,
         } as any);
-        expect(r).toBe('Hablante 1');
-        expect(clusters.map((c) => c.label)).toEqual(['Hablante 1']);
-        expect(diagnosis.reason).toBe('production-reuse-no-evidence');
+        expect(r, 'la voz distinta NO hereda la etiqueta del anterior').toBe('Hablante 2');
+        expect(clusters.map((c) => c.label)).toEqual(['Hablante 1', 'Hablante 2']);
+        expect(diagnosis.reason).toBe('production-forced-new-voice');
     });
 
     it('solo (1 cluster) sim 0.60 con lastSignature ausente → separa a Hablante 2', () => {

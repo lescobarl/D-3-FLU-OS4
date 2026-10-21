@@ -1,14 +1,6 @@
 import { defineConfig } from 'vitest/config';
 import { fileURLToPath } from 'url';
 import { availableParallelism } from 'node:os';
-import { assertSuiteScope } from './scripts/full-suite-policy.mjs';
-
-// BARRERA DE LA SUITE COMPLETA (AGENTS.md seccion 5: "exige autorizacion
-// EXPRESA"). Vive AQUI, y no solo en el script npm `test:full`, porque este
-// modulo lo carga vitest en TODA corrida (npm, npx, IDE): bloquear aqui cierra
-// el camino, no el nombre del comando. Defecto medido que cierra: el atajo
-// prohibido `npx vitest run` no pasa por `npm run` y esquivaba la barrera.
-assertSuiteScope();
 
 const ROOT = fileURLToPath(new URL('.', import.meta.url));
 
@@ -57,8 +49,7 @@ export default defineConfig({
         // a 3 en un runner de 4 vCPU.
         maxWorkers: Math.max(2, Math.min(10, availableParallelism() - 1)),
         minWorkers: 2,
-        // Cobertura (v8). Una corrida SIN filtro sigue exigiendo autorizacion
-        // (assertSuiteScope): cubrir todo el repo es la suite completa (AGENTS.md 5).
+        // Cobertura (v8).
         coverage: {
             provider: 'v8',
             include: ['src/**/*.{ts,tsx,js,jsx}'],

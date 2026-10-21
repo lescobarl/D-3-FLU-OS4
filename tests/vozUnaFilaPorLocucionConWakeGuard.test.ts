@@ -240,3 +240,50 @@ describe('P9.67 - una locucion con wake produce UNA fila', () => {
     expect(filasTexto()).toHaveLength(2)
   })
 })
+
+// ============================================================
+// P11.20 — REVISION del ASR: la cola re-oida con otra palabra sigue siendo la misma
+// locucion. MEDIDO en su log (2026-10-19 21:18/21:19): Chrome reentrego la cola como
+// SEGMENTO nuevo y la contiguidad EXACTA ya no la reconocia -> DOS filas por locucion
+// (430+112 y 468+270). Los cuatro textos son los CRUDOS de `VozProbe row` del log.
+// ============================================================
+const LOCUCION_A_LOGROW = 'bien Vamos a iniciar con las pruebas de transcripción y viarización es bien importante que le demos seguimiento a este log vamos a voy a ir narrando aquí para no estar escribiendo tanto allá de aquel lado pero aquí voy narrando lo que voy viendo y hasta ahorita está transcribiendo bastante bien va buen ritmo y claro voy a hacer un alto para para que tenga un silencio y haga la transcripción vamos a ver con qué hablante lo pone'
+const LOCUCION_A_REVISION = 'voy a hacer un alto para para que tenga un silencio y haga la transcripción vamos a ver con qué habla te lo pone'
+const LOCUCION_B_LOGROW = 'ya empezamos con problemas está duplicando un pedazo de la frase revísalo primer problema el segundo problema Bueno la lo duplicó pero también lo pasó a la conversación o sea está doble también la conversación primer problema del que que no reconoció desde el principio mi voz entendería que está limpia la base es probable que así suceda si es así ahorita lo vamos a detectar y le ponemos el nombre al hablante uno para que sea yo vamos a hacer otro espacio de tiempo'
+const LOCUCION_B_REVISION = 'primer problema el segundo problema que no reconoció desde el principio mi voz entendería que está limpia la base es probable que así suceda si es así ahorita lo vamos a detectar y le ponemos el nombre al hablante uno para que sea yo vamos a hacer otro espacio de tiempo'
+
+describe('P11.20 — revision del ASR (cola re-oida con variacion)', () => {
+  it('las dos colas medidas se reconocen como la MISMA locucion', () => {
+    expect(isFragmentOfLocution(LOCUCION_A_REVISION, LOCUCION_A_LOGROW)).toBe(true)
+    expect(isFragmentOfLocution(LOCUCION_B_REVISION, LOCUCION_B_LOGROW)).toBe(true)
+  })
+
+  it('CONTROL NEGATIVO: una frase nueva no se declara revision', () => {
+    // Mismo lexico y mismo orden que la locucion, pero NO contiguo: sigue siendo nueva.
+    expect(isFragmentOfLocution('comer plato', 'vamos a comer del plato')).toBe(false)
+    // Frase larga, mismo lexico, pero sin un tramo CONTIGUO que cubra el 80%.
+    expect(isFragmentOfLocution('vamos a hacer otro espacio de tiempo para detectar el problema de la base', LOCUCION_B_LOGROW)).toBe(false)
+    expect(isFragmentOfLocution(LOCUCION_A_LOGROW, LOCUCION_A_REVISION)).toBe(false)
+    // Trozo CORTO y NO contiguo: no alcanza el minimo de compactos de la revision
+    // (la via EXACTA no cambia: un trozo corto contiguo de verdad sigue siendo trozo).
+    expect(isFragmentOfLocution('espacio de otro tiempo', LOCUCION_B_LOGROW)).toBe(false)
+  })
+
+  it('el commit de la cola re-oida no abre fila nueva (dueno del dedupe)', () => {
+    const now = 20000
+    expect(isDuplicateTurnCommit(LOCUCION_A_REVISION, {
+      lastEmitted: LOCUCION_A_LOGROW,
+      lastCommitted: LOCUCION_A_LOGROW,
+      lastResultAt: 19000,
+      lastCommitAt: 18000,
+      now,
+    })).toBe(true)
+    expect(isDuplicateTurnCommit(LOCUCION_B_REVISION, {
+      lastEmitted: LOCUCION_B_LOGROW,
+      lastCommitted: LOCUCION_B_LOGROW,
+      lastResultAt: 19000,
+      lastCommitAt: 18000,
+      now,
+    })).toBe(true)
+  })
+})

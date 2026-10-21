@@ -8,8 +8,9 @@
 // y el primario de sesion; nunca la base (Dexie), que es lo que lee el panel.
 //
 // CONTRATO: el registro por VOZ escribe el participante en la base por el PUERTO
-// inyectado (`refs.registerParticipant`), con el nombre CANONICO y su `speakerLabel`.
-// Nace ROJO: hoy `registerSpeakerIdentity` no invoca el puerto.
+// inyectado (`refs.registerParticipant`), con el nombre CANONICO y su VECTOR MEDIDO.
+// MANDATO DEL DUENO (2026-10-18): la base compara VECTORES, no nombres; un nombre sin
+// vector es basura y NO se escribe (sembraba un ancla ajena, defecto medido en vivo).
 // ============================================================
 import { describe, expect, it, vi } from 'vitest';
 import {
@@ -19,6 +20,8 @@ import {
   type ParticipantsDb,
 } from '../src/core/multiuser/participantRegistry';
 import { registerSpeakerIdentity } from '../src/voice/lib/speakerIdentityRegister.js';
+import { registerParticipantVoice } from '../src/app/registerParticipantVoice';
+import { voiceVectorModel } from '../src/voice/lib/speakerDirectory';
 
 // IndexedDB no existe en vitest: el log de auditoria se mockea (mismo patron que
 // participantRegistry.test.ts).
@@ -56,8 +59,11 @@ function mapDb(): ParticipantsDb {
   };
 }
 
+/** Vector MEDIDO de la voz (no degenerado): la base compara vectores, no nombres. */
+const VOZ_MEDIDA = [1, 0, 0];
+
 describe('P9.79 - el nombre registrado por VOZ entra en la BASE de participantes', () => {
-  it('registrar por voz escribe el participante (nombre canonico + speakerLabel)', async () => {
+  it('registrar por voz escribe el participante con su VECTOR MEDIDO, su modelo y su marca de verificado', async () => {
     let n = 0;
     const registry = createParticipantRegistry({
       db: mapDb(),
@@ -69,9 +75,11 @@ describe('P9.79 - el nombre registrado por VOZ entra en la BASE de participantes
     registerSpeakerIdentity({
       name: 'Luis',
       clusters: [],
+      signatureVector: VOZ_MEDIDA,
       refs: {
-        registerParticipant: (name: string) => {
-          pending = registry.register({ name, speakerLabel: name });
+        // El puerto REAL de la app: misma cadena que `App.tsx` (nombre canonico + base).
+        registerParticipant: (name: string, _label?: string, voiceVector?: number[] | null) => {
+          pending = registerParticipantVoice(registry, name, voiceVector ?? undefined);
         },
       },
     });
@@ -79,9 +87,12 @@ describe('P9.79 - el nombre registrado por VOZ entra en la BASE de participantes
     const rows = await registry.list();
     expect(rows.map((r) => r.name)).toEqual(['Luis']);
     expect(rows[0].speakerLabel).toBe('Luis');
+    expect(rows[0].voiceVector, 'sin el vector la base no puede comparar voces').toEqual(VOZ_MEDIDA);
+    expect(rows[0].voiceVectorModel).toBe(voiceVectorModel());
+    expect(rows[0].voiceAnchorVerified, 'el ancla nace VERIFICADA: se midio con el modelo vigente').toBe(true);
   });
 
-  it('P9.78: el nombre entra con UNA grafia canonica ("luis" y "Luis" -> "Luis")', async () => {
+  it('P9.78: el nombre entra con UNA grafia canonica ("luis" y "Luis" -> "Luis") y re-ancla su vector', async () => {
     let n = 0;
     const registry = createParticipantRegistry({
       db: mapDb(),
@@ -97,9 +108,10 @@ describe('P9.79 - el nombre registrado por VOZ entra en la BASE de participantes
       registerSpeakerIdentity({
         name: dicho,
         clusters: [],
+        signatureVector: VOZ_MEDIDA,
         refs: {
-          registerParticipant: (name: string) => {
-            pending = registry.register({ name, speakerLabel: name });
+          registerParticipant: (name: string, _label?: string, voiceVector?: number[] | null) => {
+            pending = registerParticipantVoice(registry, name, voiceVector ?? undefined);
           },
         },
       });
@@ -110,6 +122,27 @@ describe('P9.79 - el nombre registrado por VOZ entra en la BASE de participantes
     // guardada es la canonica.
     const rows = await registry.list();
     expect(rows.map((r) => r.name)).toEqual(['Luis']);
+    expect(rows[0].voiceVector).toEqual(VOZ_MEDIDA);
+    expect(rows[0].voiceAnchorVerified).toBe(true);
+  });
+
+  it('DETECTOR sin vector MEDIDO el puerto NO se invoca: un nombre sin vector es basura', async () => {
+    let n = 0;
+    const registry = createParticipantRegistry({
+      db: mapDb(),
+      config: CONFIG,
+      newId: () => `s${++n}`,
+      now: () => 1,
+    });
+    const port = vi.fn();
+    registerSpeakerIdentity({
+      name: 'Luis',
+      // Sin clusters y sin medida del turno: no hay vector que guardar.
+      clusters: [],
+      refs: { registerParticipant: port },
+    });
+    expect(port, 'escribir solo el nombre envenenaba la base con un ancla sin evidencia').not.toHaveBeenCalled();
+    expect(await registry.list()).toEqual([]);
   });
 
   it('P9.87: dos altas CONCURRENTES del mismo nombre no duplican (candado del registro)', async () => {

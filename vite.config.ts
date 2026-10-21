@@ -33,6 +33,9 @@ export default defineConfig(async ({ mode }) => {
     const { createGeminiMiddleware } = await import('./src/server/geminiProxy.ts');
     const { createBrowserProxy } = await import('./src/server/browserProxy.ts');
     const { createSearchProxy } = await import('./src/server/searchProxy.ts');
+    // Sumidero de la grabación de sesión (SOLO dev): guarda PCM, eventos y las
+    // instantáneas con vectores completos en os.tmpdir()/flu-recordings.
+    const { createRecorderSink } = await import('./src/server/recorderSink.ts');
     return {
         plugins: [
             react({
@@ -52,6 +55,8 @@ export default defineConfig(async ({ mode }) => {
             createBrowserProxy({ env }),
             // Buscador web + IA proxy middleware (/api/search/web)
             createSearchProxy({ env }),
+            // Grabación de sesión (/__flu/recorder/*). No existe en el bundle de producción.
+            createRecorderSink(),
         ],
         resolve: {
             // dedupe: fuerza a Vite/vitest a resolver 'three' SIEMPRE desde el

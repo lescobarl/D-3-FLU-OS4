@@ -41,6 +41,12 @@ let fetchFalso: ReturnType<typeof vi.fn>;
 const cuerpos = () => fetchFalso.mock.calls.map((c) => JSON.parse(String((c[1] as { body: string }).body)));
 
 beforeEach(() => {
+    // Fake timers en TODA la prueba: cada modulo cargado programa su volcado con
+    // `setTimeout`, y una instancia anterior con temporizador REAL disparaba dentro
+    // de una prueba posterior (cuerpos de mas, indices corridos) cuando la suite
+    // iba cargada. Con el reloj falso, `useRealTimers` del afterEach descarta los
+    // temporizadores pendientes de TODAS las instancias.
+    vi.useFakeTimers();
     localRemove('flu.trace');
     info = vi.spyOn(console, 'info').mockImplementation(() => {});
     warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
@@ -50,6 +56,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+    vi.clearAllTimers();
     info.mockRestore();
     warn.mockRestore();
     error.mockRestore();
@@ -264,7 +271,6 @@ describe('fluTrace - resumen y sesion', () => {
 
 describe('fluTrace - volcado al agente (diferido y por deltas)', () => {
     it('no envia nada hasta que pasa el intervalo, y entonces manda el delta', async () => {
-        vi.useFakeTimers();
         const mod = await cargar();
         mod.initFluTrace();
 
@@ -286,7 +292,6 @@ describe('fluTrace - volcado al agente (diferido y por deltas)', () => {
     });
 
     it('varios eventos seguidos comparten un unico envio', async () => {
-        vi.useFakeTimers();
         const mod = await cargar();
         mod.initFluTrace();
         mod.fluTrace('stream', 'a');
@@ -301,7 +306,6 @@ describe('fluTrace - volcado al agente (diferido y por deltas)', () => {
     });
 
     it('tras un envio, el siguiente lleva SOLO los nuevos', async () => {
-        vi.useFakeTimers();
         const mod = await cargar();
         mod.initFluTrace();
         mod.fluTrace('stream', 'viejo');
@@ -317,7 +321,6 @@ describe('fluTrace - volcado al agente (diferido y por deltas)', () => {
     });
 
     it('un envio lleva como maximo las ultimas 50 filas', async () => {
-        vi.useFakeTimers();
         const mod = await cargar();
         mod.initFluTrace();
         for (let i = 0; i < 60; i += 1) mod.fluTrace('stream', `e${i}`);
@@ -331,7 +334,6 @@ describe('fluTrace - volcado al agente (diferido y por deltas)', () => {
     });
 
     it('HALLAZGO: con el ring lleno el delta sale VACIO (los nuevos no se envian)', async () => {
-        vi.useFakeTimers();
         const mod = await cargar();
         mod.initFluTrace();
         const tope = mod.getFluTraceSnapshot().max;
@@ -350,7 +352,6 @@ describe('fluTrace - volcado al agente (diferido y por deltas)', () => {
     });
 
     it('un endpoint que falla solo avisa, no revienta', async () => {
-        vi.useFakeTimers();
         fetchFalso.mockRejectedValue(new Error('sin agente'));
         const mod = await cargar();
         mod.initFluTrace();

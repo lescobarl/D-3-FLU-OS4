@@ -90,9 +90,17 @@ export function resolveTurnSpeakerAtCommit({
 
   const intro = resolveSpeakerNameFromUtterance(phrase, { wakeWords })
   if (intro) {
+    // El nombre se ata a la VOZ MEDIDA del turno (si el preflight ya la tiene): sin
+    // esto el rename usaba la etiqueta de continuidad, que puede ser de otra persona.
+    // `workingClusters` viaja para que el commit escriba los clusters. Sin medida NO
+    // se emiten los campos: el contrato es "el campo existe si hay dato", no null.
+    const introSignature = normalizeRowSignature(preflight?.signatureVector)
+    const introClusters = preflight?.workingClusters || null
     return {
       speakerId: labelToSpeakerId(intro),
       speakerName: intro,
+      ...(introSignature ? { signatureVector: introSignature } : {}),
+      ...(introClusters ? { workingClusters: introClusters } : {}),
       source: 'wake-intro',
     }
   }
@@ -215,13 +223,20 @@ export function applyResolvedSpeakerToSessionRefs(resolved, refs = {}) {
   // El registro (alias + renombrado de las etiquetas de la MISMA voz + primario con
   // fuente 'presented') tiene UN solo dueno, `registerSpeakerIdentity`: lo comparte con
   // la RUTA DEL COMANDO (`REGISTRAR_PARTICIPANTE`), que antes no registraba nada.
-  if (resolved?.source === 'wake-intro' && typeof refs.renameSpeakerRows === 'function') {
+  if (resolved?.source === 'wake-intro') {
     registerSpeakerIdentity({
       name,
       clusters: refs.speakerClustersRef?.current || [],
       previousLabel: previous,
-      refs: { sessionPrimarySpeakerRef: refs.sessionPrimarySpeakerRef, setClusters: refs.setSpeakerClusters },
-      rename: refs.renameSpeakerRows,
+      // La VOZ que dice el nombre es la del turno; `previous` queda solo como
+      // respaldo cuando no hubo medida (ver speakerIdentityRegister).
+      signatureVector: resolved.signatureVector || null,
+      refs: {
+        sessionPrimarySpeakerRef: refs.sessionPrimarySpeakerRef,
+        setClusters: refs.setSpeakerClusters,
+        // La base de participantes se re-ancla por la MISMA ruta que el comando.
+        registerParticipant: refs.registerParticipant,
+      },
     })
   }
 }

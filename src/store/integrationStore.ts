@@ -12,7 +12,7 @@
 //   - Obligación #7: Sync tuple [revision, updated_at, deleted]
 // ============================================================
 
-import { resolveRowSpeakerLabel } from '../voice/lib/conversationRow.js';
+import { normalizeRowSignature, resolveRowSpeakerLabel } from '../voice/lib/conversationRow.js';
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { resolveSafeStorage } from './storage.ts';
@@ -196,8 +196,11 @@ export interface IntegrationActions {
     /**
      * Actualizacion DIRIGIDA de la VOZ de una fila (idempotente). La conversacion solo cambia
      * de hablante cuando se le dice ("ok soy X") o al restaurarla, y toca UNA entrada.
+     * `options.signature` fija el TIMBRE medido de esa fila: es la evidencia con la que el
+     * registro de "soy X" reconoce toda la participacion de esa voz. Sin firma no se toca la
+     * que la fila ya tuviera (un registro sin vector nunca borra evidencia).
      */
-    setEntrySpeaker: (id: string, speakerId: string) => void;
+    setEntrySpeaker: (id: string, speakerId: string, options?: { signature?: number[] | null }) => void;
     /**
      * CONGELA el nombre visible de una fila (mandato del dueno 2026-10-17): al identificar una
      * voz, su nombre se escribe en la fila y NO se vuelve a resolver desde el directorio. Una
@@ -486,13 +489,22 @@ export const useIntegrationStore = create<IntegrationStore>()(
                 set({ conversationHistory: capConversationHistory(entries) });
             },
 
-            setEntrySpeaker: (id: string, speakerId: string) => {
+            setEntrySpeaker: (id: string, speakerId: string, options?: { signature?: number[] | null }) => {
                 const actual = get().conversationHistory.find((e) => e.id === id);
                 if (!actual) return;
-                if (String(actual.speakerId || '') === String(speakerId || '')) return;
+                // Solo una MEDIDA real se escribe: una firma vacia/ausente no borra la que la
+                // fila ya trae (el timbre es evidencia, no un campo que se limpie al vuelo).
+                const signature = normalizeRowSignature(options?.signature ?? null);
+                const sameSpeaker = String(actual.speakerId || '') === String(speakerId || '');
+                const sameSignature = !signature || (
+                    Array.isArray(actual.signature) &&
+                    actual.signature.length === signature.length &&
+                    actual.signature.every((value, index) => value === signature[index])
+                );
+                if (sameSpeaker && sameSignature) return;
                 set((current) => ({
                     conversationHistory: current.conversationHistory.map((e) =>
-                        e.id === id ? { ...e, speakerId } : e,
+                        e.id === id ? { ...e, speakerId, ...(signature ? { signature } : {}) } : e,
                     ),
                 }));
             },

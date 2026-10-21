@@ -92,11 +92,20 @@ export function createWhisperRecognitionEngine({
     get continuous() {
       return true
     },
+    /**
+     * Carga el modelo del worker SIN activar la captura: precalentamiento del
+     * motor local mientras el reconocedor principal escucha (la grabacion
+     * 45aeb8e2 perdio su primera frase por cargar el modelo EN el swap).
+     * @returns {void}
+     */
+    preload() {
+      Promise.resolve(whisper.preload?.()).catch((e) => { logCaughtError('[catch] src/voice/lib/asr/whisperRecognitionEngine.js', e) })
+      if (whisperInterim !== whisper) Promise.resolve(whisperInterim.preload?.()).catch((e) => { logCaughtError('[catch] src/voice/lib/asr/whisperRecognitionEngine.js', e) })
+    },
     start() {
       if (active) return
       active = true
-      Promise.resolve(whisper.preload?.()).catch((e) => { logCaughtError('[catch] src/voice/lib/asr/whisperRecognitionEngine.js', e) })
-      if (whisperInterim !== whisper) Promise.resolve(whisperInterim.preload?.()).catch((e) => { logCaughtError('[catch] src/voice/lib/asr/whisperRecognitionEngine.js', e) })
+      engine.preload()
       if (typeof engine.onstart === 'function') engine.onstart()
     },
     stop() {

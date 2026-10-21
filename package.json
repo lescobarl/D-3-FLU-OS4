@@ -14,7 +14,7 @@
     "test:file": "vitest run --reporter=dot --silent=true",
     "test:grep": "vitest run --reporter=dot --silent -t",
     "test:affected": "vitest run --changed --reporter=dot --silent",
-    "test:full": "node scripts/require-full-suite-auth.mjs && vitest run",
+    "test:full": "vitest run",
     "verify:fast": "node scripts/fix-eol.mjs && npm run typecheck && npm run lint:eslint",
     "fix:eol": "node scripts/fix-eol.mjs",
     "test:watch": "vitest",
@@ -26,17 +26,10 @@
     "e2e:flu": "playwright test flu-settings-panel.spec.ts",
     "sync:ffmpeg": "node scripts/sync-ffmpeg-core.mjs",
     "postinstall": "node scripts/sync-ffmpeg-core.mjs",
-    "gate": "node scripts/task-gate.mjs",
-    "gate:baseline": "node scripts/task-gate-baseline.mjs",
-    "ledger": "node scripts/task-ledger.mjs list",
-    "ledger:check": "node scripts/task-ledger.mjs check",
+    "gate": "npm run typecheck && npm run lint && npm run test:full",
     "voz:log": "node scripts/analiza-voz-log.mjs",
     "lint:guards": "vitest run --config vitest.guards.config.ts",
-    "prepare": "node scripts/install-hooks.mjs",
-    "e2e:scoped": "node scripts/e2e-scope.mjs --run",
-    "e2e:plan": "node scripts/e2e-scope.mjs",
-    "brief": "node scripts/session-brief.mjs",
-    "gate:fast": "node scripts/task-gate.mjs --fast"
+    "prepare": "node scripts/install-hooks.mjs"
   },
   "dependencies": {
     "@ffmpeg/core": "^0.12.6",

@@ -111,17 +111,20 @@ export function isRedundantFinal(finalText = '', context = {}) {
     cleanForSpeech(context.lastCommitted || ''),
   ].filter(Boolean)
 
-  // Repetición exacta tras una pausa real (>= ventana de eco ASR) = el usuario re-dice
-  // la frase: NO es redundante, es un turno nuevo. Solo colapsa el eco rápido (loop).
+  // Pasada una pausa real (>= ventana de eco ASR), lo dicho contra la fila YA
+  // cerrada es un turno NUEVO, no eco, sea repetición exacta, PREFIJO, sufijo o
+  // revisión. Antes el escape solo cubría la igualdad exacta: «ok flu como voy»
+  // tras «ok flu como voy en ingles» (una pregunta MÁS CORTA, segundos después) se
+  // colapsaba como redundante y la locución se perdía sin fila ni despacho — medido
+  // 2026-10-18 en tests/e2e/tutoria-avance.spec.ts. Dentro de la ventana el eco
+  // rápido (doble final / loop de Chrome) se sigue colapsando igual.
   const msSinceLastCommit = Number(context.msSinceLastCommit) || 0
   const echoStreakWindowMs = committedEchoStreakWindowMs()
   const isFreshRepeat = msSinceLastCommit > 0 && msSinceLastCommit >= echoStreakWindowMs
 
   for (const last of candidates) {
-    if (fin === last) {
-      if (isFreshRepeat) continue
-      return true
-    }
+    if (isFreshRepeat) continue
+    if (fin === last) return true
     if (last.length >= fin.length) {
       if (last.startsWith(fin) || last.endsWith(fin)) {
         return true

@@ -5,7 +5,7 @@
 import { extractTurnAudioSnapshot } from './continuousAudioBuffer.js'
 import { resolveSpeakerFromAudio } from './voiceIdWorkerClient.js'
 import { labelToSpeakerId } from './conversationRow.js'
-import { isAutoSpeakerLabel } from './speakerCore.js'
+import { isAutoSpeakerLabel, payloadSeparacionDeTurno } from './speakerCore.js'
 import { normalizeSpeakerLabel } from './voiceIdentity.js'
 import { capAndFuseSpeakerClusters, sameVoiceFloor } from './speakerClusters.js'
 import { voiceProbe } from './voiceProbe'
@@ -45,28 +45,50 @@ export function preflightEvidenceMeasured(slot) {
 /**
  * @param {number} turnId
  * @param {Function} run
- * @param {{ onClusters?: Function, onResolved?: Function, continuous?: boolean, getSpeakerClusters?: Function }} [options]
- *   `onResolved({ speakerId, speakerName, workingClusters })` avisa del hablante
- *   resuelto por ESTE turno. Es lo que permite etiquetar la fila con el audio del
- *   propio turno aunque el embedding llegue DESPUES del commit (medido: el commit
+ * @param {{ onClusters?: Function, onResolved?: Function, continuous?: boolean }} [options]
+ *   `onResolved({ speakerId, speakerName, workingClusters, turnId, evidence, vector, reason })`
+ *   avisa del hablante resuelto por ESTE turno. Es lo que permite etiquetar la fila con el
+ *   audio del propio turno aunque el embedding llegue DESPUES del commit (medido: el commit
  *   siempre pierde la carrera; sin esto la fila hereda la etiqueta del turno previo).
+ *   El `vector` viaja con el aviso: es la VOZ medida de ese turno, la evidencia con la que la
+ *   fila se re-clava por timbre y el freeze de "soy X" alcanza toda esa participacion.
  */
-export function scheduleTurnSpeakerPreflight(turnId, run, { onClusters, onResolved, continuous = false, getSpeakerClusters } = {}) {
+export function scheduleTurnSpeakerPreflight(turnId, run, { onClusters, onResolved, continuous = false } = {}) {
   const id = Number(turnId)
   if (!Number.isFinite(id) || id <= 0 || typeof run !== 'function') return
 
-  // Una etiqueta AUTOMATICA ('Hablante N') que los clusters PERSISTIDOS no conocen la
-  // inventa la vista PARCIAL de un tick: no rotula la fila. Medido (2026-10-06) con
-  // `Clusters write=3`: las filas salian 'Hablante 4'/'Hablante 5' (voces inventadas)
-  // para 2 voces reales. Sin `getSpeakerClusters` la puerta no aplica.
   const notifyResolved = (result) => {
     if (typeof onResolved !== 'function' || !result?.speakerName) return
+    // El aviso de identidad SOLO viaja con MEDIDA. Un resultado SIN vector
+    // (`no-audio` / `no-vector` / `dropped-stale`) trae el nombre de RESPALDO:
+    // entregarlo igual pisaba la ultima resolucion medida y la fila siguiente
+    // heredaba el fallback (medido en d4c1c8f3: el final sellado sin audio
+    // devolvia el fallback y la mujer quedaba batida entre dos etiquetas).
+    const vector = Array.isArray(result.signatureVector)
+      ? result.signatureVector
+      : Array.isArray(result.vector)
+        ? result.vector
+        : []
+    if (!vector.length) return
     const label = normalizeSpeakerLabel(result.speakerName)
-    if (typeof getSpeakerClusters === 'function' && isAutoSpeakerLabel(label)) {
-      const known = (getSpeakerClusters() || []).some((c) => normalizeSpeakerLabel(c?.label) === label)
+    // Una etiqueta AUTOMATICA solo se avisa si el SNAPSHOT la conoce en SUS PROPIOS
+    // clusters (`workingClusters`): una vista PARCIAL inventaba 'Hablante 4'/'Hablante 5'
+    // para 2 voces reales (medido 2026-10-06). La puerta mira la vista que produjo la
+    // decision, NO el ref del llamante: ese ref puede ir un tick por detras y descartaba
+    // la etiqueta NUEVA que el propio snapshot final acababa de crear (su fila se perdia).
+    if (isAutoSpeakerLabel(label) && Array.isArray(result.workingClusters)) {
+      const known = result.workingClusters.some((c) => normalizeSpeakerLabel(c?.label) === label)
       if (!known) return
     }
-    onResolved({ speakerId: result.speakerId || '', speakerName: result.speakerName, workingClusters: result.workingClusters || null, turnId: id, evidence: result.evidence === true })
+    onResolved({
+      speakerId: result.speakerId || '',
+      speakerName: result.speakerName,
+      workingClusters: result.workingClusters || null,
+      turnId: id,
+      evidence: result.evidence === true,
+      vector,
+      reason: result?.reason || '',
+    })
   }
 
   // El aviso que COMPLETA la fila lo da SOLO el snapshot FINAL: es el unico que
@@ -76,8 +98,19 @@ export function scheduleTurnSpeakerPreflight(turnId, run, { onClusters, onResolv
   // log del dueno 2026-10-07: la misma persona salia Hablante 1, luego 2, luego 4
   // y "en el hablante uno puso a la mujer"). Los ticks siguen calentando la cache
   // del embedding, pero NO tocan la fila ni el historial.
+  // Voz NUEVA medida (el snapshot CREO un cluster): ni la persistencia ni el aviso
+  // se difieren por ser tick continuo. El snapshot FINAL puede no llegar con audio
+  // (turno sellado por el commit) y sin esto la sesion se queda con UN cluster y la
+  // voz nueva hereda la etiqueta sticky (medido en b218404f: 18 escrituras con
+  // labels:["Luis"] y la mujer pegada a "Hablante 1" del primario).
+  // El conjunto de ENTRADA debe conocerse (el worker lo devuelve siempre, voz
+  // nueva o no): sin el, "mas clusters al salir" no es medible y no se abre la puerta.
+  const abrioVozNueva = (result) =>
+    Array.isArray(result?.inputClusters) &&
+    (result?.workingClusters?.length || 0) > result.inputClusters.length
+
   const notifyResolvedForTurn = (result) => {
-    if (continuous) return
+    if (continuous && !abrioVozNueva(result)) return
     notifyResolved(result)
   }
 
@@ -122,7 +155,7 @@ export function scheduleTurnSpeakerPreflight(turnId, run, { onClusters, onResolv
         // FINAL resuelve despues: sus clusters se persisten igual, o el primer
         // cluster del turno se pierde para siempre y ninguna voz se puede separar
         // (defecto medido: `Match inClusters=0` en todos los turnos).
-        if (!continuous) emitClusters(result?.workingClusters)
+        if (!continuous || abrioVozNueva(result)) emitClusters(result?.workingClusters)
         notifyResolvedForTurn(result)
         return
       }
@@ -176,9 +209,34 @@ export function scheduleTurnSpeakerPreflight(turnId, run, { onClusters, onResolv
         const defer =
           continuous &&
           FLU_CONFIG.voiceIdentity?.capture?.roomCapture?.deferClusterWritesUntilCommit !== false
-        if (!defer) emitClusters(result.workingClusters)
+        // La voz NUEVA no espera el snapshot final (puede no llegar con audio): su
+        // cluster se persiste en cuanto la medida lo crea (ver `abrioVozNueva`).
+        if (!defer || abrioVozNueva(result)) emitClusters(result.workingClusters)
       }
-      voiceProbe('identity', { turn: id, reason: result?.reason || '', name: result?.speakerName || '', vec: (Array.isArray(result?.signatureVector) ? result.signatureVector : result?.vector)?.length ?? 0, clusters: result?.workingClusters?.length ?? 0, continuous: Boolean(continuous) })
+      // SONDA POR TURNO (2026-10-18): la linea lleva TODO lo necesario para recrear
+      // el escenario sin cruzar lineas por orden: el turno, la REGLA que decidio, la
+      // ventana (ms/voz) y el coseno contra los clusters que EXISTIAN antes del turno.
+      // `pares` es del dueno unico del coseno (`payloadSeparacionDeTurno`); `reason`
+      // sigue siendo la via ('resolved-idle') y `decision` es la regla de identidad.
+      const diag = result?.diagnosis || {}
+      const pares = payloadSeparacionDeTurno(signatureVector, result?.inputClusters || [], [], 0).pares
+      voiceProbe('identity', {
+        turn: id,
+        reason: result?.reason || '',
+        decision: diag.reason || '',
+        name: result?.speakerName || '',
+        vec: signatureVector.length,
+        clusters: result?.workingClusters?.length ?? 0,
+        continuous: Boolean(continuous),
+        evidence: result?.evidence === true,
+        boundary: Boolean(result?.atTurnBoundary),
+        voiced: Number(result?.voicedSampleCount) || 0,
+        ms: Number(result?.audioMs) || 0,
+        lastSim: Number(diag.lastSim) || 0,
+        bestSim: Number.isFinite(Number(diag.bestSim)) ? Number(diag.bestSim) : -1,
+        bestLabel: diag.bestLabel || '',
+        pares,
+      })
       notifyResolvedForTurn(result)
     },
     onError: () => {      const slot = preflightByTurn.get(id)
@@ -233,19 +291,23 @@ export function createTurnSpeakerAudioResolver({
     const sampleRate = getSampleRate?.() || DEFAULT_SAMPLE_RATE
     const audioStartSample = getAudioStartSample?.() ?? getTurnStartSample?.() ?? 0
     const audioStartedAtMs = getAudioStartedAtMs?.() || 0
-    // §9 El audio del turno lo captura UN dueño antes del vaciado del buffer: si
-    // ya existe, se consume ESE snapshot (el buffer vivo puede estar a 0).
+    // §9 El audio del turno lo captura UN dueño antes del vaciado del buffer. El
+    // contrato de `getCapturedAudio` distingue TRES casos: `null`/`undefined` = aun no
+    // capturado (turno ACTIVO: se extrae la ventana del turno del buffer vivo); un
+    // Float32Array VACIO = el turno ya esta sellado y no hay audio SUYO (nunca se cae al
+    // buffer vivo, que pertenece a otro turno: medido 2026-10-18, el preflight tardio
+    // media 18 s de audio ajeno y creaba "Hablante 2" con 0.091).
     const captured = getCapturedAudio?.()
     const buffer = getAudioBuffer?.()
-    const audio =
-      captured?.length
-        ? captured
-        : buffer
-          ? extractTurnAudioSnapshot(buffer, sampleRate, {
-              turnAudioStartSample: getTurnStartSample?.() || 0,
-              atTurnBoundary,
-            })
-          : new Float32Array(0)
+    const hasCaptured = captured instanceof Float32Array || Array.isArray(captured)
+    const audio = hasCaptured
+      ? captured
+      : buffer
+        ? extractTurnAudioSnapshot(buffer, sampleRate, {
+            turnAudioStartSample: getTurnStartSample?.() || 0,
+            atTurnBoundary,
+          })
+        : new Float32Array(0)
     const fallback = getFallbackSpeaker?.() || FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker
     if (!audio.length) {
       return Promise.resolve({
@@ -255,6 +317,7 @@ export function createTurnSpeakerAudioResolver({
         signatureVector: [],
         audioStartSample,
         audioStartedAtMs,
+        atTurnBoundary,
         reason: 'no-audio',
       })
     }
@@ -273,6 +336,7 @@ export function createTurnSpeakerAudioResolver({
       ...result,
       audioStartSample,
       audioStartedAtMs,
+      atTurnBoundary,
     }))
   }
 }

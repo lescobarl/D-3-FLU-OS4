@@ -103,10 +103,11 @@ describe('la etiqueta no se hereda por continuidad sin evidencia de voz', () => 
     });
 
     it('tres voces distintas no colapsan en una sola etiqueta', () => {
-        // P9.86b: los vectores ORTOGONALES (sim 0) caen por debajo de la banda MEDIDA de
-        // voz distinta (cosineDistinctVoice 0.58) y el diseno los trata como "sin
-        // evidencia" (anti-fantasma). Se usan voces EN la banda (~0.60), que es lo que
-        // mide una voz realmente distinta (misma 0.69-0.74 / distinta ~0.58).
+        // Voces ORTOGONALES (sim 0) son un extremo artificial; se usan voces en la
+        // banda MEDIDA de "otra persona" (~0.60): misma voz 0.69-0.74 / distinta
+        // ~0.58-0.60. Criterio VIGENTE (mandato 2026-10-18): un turno sostenido que
+        // no casa con ninguna voz abre SU etiqueta; no existe rama de herencia por
+        // "sin evidencia".
         const c = Math.sqrt(0.6);
         const s = Math.sqrt(1 - 0.6);
         const voces = [

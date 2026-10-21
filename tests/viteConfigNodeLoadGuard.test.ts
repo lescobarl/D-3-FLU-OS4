@@ -125,7 +125,9 @@ describe('P6.13 configEnNode - el config de Vite carga en Node', () => {
     bundleForNode(join(ROOT, 'vite.config.ts'), out)
     const salida = await loadsInNode(out)
     expect(salida, 'el config de Vite NO carga en Node (P6.13 vuelve)').not.toBeNull()
-    expect(salida, 'la config no produjo plugins: los proxies no se cargaron').toContain('plugins=4')
+    // 5 = react + gemini + browser + search + recorderSink (dev). El guard mide que
+    // los middlewares REALES se carguen; el conteo se actualiza al añadir uno.
+    expect(salida, 'la config no produjo plugins: los proxies no se cargaron').toContain('plugins=5')
   })
 
   it('external no nombra nada instalado, que si se puede empaquetar', async () => {

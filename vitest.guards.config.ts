@@ -7,10 +7,7 @@
  * command is incorrect': cmd.exe corta en 8191), lo que impedía cumplir 0.24/0.25
  * (todo test que importe el src tocado tiene que correr en el gate).
  *
- * NO DEBILITA la barrera de la suite completa: `scripts/full-suite-policy.mjs`
- * declara este fichero en SCOPED_CONFIGS (su include es una lista EXPLICITA, no el
- * repo entero), asi que una corrida `vitest run --config vitest.guards.config.ts`
- * cuenta como ACOTADA y no pide autorizacion (lo fija tests/fullSuitePathBarrier).
+ * Su `include` es una lista EXPLICITA de pruebas funcionales, no el repo entero.
  */
 import { defineConfig } from 'vitest/config'
 import base from './vitest.config'

@@ -37,11 +37,6 @@ function looksLikeTrailingFragment(text = '') {
 
 export { looksLikeTrailingFragment }
 
-function endsWithNumericToken(text = '') {
-  const words = cleanForSpeech(text).split(/\s+/).filter(Boolean)
-  return /^\d+$/.test(words.at(-1) || '')
-}
-
 export function getTranscriptDelta(previous = '', next = '') {
   const prev = cleanForSpeech(previous)
   const nextText = cleanForSpeech(next)
@@ -68,14 +63,11 @@ export function mergeTranscriptText(base = '', incoming = '') {
   const delta = getTranscriptDelta(prev, next)
   if (!delta) return prev
 
-  if (looksLikeTrailingFragment(next) && endsWithNumericToken(prev)) {
-    const words = prev.split(/\s+/).filter(Boolean)
-    if (words.length) {
-      words[words.length - 1] = `${words[words.length - 1]}${next}`
-      return cleanForSpeech(words.join(' '))
-    }
-  }
-
+  // PROHIBIDO PEGAR DIGITOS SIN ESPACIO (medido 2026-10-19, log del dueno): Chrome
+  // entrega los numeros como items SUELTOS ("2" + "3", "9" + "10") y el pegado los
+  // convertia en "23" / "910" tanto en la caja como en la fila ("1 2 3 23 4 34...").
+  // Dos items NUNCA son un solo token: la continuacion numerica se separa con espacio
+  // por el camino generico de abajo (el delta ya evita repetir lo acumulado).
   if (looksLikeTrailingFragment(prev) && next.length > prev.length + 4) {
     return cleanForSpeech(`${next} ${prev}`)
   }

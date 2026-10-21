@@ -15,6 +15,7 @@ import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
 import type { ShoppingItemRecord } from '../core/db/fluDatabase';
+import { useAsyncAction } from '../hooks/useAsyncAction';
 
 export interface ShoppingPanelProps {
   items: ShoppingItemRecord[];
@@ -39,7 +40,7 @@ export function ShoppingPanel({
   const ui = config.ui || {};
 
   const [label, setLabel] = useState('');
-  const [busy, setBusy] = useState(false);
+  const { busy, run } = useAsyncAction('[ShoppingPanel]');
 
   const pending = items.filter((item) => !item.checked);
   const checked = items.filter((item) => item.checked);
@@ -47,14 +48,21 @@ export function ShoppingPanel({
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const labelValue = label.trim();
-    if (!labelValue || busy) return;
-    setBusy(true);
-    try {
-      await onAdd(labelValue);
-      setLabel('');
-    } finally {
-      setBusy(false);
-    }
+    if (!labelValue) return;
+    const result = await run(() => onAdd(labelValue));
+    if (result.ok) setLabel('');
+  };
+
+  const handleToggle = (id: string) => {
+    void run(() => onToggle(id), `toggle:${id}`);
+  };
+
+  const handleRemove = (id: string) => {
+    void run(() => onRemove(id), `remove:${id}`);
+  };
+
+  const handleClearChecked = () => {
+    void run(onClearChecked, 'clear-checked');
   };
 
   return (
@@ -107,7 +115,7 @@ export function ShoppingPanel({
                       <input
                         type="checkbox"
                         checked={false}
-                        onChange={() => onToggle(item.id)}
+                        onChange={() => handleToggle(item.id)}
                         data-testid={`shopping-toggle-${item.id}`}
                       />
                       <span className="flu-reminders-item__text">{item.label}</span>
@@ -118,7 +126,7 @@ export function ShoppingPanel({
                         title={ui.removeTitle || 'Quitar'}
                         aria-label={ui.removeTitle || 'Quitar'}
                         data-testid={`shopping-remove-${item.id}`}
-                        onClick={() => onRemove(item.id)}
+                        onClick={() => handleRemove(item.id)}
                       >
                         ×
                       </button>
@@ -142,7 +150,7 @@ export function ShoppingPanel({
                       <input
                         type="checkbox"
                         checked
-                        onChange={() => onToggle(item.id)}
+                        onChange={() => handleToggle(item.id)}
                         data-testid={`shopping-toggle-${item.id}`}
                       />
                       <span className="flu-reminders-item__text">{item.label}</span>
@@ -153,7 +161,7 @@ export function ShoppingPanel({
                         title={ui.removeTitle || 'Quitar'}
                         aria-label={ui.removeTitle || 'Quitar'}
                         data-testid={`shopping-remove-${item.id}`}
-                        onClick={() => onRemove(item.id)}
+                        onClick={() => handleRemove(item.id)}
                       >
                         ×
                       </button>
@@ -165,7 +173,7 @@ export function ShoppingPanel({
                 type="button"
                 className="flu-settings-image-config__field--stacked"
                 data-testid="shopping-clear-checked"
-                onClick={onClearChecked}
+                onClick={handleClearChecked}
               >
                 {ui.clearCheckedLabel || 'Vaciar comprados'}
               </button>

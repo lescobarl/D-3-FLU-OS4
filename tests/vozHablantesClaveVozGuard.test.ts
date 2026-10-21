@@ -10,17 +10,21 @@
 // INVARIANTES (una regla, un sitio: speakerDirectory):
 //   I1 una etiqueta reciclada NO hereda el nombre de otra voz (fila con firma medida).
 //   I2 la fila con VOZ medida resuelve el nombre por su VECTOR; sin coincidencia no hereda.
-//   I4 la BASE exige su propio piso (0.76) y el MODELO; la SESION conserva el suyo (0.66).
+//   I4 la BASE exige el piso de identidad registrada y el MODELO. MANDATO 2026-10-18: en la
+//      SESION una voz SIN nombre sigue agrupando por timbre, pero un NOMBRE PROPIO tambien
+//      exige el piso de identidad registrada (la banda de "misma voz" rotulaba a la hija
+//      como "Luis"). La regla anterior —"la sesion conserva el piso de misma voz para un
+//      nombre"— quedo DEROGADA.
 // ============================================================
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   registerVoiceName,
   resetVoiceDirectory,
   resolveVoiceIdentity,
+  voiceVectorModel,
 } from '../src/voice/lib/speakerDirectory.js'
 import { resolveRowSpeakerLabel } from '../src/voice/lib/conversationRow.js'
 import { compareCosineSignatures } from '../src/voice/lib/speakerCore.js'
-import { getModelId } from '../src/voice/lib/embeddingConfig.js'
 
 /** Vector unitario base (eje 0). */
 const EJE = (() => {
@@ -41,7 +45,10 @@ const V_LUIS = EJE.slice()
 const V_MISMA_VOZ = conCoseno(EJE, 0.8)
 const V_BANDA_MEDIA = conCoseno(EJE, 0.7)
 const V_MUJER = conCoseno(EJE, 0.55)
-const MODELO = getModelId()
+// AMEND 2026-10-18: la CLAVE DE COMPARABILIDAD es modelo + dtype, no el model id a secas.
+// Medido en el log del dueno: su ancla de la base (vector de otro dtype) casaba a 0.44-0.46
+// con su propia voz y se sembraba como "Luis". El dueno unico es `voiceVectorModel()`.
+const MODELO = voiceVectorModel()
 
 beforeEach(() => {
   resetVoiceDirectory()
@@ -64,6 +71,14 @@ describe('P11.10 - la fila resuelve su nombre por la VOZ, no por la clave', () =
     registerVoiceName('speaker_1', 'Luis', { vector: V_LUIS })
     const fila = { speakerId: 'speaker_1', signature: V_MISMA_VOZ }
     expect(resolveRowSpeakerLabel(fila)).toBe('Luis')
+  })
+
+  it('un registro SIN vector NO borra el timbre ya ligado a la voz (renombre tardio)', () => {
+    // La resolucion tardia y el renombre del panel llegan sin vector. Antes `{vector: []}`
+    // pisaba el ancla y la identidad entre turnos se perdia en silencio (2026-10-18).
+    registerVoiceName('speaker_1', 'Luis', { vector: V_LUIS })
+    registerVoiceName('speaker_1', 'Luis Perez')
+    expect(resolveVoiceIdentity(V_MISMA_VOZ)?.name, 'el timbre sigue ligado a la voz').toBe('Luis Perez')
   })
 
   it('AMEND (freeze 2026-10-17): una fila SIN firma NO hereda el nombre de la clave', () => {
@@ -108,10 +123,21 @@ describe('P11.10 - el piso de la BASE es el de identidad registrada (I4, con MOD
     expect(resolveVoiceIdentity(V_MISMA_VOZ)).toBeNull()
   })
 
-  it('la SESION conserva su piso (0.66): 0.70 ya es la misma voz dentro de la reunion', () => {
+  it('I4 (dtype): el MISMO model id en otro dtype NO es comparable', () => {
+    const [modelId] = MODELO.split('|')
+    const otroDtype = MODELO.endsWith('|q8') ? `${modelId}|fp32` : `${modelId}|q8`
+    const candidatos = [{ name: 'Luis', vector: V_LUIS, model: otroDtype }]
+    expect(resolveVoiceIdentity(V_MISMA_VOZ, { candidates: candidatos })).toBeNull()
+    registerVoiceName('speaker_1', 'Luis', { vector: V_LUIS, model: otroDtype })
+    expect(resolveVoiceIdentity(V_MISMA_VOZ)).toBeNull()
+  })
+
+  it('la SESION agrupa por timbre, pero un NOMBRE exige identidad registrada: 0.70 no lo afirma', () => {
     registerVoiceName('speaker_1', 'Luis', { vector: V_LUIS })
-    const r = resolveVoiceIdentity(V_BANDA_MEDIA)
-    expect(r?.name).toBe('Luis')
+    // 0.70 esta en la banda de "misma voz": NO identifica a la persona, asi que no afirma
+    // su nombre (asi se rotulaba a la hija, mandato 2026-10-18).
+    expect(resolveVoiceIdentity(V_BANDA_MEDIA)).toBeNull()
+    expect(resolveVoiceIdentity(V_MISMA_VOZ)?.name).toBe('Luis')
   })
 
   it('PRUEBA DE DETECTOR (el detector no es decorativo): si los DOS pisos son el de sesion, la base casa en 0.70', () => {

@@ -16,7 +16,7 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
-import { logCaughtError } from '../lib/caughtError';
+import { useAsyncAction } from '../hooks/useAsyncAction';
 import type { CommunicationProfileRecord, ParticipantRecord } from '../core/db/fluDatabase';
 import type { ParticipantInput, ParticipantRegisterResult } from '../core/multiuser/participantRegistry';
 import {
@@ -73,45 +73,52 @@ export function ParticipantsPanel({
   const [role, setRole] = useState('');
   const [birthday, setBirthday] = useState('');
   const [speakerLabel, setSpeakerLabel] = useState('');
-  const [busy, setBusy] = useState(false);
+  const { busy, run } = useAsyncAction('[ParticipantsPanel]');
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const nameValue = name.trim();
-    if (!nameValue || busy) return;
-    setBusy(true);
-    try {
-      const result = await onRegister({
+    if (!nameValue) return;
+    const result = await run(() =>
+      onRegister({
         name: nameValue,
         role: role || undefined,
         birthday: birthday || undefined,
         speakerLabel: speakerLabel.trim() || undefined,
-      });
-      if (result.ok) {
-        setName('');
-        setRole('');
-        setBirthday('');
-        setSpeakerLabel('');
-      }
-    } finally {
-      setBusy(false);
-    }
+      }),
+    );
+    if (!result.ok || !result.value.ok) return;
+    setName('');
+    setRole('');
+    setBirthday('');
+    setSpeakerLabel('');
   };
 
   /** FASE P — Fija manualmente el nivel de explicación ("" = Auto → sin cambio). */
   const handleSetLevel = (item: ParticipantRecord, value: string) => {
     if (!value || !onSetManual) return;
-    onSetManual(item.id, { explanationLevel: value as ExplanationLevel }, item.name).catch((error) => {
-      logCaughtError('[ParticipantsPanel] guardar nivel manual', error);
-    });
+    void run(
+      () => onSetManual(item.id, { explanationLevel: value as ExplanationLevel }, item.name),
+      `level:${item.id}`,
+    );
   };
 
   /** FASE P — Fija manualmente el tono ("" = Auto → sin cambio). */
   const handleSetTone = (item: ParticipantRecord, value: string) => {
     if (!value || !onSetManual) return;
-    onSetManual(item.id, { tone: value as PersonalityTone }, item.name).catch((error) => {
-      logCaughtError('[ParticipantsPanel] guardar tono manual', error);
-    });
+    void run(
+      () => onSetManual(item.id, { tone: value as PersonalityTone }, item.name),
+      `tone:${item.id}`,
+    );
+  };
+
+  const handleRemove = (id: string) => {
+    void run(() => onRemove(id), `remove:${id}`);
+  };
+
+  const handleReset = (id: string) => {
+    if (!onResetPerson) return;
+    void run(() => onResetPerson(id), `reset:${id}`);
   };
 
   return (
@@ -232,7 +239,7 @@ export function ParticipantsPanel({
                             title={ui.removeTitle || 'Eliminar participante'}
                             aria-label={ui.removeTitle || 'Eliminar participante'}
                             data-testid={`participants-remove-${item.id}`}
-                            onClick={() => onRemove(item.id)}
+                            onClick={() => handleRemove(item.id)}
                           >
                             ×
                           </button>
@@ -279,7 +286,7 @@ export function ParticipantsPanel({
                             <button
                               type="button"
                               className="flu-communication-profile__reset"
-                              onClick={() => onResetPerson(item.id)}
+                              onClick={() => handleReset(item.id)}
                               data-testid={`participants-profile-reset-${item.id}`}
                             >
                               {pui.resetLabel || 'Restablecer'}

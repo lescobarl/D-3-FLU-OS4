@@ -13,7 +13,7 @@ import { relayLog } from '../../lib/clientLogRelay.ts';
 import { DEFAULT_SAMPLE_RATE } from './audioConstants.js'
 import { createWorkerPendingBridge } from './workerPendingBridge.js'
 import { scheduleIdle } from './idleSchedule.js'
-import { countVoicedSamples } from './voicedActivity.js'
+import { countVoicedSamples, selectVoicedWindow } from './voicedActivity.js'
 import { voiceProbe } from './voiceProbe.ts'
 
 let seq = 0
@@ -238,9 +238,16 @@ function resolveIdentityIdle(vector, matchPayload, sampleRate, voicedSampleCount
 }
 
 export async function resolveSpeakerFromAudio(samples, sampleRate = DEFAULT_SAMPLE_RATE, matchPayload = {}) {
-  const { audioBuffer, byteOffset, sampleCount, transfer } = prepareTransferableAudio(samples)
+  // La ventana del turno llega con la cola de silencio del final del ASR (y a veces con
+  // audio ajeno en los bordes). Se embebe SOLO el tramo con voz; el recorte tiene UN
+  // dueno (`voicedActivity.selectVoicedWindow`) y el piso de voz se sigue midiendo
+  // sobre la ventana (mas abajo). Antes se embebia la ventana entera: la misma voz
+  // medida 0.10-0.43 contra su propio cluster (log del dueno 2026-10-18).
+  const voiceWindow = selectVoicedWindow(samples, { sampleRate })
+  const { audioBuffer, byteOffset, sampleCount, transfer } = prepareTransferableAudio(voiceWindow)
   const cfg = FLU_CONFIG.voiceIdentity?.capture?.conversationSpeakerThresholds || {}
   const fallbackName = matchPayload.fallbackSpeaker || FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker
+  const windowSamples = samples?.length || 0
 
   if (!sampleCount) {
     return {
@@ -322,8 +329,11 @@ export async function resolveSpeakerFromAudio(samples, sampleRate = DEFAULT_SAMP
   // CUALQUIER ventana aceptada pasaba el piso (incluida TV/silencio). Aqui se cuenta lo VIVO.
   // P9.72: el umbral NO se fija aqui (era un SEGUNDO umbral, mas permisivo que el del VAD).
   // El dueno unico del piso de voz es `voicedActivity.getVoicedFloor()`.
-  const voiced = countVoicedSamples(samples, { sampleRate })
+  const voiced = countVoicedSamples(voiceWindow, { sampleRate })
   const identity = await resolveIdentityIdle(vector, matchPayload, sampleRate, voiced)
+  // Ventana REAL del turno (no la voz): la sonda la usa para distinguir un turno
+  // corto de uno sostenido sin cruzar lineas por orden.
+  const audioMs = sampleRate > 0 ? Math.round((windowSamples / sampleRate) * 1000) : 0
   if (typeof window !== 'undefined') {
     // El log dice la decision REAL (la del hilo principal), no la del worker.
     relayLog(
@@ -339,6 +349,13 @@ export async function resolveSpeakerFromAudio(samples, sampleRate = DEFAULT_SAMP
     signatureVector: identity.signatureVector?.length ? identity.signatureVector : vector,
     reason: 'resolved-idle',
     evidence: identity.evidence === true,
+    // Traza de la decision y clusters PRE-decision: la sonda del preflight calcula
+    // el coseno contra lo que EXISTIA (no contra lo que el turno acaba de crear).
+    diagnosis: identity.diagnosis || null,
+    inputClusters: matchPayload.speakerClusters || [],
+    audioMs,
+    voicedSampleCount: voiced,
+    sampleRate,
   }
 }
 

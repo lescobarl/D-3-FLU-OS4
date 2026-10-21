@@ -64,14 +64,18 @@ describe('los umbrales de identidad salen de la config, no de un literal', () =>
 
 const SIG = [1, 0, 0, 0]
 
-/** Decision por el DUENO UNICO: vector con coseno `cos` frente al cluster 'luis'. */
+/**
+ * Decision por el DUENO UNICO: vector con coseno `cos` frente al cluster «Hablante 1».
+ * El cluster es ANONIMO a proposito: este guard mide la REUTILIZACION por umbral, y un
+ * NOMBRE propio exige ademas identidad registrada + ventana sostenida (mandato 2026-10-18).
+ */
 function decidir(cos = 0.7): string {
   const vector = [cos, Math.sqrt(Math.max(0, 1 - cos * cos)), 0, 0]
   return resolveConversationSpeaker({
     signatureVector: vector,
-    speakerClusters: [{ label: 'luis', signature: SIG }],
-    lastSpeaker: 'Hablante 1',
-    lastSignature: [0, 1, 0, 0],
+    speakerClusters: [{ label: 'Hablante 1', signature: SIG }],
+    lastSpeaker: '',
+    lastSignature: null,
     voicedSampleCount: 86400,
     sampleRate: 48000,
     atTurnBoundary: false,
@@ -81,12 +85,12 @@ function decidir(cos = 0.7): string {
 
 describe('una voz que puntua 0.70 con el cluster NO es una voz nueva (reutiliza el cluster)', () => {
   it('con los umbrales de la config resuelve al hablante del cluster', () => {
-    expect(decidir(0.7)).toBe('luis')
+    expect(decidir(0.7)).toBe('Hablante 1')
   })
 })
 
 describe('PRUEBA DE DETECTOR (el detector no es decorativo)', () => {
   it('una voz ORTOGONAL (coseno 0) NO reutiliza el cluster', () => {
-    expect(decidir(0), 'el veredicto debe depender de la similitud, no ser constante').not.toBe('luis')
+    expect(decidir(0), 'el veredicto debe depender de la similitud, no ser constante').not.toBe('Hablante 1')
   })
 })

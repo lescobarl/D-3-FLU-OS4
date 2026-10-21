@@ -3,8 +3,8 @@
  * (`git ls-files --eol`), que es exactamente lo que exige `tests/eolGuard.test.ts`.
  *
  * Por qué existe: `core.autocrlf=false` y sin `.gitattributes`, cualquier editor
- * que guarde en CRLF convierte un cambio de 20 líneas en un diff de miles, y
- * `.task/frozen.json` hashea BYTES del árbol. Se falló dos veces por esto.
+ * que guarde en CRLF convierte un cambio de 20 líneas en un diff de miles. Se
+ * falló dos veces por esto.
  *
  * Reglas:
  *   - índice `lf`   -> todo el archivo a LF.
@@ -64,6 +64,7 @@ function indexEolMap(path) {
 }
 
 function normalize(path, indexKind, workKind) {
+  if (!fs.existsSync(path)) return { path, changed: false, note: 'ausente en el arbol' }
   const buf = fs.readFileSync(path, 'utf8')
   let out
   if (indexKind === 'mixed') {

@@ -65,10 +65,17 @@ export function enqueueSpeakerIdentityJob({
 } = {}) {
   if (typeof run !== 'function') return
 
-  // Un job con `priority` (el snapshot FINAL del turno) NO se puede superseder: es
-  // el unico que escribe clusters, y los ticks del turno siguiente lo descartaban
-  // antes de correr -> `refClusters` quedaba en 0 (defecto medido, 2026-10-06).
-  if (pending?.priority) return
+  // Un job con `priority` (el snapshot FINAL del turno) NO lo supersede un TICK:
+  // el final es el unico que escribe clusters, y los ticks del turno siguiente lo
+  // descartaban antes de correr -> `refClusters` quedaba en 0 (defecto medido,
+  // 2026-10-06). PERO un FINAL nuevo de OTRO turno SI lo reemplaza: el final viejo
+  // pendiente ya nacio tarde (su commit consumio el slot) y darle preferencia ciega
+  // dejaba a los turnos siguientes SIN resolucion (medido en d4c1c8f3: 9 turnos
+  // seguidos con cero resoluciones de identidad). Mismo turno = dedupe.
+  if (pending?.priority) {
+    if (!priority || pending.rowId === rowId) return
+    dropPendingJob('superseded-by-newer-final')
+  }
   if (pending && !inFlight) {
     dropPendingJob('superseded-before-start')
   } else if (pending && inFlight) {

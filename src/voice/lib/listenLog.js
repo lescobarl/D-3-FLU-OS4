@@ -6,6 +6,7 @@
 import { fluAsyncErrorHandler } from './fluAsyncError.js'
 import { resolveDevDebugFlag } from './devFlags.js'
 import { snapshotChromeSpeechResult } from './chromeSpeechSnapshot.js'
+import { recordSessionEvent } from './sessionRecorder.js'
 
 export { snapshotChromeSpeechResult } from './chromeSpeechSnapshot.js'
 import { logCaughtError } from '../../lib/caughtError';
@@ -58,6 +59,8 @@ function serialize(entry) {
 }
 
 function pushRing(entry) {
+  // La grabación de sesión tiene su PROPIA bandera: no depende de listenTrace.
+  recordSessionEvent('listen', entry.stage, entry)
   if (!shouldRecord(entry.stage)) return
 
   ring[ringHead] = entry

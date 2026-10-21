@@ -19,7 +19,7 @@ import type { FormEvent } from 'react';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
 import type { ContactRecord, ParticipantRecord } from '../core/db/fluDatabase';
 import type { BirthdayContact, ContactInput } from '../core/contacts/contactService';
-import { runBusyAction } from './panelUtils';
+import { useAsyncAction } from '../hooks/useAsyncAction';
 
 export interface ContactsPanelProps {
   participants: ParticipantRecord[];
@@ -50,15 +50,14 @@ export function ContactsPanel({
   const [birthday, setBirthday] = useState('');
   const [participantId, setParticipantId] = useState('');
   const [notes, setNotes] = useState('');
-  const [busy, setBusy] = useState(false);
+  const { busy, run } = useAsyncAction('[ContactsPanel]');
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!name.trim() || busy) return;
+    if (!name.trim()) return;
     const participant = participants.find((p) => p.id === participantId);
-    setBusy(true);
-    try {
-      await onAdd({
+    const result = await run(() =>
+      onAdd({
         name: name.trim(),
         phone: phone.trim() ? phone.trim() : undefined,
         email: email.trim() ? email.trim() : undefined,
@@ -67,20 +66,21 @@ export function ContactsPanel({
         participantId: participantId || undefined,
         participantName: participant?.name,
         notes: notes.trim() ? notes.trim() : undefined,
-      });
-      setName('');
-      setPhone('');
-      setEmail('');
-      setRelationship('');
-      setBirthday('');
-      setParticipantId('');
-      setNotes('');
-    } finally {
-      setBusy(false);
-    }
+      }),
+    );
+    if (!result.ok) return;
+    setName('');
+    setPhone('');
+    setEmail('');
+    setRelationship('');
+    setBirthday('');
+    setParticipantId('');
+    setNotes('');
   };
 
-  const handleRemove = (id: string) => runBusyAction(busy, setBusy, () => onRemove(id));
+  const handleRemove = (id: string) => {
+    void run(() => onRemove(id), `remove:${id}`);
+  };
 
   const birthdayLabel = (item: BirthdayContact): string => {
     const days = item.daysUntil;
@@ -276,7 +276,6 @@ export function ContactsPanel({
                       <button
                         type="button"
                         data-testid={`contacts-remove-${contact.id}`}
-                        disabled={busy}
                         onClick={() => handleRemove(contact.id)}
                       >
                         {ui.removeLabel || 'Eliminar'}

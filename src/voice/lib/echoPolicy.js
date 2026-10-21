@@ -21,6 +21,27 @@
 import { FLU_CONFIG } from './fluConfig.js'
 import { useIntegrationStore } from '../../store/integrationStore.ts'
 
+/**
+ * Instante REAL en que FLU TERMINO de hablar (lo registra el dueno unico del TTS,
+ * `fluSpeech.js`, en el `onend` del utterance). La ventana de eco se ancla aqui, NO al
+ * timestamp de la fila: la fila se escribe ANTES de que el TTS empiece y su timestamp
+ * envejece mientras FLU aun habla, asi que el eco de su propia voz volvia con la
+ * ventana cerrada (medido en vivo 2026-10-20: el "Error HTTP de Gemini (402)." que
+ * FLU hablo se capturo como fila del usuario 4-5 s despues de la fila).
+ */
+let fluSpeechEndedAt = 0
+
+/** El dueno del TTS marca aqui el fin real del habla de FLU (epoch ms). */
+export function recordFluSpeechEnd(at = Date.now()) {
+  const value = Number(at)
+  if (Number.isFinite(value) && value > 0) fluSpeechEndedAt = value
+}
+
+/** Fin real del habla de FLU (0 si esta sesion aun no registro ninguno). */
+export function lastFluSpeechEndedAt() {
+  return fluSpeechEndedAt
+}
+
 /** Ventana (ms) tras el fin del habla de FLU en la que su voz puede volver por el micro. */
 export function echoWindowMs(config = FLU_CONFIG) {
   const value = Number(config?.transcript?.fluQuery?.echoWindowMs)
@@ -67,7 +88,17 @@ export function resolveFluEchoSource({ now = () => Date.now(), history = null } 
     const text = String(row.text || '').trim()
     if (!text) continue
     const at = Number(row.timestamp)
-    return { text, ageMs: Number.isFinite(at) ? Math.max(0, now() - at) : Number.POSITIVE_INFINITY }
+    // El ancla del eco es el FIN REAL del habla de FLU (onend del TTS). El timestamp
+    // de la fila se escribio ANTES de hablar: usarlo cerraba la ventana mientras el
+    // eco aun podia volver por el micro. Si el TTS no registro su fin (habla de otra
+    // sesion/tab), se conserva el timestamp de la fila como referencia.
+    const speechEnd = lastFluSpeechEndedAt()
+    const anchor =
+      Number.isFinite(speechEnd) && speechEnd > 0 && speechEnd >= at ? speechEnd : at
+    return {
+      text,
+      ageMs: Number.isFinite(anchor) ? Math.max(0, now() - anchor) : Number.POSITIVE_INFINITY,
+    }
   }
   return { text: '', ageMs: Number.POSITIVE_INFINITY }
 }

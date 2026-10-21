@@ -39,7 +39,8 @@ import {
 import { noteGameTurn } from '../../core/games/gameSessionStore'
 import { consumesGameTurn, isCatalogLevelGameAction } from '../lib/gameCommands'
 import { relayLog } from '../../lib/clientLogRelay'
-import { captureTurnAudioSnapshot, probePcmBlock, turnAudioForDiarize } from '../lib/turnAudioSnapshot.js'
+import { recordSessionTurn } from '../lib/sessionRecorder.js'
+import { captureTurnAudioSnapshot, capturedTurnAudio, probePcmBlock, turnAudioForDiarize } from '../lib/turnAudioSnapshot.js'
 import { useIntegrationStore } from '../../store/integrationStore'
 import { fluAsyncErrorHandler } from '../lib/fluAsyncError.js'
 import {
@@ -47,7 +48,6 @@ import {
   getActiveListenConfig,
   getConversationRestartConfig,
   getConversationConfig,
-  isSessionResetCommand,
 } from '../lib/fluConfig'
 import {
   getCommandSpeech,
@@ -67,7 +67,7 @@ import { setSessionPrimarySpeaker } from '../lib/sessionPrimarySpeaker'
 import { applySessionCommandToPrimary } from '../lib/sessionLifecycle.js'
 import { updateTurnRowSpeaker } from '../lib/conversationTurnRow'
 import { resetVoiceDirectory } from '../lib/speakerDirectory.js'
-import { registerSpeakerIdentity } from '../lib/speakerIdentityRegister'
+import { participantRegisterPort, registerSpeakerIdentity } from '../lib/speakerIdentityRegister'
 import {
   getConversationMinVoicedSamples,
   getConversationSpeakerTailMs,
@@ -154,9 +154,11 @@ import { resolveSrGapTrigger } from '../lib/fluTranscriptPause.js'
 import { useFluParticipant } from '../../hooks/useFluParticipant'
 import { isSpeechSynthesisSpeaking, isFluSpeaking, waitForSpeechIdle, getLastCompletedSpeechAt } from '../lib/fluSpeech.js'
 import { resumeAfterSpeechSuspend, releaseStalledTurn } from '../lib/voiceStallPolicy.js'
-import { createLocalRecognition, shouldUseLocalFallback } from '../lib/voiceLocalFallback'
+import { installLocalRecognition, prewarmLocalRecognition, resolveSilentDegrade, shouldUseLocalFallback } from '../lib/voiceLocalFallback'
 import { logCaughtError } from '../../lib/caughtError';
+import { clearAnimationFrameRef, clearTimeoutRef } from '../../lib/timerRefs'
 import { useTurnLifecycleSync, useOffPathSessionWriter } from './useTurnInfrastructure'
+import { useSessionSpeakerClusters } from './useSessionSpeakerClusters'
 import { resolvePreLaunchDelay } from '../lib/preLaunchDelay'
 import { AI_PROVIDER_IDS } from '../../core/config/sharedConfig'
 import {
@@ -169,10 +171,12 @@ import {
   isFluSpeaker,
 } from '../lib/conversationDialogue.js'
 import { isAutoSpeakerLabel, payloadSeparacionDeTurno } from '../lib/speakerCore.js';
+import { selectVoicedWindow } from '../lib/voicedActivity.js';
+import { reservedSpeakerLabels } from '../lib/speakerLabels.js';
 import { useParticipantSpeakerRef } from '../../app/useParticipantSpeakerRef';
 import { COMMAND_IDS } from '../lib/commandIds.js'
 import { createEmissionDeduper, shouldSkipCapture } from '../lib/captureDedup.js'
-import { isAssistantSpeechEcho } from '../lib/conversationStream.js'
+import { isAssistantSpeechEcho, isAssistantVoiceEcho } from '../lib/conversationStream.js'
 import { voiceProbe, isVoiceProbeEnabled } from '../lib/voiceProbe'
 
 const CONTEXT_HISTORY_LIMIT = FLU_CONFIG.limits.contextHistoryMax
@@ -356,6 +360,7 @@ export function useFluVoiceAssistant({
   activeParticipantName = '',
   activeParticipantSpeakerLabel = '',
   wakeWords = '',
+  participantVoiceAnchors = /** @type {Array<{ name?: string, vector?: number[], model?: string }>} */ ([]),
   identitySession = /** @type {{ current: unknown } | null} */ (null),
 }) {
   const [status, setStatus] = useState('idle')
@@ -487,7 +492,10 @@ export function useFluVoiceAssistant({
     }),
     [],
   )
+  // §9 El ref y su setter: `useSessionSpeakerClusters` siembra las anclas medidas
+  // de la base en TODA escritura (voz conocida = nombre inmediato).
   const speakerClustersRef = useRef([])
+  const { setClusters: setSpeakerClusters } = useSessionSpeakerClusters(speakerClustersRef, participantVoiceAnchors)
   // Ciclo de vida del turno (overlay + cronómetro) y persistencia fuera del camino
   // crítico: viven en `useTurnInfrastructure` para no engordar este hook.
   const turnLifecycleRef = useTurnLifecycleSync()
@@ -495,16 +503,6 @@ export function useFluVoiceAssistant({
     saveSessionState,
     fluAsyncErrorHandler('useFluVoiceAssistant'),
   )
-  /**
-   * §9 ÚNICO punto de escritura de los clusters de hablante.
-   * El COMMIT es autoritativo; el segmento solo propone (no persiste).
-   */
-  const setSpeakerClusters = useCallback((next) => {
-    speakerClustersRef.current =
-      typeof next === 'function' ? next(speakerClustersRef.current) : next
-    voiceProbe('clusters', { write: speakerClustersRef.current?.length ?? 0, labels: (speakerClustersRef.current || []).map((c) => c?.label) }) // BANDERA DE DIAGNOSTICO
-  }, [])
-
   /**
    * §9 ÚNICO punto de cálculo de la firma de voz por turno.
    * Cachea por snapshot (WeakMap): el MISMO audio no se re-embebe dos veces,
@@ -551,6 +549,7 @@ export function useFluVoiceAssistant({
   const turnAudioStartSampleRef = useRef(0)
   const lastSpeakerRef = useRef('')
   const lastLoggedSpeakerRef = useRef('')
+  const lastResolvedSpeakerRef = useRef('') // Ultima voz RESUELTA POR MEDIDA (unico escritor: applyResolvedSpeaker); el sticky la prefiere a lastLogged (d4c1c8f3)
   const lastTurnSignatureRef = useRef(null)
 const lastResolvedTurnRef = useRef(0)
   const isCommittingRef = useRef(false)
@@ -585,6 +584,8 @@ const lastResolvedTurnRef = useRef(0)
   const lastStreamPreviewRef = useRef('')
   const listenStateRef = useRef(createActiveListenState())
   const lastLogLineTextRef = useRef('')
+  // Procedencia de `lastLogLineTextRef`: la escribio una ORDEN cuya locucion sigue viva.
+  const lastLogLineWasCommandRef = useRef(false)
   const lastLogLineAtRef = useRef(0)
   const recognitionRestartPendingRef = useRef(false)
   const consecutiveEndsWithoutResultRef = useRef(0)
@@ -596,6 +597,7 @@ const lastResolvedTurnRef = useRef(0)
   const tryDispatchConversationActionRef = useRef(() => false)
   const lastConversationActionRef = useRef({ signature: '', at: 0 })
   const rebuildRecognitionRef = useRef(() => false)
+  const degradeToLocalRecognitionRef = useRef(null)
   const maybeSwitchRecognitionLocaleRef = useRef(() => { })
   const recognitionLocaleRef = useRef(getRecognitionLanguage(language))
   const localeSwitchDetectRef = useRef('')
@@ -604,9 +606,17 @@ const lastResolvedTurnRef = useRef(0)
   const lastOnresultAtRef = useRef(0)
   const lastMeaningfulIngressAtRef = useRef(0)
   const lastStallRebuildAtRef = useRef(0)
+  // Reloj del ULTIMO RESULTADO (solo onresult; sobrevive a rebuilds): "SR mudo de verdad".
+  const lastSrResultAtRef = useRef(0)
+  // True mientras el motor LOCAL (Whisper WASM) es la instancia activa.
+  const localFallbackActiveRef = useRef(false)
+  const degradeEligibleSinceRef = useRef(0) // Piso: Chrome debe tener su oportunidad.
+  // Ref (no dep): las deps por IDENTIDAD re-montaban el efecto en bucle (1419/289 s, cero ticks).
+  const requestRecognitionRestartRef = useRef(null)
   const lastSpeakerDiarizeAtRef = useRef(0)
   const lastLogEmitAtRef = useRef(0)
   const passiveAudioDelayTimerRef = useRef(null)
+  const passiveSetupPromiseRef = useRef(null)
   const _audioProcessSkipRef = useRef(0)
   const _lastDiarizeAtRef = useRef(0)
   const listeningAckTimerRef = useRef(null)
@@ -616,7 +626,7 @@ const lastResolvedTurnRef = useRef(0)
   const preflightScheduledForTurnRef = useRef(false)
   const turnBridgeTextRef = useRef('')
   const sessionPrimarySpeakerRef = useRef('')
-  if (identitySession) identitySession.current = { ...(identitySession.current || {}), speakerClustersRef, sessionPrimarySpeakerRef, setClusters: setSpeakerClusters }
+  if (identitySession) identitySession.current = { ...(identitySession.current || {}), speakerClustersRef, sessionPrimarySpeakerRef, setClusters: setSpeakerClusters, getLastTurnSignature: () => lastTurnSignatureRef.current }
   const turnSegmentStartedAtRef = useRef(0)
   const ingressEchoStreakRef = useRef(0)
   const lastEchoAtRef = useRef(0)
@@ -832,15 +842,8 @@ const lastResolvedTurnRef = useRef(0)
   }, [clearListeningAck])
 
   const clearLiveTranscriptTimers = useCallback(() => {
-    if (typeof window === 'undefined') return
-    if (liveDebounceTimerRef.current) {
-      window.clearTimeout(liveDebounceTimerRef.current)
-      liveDebounceTimerRef.current = null
-    }
-    if (liveRafRef.current) {
-      window.cancelAnimationFrame(liveRafRef.current)
-      liveRafRef.current = null
-    }
+    clearTimeoutRef(liveDebounceTimerRef)
+    clearAnimationFrameRef(liveRafRef)
   }, [])
 
   const clearStreamLogTimer = useCallback(() => {
@@ -889,9 +892,17 @@ const lastResolvedTurnRef = useRef(0)
     [clearLiveTranscriptTimers],
   )
 
+  // CANCELA la escritura perezosa pendiente (debounce/RAF) Y su texto en vuelo. La caja
+  // lo llama antes de cualquier escritura inmediata: sin esto, un update programado
+  // antes del vaciado pintaba su captura vieja DESPUES y la ultima frase "volvia".
+  const cancelLiveTranscriptUpdate = useCallback(() => {
+    clearLiveTranscriptTimers()
+    livePendingCaptureRef.current = ''
+  }, [clearLiveTranscriptTimers])
+
   // CAJA de la frase viva: la escribe SOLO la API del modulo dueno; el hook no toca el ref.
   const cajaVivaRef = useRef(null)
-  if (!cajaVivaRef.current) cajaVivaRef.current = crearCajaDeLaFrase({ publishedLiveRef, setLiveTranscript, scheduleLiveTranscriptUpdate })
+  if (!cajaVivaRef.current) cajaVivaRef.current = crearCajaDeLaFrase({ publishedLiveRef, setLiveTranscript, cancelLiveTranscriptUpdate, scheduleLiveTranscriptUpdate })
 
   const flushLiveTranscript = useCallback(() => {
     if (conversationActiveRef?.current) {
@@ -922,9 +933,7 @@ const lastResolvedTurnRef = useRef(0)
       flushLiveTranscript()
       return
     }
-    if (liveDebounceTimerRef.current) {
-      window.clearTimeout(liveDebounceTimerRef.current)
-    }
+    clearTimeoutRef(liveDebounceTimerRef)
     liveDebounceTimerRef.current = window.setTimeout(() => {
       liveDebounceTimerRef.current = null
       flushLiveTranscript()
@@ -932,10 +941,7 @@ const lastResolvedTurnRef = useRef(0)
   }, [flushLiveTranscript])
 
   const publishLiveImmediate = useCallback(() => {
-    if (typeof window !== 'undefined' && liveDebounceTimerRef.current) {
-      window.clearTimeout(liveDebounceTimerRef.current)
-      liveDebounceTimerRef.current = null
-    }
+    clearTimeoutRef(liveDebounceTimerRef)
     flushLiveTranscript()
   }, [flushLiveTranscript])
 
@@ -975,6 +981,7 @@ const lastResolvedTurnRef = useRef(0)
     lastStreamPreviewRef.current = ''
     resetActiveListenState(listenStateRef.current)
     lastLogLineTextRef.current = ''
+    lastLogLineWasCommandRef.current = false
     lastLogLineAtRef.current = 0
     lastTurnSignatureRef.current = null
     commitVisibleTranscript('')
@@ -1075,15 +1082,8 @@ const lastResolvedTurnRef = useRef(0)
   )
 
   const clearAutoProcessTimer = useCallback(() => {
-    if (typeof window === 'undefined') return
-    if (autoProcessTimerRef.current) {
-      window.clearTimeout(autoProcessTimerRef.current)
-      autoProcessTimerRef.current = null
-    }
-    if (liveDebounceTimerRef.current) {
-      window.clearTimeout(liveDebounceTimerRef.current)
-      liveDebounceTimerRef.current = null
-    }
+    clearTimeoutRef(autoProcessTimerRef)
+    clearTimeoutRef(liveDebounceTimerRef)
   }, [])
 
   const clearAllCommitTimers = useCallback(() => {
@@ -1091,11 +1091,7 @@ const lastResolvedTurnRef = useRef(0)
   }, [clearAutoProcessTimer])
 
   const clearRecognitionRetryTimer = useCallback(() => {
-    if (typeof window === 'undefined') return
-    if (recognitionRetryTimerRef.current) {
-      window.clearTimeout(recognitionRetryTimerRef.current)
-      recognitionRetryTimerRef.current = null
-    }
+    clearTimeoutRef(recognitionRetryTimerRef)
   }, [])
 
   const clearPassiveAudioDelayTimer = useCallback(() => {
@@ -1292,6 +1288,8 @@ const lastResolvedTurnRef = useRef(0)
     [clearRecognitionRetryTimer, conversationActiveRef],
   )
 
+  requestRecognitionRestartRef.current = requestRecognitionRestart
+
   const finalizeRecognition = useCallback(async () => {
     if (!recognitionRef.current) return
 
@@ -1446,28 +1444,32 @@ const lastResolvedTurnRef = useRef(0)
         getSpeakerClusters: () => speakerClustersRef.current,
         getLastSpeaker: () => lastLoggedSpeakerRef.current || lastSpeakerRef.current,
         getLastSignature: () => lastTurnSignatureRef.current,
-        getFallbackSpeaker: () =>
-          lastLoggedSpeakerRef.current || lastSpeakerRef.current || FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker,
+        // SIN MEDIDA no se hereda un NOMBRE PROPIO (la TV no es "Luis"): ruta unica
+        // `blindSpeakerFallback`, que degrada el nombre a etiqueta anonima (2026-10-18).
+        getFallbackSpeaker: () => blindSpeakerFallback(lastLoggedSpeakerRef.current || lastSpeakerRef.current),
         getUtteranceText: () => cleanForSpeech(utterance) || lastDiarizeUtteranceRef.current,
         atTurnBoundary,
         allowNewCluster,
         getPreferSpeaker: () => lastLoggedSpeakerRef.current || '',
         getSessionPrimary: () => sessionPrimarySpeakerRef.current || '',
-        getReservedLabels: () => [...userSpeakersView.current].filter(Boolean),
-        // P11.15: sin snapshot (ventana vacia por atasco del PCM) el audio del turno SIGUE en los
-        // chunks vivos; mismo dueno de la eleccion que el stream (turnAudioForDiarize).
-        getCapturedAudio: () => turnAudioForDiarize(turnId || activeTurnIdRef.current, chunksRef.current),
+        // El RESPALDO no reserva numero (es "sin medida", no una voz): la 1a voz nace "Hablante 1".
+        getReservedLabels: () => reservedSpeakerLabels(userSpeakersView.current),
+        // Audio CAPTURADO del turno (`capturedTurnAudio`): snapshot, ventana viva o vacio; NUNCA otro turno.
+        getCapturedAudio: () => capturedTurnAudio(turnId || activeTurnIdRef.current, activeTurnIdRef.current),
       }),
     [getContinuousBufferAdapter, userSpeakersView],
   )
 
   /** El embedding tarda MAS que el commit: la FILA de ese turno se completa SIEMPRE, los REFS de sesion no retroceden y la evidencia es la COINCIDENCIA medida (no "hay clusters"). */
-  const applyResolvedSpeaker = useCallback(({ speakerName, turnId, evidence }) => {
+  const applyResolvedSpeaker = useCallback(({ speakerName, turnId, evidence, vector }) => {
     const id = Number(turnId)
     if (!speakerName) return
-    updateTurnRowSpeaker(turnId, speakerName, { evidenciaAcustica: evidence === true, registeredSpeaker: participantSpeakerRef.current }) // completa la fila de ESE turno, aunque la medida llegue tarde
+    // La fila recibe la VOZ medida (`vector`): se re-clava por TIMBRE y el freeze de "soy X" la alcanza.
+    updateTurnRowSpeaker(turnId, speakerName, { evidenciaAcustica: evidence === true, vector, registeredSpeaker: participantSpeakerRef.current }) // completa la fila de ESE turno, aunque la medida llegue tarde
     if (Number.isFinite(id)) { if (id < lastResolvedTurnRef.current) return; lastResolvedTurnRef.current = id }
     lastSpeakerRef.current = speakerName; lastLoggedSpeakerRef.current = speakerName
+    lastResolvedSpeakerRef.current = speakerName // UNICO escritor: solo la resolucion MEDIDA pisa el sticky de la siguiente fila
+    recordSessionTurn({ kind: 'resolved', text: '', speaker: speakerName, resolvedVector: vector || null, evidence: evidence === true, clusters: speakerClustersRef.current, turnId })
     // El nombre SOLO se afirma con la MEDIDA (lo registra `updateTurnRowSpeaker`, arriba);
     // aqui no se registra nada por el nombre resuelto (ni por etiqueta ni por primario).
   }, [participantSpeakerRef])
@@ -1489,9 +1491,11 @@ const lastResolvedTurnRef = useRef(0)
       // GETTER, no id fijo: el id se acuna DESPUES de este aviso; fijarlo dejaba los snapshots en un slot que el commit no miraba (Preflight turn=5 vs Commit=9).
       startContinuousIdentityPipeline(
         () => activeTurnIdRef.current,
-        () => createSpeakerAudioResolver({ atTurnBoundary: true, allowNewCluster: true, utterance: phrase }),
-        // §9 Dueño unico de la escritura de clusters: el ref del hook.
-        { onClusters: setSpeakerClusters, onResolved: applyResolvedSpeaker, getSpeakerClusters: () => speakerClustersRef.current, getAudioBuffer: () => getContinuousBufferAdapter() },
+        // El tick entrega su turno: el resolutor queda ATADO a el y mide SU audio.
+        (turnId) => createSpeakerAudioResolver({ atTurnBoundary: true, allowNewCluster: true, utterance: phrase, turnId }),
+        // §9 Dueño unico de la escritura de clusters: el ref del hook. El tick corre como
+        // `continuous` dentro del pipeline (no completa la fila: solo calienta la cache).
+        { onClusters: setSpeakerClusters, onResolved: applyResolvedSpeaker, getAudioBuffer: () => getContinuousBufferAdapter() },
       )
     },
     [conversationActiveRef, createSpeakerAudioResolver, getContinuousBufferAdapter, setSpeakerClusters, applyResolvedSpeaker],
@@ -1582,9 +1586,10 @@ const lastResolvedTurnRef = useRef(0)
 
   const resolveSpeaker = useCallback(
     async (transcriptForIntro = '', audioSnapshot, sampleRate, fallbackSpeaker) => {
-      const signatureVector = audioSnapshot.length
-        ? (await computeTurnSignature(audioSnapshot, sampleRate)).vector
-        : [0, 0, 0, 0]
+      // Firma SOLO del tramo con VOZ (dueno unico `selectVoicedWindow`): la ventana completa
+      // embebia audio ajeno y envenenaba el ancla de "soy X" (d4c1c8f3: Luis 0.495 vs SU ancla).
+      const ventanaVoz = audioSnapshot?.length ? selectVoicedWindow(audioSnapshot, { sampleRate }) : audioSnapshot
+      const signatureVector = ventanaVoz.length ? (await computeTurnSignature(ventanaVoz, sampleRate)).vector : [0, 0, 0, 0]
 
       if (conversationActiveRef?.current) {
         const resolvedSpeakerName = resolveConversationSpeakerSync(
@@ -1657,7 +1662,8 @@ const lastResolvedTurnRef = useRef(0)
           })
           .catch(fluAsyncErrorHandler('useFluVoiceAssistant'))
       }
-      registerSpeakerIdentity({ name: introducedName, clusters: speakerClustersRef.current, refs: { sessionPrimarySpeakerRef } })
+      // La base de participantes se re-ancla por la MISMA via en todas las rutas de "soy X" (2026-10-18).
+      registerSpeakerIdentity({ name: introducedName, clusters: speakerClustersRef.current, signatureVector, refs: { sessionPrimarySpeakerRef, registerParticipant: participantRegisterPort(identitySession) } })
       lastSpeakerRef.current = resolvedSpeakerName
       lastTurnSignatureRef.current = signatureVector
       return {
@@ -1668,7 +1674,7 @@ const lastResolvedTurnRef = useRef(0)
         speakerAlias,
       }
     },
-    [conversationActiveRef, resolveConversationSpeakerSync, computeTurnSignature],
+    [conversationActiveRef, resolveConversationSpeakerSync, computeTurnSignature, identitySession],
   )
 
   const emitConversationLog = useCallback(
@@ -1770,6 +1776,7 @@ const lastResolvedTurnRef = useRef(0)
         lastSpeakerRef.current ||
         getSpeakerLabel(listenStateRef.current),
       )
+      recordSessionTurn({ kind: 'commit', text: capture, speaker, signature: lastTurnSignatureRef.current, clusters: speakerClustersRef.current, lastSpeaker: lastSpeakerRef.current, primary: sessionPrimarySpeakerRef.current, audioStartSample: turnAudioStartSampleRef.current, audioEndSample: chunkTotalSamplesRef.current, sessionTurnId: activeTurnIdRef.current })
 
       if (!isFluSpeaker(speaker)) {
         archiveCommittedTurn(listenStateRef.current, capture, {
@@ -1800,9 +1807,10 @@ const lastResolvedTurnRef = useRef(0)
           openPreviewTurnRef,
           setLiveTranscript,
           scheduleLiveTranscriptUpdate,
-          activeParticipantName,
-      activeParticipantSpeakerLabel,
-      applyConversationSpeaker,
+          // UNA sola instancia de la caja para todo el hook: el sync publica y vacia
+          // SIEMPRE sobre la misma memoria de turno (antes fabricaba una por llamada).
+          cajaDeLaFrase: cajaVivaRef.current,
+          activeParticipantName, activeParticipantSpeakerLabel, applyConversationSpeaker,
           flushPendingStreamLog,
           logRowsTextRef: userRowsTextView,
           activeTurnIdRef,
@@ -1821,18 +1829,21 @@ const lastResolvedTurnRef = useRef(0)
           createSpeakerAudioResolver,
           sessionPrimarySpeakerRef,
           lastLoggedSpeakerRef, applyResolvedSpeaker,
+          lastResolvedSpeakerRef,
           logRowSpeakersRef: userSpeakersView,
           speakerClustersRef,
           setSpeakerClusters,
           lastSpeakerRef,
           lastTurnSignatureRef,
           lastLogLineTextRef,
+          lastLogLineWasCommandRef,
           commitTurnToSessionRows,
           fluParticipantRef,
           participantSpeakerRef: {
             current: { registeredLabel: activeParticipantSpeakerLabel, registeredName: activeParticipantName },
           },
           lastRequestRef: lastConversationActionRef,
+          registerParticipant: participantRegisterPort(identitySession),
         },
         payload,
       ),
@@ -1852,6 +1863,7 @@ const lastResolvedTurnRef = useRef(0)
       applyResolvedSpeaker,
       userRowsTextView,
       userSpeakersView,
+      identitySession,
     ],
   )
 
@@ -1884,69 +1896,8 @@ const lastResolvedTurnRef = useRef(0)
     srGapFiredForOpenLineRef,
   ])
 
-  const cleanupAudio = useCallback(async () => {
-    clearPassiveAudioDelayTimer()
-    clearAllCommitTimers()
-    clearRecognitionRetryTimer()
-    clearLiveTranscriptTimers()
-    flushPendingStreamLog()
-    isListeningRef.current = false
-    recognitionActiveRef.current = false
-    clearCaptureState()
-
-    if (recognitionRef.current) {
-      recognitionRef.current.onresult = null
-      recognitionRef.current.onerror = null
-      recognitionRef.current.onend = null
-      try {
-        recognitionRef.current.stop()
-      } catch (e) {
-        logCaughtError('[catch] src/voice/hooks/useFluVoiceAssistant.js', e, e?.stack);
-        // Ignore stop errors.
-      }
-      recognitionRef.current = null
-    }
-
-    if (processorRef.current) {
-      try {
-        processorRef.current.disconnect()
-      } catch (err) { logCaughtError('[catch] src/voice/hooks/useFluVoiceAssistant.js', err, err?.stack) }
-      processorRef.current = null
-    }
-
-    if (sourceRef.current) {
-      try {
-        sourceRef.current.disconnect()
-      } catch (err) { logCaughtError('[catch] src/voice/hooks/useFluVoiceAssistant.js', err, err?.stack) }
-      sourceRef.current = null
-    }
-
-    if (analyserRef.current) {
-      try {
-        analyserRef.current.disconnect()
-      } catch (err) { logCaughtError('[catch] src/voice/hooks/useFluVoiceAssistant.js', err, err?.stack) }
-      analyserRef.current = null
-    }
-
-    if (zeroGainRef.current) {
-      try {
-        zeroGainRef.current.disconnect()
-      } catch (err) { logCaughtError('[catch] src/voice/hooks/useFluVoiceAssistant.js', err, err?.stack) }
-      zeroGainRef.current = null
-    }
-
-    if (audioContextRef.current) {
-      try {
-        await audioContextRef.current.close()
-      } catch (err) { logCaughtError('[catch] src/voice/hooks/useFluVoiceAssistant.js', err, err?.stack) }
-      audioContextRef.current = null
-    }
-
-    await stopMediaStream(mediaStreamRef.current)
-    mediaStreamRef.current = null
-  }, [clearAllCommitTimers, clearLiveTranscriptTimers, clearPassiveAudioDelayTimer, clearRecognitionRetryTimer, flushPendingStreamLog, clearCaptureState])
-
-  const releasePassiveAudioCapture = useCallback(async () => {
+  // UN dueno de desconectar el grafo de audio del micro; antes eran DOS copias.
+  const disconnectAudioGraph = useCallback(async () => {
     if (processorRef.current) {
       try {
         processorRef.current.disconnect?.()
@@ -1986,6 +1937,36 @@ const lastResolvedTurnRef = useRef(0)
     mediaStreamRef.current = null
   }, [])
 
+  const cleanupAudio = useCallback(async () => {
+    clearPassiveAudioDelayTimer()
+    clearAllCommitTimers()
+    clearRecognitionRetryTimer()
+    clearLiveTranscriptTimers()
+    flushPendingStreamLog()
+    isListeningRef.current = false
+    recognitionActiveRef.current = false
+    clearCaptureState()
+
+    if (recognitionRef.current) {
+      recognitionRef.current.onresult = null
+      recognitionRef.current.onerror = null
+      recognitionRef.current.onend = null
+      try {
+        recognitionRef.current.stop()
+      } catch (e) {
+        logCaughtError('[catch] src/voice/hooks/useFluVoiceAssistant.js', e, e?.stack);
+        // Ignore stop errors.
+      }
+      recognitionRef.current = null
+    }
+
+    await disconnectAudioGraph()
+  }, [clearAllCommitTimers, clearLiveTranscriptTimers, clearPassiveAudioDelayTimer, clearRecognitionRetryTimer, flushPendingStreamLog, clearCaptureState, disconnectAudioGraph])
+
+  const releasePassiveAudioCapture = useCallback(async () => {
+    await disconnectAudioGraph()
+  }, [disconnectAudioGraph])
+
   const needsConversationPassiveAudio = useCallback(() => {
     const captureCfg = FLU_CONFIG.voiceIdentity?.capture || {}
     if (!conversationActiveRef?.current) return true
@@ -1996,6 +1977,10 @@ const lastResolvedTurnRef = useRef(0)
   }, [conversationActiveRef])
 
   const setupPassiveAudioCapture = useCallback(async () => {
+    // Single-flight: dos arranques concurrentes pasaban el guard de refs (se
+    // fijan tras los await) y creaban DOS pipelines: PCM duplicado (alucinaba).
+    if (passiveSetupPromiseRef.current) return passiveSetupPromiseRef.current
+    const job = (async () => {
     const captureCfg = FLU_CONFIG.voiceIdentity?.capture || {}
     if (!needsConversationPassiveAudio()) {
       return
@@ -2047,16 +2032,13 @@ const lastResolvedTurnRef = useRef(0)
     source.connect(inputGain)
     inputGain.connect(analyser)
 
-    const processEvery = Math.max(
-      1,
-      Number(conversationAudio?.processEvery) ||
-      Number(captureCfg.conversationAudioProcessEvery) ||
-      1,
-    )
+    const processEvery = Math.max(1, Number(conversationAudio?.processEvery) ||
+      Number(captureCfg.conversationAudioProcessEvery) || 1)
 
     const micBridge = await wireMicCapturePipeline({
       audioContext,
-      source: inputGain,
+      source: inputGain, // STT amplificado (sala)
+      recordSource: source, // grabación CRUDA pre-ganancia: silencios reales, sonido natural
       sampleRate: sampleRateRef.current || AUDIO_SAMPLE_RATE,
       processEvery,
       onPcmBlock: (input) => {
@@ -2080,6 +2062,9 @@ const lastResolvedTurnRef = useRef(0)
 
     processorRef.current = micBridge
     zeroGainRef.current = micBridge.zeroGain
+    })()
+    passiveSetupPromiseRef.current = job.finally(() => { passiveSetupPromiseRef.current = null })
+    return passiveSetupPromiseRef.current
   }, [needsConversationPassiveAudio, conversationActiveRef])
 
   const schedulePassiveAudioCapture = useCallback(() => {
@@ -2155,6 +2140,7 @@ const lastResolvedTurnRef = useRef(0)
         if (isFluSpeaking() && isAssistantSpeechEcho(event, resolveEchoContext(useIntegrationStore.getState().conversationHistory, getLastCompletedSpeechAt()).lastAssistantText)) return
         logChromeSpeechResult(event)
         lastOnresultAtRef.current = Date.now()
+        lastSrResultAtRef.current = Date.now()
         recognitionRetryCountRef.current = 0
         consecutiveEndsWithoutResultRef.current = 0
         let interim = ''
@@ -2286,40 +2272,15 @@ const lastResolvedTurnRef = useRef(0)
       Recognition.onerror = (event) => {
         const errorCode = String(event.error || '').trim()
 
-        // Fallback OFFLINE (§1/§9): ante error de red ('network') o ausencia de
-        // habla ('no-speech') se degrada al motor local Whisper WASM en lugar de
-        // reintentar Chrome. Config-driven (fallbackErrors). Solo cuando la
-        // instancia activa sigue siendo Chrome (el motor local expone `pushAudio`),
-        // para no re-degradar si el propio motor local reporta 'network'.
+        // Fallback OFFLINE (§1/§9): 'network'/'no-speech' degradan al motor
+        // local Whisper WASM (config `fallbackErrors`) por el punto unico.
         if (
           shouldUseLocalFallback(errorCode) &&
           typeof recognitionRef.current?.pushAudio !== 'function'
         ) {
-          const previous = recognitionRef.current
-          if (previous) {
-            previous.onstart = null
-            previous.onresult = null
-            previous.onerror = null
-            previous.onend = null
-            try {
-              if (typeof previous.abort === 'function') previous.abort()
-              else previous.stop()
-            } catch (e) {
-        logCaughtError('[catch] src/voice/hooks/useFluVoiceAssistant.js', e, e?.stack);
-              // ignore
-            }
-          }
-
-          const localEngine = createLocalRecognition()
-          if (!localEngine) {
+          if (!degradeToLocalRecognitionRef.current?.()) {
             requestRecognitionRestart(getRecognitionRetryDelay(errorCode))
-            return
           }
-
-          recognitionRef.current = localEngine
-          recognitionActiveRef.current = false
-          wireRecognitionEvents(localEngine)
-          localEngine.start()
           return
         }
 
@@ -2428,6 +2389,18 @@ const lastResolvedTurnRef = useRef(0)
       userRowsTextView,
     ],
   )
+
+  const degradeToLocalRecognition = useCallback(() => {
+    // UNICO punto de degradacion: onerror de Chrome y watchdog con SR mudo.
+    const localEngine = installLocalRecognition({ previous: recognitionRef.current, wire: wireRecognitionEvents })
+    if (!localEngine) return typeof recognitionRef.current?.pushAudio === 'function'
+    recognitionRef.current = localEngine
+    recognitionActiveRef.current = false
+    localFallbackActiveRef.current = true
+    return true
+  }, [wireRecognitionEvents])
+
+  degradeToLocalRecognitionRef.current = degradeToLocalRecognition
 
   const rebuildRecognition = useCallback(() => {
     if (!isListeningRef.current || isStoppingRef.current) return false
@@ -2559,6 +2532,11 @@ const lastResolvedTurnRef = useRef(0)
 
   const startListening = useCallback(async ({ resume = false } = {}) => {
     setError('')
+    // Cada sesion arranca con Chrome SR; el piso de elegibilidad se ancla una vez.
+    localFallbackActiveRef.current = false
+    if (!resume || !degradeEligibleSinceRef.current) {
+      degradeEligibleSinceRef.current = Date.now()
+    }
     if (!isSupported) {
       setError('El navegador no soporta el flujo de voz de Flu.')
       return
@@ -2634,6 +2612,8 @@ const lastResolvedTurnRef = useRef(0)
       setStatus('listening')
       isProcessingRef.current = false
       isListeningRef.current = true
+      // Precalienta el motor local: si se degrada, ya tiene el modelo cargado.
+      prewarmLocalRecognition()
 
       if (!startSpeechRecognition(Recognition)) {
         requestRecognitionRestart(getActiveListenConfig().restart.retryBackoffMs)
@@ -2690,6 +2670,13 @@ const lastResolvedTurnRef = useRef(0)
             speaker: result.speaker,
             utterance: capture,
             turnCommit: true,
+            // CIERRE REAL (onend): la fila se escribe AQUI y la linea se vacia. Sin
+            // `settlesTurn` el commit salia sin fila, la linea quedaba abierta y el
+            // sr-silence la re-commiteaba 3.5 s despues con OTRO turno (34 commits
+            // para 17 frases, medido en b218404f): el audio de ese turno ya estaba
+            // sellado y el preflight de las 34 filas salio preReady=false -> sticky
+            // "Hablante 1" en toda la sesion.
+            settlesTurn: true,
             // El cierre consume el preflight de ESTE turno (el que se acaba de
             // esperar): si no, el sorteo del turno siguiente lo dejaba leyendo un
             // slot vacio y la evidencia medida no llegaba a la fila.
@@ -2752,6 +2739,7 @@ const lastResolvedTurnRef = useRef(0)
         turnAudioStartSampleRef.current = 0
         lastStreamPreviewRef.current = ''
         lastLogLineTextRef.current = ''
+        lastLogLineWasCommandRef.current = false
         lastLogLineAtRef.current = 0
         lastLoggedCaptureRef.current = ''
         setSpeakerClusters([])
@@ -2905,47 +2893,37 @@ const lastResolvedTurnRef = useRef(0)
           streamDisplay: readStreamDisplay(listenStateRef.current),
         }) || cleanForSpeech(transcript)
         : cleanForSpeech(transcript)
+
+      // UNA ORDEN = UNA FILA DE SESION: la frase del comando ES la locucion del turno y se
+      // registra UNA vez (medido 21:20:48: dos commits -> dos filas e identidad con 0 muestras).
+      syncConversationStream({
+        capture: phrase,
+        utterance: phrase,
+        turnCommit: true,
+        diarize: true,
+        atTurnBoundary: true,
+        // Con wake al INICIO la orden no cierra la locucion: la caja conserva el mandato.
+        commandTurn: true,
+      })
+
+      // Wake INLINE: la orden consumio la linea viva COMPLETA y el turno CIERRA aqui
+      // (medido 21:21:22: sin cierre la locucion siguiente se le pega). Wake al INICIO: defecto 5.
       const wakeAnalysis = analyzeWakeTurn(phrase, {
         lastCommitted: userRowsTextView.current.at(-1) || '',
       })
-      const passivePrefix = wakeAnalysis.passiveOnly
-      const commandLogText = wakeAnalysis.commandLogText
-      let conversationCommandPreLogged = false
-
-      if (passivePrefix) {
-        syncConversationStream({
-          capture: passivePrefix,
-          utterance: passivePrefix,
-          turnCommit: true,
-          diarize: true,
-          atTurnBoundary: true,
-        })
+      if (wakeAnalysis.hasInlineBoundary) {
+        syncConversationStream({ closeTurnOnly: true })
       }
 
-      if (
-        commandLogText &&
-        commandLogText !== passivePrefix &&
-        !isSessionResetCommand(uiCommand)
-      ) {
-        syncConversationStream({
-          capture: commandLogText,
-          utterance: commandLogText,
-          turnCommit: true,
-          diarize: true,
-          atTurnBoundary: true,
-        })
-        conversationCommandPreLogged = true
-      }
-
+      // El turno queda cerrado y la LOCUCION EN VUELO NO se toca: regla del defecto 5
+      // documentada en `processConversationFluQuery` (el cierre real es dueno unico).
       openPreviewTurnRef.current = false
-      listenStateRef.current.openLine = ''
-      listenStateRef.current.pendingInterim = ''
 
       if (import.meta.env.DEV && debugHotPath) {
         fluDebugHot('conversation-command', { command: uiCommand, phrase })
       }
 
-      await emitActiveConversationCommand(uiCommand, phrase, { conversationCommandPreLogged })
+      await emitActiveConversationCommand(uiCommand, phrase)
     },
     [
       clearAutoProcessTimer,
@@ -3201,10 +3179,14 @@ const lastResolvedTurnRef = useRef(0)
         return
       }
 
+      // El turno queda marcado como resuelto y la LOCUCION EN VUELO NO se vacia aqui
+      // (defecto 5: es habla real del usuario; su cierre real la commitea).
       openPreviewTurnRef.current = false
-      listenStateRef.current.openLine = ''
-      listenStateRef.current.pendingInterim = ''
       captureTurnAudio() // §9 sella el audio ANTES del commit-only (que vacía el buffer)
+      // La orden consumio la LINEA VIVA COMPLETA con wake INLINE (medido 2026-10-19: una linea
+      // de 58 sobrevivio y recorto la de 316): se cierra para que la siguiente no se le pegue
+      // (con wake al INICIO es la MISMA locucion, defecto 5); DESPUES de captureTurnAudio.
+      if (cleanForSpeech(beforeWake)) syncConversationStream({ closeTurnOnly: true })
       // §9: una sola frase canónica para el turno (display y fila salen de ESTE valor).
       const canonicalPhrase = await commitAndResolveTurn({
         capture: fullTranscript || question,
@@ -3216,7 +3198,7 @@ const lastResolvedTurnRef = useRef(0)
       // §9: la query ya viene derivada por el derivador único
       // (`planConversationDispatch` → action.question); NO se re-deriva aquí.
       const sampleRate = sampleRateRef.current || AUDIO_SAMPLE_RATE
-      const streamSamples = turnAudioForDiarize(activeTurnIdRef.current, chunksRef.current)
+      const streamSamples = turnAudioForDiarize(activeTurnIdRef.current, { chunks: chunksRef.current, activeTurnId: activeTurnIdRef.current })
       const audioSnapshot = streamSamples.length ? new Float32Array(streamSamples) : new Float32Array(0)
       const fallbackSpeaker = lastSpeakerRef.current || FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker
       const currentClock = formatClock()
@@ -3480,6 +3462,7 @@ const lastResolvedTurnRef = useRef(0)
       evaluateDeterministicFastPaths,
       computeTurnSignature,
       language,
+      syncConversationStream,
     ],
   )
 
@@ -3488,14 +3471,14 @@ const lastResolvedTurnRef = useRef(0)
       if (!conversationActiveRef?.current) return false
       const phrase = cleanForSpeech(text)
       const lastCommitted = userRowsTextView.current.at(-1) || ''
-      // UN solo criterio de "¿habla FLU?": la promesa propia (`isFluSpeaking`), la
-      // misma que usa la supresion de eco de `onresult`. Antes aqui se preguntaba
-      // con `isSpeechBusy()`, que incluye el flag GLOBAL `speechSynthesis.speaking`
-      // —del que este mismo fichero documenta que "quedaba pegado y silenciaba la
-      // escucha"—: con el flag pegado el eco se filtraba bien pero el despacho
-      // devolvia false y el turno se perdia en silencio.
+      // Eco del DESPACHO por CONTENIDO (mismo dueno que `onresult`): el gate por
+      // tiempo descartaba el habla real dicha mientras FLU responde (musica-en-partida).
       if (isFluSpeaking()) {
-        return false
+        const { lastAssistantText } = resolveEchoContext(
+          useIntegrationStore.getState().conversationHistory,
+          getLastCompletedSpeechAt(),
+        )
+        if (isAssistantVoiceEcho(phrase, lastAssistantText)) return false
       }
 
       if (await handleWakePolicyOrder(text, { requireWake: true })) return true
@@ -3639,7 +3622,7 @@ const lastResolvedTurnRef = useRef(0)
         const toLog = cleanForSpeech(snapshot)
         if (toLog) {
           await emitConversationLog(toLog, {
-            fallbackSpeaker: lastSpeakerRef.current || FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker,
+            fallbackSpeaker: blindSpeakerFallback(lastSpeakerRef.current),
             currentClock: formatClock(),
           })
         }
@@ -3689,7 +3672,7 @@ const lastResolvedTurnRef = useRef(0)
       }
 
       const sampleRate = sampleRateRef.current || AUDIO_SAMPLE_RATE
-      const streamSamples = turnAudioForDiarize(activeTurnIdRef.current, chunksRef.current)
+      const streamSamples = turnAudioForDiarize(activeTurnIdRef.current, { chunks: chunksRef.current, activeTurnId: activeTurnIdRef.current })
       const currentClock = formatClock()
       const fallbackSpeaker = lastSpeakerRef.current || FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker
       const audioSnapshot = streamSamples.length ? new Float32Array(streamSamples) : new Float32Array(0)
@@ -4346,33 +4329,52 @@ const lastResolvedTurnRef = useRef(0)
         const rebuildCooldown = restartCfg.stallRebuildMinMs
         releaseStalledTurn({ openPreviewTurnRef, sinceResult: now - (lastOnresultAtRef.current || 0), stallMs: restartCfg.stallMs }) // (b) dueno unico, ANTES de los rebuilds
 
-        if (
-          recognitionActiveRef.current &&
-          sinceMeaningful >= restartCfg.silentMicStallMs &&
-          sinceRebuild >= rebuildCooldown
-        ) {
-          lastStallRebuildAtRef.current = now
-          if (!rebuildRecognitionRef.current()) {
-            requestRecognitionRestart(restartCfg.retryBackoffMs)
+        // SR mudo con VOZ en el micro (45aeb8e2): decide `resolveSilentDegrade`.
+        if (!localFallbackActiveRef.current && typeof recognitionRef.current?.pushAudio !== 'function') {
+          const decision = resolveSilentDegrade({
+            chunks: chunksRef.current,
+            sampleRate: sampleRateRef.current || AUDIO_SAMPLE_RATE,
+            now,
+            lastSrResultAt: lastSrResultAtRef.current,
+            eligibleSince: degradeEligibleSinceRef.current,
+          })
+          if (decision.degrade && degradeToLocalRecognitionRef.current?.()) {
+            relayLog('LOG', 'useFluVoiceAssistant', decision.log)
+            return
           }
-          return
         }
 
-        if (
-          !recognitionActiveRef.current &&
-          !recognitionRestartPendingRef.current &&
-          sinceEnd >= deadMs
-        ) {
-          if (!rebuildRecognitionRef.current()) {
-            requestRecognitionRestart(restartCfg.retryBackoffMs)
+        // Motor local activo: su vida la gestiona el motor; NO se reconstruye Chrome encima.
+        if (!localFallbackActiveRef.current) {
+          // UN solo camino de reconstruccion: rebuild y, si no puede, reintento.
+          const rebuildOrRetry = () => {
+            if (!rebuildRecognitionRef.current()) {
+              requestRecognitionRestartRef.current?.(restartCfg.retryBackoffMs)
+            }
           }
-          return
-        }
 
-        if (sinceMeaningful >= restartCfg.stallMs && sinceRebuild >= rebuildCooldown) {
-          lastStallRebuildAtRef.current = now
-          if (!rebuildRecognitionRef.current()) {
-            requestRecognitionRestart(restartCfg.retryBackoffMs)
+          if (
+            recognitionActiveRef.current &&
+            sinceMeaningful >= restartCfg.silentMicStallMs &&
+            sinceRebuild >= rebuildCooldown
+          ) {
+            lastStallRebuildAtRef.current = now
+            rebuildOrRetry()
+            return
+          }
+
+          if (
+            !recognitionActiveRef.current &&
+            !recognitionRestartPendingRef.current &&
+            sinceEnd >= deadMs
+          ) {
+            rebuildOrRetry()
+            return
+          }
+
+          if (sinceMeaningful >= restartCfg.stallMs && sinceRebuild >= rebuildCooldown) {
+            lastStallRebuildAtRef.current = now
+            rebuildOrRetry()
           }
         }
 
@@ -4394,13 +4396,13 @@ const lastResolvedTurnRef = useRef(0)
       }
 
       if (recognitionActiveRef.current || !recognitionRef.current) return
-      requestRecognitionRestart(listeningCfg.restartAfterEndMs)
+      requestRecognitionRestartRef.current?.(listeningCfg.restartAfterEndMs)
     }, conversationActiveRef?.current
       ? getActiveListenConfig().restart.stallCheckMs
       : watchdogMs)
 
     return () => window.clearInterval(timerId)
-  }, [conversationActiveRef, requestRecognitionRestart, status])
+  }, [conversationActiveRef, status])
 
   ingressBindingsRef.current = {
     conversationActiveRef,

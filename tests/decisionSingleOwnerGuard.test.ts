@@ -161,6 +161,55 @@ describe('D1 - las puertas de VOZ preguntan "¿habla FLU?" con UN solo criterio'
     });
 });
 
+// ---------------------------------------------------------------- D14
+/** La supresion de eco del DESPACHO no puede volver a decidirse por TIEMPO.
+ *
+ * DEFECTO MEDIDO (2026-10-18, tests/e2e/musica-en-partida.spec.ts): con partida
+ * activa, "Okay Flow pon musica relajante" llegaba al despacho con `speaking=true`
+ * y el guard `if (isFluSpeaking()) return false` descartaba el turno en silencio
+ * (fila de usuario escrita, sin accion). El eco ya se filtra por CONTENIDO en
+ * `onresult` (78a0126); la misma pregunta en el despacho tiene que usar el mismo
+ * comparador (`isAssistantVoiceEcho`), no el reloj.
+ */
+export function findTimeOnlyDispatchEchoGate(content: string, file = 'src/sintetico.js'): string[] {
+    const out: string[] = [];
+    const lines = content.split(/\r?\n/);
+    lines.forEach((line, i) => {
+        if (!/\bisFluSpeaking\(\)/.test(line)) return;
+        if (/^\s*(\/\/|\*|\/\*)/.test(line)) return;
+        // La puerta puede escribir la condicion en varias lineas: se mira el bloque.
+        const block = lines.slice(Math.max(0, i - 2), i + 8).join('\n');
+        if (!/\bif\s*\(/.test(block)) return;
+        if (!/\breturn\s+false\b/.test(block)) return;
+        if (/isAssistantVoiceEcho/.test(block)) return;
+        out.push(`${file}:${i + 1}:${line.trim().slice(0, 110)}`);
+    });
+    return out;
+}
+
+describe('D14 - el eco del DESPACHO se filtra por CONTENIDO, no por tiempo', () => {
+    it('la puerta de despacho del hook compara contra la voz de FLU', () => {
+        const hook = read('src/voice/hooks/useFluVoiceAssistant.js');
+        const offenders = findTimeOnlyDispatchEchoGate(hook, 'src/voice/hooks/useFluVoiceAssistant.js');
+        expect(
+            offenders,
+            `Puertas de despacho que descartan por TIEMPO (N=${offenders.length}); usa ` +
+                `isAssistantVoiceEcho:\n  ${offenders.join('\n  ')}`,
+        ).toEqual([]);
+        // Anti-vacuidad: la puerta EXISTE y de verdad consulta el comparador.
+        expect(hook).toContain('isAssistantVoiceEcho(');
+    });
+    it('el detector no es decorativo: marca el gate por tiempo y perdona el de contenido', () => {
+        expect(findTimeOnlyDispatchEchoGate('if (isFluSpeaking()) {\n  return false\n}')).toHaveLength(1);
+        expect(findTimeOnlyDispatchEchoGate('if (\n  isFluSpeaking()\n) {\n  return false\n}')).toHaveLength(1);
+        expect(
+            findTimeOnlyDispatchEchoGate(
+                'if (isFluSpeaking() && isAssistantVoiceEcho(phrase, assistantText)) {\n  return false\n}',
+            ),
+        ).toHaveLength(0);
+    });
+});
+
 describe('D2 - "es la MISMA locucion" tiene UNA memoria (la del despacho)', () => {
     it('conversationStreamCommit no decide por el estado de la UI', () => {
         const offenders = findUiLocutionCriteria(read('src/voice/lib/conversationStreamCommit.js'));
@@ -426,6 +475,79 @@ export function countWakeRequirementDefs(
         .filter((f) => f.rel !== owner && /requireWakeAlways\s*!==\s*false/.test(f.content))
         .map((f) => `${f.rel}:requireWakeAlways !== false`);
 }
+
+// ---------------------------------------------------------------- D15
+/** Marcas de un gate BOOLEANO sobre el despacho ASINCRONO de conversacion.
+ *
+ * DEFECTO MEDIDO (2026-10-19): `buildConversationIngressCtx` construia
+ * `tryDispatch: (t, o) => bindings.tryDispatchConversationAction?.(t, o) === true`.
+ * El despacho real es `async` (devuelve Promise), asi que `Promise === true` era
+ * SIEMPRE falso: las ramas que esperaban `dispatched: true` / `handled: true`
+ * quedaron como codigo muerto y el rechazo viajaba como promesa suelta. El contrato
+ * es fire-and-forget: el resultado NO decide nada; el commit de la fila lo gobierna
+ * su escritor unico. Un `await` SI resuelve el valor y por eso no se marca.
+ */
+export function findPromiseBooleanGates(
+    files: Array<{ rel: string; content: string }>,
+): string[] {
+    const out: string[] = [];
+    for (const f of files) {
+        f.content.split(/\r?\n/).forEach((line, i) => {
+            if (/^\s*(\/\/|\*|\/\*)/.test(line)) return;
+            if (!/\btryDispatch(?:ConversationAction)?\b/.test(line)) return;
+            if (/\bawait\b/.test(line)) return;
+            const gates =
+                /\b(?:if|while)\s*\(/.test(line) ||
+                /[=!]==?\s*true\b/.test(line) ||
+                /(?:&&|\|\|)/.test(line);
+            if (!gates) return;
+            out.push(`${f.rel}:${i + 1}:${line.trim().slice(0, 110)}`);
+        });
+    }
+    return out;
+}
+
+describe('D15 - el despacho asincrono no se decide convirtiendo la Promise en booleano', () => {
+    it('ningun consumidor gatea con el valor del despacho asincrono', () => {
+        const offenders = findPromiseBooleanGates(srcFiles());
+        expect(
+            offenders,
+            `Gates booleanos sobre el despacho asincrono (N=${offenders.length}):\n  ${offenders.join('\n  ')}`,
+        ).toEqual([]);
+        // Anti-vacuidad: el bridge EXISTE, de verdad despacha y registra el rechazo.
+        const bridge = read('src/voice/lib/conversationIngressBridge.js');
+        expect(/bindings\.tryDispatchConversationAction\?\.\(/.test(bridge)).toBe(true);
+        expect(/Promise\.resolve\(pending\)\.catch/.test(bridge)).toBe(true);
+        expect(/logCaughtError\('conversationIngressBridge\.tryDispatch'/.test(bridge)).toBe(true);
+    });
+
+    it('el detector no es decorativo: marca el gate booleano y perdona la llamada directa y el await', () => {
+        expect(
+            findPromiseBooleanGates([
+                {
+                    rel: 'src/voice/lib/x.js',
+                    content:
+                        'tryDispatch: (t, o) => bindings.tryDispatchConversationAction?.(t, o) === true',
+                },
+            ]),
+        ).toHaveLength(1);
+        expect(
+            findPromiseBooleanGates([
+                { rel: 'src/voice/lib/x.js', content: 'if (ctx.tryDispatch?.(capture, opts)) {' },
+            ]),
+        ).toHaveLength(1);
+        expect(
+            findPromiseBooleanGates([
+                { rel: 'src/voice/lib/x.js', content: 'ctx.tryDispatch?.(capture, opts)' },
+            ]),
+        ).toEqual([]);
+        expect(
+            findPromiseBooleanGates([
+                { rel: 'src/voice/lib/x.js', content: 'const ok = (await tryDispatchConversationAction(t)) === true' },
+            ]),
+        ).toEqual([]);
+    });
+});
 
 describe('D13 - un solo dueno de "hace falta wake word?" (requireWakeAlways)', () => {
     it('la decision solo la implementa wakeTurnCommit; los consumidores la llaman', () => {

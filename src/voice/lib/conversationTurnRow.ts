@@ -16,10 +16,12 @@ import { useIntegrationStore } from '../../store/integrationStore';
 import { cleanForSpeech } from './audioMath';
 import { voiceProbe } from './voiceProbe';
 import { isAutoSpeakerLabel, isProperSpeakerName } from './voiceIdentity';
-import { registerVoiceName } from './speakerDirectory.js';
-import { canonicalSpeakerName } from './speakerLabels';
+import { compareCosineSignatures } from './speakerCore';
+import { registerVoiceName, resolveVoiceIdentity } from './speakerDirectory.js';
+import { sameVoiceFloor } from './speakerClusters.js';
+import { canonicalSpeakerName, normalizeSpeakerLabel } from './speakerLabels';
 import { getFallbackSpeaker } from './speakerCore';
-import { labelToSpeakerId, speakerIdToDefaultName } from './conversationRow';
+import { labelToSpeakerId, resolveRowSpeakerLabel, speakerIdToDefaultName } from './conversationRow';
 import { voiceKeyFor } from './speakerDirectory.js';
 import { normalizeRowSignature } from './conversationRow';
 import { isFragmentOfLocution } from './turnStream';
@@ -32,12 +34,17 @@ import { isFragmentOfLocution } from './turnStream';
 let currentTurn: { id: number | string | null; rowId: string | null } = { id: null, rowId: null };
 
 /**
- * ¿El `speakerId` de la fila es un NOMBRE propio (`speaker_name_*`)? Solo ese es
- * write-once: un placeholder auto (`speaker_N`) si se completa (commit temprano ->
- * resolucion con el hablante medido).
+ * ¿La fila ya tiene un NOMBRE propio? Dos formas reales del mismo dato:
+ * - `speakerId` derivado de un nombre (`speaker_name_*`), o
+ * - `speakerName` propio CONGELADO sobre un id automatico (`speaker_1` + "Luis").
+ * La segunda es la que faltaba: tras "soy Luis" la fila conservaba el id `speaker_1`,
+ * y una revision posterior del turno la reescribia con la etiqueta generica (medido
+ * en el log del dueno 2026-10-18: `speaker="Hablante 1" vista="Hablante 1"`).
+ * Ese nombre es write-once: no se mueve ni se degrada.
  */
-function esNombrePropioDeFila(speakerId?: string | null): boolean {
-    return String(speakerId || '').startsWith('speaker_name_');
+function esNombrePropioDeFila(entry?: { speakerId?: string | null; speakerName?: string | null }): boolean {
+    if (String(entry?.speakerId || '').startsWith('speaker_name_')) return true;
+    return isProperSpeakerName(String(entry?.speakerName || '').trim());
 }
 
 /**
@@ -53,6 +60,30 @@ function freezeResolvedSpeakerName(
     const actual = String(store.conversationHistory.find((e) => e.id === rowId)?.speakerName || '').trim();
     if (isProperSpeakerName(actual) && !isProperSpeakerName(resolved)) return;
     store.setEntrySpeakerName(rowId, resolved);
+}
+
+/**
+ * DUENO UNICO de la ETIQUETA VISIBLE de la fila.
+ *
+ * - Un NOMBRE PROPIO que llega del resolver ya esta AFIRMADO por identidad medida
+ *   (ventana sostenida + ancla): es la identidad de ESTE turno y manda sobre la etiqueta
+ *   de la CLAVE. DEFECTO MEDIDO (2026-10-19, sesion del dueno 18f3888c): el dueno tenia su
+ *   ancla verificada en la base, pero su timbre habia casado antes con `speaker_2` y la
+ *   fila se escribia con el nombre por defecto de la CLAVE («Hablante 2»), no con «Luis».
+ *   La clave agrupa el TIMBRE; la identidad la afirma el resolver.
+ * - Una etiqueta AUTOMATICA no se escribe por turno: la voz tiene UNA etiqueta estable (la
+ *   de su clave). Escribir la del turno partia una MISMA voz en «Hablante 2» y «Hablante 3»
+ *   (`vozNombrePorVozTodosLosTurnosGuard`).
+ * - El respaldo no aporta etiqueta: la completa la VOZ.
+ *
+ * @param resolved Etiqueta del turno (lo que devolvio el resolver).
+ * @param vozDeLaFila Clave de la voz (timbre) de la fila.
+ * @returns Etiqueta canonica a escribir.
+ */
+function resolveRowVisibleLabel(resolved: string, vozDeLaFila: string): string {
+    const label = normalizeSpeakerLabel(String(resolved || '').trim());
+    if (isProperSpeakerName(label)) return canonicalSpeakerName(label);
+    return speakerIdToDefaultName(vozDeLaFila);
 }
 
 /**
@@ -225,27 +256,85 @@ export function renameSpeakerRows(
 }
 
 /**
- * CONGELA el nombre de una voz en las filas que YA muestran su etiqueta (freeze del dueno
- * 2026-10-17): al identificar una voz ("soy Luis"), toda su participacion pasa a llevar el
- * nombre, escrito EN LA FILA, y no se vuelve a resolver desde el directorio. Solo se congelan
- * filas con etiqueta ESCRITA (auto o propia): una fila sin rotulo no tiene evidencia de esa voz
- * (el insert no estampa sin medida, regla del dueno 2026-10-08) y NO hereda nada, de modo que
- * una voz DISTINTA que reutilice la clave no se pinta (defecto "la mujer sale Luis" del log).
- * Write-once: no pisa un nombre propio ya congelado distinto.
+ * CONGELA el nombre de una voz en las filas que YA son suyas (freeze del dueno 2026-10-17):
+ * al identificar una voz ("soy Luis"), toda su participacion pasa a llevar el nombre, escrito
+ * EN LA FILA, y no se vuelve a resolver desde el directorio.
  *
+ * QUE FILA ES "SUYA": la que lleva su CLAVE (`speakerId`) con rotulo escrito, o la que tiene
+ * un TIMBRE MEDIDO que casa con el de la voz (coseno >= piso de "misma voz"). El timbre es la
+ * evidencia que faltaba: las participaciones anteriores podian quedar con una clave reciclada
+ * y por eso "soy Luis" solo cambiaba la ultima intervencion (defecto del dueno 2026-10-18).
+ * Una fila SIN rotulo y SIN medida no hereda nada: no hay evidencia de que sea esa voz.
+ *
+ * WRITE-ONCE: un nombre propio DISTINTO solo se reescribe si la firma prueba que es la MISMA
+ * voz (la excepcion declarada del mandato: "ok flu soy X" sobre su propia voz).
+ *
+ * La firma de la voz se busca en TODAS sus medidas (`signatures`): la firma aprendida del
+ * cluster y su historial. Antes solo se probaba la medida cruda del turno y las filas
+ * anteriores de la MISMA voz no casaban: "soy Luis" cambiaba solo la ultima intervencion
+ * (defecto medido por el dueno 2026-10-18).
+ *
+ * @param vector Timbre MEDIDO de la voz identificada (su ancla). Sin el, solo casa por clave.
+ * @param signatures Medidas adicionales de ESA voz (firma del cluster + historial).
+ * @param floor Piso de timbre para considerar la MISMA voz. Por defecto el de reutilizacion
+ *   (0.66), valido cuando el ancla es una medida recien tomada ("soy X"); el
+ *   RECONOCIMIENTO de una identidad REGISTRADA pasa el piso de identidad (0.76): con 0.66
+ *   la fila de la mujer (0.741 al ancla de Luis) se renombro "Luis" (medido 2026-10-19
+ *   21:22:52, `rows:1`). La via "soy X" pasa el piso de ANCLA VERIFICADA (0.62): la MISMA
+ *   voz del titular mide 0.629–0.714 contra su ancla de la base y sus filas entre 0.629 y
+ *   0.66 se quedaban sin renombrar (defecto 5 del dueno 2026-10-19). Un caller puede
+ *   endurecer el piso; solo la via "soy X" (identidad afirmada con su medida fresca del
+ *   turno) lo rebaja al piso verificado.
  * @returns cuantas filas se congelaron.
  */
-export function freezeVoiceName(voiceId: string, speakerName: string): number {
+export function freezeVoiceName(
+    voiceId: string,
+    speakerName: string,
+    {
+        vector = null,
+        signatures = [],
+        floor = sameVoiceFloor(),
+    }: { vector?: number[] | null; signatures?: Array<number[] | null | undefined>; floor?: number } = {},
+): number {
     const voz = String(voiceId || '').trim();
     const name = canonicalSpeakerName(String(speakerName || '').trim());
     if (!voz || !name) return 0;
+    const medidos = [vector, ...signatures]
+        .map((sig) => normalizeRowSignature(sig))
+        .filter((sig): sig is number[] => Boolean(sig?.length));
     const store = useIntegrationStore.getState();
     let changed = 0;
     store.conversationHistory.forEach((e) => {
         if (e.role !== 'user') return;
-        if (String(e.speakerId || '') !== voz) return;
+        const rowSignature = normalizeRowSignature(e.signature);
+        const sameVoiceBySignature = Boolean(
+            medidos.length &&
+            rowSignature &&
+            medidos.some((sig) => compareCosineSignatures(sig, rowSignature) >= floor),
+        );
+        const sameKey = String(e.speakerId || '') === voz;
+        // LA CLAVE SOLA NO PRUEBA CUANDO HAY TIMBRE EN CONTRA (medido 2026-10-19 21:22:52,
+        // `identity-recognized {"name":"Luis","label":"Hablante 1","voice":"speaker_1","rows":1}`):
+        // la clave de etiqueta (`speaker_1`) se recicla entre personas — la fila MEDIDA de la
+        // mujer (0.741 al ancla de Luis, debajo del piso registrado) se renombro "Luis" solo
+        // por compartir la clave. Con un ancla medida, manda el TIMBRE de la fila; la clave
+        // sigue siendo la evidencia valida para filas SIN medida o cuando no hay ancla con la
+        // que comparar (registro/renombre sin vector).
+        const provenByKey = sameKey && (!rowSignature || !medidos.length);
+        if (!sameVoiceBySignature && !provenByKey) return;
         const actual = String(e.speakerName || '').trim();
-        if (!actual || actual === name) return;
+        // Evidencia de que la fila es ESA voz: timbre que casa, o su clave con rotulo escrito.
+        if (!sameVoiceBySignature && !actual) return;
+        // WRITE-ONCE entre identidades: no se pisa un nombre propio DISTINTO sin prueba de
+        // timbre. El renombre MANUAL del panel (`renameSpeakerRows`, sin vector) es una
+        // decision HUMANA sobre su clave y se honra: no hay medida que la contradiga.
+        if (medidos.length && actual && isProperSpeakerName(actual) && actual !== name && !sameVoiceBySignature) return;
+        // Re-clava la fila a la voz identificada (una clave reciclada no debe quedar apuntando
+        // a un rotulo generico): el nombre viaja con la VOZ, no con la etiqueta.
+        if (sameVoiceBySignature && !sameKey) {
+            store.setEntrySpeaker(e.id, voz, { signature: rowSignature });
+        }
+        if (actual === name) return;
         store.setEntrySpeakerName(e.id, name);
         changed += 1;
     });
@@ -275,15 +364,35 @@ export function updateTurnRowSpeaker(
     // El nombre entra CANONICO (una sola grafia para la fila y la base).
     const name = canonicalSpeakerName(String(speakerName || '').trim());
     if (turnId === null || turnId === undefined || !name) return false;
-    if (!evidenciaAcustica) return false;
+    const measuredVector = Array.isArray(vector) && vector.length ? vector : null;
+    // AFIRMACION de identidad del turno: (a) COINCIDENCIA medida declarada por el resolver,
+    // o (b) cluster NUEVO medido: la etiqueta automatica de ESTE turno SI se escribe (con su
+    // vector) para que su voz quede rotulada y el freeze de "soy X" la alcance despues. Una
+    // etiqueta automatica SIN vector es el respaldo de un tick sin clusters: no afirma nada
+    // (antes estampaba "Hablante 1" en toda la sala y mezclaba a la mujer en esa etiqueta).
+    if (!evidenciaAcustica && !(measuredVector && isAutoSpeakerLabel(name))) return false;
     const rowId =
         recentTurns.get(String(turnId)) ||
         (currentTurn.id === turnId ? currentTurn.rowId : null);
     if (!rowId) return false;
-    const history = useIntegrationStore.getState().conversationHistory;
+    const store = useIntegrationStore.getState();
+    const history = store.conversationHistory;
     const entry = history.find((e) => e.id === rowId);
     if (!entry || entry.role !== 'user') return false;
-    const vozDeEtiqueta = String(entry.speakerId || '') || labelToSpeakerId(String(entry.speakerName || ''));
+    const actualName = String(entry.speakerName || '').trim();
+    // Un NOMBRE PROPIO ya escrito NO se degrada con una etiqueta AUTOMATICA (su voz puede
+    // re-clavarse por timbre, pero la fila conserva el nombre que ya tiene).
+    if (isAutoSpeakerLabel(name) && isProperSpeakerName(actualName)) return false;
+    // Tampoco se degrada una identidad CONFIRMADA POR EL TIMBRE DEL TURNO aunque la fila aun
+    // no la tenga escrita (medido 2026-10-19 21:23:08: `row-update turnId:26 voz:speaker_1
+    // nombre:"Hablante 3" evidencia:false medida:512`). La pregunta "es alguien" tiene dueno
+    // unico (`resolveVoiceIdentity`, la misma regla del commit): si responde un nombre propio,
+    // la etiqueta automatica no afirma nada y no se escribe.
+    if (isAutoSpeakerLabel(name) && measuredVector) {
+        const conocida = resolveVoiceIdentity(measuredVector);
+        if (conocida?.name && isProperSpeakerName(conocida.name)) return false;
+    }
+    const vozDeEtiqueta = String(entry.speakerId || '') || labelToSpeakerId(actualName);
     if (!vozDeEtiqueta) return false;
     // UNA VOZ, UNA CLAVE: con timbre medido el nombre se pega a la VOZ resuelta por su
     // firma (`voiceKeyFor`), NUNCA a la clave derivada de la ETIQUETA ("Hablante 1" ->
@@ -291,12 +400,16 @@ export function updateTurnRowSpeaker(
     // esa separacion, "Luis" quedaba colgado de `speaker_1` y la mujer que diariza
     // "Hablante 1" heredaba su nombre (medido en el log del dueno 2026-10-17: las
     // intervenciones de la mujer salian como "Luis").
-    const voz = voiceKeyFor({ voiceId: vozDeEtiqueta, signature: vector });
-    registerVoiceName(voz, name, { vector });
+    const voz = voiceKeyFor({ voiceId: vozDeEtiqueta, signature: measuredVector });
+    registerVoiceName(voz, name, { vector: measuredVector });
+    // La fila guarda SU VOZ y su TIMBRE: la firma es la evidencia con la que el freeze de
+    // "soy X" reconoce TODAS las participaciones de esa voz (`freezeVoiceName`), aunque su
+    // clave se haya reciclado o el rotulo escrito sea otro.
+    store.setEntrySpeaker(rowId, voz, { signature: measuredVector });
     // FREEZE del nombre en ESTA fila (mandato 2026-10-17): el nombre queda congelado aqui y no
     // se re-resuelve desde el directorio; una voz distinta que reutilice la clave no lo hereda.
-    useIntegrationStore.getState().setEntrySpeakerName(rowId, name);
-    voiceProbe('row-update', { turnId, voz, nombre: name, fila: rowId });
+    store.setEntrySpeakerName(rowId, name);
+    voiceProbe('row-update', { turnId, voz, nombre: name, fila: rowId, evidencia: evidenciaAcustica, medida: measuredVector?.length ?? 0 });
     return true;
 }
 
@@ -395,6 +508,10 @@ export function commitUserTurnRow(input: UserTurnRowInput): UserTurnRowResult {
         speaker: String(input.speakerName || ''),
         evidencia: input.evidenciaAcustica === true,
         efectivo: fila ? String(fila.speakerName || '') : '',
+        // ETIQUETA DE DISPLAY (mandato 2026-10-18): lo que el usuario VE al mostrar la
+        // fila (`resolveRowSpeakerLabel`), no lo que quedo escrito. Sin esto el log solo
+        // probaba la escritura y el invento del display ("Hablante 1") era invisible.
+        vista: fila ? resolveRowSpeakerLabel(fila) : '',
         turnId: input.turnId ?? null,
     });
     return result;
@@ -430,10 +547,14 @@ function commitUserTurnRowInner({
     // LA VOZ de la fila (no su nombre): el nombre se resuelve al MOSTRAR. La clave es el
     // TIMBRE cuando se midio (mismo timbre = misma clave aunque cambie la etiqueta).
     const vozDeLaFila = voiceKeyFor({ voiceId: labelToSpeakerId(resolved), signature });
-    // FREEZE (mandato del dueno 2026-10-17): la fila nace con su etiqueta CONGELADA — la MISMA
-    // que renderiza su VOZ (canonica por id: "luis" -> "Luis", "Lider" con su canon), no la
-    // grafia cruda del aporte. Una voz distinta que reutilice la clave no la hereda.
-    const etiquetaDeLaFila = speakerIdToDefaultName(vozDeLaFila);
+    // FREEZE (mandato del dueno 2026-10-17): la fila nace con su etiqueta CONGELADA — la
+    // etiqueta que RESOLVIO la diarizacion para ESTE turno, canonica ("luis" -> "Luis"), no
+    // la grafia cruda del aporte. Antes se escribia SIEMPRE `speakerIdToDefaultName(voz)`, y
+    // una voz que el resolver ya llamaba «Hablante 3» se pintaba «Hablante 2» (o el dueno
+    // con su ancla salia «Hablante 2») porque su TIMBRE habia casado antes con la clave de
+    // otra etiqueta: la clave agrupa el timbre, la etiqueta la decide el turno (medido
+    // 2026-10-19, sesion 18f3888c). El respaldo no aporta etiqueta y se completa con la VOZ.
+    const etiquetaDeLaFila = resolveRowVisibleLabel(resolved, vozDeLaFila);
     // ROTULO PROPIO: la fila solo lleva `speakerName` cuando el resolver aporto identidad de
     // ESTE turno (etiqueta de diarizacion distinta del RESPALDO, nombre propio del texto o
     // medida). El respaldo no se escribe: es lo que su VOZ ya muestra al renderizar, y
@@ -454,11 +575,11 @@ function commitUserTurnRowInner({
             if (!entry || entry.role !== 'user') continue;
             // WRITE-ONCE del NOMBRE: un `speaker_name_*` ya commiteado no se reescribe (el
             // nombre propio no se mueve). Un placeholder auto (`speaker_N`) si se completa.
-            if (esNombrePropioDeFila(entry.speakerId)) {
+            if (esNombrePropioDeFila(entry)) {
                 rememberTurn(turnId, entry.id);
                 return { id: entry.id, action: 'reused' };
             }
-            store.setEntrySpeaker(entry.id, vozDeLaFila);
+            store.setEntrySpeaker(entry.id, vozDeLaFila, { signature });
             if (hayRotuloPropio) freezeResolvedSpeakerName(store, entry.id, etiquetaDeLaFila);
             rememberTurn(turnId, entry.id);
             return { id: entry.id, action: 'reused' };
@@ -476,8 +597,8 @@ function commitUserTurnRowInner({
             if (rawEsTrozo || previoEsTrozo) {
                 // P1 insert-only: el texto de una fila se decide UNA vez, en su insercion.
                 // WRITE-ONCE del NOMBRE: un nombre propio ya commiteado no se reescribe.
-                if (!esNombrePropioDeFila(ultima.speakerId)) {
-                    store.setEntrySpeaker(ultima.id, vozDeLaFila);
+                if (!esNombrePropioDeFila(ultima)) {
+                    store.setEntrySpeaker(ultima.id, vozDeLaFila, { signature });
                     if (hayRotuloPropio) freezeResolvedSpeakerName(store, ultima.id, etiquetaDeLaFila);
                 }
                 if (previoEsTrozo) store.completeEntryFragment(ultima.id, raw);
@@ -499,11 +620,11 @@ function commitUserTurnRowInner({
         if (entry && entry.role === 'user') {
             // WRITE-ONCE del NOMBRE: un nombre propio ya commiteado no se reescribe; un
             // placeholder auto si se completa (commit temprano -> resolucion).
-            if (esNombrePropioDeFila(entry.speakerId)) {
+            if (esNombrePropioDeFila(entry)) {
                 rememberTurn(turnId, entry.id);
                 return { id: entry.id, action: 'reused' };
             }
-            store.setEntrySpeaker(entry.id, vozDeLaFila);
+            store.setEntrySpeaker(entry.id, vozDeLaFila, { signature });
             if (hayRotuloPropio) freezeResolvedSpeakerName(store, entry.id, etiquetaDeLaFila);
             rememberTurn(turnId, entry.id);
             return { id: entry.id, action: 'reused' };

@@ -4,8 +4,8 @@
  * Única fuente de estas operaciones; el resolver (speakerDiarization.js) las consume.
  */
 import { blendEmbeddingVectors, normalizeSpaces } from './audioMath.js'
-import { compareCosineSignatures, isAutoSpeakerLabel, normalizeEmbeddingVector } from './speakerCore.js'
-import { foldSpeakerKey, getVoiceIdentityConfig, isRegisteredSpeakerLabel } from './speakerLabels.js'
+import { compareCosineSignatures, hasVoiceMeasurement, isAutoSpeakerLabel, normalizeEmbeddingVector, parseSpeakerIndex } from './speakerCore.js'
+import { foldSpeakerKey, getVoiceIdentityConfig, isRegisteredSpeakerLabel, isProperSpeakerName, canonicalSpeakerName, normalizeSpeakerLabel } from './speakerLabels.js'
 import { getPassiveBufferMs } from './micCapture.js'
 import { DEFAULT_SAMPLE_RATE } from './audioConstants.js'
 
@@ -58,6 +58,25 @@ export function registeredVoiceFloor(thresholds = null) {
   const cfg = thresholds || getVoiceIdentityConfig()?.capture?.conversationSpeakerThresholds || {}
   const floor = Number(cfg?.cosineRegisteredMatchThreshold)
   return Number.isFinite(floor) && floor > 0 && floor <= 1 ? floor : 0.76
+}
+
+/**
+ * DUENO UNICO del piso de "esta voz es el ANCLA VERIFICADA de la base de participantes".
+ *
+ * POR QUE ES OTRO PISO (medido 2026-10-19, sesion del dueno 18f3888c): el ancla verificada
+ * de "Luis" mide 0.629–0.714 con SU MISMA voz (otra ventana y otro dia) y 0.29–0.58 con una
+ * voz DISTINTA (la mujer). El piso registrado general (0.76) exige mas de lo que la MISMA
+ * persona da contra su propia ancla, asi que Luis caia a «Hablante N» toda la sesion. Una
+ * ancla VERIFICADA (`voiceAnchorVerified`: el dueno la midio y la guardo) es evidencia mas
+ * fuerte que un cluster anonimo de la sesion; su piso es propio y no se rebaja por caller.
+ *
+ * @param {object|null} [thresholds] bloque conversationSpeakerThresholds (o se lee de config)
+ * @returns {number} umbral coseno de "ancla verificada"
+ */
+export function verifiedAnchorFloor(thresholds = null) {
+  const cfg = thresholds || getVoiceIdentityConfig()?.capture?.conversationSpeakerThresholds || {}
+  const floor = Number(cfg?.cosineVerifiedAnchorMatchThreshold)
+  return Number.isFinite(floor) && floor > 0 && floor <= 1 ? floor : 0.62
 }
 
 /** Solo las últimas N ms de chunks — evita copiar/analizar todo el buffer en cada commit. */
@@ -174,10 +193,16 @@ export function isShortUtteranceContext({
   const rate = Number.isFinite(sampleRate) && sampleRate > 0 ? sampleRate : DEFAULT_SAMPLE_RATE
   const words = countUtteranceWords(utteranceText)
   const durationMs = voicedSampleCount > 0 ? (voicedSampleCount / rate) * 1000 : 0
-  if (words > 0 && words < wordCap) return true
-  /** Audio breve solo cuenta si hay transcripción (evita relajar por cola de 1s sin frase). */
-  if (words > 0 && durationMs > 0 && durationMs < msCap) return true
-  return false
+  /** Sin transcripción no hay locución que medir (cola de silencio): no es corta. */
+  if (words <= 0) return false
+  // LA MEDIDA DE AUDIO MANDA CUANDO EXISTE (medido 2026-10-19 en el log del dueno):
+  // "voy a contar 1 2 3" tiene 3 palabras y sonaba 2 s (`voiced=96000 ms=2000`); el
+  // criterio por CONTEO lo daba por ventana corta y bloqueaba el nombre registrado
+  // (Luis 0.83) para anclar por continuidad a "Hablante 1". Una ventana SOSTENIDA es
+  // evidencia aunque el ASR entregue pocas palabras (numeros, nombres propios).
+  if (durationMs > 0) return durationMs < msCap
+  /** Sin audio medido, el unico indicio disponible es el texto. */
+  return words < wordCap
 }
 
 /**
@@ -203,7 +228,10 @@ function isPinnedAnchorCluster(cluster) {
 
 export function updateClusterSignature(cluster, vector) {
   const next = normalizeEmbeddingVector(vector)
-  if (!next.length) return
+  // Un vector VACIO o DEGENERADO (snap=0) es AUSENCIA de medida, no voz: la firma
+  // jamas se mezcla con eso (mandato 2026-10-18: prohibido actualizar el ancla con
+  // audio vacio; su coseno es 0 con todo y contamina el cluster entero).
+  if (!next.length || !hasVoiceMeasurement(next)) return
 
   // Un cluster con NOMBRE PROPIO es el ancla de identidad de esa persona y su
   // firma NO se mezcla con la voz entrante. Muchas ramas (sticky/fallback)
@@ -214,6 +242,16 @@ export function updateClusterSignature(cluster, vector) {
   // («Hablante N») sí adaptan: es lo que evita el H2 fantasma por pausa o eco.
   if (isPinnedAnchorCluster(cluster)) return
 
+  // ANTI-CONTAMINACION (mandato 2026-10-18): el cluster es UNA voz. Si la medida entrante
+  // NO casa con su firma al piso de "misma voz", es OTRA persona y no se aprende: mezclarla
+  // acercaba el cluster a todas las voces de la sala y una sola etiqueta ("Hablante 1")
+  // acababa representando al dueno y a la nina (defecto medido en vivo). La voz distinta
+  // abre o usa SU cluster; esta no se toca.
+  const priorSignature = Array.isArray(cluster?.signature) && cluster.signature.length
+    ? normalizeEmbeddingVector(cluster.signature)
+    : []
+  if (priorSignature.length && compareCosineSignatures(priorSignature, next) < sameVoiceFloor()) return
+
   const stableHistory = Array.isArray(cluster?.signatureHistory)
     ? cluster.signatureHistory
       .filter((entry) => Array.isArray(entry) && entry.length)
@@ -221,9 +259,7 @@ export function updateClusterSignature(cluster, vector) {
       .slice(-3)
     : []
 
-  let base = Array.isArray(cluster?.signature) && cluster.signature.length
-    ? normalizeEmbeddingVector(cluster.signature)
-    : next
+  let base = priorSignature.length ? priorSignature : next
 
   if (stableHistory.length) {
     base = stableHistory.reduce(
@@ -280,9 +316,71 @@ export function ensureClusterForLabel(speakerClusters, label, vector, { learn = 
     if (learn) updateClusterSignature(existing, vector)
     return existing
   }
-  const cluster = { label, signature: [...vector], signatureHistory: [[...vector]] }
+  // `learn: false` es CONTINUIDAD (conjetura temporal, no medida): NO crea ancla. Si
+  // creara, tras renombrar 'Hablante 1' -> 'Luis' la continuidad volvia a crear un
+  // 'Hablante 1' sin historia y la MISMA voz quedaba en dos clusters (medido en el log
+  // del dueno 2026-10-18). Solo abre cluster quien aprende con medida.
+  if (!learn) return null
+  // PROHIBIDO crear un ancla con audio VACIO/DEGENERADO (snap=0, mandato 2026-10-18):
+  // una firma sin medida casa por coseno 0 con cualquier voz y arrastra la sala entera.
+  const signature = normalizeEmbeddingVector(vector)
+  if (!signature.length || !hasVoiceMeasurement(signature)) return null
+  const cluster = { label, signature: [...signature], signatureHistory: [[...signature]] }
   speakerClusters.push(cluster)
   return cluster
+}
+
+/**
+ * SIEMBRA en la sesion las anclas de voz de la BASE de participantes.
+ *
+ * Medido (log del dueno 2026-10-18): la base tenia el vector de "Luis" y aun asi
+ * todos sus turnos salian "Hablante 1" — la base solo se consultaba al final, en el
+ * contrato (`resolveVoiceIdentity`), NUNCA en la decision de diarizacion. Con las
+ * anclas sembradas, la voz conocida se resuelve por la misma regla que cualquier
+ * cluster (piso de identidad registrada, `registeredVoiceFloor`) y el nombre sale en
+ * el PRIMER turno sostenido.
+ *
+ * La sesion MANDA: si el cluster de ese nombre ya existe, no se reescribe su firma
+ * (puede haber aprendido en vivo). Solo se agregan los nombres que faltan.
+ *
+ * @param {Array} speakerClusters clusters vivos de la sesion
+ * @param {Array<{name?: string, vector?: number[], model?: string, verified?: boolean}>} anchors base de participantes
+ * @param {{ model?: string }} [options] modelo vigente del embedder (un vector de OTRO
+ *   modelo no es comparable y NO se siembra)
+ * @returns {Array|null} clusters con las anclas, o `null` si no hubo cambios
+ *
+ * La marca `verified` del ancla viaja al cluster (`anchorVerified`): es la que habilita el
+ * piso propio de identidad verificada en la diarizacion (`verifiedAnchorFloor`).
+ */
+export function seedRegisteredAnchors(speakerClusters = [], anchors = [], { model = '' } = {}) {
+  if (!Array.isArray(anchors) || !anchors.length) return null
+  const out = [...(Array.isArray(speakerClusters) ? speakerClusters : [])]
+  let changed = false
+  for (const anchor of anchors) {
+    const name = canonicalSpeakerName(normalizeSpeakerLabel(anchor?.name))
+    if (!name || !isProperSpeakerName(name)) continue
+    // SOLO se siembra un ancla COMPARABLE: mismo modelo Y dtype. Antes una ancla SIN
+    // modelo pasaba la puerta y su vector se comparaba contra el vigente (log del dueno
+    // 2026-10-18: el ancla "Luis" de la base casaba a 0.44 con su propia voz y la dejaba
+    // sin nombre). Un vector sin clave de modelo NO es evidencia de esta sesion.
+    if (model && String(anchor?.model || '') !== String(model)) continue
+    const signature = normalizeEmbeddingVector(anchor?.vector)
+    if (!signature.length || !hasVoiceMeasurement(signature)) continue
+    if (findClusterByLabel(out, name)) continue
+    out.push({
+      label: name,
+      signature: [...signature],
+      signatureHistory: [[...signature]],
+      anchorSource: 'participant-base',
+      // ANCLA VERIFICADA: el productor (`participantVoiceAnchorsForDiarization`) solo entrega
+      // vectores con `voiceAnchorVerified === true`. La marca viaja al cluster para que la
+      // diarizacion use SU piso (`verifiedAnchorFloor`, medido 0.629–0.714) y no el registrado
+      // general (0.76), que la misma voz no alcanza entre sesiones.
+      anchorVerified: anchor?.verified === true,
+    })
+    changed = true
+  }
+  return changed ? out : null
 }
 
 export function findNearestCluster(vector, speakerClusters = []) {
@@ -347,6 +445,11 @@ export function findShortUtteranceHistoricalMatch({
   for (const cluster of speakerClusters) {
     const label = String(cluster?.label || '').trim()
     if (!label) continue
+    // Un NOMBRE PROPIO (ancla de identidad registrada) NUNCA se estampa desde una
+    // ventana CORTA: el piso 0.70 es la banda de REUTILIZACION, no la de identidad
+    // REGISTRADA (0.76). Medido (debug.log 16:50:34): 0.741 contra el ancla "Luis"
+    // renombraba la voz de la mujer. (Mandato 2026-10-18.)
+    if (isRegisteredSpeakerLabel(label)) continue
     const signatures = []
     if (Array.isArray(cluster.signature) && cluster.signature.length) {
       signatures.push(cluster.signature)
@@ -391,6 +494,9 @@ export function resolveImmediateShortSpeakerContinuity({
 
   const speaker = String(lastSpeaker || '').trim()
   if (!speaker) return null
+  // Un NOMBRE PROPIO no se hereda por continuidad de frase CORTA: la continuidad
+  // (piso 0.72) no es la identidad REGISTRADA (0.76). (Mandato 2026-10-18.)
+  if (isRegisteredSpeakerLabel(speaker)) return null
 
   const floor = Math.max(
     cosineThreshold(
@@ -610,6 +716,27 @@ export function consolidateSpeakerClusters(speakerClusters = [], matchThreshold 
   return out
 }
 
+/**
+ * Copia un cluster con la etiqueta NUEVA, sin arrastrar el id de voz viejo.
+ * - `speakerId` se DERIVA de la etiqueta (`ensureClusterSpeakerId`). Conservarlo deja
+ *   el cluster renombrado con `speaker_1` y a la vez la etiqueta nueva `Hablante 1`
+ *   con `speaker_1`: `resolveSpeakerNameFromId` devuelve el PRIMERO y la voz de otra
+ *   persona salia como "Luis" (medido en el log del dueno 2026-10-18).
+ * - `autoNumber` conserva el numero automatico para que el SIGUIENTE hablante
+ *   incremente 1 y no recicle el numero de quien paso a nombre propio.
+ * @param {object} cluster
+ * @param {string} label
+ * @returns {object}
+ */
+function renamedCluster(cluster, label) {
+  const index = parseSpeakerIndex(cluster?.label)
+  const autoNumber = index != null ? index : Number(cluster?.autoNumber) || 0
+  const next = { ...cluster, label }
+  delete next.speakerId
+  if (autoNumber > 0) next.autoNumber = autoNumber
+  return next
+}
+
 /** Fusiona cluster origen en destino (registro / renombrar participante). */
 export function mergeSpeakerClustersOnRename(speakerClusters = [], fromLabel = '', toLabel = '') {
   const from = String(fromLabel || '').trim()
@@ -621,15 +748,48 @@ export function mergeSpeakerClustersOnRename(speakerClusters = [], fromLabel = '
   const target = findClusterByLabel(speakerClusters, to)
   if (!source) return speakerClusters
   if (!target) {
-    source.label = to
-    return speakerClusters.filter(
-      (cluster) => foldSpeakerKey(cluster?.label) !== foldSpeakerKey(from),
-    )
+    const out = []
+    for (const cluster of speakerClusters) {
+      if (foldSpeakerKey(cluster?.label) !== foldSpeakerKey(from)) {
+        out.push(cluster)
+        continue
+      }
+      // El duplicado plegado del mismo `from` se absorbe en la fila renombrada.
+      if (cluster === source) out.push(renamedCluster(cluster, to))
+    }
+    return out
   }
-  updateClusterSignature(target, source.signature)
-  return speakerClusters.filter(
-    (cluster) => foldSpeakerKey(cluster?.label) !== foldSpeakerKey(from),
-  )
+  // El destino YA existe: absorber el origen SOLO si es la MISMA VOZ. Un cluster de
+  // OTRA voz no se borra: son dos personas distintas (medido en el log del dueno
+  // 2026-10-18: el renombre elimino el cluster de la voz que hablaba y dejo solo el
+  // ancla "Luis", asi que despues ninguna comparacion casaba con esa voz).
+  const sameVoice =
+    Array.isArray(source.signature) &&
+    source.signature.length > 0 &&
+    Array.isArray(target.signature) &&
+    target.signature.length > 0 &&
+    compareCosineSignatures(source.signature, target.signature) >= sameVoiceFloor()
+  if (!sameVoice) return speakerClusters
+  const out = []
+  for (const cluster of speakerClusters) {
+    if (cluster === source) continue
+    if (cluster === target) {
+      // `updateClusterSignature` respeta el ancla con nombre propio: el nombre no se
+      // contamina, pero el cluster automatico de la misma voz si aprende.
+      updateClusterSignature(cluster, source.signature)
+      // El indice de la etiqueta automatica sobrevive al renombre (mandato 2026-10-18:
+      // "voz nueva incrementa 1 en hablante(N)... no se incrementan arbitrariamente").
+      // Se toma del `autoNumber` YA guardado o, si el cluster nunca paso por
+      // `renamedCluster`, del propio rotulo ("Hablante 3" -> 3). Sin esto, fusionar el
+      // cluster de una voz con su ancla liberaba el numero y la voz SIGUIENTE lo
+      // reciclaba.
+      const sourceIndex = parseSpeakerIndex(source.label)
+      const carried = Math.max(sourceIndex != null ? sourceIndex : 0, Number(source.autoNumber) || 0)
+      if (carried > (Number(cluster.autoNumber) || 0)) cluster.autoNumber = carried
+    }
+    out.push(cluster)
+  }
+  return out
 }
 
 /** ¿Timbre claramente distinto del sticky (otra persona en sala)? */
