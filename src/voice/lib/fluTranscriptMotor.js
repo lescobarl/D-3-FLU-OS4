@@ -20,10 +20,6 @@ export function getAsrSegmentationCfg() {
   return requireConfigBlock(['transcript', 'asrSegmentation'], 'fluConfig.transcript.asrSegmentation')
 }
 
-export function getProfileMatchCfg() {
-  return requireConfigBlock(['voiceIdentity', 'capture', 'profileMatch'], 'fluConfig.voiceIdentity.capture.profileMatch')
-}
-
 export function getFluTimingCfg() {
   return requireConfigBlock(['timing'], 'fluConfig.timing')
 }

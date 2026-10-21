@@ -11,21 +11,19 @@ import {
   extractTheme,
   formatClock,
   extractFluVoiceCommand,
-  compareCosineSignatures,
   getRecognitionRetryDelay,
   getRecognitionErrorMessage,
   isRecoverableRecognitionError,
   isMinuteGenerationRequest,
   isMinuteSaveRequest,
   isMinuteKnowledgeRequest,
-  isPlausiblePersonName,
   pickRichestVoiceCommandCapture,
 } from '../lib/audioMath'
 import { isNavSettlePending } from '../lib/navSettleFlag'
-import { getFluTimingCfg, getProfileMatchCfg } from '../lib/fluTranscriptMotor.js'
+import { getFluTimingCfg } from '../lib/fluTranscriptMotor.js'
 import { analyzeWakeTurn, requiresWakeWord } from '../lib/wakeTurnCommit.js'
 import { handleConversationStreamSync, buildFinalSpeakerSnapshotResolver, crearCajaDeLaFrase } from '../lib/conversationStreamCommit.js'
-import { listVoiceProfiles, loadSessionState, saveSessionState, saveVoiceProfile } from '../lib/fluStorage'
+import { loadSessionState, saveSessionState } from '../lib/fluStorage'
 import { requestFluContract } from '../lib/gemini'
 import { buildContractParams } from '../lib/contractParams'
 import {
@@ -58,7 +56,6 @@ import {
   flattenChunksTail,
   flattenChunksWindow,
   isProperSpeakerName,
-  nextAvailableSpeakerLabel,
   normalizeSpeakerLabel,
   pruneGhostSpeakerClusters,
   trimAudioChunkBuffer,
@@ -68,13 +65,11 @@ import { applySessionCommandToPrimary } from '../lib/sessionLifecycle.js'
 import { updateTurnRowSpeaker } from '../lib/conversationTurnRow'
 import { resetVoiceDirectory } from '../lib/speakerDirectory.js'
 import { participantRegisterPort, registerSpeakerIdentity } from '../lib/speakerIdentityRegister'
+import { resolveSpeakerIdentityFromVector } from '../lib/voiceIdentityResolve.js'
 import {
   getConversationMinVoicedSamples,
   getConversationSpeakerTailMs,
   getDiarizeIntervalMs,
-  getLastTurnSignatureContinuityDistance,
-  getMaxSilenceWindowsForHold,
-  getVoiceDetectionThreshold,
   resolveCaptureAudioConstraints,
   resolveCaptureGain,
 } from '../lib/micCapture.js'
@@ -171,7 +166,7 @@ import {
   isFluSpeaker,
 } from '../lib/conversationDialogue.js'
 import { isAutoSpeakerLabel, payloadSeparacionDeTurno } from '../lib/speakerCore.js';
-import { selectVoicedWindow } from '../lib/voicedActivity.js';
+import { countVoicedSamples, selectVoicedWindow } from '../lib/voicedActivity.js';
 import { reservedSpeakerLabels } from '../lib/speakerLabels.js';
 import { useParticipantSpeakerRef } from '../../app/useParticipantSpeakerRef';
 import { COMMAND_IDS } from '../lib/commandIds.js'
@@ -182,145 +177,6 @@ import { voiceProbe, isVoiceProbeEnabled } from '../lib/voiceProbe'
 const CONTEXT_HISTORY_LIMIT = FLU_CONFIG.limits.contextHistoryMax
 // Sample rate de captura: fuente única en FLU_CONFIG.audio.sampleRate (sin hardcode).
 const AUDIO_SAMPLE_RATE = FLU_CONFIG.audio?.sampleRate ?? 0
-
-function segmentAudio(samples, sampleRate, threshold) {
-  const voiceThreshold = threshold ?? getVoiceDetectionThreshold()
-  if (!samples.length) return []
-
-  const windowSize = Math.max(1024, Math.floor(sampleRate * 0.04))
-  const hopSize = Math.max(512, Math.floor(sampleRate * 0.02))
-  const voicedSegments = []
-  const maxSilenceWindows = getMaxSilenceWindowsForHold(sampleRate)
-
-  let currentStart = null
-  let silenceWindows = 0
-
-  for (let index = 0; index + windowSize <= samples.length; index += hopSize) {
-    let sumSquares = 0
-    for (let sampleIndex = index; sampleIndex < index + windowSize; sampleIndex += 1) {
-      const value = samples[sampleIndex]
-      sumSquares += value * value
-    }
-
-    const rms = Math.sqrt(sumSquares / windowSize)
-    const isVoiced = rms >= voiceThreshold
-
-    if (isVoiced && currentStart === null) {
-      currentStart = index
-      silenceWindows = 0
-    }
-
-    if (currentStart !== null) {
-      if (isVoiced) {
-        silenceWindows = 0
-      } else {
-        silenceWindows += 1
-      }
-
-      if (silenceWindows >= maxSilenceWindows) {
-        const end = index + windowSize
-        if (end > currentStart + windowSize) {
-          voicedSegments.push(samples.slice(currentStart, end))
-        }
-        currentStart = null
-        silenceWindows = 0
-      }
-    }
-  }
-
-  if (currentStart !== null && currentStart < samples.length) {
-    voicedSegments.push(samples.slice(currentStart))
-  }
-
-  if (!voicedSegments.length) {
-    voicedSegments.push(samples)
-  }
-
-  return voicedSegments
-}
-
-async function matchSegmentNames(segments, sampleRate, speakerClusters = [], cachedProfiles = []) {
-  if (!segments.length) return FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker
-
-  const profiles = Array.isArray(cachedProfiles) ? cachedProfiles : []
-
-  const segmentResults = await Promise.all(
-    segments.map((segment) => computeAudioSignature(segment, sampleRate)),
-  )
-  const segmentSignatures = segmentResults.map((result, i) => ({
-    vector: result.vector,
-    length: segments[i].length,
-  }))
-  const signature = segmentSignatures.reduce(
-    (acc, current) => {
-      const weight = Math.max(1, current.length)
-      current.vector.forEach((value, index) => {
-        acc.vector[index] = (acc.vector[index] || 0) + value * weight
-      })
-      acc.totalWeight += weight
-      return acc
-    },
-    { vector: [], totalWeight: 0 },
-  )
-  const signatureVector =
-    signature.totalWeight > 0
-      ? signature.vector.map((value) => value / signature.totalWeight)
-      : [0, 0, 0, 0]
-
-  let bestMatch = null
-  let bestSimilarity = -1
-
-  profiles.forEach((profile) => {
-    if (!Array.isArray(profile.signature)) return
-    const similarity = compareCosineSignatures(signatureVector, profile.signature)
-    if (similarity > bestSimilarity) {
-      bestSimilarity = similarity
-      bestMatch = profile
-    }
-  })
-
-  const profileMatch = getProfileMatchCfg()
-  // compareCosineSignatures devuelve SIMILITUD (1 = misma voz); la config la
-  // expresa como "máxima distancia" → umbral de similitud = 1 - distancia.
-  const registeredMinSimilarity = 1 - Number(profileMatch.registeredProfileMaxDistance ?? 0.12)
-  if (bestMatch && bestSimilarity >= registeredMinSimilarity && isPlausiblePersonName(bestMatch.label || '')) {
-    return bestMatch.label || FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker
-  }
-
-  let clusterMatch = null
-  let clusterSimilarity = -1
-  speakerClusters.forEach((cluster) => {
-    if (!Array.isArray(cluster?.signature)) return
-    const similarity = compareCosineSignatures(signatureVector, cluster.signature)
-    if (similarity > clusterSimilarity) {
-      clusterSimilarity = similarity
-      clusterMatch = cluster
-    }
-  })
-
-  const MATCH_THRESHOLD = 1 - Number(profileMatch.clusterMatchMaxDistance ?? 0.09)
-  const blendWeight = profileMatch.clusterSignatureBlendWeight
-
-  if (clusterMatch && clusterSimilarity >= MATCH_THRESHOLD) {
-    const label = clusterMatch.label || FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker
-    if (isPlausiblePersonName(label) || isAutoSpeakerLabel(label)) {
-      // Cluster con NOMBRE PROPIO = ancla de esa persona: no se mezcla con la voz
-      // entrante (la arrastraría hacia sí misma). Los «Hablante N» sí adaptan.
-      if (!isPlausiblePersonName(label)) {
-        clusterMatch.signature = clusterMatch.signature.map((value, index) => {
-          const previous = Number(value || 0)
-          const next = Number(signatureVector[index] || 0)
-          return previous * (1 - blendWeight) + next * blendWeight
-        })
-      }
-      return label
-    }
-  }
-
-  const label = nextAvailableSpeakerLabel(speakerClusters)
-  speakerClusters.push({ label, signature: signatureVector })
-  return label
-}
 
 async function stopMediaStream(stream) {
   if (!stream) return
@@ -543,7 +399,6 @@ export function useFluVoiceAssistant({
   const getHorarioContextRef = useRef(getHorarioContext)
   const getResultadosContextRef = useRef(getResultadosContext)
   const resolveMinuteLookupRef = useRef(resolveMinuteLookup)
-  const voiceProfilesRef = useRef([])
   const chunkTotalSamplesRef = useRef(0)
   /** Muestras acumuladas al abrir turno (diarización alineada al turno). */
   const turnAudioStartSampleRef = useRef(0)
@@ -756,14 +611,6 @@ const lastResolvedTurnRef = useRef(0)
       rebuildRecognitionRef.current()
     }
   }, [language])
-
-  useEffect(() => {
-    listVoiceProfiles()
-      .then((profiles) => {
-        voiceProfilesRef.current = profiles
-      })
-      .catch(fluAsyncErrorHandler('useFluVoiceAssistant'))
-  }, [])
 
   useEffect(() => {
     const hasGetUserMedia = Boolean(navigator.mediaDevices?.getUserMedia)
@@ -1626,42 +1473,41 @@ const lastResolvedTurnRef = useRef(0)
         }
       }
 
-      const segments = segmentAudio(audioSnapshot, sampleRate)
-      const speakerName = await matchSegmentNames(
-        segments,
+      // MODO PASIVO: UNA sola decision de hablante, delegada al dueno canónico
+      // (`resolveConversationSpeaker` vía `resolveSpeakerIdentityFromVector`). Antes
+      // había un SEGUNDO resolver local (`matchSegmentNames`) con sus propios umbrales
+      // (1 - clusterMatchMaxDistance) y su propia base de perfiles: dos rutas que
+      // divergían sobre la MISMA señal. No se re-embebe: el vector ya sale de
+      // `computeTurnSignature` (único punto de firma por turno).
+      const identity = resolveSpeakerIdentityFromVector(signatureVector, {
+        speakerClusters: speakerClustersRef.current,
+        lastSpeaker: lastSpeakerRef.current,
+        lastSignature: lastTurnSignatureRef.current,
+        fallbackSpeaker,
+        utteranceText: cleanForSpeech(transcriptForIntro),
         sampleRate,
-        speakerClustersRef.current,
-        voiceProfilesRef.current,
-      )
+        voicedSampleCount: countVoicedSamples(ventanaVoz, { sampleRate }),
+        // `false`: en modo pasivo NO hay turno de conversación abierto. La via NO-boundary
+        // es la dueña de la continuidad (lastSpeaker/lastSignature + sticky), que sustituye
+        // al `distanceToLast` local borrado, y con `true` `production-*` marcaría
+        // `evidenciaAcustica=true` (solo `production-*` y `registered-pinned-rematch`
+        // cuentan en `isMeasuredIdentityMatch`), cambiando el comportamiento de la fila.
+        atTurnBoundary: false,
+        // El modo pasivo es el que necesita abrir "Hablante N" sin turno abierto; el
+        // resolutor sigue acotando la apertura (ventana corta / minimo voiced).
+        allowNewCluster: true,
+        preferSpeaker: lastLoggedSpeakerRef.current || '',
+        reservedLabels: reservedSpeakerLabels(userSpeakersView.current),
+        sessionPrimary: sessionPrimarySpeakerRef.current || '',
+      })
+      // El resolutor decide SOBRE COPIAS (`workingClusters`): el ref solo se escribe aqui.
+      setSpeakerClusters(identity.workingClusters)
 
+      const speakerName = identity.speakerName
       const introducedName = detectIntroducedName(transcriptForIntro)
-      let resolvedSpeakerName = introducedName || speakerName
-      if (
-        !introducedName &&
-        Array.isArray(lastTurnSignatureRef.current) &&
-        lastTurnSignatureRef.current.length
-      ) {
-        const distanceToLast = compareCosineSignatures(signatureVector, lastTurnSignatureRef.current)
-        if (distanceToLast < getLastTurnSignatureContinuityDistance()) {
-          resolvedSpeakerName = lastSpeakerRef.current || speakerName
-        }
-      }
+      const resolvedSpeakerName = introducedName || speakerName
       const speakerAlias = introducedName && introducedName !== speakerName ? speakerName : null
 
-      if (introducedName && introducedName !== speakerName) {
-        // §9: el segmento solo PROPONE; el COMMIT persiste los clusters (aqui NO se escribe el ref).
-        saveVoiceProfile({
-          label: introducedName,
-          signature: signatureVector,
-        })
-          .then((profile) => {
-            voiceProfilesRef.current = [
-              profile,
-              ...voiceProfilesRef.current.filter((item) => item.label !== profile.label),
-            ]
-          })
-          .catch(fluAsyncErrorHandler('useFluVoiceAssistant'))
-      }
       // La base de participantes se re-ancla por la MISMA via en todas las rutas de "soy X" (2026-10-18).
       registerSpeakerIdentity({ name: introducedName, clusters: speakerClustersRef.current, signatureVector, refs: { sessionPrimarySpeakerRef, registerParticipant: participantRegisterPort(identitySession) } })
       lastSpeakerRef.current = resolvedSpeakerName
@@ -1672,9 +1518,10 @@ const lastResolvedTurnRef = useRef(0)
         introducedName,
         resolvedSpeakerName,
         speakerAlias,
+        evidenciaAcustica: identity.evidence === true,
       }
     },
-    [conversationActiveRef, resolveConversationSpeakerSync, computeTurnSignature, identitySession],
+    [conversationActiveRef, resolveConversationSpeakerSync, computeTurnSignature, identitySession, setSpeakerClusters, userSpeakersView],
   )
 
   const emitConversationLog = useCallback(
@@ -4522,6 +4369,12 @@ const lastResolvedTurnRef = useRef(0)
     grantParticipantFloor,
     endParticipantFloorDelivery: () => fluParticipantRef.current?.endFloorDelivery?.(),
     suspendRecognitionForAssistantSpeech,
+    /**
+     * Resolución de hablante del turno (paso el pipeline). Expuesta como entrada
+     * pública del motor de identidad para que la rama PASIVA se pueda ejercitar
+     * de verdad en pruebas (sin simular el resolver).
+     */
+    resolveSpeaker,
     /** Set a recent memory text that gets injected into the system prompt on next contract request. */
     setRecentMemory,
   }

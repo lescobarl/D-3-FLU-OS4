@@ -16,7 +16,6 @@ import {
     getIngressGuardsCfg,
     getSpeechMergeCfg,
     getAsrSegmentationCfg,
-    getProfileMatchCfg,
     getFluTimingCfg,
     getShortFinalKeywordSet,
 } from '../src/voice/lib/fluTranscriptMotor.js';
@@ -25,7 +24,6 @@ const CONFIG = {
     voiceIdentity: {
         capture: {
             conversationSpeakerThresholds: { speaker: 0.7 },
-            profileMatch: { umbral: 0.8 },
         },
     },
     transcript: {
@@ -85,11 +83,6 @@ const LECTORES: Lector[] = [
         mensaje: 'fluConfig.transcript.asrSegmentation es obligatorio',
     },
     {
-        leer: () => getProfileMatchCfg(),
-        path: ['voiceIdentity', 'capture', 'profileMatch'],
-        mensaje: 'fluConfig.voiceIdentity.capture.profileMatch es obligatorio',
-    },
-    {
         leer: () => getFluTimingCfg(),
         path: ['timing'],
         mensaje: 'fluConfig.timing es obligatorio',
@@ -116,10 +109,6 @@ describe('fluTranscriptMotor - lectores devuelven la config', () => {
 
     it('getAsrSegmentationCfg devuelve la segmentacion ASR', () => {
         expect(getAsrSegmentationCfg()).toBe(leer(['transcript', 'asrSegmentation']));
-    });
-
-    it('getProfileMatchCfg devuelve el umbral de match de perfil', () => {
-        expect(getProfileMatchCfg()).toBe(leer(['voiceIdentity', 'capture', 'profileMatch']));
     });
 
     it('getFluTimingCfg devuelve la config de tiempos', () => {

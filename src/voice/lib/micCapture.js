@@ -2,7 +2,6 @@
  * Restricciones y ganancia del micrófono (config central, sin hardcode).
  */
 import { FLU_CONFIG } from './fluConfig.js'
-import { DEFAULT_SAMPLE_RATE } from './audioConstants.js'
 import { optionalConfigBlock } from './configGuard.js'
 
 /**
@@ -12,36 +11,6 @@ import { optionalConfigBlock } from './configGuard.js'
  */
 export function getConversationAudioConfig(config = FLU_CONFIG) {
   return optionalConfigBlock(config, ['voiceIdentity', 'capture', 'conversationAudio'])
-}
-
-/** RMS lineal desde dBFS (p. ej. -45 → ~0.0056). */
-export function dbToLinearRms(db) {
-  return Math.pow(10, Number(db) / 20)
-}
-
-/** Umbral adaptativo de voz (prioriza silenceThresholdDb; legacy voiceDetectionThreshold). */
-export function getSilenceThresholdLinear(config = FLU_CONFIG) {
-  const audio = getConversationAudioConfig(config)
-  const legacy = Number(audio.voiceDetectionThreshold)
-  if (Number.isFinite(legacy) && legacy > 0 && audio.silenceThresholdDb == null) {
-    return legacy
-  }
-  return dbToLinearRms(Number(audio.silenceThresholdDb))
-}
-
-export function getVoiceDetectionThreshold(config = FLU_CONFIG) {
-  return getSilenceThresholdLinear(config)
-}
-
-export function getVoiceHoldMs(config = FLU_CONFIG) {
-  return Number(getConversationAudioConfig(config).voiceHoldMs)
-}
-
-/** Ventanas de silencio en segmentAudio (hop ~20 ms). */
-export function getMaxSilenceWindowsForHold(_sampleRate = DEFAULT_SAMPLE_RATE, config = FLU_CONFIG) {
-  const hopMs = 20
-  const voiceHoldMs = getVoiceHoldMs(config)
-  return Math.max(4, Math.ceil(voiceHoldMs / hopMs))
 }
 
 /**
@@ -84,13 +53,6 @@ export function getConversationMinVoicedForNewSamples(sampleRate, config = FLU_C
 
 export function getDiarizeIntervalMs(config = FLU_CONFIG) {
   return Number(config.activeListen?.speakers?.diarizeIntervalMs)
-}
-
-export function getLastTurnSignatureContinuityDistance(config = FLU_CONFIG) {
-  return Number(
-    getVoiceIdentityCaptureConfig(config).conversationSpeakerThresholds
-      ?.lastTurnSignatureContinuityDistance,
-  )
 }
 
 /**

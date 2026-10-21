@@ -133,8 +133,6 @@ export const FLU_CONFIG = {
         cosineVerifiedAnchorMatchThreshold: 0.62,
         /** Margen entre DOS anclas verificadas que compiten por el nombre. */
         verifiedAnchorMargin: 0.05,
-        /** Distancia coseno máxima para pegar al hablante del turno anterior. */
-        lastTurnSignatureContinuityDistance: 0.075,
         /** Reutilización de cluster en producción (512-D real). */
         productionClusterReuseThreshold: 0.66,
         shortUtteranceMaxMs: 1500,
@@ -152,12 +150,6 @@ export const FLU_CONFIG = {
         /** <4 palabras: mantener locutor anterior si coseno ≥ 0.68 (evita H5/H7). */
         shortUtteranceImmediateContinuity: 0.76,
         shortUtteranceImmediateMaxWords: 4,
-      },
-      /** Matching de perfiles guardados vs clusters (identificación por segmento). */
-      profileMatch: {
-        registeredProfileMaxDistance: 0.12,
-        clusterMatchMaxDistance: 0.09,
-        clusterSignatureBlendWeight: 0.5,
       },
       embedding: {
         modelId: 'Xenova/wavlm-base-plus-sv',
@@ -271,8 +263,6 @@ export const FLU_CONFIG = {
         autoGainControl: false,
         /** Ganancia digital (mayor = más sensible). */
         captureGain: 30,
-        /** Umbral adaptativo: por debajo se considera silencio (dBFS). */
-        silenceThresholdDb: -45,
         /** Pausas naturales antes de cortar segmento de voz (ms). */
         voiceHoldMs: 1200,
         processEvery: 1,
