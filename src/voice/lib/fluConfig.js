@@ -2179,7 +2179,7 @@ export const FLU_CONFIG = {
       shortCommitMaxWords: 0,
       shortCommitMaxChars: 0,
       skipDiarizeOnStaleFlush: true,
-      treatEmptyPhraseAsWeak: true,
+      treatEmptyPhraseAsWeak: true, committedReplayMaxDroppedWords: 1, // palabras que el ASR puede perder al reentregar una locucion ya commiteada (misma locucion)
     },
     /** Guardas de filas nuevas en ingress (docs/reglas-duras.md). */
     ingressGuards: {

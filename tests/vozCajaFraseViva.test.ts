@@ -24,7 +24,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../src/voice/lib/voiceProbe', () => ({ voiceProbe: vi.fn() }))
 
-import { handleConversationStreamSync, colaNuevaTrasSolape, palabraQueCrece } from '../src/voice/lib/conversationStreamCommit.js'
+import { handleConversationStreamSync, colaNuevaTrasSolape, palabraQueCrece, reentregaLoMostrado, startsWithCommittedLocution, tailAfterCommittedLocution } from '../src/voice/lib/conversationStreamCommit.js'
 import { createActiveListenState } from '../src/voice/lib/activeListen.js'
 import { resetTurnSpeakerPreflights } from '../src/voice/lib/turnSpeakerPreflight.js'
 import { FLU_CONFIG } from '../src/voice/lib/fluConfig.js'
@@ -131,6 +131,119 @@ describe('A - completar la palabra que crece, no pegarla', () => {
   })
 })
 
+// DEFECTO MEDIDO EN d4c1c8f3 (commit #13): la caja mostraba la locucion DOS VECES
+// ("mientras vamos a preparar el menjurje en mientras vamos a preparar el menjurje en mi
+// pla"). La rama de "palabra que crece" confundia la ultima palabra CORTA de la caja ("mi")
+// con el arranque de la primera palabra de una REENTREGA ("mientras") y pegaba la emision
+// entera detras. La guarda devuelve la decision al alineado de cola.
+describe('A2 - reentrega de la MISMA locucion: no se pega entera detras', () => {  it('`reentregaLoMostrado` distingue la reentrega del crecimiento de una palabra', () => {
+    expect(reentregaLoMostrado('mientras vamos a preparar el menjurje en mi'.split(' '), 'mientras vamos a preparar el menjurje en mi pla'.split(' '))).toBe(true)
+    // Crecimiento puro de la ultima palabra (la que la caja tiene a medias): NO es reentrega.
+    expect(reentregaLoMostrado(['du'], ['dupli'])).toBe(false)
+    expect(reentregaLoMostrado(['vamos con la du'], ['duplica'])).toBe(false)
+  })
+
+  it('el par REAL del defecto no duplica el bloque', () => {
+    const mostrado = 'mientras vamos a preparar el menjurje en mi'
+    const emision = 'mientras vamos a preparar el menjurje en mi pla'
+    expect(colaNuevaTrasSolape(mostrado, emision)).toBe(emision)
+  })
+
+  it('la CAJA real: la locucion crece sin repetirse (4 interinos seguidos)', () => {
+    const { deps, mostrado: visible } = makeDeps()
+    const SECUENCIA = [
+      'mientras vamos a preparar el',
+      'mientras vamos a preparar el menjurje',
+      'mientras vamos a preparar el menjurje en mi',
+      'mientras vamos a preparar el menjurje en mi plato',
+      'mientras vamos a preparar el menjurje en mi plato de Hello',
+    ]
+    for (const texto of SECUENCIA) handleConversationStreamSync(deps as never, { capture: texto })
+
+    expect(ultimo(visible)).toBe(SECUENCIA[SECUENCIA.length - 1])
+    expect(deps.publishedLiveRef.current).toBe(SECUENCIA[SECUENCIA.length - 1])
+    // Ninguna publicacion puede contener el bloque dos veces.
+    for (const valor of visible) {
+      const palabras = String(valor).toLowerCase().split(/\s+/).filter(Boolean)
+      const bloque = palabras.slice(0, 3).join(' ')
+      expect(String(valor).toLowerCase().split(bloque).length - 1, `"${valor}" repite el bloque`).toBe(1)
+    }
+  })
+
+  it('CONTROL: el crecimiento de una palabra y el doble legitimo siguen igual', () => {
+    expect(colaNuevaTrasSolape('du', 'dupli')).toBe('dupli')
+    expect(colaNuevaTrasSolape('dupli', 'duplica')).toBe('duplica')
+    expect(colaNuevaTrasSolape('vamos con la du', 'duplica')).toBe('vamos con la duplica')
+    expect(colaNuevaTrasSolape('hola du', 'hola duplica ahora')).toBe('hola duplica ahora')
+    expect(colaNuevaTrasSolape('no', 'no no')).toBe(colaNuevaTrasSolape('no', 'no no'))
+  })
+})
+
+// DEFECTO MEDIDO EN d4c1c8f3 (7,4 s): un interino de la locucion SIGUIENTE re-publicaba la
+// locucion YA COMMITEADA con una palabra caida ("está mal este está ..." -> "está mal está
+// ..."). El peel comparaba palabra a palabra, fallaba, la caja volvia a pintar la vieja y la
+// nueva quedaba bloqueada como "texto ajeno" hasta su final.
+describe('A3 - el peel del texto ya commiteado tolera UNA palabra caida', () => {
+  const COMMITTED = 'está mal este está con el hablante uno'
+
+  it('la reentrega con una palabra caida ES la misma locucion', () => {
+    expect(startsWithCommittedLocution('está mal está con el hablante uno', COMMITTED)).toBe(true)
+    expect(startsWithCommittedLocution(COMMITTED, COMMITTED)).toBe(true)
+    // Con cola nueva: la cola es lo unico que hay que pintar.
+    expect(tailAfterCommittedLocution('está mal está con el hablante uno no me acuerdo si le puse así', COMMITTED)).toBe(
+      'no me acuerdo si le puse así',
+    )
+    expect(tailAfterCommittedLocution('está mal está con el hablante uno', COMMITTED)).toBe('')
+  })
+
+  it('un texto AJENO no encaja aunque comparta palabras sueltas', () => {
+    expect(startsWithCommittedLocution('pon musica relajante en el salon', COMMITTED)).toBe(false)
+    expect(startsWithCommittedLocution('está mal, pon musica relajante', COMMITTED)).toBe(false)
+    // Dos palabras caidas ya no son una reentrega: es otra cosa.
+    expect(startsWithCommittedLocution('está mal hablante uno', COMMITTED)).toBe(false)
+    expect(startsWithCommittedLocution('está', COMMITTED)).toBe(false)
+  })
+
+  it('la caja NO vuelve a pintar la locucion vieja y la NUEVA entra', () => {
+    const { deps, mostrado } = makeDeps()
+    // Estado tras el commit de la locucion: su fila escrita y la caja vaciada.
+    deps.lastLogLineTextRef.current = COMMITTED
+    deps.lastCommitAtRef.current = 1000
+    handleConversationStreamSync(deps as never, { capture: 'está mal este está con el hablante uno', turnCommit: true, settlesTurn: true })
+    expect(deps.publishedLiveRef.current, 'el cierre vacia la caja').toBe('')
+    const antes = mostrado.length
+
+    // Interino de la locucion SIGUIENTE que reentrega la vieja con una palabra caida.
+    handleConversationStreamSync(deps as never, { capture: 'está mal está con el hablante uno' })
+    expect(deps.publishedLiveRef.current, 'la locucion ya commiteada NO se repinta').toBe('')
+    expect(mostrado.length, 'no se pinta nada').toBe(antes)
+
+    // La locucion nueva llega pegada a la vieja: se pinta SOLO su cola, sin bloqueo.
+    handleConversationStreamSync(deps as never, { capture: 'está mal está con el hablante uno no me acuerdo si le puse así' })
+    expect(deps.publishedLiveRef.current).toBe('no me acuerdo si le puse así')
+    handleConversationStreamSync(deps as never, { capture: 'está mal está con el hablante uno no me acuerdo si le puse así debió de poner' })
+    expect(deps.publishedLiveRef.current, 'la nueva locucion CRECE, no se congela').toBe(
+      'no me acuerdo si le puse así debió de poner',
+    )
+  })
+
+  it('un texto realmente AJENO sigue bloqueado (el gate no se relajo)', () => {
+    const { deps } = makeDeps()
+    handleConversationStreamSync(deps as never, { capture: 'no me acuerdo si le puse así' })
+    handleConversationStreamSync(deps as never, { capture: 'pon musica relajante en el salon' })
+    expect(deps.publishedLiveRef.current).toBe('no me acuerdo si le puse así')
+  })
+
+  it('la repeticion legitima y "no no" se conservan', () => {
+    const { deps, mostrado } = makeDeps()
+    handleConversationStreamSync(deps as never, { capture: 'no' })
+    handleConversationStreamSync(deps as never, { capture: 'no no' })
+    expect(ultimo(mostrado)).toBe('no no')
+    handleConversationStreamSync(deps as never, { capture: 'no no pasa nada' })
+    expect(ultimo(mostrado)).toBe('no no pasa nada')
+  })
+})
+
 describe('B - revision de la MISMA locucion (el ASR corrige el inicio)', () => {
   it('un re-reconocimiento que CORRIGE el inicio actualiza la caja aunque sea mas corto', () => {
     const { deps, mostrado } = makeDeps()
@@ -222,5 +335,29 @@ describe('D - fidelidad del gate real (refreshNeeded && settlesTurn)', () => {
     handleConversationStreamSync(deps as never, { capture: LARGO, turnCommit: true, settlesTurn: true })
     expect(filas.length, 'una sola fila por turno').toBe(1)
     expect(filas[0].length).toBeGreaterThan(80)
+  })
+})
+
+// El hueco de 18,6 s de d4c1c8f3 lo mide el runner entre dos CAMBIOS de caja; con el reloj
+// virtual parado en el silencio, la caja de un turno ABIERTO no puede cambiar (no hay nada
+// que mostrar). Lo que SI es del producto: al cerrar el turno la caja se vacia y la locucion
+// siguiente entra SOLA, sin arrastrar la frase vieja.
+describe('E - al cerrar o cambiar de locucion la caja no arrastra la frase vieja', () => {
+  it('tras el cierre la caja queda vacia y la locucion siguiente entra sola', () => {
+    const { deps, mostrado, filas } = makeDeps()
+    handleConversationStreamSync(deps as never, { capture: 'voy a poner a la mujer' })
+    expect(deps.publishedLiveRef.current).toBe('voy a poner a la mujer')
+
+    handleConversationStreamSync(deps as never, {
+      capture: 'voy a poner a la mujer',
+      turnCommit: true,
+      settlesTurn: true,
+    })
+    expect(deps.publishedLiveRef.current, 'el cierre vacia la caja').toBe('')
+    expect(filas).toEqual(['voy a poner a la mujer'])
+
+    handleConversationStreamSync(deps as never, { capture: 'no lo voy a preparar al 100%' })
+    expect(ultimo(mostrado), 'la locucion nueva no se pega a la vieja').toBe('no lo voy a preparar al 100%')
+    expect(ultimo(mostrado).toLowerCase()).not.toContain('mujer')
   })
 })

@@ -55,6 +55,8 @@ export function createActiveListenState() {
     pendingInterim: '',
     lastFinalAtMs: 0,
     speakerIndex: 1,
+    /** Libro de la ultima fusion de la linea viva: `{ base, chunk, line }` (ver integrateOpenLine). */
+    openLineBook: null,
   }
 }
 
@@ -64,6 +66,7 @@ export function resetActiveListenState(state) {
   state.pendingInterim = ''
   state.lastFinalAtMs = 0
   state.speakerIndex = 1
+  state.openLineBook = null
 }
 
 export function resolveActiveSpeaker(state, utterance = '') {

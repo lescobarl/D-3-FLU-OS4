@@ -42,6 +42,7 @@ import {
   resolveIngressCaptureText,
   isProgressiveExtension,
   isAssistantVoiceEcho,
+  esCorreccionDelMismoTramo,
 } from './conversationStream.js'
 import { collapseAdjacentWordRepeat } from './speechMerge.js'
 import { fluTrace } from './fluTrace.js'
@@ -225,8 +226,15 @@ export function flushSrGapSegmentThroughIngress(ctx, { sinceLastResultMs = 0 } =
   // identidad NO cambia, la ven todos los consumidores) ANTES del EVAL, para que el
   // EVAL, los portones y el commit partan de la referencia COMPLETA.
   const liveText = cleanForSpeech(ctx.publishedLiveRef?.current || '')
-  if (liveText) {
-    const rawLive = cleanForSpeech(readTurnLive(ctx.listenState) || ctx.listenState.pendingFinal || '')
+  // CORRECCION DEL MISMO TRAMO (#11, medido d4c1c8f3): el ultimo interino reescribe el tramo
+  // final de la MISMA locucion ("… al 100%" corrige a "… 100 porque"). La FILA lleva la
+  // corregida; no se concatenan. Se decide ANTES de sembrar la referencia viva, que borra el
+  // pending y con el la unica copia de la correccion.
+  const ultimaEmision = cleanForSpeech(ctx.listenState.pendingInterim || '')
+  const lineaViva = cleanForSpeech(readTurnLive(ctx.listenState) || ctx.listenState.pendingFinal || '')
+  const correccion = esCorreccionDelMismoTramo(lineaViva || liveText, ultimaEmision) ? ultimaEmision : ''
+  if (liveText && !correccion) {
+    const rawLive = lineaViva
     if (liveText.length > rawLive.length) {
       ctx.listenState.openLine = liveText
       ctx.listenState.pendingInterim = ''
@@ -252,7 +260,9 @@ export function flushSrGapSegmentThroughIngress(ctx, { sinceLastResultMs = 0 } =
   // UNA palabra ("…cla Cloud Cloud de que…") mientras el final de Chrome era limpio;
   // el canon colapsa el tartamudeo ANTES de sellar la fila (mismo dueno que la puerta
   // del final: `canonSinTartamudeo`).
-  const captureFinal = canonSinTartamudeo((liveText.length > capture.length) ? liveText : capture)
+  const captureFinal = canonSinTartamudeo(
+    correccion || ((liveText.length > capture.length) ? liveText : capture),
+  )
 
   resetInterimControlBuffers(ctx.listenState, ctx.publishedLiveRef, ctx.lastStreamPreviewRef)
 

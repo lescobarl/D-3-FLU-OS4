@@ -28,6 +28,7 @@ export const TRANSCRIPT_PAUSE_KEYS = [
   'shortCommitMaxChars',
   'skipDiarizeOnStaleFlush',
   'treatEmptyPhraseAsWeak',
+  'committedReplayMaxDroppedWords',
 ]
 
 export function getTranscriptPauseCfg() {

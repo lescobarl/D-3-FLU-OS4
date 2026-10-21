@@ -11,6 +11,7 @@ import {
   hasSpeechAnchor,
   preferNewRowForShortFinal,
   utterancesRelate,
+  isSameFragmentRevision,
 } from './speechMerge.js'
 import { shouldForceNewLogRowOnCommit } from './ingressGuards.js'
 import { getTranscriptPauseCfg, countSpeechWords as countWordsFromPauseCfg, srGapSilenceReached } from './fluTranscriptPause.js'
@@ -421,6 +422,65 @@ function clearStaleCommittedEchoFromState(state, lastCommitted = '') {
 
 export { clearStaleCommittedEchoFromState }
 
+/**
+ * Son el MISMO tramo y la ULTIMA es una CORRECCION del suyo (no un recorte ni una emision
+ * que ELIMINA un tramo distinto)? La usa el cierre de la FILA por silencio: cuando el ultimo
+ * interino reescribe el tramo final de la MISMA locucion, la fila lleva la CORREGIDA, no la
+ * mas larga.
+ *
+ * MEDIDO (#11, d4c1c8f3): la locucion se entrega como "no lo voy a preparar 100 porque" y,
+ * despues, el ASR la corrige a "no lo voy a preparar al 100%". Elegir por longitud se queda
+ * con la primera y pierde la correccion; unirlas seria mezclar dos hipotesis (prohibido).
+ *
+ * Guardas (una locucion, un tramo, una correccion):
+ *  - misma locucion (`utterancesSameRevision`);
+ *  - ni recorte ni extension literal (una es prefijo de la otra): eso ya tiene su camino;
+ *  - arranque comun de >= 2 palabras (si no, no hay "mismo tramo");
+ *  - las DOS tienen cola despues del arranque (hay tramo que corregir);
+ *  - la cola de la ultima SOLAPA con la de la linea (reescribe ese tramo). Si no solapa
+ *    nada, la ultima esta ELIMINANDO contenido distinto: no se usa.
+ * @param {string} linea
+ * @param {string} ultima
+ * @returns {boolean}
+ */
+export function esCorreccionDelMismoTramo(linea = '', ultima = '') {
+  const a = cleanForSpeech(linea)
+  const b = cleanForSpeech(ultima)
+  if (!a || !b || a === b) return false
+  if (!utterancesSameRevision(a, b)) return false
+  const aLow = a.toLowerCase()
+  const bLow = b.toLowerCase()
+  if (aLow.startsWith(bLow) || bLow.startsWith(aLow)) return false
+  const aWords = a.split(/\s+/).filter(Boolean)
+  const bWords = b.split(/\s+/).filter(Boolean)
+  const clave = (palabra) => palabra.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '')
+  let comun = 0
+  while (comun < aWords.length && comun < bWords.length && clave(aWords[comun]) === clave(bWords[comun])) {
+    comun += 1
+  }
+  if (comun < 2 || bWords.length <= comun || aWords.length <= comun) return false
+  const colaLinea = aWords.slice(comun).map(clave).filter(Boolean)
+  const colaUltima = bWords.slice(comun).map(clave).filter(Boolean)
+  // Una correccion REESCRIBE el tramo: no borra mas palabras de las que el ASR puede perder
+  // al reentregar (config). Si se come un tramo entero distinto, no se usa.
+  const maxBorradas = Number(getTranscriptPauseCfg()?.committedReplayMaxDroppedWords) || 0
+  if (colaLinea.length - colaUltima.length > maxBorradas) return false
+  return colaUltima.some((palabra) => colaLinea.includes(palabra))
+}
+
+/**
+ * Captura de la FILA al cerrar por silencio. La linea viva manda, SALVO que el ULTIMO interino
+ * sea una CORRECCION del mismo tramo (`esCorreccionDelMismoTramo`): entonces la fila lleva la
+ * corregida. Las dos hipotesis NUNCA se concatenan.
+ * @param {object} state
+ * @returns {string}
+ */
+function capturaDeFilaAlCerrar(state) {
+  const linea = readTurnLive(state)
+  const ultima = cleanForSpeech(readPending(state))
+  return esCorreccionDelMismoTramo(linea, ultima) ? ultima : linea
+}
+
 /** Commit de segmento cuando Chrome deja de emitir onresult pero openLine tiene texto nuevo. */
 export function evaluateSrGapSegmentCommit(
   state,
@@ -447,7 +507,7 @@ export function evaluateSrGapSegmentCommit(
     return { flush: false, capture: '', reason: 'sr-active' }
   }
 
-  const capture = cleanForSpeech(readTurnLive(state) || state?.pendingFinal)
+  const capture = cleanForSpeech(capturaDeFilaAlCerrar(state) || state?.pendingFinal)
   if (!capture) return { flush: false, capture: '', reason: 'empty-openline' }
 
   const prior = cleanForSpeech(lastCommitted)
@@ -490,6 +550,14 @@ export function readTurnLive(state) {
   if (!line) return normalizeMicText(pending)
   if (pending.startsWith(line)) return normalizeMicText(pending)
   if (line.startsWith(pending)) return normalizeMicText(line)
+  // MISMA LOCUCION CON OTRA GRAFIA (dos motores): se conserva UNA hipotesis, la MAS
+  // COMPLETA. Sin esto, el paquete del segundo motor (variante de la linea, p.ej. sin una
+  // palabra o con otra terminacion) se tomaba como "texto nuevo" y la captura que llegaba a
+  // la caja era la variante, que la caja pegaba detras ("... ya está todo Cloud de que ya
+  // está ya", medido en d4c1c8f3).
+  if (utterancesSameRevision(line, pending)) {
+    return normalizeMicText(line.length >= pending.length ? line : pending)
+  }
   if (!utterancesRelate(line, pending)) return normalizeMicText(pending)
   if (line.length > pending.length) return normalizeMicText(line)
   return normalizeMicText(mergeSpeechText(line, pending, { keepAll: true }))
@@ -573,8 +641,29 @@ export function readPublishedText(state) {
 function integrateOpenLine(state, chunk) {
   if (!chunk) return
   const line = readOpenLine(state)
-  const resolved = resolveMicFragmentMerge(line, chunk)
-  state.openLine = normalizeMicText(resolved)
+  // LIBRO del ultimo trozo pegado: `{ base, chunk, line }`. Solo vale si la linea sigue
+  // siendo la que dejo la ultima fusion (si otro camino la reescribio, se ignora).
+  const libro = state.openLineBook && state.openLineBook.line === line ? state.openLineBook : null
+  // REVISION DEL MISMO HUECO DE AUDIO: el trozo entrante reescribe el ultimo delta pegado
+  // (otro motor, o el ASR reemitiendo su delta). Se REEMPLAZA sobre la base; antes se volvia
+  // a pegar y la linea mezclaba las dos hipotesis ("... de debido debió de poner debió",
+  // medido en d4c1c8f3). No es dedupe: es "una hipotesis por hueco".
+  if (libro && libro.chunk && libro.chunk !== chunk && isSameFragmentRevision(libro.chunk, chunk)) {
+    const merged = normalizeMicText(resolveMicFragmentMerge(libro.base, chunk))
+    state.openLine = merged
+    state.openLineBook = { base: libro.base, chunk, line: merged }
+    return
+  }
+  const merged = normalizeMicText(resolveMicFragmentMerge(line, chunk))
+  if (merged === line) return
+  // Si la fusion solo ANADIO el trozo, se abre un hueco nuevo sobre la linea anterior; si
+  // la linea crecio absorbiendolo (emision acumulativa del otro motor), no hay delta
+  // pendiente y la base pasa a ser la linea entera.
+  const appendeado = Boolean(line) && merged === normalizeMicText(`${line} ${chunk}`)
+  state.openLine = merged
+  state.openLineBook = appendeado
+    ? { base: line, chunk, line: merged }
+    : { base: merged, chunk: '', line: merged }
 }
 
 /** Filas recientes para stripPriorTurnsFromInterim (incluye fila viva aún no cerrada). */

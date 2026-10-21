@@ -6,6 +6,7 @@ import { cleanForSpeech, detectWakeIntroducedName, formatClock, sameRequestWindo
 import { normalizeMicText } from './speechMerge.js'
 import { resolveInlineWakeAtCommit, isTurnCapture, requiresWakeWord } from './wakeTurnCommit.js'
 import { getAsrSegmentationCfg } from './fluTranscriptMotor.js'
+import { getTranscriptPauseCfg } from './fluTranscriptPause.js'
 import { FLU_CONFIG } from './fluConfig.js'
 import {
   resolveMicCommitAction,
@@ -198,6 +199,35 @@ export function palabraQueCrece(mostrada = '', nueva = '') {
 }
 
 /**
+ * La emisión **REENTREGA lo mostrado EN ORDEN y sigue con más palabras**? Entonces es la
+ * MISMA locución creciendo (el ASR la vuelve a entregar entera), no una palabra que se
+ * completa.
+ *
+ * Existe porque una palabra CORTA de la caja es ARRANQUE de la primera palabra de la
+ * reentrega ("mi" → "mientras", "la" → "largo") y la rama de `palabraQueCrece` pegaba la
+ * emisión ENTERA detrás. Defecto medido en d4c1c8f3 (commit #13 de la fila):
+ * caja "…el menjurje en mi" + emisión "…el menjurje en mi pla"
+ * → "…el menjurje en mientras vamos a preparar el menjurje en mi pla" (bloque duplicado,
+ * 4 valores de caja y la fila duplicada). Cuando esto es cierto, la decisión vuelve al
+ * alineado de cola (`(A)`/`(B)`), que completa la última palabra y añade SOLO lo que falta.
+ *
+ * @param {string[]} mostradas Palabras que la caja muestra.
+ * @param {string[]} nuevas Palabras de la emisión.
+ * @returns {boolean}
+ */
+export function reentregaLoMostrado(mostradas = [], nuevas = []) {
+  if (!mostradas.length || nuevas.length <= mostradas.length) return false
+  const clavesMostradas = mostradas.map(claveDePalabra)
+  const clavesNuevas = nuevas.map(claveDePalabra)
+  // Todas las palabras mostradas MENOS la última (la que podría estar creciendo) tienen
+  // que aparecer en la MISMA posición: es la locución reentregada desde el principio.
+  for (let i = 0; i < clavesMostradas.length - 1; i += 1) {
+    if (!mismaPalabraClave(clavesMostradas[i], clavesNuevas[i])) return false
+  }
+  return true
+}
+
+/**
  * Cola NUEVA de una emision: alinea el FINAL de lo mostrado con un tramo de la emision
  * nueva (el ASR reentrega la cola y sigue) y devuelve SOLO lo que viene DESPUES de ese
  * tramo, con el texto CRUDO de la emision (mas la letra que completa la ultima palabra
@@ -219,7 +249,14 @@ export function colaNuevaTrasSolape(mostrado, nuevo) {
   // REEMPLAZA la ultima palabra por la forma completa y el resto de la emision se
   // anade detras. Antes el caso de UNA sola palabra se descartaba arriba
   // (`crudasNuevas.length < 2`) y la caja se quedaba con la parcial hasta el final.
-  if (palabraQueCrece(crudas[crudas.length - 1], crudasNuevas[0])) {
+  // GUARDA (medido d4c1c8f3): si la emision REENTREGA lo mostrado en orden y sigue, no
+  // hay palabra creciendo sino la MISMA locucion mas larga. Sin esta guarda, la palabra
+  // corta del borde ("mi") se tomaba por el arranque de la primera palabra de la
+  // reentrega ("mientras") y la locucion entera se pegaba detras (bloque duplicado).
+  if (
+    !reentregaLoMostrado(crudas, crudasNuevas) &&
+    palabraQueCrece(crudas[crudas.length - 1], crudasNuevas[0])
+  ) {
     return crudas.slice(0, -1).concat(crudasNuevas).join(' ')
   }
   if (crudasNuevas.length < 2) return ''
@@ -346,6 +383,55 @@ export function colaNuevaTrasSolape(mostrado, nuevo) {
 }
 
 /**
+ * ALINEA la locucion YA COMMITEADA al ARRANQUE de la emision, tolerando que el ASR haya
+ * PERDIDO palabras al reentregarla (misma locucion, no texto ajeno). Devuelve el indice
+ * (en palabras de `crudas`) donde TERMINA la locucion, o -1 si no encaja.
+ *
+ * MEDIDO (d4c1c8f3): la locucion "está mal este está con el hablante uno" se reentrega
+ * como "está mal está con el hablante uno" (el ASR se comio "este"). Con comparacion
+ * palabra a palabra el peel fallaba, la caja volvia a pintar la locucion vieja y la
+ * SIGUIENTE quedaba bloqueada como "texto ajeno" 7,4 s.
+ *
+ * La tolerancia son PALABRAS CAIDAS de la locucion, en orden y con el resto igual: una
+ * frase DISTINTA sigue sin encajar (no se relaja la puerta para frases nuevas).
+ * @param {string[]} crudas palabras de la emision
+ * @param {string[]} previas palabras de la locucion commiteada
+ * @param {number} maxDroppedWords palabras que el ASR pudo perder (0 = exacto)
+ * @returns {number} indice de fin en `crudas`, o -1
+ */
+function finDeLocucionReentregada(crudas = [], previas = [], maxDroppedWords = 0) {
+  if (!crudas.length || !previas.length) return -1
+  // Una locucion de UNA palabra solo encaja EXACTA: sin contexto, cualquier parecido seria
+  // adivinar.
+  const tope = previas.length >= 2 ? Math.max(0, Math.floor(Number(maxDroppedWords) || 0)) : 0
+  let i = 0
+  let caidas = 0
+  for (let j = 0; j < previas.length; j += 1) {
+    if (i >= crudas.length) return -1
+    if (claveDePalabra(crudas[i]) === claveDePalabra(previas[j])) {
+      i += 1
+      continue
+    }
+    if (caidas >= tope) return -1
+    caidas += 1
+  }
+  // Al menos dos palabras tienen que encajar: con una sola no hay evidencia de que sea la
+  // MISMA locucion.
+  return previas.length - caidas >= Math.min(2, previas.length) ? i : -1
+}
+
+/**
+ * Tolerancia configurada (palabras que el ASR puede perder al reentregar una locucion ya
+ * commiteada). Sin valor en la llamada se lee de la config: UN solo dueno del umbral.
+ * @param {number|undefined} maxDroppedWords
+ * @returns {number}
+ */
+function toleranciaDeReentrega(maxDroppedWords) {
+  if (maxDroppedWords != null && Number.isFinite(Number(maxDroppedWords))) return Number(maxDroppedWords)
+  return Number(getTranscriptPauseCfg()?.committedReplayMaxDroppedWords) || 0
+}
+
+/**
  * ¿El texto EMPIEZA por las palabras de `committed`? Compara por clave de palabra
  * (sin tildes ni signos, misma mayuscula/minuscula): el ASR re-entrega la misma
  * locucion con otra ortografia en los bordes.
@@ -353,14 +439,10 @@ export function colaNuevaTrasSolape(mostrado, nuevo) {
  * @param {string} committed
  * @returns {boolean}
  */
-export function startsWithCommittedLocution(text = '', committed = '') {
+export function startsWithCommittedLocution(text = '', committed = '', { maxDroppedWords } = {}) {
   const crudas = cleanForSpeech(text).split(/\s+/).filter(Boolean)
   const previas = cleanForSpeech(committed).split(/\s+/).filter(Boolean)
-  if (!crudas.length || !previas.length || crudas.length < previas.length) return false
-  for (let i = 0; i < previas.length; i += 1) {
-    if (claveDePalabra(crudas[i]) !== claveDePalabra(previas[i])) return false
-  }
-  return true
+  return finDeLocucionReentregada(crudas, previas, toleranciaDeReentrega(maxDroppedWords)) >= 0
 }
 
 /**
@@ -374,12 +456,12 @@ export function startsWithCommittedLocution(text = '', committed = '') {
  * @param {string} committed
  * @returns {string}
  */
-export function tailAfterCommittedLocution(capture = '', committed = '') {
+export function tailAfterCommittedLocution(capture = '', committed = '', { maxDroppedWords } = {}) {
   const crudas = cleanForSpeech(capture).split(/\s+/).filter(Boolean)
-  if (!startsWithCommittedLocution(capture, committed)) return ''
   const previas = cleanForSpeech(committed).split(/\s+/).filter(Boolean)
-  if (crudas.length <= previas.length) return ''
-  return crudas.slice(previas.length).join(' ')
+  const fin = finDeLocucionReentregada(crudas, previas, toleranciaDeReentrega(maxDroppedWords))
+  if (fin < 0) return ''
+  return crudas.slice(fin).join(' ')
 }
 
 /**
@@ -762,17 +844,14 @@ export function handleConversationStreamSync(
     const locucionCommiteada = String(lastLogLineTextRef?.current || '')
     if (locucionCommiteada && startsWithCommittedLocution(capture, locucionCommiteada)) {
       const colaNueva = tailAfterCommittedLocution(capture, locucionCommiteada)
-      // REENTREGA PURA (sin cola nueva): dentro de la ventana de eco es la misma
-      // locucion re-entregada y no hay nada que previsualizar. Fuera de ella es una
-      // REPETICION GENUINA del usuario y se muestra (misma politica que el dedupe del
-      // commit: `isDuplicateTurnCommit`).
-      if (!colaNueva) {
-        const dentroDeEco =
-          Date.now() - Number(lastCommitAtRef?.current || 0) < committedEchoStreakWindowMs()
-        if (dentroDeEco) return
-      } else {
-        capture = colaNueva
-      }
+      // REENTREGA PURA (sin cola nueva): lo que llega es la locucion YA COMMITEADA, no habla
+      // nueva. Su fila ya esta escrita, asi que el preview NO la vuelve a pintar: si la
+      // pintara, la locucion SIGUIENTE seria "texto ajeno" y quedaria BLOQUEADA hasta su
+      // final (medido en d4c1c8f3: 7,4 s con la frase vieja en pantalla, y el ASR dictando
+      // la nueva). El commit de una repeticion genuina sigue su camino (`isDuplicateTurnCommit`
+      // tiene su propio dueno): aqui solo se decide que se PINTA.
+      if (!colaNueva) return
+      capture = colaNueva
     }
   }
 

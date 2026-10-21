@@ -291,6 +291,39 @@ export function resolveMicFragmentMerge(previous = '', incoming = '') {
   return mergeSpeechTextBlind(prev, next, { keepAll: true })
 }
 
+/**
+ * El trozo `next` es una REVISION del trozo `prev` (el MISMO hueco de audio reescrito: otro
+ * motor, o el ASR que vuelve a emitir su delta)? Entonces NO son dos trozos distintos y no
+ * se concatenan: el que llega reemplaza al anterior sobre la misma base.
+ *
+ * MEDIDO (d4c1c8f3): el motor de streaming emite el delta de su hipotesis y lo va
+ * reescribiendo ("de" -> "debido" -> "debió" -> "debió de" -> "debió de poner"). Pegando
+ * cada delta detras, la linea viva mezclaba las dos hipotesis
+ * ("... así de debido debió de poner debió ..."), y eso acababa en la caja y en la fila.
+ *
+ * Criterio: crece sobre el anterior (prefijo) o es el mismo trozo con VARIACION DE GRAFIA
+ * (palabra a palabra, con el comparador difuso del ASR, el mismo de `mergeSpeechText`).
+ * @param {string} prev
+ * @param {string} next
+ * @returns {boolean}
+ */
+export function isSameFragmentRevision(prev = '', next = '') {
+  const a = cleanForSpeech(prev)
+  const b = cleanForSpeech(next)
+  if (!a || !b) return false
+  if (a === b) return true
+  const aLow = a.toLowerCase()
+  const bLow = b.toLowerCase()
+  if (bLow.startsWith(aLow) || aLow.startsWith(bLow)) return true
+  const aWords = aLow.split(/\s+/).filter(Boolean)
+  const bWords = bLow.split(/\s+/).filter(Boolean)
+  const corto = aWords.length <= bWords.length ? aWords : bWords
+  const largo = aWords.length <= bWords.length ? bWords : aWords
+  // Un trozo LARGO con palabras distintas es habla nueva, no una revision.
+  if (corto.length > 3) return false
+  return corto.every((word, i) => fuzzyAsrWordEqual(word, largo[i] || ''))
+}
+
 export function mergeSpeechText(base = '', incoming = '', { keepAll = false } = {}) {
   const prev = cleanForSpeech(base)
   const next = cleanForSpeech(incoming)
