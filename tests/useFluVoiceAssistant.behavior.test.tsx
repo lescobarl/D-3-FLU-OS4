@@ -63,6 +63,7 @@ const h = vi.hoisted(() => {
     convertSimEventsToMicBursts: vi.fn(() => []),
     createLocalRecognition: vi.fn(),
     shouldUseLocalFallback: vi.fn(() => false),
+  isLocalRecognitionEngine: (engine: any) => typeof engine?.pushAudio === 'function',
     createTurnSpeakerAudioResolver: vi.fn(() => ({})),
     peekTurnSpeakerPreflight: vi.fn(() => ({ ready: false })),
     isSelfKnowledgeRequest: vi.fn(() => false),
@@ -126,6 +127,12 @@ vi.mock('../src/voice/lib/micEventProducer.js', () => ({
 vi.mock('../src/voice/lib/voiceLocalFallback', () => ({
   createLocalRecognition: h.createLocalRecognition,
   shouldUseLocalFallback: h.shouldUseLocalFallback,
+  isLocalFallbackEnabled: vi.fn(() => false),
+  prewarmLocalRecognition: vi.fn(() => true),
+  installLocalRecognition: vi.fn(() => null),
+  installChromeRecognition: vi.fn(() => null),
+  getLocalFallbackRuntimeConfig: vi.fn(() => ({ recoveryMs: 20000, recoverySegments: 3, probeMs: 4000, finalMinSpeechLikeMs: 180, partialMinSpeechLikeMs: 300 })),
+  resolveSilentDegrade: vi.fn(() => ({ degrade: false, speechLikeMs: 0, rms: 0, voicedMs: 0, sinceSrResultMs: 0, failedRebuilds: 0, log: '' })),
 }));
 
 vi.mock('../src/voice/lib/turnSpeakerPreflight.js', () => ({

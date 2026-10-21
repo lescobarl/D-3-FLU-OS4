@@ -4,6 +4,7 @@ import { SPEECH_LOCALES, DEFAULT_SPEECH_LOCALE, BILINGUAL_LOCALES } from '../../
 import { DEFAULT_SAMPLE_RATE } from './audioConstants.js'
 import { RESET_AVATAR_COLOR_PHRASES } from './voiceCommandPhrases.js'
 import { COMMAND_IDS } from './commandIds.js'
+import { LOCAL_FALLBACK_DEFAULTS, VAD_DEFAULTS } from './asr/asrDefaults.js'
 
 /** Entorno de desarrollo: los defaults de diagnostico solo se encienden aqui. */
 const IS_DEV = import.meta.env.DEV
@@ -94,20 +95,21 @@ export const FLU_CONFIG = {
     },
     capture: {
       passiveBufferMs: 30000,
-      /** Fallback OFFLINE (§1/§9): errores de Chrome SpeechRecognition que
-       *  degradan al motor local Whisper WASM. Sin hardcode: la lista vive
-       *  aquí y puede afinarse desde config. */
+      /** Fallback OFFLINE: errores de Chrome que pueden habilitar Whisper local (config). */
       recognition: {
+        /** Politica `rescate/wip-pre-s9`: produccion Chrome-only; Whisper local opt-in. */
+        localFallbackEnabled: false,
         fallbackErrors: ['network', 'no-speech'],
-        /** SR vivo pero MUDO (caso 45aeb8e2): si el micro tiene VOZ y el
-         *  reconocedor no ha producido NINGUN resultado en esta ventana, se
-         *  degrada al motor local (Whisper WASM). Debe ser MENOR que el
-         *  silentMicStallMs de la conversacion (4200): la degradacion se decide
-         *  antes de que el rebuild de Chrome reinicie sus relojes. */
-        silentDegradeMs: 3500,
-        /** Voz minima en el PCM (ms) para aceptar la degradacion: silencio
-         *  real con SR mudo NO degrada (es el caso normal de pausa). */
-        silentDegradeMinVoicedMs: 400,
+        /** SR mudo: degrade tras N rebuilds con HABLA (nunca antes del rebuild). */
+        silentDegradeMs: LOCAL_FALLBACK_DEFAULTS.silentDegradeMs,
+        silentDegradeStallMarginMs: LOCAL_FALLBACK_DEFAULTS.silentDegradeStallMarginMs,
+        silentDegradeRebuilds: LOCAL_FALLBACK_DEFAULTS.silentDegradeRebuilds,
+        silentDegradeMinSpeechLikeMs: LOCAL_FALLBACK_DEFAULTS.silentDegradeMinSpeechLikeMs,
+        silentDegradeEvalMinMs: LOCAL_FALLBACK_DEFAULTS.silentDegradeEvalMinMs,
+        /** Recuperacion: reintento por tiempo/segmentos; sin resultado -> local. */
+        localRecoveryMs: LOCAL_FALLBACK_DEFAULTS.localRecoveryMs,
+        localRecoverySegments: LOCAL_FALLBACK_DEFAULTS.localRecoverySegments,
+        localRecoveryProbeMs: LOCAL_FALLBACK_DEFAULTS.localRecoveryProbeMs,
       },
       conversationSpeakerTailMs: 2000,
       /** Tope de ventana de audio en límite de turno (ms). */
@@ -2106,23 +2108,30 @@ export const FLU_CONFIG = {
       /** Segmentador / VAD: corta turnos y emite parciales. */
       vad: {
         /** Ventana de análisis (ms). */
-        frameMs: 30,
-        /** Umbral de energía RMS para considerar voz. Único knob de voz del VAD;
-         *  valor inicial — se mide/ajusta en validación, no es un valor secreto.
-         *  Subido a 0.02: con 0.015 el ruido de ambiente abría turno y Whisper
-         *  alucinaba ("¡Vamos!", "¡Ahh!"). */
-        energyThreshold: 0.02,
+        frameMs: VAD_DEFAULTS.frameMs,
+        /** Umbral de energía RMS para considerar voz (se mide/ajusta en validación).
+         *  Con 0.015 el ruido de ambiente abría turno y Whisper alucinaba. */
+        energyThreshold: VAD_DEFAULTS.energyThreshold,
         /** Voz mínima para abrir turno (ms). Subido a 450: exige voz sostenida
          *  (un chasquido/ruido corto ya no abre turno). */
-        minSpeechMs: 450,
+        minSpeechMs: VAD_DEFAULTS.minSpeechMs,
         /** Silencio para cerrar turno (ms). 900 junta "ok flu" con el comando
          *  (evita fragmentos); la ventana de wake del hook es la red de apoyo. */
-        minSilenceMs: 900,
+        minSilenceMs: VAD_DEFAULTS.minSilenceMs,
         /** Turno máximo antes de forzar corte (ms). Corto = menos bucles. */
-        maxSegmentMs: 8000,
+        maxSegmentMs: VAD_DEFAULTS.maxSegmentMs,
         /** Audio previo al inicio de voz que se incluye en el turno (ms). */
-        preRollMs: 180,
+        preRollMs: VAD_DEFAULTS.preRollMs,
+        /** HABLA (no solo energia): ZCR en banda (DC no cruza; ruido ~0.5). */
+        speechLikeZcrMin: VAD_DEFAULTS.speechLikeZcrMin,
+        speechLikeZcrMax: VAD_DEFAULTS.speechLikeZcrMax,
+        /** Envelope silabico entre tramas: un tono constante no modula (ratio ~1). */
+        speechLikeModulationMin: VAD_DEFAULTS.speechLikeModulationMin,
+        speechLikeModulationFloorRatio: VAD_DEFAULTS.speechLikeModulationFloorRatio,
       },
+      /** Gate del MOTOR LOCAL: sin HABLA en el audio no se emite (B3 intacto). */
+      finalMinSpeechLikeMs: LOCAL_FALLBACK_DEFAULTS.finalMinSpeechLikeMs,
+      partialMinSpeechLikeMs: LOCAL_FALLBACK_DEFAULTS.partialMinSpeechLikeMs,
     },
     /** all | last-only | off — con 3+ filas en log escala a all (Chrome acumulativo). */
     stripPriorTurnsOnInterim: true,

@@ -49,6 +49,14 @@ export interface WhisperRecognitionEngine {
   readonly continuous: boolean
   start(): void
   stop(): void
+  /**
+   * Espera a que la COLA de transcripciones ya encoladas termine.
+   *
+   * Contrato de consumo: quien empuja audio mas rapido que el modelo (replay,
+   * test, importacion) debe esperar aqui ANTES de `stop()`; sin ello `stop()`
+   * marca `active=false` y los finales encolados se descartan.
+   */
+  whenIdle(): Promise<void>
   abort(): void
   /** Alimenta PCM (AudioWorklet) en regimen continuo. */
   pushAudio(samples: Float32Array | readonly number[], rate?: number): void

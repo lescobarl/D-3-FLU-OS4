@@ -149,7 +149,8 @@ import { resolveSrGapTrigger } from '../lib/fluTranscriptPause.js'
 import { useFluParticipant } from '../../hooks/useFluParticipant'
 import { isSpeechSynthesisSpeaking, isFluSpeaking, waitForSpeechIdle, getLastCompletedSpeechAt } from '../lib/fluSpeech.js'
 import { resumeAfterSpeechSuspend, releaseStalledTurn } from '../lib/voiceStallPolicy.js'
-import { installLocalRecognition, prewarmLocalRecognition, resolveSilentDegrade, shouldUseLocalFallback } from '../lib/voiceLocalFallback'
+import { isLocalFallbackEnabled, prewarmLocalRecognition, shouldUseLocalFallback } from '../lib/voiceLocalFallback'
+import { useLocalAsrFallback } from './useLocalAsrFallback'
 import { logCaughtError } from '../../lib/caughtError';
 import { clearAnimationFrameRef, clearTimeoutRef } from '../../lib/timerRefs'
 import { useTurnLifecycleSync, useOffPathSessionWriter } from './useTurnInfrastructure'
@@ -452,7 +453,7 @@ const lastResolvedTurnRef = useRef(0)
   const tryDispatchConversationActionRef = useRef(() => false)
   const lastConversationActionRef = useRef({ signature: '', at: 0 })
   const rebuildRecognitionRef = useRef(() => false)
-  const degradeToLocalRecognitionRef = useRef(null)
+  const wireRecognitionEventsRef = useRef(() => { })
   const maybeSwitchRecognitionLocaleRef = useRef(() => { })
   const recognitionLocaleRef = useRef(getRecognitionLanguage(language))
   const localeSwitchDetectRef = useRef('')
@@ -463,9 +464,6 @@ const lastResolvedTurnRef = useRef(0)
   const lastStallRebuildAtRef = useRef(0)
   // Reloj del ULTIMO RESULTADO (solo onresult; sobrevive a rebuilds): "SR mudo de verdad".
   const lastSrResultAtRef = useRef(0)
-  // True mientras el motor LOCAL (Whisper WASM) es la instancia activa.
-  const localFallbackActiveRef = useRef(false)
-  const degradeEligibleSinceRef = useRef(0) // Piso: Chrome debe tener su oportunidad.
   // Ref (no dep): las deps por IDENTIDAD re-montaban el efecto en bucle (1419/289 s, cero ticks).
   const requestRecognitionRestartRef = useRef(null)
   const lastSpeakerDiarizeAtRef = useRef(0)
@@ -489,6 +487,35 @@ const lastResolvedTurnRef = useRef(0)
   const ultimoIndiceHablanteRef = useRef(NaN) // P4: ultimo indice (cambio = cierre real)
   const ingressBindingsRef = useRef({})
   const ingressRuntimeRef = useRef(null)
+
+  // Fallback LOCAL del ASR (degradar a Whisper, gatear sus resultados y recuperar
+  // Chrome): dueno unico en `useLocalAsrFallback`. El cableado se pasa por ref para
+  // no crear una dependencia circular con `wireRecognitionEvents`.
+  const fallback = useLocalAsrFallback({
+    recognitionRef,
+    wireRecognitionEventsRef,
+    createRecognition,
+    startRecognition: startSpeechRecognition,
+    language,
+    recognitionLocaleRef,
+    isListeningRef,
+    isStoppingRef,
+    chunksRef,
+    sampleRateRef,
+    lastSrResultAtRef,
+    lastOnresultAtRef,
+    lastMeaningfulIngressAtRef,
+    lastRecognitionEndAtRef,
+    lastStallRebuildAtRef,
+    recognitionActiveRef,
+    recognitionRestartPendingRef,
+    rebuildRecognitionRef,
+    requestRecognitionRestartRef,
+    relayLog,
+    audioSampleRate: AUDIO_SAMPLE_RATE,
+    getRestartConfig: getConversationRestartConfig,
+    degradeEnabled: isLocalFallbackEnabled(),
+  })
 
   // ---- Fase E: vincular la voz del participante activo (Juan/Luis) a su nombre ----
   // Si hay un participante real con nombre propio activo, se siembra como sessionPrimary
@@ -1899,9 +1926,8 @@ const lastResolvedTurnRef = useRef(0)
           chunkTotalSamplesRef,
         )
         // Fallback OFFLINE: el motor local (Whisper WASM) se alimenta del MISMO
-        // PCM del micrófono cuando es la instancia activa. Chrome SR no expone
-        // `pushAudio`, así que el chequeo no afecta el flujo online (default).
-        if (typeof recognitionRef.current?.pushAudio === 'function') {
+        // PCM del micrófono cuando es la instancia activa (predicado unico).
+        if (fallback.isLocal(recognitionRef.current)) {
           recognitionRef.current.pushAudio(input, sampleRateRef.current || AUDIO_SAMPLE_RATE)
         }
       },
@@ -1912,7 +1938,7 @@ const lastResolvedTurnRef = useRef(0)
     })()
     passiveSetupPromiseRef.current = job.finally(() => { passiveSetupPromiseRef.current = null })
     return passiveSetupPromiseRef.current
-  }, [needsConversationPassiveAudio, conversationActiveRef])
+  }, [conversationActiveRef, fallback, needsConversationPassiveAudio])
 
   const schedulePassiveAudioCapture = useCallback(() => {
     const runCapture = () => {
@@ -1953,6 +1979,7 @@ const lastResolvedTurnRef = useRef(0)
     setupPassiveAudioCapture,
   ])
 
+
   const wireRecognitionEvents = useCallback(
     (Recognition) => {
       const requireWake = requiresWakeWord(conversationActiveRef?.current)
@@ -1978,7 +2005,9 @@ const lastResolvedTurnRef = useRef(0)
       }
 
       Recognition.onresult = (event) => {
-        if (isVoiceProbeEnabled()) voiceProbe('asrRaw', { turn: activeTurnIdRef.current, items: Array.from(event.results || []).map((r) => { const t = String(r?.[0]?.transcript || ''); return { f: r?.isFinal ? 1 : 0, t, l: t.length } }) })
+        // UNICO predicado de motor local (dueno: voiceLocalFallback).
+        const localEngineActive = fallback.isLocal(recognitionRef.current)
+        if (isVoiceProbeEnabled()) voiceProbe('asrRaw', { engine: localEngineActive ? 'whisper' : 'chrome', metrics: event?.metrics ?? null, turn: activeTurnIdRef.current, items: Array.from(event.results || []).map((r) => { const t = String(r?.[0]?.transcript || ''); return { f: r?.isFinal ? 1 : 0, t, l: t.length } }) })
         // Supresión de eco: mientras FLU HABLA, ignorar resultados del
         // reconocedor para no capturar la propia voz y re-mandarla a la IA.
         // Se usa la promesa propia de FLU (`isFluSpeaking`, acotada por el
@@ -1990,12 +2019,30 @@ const lastResolvedTurnRef = useRef(0)
         lastSrResultAtRef.current = Date.now()
         recognitionRetryCountRef.current = 0
         consecutiveEndsWithoutResultRef.current = 0
+        // Chrome produjo un RESULTADO (o hubo texto real): el contador de rebuilds
+        // sin resultado vuelve a cero y, si habia ventana de prueba, queda activo.
+        fallback.noteResult()
         let interim = ''
         let finalText = ''
         for (let index = event.resultIndex; index < event.results.length; index += 1) {
           const result = event.results[index]
           const transcript = cleanForSpeech(result?.[0]?.transcript || '')
           if (!transcript) continue
+
+          // GATE DEL MOTOR LOCAL: Whisper alucina con audio sin habla. Evidencia
+          // ACUSTICA (`metrics`), no la forma del texto: garbageTranscript (B3)
+          // intacto; la wake y los comandos conservan su excepcion.
+          if (localEngineActive && event?.metrics) {
+            const discarded = fallback.gateResult({
+              isFinal: result.isFinal,
+              transcript,
+              metrics: event.metrics,
+              wakeWords: resolvedWakeWords,
+            })
+            if (discarded) continue
+          }
+          // Un FINAL que se emite alimenta el UNICO reloj de recuperacion.
+          if (result.isFinal) fallback.noteFinalAccepted()
 
           if (conversationActiveRef?.current) {
             // Captura del micrófono para el PREVIEW. La publica el stream sync
@@ -2018,7 +2065,7 @@ const lastResolvedTurnRef = useRef(0)
         }
 
         if (conversationActiveRef?.current) {
-          if (finalText) { const w = analyzeWakeTurn(finalText, { lastCommitted: userRowsTextView.current.at(-1) || '' }); voiceProbe('asrFinal', { turn: activeTurnIdRef.current, wake: w.wakeWordMatched, inline: w.hasInlineBoundary, before: w.passiveOnly.slice(0, 80), after: w.afterWake.slice(0, 80), len: w.cleaned.length, text: w.cleaned }) }
+          if (finalText) { const w = analyzeWakeTurn(finalText, { lastCommitted: userRowsTextView.current.at(-1) || '' }); voiceProbe('asrFinal', { engine: localEngineActive ? 'whisper' : 'chrome', ms: event?.metrics?.durationMs ?? null, speechLikeMs: event?.metrics?.speechLikeMs ?? null, rms: event?.metrics?.rms ?? null, turn: activeTurnIdRef.current, wake: w.wakeWordMatched, inline: w.hasInlineBoundary, before: w.passiveOnly.slice(0, 80), after: w.afterWake.slice(0, 80), len: w.cleaned.length, text: w.cleaned }) }
           try {
             if (import.meta.env.DEV && debugHotPath) {
               const { interimChunks, finalChunks } = collectRecognitionResultChunks(event)
@@ -2122,10 +2169,11 @@ const lastResolvedTurnRef = useRef(0)
         // Fallback OFFLINE (§1/§9): 'network'/'no-speech' degradan al motor
         // local Whisper WASM (config `fallbackErrors`) por el punto unico.
         if (
+          isLocalFallbackEnabled() &&
           shouldUseLocalFallback(errorCode) &&
-          typeof recognitionRef.current?.pushAudio !== 'function'
+          !fallback.isLocal(recognitionRef.current)
         ) {
-          if (!degradeToLocalRecognitionRef.current?.()) {
+          if (!fallback.degradeRef.current?.()) {
             requestRecognitionRestart(getRecognitionRetryDelay(errorCode))
           }
           return
@@ -2226,6 +2274,7 @@ const lastResolvedTurnRef = useRef(0)
       cleanupAudio,
       clearAutoProcessTimer,
       conversationActiveRef,
+      fallback,
       publishLiveFromTurn,
       publishLiveImmediate,
       requestRecognitionRestart,
@@ -2237,17 +2286,8 @@ const lastResolvedTurnRef = useRef(0)
     ],
   )
 
-  const degradeToLocalRecognition = useCallback(() => {
-    // UNICO punto de degradacion: onerror de Chrome y watchdog con SR mudo.
-    const localEngine = installLocalRecognition({ previous: recognitionRef.current, wire: wireRecognitionEvents })
-    if (!localEngine) return typeof recognitionRef.current?.pushAudio === 'function'
-    recognitionRef.current = localEngine
-    recognitionActiveRef.current = false
-    localFallbackActiveRef.current = true
-    return true
-  }, [wireRecognitionEvents])
+  wireRecognitionEventsRef.current = wireRecognitionEvents
 
-  degradeToLocalRecognitionRef.current = degradeToLocalRecognition
 
   const rebuildRecognition = useCallback(() => {
     if (!isListeningRef.current || isStoppingRef.current) return false
@@ -2380,9 +2420,9 @@ const lastResolvedTurnRef = useRef(0)
   const startListening = useCallback(async ({ resume = false } = {}) => {
     setError('')
     // Cada sesion arranca con Chrome SR; el piso de elegibilidad se ancla una vez.
-    localFallbackActiveRef.current = false
-    if (!resume || !degradeEligibleSinceRef.current) {
-      degradeEligibleSinceRef.current = Date.now()
+    fallback.resetSession()
+    if (!resume || !fallback.degradeEligibleSinceRef.current) {
+      fallback.degradeEligibleSinceRef.current = Date.now()
     }
     if (!isSupported) {
       setError('El navegador no soporta el flujo de voz de Flu.')
@@ -2459,8 +2499,9 @@ const lastResolvedTurnRef = useRef(0)
       setStatus('listening')
       isProcessingRef.current = false
       isListeningRef.current = true
-      // Precalienta el motor local: si se degrada, ya tiene el modelo cargado.
-      prewarmLocalRecognition()
+      // Precalienta el motor local SOLO si la politica lo habilita: en
+      // produccion Chrome-only no se carga Whisper (backup `rescate/wip-pre-s9`).
+      if (isLocalFallbackEnabled()) prewarmLocalRecognition()
 
       if (!startSpeechRecognition(Recognition)) {
         requestRecognitionRestart(getActiveListenConfig().restart.retryBackoffMs)
@@ -2481,6 +2522,7 @@ const lastResolvedTurnRef = useRef(0)
     clearTurnBuffers,
     cleanupAudio,
     conversationActiveRef,
+    fallback,
     isSupported,
     language,
     wireRecognitionEvents,
@@ -4169,61 +4211,12 @@ const lastResolvedTurnRef = useRef(0)
       if (conversationActiveRef?.current) {
         const restartCfg = getConversationRestartConfig(true)
         const now = Date.now()
-        const sinceMeaningful = now - (lastMeaningfulIngressAtRef.current || 0)
-        const sinceEnd = now - (lastRecognitionEndAtRef.current || 0)
-        const sinceRebuild = now - (lastStallRebuildAtRef.current || 0)
-        const deadMs = restartCfg.deadRecognitionMs
-        const rebuildCooldown = restartCfg.stallRebuildMinMs
-        releaseStalledTurn({ openPreviewTurnRef, sinceResult: now - (lastOnresultAtRef.current || 0), stallMs: restartCfg.stallMs }) // (b) dueno unico, ANTES de los rebuilds
+        const idleMs = now - (lastOnresultAtRef.current || 0)
+        releaseStalledTurn({ openPreviewTurnRef, sinceResult: idleMs, stallMs: restartCfg.stallMs }) // (b) dueno unico, ANTES de los rebuilds
+        // Fallback local (recuperacion -> rebuild -> degradacion): decide y ejecuta
+        // el dueno unico `useLocalAsrFallback`; aqui solo se respeta el orden.
+        if (fallback.watchdogTick() === 'handled') return
 
-        // SR mudo con VOZ en el micro (45aeb8e2): decide `resolveSilentDegrade`.
-        if (!localFallbackActiveRef.current && typeof recognitionRef.current?.pushAudio !== 'function') {
-          const decision = resolveSilentDegrade({
-            chunks: chunksRef.current,
-            sampleRate: sampleRateRef.current || AUDIO_SAMPLE_RATE,
-            now,
-            lastSrResultAt: lastSrResultAtRef.current,
-            eligibleSince: degradeEligibleSinceRef.current,
-          })
-          if (decision.degrade && degradeToLocalRecognitionRef.current?.()) {
-            relayLog('LOG', 'useFluVoiceAssistant', decision.log)
-            return
-          }
-        }
-
-        // Motor local activo: su vida la gestiona el motor; NO se reconstruye Chrome encima.
-        if (!localFallbackActiveRef.current) {
-          // UN solo camino de reconstruccion: rebuild y, si no puede, reintento.
-          const rebuildOrRetry = () => {
-            if (!rebuildRecognitionRef.current()) {
-              requestRecognitionRestartRef.current?.(restartCfg.retryBackoffMs)
-            }
-          }
-
-          if (
-            recognitionActiveRef.current &&
-            sinceMeaningful >= restartCfg.silentMicStallMs &&
-            sinceRebuild >= rebuildCooldown
-          ) {
-            lastStallRebuildAtRef.current = now
-            rebuildOrRetry()
-            return
-          }
-
-          if (
-            !recognitionActiveRef.current &&
-            !recognitionRestartPendingRef.current &&
-            sinceEnd >= deadMs
-          ) {
-            rebuildOrRetry()
-            return
-          }
-
-          if (sinceMeaningful >= restartCfg.stallMs && sinceRebuild >= rebuildCooldown) {
-            lastStallRebuildAtRef.current = now
-            rebuildOrRetry()
-          }
-        }
 
         const sinceResult = now - (lastOnresultAtRef.current || 0)
         const openLine = cleanForSpeech(
@@ -4249,7 +4242,7 @@ const lastResolvedTurnRef = useRef(0)
       : watchdogMs)
 
     return () => window.clearInterval(timerId)
-  }, [conversationActiveRef, status])
+  }, [conversationActiveRef, fallback, status])
 
   ingressBindingsRef.current = {
     conversationActiveRef,
@@ -4305,6 +4298,9 @@ const lastResolvedTurnRef = useRef(0)
         ingressEchoStreakRef.current = 0
         lastEchoAtRef.current = 0
         lastMeaningfulIngressAtRef.current = now
+        // Hubo texto real: Chrome esta vivo; se reinicia el contador de rebuilds
+        // sin resultado que habilita la degradacion.
+        fallback.noteResult()
         return
       }
       // Solo cuenta como ráfaga de eco si viene encadenada RÁPIDO (loop ASR real).

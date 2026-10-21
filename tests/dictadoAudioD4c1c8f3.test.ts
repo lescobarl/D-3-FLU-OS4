@@ -10,7 +10,7 @@
 // Imprime: cada final dictado por Whisper y las filas de conversacion resultantes.
 // ============================================================
 import { describe, expect, it, vi } from 'vitest'
-import { readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 
@@ -26,6 +26,13 @@ import { createActiveListenState } from '../src/voice/lib/activeListen.js'
 
 const DIR = join(tmpdir(), 'flu-recordings', 'd4c1c8f3-76f8-400b-b89e-e8e428cfdff7')
 const SR_GAP_COMMIT_MS = Number(FLU_CONFIG.transcript.pauseAndWeakAsr.srGapCommitMs) || 3500
+
+/**
+ * La grabacion real vive en la carpeta de grabaciones del navegador (no en el
+ * repo: 14 MB). Sin ella el DICTADO no se puede medir: el bloque se SALTA, no se
+ * finge. Declarado: en CI no hay grabacion, asi que este camino se mide en local.
+ */
+const HAY_GRABACION = existsSync(join(DIR, 'audio.wav')) && existsSync(join(DIR, 'meta.json'))
 
 /** PCM16 de un WAV: localiza el chunk 'data' y devuelve Float32Array [-1,1]. */
 function leerPcmWav(ruta: string): { muestras: Float32Array; sampleRate: number } {
@@ -101,7 +108,7 @@ function montarDeps() {
   return { deps, ctx, serie, filas, filasConTiempo }
 }
 
-describe('DICTADO POR VOZ de la grabacion d4c1c8f3', () => {
+describe.skipIf(!HAY_GRABACION)('DICTADO POR VOZ de la grabacion d4c1c8f3', () => {
   FLU_CONFIG.voiceCommands.requireWakeAlways = false
   // Solo para acotar el tiempo del dictado: los parciales del motor (1s) no cambian
   // los FINALES, que son lo que sella filas. Declarado, no silencioso.
@@ -174,6 +181,9 @@ describe('DICTADO POR VOZ de la grabacion d4c1c8f3', () => {
         lastResultAt = virtualNow
       }
     }
+    // El motor transcribe EN COLA: hay que dejarla vaciarse ANTES de stop().
+    // Sin esto, stop() marca active=false y los finales encolados se descartan.
+    await engine.whenIdle()
     engine.stop()
     dateSpy.mockRestore()
 

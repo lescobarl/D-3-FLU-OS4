@@ -16,6 +16,7 @@
  * `{ resultIndex, results: [{ isFinal, 0: { transcript } }] }`.
  */
 import { createVoiceSegmenter, getAsrConfig, getAsrSampleRate } from './voiceActivitySegmenter.js'
+import { countSpeechLikeSamples, rmsOf } from '../voicedActivity.js'
 import { createWhisperWasmTranscriber } from './whisperWasmTranscriber.js'
 import { isSpeechSynthesisSpeaking } from '../fluSpeech.js'
 import { logCaughtError } from '../../../lib/caughtError';
@@ -23,17 +24,21 @@ import { DEFAULT_SAMPLE_RATE } from '../audioConstants.js'
 import { downsample } from './resample.js'
 import { concatFloat32 } from '../pcmChunks.js'
 
-function buildResultEvent(transcript, isFinal) {
+function buildResultEvent(transcript, isFinal, metrics = null) {
   // Forma estándar de Web Speech API:
   //   event.results = [ resultado ]  (lista de resultados)
   //   resultado[0] = { transcript }  (alternativas)
   //   resultado.isFinal / resultado.length
+  // `metrics` es ADITIVO (contrato Chrome intacto): evidencia acustica del audio
+  // transcrito, para que el hook no emita un final sin habla (Whisper-tiny alucina).
   const result = {
     0: { transcript, confidence: 1 },
     isFinal: Boolean(isFinal),
     length: 1,
   }
-  return { resultIndex: 0, results: [result] }
+  const event = { resultIndex: 0, results: [result] }
+  if (metrics) event.metrics = metrics
+  return event
 }
 
 /**
@@ -118,6 +123,23 @@ export function createWhisperRecognitionEngine({
       resetTurn()
       if (typeof engine.onend === 'function') engine.onend()
     },
+    /**
+     * Espera a que la COLA de transcripciones ya encoladas termine.
+     *
+     * Contrato de consumo: quien empuja audio mas rapido que el modelo (replay,
+     * test, importacion) DEBE esperar aqui ANTES de `stop()`; si no, `stop()`
+     * marca `active=false` y los resultados encolados se descartan en
+     * `enqueueTranscription` (`if (!active || !text) return`). No es un sleep: la
+     * promesa es la de la propia cola.
+     *
+     * @returns {Promise<void>} resuelve al vaciarse la cola pendiente en ese momento.
+     */
+    whenIdle() {
+      return queue.then(
+        () => undefined,
+        () => undefined,
+      )
+    },
     abort() {
       active = false
       segmenter.reset()
@@ -151,6 +173,21 @@ export function createWhisperRecognitionEngine({
     turnChunks = []
     lastPartialAt = 0
     partialDirty = false
+  }
+
+  /**
+   * Evidencia ACUSTICA del audio que se transcribe: duracion, muestras de HABLA
+   * (VAD speech-like, dueno unico `voicedActivity`) y RMS. Se mide sobre el MISMO
+   * audio que recibe Whisper, no sobre el buffer del micro (una ventana con 0,2 s
+   * de voz no puede pasar por un turno de 3 s).
+   *
+   * @param {Float32Array} audio
+   * @returns {{ durationMs: number, speechLikeMs: number, rms: number }}
+   */
+  function measure(audio) {
+    const durationMs = (audio.length / Math.max(1, targetRate)) * 1000
+    const speechLikeMs = (countSpeechLikeSamples(audio, { sampleRate: targetRate }) / Math.max(1, targetRate)) * 1000
+    return { durationMs, speechLikeMs, rms: rmsOf(audio) }
   }
 
   function applySegmentEvent(event) {
@@ -196,7 +233,7 @@ export function createWhisperRecognitionEngine({
       if (audio.length >= partialMinSamples) {
         const text = await whisperInterim.transcribe(audio)
         if (active && inSpeech && text && typeof engine.onresult === 'function') {
-          engine.onresult(buildResultEvent(text, false))
+          engine.onresult(buildResultEvent(text, false, measure(audio)))
         }
       }
     } catch (e) {
@@ -234,7 +271,7 @@ export function createWhisperRecognitionEngine({
       try {
         const text = await whisper.transcribe(audio)
         if (!active || !text) return
-        if (typeof engine.onresult === 'function') engine.onresult(buildResultEvent(text, isFinal))
+        if (typeof engine.onresult === 'function') engine.onresult(buildResultEvent(text, isFinal, measure(audio)))
       } catch (error) {
         logCaughtError('[catch] src/voice/lib/asr/whisperRecognitionEngine.js', error);
         // Falla del worker/WASM (p. ej. el modelo no cargó) o de red real al

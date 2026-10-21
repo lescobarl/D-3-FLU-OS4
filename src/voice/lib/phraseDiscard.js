@@ -31,6 +31,8 @@ export const DISCARD_REASONS = Object.freeze({
   SAME_REQUEST: 'same-request',
   /** Sin wake word cuando es obligatoria: no es un turno. */
   WAKE_REQUIRED: 'wake-required',
+  /** Resultado del motor LOCAL sin evidencia acustica de habla (alucinacion de Whisper). */
+  NOT_SPEECH: 'not-speech',
   /** Motivo no declarado (no deberia ocurrir; se registra en vez de callar). */
   UNKNOWN: 'unknown',
 })

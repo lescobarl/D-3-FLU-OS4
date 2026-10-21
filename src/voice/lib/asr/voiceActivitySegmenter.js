@@ -7,17 +7,18 @@
  *
  * Config: `FLU_CONFIG.transcript.asr.vad` (sin valores quemados en el motor).
  */
-import { getAsrConfig, VAD_DEFAULTS } from './asrConfig.js'
+import { getAsrConfig, getVadSegmentConfig } from './asrConfig.js'
 
 // El dueno de la lectura de la config del ASR es asrConfig.js; se re-exporta para no
 // cambiar la API del segmentador (lo consumen el worker y los tests).
 export { getAsrConfig }
 import { DEFAULT_TARGET_SAMPLE_RATE } from '../audioConstants.js'
 import { concatFloat32 } from '../pcmChunks.js'
+import { countSpeechLikeSamples, frameSamplesFor, isVoicedFrame } from '../voicedActivity.js'
 
 /**
  * @typedef {{ type: 'speech-start', atMs: number }} SpeechStartEvent
- * @typedef {{ type: 'speech-end', samples: Float32Array, startMs: number, durationMs: number }} SpeechEndEvent
+ * @typedef {{ type: 'speech-end', samples: Float32Array, startMs: number, durationMs: number, speechLikeMs: number }} SpeechEndEvent
  * @typedef {SpeechStartEvent | SpeechEndEvent} VoiceSegmentEvent
  * @typedef {{ push(samples: Float32Array): VoiceSegmentEvent[], flush(): VoiceSegmentEvent[], reset(): void }} VoiceSegmenter
  */
@@ -33,29 +34,23 @@ export function getAsrSampleRate(config = getAsrConfig()) {
   return Number.isFinite(rate) && rate > 0 ? rate : DEFAULT_TARGET_SAMPLE_RATE
 }
 
-function rootMeanSquare(samples) {
-  if (!samples?.length) return 0
-  let sum = 0
-  for (let index = 0; index < samples.length; index += 1) {
-    sum += samples[index] * samples[index]
-  }
-  return Math.sqrt(sum / samples.length)
-}
-
 /**
  * @param {object} [config] Bloque `vad` de config.
  * @param {number} [sampleRate] Tasa del PCM entrante (Hz).
  * @returns {VoiceSegmenter}
  */
 export function createVoiceSegmenter(config = getVadConfig(), sampleRate = getAsrSampleRate()) {
-  const frameMs = Math.max(1, Number(config.frameMs) || VAD_DEFAULTS.frameMs)
-  const energyThreshold = Number(config.energyThreshold) || VAD_DEFAULTS.energyThreshold
-  const minSpeechMs = Math.max(0, Number(config.minSpeechMs) || 240)
-  const minSilenceMs = Math.max(0, Number(config.minSilenceMs) || 480)
-  const maxSegmentMs = Math.max(minSpeechMs + frameMs, Number(config.maxSegmentMs) || 12000)
-  const preRollMs = Math.max(0, Number(config.preRollMs) || 180)
+  // Un solo lector del bloque de segmentacion (respaldos en `VAD_DEFAULTS`): el
+  // `0` legitimo se respeta (`preRollMs: 0` = sin pre-roll, no "sin valor").
+  const segmentCfg = getVadSegmentConfig(config)
+  const frameMs = segmentCfg.frameMs
+  const energyThreshold = segmentCfg.energyThreshold
+  const minSpeechMs = segmentCfg.minSpeechMs
+  const minSilenceMs = segmentCfg.minSilenceMs
+  const maxSegmentMs = Math.max(minSpeechMs + frameMs, segmentCfg.maxSegmentMs)
+  const preRollMs = segmentCfg.preRollMs
 
-  const frameSamples = Math.max(1, Math.round((sampleRate * frameMs) / 1000))
+  const frameSamples = frameSamplesFor(sampleRate, frameMs)
   const minSpeechFrames = Math.max(1, Math.ceil(minSpeechMs / frameMs))
   const minSilenceFrames = Math.max(1, Math.ceil(minSilenceMs / frameMs))
   const maxSegmentFrames = Math.max(1, Math.floor(maxSegmentMs / frameMs))
@@ -86,17 +81,23 @@ export function createVoiceSegmenter(config = getVadConfig(), sampleRate = getAs
       resetTurn()
       return
     }
+    const samples = concatFloat32(segmentFrames)
     events.push({
       type: 'speech-end',
-      samples: concatFloat32(segmentFrames),
+      samples,
       startMs: (doneFrames - segmentFrames.length) * frameMs,
       durationMs: segmentFrames.length * frameMs,
+      // Evidencia de HABLA del turno (RMS + ZCR + modulacion, dueno unico
+      // `voicedActivity`): la consume el motor local para el gate de finales.
+      // NO cambia el criterio de apertura/cierre (que sigue siendo energia),
+      // para no romper la segmentacion ya medida.
+      speechLikeMs: (countSpeechLikeSamples(samples, { sampleRate }) / Math.max(1, sampleRate)) * 1000,
     })
     resetTurn()
   }
 
   function processFrame(frame) {
-    const isVoice = rootMeanSquare(frame) >= energyThreshold
+    const isVoice = isVoicedFrame(frame, 0, frame.length, energyThreshold)
 
     if (!inSpeech) {
       if (isVoice) {

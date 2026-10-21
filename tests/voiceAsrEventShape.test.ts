@@ -21,8 +21,7 @@ function silent(ms: number) {
   return new Float32Array(Math.round((ms / 1000) * RATE))
 }
 
-describe('ASR event shape — legible por los consumidores', () => {
-  it('el final expone results[0][0].transcript e isFinal', async () => {
+describe('ASR event shape — legible por los consumidores', () => {  it('el final expone results[0][0].transcript e isFinal', async () => {
     const events: any[] = []
     const fakeTranscriber = {
       preload: async () => true,
@@ -47,5 +46,28 @@ describe('ASR event shape — legible por los consumidores', () => {
     expect(event.results.length).toBe(1)
     expect(event.results[event.resultIndex][0].transcript).toBe('hola mundo')
     expect(event.results[event.resultIndex].isFinal).toBe(true)
+  })
+
+  it('whenIdle espera la COLA: el final se emite antes de stop()', async () => {
+    // Contrato de consumo (replay/test): quien empuja audio mas rapido que el
+    // modelo debe esperar `whenIdle()` antes de `stop()`; si no, stop() marca
+    // active=false y los finales ya encolados se descartan.
+    const events: any[] = []
+    const fakeTranscriber = {
+      preload: async () => true,
+      transcribe: async () => 'hola mundo',
+      dispose() {},
+    }
+    const engine = createWhisperRecognitionEngine({ sampleRate: RATE, transcriber: fakeTranscriber })
+    engine.onresult = (event: any) => events.push(event)
+
+    engine.start()
+    engine.pushAudio(loud(1500), RATE)
+    engine.pushAudio(silent(1300), RATE)
+    await engine.whenIdle()
+
+    expect(events, 'whenIdle no espero la cola').toHaveLength(1)
+    expect(events[0].results[0][0].transcript).toBe('hola mundo')
+    engine.stop()
   })
 })
