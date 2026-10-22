@@ -595,8 +595,10 @@ describe.runIf(existsSync(REAL_SESSION))('replay events - grabacion real d4c1c8f
     expect(filas[2]).toContain('en la transcripción')
     expect(filas[14]).toContain('me encanta este')
     expect(filas[16]).toContain('acabo de abrir el refri')
-    // #11: la FILA lleva la correccion del ultimo interino ("al 100%"), no la mas larga.
-    expect(filas[11]).toBe('no lo voy a preparar al 100%')
+    // B.3 (mandato 2026-10-21): la FILA es la MISMA frase que la caja. En d4c1c8f3
+    // la caja se quedo en "100 porque" (la correccion mas corta no se pinta); la fila
+    // ya no puede llevar una frase distinta de la visible.
+    expect(filas[11]).toBe('no lo voy a preparar 100 porque')
     expect(datos.boxStall.maxGapMs, 'sin bloqueo de preview').toBeLessThan(datos.thresholds.boxStallMs)
     // Modo observacion: no valida golden; sin invariante roto, exit 0.
     expect(datos.status).toBe('observed')

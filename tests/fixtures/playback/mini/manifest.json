@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 2,
+  "sessionId": "mini-600ms",
+  "audioFile": "../../audio/habla-real-600ms.wav",
+  "sampleRate": 16000,
+  "samples": 9600,
+  "seconds": 0.6,
+  "events": 0,
+  "turns": 0,
+  "audioBytes": 19244,
+  "appCommit": "fixture",
+  "configHash": "fixture",
+  "modelIds": [],
+  "language": "es"
+}

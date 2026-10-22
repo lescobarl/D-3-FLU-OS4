@@ -1,7 +1,7 @@
 # FLU Playback
 
 **Tipo:** herramienta de soporte (dev/QA), no funcionalidad de producto.  
-**Estado:** PLAN COMPLETO. **No implementado todavía.**  
+**Estado:** FASE 1 IMPLEMENTADA. Micrófono virtual, clean-room/mute/real, captura y CLI. Pendiente: restore-start validado con una grabación base-start, diff UI avanzado y local.
 **Ejecutor previsto:** Kilo.  
 **Fecha:** 2026-10-21.  
 **Relación con otros proyectos:** independiente del runner determinista de filas/caja (`npm run replay`), que ya está cerrado y commiteado. FLU Playback usa el **audio** y el **micrófono virtual**; no reinyecta texto ni eventos.
@@ -544,3 +544,12 @@ FLU Playback estará terminado cuando:
 ## 22. Registro
 
 - **2026-10-21:** creado el plan. Sin implementación. Pendiente aprobación del dueño.
+
+---
+
+## 23. Estado de implementación (2026-10-21)
+
+- Implementado: npm run playback, loader de sesión/WAV, micrófono virtual, clean-room, mute, real con dispositivo falso de Chromium, captura de filas/UI/eventos/recorder, --dry-run, timeout y tests del CLI.
+- Validado: mute con tests/fixtures/playback/mini; real con un recorte de 10 s de una grabación real (3 filas, 8 actualizaciones de caja, 0 pageerrors).
+- Pendiente: restore-start real (no hay base-start en las grabaciones actuales), local, diff UI fuente/playback y validación visual del dueño.
+- Sin commit de esta implementación todavía.

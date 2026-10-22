@@ -35,6 +35,9 @@ reports/
 tsconfig.tsbuildinfo
 .agent_tmp/
 
+# FLU Playback (audio/transcripcion de soporte; nunca se commitea)
+playbacks/
+
 # Volcados de stdout de runners externos en la raiz del repo
 guards-output.txt
 guards-result.txt

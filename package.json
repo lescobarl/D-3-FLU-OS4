@@ -30,7 +30,8 @@
     "voz:log": "node scripts/analiza-voz-log.mjs",
     "lint:guards": "vitest run --config vitest.guards.config.ts",
     "prepare": "node scripts/install-hooks.mjs",
-    "replay": "vite-node --config scripts/replay/vite.replay.config.mts scripts/replay.mjs"
+    "replay": "vite-node --config scripts/replay/vite.replay.config.mts scripts/replay.mjs",
+    "playback": "node scripts/playback.mjs"
   },
   "dependencies": {
     "@ffmpeg/core": "^0.12.6",
