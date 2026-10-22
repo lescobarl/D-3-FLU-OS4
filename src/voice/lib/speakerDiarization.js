@@ -415,15 +415,16 @@ function resolveProductionSpeakerAtBoundary({
         (primarySim > lastSim + SWITCH || primaryLabel === lastSpeaker || !lastSpeaker) &&
         canAssertName(primaryLabel, primarySim >= registeredFloorFor(primaryLabel)) &&
         // MARGEN de asignacion (fase 1): el nombre tiene que sacarle `namedAssignMargin` a la
-        // mejor voz ALTERNATIVA. Un ancla VERIFICADA conserva su regla medida propia.
-        (primaryCluster?.anchorVerified === true ||
-          namedAssignmentConfirmed({
-            label: primaryLabel,
-            similarity: primarySim,
-            bestAlternative: bestAlternativeSimilarity(speakerClusters, primaryLabel, normalized),
-            shortWindow,
-            thresholds,
-          }))
+        // mejor voz ALTERNATIVA. Un ancla VERIFICADA conserva su piso medido, pero NO se salta
+        // el margen (un turno mezclado medido no puede volver a Luis).
+        namedAssignmentConfirmed({
+          label: primaryLabel,
+          similarity: primarySim,
+          bestAlternative: bestAlternativeSimilarity(speakerClusters, primaryLabel, normalized),
+          shortWindow,
+          anchorVerified: primaryCluster?.anchorVerified === true,
+          thresholds,
+        })
       ) {
         const skipPrimaryRematch =
           classroom &&
@@ -488,17 +489,39 @@ function resolveProductionSpeakerAtBoundary({
     lastSpeaker &&
     lastSpeaker !== primaryLabel &&
     shortWindow
+  // La continuidad puede conservar una etiqueta ANONIMA, pero un NOMBRE PROPIO no se
+  // afirma si otra voz conocida esta dentro del margen: un turno mezclado medido no
+  // puede volver a Luis solo porque "continuaba" (defecto 2026-10-21).
+  const continuityNameAllowed =
+    !isRegisteredSpeakerLabel(lastSpeaker) ||
+    namedAssignmentConfirmed({
+      label: lastSpeaker,
+      similarity: lastSim,
+      bestAlternative: bestAlternativeSimilarity(speakerClusters, lastSpeaker, normalized),
+      anchorVerified: findClusterByLabel(speakerClusters, lastSpeaker)?.anchorVerified === true,
+      thresholds,
+    })
 
   // ANCLA VERIFICADA DE LA BASE (identidad REAL del dueno): ventana SOSTENIDA + match a SU
   // piso. Gana a un cluster anonimo pegajoso: la misma voz no se queda en «Hablante N»
   // teniendo su ancla medida y verificada (defecto medido 2026-10-19, sesion 18f3888c: la
   // voz del dueno quedo «Hablante 2» toda la sesion con su ancla en la base). Una ventana
   // corta no afirma nombres (`canAssertSpeakerName`).
-  if (verifiedAnchorMatch && !shortWindow) {
+  if (
+    verifiedAnchorMatch &&
+    !shortWindow &&
+    namedAssignmentConfirmed({
+      label: verifiedLabel,
+      similarity: verifiedSim,
+      bestAlternative: bestAlternativeSimilarity(speakerClusters, verifiedLabel, normalized),
+      anchorVerified: true,
+      thresholds,
+    })
+  ) {
     return adoptCluster(verifiedLabel, 'production-verified-anchor', verifiedSim)
   }
 
-  if (lastSpeaker && lastSim >= CONTINUITY && !shortAfterOtherVoice && canAssertName(lastSpeaker, registeredIdentityConfirmed(lastSpeaker))) {
+  if (lastSpeaker && lastSim >= CONTINUITY && !shortAfterOtherVoice && canAssertName(lastSpeaker, registeredIdentityConfirmed(lastSpeaker)) && continuityNameAllowed) {
     if (!bestLabel || bestLabel === lastSpeaker || bestSim < REUSE_EFF || bestSim - lastSim < SWITCH) {
       return anchorLastSpeaker('production-last-continuity')
     }
@@ -525,7 +548,7 @@ function resolveProductionSpeakerAtBoundary({
     if (preferHistorical && bestSim - lastSim >= SWITCH * VOICE_DIARIZATION_DEFAULTS.switchRelax) {
       return adoptCluster(bestLabel, 'production-historical-reidentify', bestSim)
     }
-    if (lastSpeaker && lastSim >= NEW_VOICE_EFF && !shortAfterOtherVoice && canAssertName(lastSpeaker, registeredIdentityConfirmed(lastSpeaker))) {
+    if (lastSpeaker && lastSim >= NEW_VOICE_EFF && !shortAfterOtherVoice && canAssertName(lastSpeaker, registeredIdentityConfirmed(lastSpeaker)) && continuityNameAllowed) {
       if (classroom && bestLabel && bestLabel !== lastSpeaker && bestSim >= REUSE_EFF && bestSim - lastSim >= SWITCH) {
         return adoptCluster(bestLabel, 'production-classroom-switch', bestSim)
       }
@@ -599,7 +622,7 @@ function resolveProductionSpeakerAtBoundary({
     return label
   }
 
-  if (lastSpeaker && lastSim >= CONTINUITY && canAssertName(lastSpeaker, registeredIdentityConfirmed(lastSpeaker))) {
+  if (lastSpeaker && lastSim >= CONTINUITY && canAssertName(lastSpeaker, registeredIdentityConfirmed(lastSpeaker)) && continuityNameAllowed) {
     return anchorLastSpeaker('production-last-continuity-late')
   }
 
@@ -953,14 +976,17 @@ export function resolveConversationSpeaker({
       if (
         pinnedSimilarity >= registeredFloorFor(preferIdentity) &&
         canAssertName(preferIdentity, true) &&
-        (pinnedCluster?.anchorVerified === true ||
-          namedAssignmentConfirmed({
-            label: preferIdentity,
-            similarity: pinnedSimilarity,
-            bestAlternative: bestAlternativeSimilarity(speakerClusters, preferIdentity, vector),
-            shortWindow: shortUtterance,
-            thresholds,
-          }))
+        namedAssignmentConfirmed({
+          label: preferIdentity,
+          similarity: pinnedSimilarity,
+          bestAlternative: bestAlternativeSimilarity(speakerClusters, preferIdentity, vector),
+          shortWindow: shortUtterance,
+          // El ancla verificada conserva SU piso medido, pero NO se salta el margen:
+          // un turno mezclado medido no puede volver a Luis por ser "verificada"
+          // (defecto medido 2026-10-21).
+          anchorVerified: pinnedCluster?.anchorVerified === true,
+          thresholds,
+        })
       ) {
         // La firma del cluster del registrado NO se actualiza aquí: es su ancla
         // de identidad. Actualizarla con la voz entrante (updateClusterSignature
@@ -1096,14 +1122,14 @@ export function resolveConversationSpeaker({
         if (
           pinnedSimilarity >= registeredFloorFor(preferSpeaker) &&
           canAssertName(preferSpeaker, true) &&
-          (pinnedCluster?.anchorVerified === true ||
-            namedAssignmentConfirmed({
-              label: preferSpeaker,
-              similarity: pinnedSimilarity,
-              bestAlternative: bestAlternativeSimilarity(speakerClusters, preferSpeaker, vector),
-              shortWindow: shortUtterance,
-              thresholds,
-            }))
+          namedAssignmentConfirmed({
+            label: preferSpeaker,
+            similarity: pinnedSimilarity,
+            bestAlternative: bestAlternativeSimilarity(speakerClusters, preferSpeaker, vector),
+            shortWindow: shortUtterance,
+            anchorVerified: pinnedCluster?.anchorVerified === true,
+            thresholds,
+          })
         ) {
           // Mismo criterio que el pin de arriba: la firma del cluster del
           // registrado es su ancla y NO se mezcla con la voz entrante.
