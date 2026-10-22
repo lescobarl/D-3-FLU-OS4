@@ -423,13 +423,32 @@ export function renameVoiceRowsByKey(
     const medidos = (Array.isArray(signatures) ? signatures : [])
         .map((sig) => normalizeRowSignature(sig))
         .filter((sig): sig is number[] => Boolean(sig?.length));
-    let changed = 0;
-    for (const e of store.conversationHistory) {
-        if (e.role !== 'user') continue;
-        // Sin epoch = fila legacy: cuenta como del epoch vigente (migracion unica aparte).
+    const filas = store.conversationHistory.filter((e) => {
+        if (e.role !== 'user') return false;
         const epochDeLaFila = Number.isFinite(Number(e.epoch)) ? Number(e.epoch) : epochVigente;
-        if (epochDeLaFila !== epochActual) continue;
-        if (String(e.speakerId || '') !== voz) continue;
+        return epochDeLaFila === epochActual && String(e.speakerId || '') === voz;
+    });
+    // CLAVE MIXTA: si la misma clave contiene una firma que NO es la voz del nombre,
+    // la clave NO identifica a una sola persona (la diarizacion metio a otra voz en
+    // `speaker_1`). En ese caso no se renombran por clave las filas sin evidencia;
+    // solo las que tienen firma compatible. Antes el piso "claramente distinta"
+    // (0.58) dejaba pasar a la mujer con 0.725/0.808 y el rename por clave le ponia
+    // el nombre del titular (defecto medido 2026-10-21).
+    let claveMixta = false;
+    for (const e of filas) {
+        const rowSignature = normalizeRowSignature(e.signature);
+        if (!rowSignature || !medidos.length) continue;
+        const bestSim = medidos.reduce(
+            (best, sig) => Math.max(best, compareCosineSignatures(sig, rowSignature)),
+            -1,
+        );
+        if (bestSim >= 0 && bestSim < floor) {
+            claveMixta = true;
+            break;
+        }
+    }
+    let changed = 0;
+    for (const e of filas) {
         const actual = String(e.speakerName || '').trim();
         const rowSignature = normalizeRowSignature(e.signature);
         // Mejor similitud de la FILA contra las medidas de la voz (una sola lectura).
@@ -447,6 +466,9 @@ export function renameVoiceRowsByKey(
         // clave (turno mezclado). No se renombra: la clave NO es la persona.
         const anonima = !actual || !isProperSpeakerName(actual);
         if (anonima && bestSim >= 0 && bestSim < differentFloor) continue;
+        // En una clave MIXTA no hay evidencia para tocar filas sin firma compatible:
+        // renombrarlas es exactamente lo que ponia el nombre del titular a la mujer.
+        if (claveMixta && anonima && bestSim < floor) continue;
         if (actual === name) continue;
         store.setEntrySpeakerName(e.id, name);
         changed += 1;

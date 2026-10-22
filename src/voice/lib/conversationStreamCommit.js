@@ -26,6 +26,7 @@ import {
   utterancesSameRevision,
   committedEchoStreakWindowMs,
 } from './activeListen.js'
+import { readTurnLive } from './conversationStream.js'
 import { debugHotPath, fluDebugHot } from './fluDebug.js'
 import { relayLog } from '../../lib/clientLogRelay'
 import { voiceProbe } from './voiceProbe'
@@ -606,6 +607,14 @@ export function crearCajaDeLaFrase(deps = {}) {
         // una REVISION no se "anade": se reemplaza. Antes se anadia su cola y la caja
         // duplicaba el tramo corregido ("...la diarizacion... transcripcion...").
         const decision = resolverEmisionDeLaCaja(mostrado, nuevo)
+        // LA CAJA NO ENCOGE DENTRO DE LA MISMA LOCUCION (mandato 2026-10-21): una
+        // revision puede corregir/completar, pero nunca reducir lo ya mostrado. El
+        // unico encogimiento legitimo es el VACIADO del cierre (`vaciarLaCaja`). Antes
+        // `resolverEmisionDeLaCaja` devolvia revisiones mas cortas y 5 se aplicaron en
+        // la sesion real (64->63, 147->104, 50->41, 80->64, 10->8).
+        if (decision.aplica && decision.destino.length < mostrado.length) {
+            return { aplicado: false, destino: mostrado, previo: mostrado.length }
+        }
         if (decision.aplica) destino = decision.destino
         else return { aplicado: false, destino: mostrado, previo: mostrado.length }
       }
@@ -965,9 +974,28 @@ export function handleConversationStreamSync(
   // ella (`isFragmentOfLocution`): un final corto ("mientras") tras interinos largos deja
   // de llevarse la fila, y un texto AJENO (la caja es de la locucion siguiente) no se
   // inyecta en esta fila.
-  const cajaDelTurno = String(publishedLiveRef.current || '')
-  if (!locutionClosed) capture = reconcileCommitText(capture, cajaDelTurno)
-  else if (cajaDelTurno && isFragmentOfLocution(capture, cajaDelTurno)) capture = cajaDelTurno
+  let cajaDelTurno = String(publishedLiveRef.current || '')
+  if (!locutionClosed) {
+    // BARRERA B.3/P11.9: "fila = caja" NO puede rebajar la fila. Si la linea viva es
+    // la MISMA locucion y tiene la frase completa, se hace CRECER la caja (nunca
+    // encoger) y se commitea esa misma frase. Si la caja y la linea son locuciones
+    // distintas, no se mezclan: manda la caja/reconciliacion existente.
+    const lineaVivaCierre = cleanForSpeech(readTurnLive(listenStateRef.current) || '')
+    if (
+      cajaDelTurno &&
+      lineaVivaCierre &&
+      utterancesSameRevision(lineaVivaCierre, cajaDelTurno) &&
+      lineaVivaCierre.length > cajaDelTurno.length
+    ) {
+      const publicacionCierre = publicarEnLaCaja(lineaVivaCierre, {
+        turnId: activeTurnIdRef.current,
+      })
+      if (publicacionCierre.aplicado) cajaDelTurno = publicacionCierre.destino
+    }
+    capture = reconcileCommitText(capture, cajaDelTurno)
+  } else if (cajaDelTurno && isFragmentOfLocution(capture, cajaDelTurno)) {
+    capture = cajaDelTurno
+  }
   // P11.26 (medido 2026-10-14 18:32 en su corrida): las FILAS quedaban con el tartamudeo del ASR
   // dentro ("prueba pruebas pruebas", "trans transcripcion transcripcion", "vi viste viste viste"):
   // la caja pasa por el colapsador y la fila escribia el texto CRUDO. Una sola definicion de

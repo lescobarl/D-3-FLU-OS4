@@ -32,8 +32,10 @@ import {
 import { DEFAULT_VOICE_CONFIG, STORAGE_KEYS } from '../core/config/appConfig';
 import { createOnboardingService } from '../core/onboarding/onboardingService';
 import { logCaughtError } from '../lib/caughtError';
-import { localGet, localRemove } from '../core/storage/localStore';
+import { localGet, localRemove, localSetSafe } from '../core/storage/localStore';
 import { voiceVectorModel } from '../voice/lib/speakerDirectory';
+import { speakerIdToDefaultName } from '../voice/lib/conversationRow.js';
+import { useIntegrationStore } from '../store/integrationStore';
 
 /** Gateway único de la tabla onboardingStates (C44: un solo escritor). */
 const onboardingGateway = createOnboardingService({ db: fluDb.onboardingStates });
@@ -142,6 +144,53 @@ export function useParticipants({ now }: UseParticipantsOptions = {}): UsePartic
       .catch((e) => logCaughtError('src/hooks/useParticipants.ts: seedAnonymous', e))
       .finally(() => refresh().catch((e) => logCaughtError('src/hooks/useParticipants.ts: refresh', e)));
   }, [seedAnonymous, refresh, service]);
+
+  // REPARACION UNICA (2026-10-21): el eco de FLU creo "Luis Registrado" con un vector
+  // medido y lo escribio en la base; el rename por clave lo propago a filas de otras
+  // voces. La creacion ya esta cerrada (stopwords + ventana de eco + no-reanclaje), pero
+  // los DATOS viejos siguen. Esta migracion se ejecuta UNA vez:
+  //   1) borra el participante cuyo nombre es " <base> Registrado" si existe <base>;
+  //   2) invalida el ancla de <base> (pudo ser re-anclada por el eco);
+  //   3) devuelve las filas con ese nombre a la etiqueta de su voz (nunca a otro nombre).
+  // No borra al participante base ni filas; no toca otras voces.
+  useEffect(() => {
+    const KEY = 'flu-identity-confirmation-repair-2026-10-21';
+    if (typeof window === 'undefined') return;
+    if (localGet(KEY) === '1') return;
+    const baseOf = (name: string): string => {
+      const match = String(name || '').trim().match(/^(.*\S)\s+(registrado|registrada|registered)$/i);
+      return match ? match[1].trim() : '';
+    };
+    const run = async () => {
+      const all = await service.list();
+      const byName = new Map(all.map((p) => [String(p.name || '').trim().toLowerCase(), p]));
+      const duplicates = all.filter((p) => {
+        const base = baseOf(p.name);
+        return Boolean(base) && byName.has(base.toLowerCase()) && base.toLowerCase() !== String(p.name || '').trim().toLowerCase();
+      });
+      for (const duplicate of duplicates) {
+        const base = byName.get(baseOf(duplicate.name).toLowerCase());
+        if (!base) continue;
+        await service.remove(duplicate.id);
+        // NO se toca el ancla del participante base: no hay evidencia de que ESTA
+        // concreta estuviera contaminada y borrarla destruiria una identidad valida.
+        // La creacion de anclas por eco ya esta cerrada; aqui solo se retira el
+        // participante duplicado y se limpia el nombre que se le pego a las filas.
+        const store = useIntegrationStore.getState();
+        const epoch = Number(store.conversationEpoch);
+        for (const entry of store.conversationHistory) {
+          if (entry.role !== 'user') continue;
+          if (Number(entry.epoch) !== epoch) continue;
+          if (String(entry.speakerName || '').trim() !== String(duplicate.name || '').trim()) continue;
+          const fallback = speakerIdToDefaultName(String(entry.speakerId || ''));
+          if (fallback && fallback !== entry.speakerName) store.setEntrySpeakerName(entry.id, fallback);
+        }
+      }
+      localSetSafe(KEY, '1', 'src/hooks/useParticipants.ts: confirmation-name repair');
+      if (duplicates.length) await refresh();
+    };
+    run().catch((error) => logCaughtError('src/hooks/useParticipants.ts: confirmation-name repair', error));
+  }, [refresh, service]);
 
   // REGISTRO VIVO ENTRE PESTANAS: si OTRA pestana de la app registra un participante o
   // fija su ancla («ok flu soy luis» en /conversation), esta sesion refresca la base y

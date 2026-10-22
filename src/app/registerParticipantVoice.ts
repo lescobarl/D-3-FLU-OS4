@@ -9,7 +9,8 @@
 // con un numero que nadie midio es basura.
 // ============================================================
 import type { ParticipantRegistry } from '../core/multiuser/participantRegistry';
-import { normalizeEmbeddingVector } from '../voice/lib/speakerCore.js';
+import { compareCosineSignatures, normalizeEmbeddingVector } from '../voice/lib/speakerCore.js';
+import { sameVoiceFloor } from '../voice/lib/speakerClusters.js';
 import { voiceVectorModel } from '../voice/lib/speakerDirectory';
 
 /**
@@ -42,6 +43,17 @@ export async function registerParticipantVoice(
     const rows = await service.list();
     const existing = rows.find((p) => String(p.name || '').trim().toLowerCase() === canonical.toLowerCase());
     if (!existing) return false;
+    // NO RE-ANCLAR CON ECO/TTS: un vector que no es de la MISMA voz no puede
+    // sustituir el ancla verificada de una persona. Antes cualquier "soy Luis"
+    // posterior (incluida la cola del TTS) reescribia el ancla del titular con la
+    // voz equivocada (defecto medido 2026-10-21: `Luis Registrado` y `Luis` 0.536).
+    const existingVector = Array.isArray(existing.voiceVector)
+        ? normalizeEmbeddingVector(existing.voiceVector)
+        : [];
+    if (existing.voiceAnchorVerified === true && existingVector.length) {
+        const similarity = compareCosineSignatures(existingVector, vector);
+        if (similarity < sameVoiceFloor()) return false;
+    }
     const reanchor = await service.upsert(existing.id, {
         voiceVector: vector,
         voiceVectorModel: model,

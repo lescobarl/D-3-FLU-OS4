@@ -1678,6 +1678,14 @@ const NAME_STOPWORDS = new Set([
   'conversacion',
   'escucha',
   'cerrar',
+  // Palabras de CONFIRMACION/eco que el ASR pega tras el nombre. "okay flu soy Luis
+  // registrado" es nombre "Luis", no "Luis Registrado" (defecto medido 2026-10-21:
+  // el eco del TTS creo un participante "Luis Registrado" y contamino la base).
+  'registrado',
+  'registrada',
+  'registrados',
+  'registradas',
+  'registered',
 ])
 
 const NAME_ARTICLE_TOKENS = new Set(['lo', 'la', 'el', 'los', 'las', 'un', 'una', 'unos', 'unas', 'al', 'del'])

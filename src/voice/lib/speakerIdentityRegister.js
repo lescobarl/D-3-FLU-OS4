@@ -40,6 +40,8 @@ import { compareCosineSignatures, hasVoiceMeasurement, isAutoSpeakerLabel, norma
 import { freezeVoiceName, renameVoiceRowsByKey } from './conversationTurnRow'
 import { setSessionPrimarySpeaker } from './sessionPrimarySpeaker.js'
 import { voiceProbe } from './voiceProbe'
+import { getLastCompletedSpeechAt } from './fluSpeech.js'
+import { committedEchoStreakWindowMs } from './activeListen.js'
 
 /**
  * Registra un nombre propio para la VOZ activa. DUENO UNICO del nombre (mandato del dueno
@@ -79,6 +81,23 @@ export function registerSpeakerIdentity({
   const clean = canonicalSpeakerName(normalizeSpeakerLabel(name))
   if (!clean || !isProperSpeakerName(clean)) {
     return { registered: false, name: "", labels: [], rowsChanged: 0, primarySet: false }
+  }
+  // ECO DEL TTS: el final del habla de FLU vuelve por el microfono y el ASR puede
+  // formar "soy <nombre>" con esa cola. Esa cola NO es una presentacion de la
+  // persona: no puede afirmar identidad ni re-anclar la base. El dueno de la
+  // ventana es el mismo del eco de filas (`committedEchoStreakWindowMs`). El turno
+  // ORIGINAL (el que dispara la respuesta) se registra antes de que el TTS termine,
+  // asi que no cae en esta ventana.
+  const lastSpeechAt = getLastCompletedSpeechAt()
+  const echoAgeMs = lastSpeechAt > 0 ? Date.now() - lastSpeechAt : Number.POSITIVE_INFINITY
+  if (echoAgeMs >= 0 && echoAgeMs < committedEchoStreakWindowMs()) {
+    voiceProbe('identity-register-skip', {
+      name: clean,
+      reason: 'tts-echo-window',
+      ageMs: echoAgeMs,
+      windowMs: committedEchoStreakWindowMs(),
+    })
+    return { registered: false, name: clean, labels: [], rowsChanged: 0, primarySet: false }
   }
   const measured =
     Array.isArray(signatureVector) && signatureVector.length && hasVoiceMeasurement(signatureVector)

@@ -443,42 +443,21 @@ export { clearStaleCommittedEchoFromState }
  * @param {string} ultima
  * @returns {boolean}
  */
-export function esCorreccionDelMismoTramo(linea = '', ultima = '') {
-  const a = cleanForSpeech(linea)
-  const b = cleanForSpeech(ultima)
-  if (!a || !b || a === b) return false
-  if (!utterancesSameRevision(a, b)) return false
-  const aLow = a.toLowerCase()
-  const bLow = b.toLowerCase()
-  if (aLow.startsWith(bLow) || bLow.startsWith(aLow)) return false
-  const aWords = a.split(/\s+/).filter(Boolean)
-  const bWords = b.split(/\s+/).filter(Boolean)
-  const clave = (palabra) => palabra.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '')
-  let comun = 0
-  while (comun < aWords.length && comun < bWords.length && clave(aWords[comun]) === clave(bWords[comun])) {
-    comun += 1
-  }
-  if (comun < 2 || bWords.length <= comun || aWords.length <= comun) return false
-  const colaLinea = aWords.slice(comun).map(clave).filter(Boolean)
-  const colaUltima = bWords.slice(comun).map(clave).filter(Boolean)
-  // Una correccion REESCRIBE el tramo: no borra mas palabras de las que el ASR puede perder
-  // al reentregar (config). Si se come un tramo entero distinto, no se usa.
-  const maxBorradas = Number(getTranscriptPauseCfg()?.committedReplayMaxDroppedWords) || 0
-  if (colaLinea.length - colaUltima.length > maxBorradas) return false
-  return colaUltima.some((palabra) => colaLinea.includes(palabra))
-}
-
 /**
- * Captura de la FILA al cerrar por silencio. La linea viva manda, SALVO que el ULTIMO interino
- * sea una CORRECCION del mismo tramo (`esCorreccionDelMismoTramo`): entonces la fila lleva la
- * corregida. Las dos hipotesis NUNCA se concatenan.
+ * Captura de la FILA al cerrar por silencio. La fila usa la MISMA frase canonica que
+ * la caja (Anexo B.3): si el caller pasa `published`, esa es la verdad; el estado
+ * vivo solo es respaldo cuando no hay caja (pruebas/cierre sin preview).
+ *
+ * NO existe una segunda eleccion "la correccion del ultimo interino": esa rama
+ * hacia que la fila llevara una frase distinta de la que el usuario veia en la caja
+ * (defecto medido 2026-10-21, turno 115: caja nueva / fila vieja). Una revision mas
+ * corta no se pinta en la caja (la caja solo acumula) y, por tanto, tampoco puede
+ * ser la fila.
  * @param {object} state
  * @returns {string}
  */
 function capturaDeFilaAlCerrar(state) {
-  const linea = readTurnLive(state)
-  const ultima = cleanForSpeech(readPending(state))
-  return esCorreccionDelMismoTramo(linea, ultima) ? ultima : linea
+  return cleanForSpeech(readTurnLive(state) || state?.pendingFinal)
 }
 
 /** Commit de segmento cuando Chrome deja de emitir onresult pero openLine tiene texto nuevo. */
@@ -489,6 +468,7 @@ export function evaluateSrGapSegmentCommit(
     sinceLastResultMs = 0,
     lastCommitted = '',
     lastCommitAtMs = 0,
+    published = '',
   } = {},
 ) {
   const cfg = getTranscriptPauseCfg()
@@ -507,7 +487,9 @@ export function evaluateSrGapSegmentCommit(
     return { flush: false, capture: '', reason: 'sr-active' }
   }
 
-  const capture = cleanForSpeech(capturaDeFilaAlCerrar(state) || state?.pendingFinal)
+  // B.3: la FILA es la MISMA frase que la caja. `published` es la fuente cuando el
+  // preview existe; el estado vivo solo es el respaldo de pruebas/cierre sin caja.
+  const capture = cleanForSpeech(published || capturaDeFilaAlCerrar(state) || state?.pendingFinal)
   if (!capture) return { flush: false, capture: '', reason: 'empty-openline' }
 
   const prior = cleanForSpeech(lastCommitted)

@@ -20,7 +20,7 @@ import {
   isSameFragmentRevision,
   resolveMicFragmentMerge,
 } from '../src/voice/lib/speechMerge.js'
-import { integrateMicPacket, readTurnLive, utterancesSameRevision, esCorreccionDelMismoTramo, evaluateSrGapSegmentCommit } from '../src/voice/lib/conversationStream.js'
+import { integrateMicPacket, readTurnLive, utterancesSameRevision, evaluateSrGapSegmentCommit } from '../src/voice/lib/conversationStream.js'
 import { createActiveListenState } from '../src/voice/lib/activeListen.js'
 
 /** Pasa la secuencia por el DUENO real de la linea viva y devuelve lo que se ve. */
@@ -166,38 +166,32 @@ describe('ingress - REGRESION #11: dos hipotesis divergentes no se concatenan', 
     expect(tieneBloqueRepetido(linea)).toBe(false)
   })
 
-  // La FILA no la decide la longitud (eso perdia la correccion): si la ultima emision reescribe
-  // el tramo final de la MISMA locucion, la fila lleva la CORREGIDA. Nunca las dos.
-  it('`esCorreccionDelMismoTramo` distingue corregir el tramo de recortar/eliminar otro', () => {
-    expect(esCorreccionDelMismoTramo(COMPLETA, CORREGIDA)).toBe(true)
-    expect(esCorreccionDelMismoTramo(CORREGIDA, COMPLETA)).toBe(true)
-    // Recorte literal de la linea: no es una correccion (se queda la linea).
-    expect(esCorreccionDelMismoTramo('no lo voy a preparar al 100% ahora mismo', 'no lo voy a preparar al 100%')).toBe(false)
-    // Elimina un tramo DISTINTO (se come palabras del medio): no se usa.
-    expect(esCorreccionDelMismoTramo('bien vamos a retomar el tema de las pruebas de la casa', 'bien vamos a retomar el tema de la casa')).toBe(false)
-    // Otra locucion: no hay correccion que hacer.
-    expect(esCorreccionDelMismoTramo(COMPLETA, 'pon musica relajante en el salon')).toBe(false)
-  })
-
-  it('el cierre por SILENCIO escribe la CORREGIDA en la fila (no la mas larga)', () => {
+  // B.3 (mandato 2026-10-21): la FILA es la MISMA frase que la caja. No se elige una
+  // "correccion" del ultimo interino que la caja no muestra.
+  it('el cierre por SILENCIO escribe la MISMA frase que la caja', () => {
     const state = createActiveListenState()
     integrateMicPacket(state, { interim: COMPLETA })
     integrateMicPacket(state, { interim: CORREGIDA })
-    // La linea viva conserva la mas completa (una sola hipotesis) ...
     expect(readTurnLive(state)).toBe(COMPLETA)
-    // ... y la FILA lleva la corregida.
-    const cierre = evaluateSrGapSegmentCommit(state, { sinceLastResultMs: 10001, lastCommitted: '' })
+    const cierre = evaluateSrGapSegmentCommit(state, {
+      sinceLastResultMs: 10001,
+      lastCommitted: '',
+      published: COMPLETA,
+    })
     expect(cierre.flush).toBe(true)
-    expect(cierre.capture).toBe(CORREGIDA)
-    expect(cierre.capture.toLowerCase()).not.toContain('100 porque')
+    expect(cierre.capture).toBe(COMPLETA)
   })
 
-  it('CONTROL: si la ultima RECORTA, la fila se queda la linea (no se pierde texto)', () => {
+  it('si la caja esta en la locucion nueva, la fila NO se lleva la linea vieja', () => {
     const state = createActiveListenState()
-    integrateMicPacket(state, { interim: 'no lo voy a preparar al 100% ahora mismo' })
-    integrateMicPacket(state, { interim: 'no lo voy a preparar al 100%' })
-    const cierre = evaluateSrGapSegmentCommit(state, { sinceLastResultMs: 10001, lastCommitted: '' })
+    integrateMicPacket(state, { interim: 'por eso le escribe a mi papá para que fuera por mí tan peligroso soy Porque no solo te fuiste y ya' })
+    const cajaNueva = 'se me hace como que no te acuerdas muy bien de qué pasó'
+    const cierre = evaluateSrGapSegmentCommit(state, {
+      sinceLastResultMs: 10001,
+      lastCommitted: '',
+      published: cajaNueva,
+    })
     expect(cierre.flush).toBe(true)
-    expect(cierre.capture).toBe('no lo voy a preparar al 100% ahora mismo')
+    expect(cierre.capture).toBe(cajaNueva)
   })
 })

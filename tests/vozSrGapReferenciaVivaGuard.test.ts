@@ -200,12 +200,12 @@ describe('srGap: el cierre retiene la referencia viva completa', () => {
     expect(filas.at(-1)).toBe(LOCUCION)
   })
 
-  it('PRUEBA DE DETECTOR (el detector no es decorativo): si la linea viva NO es mas completa, manda el buffer', () => {
+  it('B.3: si la CAJA es la corta, la fila es la corta (no se inventa el buffer oculto)', () => {
     const corta = 'buenos dias a todos los presentes'
     const { filas } = cerrarPorSrGap({ openLine: LOCUCION, live: corta, filas: [] })
     console.log(`  DET frame=${filas.map((t) => t.length).join(',')}`)
-    // Si el criterio fuera "la linea viva no esta vacia" (en vez de "es MAS completa"),
-    // este caso escribiria el texto CORTO y perderia el buffer completo.
-    expect(filas.at(-1)).toBe(LOCUCION)
+    // La caja es la frase canonica visible. Escribir el buffer largo seria romper
+    // "fila = caja" (Anexo B.3); el buffer no puede ser una segunda verdad.
+    expect(filas.at(-1)).toBe(corta)
   })
 })

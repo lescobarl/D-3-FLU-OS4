@@ -245,7 +245,7 @@ describe('A3 - el peel del texto ya commiteado tolera UNA palabra caida', () => 
 })
 
 describe('B - revision de la MISMA locucion (el ASR corrige el inicio)', () => {
-  it('un re-reconocimiento que CORRIGE el inicio actualiza la caja aunque sea mas corto', () => {
+  it('una revision MAS CORTA no encoge la caja (mandato 2026-10-21)', () => {
     const { deps, mostrado } = makeDeps()
     const MOSTRADO = 'no se como se comporta la diarizacion en la caja de la frase viva'
     const REVISION = 'no se como se comporta la transcripcion en la caja de la frase' // corrige y no crece
@@ -253,7 +253,16 @@ describe('B - revision de la MISMA locucion (el ASR corrige el inicio)', () => {
     expect(ultimo(mostrado)).toBe(MOSTRADO)
 
     handleConversationStreamSync(deps as never, { capture: REVISION })
-    expect(ultimo(mostrado), 'la revision del mismo tramo tiene que verse').toBe(REVISION)
+    expect(ultimo(mostrado), 'la caja no puede decrecer').toBe(MOSTRADO)
+  })
+
+  it('una revision MAS LARGA de la misma locucion si actualiza la caja', () => {
+    const { deps, mostrado } = makeDeps()
+    const MOSTRADO = 'no se como se comporta la diarizacion en la caja de la frase viva'
+    const CRECIDA = `${MOSTRADO} y ademas corrige el tramo`
+    handleConversationStreamSync(deps as never, { capture: MOSTRADO })
+    handleConversationStreamSync(deps as never, { capture: CRECIDA })
+    expect(ultimo(mostrado)).toBe(CRECIDA)
   })
 
   it('un texto AJENO y mas corto sigue bloqueado (jamas se sustituye lo que no deriva)', () => {

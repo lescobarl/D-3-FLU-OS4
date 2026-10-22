@@ -189,7 +189,21 @@ describe('renombre por CLAVE (sin piso de firma) y por epoch', () => {
     expect(nextAutoSpeakerLabel(podados, [], { highWater: store().speakerHighWater })).toBe('Hablante 3')
   })
 
-  it('8. reset de epoch reinicia el high-water pero NO toca las filas viejas', () => {
+  it('8. clave MIXTA: una firma contraria impide renombrar filas sin evidencia', () => {
+    fila('firma voz', 'Hablante 1', V(1))
+    fila('firma ajena', 'Hablante 1', V(2))
+    fila('sin firma', 'Hablante 1')
+    const changed = renameVoiceRowsByKey('speaker_1', 'Luis', {
+      signatures: [V(1)],
+      floor: 0.66,
+    })
+    expect(changed).toBe(1)
+    // Las filas protegidas quedan SIN nombre congelado (la UI resuelve su etiqueta);
+    // lo importante es que NO se les pegue el nombre del titular.
+    expect(nombres('speaker_1')).toEqual(['Luis', '', ''])
+  })
+
+  it('9. reset de epoch reinicia el high-water pero NO toca las filas viejas', () => {
     fila('uno', 'Hablante 1')
     fila('dos', 'Hablante 2')
     expect(store().speakerHighWater).toBe(2)

@@ -42,7 +42,7 @@ import {
   resolveIngressCaptureText,
   isProgressiveExtension,
   isAssistantVoiceEcho,
-  esCorreccionDelMismoTramo,
+
 } from './conversationStream.js'
 import { collapseAdjacentWordRepeat } from './speechMerge.js'
 import { fluTrace } from './fluTrace.js'
@@ -226,26 +226,20 @@ export function flushSrGapSegmentThroughIngress(ctx, { sinceLastResultMs = 0 } =
   // identidad NO cambia, la ven todos los consumidores) ANTES del EVAL, para que el
   // EVAL, los portones y el commit partan de la referencia COMPLETA.
   const liveText = cleanForSpeech(ctx.publishedLiveRef?.current || '')
-  // CORRECCION DEL MISMO TRAMO (#11, medido d4c1c8f3): el ultimo interino reescribe el tramo
-  // final de la MISMA locucion ("… al 100%" corrige a "… 100 porque"). La FILA lleva la
-  // corregida; no se concatenan. Se decide ANTES de sembrar la referencia viva, que borra el
-  // pending y con el la unica copia de la correccion.
-  const ultimaEmision = cleanForSpeech(ctx.listenState.pendingInterim || '')
-  const lineaViva = cleanForSpeech(readTurnLive(ctx.listenState) || ctx.listenState.pendingFinal || '')
-  const correccion = esCorreccionDelMismoTramo(lineaViva || liveText, ultimaEmision) ? ultimaEmision : ''
-  if (liveText && !correccion) {
-    const rawLive = lineaViva
-    if (liveText.length > rawLive.length) {
-      ctx.listenState.openLine = liveText
-      ctx.listenState.pendingInterim = ''
-      clearPendingFinal(ctx.listenState)
-    }
+  // B.3: la FILA sale de la MISMA frase canonica que la caja. `publishedLiveRef` es la
+  // verdad visible; NO se elige una "correccion" del ultimo interino que la caja no
+  // muestra. Esa segunda eleccion separaba fila y caja (turno 115: caja nueva, fila vieja).
+  if (liveText) {
+    ctx.listenState.openLine = liveText
+    ctx.listenState.pendingInterim = ''
+    clearPendingFinal(ctx.listenState)
   }
 
   const evalResult = evaluateSrGapSegmentCommit(ctx.listenState, {
     sinceLastResultMs,
     lastCommitted,
     lastCommitAtMs: Number(ctx.lastCommitAtRef?.current) || 0,
+    published: liveText,
   })
   if (!evalResult.flush || !evalResult.capture) {
     return { flushed: false, reason: evalResult.reason || 'no-flush', capture: evalResult.capture || '' }
@@ -260,9 +254,7 @@ export function flushSrGapSegmentThroughIngress(ctx, { sinceLastResultMs = 0 } =
   // UNA palabra ("…cla Cloud Cloud de que…") mientras el final de Chrome era limpio;
   // el canon colapsa el tartamudeo ANTES de sellar la fila (mismo dueno que la puerta
   // del final: `canonSinTartamudeo`).
-  const captureFinal = canonSinTartamudeo(
-    correccion || ((liveText.length > capture.length) ? liveText : capture),
-  )
+  const captureFinal = canonSinTartamudeo(liveText || capture)
 
   resetInterimControlBuffers(ctx.listenState, ctx.publishedLiveRef, ctx.lastStreamPreviewRef)
 
