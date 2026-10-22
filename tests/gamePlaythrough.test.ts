@@ -20,13 +20,40 @@
 // ============================================================
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { GAME_CATALOG } from '../src/core/games/gameCatalog';
 import { applyGameAction } from '../src/app/gameActions';
 import { clearActiveGameSession, getActiveGameSession } from '../src/core/games/gameSessionStore';
 import type { GameEngine } from '../src/core/games/gameEngine';
 import type { GameSession, GameTurnResult } from '../src/core/games/types';
+
+// El motor de juegos puede disparar musica al ganar. En node no existe `Audio`;
+// sin este stub, `playSong` deja una promesa rechazada no controlada y el gate
+// sale rojo aunque todas las pruebas pasen (defecto de entorno, no de juego).
+beforeAll(() => {
+    vi.stubGlobal(
+        'Audio',
+        class AudioStub {
+            src = '';
+            preload = 'auto';
+            volume = 1;
+            loop = false;
+            currentTime = 0;
+            duration = 0;
+            play() {
+                return Promise.resolve();
+            }
+            pause() {}
+            load() {}
+            addEventListener() {}
+            removeEventListener() {}
+        },
+    );
+});
+afterAll(() => {
+    vi.unstubAllGlobals();
+});
 
 // ------------------------------------------------------------
 // Descubrimiento de motores y sus datos (sin listas por juego)
