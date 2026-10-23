@@ -279,12 +279,13 @@ describe('piso de evidencia: una ventana sin VOZ medida no abre un "Hablante N" 
       allowNewCluster: true,
     } as any)
 
-  // CAMBIO DECLARADO (2026-10-21, fase 1 de diarizacion): sin VOZ medida el turno recibe
-  // la etiqueta PROVISIONAL de config (no la del turno anterior: heredarla le daba a la
-  // mujer la etiqueta del dueno). El proposito del guard se conserva: NO se inventa un
-  // "Hablante N" nuevo.
-  it('sin voz medida no se inventa hablante: etiqueta PROVISIONAL, no la anterior', () => {
-    expect(resolverPiso(VENTANA_SIN_VOZ)).toBe('Hablante ?')
+  // CAMBIO DECLARADO (2026-10-23, mandato del dueno): sin VOZ medida el turno NO se queda en
+  // la etiqueta pendiente; su etiqueta es la CONTINUIDAD de una etiqueta anonima de la sesion
+  // (jamas un nombre propio y jamas un "Hablante N" inventado que no exista en la sesion).
+  it('sin voz medida no se inventa hablante: continuidad anonima, nunca un nombre', () => {
+    const label = resolverPiso(VENTANA_SIN_VOZ)
+    expect(label).not.toBe('Hablante ?')
+    expect(label, 'no se abre un indice que la sesion no tiene').toBe('Hablante 1')
   })
 
   it('una voz DISTINTA con evidencia suficiente (0.58) si abre hablante nuevo', () => {
@@ -295,8 +296,10 @@ describe('piso de evidencia: una ventana sin VOZ medida no abre un "Hablante N" 
     expect(resolverPiso([0, 1, 0])).toBe('Hablante 2')
   })
 
-  it('sin vector no se inventa etiqueta (pendiente, nunca la del turno anterior)', () => {
-    expect(resolverPiso([])).toBe('Hablante ?')
+  it('sin vector no se inventa etiqueta (continuidad anonima, nunca la de otra persona)', () => {
+    const label = resolverPiso([])
+    expect(label).not.toBe('Hablante ?')
+    expect(label, 'la continuidad es la etiqueta automatica de la sesion').toBe('Hablante 1')
   })
 })
 

@@ -90,8 +90,12 @@ export function buildReport(input) {
       (input.comparison?.speakerFlips || input.comparison?.source?.speakerFlips || []).length,
     ) || 0,
     // TRIAGE: cada missing/extra con su clase y evidencia; un sin clasificar es un fallo.
-    pendingRows: (input.vectors?.turns || []).filter((t) => t.evidenciaPropia && String(t.observed || '').includes('?')).length,
+    // PENDIENTES (mandato del dueno 2026-10-23): UN solo contador con TODAS las filas
+    // cerradas en "?". `pendingCircular` es su DESGLOSE informativo (cuantas de ellas tienen
+    // firma circular), nunca un cajon aparte que las saque del veredicto.
+    pendingRows: (input.vectors?.turns || []).filter((t) => String(t.observed || '').includes('?')).length,
     pendingCircular: (input.vectors?.turns || []).filter((t) => !t.evidenciaPropia && String(t.observed || '').includes('?')).length,
+    pendingPropio: (input.vectors?.turns || []).filter((t) => t.evidenciaPropia && String(t.observed || '').includes('?')).length,
     sourceTriage: input.comparison?.source?.triage || null,
     unclassifiedMissing: Number(input.comparison?.source?.triage?.unclassifiedMissing) || 0,
     unclassifiedExtra: Number(input.comparison?.source?.triage?.unclassifiedExtra) || 0,

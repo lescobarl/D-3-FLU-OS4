@@ -123,9 +123,15 @@ function claveDeTexto(text = '') {
  * @param {Map<string, { veces: number, textos: Set<string> }>} firmas lo visto en la sesion
  * @returns {boolean} true si la firma PUEDE ser la medida de ESTE turno
  */
-function firmaPropiaDelTurno(clave, firmas) {
+function firmaPropiaDelTurno(clave, firmas, tramo = '') {
   const visto = firmas?.get(clave)
   if (!visto) return Boolean(clave)
+  // UN MISMO VECTOR NO ES LA MEDIDA DE DOS TRAMOS DE AUDIO DISTINTOS: si la firma aparece bajo
+  // tramos diferentes (`audioEndSample - audioStartSample`), es una REFERENCIA copiada, no la
+  // medida del turno (medido 2026-10-23: #54/#55, #120/#121, #127/#128 comparten firma con
+  // tramos de 1 s y de 5 s). Se prefiere perder la evaluacion a vender evidencia falsa.
+  if (Number(visto.tramos?.size || 0) > 1) return false
+  void tramo
   return Number(visto.veces || 0) <= 1 || Number(visto.textos?.size || 0) <= 1
 }
 
@@ -175,9 +181,11 @@ export async function runVectorsSession({ session, thresholds } = {}) {
   for (const commit of commits) {
     const clave = claveDeFirma(commit?.signature)
     if (!clave) continue
-    const visto = firmasDeLaSesion.get(clave) || { veces: 0, textos: new Set() }
+    const visto = firmasDeLaSesion.get(clave) || { veces: 0, textos: new Set(), tramos: new Set() }
     visto.veces += 1
     visto.textos.add(claveDeTexto(commit?.text))
+    // TRAMO del turno: dos tramos distintos no pueden compartir la MISMA medida grabada.
+    visto.tramos.add(String(Number(commit?.audioEndSample) - Number(commit?.audioStartSample)))
     firmasDeLaSesion.set(clave, visto)
   }
 
@@ -210,7 +218,11 @@ export async function runVectorsSession({ session, thresholds } = {}) {
     // SIN MEDIDA PROPIA (firma compartida con otra locucion) el turno SE EVALUA igual, pero su
     // veredicto es CIRCULAR: el vector que se le pasa es el de un cluster, asi que el resultado
     // lo decide el dato de entrada. Se cuenta en `circular`, nunca como acierto ni mismatch.
-    const evidenciaPropia = firmaPropiaDelTurno(claveDeFirma(vector), firmasDeLaSesion)
+    const evidenciaPropia = firmaPropiaDelTurno(
+      claveDeFirma(vector),
+      firmasDeLaSesion,
+      String(Number(commit?.audioEndSample) - Number(commit?.audioStartSample)),
+    )
 
     // ESTADO PREVIO: nunca el resultado de este commit.
     const clustersPrevios = previo ? clustersDeTurno(previo.clusters) : clustersDesdeBase(participantesBase)

@@ -347,13 +347,17 @@ describe('recalculo de filas INCIERTAS (solo cuando aparece un cluster nuevo)', 
     expect(porId('r-resuelta'), 'una fila ya resuelta no se recalcula').toBe('Luis')
   })
 
-  it('sin cluster que case (por debajo del piso) la fila SIGUE pendiente', () => {
+  it('sin cluster que case (por debajo del piso) la fila NO hereda etiqueta ajena', () => {
+    // Mandato 2026-10-23: la fila cerrada no queda en "?". Su medida es de OTRA voz, asi que
+    // no hereda la etiqueta del cluster: se abre la SIGUIENTE etiqueta anonima de la sesion.
     sembrarPendiente('r-otra', firma(5))
     const cambiadas = resolvePendingSpeakerRows([{ label: 'Hablante 4', signature: firma(9) }])
 
-    expect(cambiadas).toBe(0)
+    expect(cambiadas).toBe(1)
     const fila = useIntegrationStore.getState().conversationHistory[0]
-    expect(fila.speakerName).toBe(PENDIENTE)
+    expect(fila.speakerName).not.toBe(PENDIENTE)
+    expect(fila.speakerName, 'no es la etiqueta de la otra voz').not.toBe('Hablante 4')
+    expect(fila.speakerName).toBe('Hablante 5')
   })
 })
 
@@ -423,14 +427,18 @@ describe('filas INCIERTAS: la asignacion la decide el dueno unico', () => {
     expect(Array.isArray(resuelta.signature) && resuelta.signature.length > 0, 'la firma con la que se decidio queda estampada').toBe(true)
   })
 
-  it('sin medida del turno la fila SIN firma sigue pendiente (no se inventa)', () => {
+  it('sin medida del turno la fila SIN firma sale por CONTINUIDAD (nunca "?")', () => {
+    // Mandato 2026-10-23: sin medida no se inventa identidad, pero la fila cerrada no queda en
+    // la etiqueta pendiente: usa la continuidad de una etiqueta anonima de la sesion.
     useIntegrationStore.setState({ conversationHistory: [], conversationEpoch: 0 })
     const { id } = commitUserTurnRow({ text: 'otro turno sin medida', speakerName: PENDIENTE, turnId: 9 })
 
     const cambiadas = resolvePendingSpeakerRows([clusterLuis, clusterMujer], { snapshots: [] })
 
-    expect(cambiadas).toBe(0)
-    expect(fila(String(id)).speakerName).toBe(PENDIENTE)
+    expect(cambiadas).toBe(1)
+    const etiqueta = String(fila(String(id)).speakerName || '')
+    expect(etiqueta).not.toBe(PENDIENTE)
+    expect(etiqueta, 'no se afirma un nombre propio por continuidad').not.toBe('Luis')
   })
 })
 

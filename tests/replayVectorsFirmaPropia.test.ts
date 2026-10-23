@@ -58,9 +58,12 @@ function sesion(commits: Array<Record<string, unknown>>) {
 type VectorsResult = {
   evaluated: number
   conclusive: boolean
+  conEvidencia: number
+  circulares: number
   skipped: Array<{ index: number; motivo: string }>
   notConclusive: string[]
   avisos: string[]
+  turns: Array<{ categoria: string; evidenciaPropia: boolean; sinDuracion: boolean }>
 }
 
 /** Ejecuta el runner REAL sobre la sesion construida. */
@@ -69,19 +72,33 @@ function correr(session: unknown): Promise<VectorsResult> {
 }
 
 const CLUSTERS = [{ label: 'Hablante 1', signature: [...VOZ_A] }]
-const motivos = (r: VectorsResult) => r.skipped.map((turno) => turno.motivo)
 
 describe('vectors: firma compartida entre locuciones = referencia, no medida del turno', () => {
-  it('la MISMA firma en dos LOCUCIONES distintas -> no se evalua (firma-repetida)', async () => {
+  it('la MISMA firma en dos LOCUCIONES distintas -> CIRCULAR: sin evidencia propia', async () => {
     const observado = await correr(
       sesion([commit(VOZ_A, CLUSTERS, 'primera locucion'), commit(VOZ_A, CLUSTERS, 'segunda locucion')]),
     )
 
-    expect(observado.evaluated).toBe(0)
+    // Se EVALUA (no se omite), pero sin evidencia propia: no cuenta como acierto ni fallo.
+    expect(observado.evaluated).toBe(2)
+    expect(observado.conEvidencia).toBe(0)
+    expect(observado.circulares).toBe(2)
+    expect(observado.turns.every((turno) => turno.categoria === 'circular')).toBe(true)
     expect(observado.conclusive).toBe(false)
-    expect(motivos(observado)).toEqual(['firma-repetida', 'firma-repetida'])
-    expect(observado.notConclusive).toContain('firma-repetida')
+    expect(observado.notConclusive).toContain('sin-evidencia')
     expect(observado.avisos).toContain('firma-no-propia-del-turno')
+  })
+
+  it('MUTACION: la MISMA firma bajo el MISMO texto pero con TRAMOS distintos es una REFERENCIA', async () => {
+    // Dos tramos de audio distintos no producen el mismo vector de 512 componentes: si lo
+    // comparten, la grabacion guardo una copia. Es el caso de #54/#55 y #127/#128 del dueno.
+    const primera = commit(VOZ_A, CLUSTERS, 'la misma locucion')
+    const segunda = { ...commit(VOZ_A, CLUSTERS, 'la misma locucion'), audioEndSample: 480000 }
+    const observado = await correr(sesion([primera, segunda]))
+
+    expect(observado.conEvidencia).toBe(0)
+    expect(observado.circulares).toBe(2)
+    expect(observado.turns.every((turno) => turno.categoria === 'circular')).toBe(true)
   })
 
   it('FALSIFICACION: firmas DISTINTAS -> se evaluan todas y el detector no marca nada', async () => {
@@ -107,6 +124,8 @@ describe('vectors: firma compartida entre locuciones = referencia, no medida del
 
     expect(observado.evaluated).toBe(2)
     expect(observado.conclusive).toBe(true)
+    expect(observado.conEvidencia).toBe(2)
+    expect(observado.circulares).toBe(0)
     expect(observado.skipped).toEqual([])
   })
 
@@ -119,7 +138,9 @@ describe('vectors: firma compartida entre locuciones = referencia, no medida del
       ]),
     )
 
-    expect(observado.evaluated).toBe(1)
-    expect(motivos(observado)).toEqual(['firma-repetida', 'firma-repetida'])
+    expect(observado.evaluated).toBe(3)
+    expect(observado.conEvidencia).toBe(1)
+    expect(observado.circulares).toBe(2)
+    expect(observado.turns.map((turno) => turno.categoria)).toEqual(['circular', 'circular', 'match'])
   })
 })

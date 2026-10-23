@@ -134,29 +134,33 @@ describe('resolutor en monologo (mutacion: hasVoiceMeasurement = false)', () => 
     expect(() => exigirEtiquetaFinalDeMonologo('Hablante 1')).not.toThrow()
   })
 
-  it('DOS voces: "?" sigue siendo legitimo (no se fuerza la etiqueta)', () => {
+  it('DOS voces sin medida: la fila NO queda en "?" (continuidad de una etiqueta anonima)', () => {
+    // Mandato 2026-10-23: ninguna fila CERRADA se queda en "?". Sin medida del turno la
+    // etiqueta es la continuidad de una etiqueta ANONIMA de la sesion (nunca un nombre).
     const clusters = [
       { label: 'Hablante 1', signature: [...LUIS] },
       { label: 'Hablante 2', signature: [...MUJER] },
     ]
     const label = resolver([], clusters)
-    expect(label).toBe(PENDING)
+    expect(label).not.toBe(PENDING)
+    expect(['Hablante 1', 'Hablante 2']).toContain(label)
+    expect(label, 'la continuidad elige la PRIMERA etiqueta anonima de la sesion').toBe('Hablante 1')
   })
 
   it('sin namedAssignmentConfirmed no se afirma un nombre propio SIN ancla verificada', () => {
     const clusters = [{ label: 'Luis', signature: [...LUIS] }]
     const label = resolver([], clusters)
     expect(label, 'sin ancla verificada no se afirma "Luis"').not.toBe('Luis')
-    expect(label).toBe(PENDING)
+    expect(label, 'sin ninguna etiqueta anonima se usa la primera del vocabulario').toBe('Hablante 1')
   })
 
-  it('EXCEPCION DECLARADA: ancla verificada unica SIN medida -> "?" (no se afirma el nombre)', () => {
+  it('ancla verificada unica SIN medida: nombre NO, etiqueta anonima SI (nunca "?")', () => {
     const clusters = [{ label: 'Luis', signature: [...LUIS], anchorVerified: true }]
     const label = resolver([], clusters)
-    // Se conserva "?" a proposito: afirmar "Luis" por continuidad es exactamente el defecto
-    // medido (la mujer con la etiqueta del dueno). Ver la cabecera del guard, excepcion 1.
+    // Afirmar "Luis" por continuidad es el defecto medido (la mujer con la etiqueta del dueno):
+    // se conserva la etiqueta ANONIMA del vocabulario, pero la fila cerrada no queda en "?".
     expect(label, 'sin medida del turno no hay confirmacion de nombre').not.toBe('Luis')
-    expect(label).toBe(PENDING)
+    expect(label).toBe('Hablante 1')
   })
 })
 
@@ -181,7 +185,7 @@ describe('fila CERRADA (capa de escritura) en monologo', () => {
     expect(String(useIntegrationStore.getState().conversationHistory[0].speakerName || '')).toBe('Hablante 1')
   })
 
-  it('G U A R D: con DOS voces (firma por debajo del piso) la fila SIGUE pendiente', () => {
+  it('G U A R D: una firma por debajo del piso NO hereda la etiqueta de otra voz', () => {
     useIntegrationStore.setState({
       conversationHistory: [
         {
@@ -197,8 +201,11 @@ describe('fila CERRADA (capa de escritura) en monologo', () => {
       conversationEpoch: 0,
     })
     const cambiadas = resolvePendingSpeakerRows([{ label: 'Hablante 1', signature: [...LUIS] }])
-    expect(cambiadas).toBe(0)
-    expect(String(useIntegrationStore.getState().conversationHistory[0].speakerName || '')).toBe(PENDING)
+    expect(cambiadas).toBe(1)
+    const etiqueta = String(useIntegrationStore.getState().conversationHistory[0].speakerName || '')
+    expect(etiqueta, 'la voz distinta NO hereda la etiqueta de otra persona').not.toBe(PENDING)
+    expect(etiqueta).not.toBe('Hablante 1')
+    expect(etiqueta, 'se abre la siguiente etiqueta anonima de la sesion').toBe('Hablante 2')
   })
 
   it('la PRIMERA fila (sin historial con etiqueta y SIN firma) sale por la continuidad del cluster', () => {
@@ -223,9 +230,9 @@ describe('fila CERRADA (capa de escritura) en monologo', () => {
     expect(String(useIntegrationStore.getState().conversationHistory[0].speakerName || '')).toBe('Hablante 1')
   })
 
-  it('EXCEPCION DECLARADA: primera fila sin cluster MEDIDO ni etiqueta en el historial -> "?"', () => {
-    // No hay ninguna voz de la que heredar (0 clusters medidos) ni historial con etiqueta: la
-    // unica respuesta honesta es la pendiente. Ver la cabecera del guard, excepcion 2.
+  it('primera fila sin cluster MEDIDO ni historial: primera etiqueta anonima (nunca "?")', () => {
+    // Sin voz medida ni historial, la continuidad anonima es la PRIMERA etiqueta del
+    // vocabulario: no afirma ninguna identidad y la fila cerrada no queda en "?".
     useIntegrationStore.setState({
       conversationHistory: [
         {
@@ -240,7 +247,7 @@ describe('fila CERRADA (capa de escritura) en monologo', () => {
     })
 
     const cambiadas = resolvePendingSpeakerRows([{ label: 'Hablante 1' }])
-    expect(cambiadas).toBe(0)
-    expect(String(useIntegrationStore.getState().conversationHistory[0].speakerName || '')).toBe(PENDING)
+    expect(cambiadas).toBe(1)
+    expect(String(useIntegrationStore.getState().conversationHistory[0].speakerName || '')).toBe('Hablante 1')
   })
 })

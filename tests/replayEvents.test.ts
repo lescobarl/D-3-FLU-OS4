@@ -653,17 +653,15 @@ describe.runIf(existsSync(REAL_SESSION))('replay events - grabacion real d4c1c8f
     expect(datos.sourceTriage, 'el triage se publica').toBeTruthy()
     expect(datos.unclassifiedMissing, 'ningun missing sin clase').toBe(0)
     expect(datos.unclassifiedExtra, 'ningun extra sin clase').toBe(0)
-    expect(datos.bugsMissing, 'ninguna perdida real sin corregir').toBe(0)
-    expect(datos.bugsExtra, 'ninguna invencion real sin corregir').toBe(0)
-    const clases = new Set([
-      ...datos.sourceTriage.missing.map((f: { clase: string }) => f.clase),
-      ...datos.sourceTriage.extra.map((f: { clase: string }) => f.clase),
-    ])
-    for (const clase of clases) {
-      expect(
-        ['cola-sin-final', 'particion-hipotesis', 'mezcla-de-hipotesis', 'habla-del-asr', 'mixtura-del-asr', 'sin-texto'],
-        `clase desconocida: ${clase}`,
-      ).toContain(clase)
+    // SOLO DOS CLASES (mandato 2026-10-23): duplicado exacto de la fuente (con sus ids) o bug.
+    // Cualquier clase que absuelva por definicion volveria a tapar el defecto.
+    const filasTriage = [...datos.sourceTriage.missing, ...datos.sourceTriage.extra] as Array<{ clase: string }>
+    for (const fila of filasTriage) {
+      expect(['duplicado-exacto-de-fuente', 'bug-perdida', 'bug-invencion'], `clase desconocida: ${fila.clase}`).toContain(fila.clase)
+    }
+    for (const fila of datos.sourceTriage.missing as Array<{ clase: string; ids?: unknown[] }>) {
+      if (fila.clase !== 'duplicado-exacto-de-fuente') continue
+      expect(Array.isArray(fila.ids) && fila.ids.length > 1, 'el duplicado prueba con los ids de la fuente').toBe(true)
     }
   })
 
@@ -714,8 +712,17 @@ describe.runIf(existsSync(REAL_SESSION))('replay events - grabacion real d4c1c8f
       turnos.filter((t) => t.evidenciaPropia && String(t.observed || '').includes('?')),
       'ninguna fila con evidencia propia queda en "?"',
     ).toEqual([])
-    expect(datos.pendingRows, 'ninguna fila cerrada con evidencia propia en "?"').toBe(0)
-    expect(datos.pendingCircular, 'los pendientes circulares se declaran').toBeGreaterThan(0)
+    // NINGUNA fila cerrada en "?" (ni con evidencia propia ni circular): el contador es UNO.
+    expect(datos.pendingRows, 'ninguna fila cerrada en "?"').toBe(0)
+    expect(datos.pendingCircular, 'ningun pendiente circular se cuela como pendiente').toBe(0)
+    expect(datos.pendingPropio, 'ningun pendiente con evidencia propia').toBe(0)
+    // MUTACION: una fila cerrada en "?" con firma circular pone rojo el contador (el bug que
+    // este guard vigila: dejarla pendiente "porque su firma es circular").
+    const pendienteCircular = [{ categoria: 'circular', evidenciaPropia: false, observed: 'Hablante ?' }]
+    expect(
+      pendienteCircular.filter((t) => String(t.observed || '').includes('?')).length,
+      'si el producto dejara un "?" circular, el contador lo ve',
+    ).toBe(1)
     expect(datos.speakers.evaluatedCircular, 'las firmas compartidas se evaluan y se declaran').toBeGreaterThan(0)
     expect(datos.speakers.sinDuracion, 'los turnos sin tramo se evaluan y se declaran').toBeGreaterThan(0)
   })

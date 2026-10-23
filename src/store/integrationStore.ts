@@ -216,7 +216,7 @@ export interface IntegrationActions {
      * etiqueta reutilizada por otra voz no hereda el nombre (la mujer dejaba de salir "Luis").
      * Write-once: no pisa un nombre propio ya congelado.
      */
-    setEntrySpeakerName: (id: string, speakerName: string) => void;
+    setEntrySpeakerName: (id: string, speakerName: string, options?: { resolved?: boolean }) => void;
     /**
      * Completa el texto de la fila que era FRAGMENTO de la locucion (misma fila, una entrada):
      * el texto consolidado entra UNA vez y no se reescribe despues.
@@ -544,14 +544,21 @@ export const useIntegrationStore = create<IntegrationStore>()(
                 }));
             },
 
-            setEntrySpeakerName: (id: string, speakerName: string) => {
+            /**
+             * Escribe la etiqueta de una fila. `resolved` la declara COMPLETADA por el
+             * resolutor: limpia la marca de continuidad aunque el texto no cambie (la fila
+             * nacio con la etiqueta de continuidad, no con identidad propia).
+             */
+            setEntrySpeakerName: (id: string, speakerName: string, options?: { resolved?: boolean }) => {
                 const actual = get().conversationHistory.find((e) => e.id === id);
                 if (!actual) return;
                 const next = String(speakerName || '').trim();
-                if (!next || String(actual.speakerName || '').trim() === next) return;
+                const resolved = options?.resolved === true;
+                const mismoNombre = String(actual.speakerName || '').trim() === next;
+                if (!next || (mismoNombre && (!resolved || actual.speakerPending !== true))) return;
                 set((current) => ({
                     conversationHistory: current.conversationHistory.map((e) =>
-                        e.id === id ? { ...e, speakerName: next } : e,
+                        e.id === id ? { ...e, speakerName: next, ...(resolved ? { speakerPending: false } : {}) } : e,
                     ),
                 }));
             },

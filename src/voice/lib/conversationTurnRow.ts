@@ -19,8 +19,8 @@ import { isAutoSpeakerLabel, isProperSpeakerName } from './voiceIdentity';
 import { compareCosineSignatures } from './speakerCore';
 import { registerVoiceName, resolveVoiceIdentity } from './speakerDirectory.js';
 import { differentVoiceFloor, sameVoiceFloor, getSessionClusters } from './speakerClusters.js';
-import { classifyVoiceAgainstClusters, namedAssignmentConfirmed, continuityLabelForMonologue } from './speakerDiarization.js';
-import { canonicalSpeakerName, normalizeSpeakerLabel, pendingSpeakerLabel } from './speakerLabels';
+import { classifyVoiceAgainstClusters, namedAssignmentConfirmed, continuityLabelForTurn } from './speakerDiarization.js';
+import { canonicalSpeakerName, normalizeSpeakerLabel, nextAvailableSpeakerLabel, pendingSpeakerLabel } from './speakerLabels';
 import { getVoiceIdentityConfig } from './speakerLabels';
 import { autoSpeakerIndexFromKey, getFallbackSpeaker } from './speakerCore';
 import { labelToSpeakerId, resolveRowSpeakerLabel, speakerIdToDefaultName } from './conversationRow';
@@ -349,9 +349,13 @@ export function resolvePendingSpeakerRows(
         porTurno.set(String(evidencia.turnId), vector);
     }
     let changed = 0;
+    // Voces NUEVAS abiertas en esta pasada (voz distinta sin etiqueta en la sesion): la
+    // siguiente etiqueta anonima se calcula con las que ya se abrieron aqui.
+    const vocesAbiertas: Array<{ label: string; signature: number[] }> = [];
     for (const e of store.conversationHistory) {
         if (e.role !== 'user') continue;
-        if (String(e.speakerName || '').trim() !== pending) continue;
+        const sinIdentidad = String(e.speakerName || '').trim() === pending || e.speakerPending === true;
+        if (!sinIdentidad) continue;
         const epochDeLaFila = Number.isFinite(Number(e.epoch)) ? Number(e.epoch) : epochVigente;
         if (epochDeLaFila !== epochActual) continue;
         // Firma de la fila o, si no tiene, la de SU turno: la fila puede nacer sin medida y
@@ -361,11 +365,11 @@ export function resolvePendingSpeakerRows(
             porTurno.get(turnByRow.get(String(e.id)) || '') ||
             null;
         if (!deSuTurno) {
-            // MONOLOGO sin vector (auditoria 2026-10-23): con UNA sola etiqueta en la sesion no
-            // hay otra voz a la que atribuir el turno; su etiqueta es la continuidad.
-            const continuidad = etiquetaUnicaDeLaSesion(store.conversationHistory, epochActual) || continuityLabelForMonologue(clusters);
+            // SIN MEDIDA (mandato 2026-10-23): ninguna fila CERRADA queda en "?". La etiqueta
+            // es la continuidad de la voz que la sesion venia usando (nunca un nombre propio).
+            const continuidad = etiquetaDeContinuidadDeLaSesion(store.conversationHistory, epochActual, clusters);
             if (!continuidad) continue;
-            store.setEntrySpeakerName(e.id, continuidad);
+            store.setEntrySpeakerName(e.id, continuidad, { resolved: true });
             changed += 1;
             continue;
         }
@@ -373,23 +377,38 @@ export function resolvePendingSpeakerRows(
         if (!elegida) {
             // Sin margen para afirmar identidad, la CONTINUIDAD solo vale si NO hay evidencia
             // de otra voz: si la firma de la fila cae por debajo del piso de "voz distinta"
-            // frente a TODOS los clusters medidos, esta fila es de OTRA persona y forzar la
+            // frente a TODOS los clusters medidos, esta fila es de OTRA persona y heredar la
             // etiqueta seria el defecto medido (la mujer heredaba la etiqueta del dueno).
             const medidas = clusters
                 .map((c) => normalizeRowSignature(c?.signature))
                 .filter((v): v is number[] => Array.isArray(v) && v.length > 0);
             if (medidas.length) {
                 const similitudMax = Math.max(...medidas.map((v) => compareCosineSignatures(deSuTurno, v)));
-                if (similitudMax < differentVoiceFloor()) continue;
+                if (similitudMax < differentVoiceFloor()) {
+                    // VOZ DISTINTA de todas las medidas: su etiqueta es la SIGUIENTE anonima de
+                    // la sesion (misma decision que `production-forced-new-voice`), no la de
+                    // otra persona ni la pendiente. Se estampa su medida para que su voz quede
+                    // identificada a partir de ahora.
+                    const nueva = nextAvailableSpeakerLabel([...clusters, ...vocesAbiertas], [], {});
+                    vocesAbiertas.push({ label: nueva, signature: deSuTurno });
+                    store.setEntrySpeaker(
+                        e.id,
+                        voiceKeyFor({ voiceId: labelToSpeakerId(nueva), signature: deSuTurno }),
+                        { signature: deSuTurno },
+                    );
+                    store.setEntrySpeakerName(e.id, nueva, { resolved: true });
+                    changed += 1;
+                    continue;
+                }
             }
-            const continuidad = etiquetaUnicaDeLaSesion(store.conversationHistory, epochActual) || continuityLabelForMonologue(clusters, { lastSpeaker: '' });
+            const continuidad = etiquetaDeContinuidadDeLaSesion(store.conversationHistory, epochActual, clusters);
             if (!continuidad) continue;
-            store.setEntrySpeakerName(e.id, continuidad);
+            store.setEntrySpeakerName(e.id, continuidad, { resolved: true });
             changed += 1;
             continue;
         }
         store.setEntrySpeaker(e.id, elegida.speakerId, { signature: deSuTurno });
-        store.setEntrySpeakerName(e.id, elegida.label);
+        store.setEntrySpeakerName(e.id, elegida.label, { resolved: true });
         changed += 1;
     }
     return changed;
@@ -397,28 +416,36 @@ export function resolvePendingSpeakerRows(
 
 
 /**
- * ETIQUETA UNICA DE LA SESION (mandato del dueno 2026-10-23): si las filas de usuario del
- * epoch usan UNA sola etiqueta automatica, esa es la continuidad de la unica voz. Devuelve ''
- * con cero etiquetas o con dos o mas (ahi `?` es legitimo y no se fuerza nada).
+ * ETIQUETA DE CONTINUIDAD de una fila SIN evidencia de identidad (mandato del dueno
+ * 2026-10-23): ninguna fila CERRADA queda en la etiqueta pendiente.
+ *
+ * La continuidad es la etiqueta de la ULTIMA fila de usuario no pendiente del epoch (la
+ * etiqueta con la que el motor venia escribiendo esa conversacion) y, si no hay ninguna,
+ * la que decide el dueno unico de diarizacion (`continuityLabelForTurn`). Nunca un nombre
+ * propio: el nombre exige `namedAssignmentConfirmed` y aqui NO hay medida del turno.
+ *
  * @param history filas de la conversacion
  * @param epoch epoch vigente de la fila
- * @returns etiqueta automatica unica, o ''
+ * @param clusters clusters de la sesion
+ * @returns etiqueta de continuidad, o '' si la sesion no tiene ninguna etiqueta anonima
  */
-function etiquetaUnicaDeLaSesion(
+function etiquetaDeContinuidadDeLaSesion(
     history: Array<{ role?: string; epoch?: number | string; speakerName?: string }> = [],
     epoch?: number,
+    clusters: Array<{ label?: string | null; signature?: number[] | null; anchorVerified?: boolean }> = [],
 ): string {
-    const etiquetas = new Set<string>();
-    for (const entry of history || []) {
+    for (let i = (history || []).length - 1; i >= 0; i -= 1) {
+        const entry = history[i];
         if (entry?.role !== 'user') continue;
         if (Number.isFinite(Number(entry?.epoch)) && Number(entry.epoch) !== Number(epoch)) continue;
         const name = normalizeSpeakerLabel(String(entry?.speakerName || '').trim());
         if (!name || name === pendingSpeakerLabel()) continue;
         if (!isAutoSpeakerLabel(name) || !/\d/.test(name)) continue;
-        etiquetas.add(name);
+        return name;
     }
-    return etiquetas.size === 1 ? [...etiquetas][0] : '';
+    return continuityLabelForTurn(clusters, { lastSpeaker: '' });
 }
+
 
 /**
  * Correccion de UNA fila concreta por su id (migracion declarada). El dueno del nombre de
@@ -881,15 +908,14 @@ function commitUserTurnRowInner({
     // otra etiqueta: la clave agrupa el timbre, la etiqueta la decide el turno (medido
     // 2026-10-19, sesion 18f3888c). El respaldo no aporta etiqueta y se completa con la VOZ.
     const etiquetaVisible = resolveRowVisibleLabel(resolved, vozDeLaFila);
-    // MONOLOGO (mandato del dueno 2026-10-23): una fila CERRADA no puede quedar en la etiqueta
-    // pendiente cuando la sesion entera tiene UNA sola etiqueta automatica; esa etiqueta es la
-    // continuidad de su unica voz. Con 2+ etiquetas, `?` sigue siendo legitimo.
-    const etiquetaDeLaFila =
-        etiquetaVisible === pendingSpeakerLabel()
-            ? etiquetaUnicaDeLaSesion(history, epochDeLaFila) ||
-              continuityLabelForMonologue(getSessionClusters(), { lastSpeaker: '' }) ||
-              etiquetaVisible
-            : etiquetaVisible;
+    // SIN EVIDENCIA (mandato del dueno 2026-10-23): una fila CERRADA no puede quedar en la
+    // etiqueta pendiente. La continuidad la decide el dueno unico (`continuityLabelForTurn`):
+    // la voz unica de la sesion, la etiqueta automatica del turno anterior o la primera
+    // etiqueta automatica de la sesion. Nunca un nombre propio sin medida.
+    const faltabaIdentidad = etiquetaVisible === pendingSpeakerLabel();
+    const etiquetaDeLaFila = faltabaIdentidad
+        ? etiquetaDeContinuidadDeLaSesion(history, epochDeLaFila, getSessionClusters()) || etiquetaVisible
+        : etiquetaVisible;
     // ROTULO PROPIO: la fila solo lleva `speakerName` cuando el resolver aporto identidad de
     // ESTE turno (etiqueta de diarizacion distinta del RESPALDO, nombre propio del texto o
     // medida). El respaldo no se escribe: es lo que su VOZ ya muestra al renderizar, y
@@ -994,6 +1020,9 @@ function commitUserTurnRowInner({
         // e2e `A3`): sin medida ni etiqueta propia la fila queda SIN hablante escrito y su
         // rotulo lo da su VOZ al MOSTRAR. El respaldo jamas se estampa aqui.
         ...(hayRotuloPropio ? { speakerName: etiquetaDeLaFila } : {}),
+        // SIN IDENTIDAD al escribir: la fila lleva la CONTINUIDAD (nunca "?") y queda marcada
+        // para que el resolutor la complete cuando llegue la medida de su turno.
+        ...(faltabaIdentidad ? { speakerPending: true } : {}),
         timestamp: stamp,
         sentiment,
         signature: normalizeRowSignature(signature),

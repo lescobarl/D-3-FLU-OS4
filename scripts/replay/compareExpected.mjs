@@ -300,119 +300,79 @@ export function locucionesConEtiquetasDistintas(rows = []) {
  * @param {{ minVariantWords?: number, similitudMinima?: number }} [options]
  * @returns {{ sourceRows: number, observedRows: number, sourceUnique: number, sourceDuplicates: number, missingUnique: Array<{ text: string }>, textVariants: Array<{ source: string, observed: string }>, extraAceptadas: Array<{ text: string, repiteDe: string, vecesEnFuente: number, similitud: number }>, extraUnique: Array<{ text: string }>, speakerFlips: Array<{ text: string, labels: string[], indices: number[] }> }}
  */
-/**
- * ¿El texto lo DIJO el ASR? Se compara contra el stream grabado (finales o cualquier evento)
- * con el criterio de cobertura de palabras: >= 60 % de las palabras del texto aparecen en un
- * mismo evento (o el evento esta contenido en el texto).
- * @param {string} texto
- * @param {string[]} eventos textos normalizados del ASR
- * @returns {boolean}
- */
-function hablaDelAsr(texto, eventos = []) {
-  const clave = normalizarFila(texto)
-  if (!clave) return false
-  const palabras = clave.split(' ').filter(Boolean)
-  if (!palabras.length) return false
-  for (const evento of eventos) {
-    if (!evento) continue
-    if (evento.includes(clave) || clave.includes(evento)) return true
-    const conjunto = new Set(evento.split(' ').filter(Boolean))
-    let comunes = 0
-    for (const palabra of palabras) if (conjunto.has(palabra)) comunes += 1
-    if (comunes / palabras.length >= 0.6) return true
-  }
-  return false
-}
 
 /**
- * TRIAGE de la fuente (mandato 2026-10-23): cada missing/extra se CLASIFICA con evidencia,
- * nunca se deja "sin categoría".
+ * TRIAGE de la fuente (mandato del dueno 2026-10-23, SIN reclassificaciones): cada
+ * missing/extra se clasifica con PRUEBA documental de la fuente.
  *
- *  - `missing`: la fuente escribio una fila que el replay no. Si el ASR NUNCA emitio un FINAL
- *    con ese texto, la locucion cerro por silencio sobre una linea de SOLO interinos: el
- *    replay infiere ese cierre y no la commitea (artefacto de la reinyeccion, `cola-sin-final`).
- *    Si el ASR SI emitio ese final y el replay lo perdio -> `bug-perdida`.
- *  - `extra`: el replay escribio una fila que la fuente no. Si el texto EXISTE en el stream del
- *    ASR, el producto no lo commiteo en su momento (artefacto del grabador, `habla-del-asr`).
- *    Si el ASR nunca lo dijo -> `bug-invencion`.
+ *  - `missing`: la fuente escribio una fila que el replay no. El UNICO artefacto admitido es
+ *    que la fuente haya escrito ESA MISMA frase mas de una vez (duplicado EXACTO, con sus
+ *    ids): entonces lo que falta es una copia. Cualquier otro caso es `bug-perdida`.
+ *  - `extra`: el replay escribio una fila que la fuente no. El UNICO artefacto admitido es
+ *    que la fuente tenga una fila con ESE MISMO texto (duplicado exacto con su id). Cualquier
+ *    otro caso es `bug-invencion`: "el ASR lo dijo" NO justifica una fila.
+ *
+ * Se retiraron las clases que absolvian por definicion (`cola-sin-final`, `habla-del-asr`,
+ * `mixtura-del-asr`, `particion-hipotesis`, `mezcla-de-hipotesis`).
  *
  * @param {Array<{ text?: string }>} missing
  * @param {Array<{ text?: string }>} extra
- * @param {{ finales?: string[], todos?: string[] }} [asrDigest]
+ * @param {{ sourceRows?: Array<{ id?: number|string|null, text?: string }> }} [asrDigest]
  * @returns {{ missing: Array<object>, extra: Array<object>, unclassifiedMissing: number, unclassifiedExtra: number, bugsMissing: number, bugsExtra: number }}
  */
 export function clasificarFuente(missing = [], extra = [], asrDigest = {}, observedRows = []) {
-  const finales = (asrDigest?.finales || []).map((t) => normalizarFila(t)).filter(Boolean)
-  const todos = (asrDigest?.todos || []).map((t) => normalizarFila(t)).filter(Boolean)
-  const filasReplay = (observedRows || []).map((r) => normalizarFila(r?.text)).filter(Boolean)
-  const palabrasDe = (texto) => normalizarFila(texto).split(' ').filter(Boolean)
-  const tasa = (texto, contra) => {
-    const palabras = palabrasDe(texto)
-    if (!palabras.length) return 0
-    const conjunto = new Set(palabrasDe(contra))
-    let comunes = 0
-    for (const palabra of palabras) if (conjunto.has(palabra)) comunes += 1
-    return comunes / palabras.length
-  }
-  const cubierto = (texto, lista, minimo = 0.8) => (lista || []).some((t) => tasa(texto, t) >= minimo)
-  const cola = (texto, n = 3) => palabrasDe(texto).slice(-n).join(' ')
-  const colaEn = (texto, lista) => {
-    const ultima = cola(texto)
-    if (!ultima) return false
-    return (lista || []).some((t) => t.includes(ultima))
+  const fuente = (asrDigest?.sourceRows || []).map((fila) => ({
+    id: fila?.id ?? fila?.t ?? null,
+    key: normalizarFila(fila?.text),
+  })).filter((fila) => fila.key)
+  const porTexto = new Map()
+  for (const fila of fuente) {
+    const lista = porTexto.get(fila.key) || []
+    lista.push(fila.id)
+    porTexto.set(fila.key, lista)
   }
   const filasMissing = (missing || []).map((fila) => {
     const texto = String(fila?.text || '')
-    if (!texto.trim()) return { text: texto, clase: 'sin-texto', evidencia: 'fila vacia en la fuente' }
-    const asrDijo = cubierto(texto, finales)
-    const replayEscribio = cubierto(texto, filasReplay)
-    const replayTieneCola = colaEn(texto, filasReplay)
-    if (replayEscribio) {
+    const key = normalizarFila(texto)
+    const ids = porTexto.get(key) || []
+    // UNICO artefacto admitido: la fuente ESCRIBIO ESA MISMA FRASE MAS DE UNA VEZ (duplicado
+    // exacto, con sus ids). Entonces la fila que "falta" es la copia, no contenido perdido.
+    if (ids.length > 1) {
       return {
         text: texto,
-        clase: 'particion-hipotesis',
-        evidencia: 'el replay escrbio la misma locucion con otra particion/hipotesis del ASR (>=80% de palabras en UNA fila)',
-      }
-    }
-    if (!asrDijo && !colaEn(texto, finales)) {
-      return {
-        text: texto,
-        clase: 'cola-sin-final',
-        evidencia: 'el ASR no emitio FINAL para esta cola (solo interinos): el cierre por silencio del replay no commitea la linea abierta',
-      }
-    }
-    if (asrDijo && !replayTieneCola) {
-      return {
-        text: texto,
-        clase: 'bug-perdida',
-        evidencia: 'el ASR emitio el final de esta locucion y NINGUNA fila del replay lleva su cola',
+        clase: 'duplicado-exacto-de-fuente',
+        ids,
+        evidencia: `la fuente tiene ${ids.length} filas con ESTE MISMO texto (ids ${ids.join(', ')}): la que falta es una copia`,
       }
     }
     return {
       text: texto,
-      clase: 'mezcla-de-hipotesis',
-      evidencia: 'el replay lleva la cola pero unida a otra hipotesis del ASR (final limpio disponible)',
+      clase: 'bug-perdida',
+      ids,
+      evidencia: ids.length
+        ? `la fuente escribio esta locucion UNA sola vez (id ${ids[0]}) y el replay no la tiene`
+        : 'la fuente escribio esta locucion y el replay no la tiene',
     }
   })
   const filasExtra = (extra || []).map((fila) => {
     const texto = String(fila?.text || '')
-    if (!texto.trim()) return { text: texto, clase: 'sin-texto', evidencia: 'fila vacia en el replay' }
-    if (cubierto(texto, todos)) {
-      return { text: texto, clase: 'habla-del-asr', evidencia: 'el texto existe en el stream del ASR: el producto no lo commiteo en su momento' }
+    const key = normalizarFila(texto)
+    const ids = porTexto.get(key) || []
+    // UNICO artefacto admitido: la fila del replay EXISTE en la fuente con el MISMO texto.
+    if (ids.length) {
+      return {
+        text: texto,
+        clase: 'duplicado-exacto-de-fuente',
+        ids,
+        evidencia: `la fuente ya tiene ESTE MISMO texto (id ${ids.join(', ')}): el replay la repite`,
+      }
     }
-    // MIXTURA: la fila se puede partir en dos tramos y CADA tramo esta en el stream (el replay
-    // unio dos hipotesis reales en una locucion). Inventar seria una palabra que el ASR no dijo.
-    const palabras = palabrasDe(texto)
-    let mixtura = false
-    for (let corte = 2; corte <= palabras.length - 2 && !mixtura; corte += 1) {
-      const izq = palabras.slice(0, corte).join(' ')
-      const der = palabras.slice(corte).join(' ')
-      mixtura = cubierto(izq, todos, 0.99) && cubierto(der, todos, 0.99)
+    return {
+      text: texto,
+      clase: 'bug-invencion',
+      ids: [],
+      evidencia: 'la fuente no tiene ninguna fila con este texto: el replay la escribe de mas',
     }
-    if (mixtura) {
-      return { text: texto, clase: 'mixtura-del-asr', evidencia: 'dos tramos del ASR unidos en una fila (cada tramo SI se emitio)' }
-    }
-    return { text: texto, clase: 'bug-invencion', evidencia: 'el ASR nunca emitio este texto: la fila la inventa el replay' }
   })
   const sinClase = (filas) => filas.filter((f) => !f.clase).length
   const esBug = (f) => String(f.clase).startsWith('bug')
@@ -510,11 +470,11 @@ export function sourceRowDiff(sourceRows = [], observedRows = [], { minVariantWo
     extraUnique,
     // LOCUCIONES con DOS etiquetas en la fuente (una locucion es UNA voz): se mide, no falla.
     speakerFlips: locucionesConEtiquetasDistintas(sourceRows),
-    // TRIAGE de cada missing/extra con la evidencia del ASR (una fila sin clase = no terminado).
+    // TRIAGE de cada missing/extra con PRUEBA de la fuente (sin clases que absuelvan).
     triage: clasificarFuente(
       pendientesFuente.map((row) => ({ text: row.text })),
       extraUnique,
-      asrDigest || {},
+      { sourceRows: sourceRows.map((row) => ({ id: row?.id ?? row?.t ?? null, text: String(row?.text || '') })) },
       observedRows || [],
     ),
   }
@@ -563,17 +523,18 @@ export function compararSpeakers(vectors = {}) {
   // Sin categoria = fallo de la MEDICION (no del producto). Con la clasificacion completa, el
   // desacuerdo real se llama 'mismatch' y SI cuenta como error.
   const sinClasificar = turnos.filter((turno) => !turno.categoria)
-  // PENDIENTES: filas CERRADAS en "?" con evidencia propia (deberia ser 0). Las de evidencia
-  // circular se declaran aparte: su "?" lo produce el dato de entrada (la firma del cluster).
-  const pendientesPropios = turnos.filter((turno) => turno.evidenciaPropia && String(turno.observed || '').includes('?'))
-  const pendientesCirculares = turnos.filter((turno) => !turno.evidenciaPropia && String(turno.observed || '').includes('?'))
+  // PENDIENTES: TODA fila cerrada en "?" (con evidencia propia O circular). Es UN contador:
+  // separar los circulares escondia pendientes (mandato del dueno 2026-10-23). Su desglose se
+  // reporta aparte SOLO como informacion, nunca para dejar fuera del veredicto.
+  const pendientes = turnos.filter((turno) => String(turno.observed || '').includes('?'))
+  const pendientesPropios = pendientes.filter((turno) => turno.evidenciaPropia)
+  const pendientesCirculares = pendientes.filter((turno) => !turno.evidenciaPropia)
   const renombradas = turnos.filter((turno) => turno.categoria === 'renombrada')
   const extra =
     `${circulares} circular(es) (firma compartida, evaluadas y no comparables)` +
     ` · ${renombradas.length} con etiqueta renovada (misma voz)` +
     ` · ${sinDuracion} sin tramo grabado (evaluadas con 0 muestras)` +
-    ` · ${pendientesPropios.length} pendiente(s) con evidencia propia` +
-    ` · ${pendientesCirculares.length} pendiente(s) circulares (declaradas)` +
+    ` · ${pendientes.length} fila(s) cerrada(s) en "?" (${pendientesPropios.length} con evidencia propia, ${pendientesCirculares.length} circulares)` +
     ` · ${sinClasificar.length} sin clasificar`
   if (vectors?.conclusive !== true) {
     const motivos = (vectors?.notConclusive || []).join(', ') || 'sin-evidencia'
@@ -590,9 +551,14 @@ export function compararSpeakers(vectors = {}) {
     }
   }
   const fallosReales = turnos.filter((turno) => turno.categoria === 'mismatch')
-  const primero = fallosReales[0] || renombradas[0] || sinClasificar[0]
-  // Un veredicto RENOMBRADO o SIN CLASIFICAR impide vender una validacion completa.
-  const completo = coverage >= 1 && sinClasificar.length === 0 && renombradas.length === 0
+  const primero = fallosReales[0] || renombradas[0] || pendientes[0] || sinClasificar[0]
+  // VEREDICTO COMPLETO: cobertura 100 %, sin mismatch, sin etiquetas renovadas, sin
+  // pendientes (ni propios ni circulares) y sin turnos sin clasificar.
+  const completo =
+    coverage >= 1 &&
+    sinClasificar.length === 0 &&
+    renombradas.length === 0 &&
+    pendientes.length === 0
   const detalle =
     `${vectors.speakerMatches} acierto(s) · ${vectors.speakerMismatches} mismatch(s) · ` +
     `${conEvidencia}/${commits} con evidencia propia (cobertura ${Math.round(coverage * 100)}%) · ${extra}` +
@@ -601,7 +567,7 @@ export function compararSpeakers(vectors = {}) {
       : '')
   return {
     name: 'speakers',
-    ok: completo && fallosReales.length === 0 && pendientesPropios.length === 0,
+    ok: completo && fallosReales.length === 0,
     covered: true,
     partial: !completo,
     coverage: Number(coverage.toFixed(3)),

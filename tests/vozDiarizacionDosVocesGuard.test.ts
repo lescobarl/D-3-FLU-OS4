@@ -143,8 +143,11 @@ describe('PRUEBA DE DETECTOR: con el umbral VIEJO el sistema NO inventa hablante
 
     // `etiquetas` viene como "voz=etiqueta": lo que se afirma es la ETIQUETA elegida.
     const asignadas = inflado.etiquetas.map((e) => e.split('=')[1])
-    // La medida cae en la banda gris -> etiqueta pendiente (ni cluster nuevo ni nombre).
-    expect(asignadas, inflado.etiquetas.join(' | ')).toContain(PENDIENTE)
+    // La medida cae en la banda gris -> etiqueta de CONTINUIDAD (ni cluster nuevo ni nombre).
+    // Mandato 2026-10-23: la fila cerrada no queda en "?"; la continuidad es una etiqueta
+    // anonima de la sesion.
+    expect(asignadas, inflado.etiquetas.join(' | ')).not.toContain(PENDIENTE)
+    expect(new Set(asignadas).size, inflado.etiquetas.join(' | ')).toBeLessThanOrEqual(2)
     // Y NO se abre un cluster por turno (el defecto medido: 7 etiquetas para 2 voces).
     expect(inflado.clusters, inflado.etiquetas.join(' | ')).toBeLessThanOrEqual(2)
   })

@@ -103,6 +103,11 @@ export interface ConversationEntry {
      * Sin este dato una fila no se puede reutilizar: un commit sin turno no toca la de otro.
      */
     turnId?: number | string | null;
+    /**
+     * La fila nacio SIN identidad de voz y lleva la etiqueta de CONTINUIDAD (nunca "?"): el
+     * resolutor la completa cuando llega la medida de su turno y limpia esta marca.
+     */
+    speakerPending?: boolean;
     /** Firma de embedding (OS2: signature) */
     signature?: number[] | null;
     /** Fase de la conversación (OS2: phase) */
