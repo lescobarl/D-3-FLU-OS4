@@ -206,11 +206,13 @@ export function continuityLabelForMonologue(speakerClusters = [], { lastSpeaker 
   // en "?"; dos voces distintas si (ahi `?` es legitimo, no se fuerza nada).
   const referencia = medidos[0].signature
   const piso = sameVoiceFloor()
-  const unaSolaVoz = medidos.every(
-    (c) =>
-      c.signature === referencia ||
-      compareCosineSignatures(referencia, c.signature) >= piso,
-  )
+  // Con un ANCLA VERIFICADA en la sesion se usa SU banda medida (el codigo ya la usa para
+  // identificar la misma voz: 0,629-0,714 contra su ancla), en vez del piso generico.
+  const ancla = medidos.find((c) => c?.anchorVerified === true)
+  const esLaMismaVoz = ancla
+    ? (c) => c === ancla || compareCosineSignatures(ancla.signature || [], c.signature || []) >= verifiedAnchorFloor()
+    : (c) => c.signature === referencia || compareCosineSignatures(referencia, c.signature || []) >= piso
+  const unaSolaVoz = medidos.every(esLaMismaVoz)
   if (!unaSolaVoz) return ''
   // Etiqueta de continuidad: la AUTOMATICA con numero de menor indice (la primera de la
   // sesion). Es continuidad, no un nombre: no se asciende ninguna identidad aqui.
