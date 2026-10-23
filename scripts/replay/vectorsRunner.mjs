@@ -184,6 +184,8 @@ export async function runVectorsSession({ session, thresholds } = {}) {
   const turnos = []
   let speakerMatches = 0
   let speakerMismatches = 0
+  let circulares = 0
+  let sinDuracionTotal = 0
   const skipped = []
   const motivos = []
   const avisos = primaryInicial.aviso ? [primaryInicial.aviso] : []
@@ -201,17 +203,14 @@ export async function runVectorsSession({ session, thresholds } = {}) {
       if (!motivos.includes('sin-vector')) motivos.push('sin-vector')
       continue
     }
-    if (!(voiced > 0)) {
-      skipped.push({ index: i, motivo: 'sin-duracion' })
-      if (!motivos.includes('sin-duracion')) motivos.push('sin-duracion')
-      continue
-    }
-    // SIN MEDIDA PROPIA no hay validacion: ver `firmaPropiaDelTurno`.
-    if (!firmaPropiaDelTurno(claveDeFirma(vector), firmasDeLaSesion)) {
-      skipped.push({ index: i, motivo: 'firma-repetida' })
-      if (!motivos.includes('firma-repetida')) motivos.push('firma-repetida')
-      continue
-    }
+    // SIN DURACION NO SE OMITE (mandato 2026-10-23): la grabacion no guardo el tramo
+    // (`audioEndSample === audioStartSample`), asi que el producto midio ESE turno con 0
+    // muestras. Se evalua con el MISMO dato que tuvo el producto (0) y se declara.
+    const sinDuracion = !(voiced > 0)
+    // SIN MEDIDA PROPIA (firma compartida con otra locucion) el turno SE EVALUA igual, pero su
+    // veredicto es CIRCULAR: el vector que se le pasa es el de un cluster, asi que el resultado
+    // lo decide el dato de entrada. Se cuenta en `circular`, nunca como acierto ni mismatch.
+    const evidenciaPropia = firmaPropiaDelTurno(claveDeFirma(vector), firmasDeLaSesion)
 
     // ESTADO PREVIO: nunca el resultado de este commit.
     const clustersPrevios = previo ? clustersDeTurno(previo.clusters) : clustersDesdeBase(participantesBase)
@@ -249,20 +248,42 @@ export async function runVectorsSession({ session, thresholds } = {}) {
     const esperado = canonicalSpeakerName(String(commit?.speaker || '').trim())
     const obtenido = canonicalSpeakerName(String(observed || '').trim())
     const match = esperado === obtenido
-    if (match) speakerMatches += 1
-    else speakerMismatches += 1
+    // CLASIFICACION DEL VEREDICTO (una fila sin categoria = no terminado):
+    //   circular  -> la firma no es la medida del turno (no comparable; se declara)
+    //   renombrada-> el esperado NO existe como cluster previo y el observado SI: la etiqueta
+    //               fue superada por el nombre registrado de la MISMA voz (medido sim 1.000)
+    //   match / mismatch -> comparacion con evidencia propia; un mismatch sin causa = bug
+    const etiquetasPrevias = clustersPrevios.map((c) => String(c?.label || '').trim())
+    const esperadoVigente = etiquetasPrevias.includes(esperado)
+    const observadoVigente = etiquetasPrevias.includes(obtenido)
+    let categoria = 'match'
+    if (!evidenciaPropia) categoria = 'circular'
+    else if (match) categoria = 'match'
+    else if (!esperadoVigente && observadoVigente) categoria = 'renombrada'
+    // DESACUERDO REAL (las dos etiquetas existen como cluster): es el mismatch que cuenta.
+    // Una fila SIN categoria no existe por construccion (el else final la deja en 'mismatch').
+    else categoria = 'mismatch'
+    if (categoria === 'match') speakerMatches += 1
+    if (categoria === 'mismatch') speakerMismatches += 1
+    if (categoria === 'circular') circulares += 1
+    if (sinDuracion) sinDuracionTotal += 1
     turnos.push({
       index: i,
       text: texto.slice(0, 120),
       expected: esperado,
       observed: obtenido,
       match,
+      categoria,
+      evidenciaPropia,
+      sinDuracion,
       reason: String(diagnosis?.reason || ''),
     })
   }
 
-  const evaluados = speakerMatches + speakerMismatches
-  const conclusive = evaluados > 0
+  // EVALUABLES = veredicto con evidencia PROPIA (match o mismatch clasificado).
+  const evaluados = speakerMatches + speakerMismatches + circulares
+  const conEvidencia = speakerMatches + speakerMismatches
+  const conclusive = conEvidencia > 0
   if (!conclusive) {
     if (!commits.length) motivos.push('sin-commits')
     if (!motivos.length) motivos.push('sin-evidencia')
@@ -272,12 +293,17 @@ export async function runVectorsSession({ session, thresholds } = {}) {
     turns: turnos,
     speakerMatches,
     speakerMismatches,
+    // Turnos EVALUADOS con veredicto circular (firma compartida) y turnos sin tramo grabado.
+    circulares,
+    sinDuracionTotal,
+    conEvidencia,
+    evaluados,
     skipped,
     evaluated: evaluados,
     conclusive,
     notConclusive: conclusive ? [] : motivos,
     // Aviso ESTRUCTURAL (no un recuento): la grabacion no guarda la medida del turno.
-    avisos: motivos.includes('firma-repetida') ? [...avisos, 'firma-no-propia-del-turno'] : avisos,
+    avisos: circulares > 0 ? [...avisos, 'firma-no-propia-del-turno'] : avisos,
     commits: commits.length,
     reconstructed: {
       base: Boolean(base),

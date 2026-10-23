@@ -58,9 +58,15 @@ export function buildReport(input) {
           partial: input.vectors.conclusive === true && Number(input.vectors.evaluated || 0) < Number(input.vectors.commits || 0),
           coverage:
             Number(input.vectors.commits || 0) > 0
-              ? Number((Number(input.vectors.evaluated || 0) / Number(input.vectors.commits)).toFixed(3))
+              ? Number(((
+                  Number(input.vectors.conEvidencia || 0) +
+                  (input.vectors.turns || []).filter((t) => t.categoria === 'renombrada').length
+                ) / Number(input.vectors.commits)).toFixed(3))
               : 0,
           evaluated: input.vectors.evaluated,
+          conEvidencia: input.vectors.conEvidencia,
+          evaluatedCircular: input.vectors.circulares,
+          sinDuracion: input.vectors.sinDuracionTotal,
           matches: input.vectors.speakerMatches,
           mismatches: input.vectors.speakerMismatches,
           skipped: input.vectors.skipped,
@@ -83,6 +89,14 @@ export function buildReport(input) {
     sourceSpeakerFlips: Number(
       (input.comparison?.speakerFlips || input.comparison?.source?.speakerFlips || []).length,
     ) || 0,
+    // TRIAGE: cada missing/extra con su clase y evidencia; un sin clasificar es un fallo.
+    pendingRows: (input.vectors?.turns || []).filter((t) => t.evidenciaPropia && String(t.observed || '').includes('?')).length,
+    pendingCircular: (input.vectors?.turns || []).filter((t) => !t.evidenciaPropia && String(t.observed || '').includes('?')).length,
+    sourceTriage: input.comparison?.source?.triage || null,
+    unclassifiedMissing: Number(input.comparison?.source?.triage?.unclassifiedMissing) || 0,
+    unclassifiedExtra: Number(input.comparison?.source?.triage?.unclassifiedExtra) || 0,
+    bugsMissing: Number(input.comparison?.source?.triage?.bugsMissing) || 0,
+    bugsExtra: Number(input.comparison?.source?.triage?.bugsExtra) || 0,
     sourceDiff: input.comparison?.source
       ? {
           sourceUnique: input.comparison.source.sourceUnique,
@@ -145,7 +159,8 @@ export function printReport(report, io = {}) {
     print(
       s.covered
         ? `  hablantes ${s.matches} acierto(s) · ${s.mismatches} mismatch(s) · ` +
-            `${s.skipped.length}/${s.commits} sin evidencia (cobertura ${Math.round((s.coverage || 0) * 100)}%)` +
+            `${s.evaluatedCircular || 0} circular(es) · ${s.sinDuracion || 0} sin tramo · ` +
+            `cobertura con evidencia ${Math.round((s.coverage || 0) * 100)}%` +
             (s.partial ? ' · PARTIAL: no es validacion completa' : '')
         : `  hablantes NO CONCLUYENTE: ${(s.notConclusive || []).join(', ') || 'sin evidencia'} (${s.skipped.length} turno(s) sin evidencia evaluable)`,
     )
@@ -168,6 +183,16 @@ export function printReport(report, io = {}) {
   }
   // UNA LOCUCION ES UNA VOZ: si la fuente trae la misma frase con dos etiquetas, es un dato
   // del producto (duplicado de turno + continuidad), no del replay. Se avisa en los dos modos.
+  // TRIAGE de la fuente (siempre visible): sin clasificar o bug => el replay NO esta resuelto.
+  if (report.sourceTriage) {
+    const t = report.sourceTriage
+    print(
+      `  triage   missing ${t.missing.length} (cola-sin-final ` +
+        `${t.missing.filter((f) => f.clase === 'cola-sin-final').length}, bug ${report.bugsMissing}) · ` +
+        `extra ${t.extra.length} (habla-del-asr ${t.extra.filter((f) => f.clase === 'habla-del-asr').length}, bug ${report.bugsExtra}) · ` +
+        `sin clasificar ${report.unclassifiedMissing + report.unclassifiedExtra}`,
+    )
+  }
   if (report.sourceSpeakerFlips) {
     print(
       `  AVISO    ${report.sourceSpeakerFlips} locucion(es) de la FUENTE con 2+ etiquetas: ` +

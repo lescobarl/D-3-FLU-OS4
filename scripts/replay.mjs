@@ -349,10 +349,23 @@ async function main() {
 
   // FILAS FUENTE: `turns.ndjson` con `kind === "commit"` (las `base`/`resolved` no son filas).
   const sourceRows = (session.turns || []).filter((row) => String(row?.kind || '') === 'commit')
+  // DIGESTO del ASR (mandato 2026-10-23): con el se CLASIFICA cada missing/extra del triage.
+  // `finales` = lo que el motor cerro como final; `todos` = todo texto que el motor emitio.
+  const asrDigest = (() => {
+    const finales = []
+    const todos = []
+    for (const row of session.events || []) {
+      const texto = row?.data?.text
+      if (!texto) continue
+      todos.push(String(texto))
+      if (String(row?.data?.kind || '') === 'final') finales.push(String(texto))
+    }
+    return { finales, todos }
+  })()
   const comparison = compareExpected({
     observed,
     expected,
-    options: { boxStallMs, dupBlockWords: args.dupBlockWords, sourceRows, variantWords: args.variantWords, locucionSimilitud: args.locucionSimilitud },
+    options: { boxStallMs, dupBlockWords: args.dupBlockWords, sourceRows, variantWords: args.variantWords, locucionSimilitud: args.locucionSimilitud, asrDigest },
   })
   const approved = expected.approved === true
   const blocked = !observacion && comparison.status === 'ok' && !approved && args.allowDraft !== true

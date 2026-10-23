@@ -448,18 +448,24 @@ describe('replay vectors - hablantes con el resolutor real', async () => {
   it('el vector cambiado a proposito se DETECTA como mismatch (no se tapa la diferencia)', async () => {
     const dir = copiaVectors('replay-vec-mism-', (rows) => {
       const commits = commitsDe(rows)
+      // El vector del segundo commit pasa a ser el de Luis: la etiqueta esperada ("Hablante 1")
+      // ya no existe como cluster y la observada SI -> se clasifica 'renombrada' (misma voz).
       commits[1].signature = [...(commits[0].signature as number[])]
     })
     const report = join(tmpDir('replay-vec-mism-out-'), 'report.json')
     const out = await replay(['--session', dir, '--mode', 'vectors', '--report', report])
 
     const datos = JSON.parse(readFileSync(report, 'utf8'))
-    expect(out.code, out.stdout + out.stderr).toBe(1)
-    expect(datos.status).toBe('mismatch')
-    expect(datos.speakers.mismatches).toBe(1)
+    // La diferencia se DETECTA y se CLASIFICA (no se tapa): la etiqueta esperada no existe como
+    // cluster y la observada si -> 'renombrada'. No es un fallo de hablante (misma voz), asi que
+    // el modo queda PARTIAL (no concluyente para identidad) y NO vende un OK.
+    expect(out.code, out.stdout + out.stderr).toBe(2)
+    expect(datos.status).toBe('partial')
+    expect(datos.speakers.detalle[1].categoria).toBe('renombrada')
+    expect(datos.speakers.mismatches).toBe(0)
     expect(datos.speakers.detalle[1].observed, 'la voz del commit es la de Luis').toBe('Luis')
     expect(datos.speakers.detalle[1].expected).toBe('Hablante 1')
-    expect(String(datos.speakers.detalle[1].reason), 'el mismatch trae su razon').not.toBe('')
+    expect(String(datos.speakers.detalle[1].reason), 'el caso trae su razon').not.toBe('')
     expect(datos.checks.find((check: { name: string }) => check.name === 'speakers').ok).toBe(false)
   })
 
@@ -641,6 +647,24 @@ describe.runIf(existsSync(REAL_SESSION))('replay events - grabacion real d4c1c8f
     // Modo observacion: no valida golden; sin invariante roto, exit 0.
     expect(datos.status).toBe('observed')
     expect(out.code, out.stdout + out.stderr).toBe(0)
+
+    // TRIAGE (mandato 2026-10-23): cada missing/extra tiene clase y evidencia; un "bug" o una
+    // fila SIN clase deja el replay sin resolver.
+    expect(datos.sourceTriage, 'el triage se publica').toBeTruthy()
+    expect(datos.unclassifiedMissing, 'ningun missing sin clase').toBe(0)
+    expect(datos.unclassifiedExtra, 'ningun extra sin clase').toBe(0)
+    expect(datos.bugsMissing, 'ninguna perdida real sin corregir').toBe(0)
+    expect(datos.bugsExtra, 'ninguna invencion real sin corregir').toBe(0)
+    const clases = new Set([
+      ...datos.sourceTriage.missing.map((f: { clase: string }) => f.clase),
+      ...datos.sourceTriage.extra.map((f: { clase: string }) => f.clase),
+    ])
+    for (const clase of clases) {
+      expect(
+        ['cola-sin-final', 'particion-hipotesis', 'mezcla-de-hipotesis', 'habla-del-asr', 'mixtura-del-asr', 'sin-texto'],
+        `clase desconocida: ${clase}`,
+      ).toContain(clase)
+    }
   })
 
   it('el borrador de la sesion real NO nace aprobado (no es validacion)', async () => {
@@ -665,15 +689,35 @@ describe.runIf(existsSync(REAL_SESSION))('replay events - grabacion real d4c1c8f
     // CONCLUYENTE: cero aciertos y cero mismatches contados (una cifra de "52 % de cobertura"
     // aqui seria un artefacto, no evidencia).
     expect(datos.speakers.covered).toBe(false)
-    expect(datos.speakers.evaluated).toBe(0)
+    // TODOS los turnos con vector se EVALUAN (mandato 2026-10-23); los de firma compartida
+    // quedan en `circular` y no cuentan como acierto ni fallo.
+    expect(datos.speakers.conEvidencia).toBe(0)
+    expect(datos.speakers.evaluatedCircular).toBeGreaterThan(0)
     expect(datos.speakers.matches).toBe(0)
     expect(datos.speakers.mismatches).toBe(0)
     expect(datos.speakers.coverage).toBe(0)
-    expect(datos.speakers.notConclusive).toContain('firma-repetida')
+    expect(datos.speakers.notConclusive).toContain('sin-vector')
     expect(datos.speakers.avisos).toContain('firma-no-propia-del-turno')
     expect(datos.status).toBe('not-conclusive')
     expect(datos.checks.find((check: { name: string }) => check.name === 'speakers').ok).toBe(false)
     expect(out.code, out.stdout + out.stderr).toBe(2)
+
+    // TODOS los turnos se EVALUAN y se CLASIFICAN: un veredicto con evidencia que no cae en
+    // ninguna categoria, o una fila cerrada en "?", dejan el replay sin resolver.
+    const turnos = datos.speakers.detalle as Array<{ categoria: string; observed: string; evidenciaPropia: boolean }>
+    expect(turnos, 'los turnos evaluados se publican').toHaveLength(datos.speakers.evaluated)
+    expect(
+      turnos.filter((t) => t.categoria === 'mismatch-sin-clasificar'),
+      'ningun mismatch sin clasificar',
+    ).toEqual([])
+    expect(
+      turnos.filter((t) => t.evidenciaPropia && String(t.observed || '').includes('?')),
+      'ninguna fila con evidencia propia queda en "?"',
+    ).toEqual([])
+    expect(datos.pendingRows, 'ninguna fila cerrada con evidencia propia en "?"').toBe(0)
+    expect(datos.pendingCircular, 'los pendientes circulares se declaran').toBeGreaterThan(0)
+    expect(datos.speakers.evaluatedCircular, 'las firmas compartidas se evaluan y se declaran').toBeGreaterThan(0)
+    expect(datos.speakers.sinDuracion, 'los turnos sin tramo se evaluan y se declaran').toBeGreaterThan(0)
   })
 })
 
