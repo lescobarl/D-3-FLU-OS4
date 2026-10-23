@@ -1,3 +1,4 @@
+import { normalizeLang } from '../core/config/localeConfig.ts'
 // ============================================================
 // Gemini API Proxy — OS2 parity middleware for Vite
 // OS2's useFluVoiceAssistant calls requestFluContract(),
@@ -215,7 +216,7 @@ function buildEvalCacheKey(body: ProxyBody | null): string {
     const conversationLog = body?.conversationLog;
     // Use first 200 chars of conversationLog as fingerprint (enough to detect changes)
     const logFingerprint = (conversationLog || '').slice(0, 200);
-    return `${logFingerprint}|${body?.language || 'es'}|${body?.role || ''}|${body?.theme || ''}|${body?.maxDraftChars || 420}`;
+    return `${logFingerprint}|${normalizeLang(body?.language)}|${body?.role || ''}|${body?.theme || ''}|${body?.maxDraftChars || 420}`;
 }
 
 // ─── Shared helpers ──────────────────────────────────────────
@@ -366,7 +367,7 @@ async function handleResponseMode(body: ProxyBody | null): Promise<{ respuesta_v
     const fullResult = await generateFluContract({
         ...proxyBodyToGenerateParams(body),
         transcript: body?.transcript || '',
-        language: body?.language || 'es',
+        language: normalizeLang(body?.language),
         role: body?.role || '',
         theme: body?.theme || '',
         history: body?.history || [],
@@ -391,7 +392,7 @@ async function handleMinuteMode(body: ProxyBody | null): Promise<unknown> {
     const summaryResult = await generateConversationSummary({
         apiKey: body?.apiKey,
         history: body?.history || [],
-        language: body?.language || 'es',
+        language: normalizeLang(body?.language),
         role: body?.role || '',
         theme: body?.theme || '',
         model: body?.model || undefined,
@@ -513,7 +514,7 @@ async function handleSummary(req: IncomingMessage, res: ServerResponse) {
         const result = await generateConversationSummary({
             apiKey: body?.apiKey,
             history: body?.history || [],
-            language: body?.language || 'es',
+            language: normalizeLang(body?.language),
             role: body?.role || '',
             theme: body?.theme || '',
             model: body?.model || undefined,
@@ -561,7 +562,7 @@ async function handleParticipantEval(req: IncomingMessage, res: ServerResponse) 
         const result = await generateParticipantEvaluation({
             apiKey: body?.apiKey,
             conversationLog: body?.conversationLog || '',
-            language: body?.language || 'es',
+            language: normalizeLang(body?.language),
             role: body?.role || '',
             theme: body?.theme || '',
             maxDraftChars: body?.maxDraftChars || 420,

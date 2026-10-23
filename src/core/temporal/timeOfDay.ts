@@ -173,11 +173,11 @@ export function pickTimeOfDay(text: string): PickedTimeOfDay {
 
 // ------------------------------------------------------------
 // Lectura COMPLETA: todas las horas del texto, en orden.
-// `pickTimeOfDay` devuelve UNA hora (el contrato hist�rico: la de meridiem
-// expl�cito o la m�s temprana). Un cambio de hora ("de las siete a las ocho")
-// necesita las DOS: la primera identifica el item y la �ltima es el destino.
-// Mismo resolutor y mismas regex que `pickTimeOfDay` (una sola sem�ntica de
-// hora); s�lo cambia la recolecci�n, que aqu� no se corta en el primer match.
+// `pickTimeOfDay` devuelve UNA hora (el contrato histórico: la de meridiem
+// explícito o la más temprana). Un cambio de hora ("de las siete a las ocho")
+// necesita las DOS: la primera identifica el item y la última es el destino.
+// Mismo resolutor y mismas regex que `pickTimeOfDay` (una sola semántica de
+// hora); sólo cambia la recolección, que aquí no se corta en el primer match.
 // ------------------------------------------------------------
 
 export interface TimeOfDayMatch {
@@ -185,7 +185,7 @@ export interface TimeOfDayMatch {
     timeOfDay: string;
     start: number;
     end: number;
-    /** 1 = meridiem expl�cito � 2 = 'a las N' concreta � 4 = parte del d�a sola. */
+    /** 1 = meridiem explícito · 2 = 'a las N' concreta · 4 = parte del día sola. */
     rank: number;
 }
 
@@ -201,7 +201,7 @@ function overlapsAny(kept: readonly TimeOfDayMatch[], c: TimeOfDayMatch): boolea
     return kept.some((k) => c.start < k.end && c.end > k.start);
 }
 
-/** Todas las horas del texto, sin solapes y en orden de aparici�n. */
+/** Todas las horas del texto, sin solapes y en orden de aparición. */
 export function scanTimesOfDay(text: string): TimeOfDayMatch[] {
     const source = String(text || '');
     const matches: TimeOfDayMatch[] = [];
@@ -223,8 +223,8 @@ export function scanTimesOfDay(text: string): TimeOfDayMatch[] {
             }
         }
     };
-    // Prioridad de recolecci�n la de `pickTimeOfDay`: primero las formas con
-    // 'a las/at', luego la hora suelta con meridiem, luego parte del d�a.
+    // Prioridad de recolección la de `pickTimeOfDay`: primero las formas con
+    // 'a las/at', luego la hora suelta con meridiem, luego parte del día.
     collect(ALL_ES, resolveEsTime, (m) => (m[7] ? 1 : 2));
     collect(ALL_EN, resolveEnTime, (m) => (m[5] ? 1 : 2));
     collect(ALL_BARE, resolveBareMeridiemTime, () => 1);
@@ -241,7 +241,7 @@ export function scanTimesOfDay(text: string): TimeOfDayMatch[] {
     return kept.sort((a, b) => a.start - b.start);
 }
 
-/** El texto SIN ninguna hora (todas, no s�lo la primera). */
+/** El texto SIN ninguna hora (todas, no sólo la primera). */
 export function stripTimesOfDay(text: string): string {
     const source = String(text || '');
     let rest = source;

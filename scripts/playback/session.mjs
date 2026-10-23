@@ -5,6 +5,7 @@
  * producida por `sessionRecorder`/`recorderSink` y valida lo minimo para
  * reproducir el audio como microfono virtual.
  */
+import { readNdjson as readNdjsonStrict, readSessionManifest } from '../replay/loadSession.mjs';
 import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
 
@@ -12,28 +13,15 @@ export const DEFAULT_PORT = 5173
 export const DEFAULT_URL = `http://localhost:${DEFAULT_PORT}`
 export const DEFAULT_TAIL_MS = 5000
 export const DEFAULT_TIMEOUT_MS = 600000
-export const SUPPORTED_SCHEMA = new Set([1, 2])
 
 /**
- * @param {string} file
- * @returns {any}
- */
-export function readJson(file) {
-  return JSON.parse(readFileSync(file, 'utf8'))
-}
-
-/**
+ * Lector NDJSON de playback: DELEGA en el del replay (dueno unico del parseo).
+ * Contrato propio: archivo ausente o vacio => [] (el replay devuelve null).
  * @param {string} file
  * @returns {any[]}
  */
 export function readNdjson(file) {
-  if (!existsSync(file)) return []
-  const text = readFileSync(file, 'utf8').trim()
-  if (!text) return []
-  return text
-    .split(/\r?\n/)
-    .filter(Boolean)
-    .map((line) => JSON.parse(line))
+  return readNdjsonStrict(file) ?? []
 }
 
 /**
@@ -151,14 +139,11 @@ export function loadSession(input) {
   if (!existsSync(dir) || !statSync(dir).isDirectory()) {
     throw new Error(`Sesion no encontrada: ${input}`)
   }
+  // MANIFIESTO: dueno unico en el replay (auditoria 2026-10-23). Antes playback tenia su
+  // propia copia del conjunto de versiones y de la validacion (ruta doble de la misma regla).
+  const { manifest, schemaVersion, meta } = readSessionManifest(dir)
   const manifestPath = join(dir, 'manifest.json')
   const metaPath = join(dir, 'meta.json')
-  if (!existsSync(manifestPath)) throw new Error(`Falta manifest.json en ${dir}`)
-  const manifest = readJson(manifestPath)
-  const schemaVersion = Number(manifest.schemaVersion)
-  if (!SUPPORTED_SCHEMA.has(schemaVersion)) {
-    throw new Error(`manifest.schemaVersion no soportada: ${manifest.schemaVersion}`)
-  }
 
   const declaredAudio = manifest.audioFile ? resolve(dir, String(manifest.audioFile)) : join(dir, 'audio.wav')
   const pcmPath = join(dir, 'audio.pcm')
@@ -179,7 +164,6 @@ export function loadSession(input) {
   const eventsPath = join(dir, 'events.ndjson')
   const turns = readNdjson(turnsPath)
   const events = readNdjson(eventsPath)
-  const meta = existsSync(metaPath) ? readJson(metaPath) : {}
 
   const sourceRows = turns
     .filter((turn) => turn?.kind === 'commit' && typeof turn.text === 'string')

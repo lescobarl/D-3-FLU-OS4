@@ -199,17 +199,20 @@ describe('modo pasivo — UNA sola decisión de hablante (dueño canónico)', ()
     expect(lineasIdentity()).toHaveLength(0)
   })
 
-  it('el alias "soy X" sigue en la misma rama y no depende de voiceProfiles', async () => {
+  it('sin wake, "soy X" NO infiere nombre (politica unica del resolutor en la rama pasiva)', async () => {
     const { result } = montar()
     await waitFor(() => expect(typeof result.current.resolveSpeaker).toBe('function'))
 
     const r = await result.current.resolveSpeaker('soy luis', audioVoz(1), SR, 'FLU')
 
-    expect(r.introducedName).toBe('Luis')
+    // requireWakeWordForSpeakerName: true -> sin wake no hay nombre propio (auditoria 2026-10-23).
+    expect(r.introducedName).toBe('')
     // `speakerName` es lo que midió el dueño; `resolvedSpeakerName` trae la etiqueta de la frase.
     expect(r.speakerName).toBe(FLU_CONFIG.voiceIdentity.labels.template.replace('{n}', '1'))
-    expect(r.resolvedSpeakerName).toBe('Luis')
-    expect(r.speakerAlias).toBe(r.speakerName)
+    expect(r.resolvedSpeakerName).toBe(r.speakerName)
+    expect(r.speakerAlias).toBeNull()
+    // La linea `Identity` la emite el resolutor canonico (evidencia de la ruta); lo que ya
+    // NO aparece es el NOMBRE inferido sin wake.
     expect(lineasIdentity()).toHaveLength(1)
   })
 })

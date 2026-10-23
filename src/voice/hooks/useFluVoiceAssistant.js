@@ -3,7 +3,6 @@ import {
   computeAudioSignature,
   cleanForSpeech,
   decideVoiceTurnDispatch,
-  detectIntroducedName,
   detectWakeIntroducedName,
   detectListeningControl,
   detectRole,
@@ -18,6 +17,7 @@ import {
   isMinuteSaveRequest,
   isMinuteKnowledgeRequest,
   pickRichestVoiceCommandCapture,
+  splitTranscriptAtWakeWord,
 } from '../lib/audioMath'
 import { isNavSettlePending } from '../lib/navSettleFlag'
 import { getFluTimingCfg } from '../lib/fluTranscriptMotor.js'
@@ -140,9 +140,12 @@ import {
 } from '../lib/turnSpeakerPreflight.js'
 import {
   blindSpeakerFallback,
+  resolveSpeakerNameFromUtterance,
   shouldSkipPreviewDiarize,
 } from '../lib/speakerPolicy.js'
 import { WAKE_POLICY_ORDER, applyWakePolicyOrder, resolveWakePolicyOrder, wakePolicySpeech } from '../lib/wakePolicy.js'
+import { normalizeLang } from '../../core/config/localeConfig.ts'
+import { normalizeMicText } from '../lib/speechMerge.js'
 import { resolveSrGapTrigger } from '../lib/fluTranscriptPause.js'
 // Ruta única: useFluParticipant vive solo en src/hooks/useFluParticipant.ts.
 // El motor de voz la importa aquí solo como fallback defensivo; en producción App.tsx inyecta su instancia vía participantRef (mismo módulo).
@@ -174,7 +177,6 @@ import { COMMAND_IDS } from '../lib/commandIds.js'
 import { createEmissionDeduper, shouldSkipCapture } from '../lib/captureDedup.js'
 import { isAssistantSpeechEcho, isAssistantVoiceEcho } from '../lib/conversationStream.js'
 import { voiceProbe, isVoiceProbeEnabled } from '../lib/voiceProbe'
-
 const CONTEXT_HISTORY_LIMIT = FLU_CONFIG.limits.contextHistoryMax
 // Sample rate de captura: fuente única en FLU_CONFIG.audio.sampleRate (sin hardcode).
 const AUDIO_SAMPLE_RATE = FLU_CONFIG.audio?.sampleRate ?? 0
@@ -242,7 +244,7 @@ export function useFluVoiceAssistant({
   // Wake words efectivas (Ajustes o default): UN solo criterio. Van declaradas ANTES del commit porque el commit las consume para recortar el eco.
   const resolvedWakeWords = resolveWakeWords(wakeWords)
   const commitTurnPhrase = useCallback((text, fallback = '') => {
-    const phrase = resolveTurnCommitPhrase({ capture: text, fallback, log: relayLog, wakeWords: resolvedWakeWords })
+    const phrase = normalizeMicText(resolveTurnCommitPhrase({ capture: text, fallback, log: relayLog, wakeWords: resolvedWakeWords }))
     if (phrase) commitVisibleTranscript(phrase)
     return phrase
   }, [commitVisibleTranscript, resolvedWakeWords])
@@ -262,7 +264,7 @@ export function useFluVoiceAssistant({
       const canonicalPhrase = commitTurnPhrase(capture, fallbackCapture)
       const evidenciaAcustica = payload.evidenciaAcustica === true // solo la DECLARA quien midio VOZ (preflight/sync con ventana)
       // Garbage descartada (anti-alucinación): no se commitea ni se consulta a IA.
-      if (!canonicalPhrase) return ''
+      if (!canonicalPhrase) return
       // `commitOnly`: commit temprano + fila del USUARIO inmediata (sin esperar a
       // la IA). La resolución posterior re-commitea el MISMO valor (idempotente) y deduplica la fila, así no hay doble fuente.
       if (commitOnly) {
@@ -734,7 +736,7 @@ const lastResolvedTurnRef = useRef(0)
     if (!pending) return
     pendingStreamLogRef.current = null
     const { __fluDebug, ...payload } = pending
-    void onContractResolved?.(payload)
+    void Promise.resolve(onContractResolved?.(payload)).catch((error) => logCaughtError('useFluVoiceAssistant.flushPendingStreamLog', error))
     if (import.meta.env.DEV && debugHotPath && __fluDebug) {
       fluDebugHot('log-emit', __fluDebug)
     }
@@ -1534,7 +1536,7 @@ const lastResolvedTurnRef = useRef(0)
       setSpeakerClusters(identity.workingClusters)
 
       const speakerName = identity.speakerName
-      const introducedName = detectIntroducedName(transcriptForIntro)
+      const introducedName = resolveSpeakerNameFromUtterance(transcriptForIntro)
       const resolvedSpeakerName = introducedName || speakerName
       const speakerAlias = introducedName && introducedName !== speakerName ? speakerName : null
 
@@ -1572,7 +1574,7 @@ const lastResolvedTurnRef = useRef(0)
       if (!capture) return false
       if (
         !replaceLastRawLog &&
-        isDuplicateLogPhrase(capture, lastEmittedTranscriptRef.current)
+        isDuplicateLogPhrase(capture, lastEmittedTranscriptRef.current, { msSinceLastEmit: lastLogEmitAtRef.current ? Date.now() - lastLogEmitAtRef.current : 0 })
       ) {
         return false
       }
@@ -1633,7 +1635,7 @@ const lastResolvedTurnRef = useRef(0)
 
       pendingStreamLogRef.current = null
       clearStreamLogTimer()
-      void onContractResolved?.(payload)
+      void Promise.resolve(onContractResolved?.(payload)).catch((error) => logCaughtError('useFluVoiceAssistant.onContractResolved', error))
       if (import.meta.env.DEV && debugHotPath) {
         fluDebugHot('log-emit', debugMeta)
       }
@@ -2957,7 +2959,7 @@ const lastResolvedTurnRef = useRef(0)
       if (!intent?.tipo && !isMusicAction) return null
       await onContractResolved?.({
         contract: {
-          respuesta_voz: isMusicAction ? musicActionSpeech(intent.accion, language || 'es') : '',
+          respuesta_voz: isMusicAction ? musicActionSpeech(intent.accion, normalizeLang(language)) : '',
           navegacion: { comando: null, destino: null, parametros: {} },
           workspace: null,
           musica: isMusicAction ? { accion: intent.accion, ...(intent.cancion ? { cancion: intent.cancion } : {}) } : null,
@@ -3071,13 +3073,10 @@ const lastResolvedTurnRef = useRef(0)
         return
       }
 
-      // El turno queda marcado como resuelto y la LOCUCION EN VUELO NO se vacia aqui
-      // (defecto 5: es habla real del usuario; su cierre real la commitea).
+      // El turno queda resuelto; la LOCUCION EN VUELO no se vacia (su cierre real la commitea).
       openPreviewTurnRef.current = false
       captureTurnAudio() // §9 sella el audio ANTES del commit-only (que vacía el buffer)
-      // La orden consumio la LINEA VIVA COMPLETA con wake INLINE (medido 2026-10-19: una linea
-      // de 58 sobrevivio y recorto la de 316): se cierra para que la siguiente no se le pegue
-      // (con wake al INICIO es la MISMA locucion, defecto 5); DESPUES de captureTurnAudio.
+      // La orden consumio la LINEA VIVA: se cierra para que la siguiente no se le pegue.
       if (cleanForSpeech(beforeWake)) syncConversationStream({ closeTurnOnly: true })
       // §9: una sola frase canónica para el turno (display y fila salen de ESTE valor).
       const canonicalPhrase = await commitAndResolveTurn({
@@ -3085,16 +3084,17 @@ const lastResolvedTurnRef = useRef(0)
         fallbackCapture: question, // texto validado del turno (si la captura cruda es basura)
         commitOnly: true,
       })
-      // Sin frase válida no se llama a la IA (el motivo ya quedó registrado).
       if (!canonicalPhrase) return
+
+      // B.6: la IA recibe la MISMA frase commiteada, sin la wake (splitter unico, Anexo B.11).
+      const transcriptForAi = cleanForSpeech(splitTranscriptAtWakeWord(canonicalPhrase, FLU_CONFIG.voiceCommands?.wakeWords || []).commandText || '') || question
       // §9: la query ya viene derivada por el derivador único
-      // (`planConversationDispatch` → action.question); NO se re-deriva aquí.
       const sampleRate = sampleRateRef.current || AUDIO_SAMPLE_RATE
       const streamSamples = turnAudioForDiarize(activeTurnIdRef.current, { chunks: chunksRef.current, activeTurnId: activeTurnIdRef.current })
       const audioSnapshot = streamSamples.length ? new Float32Array(streamSamples) : new Float32Array(0)
       const fallbackSpeaker = lastSpeakerRef.current || FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker
       const currentClock = formatClock()
-      const detectedLanguage = detectTranscriptLanguage(question)
+      const detectedLanguage = detectTranscriptLanguage(transcriptForAi)
 
       setStatus('processing')
       isProcessingRef.current = true
@@ -3133,7 +3133,7 @@ const lastResolvedTurnRef = useRef(0)
         // motor local ya habla su propia voz, así que la frase de cortesía es '' (no se
         // duplica el habla).
         const skipGemini = resolveDeterministicSkipGeminiContract({
-          text: question || fullTranscript,
+          text: transcriptForAi,
           language: detectedLanguage,
           skipGeminiOnMatch: Boolean(FLU_CONFIG.arbiter?.skipGeminiOnMatch),
         })
@@ -3174,7 +3174,7 @@ const lastResolvedTurnRef = useRef(0)
         // nota/horario sobre la question ANTES de llamar a Gemini? Esto muestra si el
         // mandato ("crea una cita...", "pon una alarma...") debía despacharse sin IA.
         try {
-          const probe = resolveDeterministicCommand(question, {
+          const probe = resolveDeterministicCommand(transcriptForAi, {
             language: detectedLanguage,
           })
           relayLog(
@@ -3193,9 +3193,9 @@ const lastResolvedTurnRef = useRef(0)
         // Fase 2: orador + llamada API + firma de audio en PARALELO. La firma se
         // calcula UNA vez y se reutiliza en ambos caminos de onContractResolved.
         const [speakerResult, contractResult, signatureResult, fastPathResult] = await Promise.allSettled([
-          resolveSpeaker(question, audioSnapshot, sampleRate, fallbackSpeaker),
+          resolveSpeaker(transcriptForAi, audioSnapshot, sampleRate, fallbackSpeaker),
           requestFluContractForTranscript({
-            transcript: question,
+            transcript: transcriptForAi,
             knowledgeMode,
             intent: { comando: null, destino: null, parametros: {} },
             speaker: resolvedSpeakerName,
@@ -3211,7 +3211,7 @@ const lastResolvedTurnRef = useRef(0)
           // onContractResolved.
           (async () => {
             const result = await evaluateDeterministicFastPaths({
-              text: question || fullTranscript,
+              text: transcriptForAi,
               // La fila del usuario es la MISMA frase canónica del turno: el
               // fast-path no debe registrar otra (defecto: fila duplicada sin wake).
               utterance: canonicalPhrase,
@@ -3251,7 +3251,7 @@ const lastResolvedTurnRef = useRef(0)
         // §1A: re-resolución determinista tardía (config/ambiente) para la idempotencia
         // del contrato. Se delega al árbitro puro; solo se usa cuando el fast-path NO
         // despachó (para que la resolución determinista gane sobre la del modelo).
-        const lateStateful = resolveStatefulDomains(question || fullTranscript, { language: detectedLanguage })
+        const lateStateful = resolveStatefulDomains(transcriptForAi, { language: detectedLanguage })
 
         // Reparto real del tiempo del turno: la fase paralela (IA + orador +
         // firma + fast-path) se mide como UNA marca; antes se atribuía a ojo el
@@ -3552,7 +3552,7 @@ const lastResolvedTurnRef = useRef(0)
 
       let capturedTranscript = readTurnCaptureSnapshot()
       if (capturedTranscript && turnRef.current.interim) {
-        capturedTranscript = await waitForCaptureSettle(readTurnCaptureSnapshot, FLU_CONFIG.timing)
+        capturedTranscript = await waitForCaptureSettle(readTurnCaptureSnapshot, FLU_CONFIG.timing, { settled: true })
       }
 
       // §9 — Visibilidad INMEDIATA: commit temprano de la frase capturada para
@@ -3661,9 +3661,8 @@ const lastResolvedTurnRef = useRef(0)
         }
         : { comando: null, destino: null, parametros: {} }
 
-      // Orador rapido por TEXTO para el prompt y el fast-path; lo reconcilia el audio.
       const fastSpeakerName =
-        detectIntroducedName(bufferedTranscript || capturedTranscript) ||
+        resolveSpeakerNameFromUtterance(bufferedTranscript || capturedTranscript) ||
         lastSpeakerRef.current ||
         fallbackSpeaker
 
@@ -4233,7 +4232,7 @@ const lastResolvedTurnRef = useRef(0)
         const srGap = resolveSrGapTrigger({ sinceLastResultMs: sinceResult, sinceLastCommitMs: lastCommitAtRef.current > 0 ? now - lastCommitAtRef.current : 0, hasOpenLine: Boolean(openLine), openLineAgeMs: now - (listenStateRef.current?.openLineStartedAtMs || now), speakerChanged })
         if (srGap.fire && !srGapFiredForOpenLineRef.current) {
           srGapFiredForOpenLineRef.current = true
-          ingressRuntimeRef.current?.pushSrGapEvent?.({ sinceLastResultMs: srGap.sinceLastResultMs })
+          ingressRuntimeRef.current?.pushSrGapEvent?.({ sinceLastResultMs: srGap.sinceLastResultMs, reason: srGap.reason })
         }
         return
       }
@@ -4249,6 +4248,7 @@ const lastResolvedTurnRef = useRef(0)
 
   ingressBindingsRef.current = {
     conversationActiveRef,
+    activeTurnIdRef,
     listenStateRef,
     publishedLiveRef,
     openPreviewTurnRef,

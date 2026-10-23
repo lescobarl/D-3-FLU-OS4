@@ -128,10 +128,21 @@ describe('B - la caja solo acumula (conducta)', () => {
     expect(leer()).toBe(r2.aplicado ? 'buenas tardes' : 'hola que tal como estas')
   })
 
-  it('ANADE la cola nueva de un tramo INTERIOR reentregado, sin duplicar ni perder nada', () => {
+  it('un tramo INTERIOR con otra cola NO se concatena (otra hipotesis del mismo audio)', () => {
+    // MEDIDO (d4c1c8f3): "vamos a ver si es cie | lo que nos dijo" + "vamos a ver si es cie |
+    // esta todo resuelto" producia "es cie lo que nos dijo esta todo resuelto", que NADIE dijo.
+    // La caja puede crecer solo cuando la emision CONTINUA lo mostrado: reentrega su COLA
+    // (o un tramo que llega al final de lo mostrado) y sigue con habla nueva.
     const { caja, leer } = montar()
-    caja.publicarEnLaCaja('a la una el avion se alejo perdiendose en el cielo negro de la noche')
-    expect(caja.publicarEnLaCaja('el avion se alejo perdiendose en el cielo negro y siguio').aplicado).toBe(true)
+    const mostrado = 'a la una el avion se alejo perdiendose en el cielo negro de la noche'
+    caja.publicarEnLaCaja(mostrado)
+
+    const otraHipotesis = 'el avion se alejo perdiendose en el cielo negro y siguio'
+    expect(caja.publicarEnLaCaja(otraHipotesis).aplicado, 'no fabrica la union').toBe(false)
+    expect(leer()).toBe(mostrado)
+
+    // CONTROL POSITIVO: la reentrega de la COLA y su continuacion SI se anade.
+    expect(caja.publicarEnLaCaja('perdiendose en el cielo negro de la noche y siguio').aplicado).toBe(true)
     expect(leer()).toBe('a la una el avion se alejo perdiendose en el cielo negro de la noche y siguio')
   })
 
@@ -187,5 +198,65 @@ describe('B - la caja solo acumula (conducta)', () => {
     caja.publicarEnLaCaja(viejo[0])
     caja.publicarEnLaCaja(viejo[1])
     expect(reemplazos([viejo[0], leer()]), 'la caja unificada no reemplaza').toBe(0)
+  })
+})
+
+// MEDIDO (cec7281d, turno de la modalidad 40): el ASR REENTREGO la locucion con la ultima
+// palabra a medias ("... aqui estamos hablando de un" -> "... aqui estamos hablando de").
+// `reentregaLoMostrado` exigia que la emision tuviera MAS palabras, asi que no la reconocio
+// como reentrega; la rama de "completar la ultima palabra" creyo que "un" crecia hasta
+// "unidad" y pego la EMISION ENTERA detras: la caja mostraba la locucion DOS VECES
+// (238 -> 471 chars, bloque "unidad de medida actualizada" repetido).
+describe('B2 - la reentrega con MENOS palabras no duplica la locucion', () => {
+  const LOCUCION =
+    'unidad de medida actualizada asi que estamos viendo una aprobacion del consejo tecnico del imss y ya se perfila la distincion y el debate puede el ejecutivo modificar esta modalidad 40 aqui estamos hablando de un'
+  const LOCUCION_SIN_ULTIMA = LOCUCION.split(' ').slice(0, -1).join(' ')
+
+  it('la emision que reentrega la locucion SIN la ultima palabra no se pega entera', () => {
+    const { caja, leer } = montar()
+    caja.publicarEnLaCaja(LOCUCION)
+    caja.publicarEnLaCaja(LOCUCION_SIN_ULTIMA)
+    expect(leer(), 'la caja no crece con la locucion repetida').toBe(LOCUCION)
+    expect(leer().split('unidad de medida actualizada').length - 1, 'un solo bloque').toBe(1)
+  })
+
+  it('CONTROL: la palabra que crece de verdad SI se completa', () => {
+    const { caja, leer } = montar()
+    // Caso medido (2026-10-21): la caja mostraba "du dupli duplica" porque completar la
+    // palabra no era posible. Con la ultima palabra sola, la emision que la completa entra.
+    caja.publicarEnLaCaja('du')
+    expect(caja.publicarEnLaCaja('dupli').aplicado).toBe(true)
+    expect(leer()).toBe('dupli')
+  })
+
+  it('CONTROL: la reentrega de la COLA y su continuacion SI crece (sin duplicar)', () => {
+    const { caja, leer } = montar()
+    caja.publicarEnLaCaja(LOCUCION)
+    caja.publicarEnLaCaja('aqui estamos hablando de un marco legal')
+    expect(leer()).toBe(`${LOCUCION} marco legal`)
+  })
+})
+
+// MEDIDO (auditoria 2026-10-22): la regla de "hipotesis mas completa" sustituia la caja con
+// solo compartir la PRIMERA palabra. Eso permitia que una frase DISTINTA ("vamos a comprar...")
+// reemplazara la locucion en curso ("vamos a preparar..."). Ahora exige un TRAMO compartido
+// mas alla del arranque; los dos lados quedan fijados aqui.
+describe('B3 - la hipotesis mas completa exige tramo compartido', () => {
+  it('NO sustituye otra frase que solo comparte el arranque', () => {
+    const { caja, leer } = montar()
+    const mostrado = 'vamos a preparar la receta de la abuela con todos los ingredientes'
+    caja.publicarEnLaCaja(mostrado)
+    const otraFrase = 'vamos a comprar otra cosa distinta para la cena de hoy'
+    expect(caja.publicarEnLaCaja(otraFrase).aplicado, 'otra frase no se lleva la caja').toBe(false)
+    expect(leer()).toBe(mostrado)
+  })
+
+  it('SI sustituye la MISMA locucion cuando comparte un tramo mas alla del arranque', () => {
+    const { caja, leer } = montar()
+    const mostrado = 'porque a los tal vez'
+    caja.publicarEnLaCaja(mostrado)
+    const mejor = 'porque tal vez tu papa necesita jubilarse antes'
+    expect(caja.publicarEnLaCaja(mejor).aplicado).toBe(true)
+    expect(leer()).toBe(mejor)
   })
 })

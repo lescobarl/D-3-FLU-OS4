@@ -23,6 +23,7 @@ export function buildConversationIngressCtx(bindings = {}) {
     ingressSource: 'mic',
     listenState: bindings.listenStateRef?.current,
     publishedLiveRef: bindings.publishedLiveRef,
+    getTurnId: () => bindings.activeTurnIdRef?.current ?? null,
     openPreviewTurnRef: bindings.openPreviewTurnRef,
     logRowsTextRef: bindings.logRowsTextRef,
     logRowSpeakersRef: bindings.logRowSpeakersRef,
@@ -82,7 +83,14 @@ export function createConversationIngressRuntime({ getBindings, onAfterBrowserEv
   const queue = createEventQueue()
   const consumer = createTranscriptConsumer({
     getCtx: () => buildConversationIngressCtx(getBindings()),
-    onAfterEvent: (event) => {
+    onAfterEvent: (event, result) => {
+      // CIERRE QUE NO CERRÓ: si el sr-gap no flusho, la locucion sigue ABIERTA y el flag que
+      // evita repetir el sr-gap no puede quedarse armado: el silencio posterior tiene que
+      // poder cerrarla (auditoria 2026-10-22).
+      if (event?.kind === 'sr-gap' && result && result.flushed === false) {
+        const ref = getBindings?.()?.srGapFiredForOpenLineRef
+        if (ref) ref.current = false
+      }
       if (event?.source !== 'browser') return
       onAfterBrowserEvent?.(event, getBindings())
       const bindings = getBindings()
@@ -113,8 +121,8 @@ export function createConversationIngressRuntime({ getBindings, onAfterBrowserEv
       }
       return pushed
     },
-    pushSrGapEvent({ sinceLastResultMs = 0 } = {}) {
-      const pushed = pushSrGapEvent({ sinceLastResultMs }, queue)
+    pushSrGapEvent({ sinceLastResultMs = 0, reason = '' } = {}) {
+      const pushed = pushSrGapEvent({ sinceLastResultMs, reason }, queue)
       if (pushed) {
         consumer.scheduleDrain(queue)
       }

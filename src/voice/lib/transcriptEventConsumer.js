@@ -17,8 +17,12 @@ export function createTranscriptConsumer({ getCtx, onAfterEvent } = {}) {
     if (!force && !ctx?.conversationActive) return { handled: false, skipped: true }
 
     if (event.kind === 'sr-gap') {
+      // El MOTIVO viaja con el evento: el cierre por CAMBIO DE HABLANTE no espera silencio
+      // (mandato P4) y el evaluador tiene que saberlo. Antes se perdia aqui y el cierre se
+      // descartaba por "sr-active" mientras el flag ya estaba armado (auditoria 2026-10-22).
       return flushSrGapSegmentThroughIngress(ctx, {
         sinceLastResultMs: event.sinceLastResultMs,
+        reason: event.reason || '',
       })
     }
 

@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "scenario": "caja-corta-linea-larga",
+  "mode": "events",
+  "approved": true,
+  "approvedNote": "Fixture escrito a mano: la caja muestra una hipotesis CORTA ('vamos a preparar la receta') y el ASR confirma despues un FINAL mas largo con otro arranque. El cierre por silencio (sr-gap inferido) debe commitear el FINAL confirmado y la caja debe terminar el turno con esa misma frase (Anexo B.3). Antes de 2026-10-22 la fila era la caja corta (o una mezcla de las dos hipotesis) y el final se perdia.",
+  "expect": {
+    "rows": [
+      { "text": "prepara la receta completa con todos los ingredientes y el horno", "speaker": "Hablante 1" },
+      { "text": "y despues horneamos", "speaker": "Hablante 1" }
+    ],
+    "rowCount": 2,
+    "noPrefixDuplication": true,
+    "noLostLongBlock": true,
+    "boxDuplicated": 0,
+    "box": [
+      "prepara la receta completa con todos los ingredientes y el horno",
+      "y despues horneamos"
+    ]
+  }
+}

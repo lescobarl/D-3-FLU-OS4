@@ -518,7 +518,7 @@ export function useNavigationCommands(
                 // wikipedia en inglés" → sitio "wikipedia").
                 const languageWords = browserCfg.languageWords || {};
                 const languageHosts = browserCfg.languageHosts || {};
-                const profileLang = String(browserCfg.defaultProfile?.language || 'es');
+                const profileLang = normalizeLang(browserCfg.defaultProfile?.language);
                 const requestLang = resolveSearchLanguage(transcript, profileLang, languageWords);
                 const phraseForSite = stripLanguageWords(transcript, languageWords);
                 const input = resolveSiteCandidate(
@@ -583,7 +583,7 @@ export function useNavigationCommands(
                 // la frase para que los marcadores no se cuelen en la consulta
                 // ("buscá capital de Francia en inglés" → "capital de Francia").
                 const languageWords = browserCfg.languageWords || {};
-                const profileLang = String(browserCfg.defaultProfile?.language || 'es');
+                const profileLang = normalizeLang(browserCfg.defaultProfile?.language);
                 const requestLang = resolveSearchLanguage(transcript, profileLang, languageWords);
                 // §9: ÚNICA derivación de la query. Toma los parámetros del LLM si
                 // existen o el transcript canónico, y limpia con un solo limpiador

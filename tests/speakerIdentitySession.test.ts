@@ -21,6 +21,8 @@ import {
     clearSessionPrimarySpeaker,
     setSessionPrimarySpeaker,
 } from '../src/voice/lib/sessionPrimarySpeaker';
+import { forgetVoiceName, registerVoiceName, resolveVoiceName } from '../src/voice/lib/speakerDirectory';
+import { resolveSpeakerNameFromUtterance } from '../src/voice/lib/speakerPolicy';
 
 const hookSource = () =>
     readFileSync(join(process.cwd(), 'src', 'voice', 'hooks', 'useFluVoiceAssistant.js'), 'utf8');
@@ -285,3 +287,36 @@ describe('"soy X" marca VERIFICADO solo el cluster de SU voz', () => {
         );
     });
 });
+
+// AUDITORIA 2026-10-22: borrar un participante no olvidaba su nombre en el DIRECTORIO de
+// sesion, asi que el nombre reaparecia al resolver por voz. El dueno del nombre expone ahora
+// `forgetVoiceName`.
+describe('directorio de sesion: olvidar un nombre (borrado de participante)', () => {
+  it('tras olvidarlo, la voz ya no resuelve el nombre', () => {
+    registerVoiceName('speaker_2', 'Luis', { vector: [1, 0, 0, 0] })
+    expect(resolveVoiceName('speaker_2')).toBe('Luis')
+    const olvidadas = forgetVoiceName('Luis')
+    expect(olvidadas).toBeGreaterThan(0)
+    expect(resolveVoiceName('speaker_2'), 'el nombre olvidado no vuelve').toBe('')
+  })
+
+  it('olvidar un nombre que no existe no toca el directorio', () => {
+    registerVoiceName('speaker_3', 'Ana', { vector: [0, 1, 0, 0] })
+    expect(forgetVoiceName('Nadie')).toBe(0)
+    expect(resolveVoiceName('speaker_3')).toBe('Ana')
+  })
+})
+
+// AUDITORIA 2026-10-22: `resolveSpeakerNameFromUtterance` devolvia '' en las DOS ramas, asi
+// que `requireWakeWordForSpeakerName: false` no tenia ningun efecto.
+describe('politica de nombres: la config MANDA', () => {
+  it('con wake obligatoria, un nombre sin wake NO se resuelve', () => {
+    const r = resolveSpeakerNameFromUtterance('soy luis', { roomCfg: { requireWakeWordForSpeakerName: true } as never })
+    expect(r).toBe('')
+  })
+
+  it('con wake NO obligatoria, el mismo nombre SI se resuelve', () => {
+    const r = resolveSpeakerNameFromUtterance('soy luis', { roomCfg: { requireWakeWordForSpeakerName: false } as never })
+    expect(r).toBe('Luis')
+  })
+})

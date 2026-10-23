@@ -41,15 +41,27 @@ export function pushMicSpeechEvent(event, queue) {
   })
 }
 
-export function buildMicBurstEvent({ interim = '', final = '' } = {}) {
+/**
+ * Construye el evento del motor con SUS RESULTADOS, en orden: Chrome entrega VARIOS
+ * resultados en UN evento (el sink escribe una fila por resultado, todas con el MISMO `t`).
+ * Acepta uno (`interim`/`final`) o la LISTA real (`interims`/`finals`): reconstruir la lista
+ * es lo que evita inventar hipotesis que el motor nunca emitio juntas.
+ * @param {{ interim?: string, final?: string, interims?: string[], finals?: string[] }} [parts]
+ * @returns {{ resultIndex: number, results: object[] } | null}
+ */
+export function buildMicBurstEvent({ interim = '', final = '', interims = [], finals = [] } = {}) {
   const results = []
-  const inter = String(interim ?? '').trim()
-  const fin = String(final ?? '').trim()
-  if (inter && inter !== fin) {
-    results.push({ isFinal: false, 0: { transcript: inter }, length: 1 })
+  const listaFinales = (Array.isArray(finals) && finals.length ? finals : [final])
+    .map((texto) => String(texto ?? '').trim())
+    .filter(Boolean)
+  const listaInterinos = (Array.isArray(interims) && interims.length ? interims : [interim])
+    .map((texto) => String(texto ?? '').trim())
+    .filter((texto) => Boolean(texto) && !listaFinales.includes(texto))
+  for (const texto of listaInterinos) {
+    results.push({ isFinal: false, 0: { transcript: texto }, length: 1 })
   }
-  if (fin) {
-    results.push({ isFinal: true, 0: { transcript: fin }, length: 1 })
+  for (const texto of listaFinales) {
+    results.push({ isFinal: true, 0: { transcript: texto }, length: 1 })
   }
   if (!results.length) return null
   return { resultIndex: 0, results }
@@ -89,11 +101,12 @@ export function pushRecognitionEndEvent(queue) {
   })
 }
 
-export function pushSrGapEvent({ sinceLastResultMs = 0 }, queue) {
+export function pushSrGapEvent({ sinceLastResultMs = 0, reason = '' } = {}, queue) {
   if (!queue) return null
   return queue.push({
     source: 'browser',
     kind: 'sr-gap',
     sinceLastResultMs: Number(sinceLastResultMs) || 0,
+    reason: String(reason || ''),
   })
 }

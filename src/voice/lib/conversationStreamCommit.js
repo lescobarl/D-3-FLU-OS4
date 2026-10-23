@@ -1,11 +1,11 @@
 /**
- * Preview y commit del stream de conversación (mic → UI/log).
+ * Preview y commit del stream de conversación (mic -> UI/log).
  * Extraído de useFluVoiceAssistant para aislar la ruta syncConversationStream.
  */
 import { cleanForSpeech, detectWakeIntroducedName, formatClock, sameRequestWindowMs, stripDiacritics } from './audioMath.js'
 import { normalizeMicText } from './speechMerge.js'
 import { resolveInlineWakeAtCommit, isTurnCapture, requiresWakeWord } from './wakeTurnCommit.js'
-import { getAsrSegmentationCfg } from './fluTranscriptMotor.js'
+import { getAsrSegmentationCfg, getTranscriptPolicyCfg } from './fluTranscriptMotor.js'
 import { getTranscriptPauseCfg } from './fluTranscriptPause.js'
 import { FLU_CONFIG } from './fluConfig.js'
 import {
@@ -26,7 +26,7 @@ import {
   utterancesSameRevision,
   committedEchoStreakWindowMs,
 } from './activeListen.js'
-import { readTurnLive } from './conversationStream.js'
+import { readTurnLive, countSharedSpeechWords } from './conversationStream.js'
 import { debugHotPath, fluDebugHot } from './fluDebug.js'
 import { relayLog } from '../../lib/clientLogRelay'
 import { voiceProbe } from './voiceProbe'
@@ -85,6 +85,12 @@ export function buildFinalSpeakerSnapshotResolver({ createSpeakerAudioResolver, 
  * @property {boolean} [forceNewRowOnSegment]
  * @property {boolean} [settlesTurn] Cierre REAL del turno (onend/srGap/wake-split):
  *   un `final` de SEGMENTO de Chrome NO lo declara.
+ * @property {number|null} [turnId] Turno al que pertenece una captura ya CERRADA
+ *   (`locutionClosed`). Lo sella el ingress al derramar `pendingFinal`; el cierre solo
+ *   adopta la caja cuando AMBOS turnos se conocen y coinciden.
+ * @property {boolean} [confirmedFinal] La captura es un `final` de SEGMENTO: texto
+ *   CONFIRMADO por el ASR. No cierra el turno, pero es la frase canonica de la
+ *   locucion y la caja la adopta (nunca encoge).
  * @property {boolean} [locutionClosed] La captura es una locucion YA CONFIRMADA y
  *   CERRADA (volcado de `pendingFinal`): no se reconcilia contra la linea viva.
  * @property {boolean} [closeTurnOnly] La orden ya consumio la linea viva: solo se
@@ -166,7 +172,9 @@ export function mismaPalabraClave(a, b) {
   if (a === b) return true
   const corta = a.length <= b.length ? a : b
   const larga = a.length <= b.length ? b : a
-  return corta.length >= 2 && larga.startsWith(corta)
+  // POLITICA DE TRANSCRIPCION (una tabla): `transcript.policy.sameWordMinLetters`.
+  const minLetras = Number(getTranscriptPolicyCfg().sameWordMinLetters) || 2
+  return corta.length >= minLetras && larga.startsWith(corta)
 }
 
 /**
@@ -178,6 +186,46 @@ export function mismaPalabraClave(a, b) {
  */
 function mismaPalabraDeLaCaja(a = '', b = '') {
   return mismaPalabraClave(claveDePalabra(a).toLowerCase(), claveDePalabra(b).toLowerCase())
+}
+
+/**
+ * Palabras comparables de un texto de la caja (clave de palabra, sin vacias).
+ * @param {string} texto
+ * @returns {string[]}
+ */
+function palabrasDeLaCaja(texto = '') {
+  return String(texto || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((palabra) => claveDePalabra(palabra))
+    .filter(Boolean)
+}
+
+/**
+ * El BOCETO no dice nada que la FRASE CANONICA no diga ya: todas sus palabras aparecen
+ * en la frase, en orden. Es el caso del canon limpiando el ASR ("puso Cloud Cloud" vs
+ * "puso Cloud"): la caja puede ceder sin perder habla. Si el boceto lleva habla AJENA
+ * (la locucion siguiente) devuelve false y la caja NO se sustituye: ahi sigue mandando
+ * el no-encogimiento.
+ * @param {string} mostrado Lo que la caja muestra.
+ * @param {string} frase Frase canonica (cierre o final confirmado).
+ * @returns {boolean}
+ */
+function bocetoCubiertoPor(mostrado = '', frase = '') {
+  const boceto = palabrasDeLaCaja(mostrado)
+  const canonica = palabrasDeLaCaja(frase)
+  if (!boceto.length || !canonica.length) return false
+  let j = 0
+  let ultima = ''
+  for (const palabra of boceto) {
+    if (ultima && mismaPalabraClave(palabra, ultima)) continue
+    while (j < canonica.length && !mismaPalabraClave(palabra, canonica[j])) j += 1
+    if (j >= canonica.length) return false
+    ultima = canonica[j]
+    j += 1
+  }
+  return true
 }
 
 /**
@@ -205,10 +253,10 @@ export function palabraQueCrece(mostrada = '', nueva = '') {
  * completa.
  *
  * Existe porque una palabra CORTA de la caja es ARRANQUE de la primera palabra de la
- * reentrega ("mi" → "mientras", "la" → "largo") y la rama de `palabraQueCrece` pegaba la
+ * reentrega ("mi" -> "mientras", "la" -> "largo") y la rama de `palabraQueCrece` pegaba la
  * emisión ENTERA detrás. Defecto medido en d4c1c8f3 (commit #13 de la fila):
  * caja "…el menjurje en mi" + emisión "…el menjurje en mi pla"
- * → "…el menjurje en mientras vamos a preparar el menjurje en mi pla" (bloque duplicado,
+ * -> "... el menjurje en mientras vamos a preparar el menjurje en mi pla" (bloque duplicado,
  * 4 valores de caja y la fila duplicada). Cuando esto es cierto, la decisión vuelve al
  * alineado de cola (`(A)`/`(B)`), que completa la última palabra y añade SOLO lo que falta.
  *
@@ -217,12 +265,21 @@ export function palabraQueCrece(mostrada = '', nueva = '') {
  * @returns {boolean}
  */
 export function reentregaLoMostrado(mostradas = [], nuevas = []) {
-  if (!mostradas.length || nuevas.length <= mostradas.length) return false
+  if (!mostradas.length || !nuevas.length) return false
+  // REENTREGA = la emision repite la locucion DESDE EL PRINCIPIO, coincidiendo en todas las
+  // palabras mostradas MENOS la ultima (la que puede estar creciendo). NO exige que la
+  // emision sea MAS LARGA: "… hablando de un" reentregada como "… hablando de" es la MISMA
+  // locucion, y tomarla por "la ultima palabra creciendo" pegaba la emision ENTERA detras de
+  // la caja, que la mostraba dos veces (medido en cec7281d: 238 -> 471 chars, el bloque
+  // "unidad de medida actualizada" repetido).
+  // Con UNA sola palabra mostrada no hay locucion que reentregar: ahi manda el crecimiento
+  // de esa palabra ("du" -> "dupli"), y por eso se devuelve false.
+  if (mostradas.length < 2) return false
+  if (nuevas.length < mostradas.length - 1) return false
   const clavesMostradas = mostradas.map(claveDePalabra)
   const clavesNuevas = nuevas.map(claveDePalabra)
-  // Todas las palabras mostradas MENOS la última (la que podría estar creciendo) tienen
-  // que aparecer en la MISMA posición: es la locución reentregada desde el principio.
-  for (let i = 0; i < clavesMostradas.length - 1; i += 1) {
+  const comparables = Math.min(clavesMostradas.length - 1, clavesNuevas.length)
+  for (let i = 0; i < comparables; i += 1) {
     if (!mismaPalabraClave(clavesMostradas[i], clavesNuevas[i])) return false
   }
   return true
@@ -238,6 +295,81 @@ export function reentregaLoMostrado(mostradas = [], nuevas = []) {
  * @param {string} nuevo
  * @returns {string}
  */
+/** La emision ARRANCA con la cola de lo mostrado (reentrega genuina, no otra hipotesis). */
+function arrancaConLaColaDe(mostradas = [], nuevas = []) {
+  const max = Math.min(mostradas.length, nuevas.length)
+  for (let k = max; k >= 1; k -= 1) {
+    let igual = true
+    for (let j = 0; j < k; j += 1) {
+      if (claveDePalabra(mostradas[mostradas.length - k + j]) !== claveDePalabra(nuevas[j])) {
+        igual = false
+        break
+      }
+    }
+    if (igual) return true
+  }
+  return false
+}
+
+/** Palabras iguales desde el principio (dueno: `countSharedSpeechWords`, conversationStream). */
+function palabrasCompartidasAlArranque(mostradas = [], nuevas = []) {
+  return countSharedSpeechWords(mostradas.join(' '), nuevas.join(' '))
+}
+
+/**
+ * La emision empieza con un TRAMO de lo mostrado (>=2 palabras) cuya PRIMERA palabra
+ * coincide EXACTA. Una palabra que solo "crece" ("prepara" vs "preparar") no es una
+ * reentrega: es otra hipotesis del mismo audio (medido: "vamos a preparar la receta" +
+ * "prepara la receta completa..." fabricaba "vamos a preparar la receta completa...").
+ */
+function empiezaConTramoExacto(mostradas = [], nuevas = []) {
+  if (nuevas.length < 2 || !mostradas.length) return false
+  const primera = claveDePalabra(nuevas[0])
+  for (let i = 0; i < mostradas.length; i += 1) {
+    if (claveDePalabra(mostradas[i]) !== primera) continue
+    let k = 1
+    while (
+      k < nuevas.length &&
+      i + k < mostradas.length &&
+      mismaPalabraClave(claveDePalabra(mostradas[i + k]), claveDePalabra(nuevas[k]))
+    ) {
+      k += 1
+    }
+    if (k >= 2) return true
+  }
+  return false
+}
+
+/**
+ * La emision CONTINUA lo mostrado (misma locucion), no es otra hipotesis del mismo audio.
+ * Tres formas legitimas:
+ *  (a) empieza con TODO lo mostrado (extension) o lo mostrado empieza con ella;
+ *  (b) comparte un arranque largo (>=3 palabras): misma frase con la cola revisada;
+ *  (c) reentrega la COLA de lo mostrado al principio de la emision.
+ * Un bloque INTERIOR compartido con OTRO arranque no es continuacion: unirlo fabricaba
+ * una frase que nadie dijo ("vamos a preparar la receta" + "prepara la receta completa").
+ */
+function empiezaComoLoMostrado(mostradas = [], nuevas = []) {
+  if (!mostradas.length || !nuevas.length) return false
+  const comunes = palabrasCompartidasAlArranque(mostradas, nuevas)
+  if (comunes >= Math.min(mostradas.length, nuevas.length)) return true
+  if (comunes >= 3) return true
+  if (comunes >= 1 && nuevas[comunes]) {
+    // La primera palabra que DIVERGE: si la de la emision es la misma creciendo (o al
+    // reves), es la misma frase (la ultima palabra mostrada se completa).
+    const mostradaDivergente = mostradas[comunes] ? claveDePalabra(mostradas[comunes]) : ''
+    const nuevaDivergente = claveDePalabra(nuevas[comunes])
+    if (
+      mostradaDivergente &&
+      (nuevaDivergente.startsWith(mostradaDivergente) || mostradaDivergente.startsWith(nuevaDivergente))
+    ) {
+      return true
+    }
+    if (comunes >= 2) return true
+  }
+  return arrancaConLaColaDe(mostradas, nuevas) || empiezaConTramoExacto(mostradas, nuevas)
+}
+
 export function colaNuevaTrasSolape(mostrado, nuevo) {
   // La reentrega vive SIEMPRE al final de lo mostrado: se alinea contra la COLA (ventana
   // acotada) y la cola a anadir no puede estar ya ahi (nada se duplica ni se infla).
@@ -261,6 +393,11 @@ export function colaNuevaTrasSolape(mostrado, nuevo) {
     return crudas.slice(0, -1).concat(crudasNuevas).join(' ')
   }
   if (crudasNuevas.length < 2) return ''
+  // REENTREGA GENUINA: la emision debe CONTINUAR lo mostrado (mismo arranque o reentrega
+  // de la cola). Un bloque INTERIOR compartido con otro arranque es otra HIPOTESIS del
+  // mismo audio: unirlo fabricaba una frase que nadie dijo (medido: "vamos a preparar la
+  // receta" + "prepara la receta completa con..." -> "vamos a preparar la receta completa").
+  if (!empiezaComoLoMostrado(crudas, crudasNuevas)) return ''
   const mostrar = String(mostrado)
   const colaDeLoMostrado = crudas.slice(-VENTANA)
   const clavesMostradas = colaDeLoMostrado.map(claveDePalabra)
@@ -336,6 +473,9 @@ export function colaNuevaTrasSolape(mostrado, nuevo) {
   // (B) La emision ARRANCA reentregando un tramo de lo mostrado (trozo INTERIOR, P11.16) y
   // sigue: se anade su cola nueva. Con menos de 2 palabras de tramo no se inventa la union.
   let mejorK = 0
+  // Posicion del tramo reentregado dentro de lo mostrado: sin ella no se puede saber si la
+  // reentrega llega al FINAL de la caja o se queda a mitad (otra hipotesis del audio).
+  let mejorI = 0
   for (let i = 0; i < clavesMostradas.length; i += 1) {
     let k = 0
     while (
@@ -343,9 +483,29 @@ export function colaNuevaTrasSolape(mostrado, nuevo) {
       i + k < clavesMostradas.length &&
       mismaPalabraClave(clavesMostradas[i + k], clavesNuevas[k])
     ) k += 1
-    if (k > mejorK) mejorK = k
+    if (k > mejorK) {
+      mejorK = k
+      mejorI = i
+    }
   }
   if (mejorK >= 2) {
+    // GENUINA O HIPOTESIS: solo se une cuando la emision CONTINUA lo mostrado. Dos formas:
+    // (1) el tramo reentregado llega al FINAL de la caja (reentrega de la cola + habla
+    // nueva), o (2) la palabra que la caja muestra JUSTO DESPUES del tramo es la que la
+    // emision reescribe/crece (costura del ASR: la caja pego una parcial y el ASR la
+    // completa). Un tramo INTERIOR con otra cola es otra HIPOTESIS del mismo audio: unirla
+    // fabricaba una frase que nadie dijo (medido: "vamos a ver si es cie | lo que nos dijo"
+    // + "vamos a ver si es cie | esta todo resuelto" -> "es cie lo que nos dijo esta todo
+    // resuelto", que no se dijo).
+    const restoMostrado = colaDeLoMostrado[mejorI + mejorK]
+    const primeraPalabraNueva = crudasNuevas[mejorK]
+    const llegaAlFinalDeLaCaja = mejorI + mejorK === clavesMostradas.length
+    const continuaLaPalabra =
+      Boolean(restoMostrado) &&
+      Boolean(primeraPalabraNueva) &&
+      (mismaPalabraDeLaCaja(restoMostrado, primeraPalabraNueva) ||
+        palabraQueCrece(restoMostrado, primeraPalabraNueva))
+    if (!llegaAlFinalDeLaCaja && !continuaLaPalabra) return ''
     const cola = clavesNuevas.slice(mejorK)
     if (colaGen(cola)) {
       // COSTURA ANTI-TARTAMUDEO (medido d4c1c8f3): la cola puede ARRANCAR con la
@@ -493,6 +653,30 @@ function alcanzaElFinalDeLoMostrado(mostradas = [], nuevas = []) {
 }
 
 /**
+ * La emision COMPARTE UN TRAMO de lo mostrado DESPUES del arranque (>=2 palabras seguidas que
+ * la caja ya tenia). Es lo que separa "misma locucion, mejor hipotesis" de "otra frase que
+ * empieza igual":
+ *  - "porque a los tal vez" -> "porque tal vez tu papa necesita" comparte "tal vez" (SI),
+ *  - "vamos a preparar la receta" -> "vamos a comprar otra cosa" no comparte nada salvo el
+ *    saludo "vamos a" (NO): es otra frase y la caja no se sustituye.
+ * @param {string[]} mostradas Palabras de lo mostrado.
+ * @param {string[]} nuevas Palabras de la emision.
+ * @param {number} comun Longitud del prefijo comun ya calculado.
+ * @returns {boolean}
+ */
+function comparteTramoTrasElArranque(mostradas = [], nuevas = [], comun = 0) {
+  const desde = Math.max(1, Number(comun) || 0)
+  for (let i = desde; i + 1 < mostradas.length; i += 1) {
+    for (let j = 0; j + 1 < nuevas.length; j += 1) {
+      if (mismaPalabraClave(mostradas[i], nuevas[j]) && mismaPalabraClave(mostradas[i + 1], nuevas[j + 1])) {
+        return true
+      }
+    }
+  }
+  return false
+}
+
+/**
  * DUENO UNICO de "esta emision entra en la caja, y como" (2026-10-21).
  *
  * Tres desenlaces, una sola regla:
@@ -529,7 +713,12 @@ export function resolverEmisionDeLaCaja(mostrado = '', nuevo = '') {
     if (comun === mostradas.length && unionAplica) return solape()
     // ARRANQUE ESTABLE: >=2 palabras compartidas, o el prefijo corto ya existente cuando la
     // caja apenas tiene unas pocas (glue del arranque del turno: "te las" -> "te lo escribe").
-    const arranqueEstable = comun >= 2 || (mostradas.length <= 4 && comun >= 1)
+    // Numeros en UNA tabla (`FLU_CONFIG.transcript.policy`), no repartidos por el pipeline.
+    const politica = getTranscriptPolicyCfg()
+    const arranqueEstable =
+      comun >= (Number(politica.boxStablePrefixWords) || 2) ||
+      (mostradas.length <= (Number(politica.boxShortBoxMaxWords) || 4) &&
+        comun >= (Number(politica.boxShortBoxPrefixWords) || 1))
     const noEsTrozo = !isFragmentOfLocution(nuevo, mostrado)
     const noEncojeBajoLoConfirmado = nuevas.length >= comun
     const crece = nuevas.length >= mostradas.length
@@ -538,6 +727,22 @@ export function resolverEmisionDeLaCaja(mostrado = '', nuevo = '') {
       noEsTrozo &&
       noEncojeBajoLoConfirmado &&
       (crece || alcanzaElFinalDeLoMostrado(mostradas, nuevas))
+    ) {
+      return { aplica: true, destino: String(nuevo), motivo: 'revision' }
+    }
+
+    // HIPOTESIS MAS COMPLETA (medido 7fce0045: la caja se quedo 10,7 s en "porque a los tal
+    // vez" mientras el ASR decia "porque tal vez tu papa necesita..." — 80 emisiones dentro
+    // sin entrar). Si la emision es MAS LARGA, arranca con la MISMA primera palabra y COMPARTE
+    // UN TRAMO de lo mostrado mas alla del arranque, es la hipotesis VIGENTE de la MISMA
+    // locucion y la caja la muestra (se REEMPLAZA, no se une). El tramo compartido es la
+    // guarda contra "otra frase que empieza igual" ("vamos a preparar la receta" vs "vamos a
+    // comprar otra cosa": solo comparten "vamos a" -> NO se sustituye).
+    if (
+      comun >= 1 &&
+      nuevas.length > mostradas.length &&
+      noEsTrozo &&
+      comparteTramoTrasElArranque(mostradas, nuevas, comun)
     ) {
       return { aplica: true, destino: String(nuevo), motivo: 'revision' }
     }
@@ -601,6 +806,24 @@ export function crearCajaDeLaFrase(deps = {}) {
     let destino = nuevo
     if (!cambioDeTurno) {
       if (mostrado) {
+        // EXCEPCION DECLARADA (SOLO FRASE CANONICA): el CIERRE del turno y la
+        // CONFIRMACION del ASR entregan la frase canonica de la locucion, y la caja la
+        // ADOPTA aunque no derive de lo mostrado. Dos motivos medidos:
+        //  1) el boceto puede ser un texto FABRICADO (d4c1c8f3: la caja mostraba
+        //     "... es cie ... esta todo resuelto" sin "Cloud de que ya" mientras la fila
+        //     si lo llevaba), y
+        //  2) la frase canonica puede ser MAS CORTA que el boceto porque el canon quita
+        //     el tartamudeo ("puso Cloud Cloud" -> "puso Cloud").
+        // Adoptarla es lo que mantiene caja = fila (B.3). Se admite cuando crece, cuando
+        // es la MISMA revision (correccion del mismo tramo) o cuando el boceto es solo un
+        // ECO de la frase. Si el boceto ya lleva habla AJENA (la locucion siguiente)
+        // ninguna se cumple y no se toca: ahi el no-encogimiento sigue mandando.
+        if (
+          opciones.canonica &&
+          (nuevo.length >= mostrado.length || bocetoCubiertoPor(mostrado, nuevo))
+        ) {
+          destino = nuevo
+        } else {
         // UN SOLO CRITERIO (2026-10-21): la emision solo entra si DERIVA de lo mostrado.
         // El dueno unico de esa decision es `resolverEmisionDeLaCaja` (revision del mismo
         // tramo o cola genuina); aqui solo se aplica. Se decide ANTES de la union porque
@@ -617,6 +840,7 @@ export function crearCajaDeLaFrase(deps = {}) {
         }
         if (decision.aplica) destino = decision.destino
         else return { aplicado: false, destino: mostrado, previo: mostrado.length }
+        }
       }
     }
     turnoDelBoceto = turnoActivo ?? turnoDelBoceto
@@ -633,7 +857,7 @@ export function crearCajaDeLaFrase(deps = {}) {
     turnoDelBoceto = null
     if (opciones.visible !== false) escribirVisible('', true)
   }
-  return { publicarEnLaCaja, vaciarLaCaja }
+  return { publicarEnLaCaja, vaciarLaCaja, turnoActual: () => turnoDelBoceto }
 }
 
 /**
@@ -656,7 +880,7 @@ export function crearCajaDeLaFrase(deps = {}) {
  * reaparecia como fila propia) y la linea de 58 chars que sobrevivio a la orden y
  * luego recorto la locucion de 316 chars.
  *
- * @param {object} deps — los MISMOS deps del sync (refs y sellado de audio).
+ * @param {object} deps -> los MISMOS deps del sync (refs y sellado de audio).
  */
 function closeLiveTurn(deps) {
   const {
@@ -708,12 +932,18 @@ export function handleConversationStreamSync(
     // de Chrome NO lo declara: la fila de conversacion no se escribe a mitad del
     // dictado (medido 2026-10-08 por el dueno: al llegar al 9 ya estaba "vaciada").
     settlesTurn = false,
+    // CONFIRMACION del ASR: la captura es un `final` de SEGMENTO (texto confirmado por
+    // el motor, no una hipotesis interina). No cierra el turno, pero SI es la frase
+    // canonica de la locucion: la caja la adopta (B.3) en vez de quedarse con el
+    // interino fabricado (medido d4c1c8f3).
+    confirmedFinal = false,
     // La captura es una locucion YA CONFIRMADA que quedo pendiente (`pendingFinal`) y
     // se commitea porque llego OTRA locucion: es texto CERRADO y NO puede
     // reconciliarse contra la linea viva. Reconciliarla metia en su fila el interino
     // de la locucion SIGUIENTE (medido 2026-10-19 21:18:52: fila de 430 = 315 dichos +
     // 112 de la locucion siguiente; luego esos 112 se volvian a escribir como cola).
     locutionClosed = false,
+    turnId: turnoDelTextoCerrado = null,
     // La orden (comando/consulta) YA CONSUMIO la linea viva y su fila la escribio la
     // ruta de la orden: aqui solo se CIERRA el turno vivo. Sin esto la linea seguia
     // abierta con el texto consumido, la locucion siguiente se le PEGABA y el srGap
@@ -765,7 +995,7 @@ export function handleConversationStreamSync(
   // CAJA ("ultima frase"): TODO pasa por la API de este modulo (un solo escritor, una
   // sola regla). Ninguna linea de aqui escribe el ref: lo hace la caja.
   //
-  // DUEÑO UNICO DE LA INSTANCIA: el hook crea la caja UNA vez (`cajaVivaRef`) y la
+  // DUENO UNICO DE LA INSTANCIA: el hook crea la caja UNA vez (`cajaVivaRef`) y la
   // inyecta. Fabricar una caja nueva por llamada reseteaba `turnoDelBoceto` en cada
   // sync (la frontera por identidad de turno se perdia) y dejaba dos instancias
   // vivas sobre la misma frase. Si no viene inyectada, se deriva de los mismos deps.
@@ -779,6 +1009,7 @@ export function handleConversationStreamSync(
   // ahora: `visible:false` resetea la MEMORIA de la caja (ancla del parrafo nuevo) y
   // deja la frase viva en pantalla; su dueno la reemplaza cuando llega la locucion
   // siguiente. Es la misma regla documentada en `vaciarLaCaja`.
+  //
   const vaciarTrasCierre = () =>
     locutionClosed ? vaciarLaCaja({ visible: false }) : vaciarLaCaja()
 
@@ -876,8 +1107,8 @@ export function handleConversationStreamSync(
   const wakeRequired = requiresWakeWord(conversationActiveRef?.current)
   const esTurno = (text) => isTurnCapture(text, { wakeRequired })
   // UN ID POR PETICION (no por reloj ni por estado de la UI): la identidad del
-  // turno la dicta la MISMA memoria del despacho —la ultima peticion ACEPTADA
-  // (texto + instante)— con la ventana compartida (`sameRequestWindowMs`). Una
+  // turno la dicta la MISMA memoria del despacho ->la ultima peticion ACEPTADA
+  // (texto + instante)-> con la ventana compartida (`sameRequestWindowMs`). Una
   // reentrega del ASR de la MISMA peticion no acuna id: la fila se reutiliza. Un
   // solo criterio (comparador del motor + una ventana) para la ejecucion y la fila.
   const sameRequestAsLastDispatch = (text) => {
@@ -975,6 +1206,10 @@ export function handleConversationStreamSync(
   // de llevarse la fila, y un texto AJENO (la caja es de la locucion siguiente) no se
   // inyecta en esta fila.
   let cajaDelTurno = String(publishedLiveRef.current || '')
+  // IDENTIDAD DE TURNO: un texto CERRADO solo adopta la caja si AMBAS son del mismo
+  // turno. Si el turno de la caja no se conoce (publicacion externa) NO se adopta:
+  // la caja pudo avanzar a la locucion SIGUIENTE (defecto medido 2026-10-19).
+  const turnoDeLaCaja = typeof caja?.turnoActual === 'function' ? caja.turnoActual() : null
   if (!locutionClosed) {
     // BARRERA B.3/P11.9: "fila = caja" NO puede rebajar la fila. Si la linea viva es
     // la MISMA locucion y tiene la frase completa, se hace CRECER la caja (nunca
@@ -992,15 +1227,60 @@ export function handleConversationStreamSync(
       })
       if (publicacionCierre.aplicado) cajaDelTurno = publicacionCierre.destino
     }
-    capture = reconcileCommitText(capture, cajaDelTurno)
-  } else if (cajaDelTurno && isFragmentOfLocution(capture, cajaDelTurno)) {
+    // FRASE CANONICA: si la captura es el CIERRE del turno o una CONFIRMACION del ASR,
+    // manda ELLA y no se reconcilia contra el boceto: reconciliar resucitaba el tartamudeo
+    // del interino sobre la frase limpia ("puso Cloud Cloud" ganaba a "puso Cloud"). El boceto
+    // ya tuvo su oportunidad arriba (crecer con la linea viva de la misma revision).
+    // FRASE CANONICA: si la captura es el CIERRE del turno o una CONFIRMACION del ASR,
+    // manda la frase CONFIRMADA y no se reconcilia contra el boceto, porque reconciliar
+    // resucitaba el tartamudeo del interino sobre la frase limpia ("puso Cloud Cloud" ganaba
+    // a "puso Cloud"). EXCEPCION: si el boceto APORTA habla que la frase no dice (misma
+    // locucion mas completa), manda el boceto (barrera P11.9). El criterio de "no aporta" es
+    // el MISMO de la caja: `bocetoCubiertoPor`.
+    const fraseCanonica = Boolean(settlesTurn || confirmedFinal)
+    const elBocetoAportaHabla = fraseCanonica && Boolean(cajaDelTurno) && !bocetoCubiertoPor(cajaDelTurno, capture)
+    if (!fraseCanonica || elBocetoAportaHabla) capture = reconcileCommitText(capture, cajaDelTurno)
+  } else if (
+    cajaDelTurno &&
+    isFragmentOfLocution(capture, cajaDelTurno) &&
+    // IDENTIDAD OBLIGATORIA: un texto CERRADO solo adopta la caja si AMBOS turnos se conocen
+    // y son el MISMO. Un `null` (sello perdido, publicacion externa) NO autoriza a adoptar:
+    // la caja pudo avanzar a la locucion siguiente y su texto acabaria en la fila anterior.
+    turnoDeLaCaja !== null &&
+    turnoDelTextoCerrado !== null &&
+    Number(turnoDeLaCaja) === Number(turnoDelTextoCerrado)
+  ) {
     capture = cajaDelTurno
   }
   // P11.26 (medido 2026-10-14 18:32 en su corrida): las FILAS quedaban con el tartamudeo del ASR
   // dentro ("prueba pruebas pruebas", "trans transcripcion transcripcion", "vi viste viste viste"):
   // la caja pasa por el colapsador y la fila escribia el texto CRUDO. Una sola definicion de
   // texto: la fila usa el MISMO normalizador que la caja (normalizeMicText, dueno unico).
+  // NORMALIZADOR UNICO de la fila (auditoria 2026-10-23): el mismo que la caja (B.3).
   capture = normalizeMicText(capture)
+
+  // FRASE CANONICA (con el texto ya DEFINITIVO): la caja termina el turno con la MISMA frase
+  // que la fila (B.3). Hay DOS ocasiones en que la captura es la frase canonica y no una
+  // hipotesis interina: el CIERRE REAL (`settlesTurn`) y la CONFIRMACION del ASR
+  // (`confirmedFinal`, final de segmento). Una emision INTERINA jamas sustituye.
+  // Se publica DESPUES de `normalizeMicText`: reconciliar con la caja puede devolver el texto
+  // de la caja y la normalizacion lo colapsa; publicar antes dejaba caja y fila distintas
+  // (medido d4c1c8f3 #0: la caja conservaba "ya esta ya esta" y la fila no).
+  // QUE SE ADMITE lo decide la CAJA (`publicarEnLaCaja`, dueno unico): crecer, la MISMA
+  // revision o un boceto que es solo un ECO de la frase. El canon puede ser MAS CORTO
+  // ("puso Cloud Cloud" -> "puso Cloud") y ahi la caja tiene que ceder.
+  if (
+    (settlesTurn || confirmedFinal) &&
+    capture &&
+    cajaDelTurno &&
+    capture !== cajaDelTurno
+  ) {
+    const publicacionDelCierre = publicarEnLaCaja(capture, {
+      turnId: activeTurnIdRef.current,
+      canonica: true,
+    })
+    if (publicacionDelCierre.aplicado) cajaDelTurno = publicacionDelCierre.destino
+  }
 
   const wakeWords = FLU_CONFIG.voiceCommands?.wakeWords || []
   const lastCommittedRow = logRowsTextRef.current.at(-1) || ''
@@ -1028,7 +1308,7 @@ export function handleConversationStreamSync(
   // el id YA acuñado, antes de que `finalizeTurnCommit` vacíe el buffer PCM.
   if (turnCommit && typeof captureTurnAudio === 'function') captureTurnAudio()
 
-  // Único escritor del log: si esta MISMA frase ya se cerró y no llegó habla
+  // unico escritor del log: si esta MISMA frase ya se cerró y no llegó habla
   // nueva desde ese commit (doble `onend`/doble dispatch), es una re-emisión
   // del mismo turno, no una fila nueva.
   const dupCheck = {
@@ -1074,7 +1354,7 @@ export function handleConversationStreamSync(
     }
   }
 
-  // §9.5 — RUTA ÚNICA de cierre de turno: finalize + aviso al participante.
+  // §9.5 -> RUTA aNICA de cierre de turno: finalize + aviso al participante.
   // Las dos ramas (segmentada y simple) cierran por aquí; no se invoca
   // `finalizeTurnCommit` en más de un punto.
   const finalizeAndNotify = () => {
@@ -1134,14 +1414,14 @@ export function handleConversationStreamSync(
   markCommitPerfNow()
   const turnId = activeTurnIdRef.current
   const preflight = finalizeTurnIdentityPipeline(
-    // El slot que el LLAMADOR esperó (ver el typedef). Si no hay espera previa —la
-    // ruta del comando y el commit sin preview— se consume el turno del commit.
+    // El slot que el LLAMADOR esperó (ver el typedef). Si no hay espera previa ->la
+    // ruta del comando y el commit sin preview-> se consume el turno del commit.
     Number.isFinite(Number(preflightTurnId)) && Number(preflightTurnId) > 0
       ? Number(preflightTurnId)
       : turnId,
     buildFinalSpeakerSnapshotResolver({ createSpeakerAudioResolver, phrase, turnId }),
-    // §9 El cluster del turno se persiste POR EL DUEÑO UNICO (`setSpeakerClusters`)
-    // cuando el snapshot final resuelve — aunque sea despues del commit. Sin esto el
+    // §9 El cluster del turno se persiste POR EL DUENO UNICO (`setSpeakerClusters`)
+    // cuando el snapshot final resuelve -> aunque sea despues del commit. Sin esto el
     // primer cluster se perdia y ninguna voz se podia separar (inClusters=0 siempre).
     { onClusters: setSpeakerClusters, onResolved: applyResolvedSpeaker },
   )
@@ -1294,6 +1574,7 @@ export function handleConversationStreamSync(
           replaceLastRawLog: segmentReplace,
           streamUpdate: false,
           turnCommit: true,
+          settlesTurn,
         })
         if (delivered) {
           lastEmittedTranscriptRef.current = segmentText
@@ -1383,6 +1664,7 @@ export function handleConversationStreamSync(
         replaceLastRawLog: replaceLast,
         streamUpdate: false,
         turnCommit: true,
+        settlesTurn: true,
       })
       if (delivered) {
         lastEmittedTranscriptRef.current = capture
@@ -1399,7 +1681,7 @@ export function handleConversationStreamSync(
     // ahora (`delivered`), ya estaba en la fila (`yaEstaEnFila`) o es re-emision de la
     // locucion viva (`ambientRowBlocked`: su fila original existe). Si no se entrego y no
     // esta en fila, la caja NO se vacia: el texto sigue vivo y el cierre siguiente
-    // (onend/srGap) lo rescata — borrarla igual era el defecto 1 del dueno (la frase
+    // (onend/srGap) lo rescata -> borrarla igual era el defecto 1 del dueno (la frase
     // desaparecia de ULTIMA FRASE sin haber pasado a la conversacion).
     //
     // Si la locucion ya estaba confirmada (`locutionClosed`), la memoria se resetea y

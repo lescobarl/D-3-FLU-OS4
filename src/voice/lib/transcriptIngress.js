@@ -31,6 +31,7 @@ import {
   buildPriorRowsForStrip,
   clearInterimOpenLineClock,
   readTurnLive,
+  fraseDeCierreDeLocucion,
   evaluateSrGapSegmentCommit,
   isCommittedInterimEcho,
   clearStaleCommittedEchoFromState,
@@ -42,7 +43,6 @@ import {
   resolveIngressCaptureText,
   isProgressiveExtension,
   isAssistantVoiceEcho,
-
 } from './conversationStream.js'
 import { collapseAdjacentWordRepeat } from './speechMerge.js'
 import { fluTrace } from './fluTrace.js'
@@ -210,25 +210,25 @@ function buildIngressRowContext(ctx, capture) {
 export { commitCaptureRespectingWakeBoundary, applyWakeTurnCommit, analyzeWakeTurn }
 
 /** Commit openLine cuando Chrome lleva ≥ srGapCommitMs sin onresult (TV / SR mudo). */
-export function flushSrGapSegmentThroughIngress(ctx, { sinceLastResultMs = 0 } = {}) {
+export function flushSrGapSegmentThroughIngress(ctx, { sinceLastResultMs = 0, reason = '' } = {}) {
   if (!ctx?.conversationActive || !ctx.listenState) {
     return { flushed: false, reason: 'inactive' }
   }
 
   const lastCommitted = ctx.logRowsTextRef?.current?.at(-1) || ''
 
-  // P11.9: la LOCUCION VIVA acumulada (publishedLiveRef) es el texto del cierre REAL.
-  // Chrome puede re-entregar un interino PARCIAL (p. ej. "54" chars) de una locucion
-  // que la linea viva ya acumulo entera (242 chars): el buffer crudo del ASR se queda
-  // en el TROZO y los portones del EVAL (already-committed / no-new-content, que
-  // comparan contra la ultima fila) cerraban con el trozo o no cerraban nada. Se
-  // escribe la locucion COMPLETA EN EL OBJETO del estado (mutacion in-place: su
-  // identidad NO cambia, la ven todos los consumidores) ANTES del EVAL, para que el
-  // EVAL, los portones y el commit partan de la referencia COMPLETA.
-  const liveText = cleanForSpeech(ctx.publishedLiveRef?.current || '')
-  // B.3: la FILA sale de la MISMA frase canonica que la caja. `publishedLiveRef` es la
-  // verdad visible; NO se elige una "correccion" del ultimo interino que la caja no
-  // muestra. Esa segunda eleccion separaba fila y caja (turno 115: caja nueva, fila vieja).
+  // DUENO UNICO de la frase de cierre (`fraseDeCierreDeLocucion`): el MISMO que usa el
+  // cierre por onend. Antes esta ruta sembraba con la CAJA y commiteaba la CAJA: si el ASR
+  // habia confirmado un final mas largo que la caja, o la caja habia bloqueado una emision
+  // mas completa, la fila se quedaba corta y el final se perdia. La frase elegida se siembra
+  // EN EL OBJETO del estado (mutacion in-place) ANTES del EVAL, para que el EVAL, sus
+  // portones y el commit partan de la MISMA referencia.
+  const cierre = fraseDeCierreDeLocucion({
+    caja: ctx.publishedLiveRef?.current || '',
+    lineaViva: readTurnLive(ctx.listenState),
+    finalConfirmado: ctx.listenState?.pendingFinal || '',
+  })
+  const liveText = cierre.texto
   if (liveText) {
     ctx.listenState.openLine = liveText
     ctx.listenState.pendingInterim = ''
@@ -237,6 +237,8 @@ export function flushSrGapSegmentThroughIngress(ctx, { sinceLastResultMs = 0 } =
 
   const evalResult = evaluateSrGapSegmentCommit(ctx.listenState, {
     sinceLastResultMs,
+    reason,
+    caja: ctx.publishedLiveRef?.current || '',
     lastCommitted,
     lastCommitAtMs: Number(ctx.lastCommitAtRef?.current) || 0,
     published: liveText,
@@ -337,19 +339,18 @@ export function flushRecognitionEndThroughIngress(ctx) {
     return { flushed: false, reason: 'inactive' }
   }
 
-  // LOCUCION CONFIRMADA SIN FILA primero: es el texto que el usuario YA dijo (FINAL de
-  // Chrome) y que ningun cierre ha sellado. Los interinos POSTERIORES son el tramo EN
-  // VUELO (Chrome suelta palabras truncadas) y NO deben pisar la captura confirmada
-  // (regla P9.60: el parcial en vuelo se descarta, la confirmada se sella).
-  const capture =
-    cleanForSpeech(ctx.listenState.pendingFinal) ||
-    readStreamDisplay(ctx.listenState) ||
-    cleanForSpeech(ctx.listenState.pendingInterim) ||
-    // RESCATE DEL CIERRE (defecto 1 del dueno 2026-10-19): los buffers del ASR pueden
-    // llegar limpios (reset o puertas previas) con la frase aun viva en la CAJA
-    // (publishedLiveRef): se veia en ULTIMA FRASE y el onend salia por empty-capture
-    // sin escribir fila. La caja es el texto que el usuario VE: si esta, es la captura.
-    cleanForSpeech(ctx.publishedLiveRef?.current)
+  // UN SOLO DUENO de "que texto cierra la locucion" (`fraseDeCierreDeLocucion`), el MISMO que
+  // usa el cierre por srGap. Antes onend tenia su propia precedencia (final > display >
+  // interino > caja) y por eso la fila y la caja podian discrepar (auditoria 2026-10-22).
+  // La regla del dueno: final confirmado > caja (si es mas completa y de la MISMA revision) >
+  // linea viva solo si no hay caja.
+  const capture = cleanForSpeech(
+    fraseDeCierreDeLocucion({
+      caja: ctx.publishedLiveRef?.current || '',
+      lineaViva: readTurnLive(ctx.listenState) || readStreamDisplay(ctx.listenState),
+      finalConfirmado: ctx.listenState?.pendingFinal || '',
+    }).texto,
+  )
   if (!capture) {
     sealPendingInterim(ctx.listenState)
     return { flushed: false, reason: 'empty-capture' }
@@ -433,6 +434,7 @@ function ingestFinalChunk({ finalChunk, ctx }) {
       // esa reconciliacion metia la locucion siguiente en esta fila (medido 2026-10-19
       // 21:18:52: fila de 430 = 315 dichos + 112 ajenos; luego los 112 se repetian).
       locutionClosed: true,
+      turnId: ctx.listenState?.pendingFinalTurn ?? null,
     })
     clearPendingFinal(ctx.listenState)
   }
@@ -571,7 +573,6 @@ function ingestFinalChunk({ finalChunk, ctx }) {
     final: commitCapture,
     reset: true,
   })
-
   if (redundant) {
     resetInterimControlBuffers(listenState, ctx.publishedLiveRef, ctx.lastStreamPreviewRef)
     // Un final de SEGMENTO NO sella el turno: el cierre REAL llega por onend/srGap
@@ -618,6 +619,10 @@ function ingestFinalChunk({ finalChunk, ctx }) {
     // (onend/srGap) lo selle. Sin esto, los interinos posteriores "desconfirmaban" la
     // linea y el rebuild la descartaba: la locucion se perdia entera (medido: filas=[]).
     if (ctx.listenState) ctx.listenState.pendingFinal = commitCapture
+    // SELLO DEL TURNO: va AQUI, con `pendingFinal` ya escrito. Antes se llamaba antes del
+    // EVAL (el slot aun estaba vacio) y siempre devolvia null, asi que el cierre
+    // `locutionClosed` no tenia identidad y podia adoptar la caja del turno SIGUIENTE.
+    sellarTurnoDeLaConfirmada(ctx)
     ctx.scheduleTurnCommit?.({
       capture: published,
       newParagraph: forceNewRow ? true : newParagraph,
@@ -629,6 +634,10 @@ function ingestFinalChunk({ finalChunk, ctx }) {
       atTurnBoundary: true,
       forceNewRow,
       forceNewRowOnSegment: segmentChronoSplit,
+      // CONFIRMACION del ASR: es un `final` de segmento, texto CONFIRMADO. No cierra
+      // el turno, pero la caja lo adopta como frase canonica (B.3): sin esto la caja
+      // se quedaba con el interino fabricado (medido d4c1c8f3).
+      confirmedFinal: true,
     })
   }
   if (typeof ctx.touchMeaningfulIngress === 'function') {
@@ -755,6 +764,7 @@ function ingestInterimChunk({ interim, ctx }) {
     msSinceLastCommit: msSinceLastCommitFromCtx(ctx),
     priorRows,
   })
+  sellarTurnoDeLaConfirmada(ctx)
 
   const liveTurn = cleanForSpeech(readTurnLive(listenState))
   const syncSources = [packet.published, liveTurn, interimForPacket]
@@ -820,6 +830,17 @@ function ingestInterimChunk({ interim, ctx }) {
   return { handled: false }
 }
 
+/**
+ * Sella el TURNO de la locucion confirmada sin fila (`pendingFinal`). Lo consume el
+ * cierre `locutionClosed` para no adoptar una caja que ya es de la locucion SIGUIENTE.
+ */
+function sellarTurnoDeLaConfirmada(ctx) {
+  const state = ctx?.listenState
+  if (!state) return
+  state.pendingFinalTurn = cleanForSpeech(state.pendingFinal || '')
+    ? (typeof ctx.getTurnId === 'function' ? ctx.getTurnId() : null)
+    : null
+}
 /**
  * Puerta unica del ingress de conversacion: reinyecta los chunks del ASR (interinos y
  * finales) en el pipeline del turno. Es la MISMA puerta que usa el hook en produccion

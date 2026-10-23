@@ -20,11 +20,26 @@ import { getSpeechVoices, subscribeSpeechVoices } from '../voice/lib/fluSpeech';
 import { useAuditLog } from './useAuditLog';
 import { logCaughtError } from '../lib/caughtError';
 import { localGet, localKeys, localRemove, localSetSafe } from '../core/storage/localStore';
+import { UI_LANGUAGES } from '../core/config/voiceConfigCatalog';
 import { useIntegrationStore } from '../store/integrationStore';
 
 // ============================================================
 // Tipos
 // ============================================================
+
+/** Idioma de UI: derivado de la lista UNICA (`UI_LANGUAGES`), no re-enumerado. */
+export type UiLanguage = (typeof UI_LANGUAGES)[number];
+
+/**
+ * Normaliza el idioma guardado contra la lista unica de idiomas.
+ * @param value valor de localStorage (o undefined)
+ * @returns idioma valido de `UI_LANGUAGES`, o el default de UI
+ */
+function normalizeUiLanguage(value?: string | null): UiLanguage {
+    const candidate = String(value || '');
+    if ((UI_LANGUAGES as readonly string[]).includes(candidate)) return candidate as UiLanguage;
+    return UI_DEFAULTS.LANGUAGE as UiLanguage;
+}
 
 export interface ConfigPersistence {
     // Text (Gemini) Config
@@ -136,13 +151,13 @@ export function useConfigPersistence(): ConfigPersistence {
     const [ocrApiUrl, setOcrApiUrl] = useState<string>(() => loadString(STORAGE_KEYS.OCR_API_URL));
 
     // ---- Language ----
-    const [language, setLanguage] = useState<'es' | 'en' | 'both'>(() => {
+    const [language, setLanguage] = useState<UiLanguage>(() => {
         try {
-            const saved = localGet(STORAGE_KEYS.LANGUAGE);
-            if (saved === 'es' || saved === 'en' || saved === 'both') return saved;
+            return normalizeUiLanguage(localGet(STORAGE_KEYS.LANGUAGE));
+            // El idioma ya quedo normalizado contra la lista unica arriba.
         } catch (e) {
         logCaughtError('src/hooks/useConfigPersistence.ts', e); /* ignore */ }
-        return UI_DEFAULTS.LANGUAGE;
+        return normalizeUiLanguage(UI_DEFAULTS.LANGUAGE);
     });
 
     // ---- Session Role ----

@@ -559,6 +559,48 @@ export function compareExpected({ observed, expected, options = {} } = {}) {
       : 'ningun commit con la caja duplicada',
   })
 
+  // ACORTES APLICADOS: la decision del escritor de la caja (`previo` = 0 al cambiar de
+  // turno, asi que un reinicio de turno NO cuenta). Debe ser 0: la caja no encoge dentro
+  // de la locucion. Es el numero que faltaba: `boxLost` solo mira fila/caja en el commit.
+  const acortes = Array.isArray(observed?.acortes) ? observed.acortes : []
+  // TRANSFERENCIAS DE LA FRASE CANONICA: un acorte pedido por el cierre/confirmacion no
+  // es jitter del ASR; se informa aparte para que el check siga midiendo el defecto real.
+  const canonicos = Array.isArray(observed?.acortesCanonicos) ? observed.acortesCanonicos : []
+  checks.push({
+    name: 'boxShrink',
+    ok: acortes.length === 0,
+    detail: acortes.length
+      ? `${acortes.length} acorte(s) aplicados; primero: ${acortes[0].previo} -> ${acortes[0].destino} chars`
+      : canonicos.length
+        ? `ningun acorte de jitter; ${canonicos.length} transferencia(s) de la frase canonica`
+        : 'ningun acorte aplicado en la caja',
+  })
+
+  // FILA MAS CORTA QUE LA CAJA de su MISMA locucion (numero §3.3). Si la caja del instante
+  // es de otro tramo/turno no se compara (el runner lo marca en `rowShorterThanBox`). La
+  // caja por turno no se expone en la traza: por eso el flag lo decide el runner.
+  const filasCortas = (observed?.commits || []).filter((commit) => commit?.rowShorterThanBox)
+  checks.push({
+    name: 'rowShorterThanBox',
+    ok: filasCortas.length === 0,
+    detail: filasCortas.length
+      ? `${filasCortas.length} commit(s) con fila mas corta que su caja; primero #${filasCortas[0].rowIndex}`
+      : 'ninguna fila mas corta que su caja (misma locucion)',
+  })
+
+  // FILA MAS CORTA QUE LA LINEA VIVA de su misma locucion (numero 3.3, segunda mitad):
+  // el commit no puede quedarse con menos texto del que la locucion ya tenia reconocido.
+  // El flag lo decide el runner (`liveShorter`) exigiendo la MISMA revision: la linea viva
+  // acumulada puede llevar ya la locucion siguiente y esa no cuenta.
+  const filasCortasVivo = (observed?.commits || []).filter((commit) => commit?.liveShorter)
+  checks.push({
+    name: 'rowLiveLost',
+    ok: filasCortasVivo.length === 0,
+    detail: filasCortasVivo.length
+      ? `${filasCortasVivo.length} commit(s) con fila mas corta que la linea viva; primero #${filasCortasVivo[0].rowIndex}`
+      : 'ninguna fila mas corta que su linea viva (misma revision)',
+  })
+
   if (checks.length === 0) {
     checks.push({ name: 'expected', ok: false, detail: 'el expected no declara ninguna expectativa' })
   }

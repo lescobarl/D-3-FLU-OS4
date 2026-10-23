@@ -85,9 +85,9 @@ export const BUNNY_STATE_INDICATOR = {
 
 /**
  * Color del indicador para un estado del avatar. DUENO UNICO (P7.83): antes el
- * mismo mapa de 8 colores y el mismo fallback estaban copiados en
- * BunnyControlCenter.getStateColor, asi que cambiar un color obligaba a
- * acordarse de los dos sitios. La resolucion vive aqui, junto al mapa.
+ * mismo mapa de 8 colores y el mismo fallback estaban repetidos en la UI, asi que
+ * cambiar un color obligaba a acordarse de los dos sitios. La resolucion vive aqui,
+ * junto al mapa, y los consumidores (BunnyViewer) solo aplican el valor.
  */
 export function bunnyStateColor(state: string): string {
     return BUNNY_STATE_INDICATOR.colors[state] || BUNNY_STATE_INDICATOR.fallbackColor;

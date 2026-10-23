@@ -5,6 +5,7 @@
 import { extractTurnAudioSnapshot } from './continuousAudioBuffer.js'
 import { resolveSpeakerFromAudio } from './voiceIdWorkerClient.js'
 import { labelToSpeakerId } from './conversationRow.js'
+import { logCaughtError } from '../../lib/caughtError'
 import { isAutoSpeakerLabel, payloadSeparacionDeTurno } from './speakerCore.js'
 import { normalizeSpeakerLabel } from './voiceIdentity.js'
 import { capAndFuseSpeakerClusters, sameVoiceFloor } from './speakerClusters.js'
@@ -318,7 +319,11 @@ export function scheduleTurnSpeakerPreflight(turnId, run, { onClusters, onResolv
       })
       notifyResolvedForTurn(result)
     },
-    onError: () => {      const slot = preflightByTurn.get(id)
+    onError: (error) => {
+      // El fallo se REGISTRA: sin traza la fila caia a etiqueta generica y nadie sabia por
+      // que (auditoria 2026-10-22).
+      logCaughtError('turnSpeakerPreflight.onError', error, { turnId: id })
+      const slot = preflightByTurn.get(id)
       if (slot) preflightByTurn.set(id, { ...slot, ready: false, pending: false })
     },
   })

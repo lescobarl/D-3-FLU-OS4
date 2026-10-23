@@ -6,10 +6,11 @@ import { compareCosineSignatures, normalizeEmbeddingVector } from './speakerCore
 import { looksLikeTrailingFragment, mergeTranscriptText } from './transcriptDelta.js'
 import { buildWakeWordPattern } from './wakeWord.js'
 import { cleanForSpeech, normalizeSpaces, stripDiacriticsLower as stripDiacritics } from '../../lib/textUtils.ts'
-import { SPEECH_LOCALES } from '../../core/config/localeConfig.ts'
+import { SPEECH_LOCALES, normalizeLang } from '../../core/config/localeConfig.ts'
 import { DEFAULT_SAMPLE_RATE } from './audioConstants.js'
 import { COMMAND_IDS } from './commandIds.js'
 import { isTutoringGlobalProgressQuery, isTutoringProgressQuery, isTutoringReviewQuery } from '../../core/tutoring/tutoringModel.ts'
+import { CONFIRMATION_SUFFIXES } from '../../lib/confirmationSuffix.ts'
 
 // Fuente única de normalización de espacios y del plegado NFD
 // (src/lib/textUtils.ts). `stripDiacritics` se re-exporta con el contrato
@@ -53,7 +54,7 @@ export function detectTranscriptLanguage(text = '') {
 export function resolveAppLanguage(mode = 'es', text = '') {
   const normalized = String(mode || '').trim()
   if (normalized === 'en' || normalized === 'es') return normalized
-  if (normalized === 'both') return detectTranscriptLanguage(text) || 'es'
+  if (normalized === 'both') return normalizeLang(detectTranscriptLanguage(text))
   return 'es'
 }
 
@@ -1681,11 +1682,9 @@ const NAME_STOPWORDS = new Set([
   // Palabras de CONFIRMACION/eco que el ASR pega tras el nombre. "okay flu soy Luis
   // registrado" es nombre "Luis", no "Luis Registrado" (defecto medido 2026-10-21:
   // el eco del TTS creo un participante "Luis Registrado" y contamino la base).
-  'registrado',
-  'registrada',
-  'registrados',
-  'registradas',
-  'registered',
+  // FUENTE UNICA del vocabulario: `src/lib/confirmationSuffix.ts` (la comparte con la
+  // reparacion de datos de useParticipants; antes cada una tenia su copia divergente).
+  ...CONFIRMATION_SUFFIXES,
 ])
 
 const NAME_ARTICLE_TOKENS = new Set(['lo', 'la', 'el', 'los', 'las', 'un', 'una', 'unos', 'unas', 'al', 'del'])

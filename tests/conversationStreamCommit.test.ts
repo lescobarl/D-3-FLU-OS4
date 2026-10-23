@@ -542,17 +542,30 @@ describe('P11.19 - la cola de una locucion ya escrita no abre fila nueva (eco de
     'Acompaname a comprar el helado favorito de jungkook y vamos a comprar el helado en esta tienda donde no hay empleados'
   const COLA = 'y vamos a comprar el helado en esta tienda donde no hay empleados'
 
-  it('un segmento nuevo que repite la COLA de la fila anterior es duplicado (no escribe fila)', () => {
+  it('un segmento nuevo que repite la COLA de la fila anterior DENTRO de la ventana de eco es duplicado', () => {
     expect(
       isDuplicateTurnCommit(COLA, {
         lastEmitted: FILA,
         lastCommitted: FILA,
-        lastResultAt: 2000,
+        lastResultAt: 1400,
         lastCommitAt: 1000,
-        now: 3000,
+        now: 1600,
         echoWindowMs: 1200,
       }),
     ).toBe(true)
+  })
+
+  it('pasada la ventana de eco, el mismo trozo es habla NUEVA (no se pierde la frase repetida)', () => {
+    expect(
+      isDuplicateTurnCommit(COLA, {
+        lastEmitted: FILA,
+        lastCommitted: FILA,
+        lastResultAt: 2500,
+        lastCommitAt: 1000,
+        now: 2600,
+        echoWindowMs: 1200,
+      }),
+    ).toBe(false)
   })
 
   it('habla nueva (no contenida en la fila) sigue siendo turno nuevo', () => {

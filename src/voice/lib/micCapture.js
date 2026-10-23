@@ -87,5 +87,9 @@ export function resolveCaptureGain({
   audio = getConversationAudioConfig(),
 } = {}) {
   if (!conversationActive && !maxSensitivity) return 1
-  return Number(audio?.captureGain) || 8
+  // La ganancia tiene UN dueno: `voiceIdentity.capture.conversationAudio.captureGain`
+  // (fluConfig). Si el bloque faltara, se devuelve 1 (NEUTRA): inventar un 8 dejaba la
+  // captura 3,7x por debajo de la configurada y nadie lo veia (auditoria 2026-10-22).
+  const ganancia = Number(audio?.captureGain)
+  return Number.isFinite(ganancia) && ganancia > 0 ? ganancia : 1
 }

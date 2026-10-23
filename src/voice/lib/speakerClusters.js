@@ -110,6 +110,16 @@ export function differentVoiceFloor(thresholds = null) {
  * @param {object|null} [thresholds] bloque conversationSpeakerThresholds
  * @returns {number} piso coseno de asignacion de nombre (0..1)
  */
+/**
+ * DUENO UNICO del MARGEN de un ANCLA VERIFICADA contra la mejor alternativa.
+ * La MISMA voz medida contra su ancla (0.629-0.714) no puede exigir el margen
+ * generico de asignacion (0.08): su banda medida es mas estrecha (0.05).
+ */
+export function verifiedAnchorMargin(thresholds = null) {
+  const cfg = thresholds || getVoiceIdentityConfig()?.capture?.conversationSpeakerThresholds || {}
+  const margin = Number(cfg?.verifiedAnchorMargin)
+  return Number.isFinite(margin) && margin >= 0 && margin <= 1 ? margin : 0.05
+}
 export function namedAssignFloor(thresholds = null) {
   const cfg = thresholds || getVoiceIdentityConfig()?.capture?.conversationSpeakerThresholds || {}
   const floor = Number(cfg?.namedAssignFloor)
@@ -258,8 +268,11 @@ export function isShortUtteranceContext({
  * Umbral room-rematch estricto (0.85): similitud coseno < umbral → room-new-person.
  */
 export function resolveRoomRematchThreshold({ thresholds = {} } = {}) {
-  const configured = cosineThreshold(thresholds, 'roomRematchThreshold', ROOM_REMATCH_STRICT)
-  return Math.max(ROOM_REMATCH_STRICT, configured)
+  // EL CONFIG MANDA. Antes habia un `Math.max(ROOM_REMATCH_STRICT, configurado)` que anulaba
+  // en silencio cualquier `roomRematchThreshold` por debajo de 0.85: la clave existia en
+  // `fluConfig` (0.80) y no hacia nada (auditoria 2026-10-22). El fallback solo aplica si la
+  // clave falta o esta fuera de rango.
+  return cosineThreshold(thresholds, 'roomRematchThreshold', ROOM_REMATCH_STRICT)
 }
 
 /** Emparejamiento permitido solo si similitud ≥ umbral room-rematch. */
@@ -324,8 +337,14 @@ export function updateClusterSignature(cluster, vector) {
 const _clusterMapCache = new WeakMap()
 
 function _buildClusterMap(speakerClusters) {
+  // HUELLA DE ETIQUETAS: la cache valida por LONGITUD y por las etiquetas. El renombrado MUTA
+  // `label` en sitio (speakerDiarization): con solo la longitud, el mapa se quedaba obsoleto y
+  // el nombre nuevo no se encontraba (auditoria 2026-10-22).
   const cached = _clusterMapCache.get(speakerClusters)
-  if (cached && cached.length === speakerClusters.length) return cached.map
+  const huella = speakerClusters.map((c) => String(c?.label ?? '')).join('\u0000')
+  if (cached && cached.length === speakerClusters.length && cached.huella === huella) {
+    return cached.map
+  }
   const map = new Map()
   for (let i = 0; i < speakerClusters.length; i++) {
     const cluster = speakerClusters[i]
@@ -335,7 +354,7 @@ function _buildClusterMap(speakerClusters) {
       map.set(foldSpeakerKey(cluster.label), cluster)
     }
   }
-  _clusterMapCache.set(speakerClusters, { map, length: speakerClusters.length })
+_clusterMapCache.set(speakerClusters, { map, length: speakerClusters.length, huella })
   return map
 }
 

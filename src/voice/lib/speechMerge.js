@@ -3,7 +3,7 @@
  */
 import { cleanForSpeech, novelWords, sliceWordsLower, speechWords } from './audioMath.js';
 import { getTranscriptPauseCfg } from './fluTranscriptPause.js'
-import { getShortFinalKeywordSet, getSpeechMergeCfg } from './fluTranscriptMotor.js'
+import { getShortFinalKeywordSet, getSpeechMergeCfg, getTranscriptPolicyCfg } from './fluTranscriptMotor.js'
 import { getTranscriptDelta, mergeTranscriptText } from './transcriptDelta.js'
 
 /** Misma frase acumulativa de Chrome o revisión ASR (cola), no un turno nuevo. Dueño único (V18). */
@@ -159,13 +159,13 @@ function hasRepeatedWordBlock(words = [], minSize = 4) {
 export function collapseAsrStutter(text = '', { maxPasses = 6 } = {}) {
   let cur = collapseEchoPhrase(collapseRepeatedSpeech(cleanForSpeech(text)))
   const initialWords = cur.split(/\s+/).filter(Boolean)
-  if (initialWords.length < 8 || !hasRepeatedWordBlock(initialWords)) {
+  if (initialWords.length < minPalabrasTartamudeo() || !hasRepeatedWordBlock(initialWords)) {
     return cur
   }
 
   for (let pass = 0; pass < maxPasses; pass += 1) {
     const words = cur.split(/\s+/).filter(Boolean)
-    if (words.length < 8 || !hasRepeatedWordBlock(words)) break
+    if (words.length < minPalabrasTartamudeo() || !hasRepeatedWordBlock(words)) break
 
     let found = false
     blockSearch: for (let size = Math.min(14, Math.floor(words.length / 2)); size >= 4; size -= 1) {
@@ -189,10 +189,20 @@ export function collapseAsrStutter(text = '', { maxPasses = 6 } = {}) {
 }
 
 /** Pipeline único mic → UI/log (eco + stutter + prefijo huérfano). */
+/** POLITICAS DE TRANSCRIPCION: dueno unico `getTranscriptPolicyCfg`. */
+function minPalabrasTartamudeo() {
+  return Number(getTranscriptPolicyCfg().stutterMinWords) || 8
+}
+
+/** POLITICAS DE TRANSCRIPCION: dueno unico `getTranscriptPolicyCfg`. */
+function pisoCaracteresTartamudeo() {
+  return Number(getTranscriptPolicyCfg().stutterCharFloor) || 48
+}
+
 export function normalizeMicText(text = '') {
   const base = cleanForSpeech(text)
   if (!base) return ''
-  if (base.length < 48) {
+  if (base.length < pisoCaracteresTartamudeo()) {
     return collapseRepeatedSpeech(base)
   }
   return collapseAsrStutter(base)

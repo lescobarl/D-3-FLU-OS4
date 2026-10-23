@@ -1,3 +1,4 @@
+import { BASE_LANGS } from '../core/config/localeConfig'
 // ============================================================
 // localTts — Text-to-Speech 100% local
 // ============================================================
@@ -116,11 +117,11 @@ export function speakLocal(text: string, options: LocalTtsOptions = {}): SpeakRe
     if (!isSpeechSupported()) return { started: false, error: 'tts-unavailable' };
     const clean = (text || '').trim();
     if (!clean) return { started: false, error: 'empty-text' };
-    const voice = pickBestLocalVoice(getLocalVoices(), options.lang || 'es');
+    const voice = pickBestLocalVoice(getLocalVoices(), options.lang || BASE_LANGS.es);
     if (!voice) return { started: false, error: 'no-local-voice' };
 
     options.onStart?.();
-    speakResponse(clean, options.lang || 'es', {
+    speakResponse(clean, options.lang || BASE_LANGS.es, {
         rate: options.rate,
         pitch: options.pitch,
     }).then(

@@ -98,10 +98,22 @@ describe('B. VARIANTES del final (canon sin tartamudeo)', () => {
   })
 })
 
-/** Deps minimas de la puerta real (mismo cableado que reinyeccionTodos). */
-function montarDeps() {
+/**
+ * Deps minimas de la puerta real (mismo cableado que reinyeccionTodos).
+ *
+ * `nivel` declara QUE se mide:
+ *  - `ingress` (defecto): `scheduleTurnCommit` solo APUNTA el texto, de modo que la
+ *    prueba mide lo que el ingress entrega a la puerta de fila.
+ *  - `stream`: `scheduleTurnCommit` delega en `handleConversationStreamSync`, igual que
+ *    `conversationIngressBridge.js:52`; es el unico nivel en el que la CAJA se publica.
+ * @param {{ nivel?: "ingress"|"stream" }} [options]
+ */
+function montarDeps({ nivel = 'ingress' }: { nivel?: 'ingress' | 'stream' } = {}) {
   const serie: string[] = []
   const filas: string[] = []
+  // Enlace TARDIO: el commit del final entra por el mismo escritor que el puente
+  // (`syncConversationStream`), y `deps` aun no existe cuando se arma el objeto.
+  let syncTurnCommit: (p: Record<string, unknown>) => void = () => {}
   const deps = {
     conversationActiveRef: { current: true }, publishedLiveRef: { current: '' },
     listenStateRef: { current: createActiveListenState() }, openPreviewTurnRef: { current: false },
@@ -120,13 +132,20 @@ function montarDeps() {
     setSpeakerClusters: vi.fn(), lastSpeakerRef: { current: '' },
     lastTurnSignatureRef: { current: null as number[] | null }, lastLogLineTextRef: { current: '' },
     commitTurnToSessionRows: vi.fn((text: string) => { if (text) filas.push(String(text)) }),
-    scheduleTurnCommit: vi.fn((p: { capture?: string; utterance?: string }) => {
-      const t = String(p?.capture || p?.utterance || '')
-      if (t) filas.push(t)
-    }),
+    // PUERTA DE FILA: `montarDeps({ nivel: 'stream' })` cablea el escritor REAL del puente
+    // (`conversationIngressBridge.js:52` -> `handleConversationStreamSync`), que es el unico
+    // que publica la caja. El nivel por defecto solo apunta el texto que entrega el ingress.
+    scheduleTurnCommit:
+      nivel === 'stream'
+        ? (p: Record<string, unknown>): void => syncTurnCommit(p)
+        : (p: Record<string, unknown>) => {
+            const t = String(p?.capture || p?.utterance || '')
+            if (t) filas.push(t)
+          },
     lastRequestRef: { current: { text: '', at: 0 } },
     fluParticipantRef: { current: { onTurnCommitted: vi.fn() } },
   }
+  syncTurnCommit = (p) => handleConversationStreamSync(deps as never, { ...p, turnCommit: true } as never)
   const ctx = {
     ...deps, conversationActive: true, listenState: deps.listenStateRef.current, lastStreamPreviewRef: { current: '' },
     tryDispatch: vi.fn(() => false),
@@ -142,7 +161,7 @@ function montarDeps() {
 describe('C. REINYECCION turn 0 COMPLETO por la puerta real (processMicConversationIngress)', () => {
   it('C1 la caja del turno 0 nunca contiene "Cloud Cloud"', () => {
     FLU_CONFIG.voiceCommands.requireWakeAlways = false
-    const e = montarDeps()
+    const e = montarDeps({ nivel: 'stream' })
     const asr: Array<{ interims: string[]; finals: string[] }> = [
       // item1 fijo (interino) + item2 que crece (medido, seq 185-269 del log)
       { interims: ['bien Vamos a retomar el tema de las pruebas realización transcripción etcétera vamos a ver si es cie', ' lo que nos dijo'], finals: [] },

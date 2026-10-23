@@ -160,9 +160,9 @@ describe('replay events - el expected alterado FALLA (no es decorativo)', async 
 describe('replay events - checks de CAJA (fixtures sinteticos)', async () => {
   const fixtures = readdirSync(CHECKS).filter((file) => file.endsWith('.json'))
 
-  it('hay las cinco fixtures de caja exigidas', async () => {
+  it('hay las seis fixtures de caja exigidas (ninguna se cae de la lista)', async () => {
     expect(fixtures.sort()).toEqual(
-      ['bloque-duplicado.json', 'congelada.json', 'limpia.json', 'perdida-real.json', 'prefijo-creciente.json'].sort(),
+      ['bloque-duplicado.json', 'congelada.json', 'fila-corta-vs-viva.json', 'limpia.json', 'perdida-real.json', 'prefijo-creciente.json'].sort(),
     )
   })
 
@@ -333,6 +333,38 @@ describe('replay events - congelacion de caja: cuenta ACTIVIDAD del ASR, no solo
     expect(hueco.motivo).toBe('')
   })
 
+  it('una EXTENSION rechazada SI es congelacion (falsificacion del filtro)', async () => {
+    const traza = [
+      { t: 0, text: 'hola', reason: 'publish' },
+      { t: 4000, text: 'hola que tal', reason: 'publish' },
+    ]
+    const eventos = [
+      { t: 1000, text: 'hola que' },
+      { t: 2000, text: 'hola que tal' },
+    ]
+    const hueco = medirCongelacionCaja(traza, eventos, {
+      decisions: [{ t: 1000, aplicado: false, extension: true }],
+    })
+    expect(hueco.maxGapMs, 'se midio hasta la ultima actividad').toBe(2000)
+    expect(hueco.motivo).toBe('extension-ignorada')
+  })
+
+  it('una emision que ACORTA o que es de OTRA locucion es espera legitima, no congelacion', async () => {
+    const traza = [
+      { t: 0, text: 'hola que tal', reason: 'publish' },
+      { t: 4000, text: '', reason: 'clear' },
+    ]
+    const eventos = [
+      { t: 1000, text: 'hola' },
+      { t: 2000, text: 'otra cosa distinta' },
+    ]
+    const hueco = medirCongelacionCaja(traza, eventos, {
+      decisions: [{ t: 1000, aplicado: false, extension: false }, { t: 2000, aplicado: false, extension: false }],
+    })
+    expect(hueco.maxGapMs, 'no hay defecto').toBe(0)
+    expect(hueco.esperaMs, 'pero la espera se informa').toBe(2000)
+  })
+
   it('el SILENCIO no es congelacion (sin eventos de voz no hay nada que se congele)', async () => {
     const traza = [
       { t: 0, text: 'hola', reason: 'publish' },
@@ -362,7 +394,10 @@ describe('replay events - congelacion de caja: cuenta ACTIVIDAD del ASR, no solo
     // ultimaVoz + 3500), pero el ASR solo hablo 800 ms: el silencio no cuenta.
     // Antes del arreglo el mismo caso medía los 4300 ms y marcaba.
     expect(caja[1].t - caja[0].t).toBe(4300)
-    expect(datos.boxStall.maxGapMs).toBe(800)
+    // Con la atribucion por DECISION, esa espera es LEGITIMA: la caja ya mostraba la frase y
+    // el ASR no pidio crecerla. Se informa en `esperaMs` y NO cuenta como congelacion.
+    expect(datos.boxStall.maxGapMs).toBe(0)
+    expect(datos.boxStall.esperaMs).toBe(800)
     expect(datos.boxStall.maxGapMs).toBeLessThan(datos.thresholds.boxStallMs)
     const check = datos.checks.find((c: { name: string }) => c.name === 'boxStall')
     expect(check.ok, check.detail).toBe(true)
@@ -370,16 +405,19 @@ describe('replay events - congelacion de caja: cuenta ACTIVIDAD del ASR, no solo
     expect(datos.status).toBe('observed')
   })
 
-  it('la grabacion sintetica: la caja se queda con la frase vieja mientras el ASR insiste', async () => {
+  it('la grabacion sintetica: insistir con la MISMA frase no es congelacion (la caja ya la muestra)', async () => {
     const report = join(tmpDir('replay-repetida-'), 'report.json')
     const out = await replay(['--session', REPETIDA, '--mode', 'events', '--box-stall-ms', '500', '--report', report])
 
     const datos = JSON.parse(readFileSync(report, 'utf8'))
-    expect(datos.boxStall.motivo, 'la caja no cambio y el ASR si hablo').toBe('asr-repetido-sin-cambio')
-    expect(datos.boxStall.maxGapMs).toBeGreaterThan(500)
-    expect(datos.checks.find((check: { name: string }) => check.name === 'boxStall').ok).toBe(false)
+    // REGLA DECLARADA (2026-10-22): el defecto es ignorar una EXTENSION de la misma locucion.
+    // Repetir lo que la caja YA muestra, o traer otra locucion, es una espera legitima: la
+    // caja no puede encoger ni sustituirse (mandatos 2026-10-21). Se mide y se informa.
+    expect(datos.boxStall.maxGapMs, 'ninguna extension rechazada').toBe(0)
+    expect(datos.boxStall.esperaMs).toBeGreaterThan(500)
+    expect(datos.checks.find((check: { name: string }) => check.name === 'boxStall').ok).toBe(true)
     expect(datos.checks.find((check: { name: string }) => check.name === 'boxLost').ok, 'no se vende como perdida').toBe(true)
-    expect(out.code, out.stdout + out.stderr).toBe(1)
+    expect(out.code, out.stdout + out.stderr).toBe(0)
   })
 })
 

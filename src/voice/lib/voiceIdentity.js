@@ -12,7 +12,6 @@
 export {
   normalizeEmbeddingVector,
   compareCosineSignatures,
-  labelToSpeakerIdSimple,
   autoSpeakerLabel,
   nextAutoSpeakerLabel,
   getFallbackSpeaker,
@@ -23,7 +22,6 @@ export {
   parseSpeakerIndex,
   isAutoSpeakerLabel,
   isRegisteredSpeakerLabel,
-  resolveRegisteredSpeakerName,
   isProperSpeakerName,
   normalizeSpeakerLabel,
   expandSessionSpeakerNames,

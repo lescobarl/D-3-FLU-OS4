@@ -128,8 +128,31 @@ abierto no puede cambiar si nadie habla, y esa espera (en el producto la acota
 | `boxDuplicated` | nº de commits cuya caja estaba duplicada (por defecto **0**) |
 
 Checks de caja que **siempre** se calculan sobre la traza (no hace falta declararlos):
-`noBoxPrefixDuplication`, `noBoxDuplicatedBlock`, `boxStall`, `boxLost` y `boxDuplicated`.
+`noBoxPrefixDuplication`, `noBoxDuplicatedBlock`, `boxStall`, `boxLost`, `boxDuplicated`,
+`boxShrink` y `rowShorterThanBox`.
 Una caja duplicada se reporta como **duplicación**, nunca como pérdida.
+
+`boxShrink` distingue **dos causas** de un acorte aplicado:
+
+- **jitter** (`observed.acortes`): una emision interina reemplazo lo mostrado por menos
+  texto. Es el defecto: cuenta y `boxShrink` falla.
+- **transferencia de la frase canonica** (`observed.acortesCanonicos`): el CIERRE del turno
+  o un `final` CONFIRMADO por el ASR entregan la frase de la fila y la caja cede (por
+  ejemplo quita el tartamudeo: `puso Cloud Cloud` -> `puso Cloud`). No es jitter; el check
+  sigue en OK y el detalle informa cuantas transferencias hubo.
+
+`rowShorterThanBox` vigila la otra mitad de la regla B.3: con caja y fila de la MISMA
+locucion, la fila no puede quedarse con menos texto del que la caja estaba mostrando.
+
+`observed.boxDecisions` guarda, por cada publicacion, QUE se pidio a la caja, si se aplico y
+con que destino (textos recortados). Es diagnostico, no golden: sin esa traza una union de
+mas y una emision legitima se ven igual en `boxTrace`.
+
+FIDELIDAD DE LOS EVENTOS: el sink escribe UNA fila por resultado del motor, todas con el
+mismo `t`. El runner AGRUPA las filas consecutivas con el mismo `t` y el mismo `kind` y
+reconstruye el evento original (`buildMicBurstEvent` con `interims`/`finals`). Reinyectar cada
+fila por separado inventaba hipotesis que Chrome nunca emitio juntas (medido: la caja parecia
+duplicar).
 
 `speakers` **no se valida** en `events` (sin audio/vectores): si el expected los declara, el
 reporte lo marca en `notCovered`.

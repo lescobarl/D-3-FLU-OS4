@@ -35,6 +35,10 @@ export function labelToSpeakerId(label = '') {
   if (!name) return SPEAKER_ID_CALCULATING
   const index = parseSpeakerIndex(name)
   if (index != null) return `speaker_${index}`
+  // ETIQUETA PENDIENTE ("Hablante ?"): clave PROPIA y estable. Sin esto el slug la convertia
+  // en `speaker_name_hablante` y el consumidor la leia como NOMBRE PROPIO (auditoria
+  // 2026-10-22): la voz pendiente competia como identidad y ademas perdia el `?`.
+  if (isAutoSpeakerLabel(name)) return 'speaker_pending'
   const slug = stripDiacritics(name)
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '_')

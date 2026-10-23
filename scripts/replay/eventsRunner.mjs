@@ -33,7 +33,7 @@ const REBUILD = 'rebuild'
  * @returns {{ deps: object, bindings: object, observed: object, refs: object }}
  */
 function buildHarness(app, clock) {
-  const { createActiveListenState, handleConversationStreamSync, crearCajaDeLaFrase } = app
+  const { createActiveListenState, handleConversationStreamSync, crearCajaDeLaFrase, readTurnLive, utterancesSameRevision } = app
   const observed = {
     rows: [],
     sessionRows: [],
@@ -91,6 +91,48 @@ function buildHarness(app, clock) {
     scheduleLiveTranscriptUpdate: escribirCaja,
     setLiveTranscript: escribirCaja,
   })
+  // ACORTES: la decision del escritor (`previo` = 0 al cambiar de turno) es la que cuenta;
+  // la traza sola confundiria el reinicio de turno con un encogimiento.
+  observed.acortes = []
+  // ACORTE LEGITIMO: la transferencia de la FRASE CANONICA (cierre o confirmacion del ASR)
+  // puede quitar tartamudeo ("puso Cloud Cloud" -> "puso Cloud"). No es jitter del ASR:
+  // es la caja alineandose con la fila (B.3), y se cuenta aparte para no venderla como
+  // defecto ni esconderla.
+  observed.acortesCanonicos = []
+  observed.boxDecisions = []
+  const publicarEnLaCaja = (texto, opciones = {}) => {
+    const mostrado = String(refs.publishedLiveRef.current || '')
+    const pedido = String(texto || '')
+    const publicacion = caja.publicarEnLaCaja(texto, opciones)
+    // TRAZA DE DECISION: que se PIDIO a la caja, que se aplico y con que destino. Sin esto
+    // solo se ve el texto final y no la rama que lo produjo (una union de mas y una emision
+    // legitima se ven igual en `boxTrace`). Textos recortados: es diagnostico, no golden.
+    observed.boxDecisions.push({
+      t: clock.now(),
+      pedido: pedido.slice(-60),
+      pedidoLen: String(texto || '').length,
+      aplicado: publicacion?.aplicado === true,
+      previoLen: Number(publicacion?.previo) || 0,
+      destinoLen: String(publicacion?.destino || '').length,
+      canonica: opciones?.canonica === true,
+      // EXTENSION: la emision es lo mostrado + mas texto (misma locucion). Si la caja NO
+      // crece con eso, la caja esta congelada de verdad; una emision que ACORTA o que es
+      // de OTRA locucion no puede entrar (mandatos de no-encoger y no-sustituir), asi que
+      // su espera es legitima y no se cuenta como defecto.
+      extension:
+        Boolean(pedido) &&
+        pedido.length > mostrado.length &&
+        pedido.toLowerCase().startsWith(mostrado.toLowerCase()),
+      destino: String(publicacion?.destino || '').slice(-60),
+    })
+    const acorta = publicacion?.aplicado && Number(publicacion.destino.length) < Number(publicacion.previo)
+    if (acorta) {
+      const registro = { previo: publicacion.previo, destino: publicacion.destino.length }
+      if (opciones?.canonica) observed.acortesCanonicos.push(registro)
+      else observed.acortes.push(registro)
+    }
+    return publicacion
+  }
   // El vaciado legitimo de la caja (cierre de turno) tambien es un cambio observable.
   const vaciarCajaObservada = (opciones = {}) => {
     caja.vaciarLaCaja(opciones)
@@ -99,9 +141,42 @@ function buildHarness(app, clock) {
 
   const emitConversationLog = (text, options = {}) => {
     const box = String(refs.publishedLiveRef.current || '')
+    // Linea VIVA del turno en el instante del commit: la invariante es "la fila no puede
+    // ser mas corta que la linea viva de su MISMA locucion". Se mide aqui, con el estado
+    // real, y el comparador solo cuenta el flag (no re-decide similitud).
+    const live = typeof readTurnLive === 'function'
+      ? String(readTurnLive(refs.listenStateRef.current) || '')
+      : ''
+    const mismaRevision = Boolean(
+      live && text && typeof utterancesSameRevision === 'function' && utterancesSameRevision(live, text),
+    )
+    // La linea viva puede llevar YA la locucion SIGUIENTE (dictado corrido sin silencio):
+    // que la fila sea su PREFIJO es lo normal, no una perdida. Solo hay perdida cuando la
+    // fila se queda con menos texto y NO es un prefijo (se comio un tramo del medio).
+    const filaEsPrefijoDeLaViva = Boolean(text) &&
+      live.toLowerCase().startsWith(String(text).toLowerCase())
     observed.rows.push({ text: String(text || ''), speaker: String(options?.speakerName || '') })
     observed.boxAtCommit.push(box)
-    observed.commits.push({ t: clock.now(), rowIndex: observed.rows.length - 1, box })
+    const boxMismaRevision = Boolean(
+      box && text && typeof utterancesSameRevision === 'function' && utterancesSameRevision(box, text),
+    )
+    observed.commits.push({
+      t: clock.now(),
+      rowIndex: observed.rows.length - 1,
+      box,
+      live,
+      // La FILA tal cual, y la PROCEDENCIA del commit: una orden escribe a proposito solo
+      // su tramo (la wake y su cola), asi que no se compara contra la linea viva entera.
+      text: String(text || ''),
+      commandTurn: options?.commandTurn === true,
+      locutionClosed: options?.locutionClosed === true,
+      closeTurnOnly: options?.closeTurnOnly === true,
+      settlesTurn: options?.settlesTurn === true,
+      liveShorter: mismaRevision && !filaEsPrefijoDeLaViva && String(text || '').length < live.length,
+      // Solo comparable si la caja del instante es de la MISMA locucion que la fila: en un
+      // turno troceado la caja ya muestra el tramo siguiente y la comparacion no aplica.
+      rowShorterThanBox: boxMismaRevision && String(text || '').length < box.length,
+    })
     refs.logRowsTextRef.current = observed.rows.map((row) => row.text)
     refs.logRowSpeakersRef.current = observed.rows.map((row) => row.speaker)
     return true
@@ -114,7 +189,7 @@ function buildHarness(app, clock) {
     ...refs,
     setLiveTranscript: escribirCaja,
     scheduleLiveTranscriptUpdate: escribirCaja,
-    cajaDeLaFrase: { publicarEnLaCaja: caja.publicarEnLaCaja, vaciarLaCaja: vaciarCajaObservada },
+    cajaDeLaFrase: { publicarEnLaCaja, vaciarLaCaja: vaciarCajaObservada },
     applyConversationSpeaker: () => {},
     flushPendingStreamLog: () => {},
     captureTurnAudio: () => {},
@@ -178,11 +253,27 @@ function buildHarness(app, clock) {
  * @param {{ minEventosActivos?: number }} [options]
  * @returns {{ maxGapMs: number, from: string, to: string, at: number, motivo: string }}
  */
-export function medirCongelacionCaja(boxTrace = [], speechEvents = [], { minEventosActivos = 2 } = {}) {
+/**
+ * Congelacion REAL de la caja: la caja se quedo quieta mientras el ASR pedia CRECERLA.
+ *
+ * Un hueco con emisiones dentro NO es defecto por si mismo: la caja no puede encoger (mandato
+ * 2026-10-21) ni sustituirse por otra locucion (`no-sustituir`), asi que cuando el ASR acorta o
+ * cambia de frase la caja debe quedarse quieta. El defecto es otro: el ASR pidio una EXTENSION
+ * (lo mostrado + mas texto de la MISMA locucion) y la caja no crecio (medido: 7fce0045,
+ * "porque a los tal vez" con 80 emisiones dentro; la causa era la regla de revision, ya
+ * corregida en el dueno). Por eso la medida solo cuenta ventanas con una extension RECHAZADA;
+ * el resto se reporta como espera legitima.
+ * @param {Array<{t: number, text?: string}>} boxTrace
+ * @param {Array<{t: number, text?: string}>} speechEvents
+ * @param {{ minEventosActivos?: number, decisions?: Array<{t: number, aplicado: boolean, extension?: boolean}> }} [options]
+ * @returns {{ maxGapMs: number, from: string, to: string, at: number, motivo: string, esperaMs: number }}
+ */
+export function medirCongelacionCaja(boxTrace = [], speechEvents = [], { minEventosActivos = 2, decisions = [] } = {}) {
   const minimo = Math.max(1, Math.floor(Number(minEventosActivos) || 2))
   const traza = [...boxTrace].sort((a, b) => Number(a.t) - Number(b.t))
   const eventos = [...speechEvents].sort((a, b) => Number(a.t) - Number(b.t))
-  let stall = { maxGapMs: 0, from: '', to: '', at: 0, motivo: '' }
+  const pedidos = [...(decisions || [])].sort((a, b) => Number(a.t) - Number(b.t))
+  let stall = { maxGapMs: 0, from: '', to: '', at: 0, motivo: '', esperaMs: 0 }
   for (let i = 1; i < traza.length; i += 1) {
     const desde = Number(traza[i - 1].t)
     const hasta = Number(traza[i].t)
@@ -194,17 +285,31 @@ export function medirCongelacionCaja(boxTrace = [], speechEvents = [], { minEven
     if (!textoNuevo && !activoRepetido) continue
     // El SILENCIO FINAL de la ventana NO cuenta: se mide hasta la ULTIMA actividad de voz.
     // Una caja de un turno abierto no puede cambiar cuando nadie habla, y esa espera (en el
-    // producto la acota `srGapCommitMs`) no es una caja congelada. Antes la ventana llegaba
-    // hasta el siguiente cambio y el silencio entraba en la medida (d4c1c8f3: 18,6 s).
+    // producto la acota `srGapCommitMs`) no es una caja congelada.
     const ultimaActividad = Number(dentro[dentro.length - 1].t)
     const hueco = Math.min(hasta, ultimaActividad) - desde
+    // Sin DECISIONES el llamador no puede atribuir la emision a esta locucion: se cuenta
+    // como antes (conservador). Con decisiones, solo la EXTENSION rechazada es defecto.
+    const extensionRechazada =
+      pedidos.length === 0 ||
+      pedidos.some(
+        (d) => Number(d.t) > desde && Number(d.t) <= hasta && d.extension === true && d.aplicado !== true,
+      )
+    if (!extensionRechazada) {
+      if (hueco > stall.esperaMs) stall.esperaMs = hueco
+      continue
+    }
     if (hueco > stall.maxGapMs) {
       stall = {
         maxGapMs: hueco,
         from: String(traza[i - 1].text || '').slice(0, 80),
         to: String(traza[i].text || '').slice(0, 80),
         at: desde,
-        motivo: textoNuevo ? 'texto-nuevo-ignorado' : 'asr-repetido-sin-cambio',
+        // Con decisiones el defecto es SIEMPRE una extension ignorada. Sin ellas se conserva
+        // la atribucion historica (dato para el llamador que no puede clasificar).
+        motivo:
+          pedidos.length === 0 ? (textoNuevo ? 'texto-nuevo-ignorado' : 'asr-repetido-sin-cambio') : 'extension-ignorada',
+        esperaMs: stall.esperaMs,
       }
     }
   }
@@ -224,6 +329,7 @@ export async function runEventsSession({ session, clock, inferMarks = true, srGa
   const bridge = await import('../../src/voice/lib/conversationIngressBridge.js')
   const producer = await import('../../src/voice/lib/micEventProducer.js')
   const activeListen = await import('../../src/voice/lib/activeListen.js')
+  const conversationStream = await import('../../src/voice/lib/conversationStream.js')
   const transcriptPause = await import('../../src/voice/lib/fluTranscriptPause.js')
   // RUIDO DE CONSOLA (declarado): el Productor imprime CADA fragmento STT en DEV. En el
   // replay no hay panel que lo muestre y tapa el reporte (618 lineas en una sesion de
@@ -236,6 +342,8 @@ export async function runEventsSession({ session, clock, inferMarks = true, srGa
     handleConversationStreamSync: commitModule.handleConversationStreamSync,
     crearCajaDeLaFrase: commitModule.crearCajaDeLaFrase,
     createActiveListenState: activeListen.createActiveListenState,
+    readTurnLive: conversationStream.readTurnLive,
+    utterancesSameRevision: conversationStream.utterancesSameRevision,
   }
   const { observed, bindings } = buildHarness(app, clock)
   const runtime = bridge.createConversationIngressRuntime({ getBindings: () => bindings })
@@ -247,15 +355,21 @@ export async function runEventsSession({ session, clock, inferMarks = true, srGa
   globalThis.__replayTimerError = (error) => errors.push(String(error?.message || error))
 
   const speech = session.events.filter((row) => String(row?.event || '') === SPEECH)
+  // FILAS MANEJADAS: los logs (VozProbe, MicPcm...) no son tiempo del dictado. Se filtran
+  // UNA vez para poder mirar la fila SIGUIENTE al agrupar resultados del mismo evento.
+  const HANDLED = new Set([SPEECH, SR_GAP, RECOGNITION_END, RECOGNITION_ERROR, REBUILD])
+  const filas = session.events.filter((row) => HANDLED.has(String(row?.event || '')))
   // Umbral del silencio: el MISMO que usa el producto y UNA sola lectura (config).
   const gapMs =
     Number(srGapCommitMs) > 0
       ? Number(srGapCommitMs)
       : Number(transcriptPause.getTranscriptPauseCfg?.()?.srGapCommitMs) || 0
   let previousSpeechAt = null
+  // Resultados pendientes del MISMO evento del motor (se vuelcan al cambiar de evento).
+  let grupo = null
 
-  const HANDLED = new Set([SPEECH, SR_GAP, RECOGNITION_END, RECOGNITION_ERROR, REBUILD])
-  for (const row of session.events) {
+  for (let idx = 0; idx < filas.length; idx += 1) {
+    const row = filas[idx]
     const kind = String(row?.event || '')
     // Los eventos que no son de VOZ/marca no mueven el reloj: la grabacion puede
     // seguir escribiendo logs durante horas y eso no es tiempo del dictado.
@@ -286,15 +400,34 @@ export async function runEventsSession({ session, clock, inferMarks = true, srGa
       }
       if (Number.isFinite(t)) clock.advanceTo(t)
       if (kind === SPEECH) {
-        const burst = buildMicBurstEvent(
-          String(data?.kind || '') === 'final' ? { final: data?.text } : { interim: data?.text },
-        )
-        if (burst) {
-          runtime.pushMicRecognitionEvent(burst)
-          applied.speech += 1
+        // UN EVENTO DEL MOTOR, N RESULTADOS: Chrome entrega varios resultados en el MISMO
+        // `t` y el sink escribe una fila por resultado. Reinyectarlos por separado INVENTA
+        // hipotesis que el motor nunca emitio juntas (medido: la caja parecia duplicar
+        // "novedad la novedad novedad" en cec7281d). Se agrupan las filas consecutivas con
+        // el mismo `t` y el mismo tipo y se reconstruye el evento ORIGINAL con su lista.
+        const tipo = String(data?.kind || '') === 'final' ? 'final' : 'interim'
+        const siguiente = filas[idx + 1]
+        const mismoEvento =
+          String(siguiente?.event || '') === SPEECH &&
+          Number(siguiente?.t) === t &&
+          (String(siguiente?.data?.kind || '') === 'final' ? 'final' : 'interim') === tipo
+        if (mismoEvento) {
+          if (!grupo || grupo.t !== t || grupo.tipo !== tipo) grupo = { t, tipo, textos: [] }
+          grupo.textos.push(String(data?.text ?? ''))
           if (Number.isFinite(t)) previousSpeechAt = t
         } else {
-          applied.ignored += 1
+          const textos =
+            grupo && grupo.t === t && grupo.tipo === tipo ? [...grupo.textos, String(data?.text ?? '')] : [String(data?.text ?? '')]
+          grupo = null
+          const burst =
+            tipo === 'final' ? buildMicBurstEvent({ finals: textos }) : buildMicBurstEvent({ interims: textos })
+          if (burst) {
+            runtime.pushMicRecognitionEvent(burst)
+            applied.speech += 1
+            if (Number.isFinite(t)) previousSpeechAt = t
+          } else {
+            applied.ignored += 1
+          }
         }
       } else if (kind === SR_GAP) {
         runtime.pushSrGapEvent({ sinceLastResultMs: Number(data?.sinceLastResultMs) || 0 })
@@ -349,7 +482,9 @@ export async function runEventsSession({ session, clock, inferMarks = true, srGa
     .filter((entry) => Number.isFinite(entry.t))
     .sort((a, b) => a.t - b.t)
   // CONGELACION de la caja: un solo criterio (`medirCongelacionCaja`).
-  observed.boxStall = medirCongelacionCaja(observed.boxTrace, speechEvents)
+  observed.boxStall = medirCongelacionCaja(observed.boxTrace, speechEvents, {
+    decisions: observed.boxDecisions,
+  })
 
   // Config EFECTIVA del producto: los topes del comparador salen de aqui, no de un
   // numero escrito en el runner.

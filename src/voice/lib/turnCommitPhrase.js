@@ -18,6 +18,7 @@
 // turno caía al texto post-wake y la fila quedaba duplicada (con y sin wake).
 // ============================================================
 import { cleanForSpeech, stripLeadingWakeEcho } from './audioMath.js'
+import { canonSinTartamudeo } from './transcriptIngress.js'
 import { getWakeWords } from './wakeTurnCommit.js'
 import { resolveCommittablePhrase } from './garbageTranscript.js'
 import { recomposeLocution } from './turnStream.js'
@@ -56,5 +57,8 @@ export function resolveTurnCommitPhrase({ capture, fallback = '', log, wakeWords
   }
   // B4: si el ASR cerro el turno con un TROZO de la locucion, manda la locucion completa
   // (el texto validado del turno); nunca se commitea un fragmento cortado.
-  return recomposeLocution(canonical, canonicalFallback)
+  // UNA sola definicion de texto para la fila: el canon anti-tartamudeo es el MISMO que usa
+  // el cierre del stream (`canonSinTartamudeo`, dueno unico del ingress). La ruta de la ORDEN
+  // normalizaba por su cuenta y la misma locucion podia escribirse distinta segun la puerta.
+  return canonSinTartamudeo(recomposeLocution(canonical, canonicalFallback))
 }

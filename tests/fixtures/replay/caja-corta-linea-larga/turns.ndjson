@@ -1,0 +1,3 @@
+{"t":0,"iso":"1970-01-01T00:00:00.000Z","kind":"base","reason":"session-start","model":"fixture:wavlm-sv","participants":[]}
+{"t":2200,"iso":"1970-01-01T00:00:02.200Z","kind":"commit","text":"prepara la receta completa con todos los ingredientes y el horno","speaker":"Hablante 1","sessionTurnId":1}
+{"t":7600,"iso":"1970-01-01T00:00:07.600Z","kind":"commit","text":"y despues horneamos","speaker":"Hablante 1","sessionTurnId":2}

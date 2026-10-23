@@ -21,6 +21,7 @@ import { registerVoiceName, resolveVoiceIdentity } from './speakerDirectory.js';
 import { differentVoiceFloor, sameVoiceFloor } from './speakerClusters.js';
 import { classifyVoiceAgainstClusters, namedAssignmentConfirmed } from './speakerDiarization.js';
 import { canonicalSpeakerName, normalizeSpeakerLabel, pendingSpeakerLabel } from './speakerLabels';
+import { getVoiceIdentityConfig } from './speakerLabels';
 import { autoSpeakerIndexFromKey, getFallbackSpeaker } from './speakerCore';
 import { labelToSpeakerId, resolveRowSpeakerLabel, speakerIdToDefaultName } from './conversationRow';
 import { voiceKeyFor } from './speakerDirectory.js';
@@ -33,6 +34,52 @@ import { isFragmentOfLocution } from './turnStream';
  * del turno: temprano y de resolucion) en vez de por posicion respecto a FLU.
  */
 let currentTurn: { id: number | string | null; rowId: string | null } = { id: null, rowId: null };
+
+/**
+ * CANDIDATOS de identidad por voz para esta capa: las anclas MEDIDAS de la base de
+ * participantes (`participantVoiceAnchorsForDiarization`).
+ *
+ * POR QUE UN PUERTO: la fila resolvia la voz con `resolveVoiceIdentity(vector)` SIN
+ * candidatos mientras App la resolvia CON ellos; la MISMA voz podia ser conocida en una
+ * ruta y desconocida en la otra (auditoria 2026-10-23). El proveedor se inyecta una vez
+ * desde App (dueno de la base) y aqui solo se consulta: una sola llamada, los mismos datos.
+ * @type {() => Array<{ name?: string, vector?: number[], model?: string, verified?: boolean }>}
+ */
+type ParticipantAnchors = Array<{ name?: string; vector?: number[]; model?: string; verified?: boolean }>;
+
+let participantAnchorsProvider: () => ParticipantAnchors = () => [];
+
+/**
+ * Inyecta los candidatos de identidad por voz (anclas de participantes).
+ * @param provider devuelve las anclas vigentes; null restaura la lista vacia.
+ */
+export function setParticipantAnchorsProvider(
+    provider: (() => Array<{ name?: string; vector?: number[]; model?: string; verified?: boolean }>) | null,
+): void {
+    participantAnchorsProvider = typeof provider === 'function' ? provider : () => [];
+}
+
+/**
+ * ¿La fila puede pertenecer al turno `turnId`?
+ *
+ * Regla UNICA de identidad de turno para TODAS las ramas que reutilizan/completan una fila
+ * (auditoria 2026-10-23: el bucle principal la tenia y la rama P9.67 no, asi que un trozo
+ * podia completar/renombrar la fila del turno ANTERIOR). Si alguno de los dos ids se
+ * desconoce no se puede afirmar que sea de otro turno: se conserva la conducta anterior.
+ * @param entry fila de conversacion
+ * @param turnId turno del texto que se esta commiteando
+ * @returns true si la fila es (o puede ser) de ese turno
+ */
+function filaPuedeSerDeEsteTurno(
+    entry: { turnId?: number | string | null } | null | undefined,
+    turnId: number | string | null | undefined,
+): boolean {
+    if (!entry) return false;
+    if (turnId === null || turnId === undefined) return true;
+    const turnoDeLaFila = entry.turnId;
+    if (turnoDeLaFila === null || turnoDeLaFila === undefined) return true;
+    return String(turnoDeLaFila) === String(turnId);
+}
 
 /**
  * ¿La fila ya tiene un NOMBRE propio? Dos formas reales del mismo dato:
@@ -133,17 +180,16 @@ function resolveRowVisibleLabel(resolved: string, vozDeLaFila: string): string {
  * registro, que es dato de sesion, no por esta via).
  *
  * @param speakerName etiqueta/nombre que aporta el que llama
- * @param evidenciaAcustica `true` SOLO si el nombre viene de una ventana de AUDIO medida
- *   (coincidencia). OMITIRLA equivale a `false` (sin evidencia): la identidad NO se da por
- *   "medida" por omision -> etiqueta generica, nunca un nombre propio sin coincidencia.
- * @param registered vinculo etiqueta->persona registrada (panel de participantes)
  * @param fallbackSpeaker respaldo cuando NO hay etiqueta (por defecto, el de config)
  * @returns el hablante a escribir (siempre una etiqueta)
+ *
+ * SIN parametros de evidencia ni de vinculo registrado: ninguno de los dos cambiaba la
+ * salida (la etiqueta se escribe TAL CUAL y el nombre propio solo entra por el texto del
+ * mandato, decision que vive en `updateTurnRowSpeaker`). Aceptarlos sugeria una decision
+ * que aqui no existe.
  */
 export function resolveRowSpeakerName(
     speakerName: string,
-    _evidenciaAcustica?: boolean,
-    _registered: { registeredLabel?: string; registeredName?: string } = {},
     fallbackSpeaker: string = getFallbackSpeaker(),
 ): string {
     const respaldo = String(fallbackSpeaker || '').trim() || getFallbackSpeaker();
@@ -160,41 +206,6 @@ export function resolveRowSpeakerName(
     // tiene UNA sola via de introduccion (wake + comando); la evidencia de VOZ no lo introduce,
     // solo lo CONFIRMA si ya venia introducido. Por eso NO se asciende la etiqueta al registrado.
     return raw;
-}
-
-/**
- * Un nombre PROPIO ya escrito en la fila NO lo pisa una etiqueta AUTOMATICA
- * ("Hablante N"). Medido en el log del dueno (2026-10-07): la sesion quedo
- * identificada como "Luis" y las filas acabaron en "Hablante 2/1/4/5" (D3: 8 filas)
- * porque el tick de identidad reescribia con la etiqueta generica. La etiqueta
- * automatica solo COMPLETA una fila sin hablante: nunca degrada un nombre propio.
- *
- * @param nextName etiqueta/nombre que quiere escribir el que llama
- * @param currentName hablante que la fila YA tiene
- * @returns el hablante que debe quedar
- */
-export function preserveProperSpeaker(
-    nextName: string,
-    currentName?: string,
-    evidenciaAcustica = false,
-    { evidenciaDeTexto = true }: { evidenciaDeTexto?: boolean } = {},
-): string {
-    const next = String(nextName || '').trim();
-    const current = String(currentName || '').trim();
-    if (!next) return current;
-    // Una etiqueta AUTOMATICA ("Hablante N") solo entra con evidencia declarada: el
-    // sincrono sin ventana y el tick sin clusters devolvian el FALLBACK y la fila
-    // acababa con dos nombres para el mismo turno (medido 2026-10-07).
-    // A5: sin evidencia no se DEGRADA un nombre ya escrito; si la fila esta vacia se
-    // escribe la etiqueta disponible (nunca vacia).
-    // A5 corregida + FLANCO: sin evidencia acustica NI del texto de ESTE turno, un
-    // nombre propio NO se estampa sobre una fila (ni siquiera vacia: el relleno tardio
-    // de identidad colaba "Luis" en la voz de la mujer). El nombre que SI viene del
-    // texto ("soy Luis") es evidencia de identidad y pasa (`evidenciaDeTexto`).
-    if (!evidenciaDeTexto && isProperSpeakerName(next) && !evidenciaAcustica) return current || getFallbackSpeaker();
-    if (isAutoSpeakerLabel(next) && !evidenciaAcustica) return current || next;
-    if (current && isProperSpeakerName(current) && isAutoSpeakerLabel(next)) return current;
-    return next;
 }
 
 /**
@@ -250,8 +261,11 @@ function pickPendingRowLabel(
     clusters: Array<{ label?: string | null; signature?: number[] | null; anchorVerified?: boolean }>,
     vector: number[],
     floor: number,
+    // Umbrales de la CONFIG: la reclasificacion de filas pendientes decidia con los defaults
+    // del modulo y podia medir otra politica que la sesion (auditoria 2026-10-22).
+    thresholds: Record<string, unknown> = {},
 ): { label: string; speakerId: string } | null {
-    const verdict = classifyVoiceAgainstClusters({ vector, speakerClusters: clusters });
+    const verdict = classifyVoiceAgainstClusters({ vector, speakerClusters: clusters, thresholds });
     if (verdict.verdict !== 'known') return null;
     const medidos = clusters
         .map((cluster) => ({
@@ -278,6 +292,7 @@ function pickPendingRowLabel(
                 similarity: sim,
                 bestAlternative,
                 anchorVerified: cluster.anchorVerified,
+                thresholds,
             });
             if (!vale) continue;
             if (!mejorNombre || sim > mejorNombre.sim) mejorNombre = { ...cluster, sim };
@@ -291,6 +306,20 @@ function pickPendingRowLabel(
         label: elegida.label,
         speakerId: voiceKeyFor({ voiceId: labelToSpeakerId(elegida.label), signature: elegida.signature }),
     };
+}
+
+
+/**
+ * Tabla de umbrales de la SESION (config del motor de identidad).
+ *
+ * La reclasificacion de filas pendientes es una decision de identidad: tiene que medir con la
+ * MISMA tabla que el resto del pipeline, no con los defaults del modulo (auditoria 2026-10-22).
+ * @returns {Record<string, unknown>}
+ */
+function umbralesDeLaSesion(): Record<string, unknown> {
+    const cfg = getVoiceIdentityConfig();
+    const tabla = cfg?.capture?.conversationSpeakerThresholds;
+    return tabla && typeof tabla === 'object' ? (tabla as Record<string, unknown>) : {};
 }
 
 /**
@@ -341,13 +370,31 @@ export function resolvePendingSpeakerRows(
             porTurno.get(turnByRow.get(String(e.id)) || '') ||
             null;
         if (!deSuTurno) continue;
-        const elegida = pickPendingRowLabel(clusters, deSuTurno, floor);
+        const elegida = pickPendingRowLabel(clusters, deSuTurno, floor, umbralesDeLaSesion());
         if (!elegida) continue;
         store.setEntrySpeaker(e.id, elegida.speakerId, { signature: deSuTurno });
         store.setEntrySpeakerName(e.id, elegida.label);
         changed += 1;
     }
     return changed;
+}
+
+/**
+ * Correccion de UNA fila concreta por su id (migracion declarada). El dueno del nombre de
+ * fila es ESTE modulo: la migracion no toca el store ni tiene su propia regla.
+ * @param rowId id de la fila de conversacion
+ * @param speakerName nombre a escribir (se canoniza)
+ * @returns true si la fila existia y era de usuario
+ */
+export function renameRowSpeakerName(rowId: string, speakerName: string): boolean {
+    const id = String(rowId || '');
+    const name = canonicalSpeakerName(String(speakerName || '').trim());
+    if (!id || !name) return false;
+    const store = useIntegrationStore.getState();
+    const entry = store.conversationHistory.find((e) => e.id === id);
+    if (!entry || entry.role !== 'user') return false;
+    store.setEntrySpeakerName(id, name);
+    return true;
 }
 
 export function renameSpeakerRows(
@@ -591,7 +638,6 @@ export function updateTurnRowSpeaker(
         vector = null,
     }: {
         evidenciaAcustica?: boolean;
-        registeredSpeaker?: { registeredLabel?: string; registeredName?: string };
         vector?: number[] | null;
     } = {},
 ): boolean {
@@ -623,7 +669,9 @@ export function updateTurnRowSpeaker(
     // unico (`resolveVoiceIdentity`, la misma regla del commit): si responde un nombre propio,
     // la etiqueta automatica no afirma nada y no se escribe.
     if (isAutoSpeakerLabel(name) && measuredVector) {
-        const conocida = resolveVoiceIdentity(measuredVector);
+        // MISMOS CANDIDATOS QUE App (auditoria 2026-10-23): sin ellos esta ruta no veia las
+        // anclas de la base y la misma voz salia conocida en App y desconocida en la fila.
+        const conocida = resolveVoiceIdentity(measuredVector, { candidates: participantAnchorsProvider() });
         if (conocida?.name && isProperSpeakerName(conocida.name)) return false;
     }
     const vozDeEtiqueta = String(entry.speakerId || '') || labelToSpeakerId(actualName);
@@ -652,12 +700,6 @@ export interface UserTurnRowInput {
     text: string;
     /** Hablante resuelto (puede llegar en el commit final, no en el temprano). */
     speakerName?: string;
-    /**
-     * Vinculo etiqueta de diarizacion -> persona registrada (panel de participantes).
-     * Lo aporta el llamante; el dueno de la decision (`resolveRowSpeakerName`) lo
-     * aplica SOLO con evidencia acustica declarada.
-     */
-    registeredSpeaker?: { registeredLabel?: string; registeredName?: string };
     /** El que llama DECLARA que el nombre viene de una ventana de AUDIO medida. */
     evidenciaAcustica?: boolean;
     /** FIRMA de la voz del turno (para sustituir el nombre en TODAS las filas de esa voz). */
@@ -763,7 +805,6 @@ function commitUserTurnRowInner({
     replaceLast = false,
     turnId,
     evidenciaAcustica = false,
-    registeredSpeaker,
     signature = null,
     sentiment = 'neutral',
     epoch,
@@ -784,7 +825,7 @@ function commitUserTurnRowInner({
         }
     }
 
-    const resolved = resolveRowSpeakerName(speakerName || '', evidenciaAcustica, registeredSpeaker);
+    const resolved = resolveRowSpeakerName(speakerName || '');
     // LA VOZ de la fila (no su nombre): el nombre se resuelve al MOSTRAR. La clave es el
     // TIMBRE cuando se midio (mismo timbre = misma clave aunque cambie la etiqueta).
     const vozDeLaFila = voiceKeyFor({ voiceId: labelToSpeakerId(resolved), signature });
@@ -816,6 +857,14 @@ function commitUserTurnRowInner({
     if (replaceLast) {
         for (let i = history.length - 1; i >= turnStart; i -= 1) {
             const entry = history[i];
+            // IDENTIDAD DE TURNO: la fila que se reutiliza tiene que ser de ESTE turno. El
+            // `replaceLast` se decide por TEXTO (dos locuciones parecidas) y podia completar/renombrar
+            // la fila de un turno ANTERIOR cuando FLU aun no habia respondido (auditoria 2026-10-22).
+            // Si alguno de los dos turnos se desconoce, se conserva la conducta anterior.
+            // Un solo criterio (`filaPuedeSerDeEsteTurno`), compartido con la rama P9.67.
+            if (!filaPuedeSerDeEsteTurno(entry as { turnId?: number | string | null }, turnId)) {
+                continue;
+            }
             if (!entry || entry.role !== 'user') continue;
             // WRITE-ONCE del NOMBRE: un `speaker_name_*` ya commiteado no se reescribe (el
             // nombre propio no se mueve). Un placeholder auto (`speaker_N`) si se completa.
@@ -833,7 +882,12 @@ function commitUserTurnRowInner({
         // recorta la locución y el commit va con el turno vivo; el dueno de ese criterio es
         // `isFragmentOfLocution` (uno solo). Fundir por texto no reescribe lo ya commitado
         // (write-once arriba), solo evita la segunda fila del recorte.
-        const ultima = [...history].reverse().find((e) => e?.role === 'user');
+        // IDENTIDAD DE TURNO (auditoria 2026-10-23): esta rama tambien exige que la fila sea
+        // del turno que se commitea (`filaPuedeSerDeEsteTurno`, el MISMO criterio del bucle
+        // principal). Sin esto un trozo podia completar/renombrar la fila del turno ANTERIOR.
+        const ultima = [...history]
+            .reverse()
+            .find((e) => e?.role === 'user' && filaPuedeSerDeEsteTurno(e as { turnId?: number | string | null }, turnId));
         if (ultima) {
             const previo = String(ultima.text || '');
             const rawEsTrozo = isFragmentOfLocution(raw, previo);

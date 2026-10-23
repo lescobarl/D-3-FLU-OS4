@@ -13,7 +13,7 @@
 //   empieza en la wake y el contexto de delante se descarta (que es lo que manda #11).
 //
 // B2 MEDIDO por el dueno:
-//   registerSpeakerAlias('Hablante 1','Luis'); resolveRowSpeakerName('Hablante 1', false)
+//   registerSpeakerAlias('Hablante 1','Luis'); resolveRowSpeakerName('Hablante 1')
 //     esperado 'Hablante 1' -> medido 'Luis'
 //   CAUSA: `conversationTurnRow.resolveRowSpeakerName` aplicaba un mapa GLOBAL
 //   etiqueta->nombre (`resolveSpeakerAlias`): si otra voz reutiliza la etiqueta, hereda
@@ -111,11 +111,11 @@ describe('B2 - la identidad es la VOZ (firma), no la etiqueta', () => {
 
   it('una etiqueta reusada por OTRA voz NO se vuelve el nombre', () => {
     // El defecto medido: el mapa global etiqueta->nombre contaminaba la etiqueta.
-    expect(resolveRowSpeakerName('Hablante 1', false), 'sin voz que la respalde').toBe('Hablante 1')
+    expect(resolveRowSpeakerName('Hablante 1'), 'sin voz que la respalde').toBe('Hablante 1')
     commitUserTurnRow({ text: 'hola que tal', speakerName: 'Hablante 1', evidenciaAcustica: false, turnId: 1 } as never)
     // Si "Luis" se registra para ESA voz, la ETIQUETA sigue siendo una etiqueta: una fila
     // nueva de OTRA voz que reutilice "Hablante 1" no hereda "Luis".
-    expect(resolveRowSpeakerName('Hablante 1', false)).toBe('Hablante 1')
+    expect(resolveRowSpeakerName('Hablante 1')).toBe('Hablante 1')
   })
 
   it('"soy X" registra el nombre en la VOZ (sus filas se VEN con el nombre; la otra voz no se toca)', () => {
@@ -191,9 +191,9 @@ describe('B2 - la identidad es la VOZ (firma), no la etiqueta', () => {
     const viejo = (label: string) => aliasGlobal.get(label.trim().toLowerCase()) || label
     expect(viejo('Hablante 1'), 'el defecto medido').toBe('Luis')
     // El dueno real NO usa ese mapa.
-    expect(resolveRowSpeakerName('Hablante 1', false)).toBe('Hablante 1')
+    expect(resolveRowSpeakerName('Hablante 1')).toBe('Hablante 1')
     // Y el renombre por etiqueta desnuda ya no cambia el nombre de una fila por si solo.
     renameSpeakerRows(['Hablante 1'], 'Luis')
-    expect(resolveRowSpeakerName('Hablante 1', false)).toBe('Hablante 1')
+    expect(resolveRowSpeakerName('Hablante 1')).toBe('Hablante 1')
   })
 })

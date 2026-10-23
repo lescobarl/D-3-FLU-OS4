@@ -118,7 +118,7 @@ export const BRANDING_SEASONS: readonly string[] = getPaletteKeys();
 export const BRANDING_MODES: readonly string[] = ['auto', 'manual', 'disabled'] as const;
 
 /** Idiomas de la interfaz. */
-export const UI_LANGUAGES: readonly string[] = ['es', 'en', 'both'] as const;
+export const UI_LANGUAGES = ['es', 'en', 'both'] as const;
 
 /** Motores de IA disponibles (fuente única: sharedConfig.ts). */
 export { AI_PROVIDERS };

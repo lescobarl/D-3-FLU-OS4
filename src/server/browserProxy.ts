@@ -1,3 +1,4 @@
+import { normalizeLang } from '../core/config/localeConfig.ts'
 // ============================================================
 // browserProxy.ts — Proxy de lectura curada (modo lectura)
 // Mismo patrón que geminiProxy:
@@ -81,7 +82,7 @@ async function handleBrowserFetch(req: IncomingMessage, res: ServerResponse): Pr
   const timeoutMs = Number(parsed.searchParams.get('timeout')) || defaultProxyMs;
   // F1 — Idioma: llega por query desde el comando de voz (NAVEGAR) y se
   // aplica como Accept-Language al sitio destino.
-  const lang = parsed.searchParams.get('lang') || 'es';
+  const lang = normalizeLang(parsed.searchParams.get('lang'));
 
   const validation = buildBrowserUrl(target, allowlist, scheme) as
     | { ok: true; url: string; host: string }

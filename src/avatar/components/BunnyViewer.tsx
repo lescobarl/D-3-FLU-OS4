@@ -28,6 +28,7 @@ import {
     BUNNY_SCENE,
     BUNNY_SIGNAL_OVERLAY,
     BUNNY_STATE_INDICATOR,
+    bunnyStateColor,
 } from '../config/bunnySceneConfig';
 
 // -----------------------------------------------------------
@@ -67,15 +68,15 @@ function SignalOverlay() {
 function StateIndicator() {
     const currentState = useBunnyStore((s) => s.currentState);
 
-    const stateColors: Record<string, string> = BUNNY_STATE_INDICATOR.colors;
-
     return (
         <Html position={BUNNY_STATE_INDICATOR.position} center>
             <div
                 className="bunny-state-indicator"
                 style={{
                     '--bunny-state-bg': BUNNY_STATE_INDICATOR.background,
-                    '--bunny-state-color': stateColors[currentState] || BUNNY_STATE_INDICATOR.fallbackColor,
+                    // El mapa y el fallback se resuelven en SU dueno (bunnySceneConfig): este
+                    // fichero solo aplica el valor.
+                    '--bunny-state-color': bunnyStateColor(currentState),
                 } as React.CSSProperties}
             >
                 {currentState}

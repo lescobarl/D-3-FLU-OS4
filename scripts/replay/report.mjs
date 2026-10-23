@@ -107,6 +107,9 @@ export function buildReport(input) {
       commits: input.observed?.commits || [],
       boxAtCommit: input.observed?.boxAtCommit || [],
       boxTrace,
+      // DECISIONES de la caja (que se pidio, que se aplico): sin ellas una union de mas y
+      // una emision legitima se ven igual en la traza. Textos recortados por el runner.
+      boxDecisions: input.observed?.boxDecisions || [],
     },
     startedAt: input.startedAt,
     durationMs: input.durationMs,

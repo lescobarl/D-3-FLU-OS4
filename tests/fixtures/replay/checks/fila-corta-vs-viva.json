@@ -1,0 +1,44 @@
+{
+  "name": "fila-corta-vs-viva",
+  "descripcion": "La FILA se quedo con un tramo y la LINEA VIVA de la MISMA locucion tenia mas texto que NO es una cola nueva: el commit perdio texto por el camino. Es el numero que `rowLiveLost` tiene que encender; la caja esta limpia para que la unica senal sea la perdida.",
+  "options": { "boxStallMs": 3500, "dupBlockWords": 4 },
+  "observed": {
+    "rows": [{ "text": "la locucion completa", "speaker": "Hablante 1" }],
+    "boxTrace": [
+      { "t": 100, "text": "la locucion completa", "reason": "publish" },
+      { "t": 1000, "text": "", "reason": "clear" }
+    ],
+    "commits": [
+      {
+        "t": 1000,
+        "rowIndex": 0,
+        "box": "la locucion completa",
+        "live": "que estaba en la caja y debe llegar a la fila la locucion completa",
+        "text": "la locucion completa",
+        "liveShorter": true,
+        "rowShorterThanBox": false,
+        "settlesTurn": true
+      }
+    ],
+    "boxAtCommit": ["la locucion completa"],
+    "boxStall": { "maxGapMs": 900, "from": "la locucion completa", "to": "", "at": 100 }
+  },
+  "expected": {
+    "schemaVersion": 1,
+    "scenario": "fila-corta-vs-viva",
+    "mode": "events",
+    "approved": true,
+    "expect": {
+      "rowCount": 1,
+      "rows": [{ "text": "la locucion completa", "speaker": "Hablante 1" }],
+      "box": ["la locucion completa"],
+      "boxDuplicated": 0,
+      "noPrefixDuplication": true
+    }
+  },
+  "want": {
+    "status": "mismatch",
+    "failing": ["rowLiveLost"],
+    "passing": ["rowShorterThanBox", "boxShrink", "boxLost", "boxDuplicated", "noBoxPrefixDuplication", "noBoxDuplicatedBlock"]
+  }
+}

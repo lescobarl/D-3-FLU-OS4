@@ -24,7 +24,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../src/voice/lib/voiceProbe', () => ({ voiceProbe: vi.fn() }))
 
-import { handleConversationStreamSync, colaNuevaTrasSolape, palabraQueCrece, reentregaLoMostrado, startsWithCommittedLocution, tailAfterCommittedLocution } from '../src/voice/lib/conversationStreamCommit.js'
+import { handleConversationStreamSync, colaNuevaTrasSolape, resolverEmisionDeLaCaja, palabraQueCrece, reentregaLoMostrado, startsWithCommittedLocution, tailAfterCommittedLocution, crearCajaDeLaFrase } from '../src/voice/lib/conversationStreamCommit.js'
 import { createActiveListenState } from '../src/voice/lib/activeListen.js'
 import { resetTurnSpeakerPreflights } from '../src/voice/lib/turnSpeakerPreflight.js'
 import { FLU_CONFIG } from '../src/voice/lib/fluConfig.js'
@@ -79,6 +79,16 @@ function makeDeps(over: Record<string, unknown> = {}) {
     fluParticipantRef: { current: { onTurnCommitted: vi.fn() } },
   }
   Object.assign(deps, over)
+  // UNA sola caja para todo el test (como el hook): la identidad de TURNO de la caja
+  // exige la MISMA instancia entre preview y commit (si se deriva una por llamada, el
+  // turno se pierde y el cierre no puede distinguir su locucion de la siguiente).
+  if (!(deps as Record<string, unknown>).cajaDeLaFrase) {
+    ;(deps as Record<string, unknown>).cajaDeLaFrase = crearCajaDeLaFrase({
+      publishedLiveRef: deps.publishedLiveRef,
+      scheduleLiveTranscriptUpdate: deps.scheduleLiveTranscriptUpdate,
+      setLiveTranscript: deps.setLiveTranscript,
+    })
+  }
   return { deps, mostrado, filas }
 }
 
@@ -299,6 +309,11 @@ describe('C - el cierre no tira la caja', () => {
       capture: 'mientras',
       turnCommit: true,
       settlesTurn: true,
+      // El cierre lleva el TURNO sellado (lo sella el ingress al derramar `pendingFinal`):
+      // sin identidad el cierre NO puede adoptar la caja (regla 2026-10-22).
+      // El sello del ingress es el turno de la CAJA (lo pone `publicarEnLaCaja`): se usa el
+      // mismo id, que es lo que hace el cierre real al volcar `pendingFinal`.
+      turnId: (deps as unknown as { cajaDeLaFrase: { turnoActual: () => number | null } }).cajaDeLaFrase.turnoActual(),
       locutionClosed: true,
     })
 
@@ -368,5 +383,61 @@ describe('E - al cerrar o cambiar de locucion la caja no arrastra la frase vieja
     handleConversationStreamSync(deps as never, { capture: 'no lo voy a preparar al 100%' })
     expect(ultimo(mostrado), 'la locucion nueva no se pega a la vieja').toBe('no lo voy a preparar al 100%')
     expect(ultimo(mostrado).toLowerCase()).not.toContain('mujer')
+  })
+})
+
+// La FRASE CANONICA (un final de SEGMENTO confirmado por el ASR o el CIERRE del turno) es
+// la unica emision autorizada a SUSTITUIR lo que la caja muestra. Sin esta transferencia la
+// fila y la caja divergian (d4c1c8f3: fila con "Cloud de que ya", caja con el interino
+// fabricado). El limite es el habla AJENA: si el boceto ya lleva la locucion siguiente, la
+// caja no cede y manda el no-encogimiento.
+describe('F - la frase canonica sustituye el boceto cuando el boceto no aporta habla', () => {
+  it('un final confirmado MAS LARGO entra en la caja aunque no derive del interino', () => {
+    const { deps } = makeDeps()
+    // Interino FABRICADO: la caja encadena el arranque viejo con una cola posterior.
+    deps.publishedLiveRef.current = 'vamos a ver si es cie lo que nos dijo esta todo resuelto'
+    const canonico =
+      'vamos a ver si es cierto lo que nos dijo Cloud de que ya esta todo resuelto'
+    handleConversationStreamSync(deps as never, {
+      capture: canonico,
+      utterance: canonico,
+      turnCommit: true,
+      confirmedFinal: true,
+    })
+    expect(deps.publishedLiveRef.current, 'la caja termina con la frase de la fila').toBe(canonico)
+  })
+
+  it('el canon MAS CORTO entra si el boceto solo repite sus palabras (tartamudeo)', () => {
+    const { deps } = makeDeps()
+    deps.publishedLiveRef.current = 'puso Cloud Cloud'
+    handleConversationStreamSync(deps as never, { capture: 'puso Cloud', turnCommit: true, confirmedFinal: true })
+    expect(deps.publishedLiveRef.current, 'la caja cede el tartamudeo, no encoge el habla').toBe('puso Cloud')
+  })
+
+  it('NO cede si el boceto lleva habla AJENA (la locucion siguiente ya empezo)', () => {
+    const { deps } = makeDeps()
+    const conHablaAjena = 'la locucion completa y ademas empiezo a contar otra cosa distinta'
+    deps.publishedLiveRef.current = conHablaAjena
+    handleConversationStreamSync(deps as never, { capture: 'la locucion completa', turnCommit: true, confirmedFinal: true })
+    expect(deps.publishedLiveRef.current, 'el habla nueva no se borra del espejo').toBe(conHablaAjena)
+  })
+})
+
+// D2 del plan (Fase 2): la caja NO fabrica una frase que nadie dijo. Un ARRANQUE
+// compartido no es una reentrega: si la emision reescribe la COLA (otra hipotesis del mismo
+// audio), unirla pegaba "vamos a ver si es cie" + "esta todo resuelto". La reentrega de la
+// COLA de lo mostrado y su continuacion SI se anade (ahi la emision continua, no reescribe).
+describe('G - la caja no fabrica con un arranque compartido', () => {
+  it('arranque compartido + cola AJENA no se concatena (se decide bloqueado o revision)', () => {
+    const mostrado = 'vamos a ver si es cie lo que nos dijo'
+    const otraHipotesis = 'vamos a ver si es cie esta todo resuelto'
+    expect(colaNuevaTrasSolape(mostrado, otraHipotesis)).toBe('')
+    expect(resolverEmisionDeLaCaja(mostrado, otraHipotesis).motivo).not.toBe('solape')
+  })
+
+  it('la reentrega de la COLA con continuacion SI se anade', () => {
+    expect(colaNuevaTrasSolape('vamos a preparar la receta', 'preparar la receta con el horno')).toBe(
+      'vamos a preparar la receta con el horno',
+    )
   })
 })

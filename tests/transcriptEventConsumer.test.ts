@@ -101,7 +101,9 @@ describe('transcriptEventConsumer - processEvent: enrutado por tipo', () => {
 
     const resultado = consumer.processEvent({ kind: 'sr-gap', sinceLastResultMs: 1500 });
 
-    expect(ingresos.srGap).toHaveBeenCalledWith(ctx, { sinceLastResultMs: 1500 });
+    // El MOTIVO viaja con el evento (contrato 2026-10-22): el cierre por cambio de hablante
+    // no puede perderse. Sin motivo, el evento llega con reason vacio.
+    expect(ingresos.srGap).toHaveBeenCalledWith(ctx, { sinceLastResultMs: 1500, reason: '' });
     expect(ingresos.mic).not.toHaveBeenCalled();
     expect(ingresos.recEnd).not.toHaveBeenCalled();
     expect(resultado).toEqual({ flushed: true, via: 'sr-gap' });

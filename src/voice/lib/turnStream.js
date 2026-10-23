@@ -204,15 +204,17 @@ export function isDuplicateTurnCommit(
   if (!capture || !lastCommitAt) return false
   const prior = lastEmitted || lastCommitted
   if (!prior) return false
+  const hayResultadoNuevo = lastResultAt > lastCommitAt
+  // VENTANA PRIMERO (auditoria 2026-10-23): "resultado nuevo y fuera de la ventana de eco" es
+  // habla NUEVA aunque su texto sea un trozo de la fila anterior. Antes el chequeo de TROZO
+  // (`isFragmentOfLocution`) iba ANTES de este escape, asi que una frase corta repetida tras
+  // una pausa se descartaba como duplicado y se perdia (el comentario de abajo ya lo decia,
+  // pero era inalcanzable para los trozos).
+  if (hayResultadoNuevo && !(echoWindowMs > 0 && now - lastCommitAt < echoWindowMs)) return false
   // P11.19 (medido en su log 2026-10-14 17:18): la COLA de una locucion YA ESCRITA llega como
   // SEGMENTO nuevo (Chrome reentrega el tramo) y quedaba en DOS filas ("se repitio esa frase",
-  // su pantalla). Un texto CONTENIDO en la fila ya escrita no es habla nueva: es la misma
-  // locucion reentregada -> no abre fila.
+  // su pantalla). Un texto CONTENIDO en la fila ya escrita DENTRO de la ventana de eco no es
+  // habla nueva: es la misma locucion reentregada -> no abre fila.
   if (isFragmentOfLocution(capture, prior)) return true
-  const hayResultadoNuevo = lastResultAt > lastCommitAt
-  // Un "resultado nuevo" con el MISMO texto DENTRO de la ventana de eco es el MISMO evento
-  // re-entregado por el ASR (doble final ~0,3-0,7 s), no habla nueva: UNA locucion = UN commit.
-  // Fuera de la ventana la repeticion es genuina del usuario y SI es un turno nuevo.
-  if (hayResultadoNuevo && !(echoWindowMs > 0 && now - lastCommitAt < echoWindowMs)) return false
   return phrasesEquivalent(capture, prior)
 }

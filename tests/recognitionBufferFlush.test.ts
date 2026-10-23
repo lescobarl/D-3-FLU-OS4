@@ -27,10 +27,12 @@ describe('flushTranscriptStateOnFinal: vacia el estado de transcripcion en FINAL
         expect(openPreviewTurnRef.current).toBe(false)
     })
 
-    it('vacia los tres campos del listenState', () => {
-        const listenState = { openLine: 'a', pendingInterim: 'b', pendingFinal: 'c' }
+    it('vacia los campos de la locucion del listenState (incluido el sello del turno)', () => {
+        // `pendingFinalTurn` sella a que turno pertenece la locucion confirmada; lo limpia el
+        // MISMO reset: si sobreviviera, un cierre adoptaria la caja de un turno anterior.
+        const listenState = { openLine: 'a', pendingInterim: 'b', pendingFinal: 'c', pendingFinalTurn: 7 }
         flushTranscriptStateOnFinal({ listenState } as any)
-        expect(listenState).toEqual({ openLine: '', pendingInterim: '', pendingFinal: '' })
+        expect(listenState).toEqual({ openLine: '', pendingInterim: '', pendingFinal: '', pendingFinalTurn: null })
     })
 
     it('no revienta sin argumentos', () => {

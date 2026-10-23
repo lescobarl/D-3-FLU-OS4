@@ -15,6 +15,7 @@ import {
 } from './speechMerge.js'
 import { shouldForceNewLogRowOnCommit } from './ingressGuards.js'
 import { getTranscriptPauseCfg, countSpeechWords as countWordsFromPauseCfg, srGapSilenceReached } from './fluTranscriptPause.js'
+import { getTranscriptPolicyCfg } from './fluTranscriptMotor.js'
 import { normalizeForMatch } from '../../lib/textUtils'
 import { VOICE_DIARIZATION_DEFAULTS } from '../../core/config/sharedConfig'
 
@@ -160,6 +161,9 @@ export function bridgeInterimAfterCommitPause(interim = '', lastCommitted = '', 
   }
   if (utterancesRelate(prior, chunk)) {
     if (chunk.length <= prior.length) return chunk
+    // UNA SOLA HIPOTESIS (auditoria 2026-10-23): si la emision YA contiene lo previo, manda
+    // la emision entera. El merge con `keepAll` queda SOLO para el solape parcial real.
+    if (chunk.toLowerCase().includes(prior.toLowerCase())) return normalizeMicText(chunk)
     return normalizeMicText(mergeSpeechText(prior, chunk, { keepAll: true }))
   }
 
@@ -219,7 +223,8 @@ export function utterancesSameRevision(previous = '', next = '') {
   while (chars < max && prev[chars].toLowerCase() === nxt[chars].toLowerCase()) {
     chars += 1
   }
-  return chars >= 24
+  // POLITICA DE TRANSCRIPCION (una tabla): `transcript.policy.sameRevisionMinSharedChars`.
+  return chars >= (Number(getTranscriptPolicyCfg().sameRevisionMinSharedChars) || 24)
 }
 
 export function readOpenLine(state) {
@@ -423,28 +428,70 @@ function clearStaleCommittedEchoFromState(state, lastCommitted = '') {
 export { clearStaleCommittedEchoFromState }
 
 /**
- * Son el MISMO tramo y la ULTIMA es una CORRECCION del suyo (no un recorte ni una emision
- * que ELIMINA un tramo distinto)? La usa el cierre de la FILA por silencio: cuando el ultimo
- * interino reescribe el tramo final de la MISMA locucion, la fila lleva la CORREGIDA, no la
- * mas larga.
+ * ¿`viva` conserva TODAS las palabras de `mostrada`, en el mismo orden?
  *
- * MEDIDO (#11, d4c1c8f3): la locucion se entrega como "no lo voy a preparar 100 porque" y,
- * despues, el ASR la corrige a "no lo voy a preparar al 100%". Elegir por longitud se queda
- * con la primera y pierde la correccion; unirlas seria mezclar dos hipotesis (prohibido).
- *
- * Guardas (una locucion, un tramo, una correccion):
- *  - misma locucion (`utterancesSameRevision`);
- *  - ni recorte ni extension literal (una es prefijo de la otra): eso ya tiene su camino;
- *  - arranque comun de >= 2 palabras (si no, no hay "mismo tramo");
- *  - las DOS tienen cola despues del arranque (hay tramo que corregir);
- *  - la cola de la ultima SOLAPA con la de la linea (reescribe ese tramo). Si no solapa
- *    nada, la ultima esta ELIMINANDO contenido distinto: no se usa.
- * @param {string} linea
- * @param {string} ultima
+ * Es la guarda que hace seguro preferir la linea viva en el cierre: si la emision mas larga
+ * no contiene el bloque visible, es OTRA hipotesis y la caja no puede ceder (medido
+ * 2026-10-23 en d4c1c8f3: sin esta guarda, 4 filas perdian el bloque de la caja).
+ * @param {string} mostrada
+ * @param {string} viva
  * @returns {boolean}
  */
+function conservaLasPalabrasDe(mostrada = '', viva = '') {
+  const objetivo = speechWords(mostrada)
+  const emision = speechWords(viva)
+  if (!objetivo.length || emision.length < objetivo.length) return false
+  let j = 0
+  for (let i = 0; i < emision.length && j < objetivo.length; i += 1) {
+    if (emision[i] === objetivo[j]) j += 1
+  }
+  return j === objetivo.length
+}
+
 /**
- * Captura de la FILA al cerrar por silencio. La fila usa la MISMA frase canonica que
+ * FRASE DE CIERRE de la locucion: UNICA regla para los DOS cierres reales (onend y srGap).
+ *
+ * - FINAL confirmado: es el veredicto del ASR para ese audio. Manda, salvo que la caja o
+ *   la linea viva sean la MISMA revision y traigan mas texto (la caja acumula).
+ * - Sin final: manda la caja; la linea viva solo la supera si es la MISMA revision y es
+ *   mas completa (`utterancesSameRevision`, dueno unico de "mismo tramo").
+ * - NUNCA se concatenan dos hipotesis: cada candidato es una emision entera.
+ *
+ * @param {{ caja?: string, lineaViva?: string, finalConfirmado?: string }} [partes]
+ * @returns {{ texto: string, motivo: 'final'|'revision'|'caja'|'linea-viva' }}
+ */
+export function fraseDeCierreDeLocucion({ caja = '', lineaViva = '', finalConfirmado = '' } = {}) {
+  const mostrada = cleanForSpeech(caja)
+  const viva = cleanForSpeech(lineaViva)
+  const confirmada = cleanForSpeech(finalConfirmado)
+  if (confirmada) {
+    // La caja puede superar al final SOLO si es la misma revision y acumulo mas texto
+    // (el final es un tramo de la locucion que la caja ya mostraba entera).
+    if (
+      mostrada &&
+      utterancesSameRevision(confirmada, mostrada) &&
+      mostrada.length > confirmada.length
+    ) {
+      return { texto: mostrada, motivo: 'revision' }
+    }
+    return { texto: confirmada, motivo: 'final' }
+  }
+  // SIN final: la caja es la verdad visible. La linea viva solo entra si NO hay caja
+  // (rescate del cierre, defecto 1 del dueno 2026-10-19). NUNCA se prefiere la linea
+  // viva acumulada sobre la caja: puede traer ya la locucion SIGUIENTE (medido
+  // 2026-10-19: la fila del dictado se llevaba "voy a hacer un alto...").
+  // SIN final: manda la caja; la linea viva SOLO la supera si es la MISMA revision, trae MAS
+  // texto y CONSERVA todas las palabras de la caja (en el mismo orden). La ultima condicion es
+  // la que hace la regla segura: asi la fila nunca puede perder el bloque que la caja mostraba
+  // (medido 2026-10-23: sin ella, la sesion real d4c1c8f3 pasaba de 0 a 4 `boxLost`).
+  if (mostrada && viva && viva.length > mostrada.length && utterancesSameRevision(viva, mostrada)) {
+    if (conservaLasPalabrasDe(mostrada, viva)) return { texto: viva, motivo: 'revision' }
+  }
+  return { texto: mostrada || viva, motivo: mostrada ? 'caja' : 'linea-viva' }
+}
+
+/**
+ * Captura de la FILA al cerrar por silencio. Delega en el dueno de la frase de cierre.
  * la caja (Anexo B.3): si el caller pasa `published`, esa es la verdad; el estado
  * vivo solo es respaldo cuando no hay caja (pruebas/cierre sin preview).
  *
@@ -456,8 +503,20 @@ export { clearStaleCommittedEchoFromState }
  * @param {object} state
  * @returns {string}
  */
-function capturaDeFilaAlCerrar(state) {
-  return cleanForSpeech(readTurnLive(state) || state?.pendingFinal)
+/**
+ * Frase de la FILA al cerrar. `caja` se pasa SIEMPRE que el llamador la tenga: sin ella el
+ * helper no puede preferir la caja cuando es mas completa y la fila se quedaba con la linea
+ * viva (auditoria 2026-10-22).
+ * @param {object} state
+ * @param {{ caja?: string }} [parts]
+ * @returns {string}
+ */
+function capturaDeFilaAlCerrar(state, { caja = '' } = {}) {
+  return fraseDeCierreDeLocucion({
+    caja,
+    lineaViva: readTurnLive(state),
+    finalConfirmado: state?.pendingFinal,
+  }).texto
 }
 
 /** Commit de segmento cuando Chrome deja de emitir onresult pero openLine tiene texto nuevo. */
@@ -469,6 +528,8 @@ export function evaluateSrGapSegmentCommit(
     lastCommitted = '',
     lastCommitAtMs = 0,
     published = '',
+    caja = '',
+    reason = '',
   } = {},
 ) {
   const cfg = getTranscriptPauseCfg()
@@ -483,13 +544,18 @@ export function evaluateSrGapSegmentCommit(
   // P11.12 (mandato del dueno 2026-10-13): SOLO SILENCIO real. La rama de 'contenido
   // estancado' (mismo texto sin crecer) se RETIRA: cerraba a mitad del dictado y luego la
   // fila habia que ACTUALIZARLA (reused/replaced) — la conversacion solo se INSERTA.
-  if (!srGapSilenceReached(sinceLastResultMs)) {
+  // DOS PUERTAS del cierre real (mandato P4): SILENCIO o CAMBIO DE HABLANTE. El cambio de
+  // hablante cierra YA (no espera al silencio): el trigger lo dispara con `reason` y aqui se
+  // acepta sin exigir hueco. Sin esto el cierre se descartaba por "sr-active" y la locucion
+  // quedaba abierta (auditoria 2026-10-22).
+  const cierrePorCambioDeHablante = String(reason || '') === 'sr-speaker-change'
+  if (!cierrePorCambioDeHablante && !srGapSilenceReached(sinceLastResultMs)) {
     return { flush: false, capture: '', reason: 'sr-active' }
   }
 
   // B.3: la FILA es la MISMA frase que la caja. `published` es la fuente cuando el
   // preview existe; el estado vivo solo es el respaldo de pruebas/cierre sin caja.
-  const capture = cleanForSpeech(published || capturaDeFilaAlCerrar(state) || state?.pendingFinal)
+  const capture = cleanForSpeech(published || capturaDeFilaAlCerrar(state, { caja }) || state?.pendingFinal)
   if (!capture) return { flush: false, capture: '', reason: 'empty-openline' }
 
   const prior = cleanForSpeech(lastCommitted)
@@ -542,6 +608,9 @@ export function readTurnLive(state) {
   }
   if (!utterancesRelate(line, pending)) return normalizeMicText(pending)
   if (line.length > pending.length) return normalizeMicText(line)
+  // UNA SOLA HIPOTESIS (auditoria 2026-10-23): la acumulacion que YA contiene la linea no se
+  // mezcla; `keepAll` queda solo para el solape parcial (la emision no trae el arranque).
+  if (pending.toLowerCase().includes(line.toLowerCase())) return normalizeMicText(pending)
   return normalizeMicText(mergeSpeechText(line, pending, { keepAll: true }))
 }
 
@@ -1005,7 +1074,9 @@ export function validateLogRowsNoAsrRevisionDup(rows = []) {
 
 export function assessStreamParity(micInterim = '', published = '', _session = '') {
   const mic = micInterim ? cleanForSpeech(micInterim) : ''
-  if (!mic) return { ok: true }
+  // SIN microfono no hay paridad que afirmar: antes devolvia `ok: true` y un silencio total
+  // parecia una paridad perfecta (auditoria 2026-10-22). `null` = desconocido.
+  if (!mic) return { ok: null, displayOk: null, sessionOk: null }
 
   const pub = published || ''
   return {

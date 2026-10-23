@@ -1,88 +1,55 @@
 // ============================================================
-// fluAsyncError.test.ts — Conducta del registro de errores de
-// promesas fire-and-forget.
+// fluAsyncError.test.ts — registro de promesas fire-and-forget
 // ------------------------------------------------------------
-// Se sustituye SOLO la frontera (console.error) para observar
-// QUE se registra y como, sin ruido en la salida de test.
+// CONTRATO (2026-10-22): una sola salida, el registro CENTRAL (`logCaughtError`). Antes
+// escribia solo `console.error` y los fallos no llegaban al relay ni a la auditoria. Se
+// sustituye SOLO la frontera (logCaughtError) para observar QUE se registra y con que
+// contexto, sin ruido en la salida de test.
 // ============================================================
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+const logCaughtError = vi.fn()
+vi.mock('../src/lib/caughtError', () => ({ logCaughtError: (...args: unknown[]) => logCaughtError(...args) }))
+
 import { fluAsyncErrorHandler, logFluAsyncError } from '../src/voice/lib/fluAsyncError.js'
 
-let errorSpy: ReturnType<typeof vi.spyOn>
-
 beforeEach(() => {
-  errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-})
-
-afterEach(() => {
-  errorSpy.mockRestore()
+  logCaughtError.mockClear()
 })
 
 describe('fluAsyncError — logFluAsyncError', () => {
-  it('llama a console.error exactamente una vez', () => {
+  it('registra UNA vez en el registro central', () => {
     logFluAsyncError('scope', new Error('boom'))
-    expect(errorSpy).toHaveBeenCalledTimes(1)
+    expect(logCaughtError).toHaveBeenCalledTimes(1)
   })
 
-  it('prefija el mensaje con [Flu][async-error] y el scope', () => {
+  it('el contexto lleva el scope para poder buscarlo en el log', () => {
     logFluAsyncError('carga', new Error('boom'))
-    expect(errorSpy).toHaveBeenCalledWith('[Flu][async-error] carga: boom')
+    expect(String(logCaughtError.mock.calls[0][0])).toContain('carga')
   })
 
-  it('usa el message de un Error', () => {
-    logFluAsyncError('s', new Error('mensaje real'))
-    expect(errorSpy.mock.calls[0][0]).toContain('mensaje real')
+  it('pasa la excepcion ORIGINAL (no su mensaje) al registro', () => {
+    const error = new Error('mensaje real')
+    logFluAsyncError('s', error)
+    expect(logCaughtError.mock.calls[0][1]).toBe(error)
   })
 
-  it('convierte a cadena un error que no es Error', () => {
+  it('acepta un error que no es Error', () => {
     logFluAsyncError('s', 'caida de red')
-    expect(errorSpy).toHaveBeenCalledWith('[Flu][async-error] s: caida de red')
-  })
-
-  it('convierte a cadena un objeto plano', () => {
-    logFluAsyncError('s', { code: 500 })
-    expect(errorSpy).toHaveBeenCalledWith('[Flu][async-error] s: [object Object]')
-  })
-
-  it("usa 'unknown' cuando el error es undefined", () => {
-    logFluAsyncError('s', undefined)
-    expect(errorSpy).toHaveBeenCalledWith('[Flu][async-error] s: unknown')
-  })
-
-  it("usa 'unknown' cuando el error es una cadena vacia", () => {
-    logFluAsyncError('s', '')
-    expect(errorSpy).toHaveBeenCalledWith('[Flu][async-error] s: unknown')
-  })
-
-  it("usa 'unknown' cuando el error es 0 (falsy)", () => {
-    logFluAsyncError('s', 0)
-    expect(errorSpy).toHaveBeenCalledWith('[Flu][async-error] s: unknown')
+    expect(logCaughtError.mock.calls[0][1]).toBe('caida de red')
   })
 })
 
 describe('fluAsyncError — fluAsyncErrorHandler', () => {
-  it('devuelve una funcion', () => {
-    expect(typeof fluAsyncErrorHandler('s')).toBe('function')
+  it('devuelve un handler que registra con el scope fijado', () => {
+    const handler = fluAsyncErrorHandler('cola')
+    handler(new Error('x'))
+    expect(String(logCaughtError.mock.calls[0][0])).toContain('cola')
+    expect(logCaughtError).toHaveBeenCalledTimes(1)
   })
 
-  it('la funcion devuelta registra el error con el scope capturado', () => {
-    const handler = fluAsyncErrorHandler('arranque')
-    handler(new Error('fallo'))
-    expect(errorSpy).toHaveBeenCalledWith('[Flu][async-error] arranque: fallo')
-  })
-
-  it('la funcion devuelta registra un valor no-Error', () => {
-    const handler = fluAsyncErrorHandler('arranque')
-    handler('sin detalle')
-    expect(errorSpy).toHaveBeenCalledWith('[Flu][async-error] arranque: sin detalle')
-  })
-
-  it('dos handlers mantienen scopes independientes', () => {
-    const a = fluAsyncErrorHandler('A')
-    const b = fluAsyncErrorHandler('B')
-    a(new Error('e1'))
-    b(new Error('e2'))
-    expect(errorSpy.mock.calls[0][0]).toBe('[Flu][async-error] A: e1')
-    expect(errorSpy.mock.calls[1][0]).toBe('[Flu][async-error] B: e2')
+  it('el handler no propaga la excepcion', () => {
+    const handler = fluAsyncErrorHandler('cola')
+    expect(() => handler(new Error('x'))).not.toThrow()
   })
 })

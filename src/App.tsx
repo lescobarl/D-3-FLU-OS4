@@ -203,7 +203,7 @@ import { participantVoiceAnchorsForDiarization } from './voice/lib/participantVo
 import { registerParticipantVoice } from './app/registerParticipantVoice';
 import { useIdentitySessionRef } from './app/useIdentitySessionRef';
 import { applyKnownVoiceName } from './voice/lib/speakerIdentityRegister';
-import { resolveVoiceIdentity } from './voice/lib/speakerDirectory';
+import { resolveVoiceIdentity, forgetVoiceName } from './voice/lib/speakerDirectory';
 import { isAutoSpeakerLabel } from './voice/lib/voiceIdentity';
 import { resolveVoiceParticipants } from './voice/lib/voiceParticipantsSource';
 import { isAIProvider } from './app/appTypeGuards';
@@ -741,7 +741,7 @@ function App() {
         personId: realParticipantId,
         audio: agendaAudioDriver,
         onFire: async (action, item) => {
-            const lang = (languageRef.current as 'es' | 'en') || 'es';
+            const lang = normalizeLang(languageRef.current);
             const temporalCfg = (FLU_CONFIG.temporal || {}) as Record<string, unknown>;
             const temporalVoice = (temporalCfg.voice || {}) as Record<string, string>;
             const temporalUi = (temporalCfg.ui || {}) as Record<string, string>;
@@ -801,7 +801,7 @@ function App() {
     // (describeTriggerWhen vive en src/core/agenda/describeTriggerText.ts)
     window.__fluHandleAgendaCommandText = useCallback(
         async (input: AgendaCommand | string, _opts?: { personId?: string; personName?: string }) => {
-            const lang = (languageRef.current as 'es' | 'en') || 'es';
+            const lang = normalizeLang(languageRef.current);
             const cmd = typeof input === 'object' && input?.action
                 ? input
                 : parseAgendaCommand(String(input || ''));
@@ -1159,11 +1159,6 @@ function App() {
         const profile = participants.participants.find((p) => p.id === activeParticipantId);
         return String(profile?.speakerLabel || "").trim();
     }, [activeParticipantId, participants.participants]);
-    const participantSpeakerForRow = useMemo(() => ({
-        registeredLabel: activeParticipantSpeakerLabelForVoice || "",
-        registeredName: activeParticipantNameForVoice || "",
-    }), [activeParticipantSpeakerLabelForVoice, activeParticipantNameForVoice]);
-    const participantSpeakerRef = useRef(participantSpeakerForRow) // closure fresca (deps [] del callback)
     // VOZ CONOCIDA EN LA BASE = NOMBRE INMEDIATO (mandato del dueño 2026-10-18): anclas medidas que la sesión siembra.
     const participantVoiceAnchorsForVoice = useMemo(() => participantVoiceAnchorsForDiarization(participants.participants), [participants.participants]);
 
@@ -1189,7 +1184,6 @@ function App() {
                 .catch((err: unknown) => logCaughtError('src/App.tsx: registerParticipant (voz)', err));
         };
     }, [identitySessionRef, participantsService, refreshParticipants]);
-    participantSpeakerRef.current = participantSpeakerForRow;
     const {
         status: voiceStatus,
         error: voiceError,
@@ -1365,13 +1359,13 @@ function App() {
             // SERVICIO (`effectOnly`) aplica su efecto y no escribe la conversacion.
             if (rawOnly && transcript && !cleanForSpeech(transcript)) return;
             if (escribeFilaDeUsuario(resolved, { hayTexto: Boolean(transcript), hablable: Boolean(cleanForSpeech(transcript)) })) {
-                // P8.40: la etiqueta automatica puede pertenecer a un participante registrado
-                // (speakerLabel del panel): la fila lleva su NOMBRE solo con VOZ medida, y
-                // el mapeo lo aplica el DUENO UNICO de la fila (`resolveRowSpeakerName`).
+                // P8.40: la etiqueta de diarizacion se escribe TAL CUAL: el vinculo con un
+                // participante registrado NO la asciende (una sola via del nombre: el mandato).
+                // El dueno de esa decision es `resolveRowSpeakerName`. 
                 commitUserTurnRow({
                     text: transcript,
                     signature: (resolved as { signature?: number[] | null })?.signature ?? null,
-                    speakerName, registeredSpeaker: participantSpeakerRef.current,
+                    speakerName,
                     sentiment: detectSentiment(transcript),
                     evidenciaAcustica: resolved?.evidenciaAcustica === true,
                     replaceLast: resolved?.replaceLastRawLog === true,
@@ -1506,7 +1500,7 @@ function App() {
                             : resolveDomainScopedIntent(accion?.dominio, commandText, {
                                 defaultOffsetMs: (arbiterOptions)?.defaultOffsetMs,
                                 now: (arbiterOptions)?.now,
-                                language: (languageRef.current as 'es' | 'en') || 'es',
+                                language: normalizeLang(languageRef.current),
                             });
                         if (effectiveResult?.matched && effectiveResult.domain) {
                             const entryKey = resolvedActionIdentity(effectiveResult);
@@ -2836,7 +2830,7 @@ function App() {
     // Lista de compras por voz (dominio `shopping`, separado del calendario).
     window.__fluHandleShoppingText = useCallback(
         async (input: ShoppingIntent | string) => {
-            const lang = (languageRef.current as 'es' | 'en') || 'es';
+            const lang = normalizeLang(languageRef.current);
             const intent = (
                 input && typeof input === 'object' && typeof input.action === 'string'
             )
@@ -2898,7 +2892,7 @@ function App() {
     // compilado desde la configuración y lo devuelve como respuesta hablada.
     exposeDevHook('__fluHandleConocerFluText', useCallback(
         async (text: string) => {
-            const lang = (languageRef.current as 'es' | 'en') || 'es';
+            const lang = normalizeLang(languageRef.current);
             const clean = String(text || '').trim();
             if (!clean || !isSelfKnowledgeRequest(clean, lang)) return '';
             const manifesto = buildSelfManifesto(lang);
@@ -2924,7 +2918,7 @@ function App() {
     // (tel:, wa.me, sms:, mailto:) vía el servicio inyectado en el hook.
     exposeDevHook('__fluHandleDeviceActionText', useCallback(
         async (text: string) => {
-            const lang = (languageRef.current as 'es' | 'en') || 'es';
+            const lang = normalizeLang(languageRef.current);
             const intent = parseDeviceActionIntent(String(text || ''));
             if (!intent.handled) return '';
             if (!intent.action) return intent.reply;
@@ -2971,7 +2965,7 @@ function App() {
     // notes.add. Devuelve la confirmación hablada (o '' si no aplica).
     window.__fluHandleNoteText = useCallback(
         async (input: NoteVoiceIntent | string, opts?: { personId?: string; personName?: string }) => {
-            const lang = (languageRef.current as 'es' | 'en') || 'es';
+            const lang = normalizeLang(languageRef.current);
             const notesVoice = FLU_CONFIG.notes?.voice || {};
             const addedMsg =
                 notesVoice.added ||
@@ -3060,7 +3054,7 @@ function App() {
         async (input: DiaryVoiceIntent | string, opts?: { personId?: string; personName?: string }) => {
             // El diario se activa por config (diary.enabled), no por codigo.
             if (!FLU_CONFIG.diary?.enabled) return '';
-            const lang = (languageRef.current as 'es' | 'en') || 'es';
+            const lang = normalizeLang(languageRef.current);
             const diaryVoice = FLU_CONFIG.diary?.voice || {};
             const addedMsg =
                 diaryVoice.entryAdded ||
@@ -3692,11 +3686,9 @@ const {
             
             // Solo cancelar si realmente hay speech activo y es necesario
             if (isSpeechBusy()) {
-                // En lugar de cancelar inmediatamente, esperar un momento breve
-                // para permitir que la animación de boca termine naturalmente
                 cancelSpeech();
-                // Pequeña pausa para permitir transición de estado
-                await new Promise(resolve => setTimeout(resolve, FLU_CONFIG.timing.speechCancelSettleMs));
+
+                await waitForSpeechIdle();
             }
             
             const commandSpeech = getCommandSpeech(COMMAND_IDS.CERRAR_ESCUCHA, language);
@@ -3716,7 +3708,8 @@ const {
         // Solo cancelar si realmente hay speech activo
         if (isSpeechBusy()) {
             cancelSpeech();
-            await new Promise(resolve => setTimeout(resolve, FLU_CONFIG.timing.speechCancelSettleMs));
+
+            await waitForSpeechIdle();
         }
         
         const commandSpeech = getCommandSpeech(COMMAND_IDS.ABRIR_ESCUCHA, language);
@@ -3739,7 +3732,8 @@ const {
             // Solo cancelar si realmente hay speech activo
             if (isSpeechBusy()) {
                 cancelSpeech();
-                await new Promise(resolve => setTimeout(resolve, FLU_CONFIG.timing.speechCancelSettleMs));
+
+                await waitForSpeechIdle();
             }
             const commandSpeech = getCommandSpeech(COMMAND_IDS.INICIAR_CONVERSACION, language);
             if (commandSpeech) {
@@ -3822,6 +3816,7 @@ const {
 
         // 5) Speaker de sesión en memoria (diarización) + auditoría.
         os2RemoveSessionSpeaker(label);
+        forgetVoiceName(label); // el directorio de sesion tambien guarda el nombre por VOZ
         // OS2 parity: delete audit logs for the removed speaker (FluShell.jsx lines 1226-1228)
         deleteAuditLogsBySpeaker(label).catch((e) => logCaughtError('src/App.tsx: deleteAuditLogsBySpeaker', e));
         auditLog.logEvent('participant:removed', 'config', uuidv4(), {

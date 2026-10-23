@@ -71,7 +71,7 @@ function rowToEntry(row: ConversationRow): ConversationEntry {
 /**
  * Convert a ConversationEntry to a DB row format.
  */
-function entryToRow(entry: ConversationEntry, participantId: string) {
+function entryToRow(entry: ConversationEntry, participantId: string, syncPrevio?: { revision: number; updated_at: string; deleted: boolean } | null) {
     return {
         id: entry.id,
         role: entry.role,
@@ -88,7 +88,10 @@ function entryToRow(entry: ConversationEntry, participantId: string) {
         phase: entry.phase || '',
         navigation: entry.navigation || null,
         participantId: entry.personId || participantId,
-        sync: buildSyncTuple(undefined, Date.now()),
+        // REVISION QUE SE CONSERVA: la tupla incrementa sobre la fila que ya existe. Antes se
+        // reiniciaba en 1 en CADA escritura (auditoria 2026-10-22) y la sincronizacion perdia el
+        // rastro de las revisiones anteriores.
+        sync: buildSyncTuple(syncPrevio ?? undefined, Date.now()),
     };
 }
 
@@ -219,11 +222,20 @@ export function useConversationPersistence(participantId?: string) {
     // render (no toca el estado de React) y solo se suben las entradas que CAMBIARON de objeto.
     useEffect(() => {
         const persistidas = new Map<string, object>();
+        // Tupla de sync por fila: la escritura siguiente incrementa sobre la anterior.
+        const syncPorFila = new Map<string, { revision: number; updated_at: string; deleted: boolean }>();
         const guardarCambiadas = (historial: ConversationEntry[]) => {
             const cambiadas = historial.filter((e) => persistidas.get(String(e.id)) !== e);
             if (!cambiadas.length) return;
             cambiadas.forEach((e) => persistidas.set(String(e.id), e));
-            fluDb.conversations.bulkPut(cambiadas.map((entry) => entryToRow(entry, scope))).catch((err) => {
+            const filas = cambiadas.map((entry) => {
+                const id = String(entry.id);
+                const previa = syncPorFila.get(id) || null;
+                const fila = entryToRow(entry, scope, previa);
+                syncPorFila.set(id, fila.sync);
+                return fila;
+            });
+            fluDb.conversations.bulkPut(filas).catch((err) => {
                 logCaughtError('[ConversationPersistence] Error consolidando la fila', err);
             });
         };
@@ -233,16 +245,9 @@ export function useConversationPersistence(participantId?: string) {
     }, [scope]);
 
     useEffect(() => {
-        if (historyLength > savedLengthRef.current) {
-            // New entries were added — batch save all at once
-            // Access the full history directly from the store to avoid stale closures
-            const fullHistory = useIntegrationStore.getState().conversationHistory;
-            const newEntries = fullHistory.slice(savedLengthRef.current);
-            const rows = newEntries.map((entry) => entryToRow(entry, scope));
-            fluDb.conversations.bulkPut(rows).catch((err) => {
-                logCaughtError('[ConversationPersistence] Error saving entries', err);
-            });
-        }
+        // UN SOLO ESCRITOR: la suscripcion de arriba ya persiste las entradas nuevas (y las
+        // consolidadas). Escribirlas tambien aqui era la MISMA fila dos veces por insercion
+        // (auditoria 2026-10-22). Este efecto solo mantiene el contador que usa el reset.
         savedLengthRef.current = historyLength;
     }, [historyLength, scope]);
 

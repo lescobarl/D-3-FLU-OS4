@@ -76,8 +76,22 @@ export function compareCosineSignatures(sig1 = [], sig2 = []) {
 
 /** Coincide con la etiqueta automatica «Hablante N». FUENTE UNICA del patron (antes
  * reimplementado en activeListen, fluDebug, speakerPolicy y useFluVoiceAssistant). */
-export function parseSpeakerIndex(label = '') {
-  const match = String(label || '').trim().match(/^Hablante\s+(\d+)$/i)
+export function speakerLabelPattern(config = FLU_CONFIG) {
+  const template = String(
+    config?.voiceIdentity?.labels?.template || FLU_CONFIG.voiceIdentity.labels.template || '',
+  )
+  if (!template.includes('{n}')) return null
+  const fuente = template
+    .split('{n}')
+    .map((parte) => parte.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/ /g, '\\s+'))
+    .join('(\\d+)')
+  return new RegExp(`^${fuente}$`, 'i')
+}
+
+export function parseSpeakerIndex(label = '', config = FLU_CONFIG) {
+  const patron = speakerLabelPattern(config)
+  if (!patron) return null
+  const match = String(label || '').trim().match(patron)
   return match ? Number(match[1]) : null
 }
 
@@ -88,24 +102,12 @@ export function parseSpeakerIndex(label = '') {
  */
 export function isAutoSpeakerLabel(label = '', config = FLU_CONFIG) {
   const text = String(label || '').trim()
-  if (/^Hablante\s+\d+$/i.test(text)) return true
+  const patron = speakerLabelPattern(config)
+  if (patron && patron.test(text)) return true
   const pending = String(config?.voiceIdentity?.labels?.pendingSpeaker || '').trim()
   return Boolean(pending) && text.toLowerCase() === pending.toLowerCase()
 }
 
-/** Id estable a partir de la etiqueta de hablante («Hablante 3» → speaker_3). */
-export function labelToSpeakerIdSimple(label = '') {
-  const text = String(label || '').trim()
-  const index = parseSpeakerIndex(text)
-  if (index !== null) return `speaker_${index}`
-  // Etiqueta PENDIENTE (config): clave propia y estable. NO es un nombre propio, asi que
-  // no puede acabar en `speaker_name_*` (eso la haria competir como identidad).
-  if (isAutoSpeakerLabel(text)) return 'speaker_pending'
-  const slug = stripDiacriticsLower(text)
-    .replace(/[^a-z0-9]+/g, '_')
-    .replace(/^_+|_+$/g, '')
-  return slug ? `speaker_name_${slug}` : 'speaker_1'
-}
 
 /** Siguiente etiqueta automática libre (sin colisión con clusters ni reservadas). */
 /**

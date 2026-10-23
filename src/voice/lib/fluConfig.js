@@ -1,5 +1,5 @@
 /** Configuración central de FLU. */
-import { OPENROUTER_DEFAULTS, AI_PROVIDER_IDS, SEARCH_PROVIDER_IDS } from '../../core/config/sharedConfig.ts'
+import { OPENROUTER_DEFAULTS, AI_PROVIDER_IDS, SEARCH_PROVIDER_IDS, VOICE_DIARIZATION_DEFAULTS } from '../../core/config/sharedConfig.ts'
 import { SPEECH_LOCALES, DEFAULT_SPEECH_LOCALE, BILINGUAL_LOCALES } from '../../core/config/localeConfig.ts'
 import { DEFAULT_SAMPLE_RATE } from './audioConstants.js'
 import { RESET_AVATAR_COLOR_PHRASES } from './voiceCommandPhrases.js'
@@ -123,19 +123,19 @@ export const FLU_CONFIG = {
       /** Umbrales de similitud coseno entre embeddings WavLM-SV 512-D (mayor = misma persona). */
       conversationSpeakerThresholds: {
         /** Misma persona con variación natural de tono NO crea H2/H3. Subido para separar voces claras. */
-        cosineMatchThreshold: 0.85,
+        cosineMatchThreshold: VOICE_DIARIZATION_DEFAULTS.cosineMatch,
         /** Re-identificación room-rematch estricta (512-D L2 + coseno). */
-        roomRematchThreshold: 0.80,
-        cosineContinuityThreshold: 0.80,
-        cosineNewVoiceThreshold: 0.64, // medido 2026-10-07: MISMA voz 0.69-0.74, DISTINTA 0.58; con 0.70 (dentro de la misma voz) cada turno abria un 'Hablante N'
+        roomRematchThreshold: VOICE_DIARIZATION_DEFAULTS.roomRematch,
+        cosineContinuityThreshold: VOICE_DIARIZATION_DEFAULTS.cosineContinuity,
+        cosineNewVoiceThreshold: VOICE_DIARIZATION_DEFAULTS.cosineNewVoice, // medido 2026-10-07: MISMA voz 0.69-0.74, DISTINTA 0.58; con 0.70 (dentro de la misma voz) cada turno abria un 'Hablante N'
         /** Caída de similitud coseno que indica cambio abrupto de voz en ingress. */
         abruptSimilarityDrop: 0.08,
-        cosineRegisteredMatchThreshold: 0.76,
+        cosineRegisteredMatchThreshold: VOICE_DIARIZATION_DEFAULTS.cosineRegisteredMatch,
         /** Piso de match contra un ANCLA VERIFICADA (participantes). Medido 2026-10-19
          * (sesion 18f3888c): misma voz 0.629-0.714, distinta 0.29-0.58. */
-        cosineVerifiedAnchorMatchThreshold: 0.62,
+        cosineVerifiedAnchorMatchThreshold: VOICE_DIARIZATION_DEFAULTS.cosineVerifiedAnchorMatch,
         /** Margen entre DOS anclas verificadas que compiten por el nombre. */
-        verifiedAnchorMargin: 0.05,
+        verifiedAnchorMargin: VOICE_DIARIZATION_DEFAULTS.verifiedAnchorMargin,
         /** Reutilización de cluster en producción (512-D real). */
         productionClusterReuseThreshold: 0.66, ...SPEAKER_ASSIGN.thresholds,
         shortUtteranceMaxMs: 1500,
@@ -146,12 +146,12 @@ export const FLU_CONFIG = {
          * una pausa real (>= esta ventana), es repetición genuina del usuario: se trata
          * como voz nueva, NO se descarta ni se cuenta como eco. */
         committedEchoStreakWindowMs: 1200,
-        turnBoundaryVoicedFactor: 0.32,
-        turnBoundaryNewVoiceFactor: 0.82,
+        turnBoundaryVoicedFactor: VOICE_DIARIZATION_DEFAULTS.turnBoundaryVoicedFactor,
+        turnBoundaryNewVoiceFactor: VOICE_DIARIZATION_DEFAULTS.turnBoundaryNewVoiceFactor,
         /** Frases cortas inestables: unificar con histórico si coseno ≥ este valor (evita H7/H8). */
-        shortUtteranceHistoricalMatch: 0.74,
+        shortUtteranceHistoricalMatch: VOICE_DIARIZATION_DEFAULTS.shortUtteranceHistoricalMatch,
         /** <4 palabras: mantener locutor anterior si coseno ≥ 0.68 (evita H5/H7). */
-        shortUtteranceImmediateContinuity: 0.76,
+        shortUtteranceImmediateContinuity: VOICE_DIARIZATION_DEFAULTS.shortUtteranceImmediateContinuity,
         shortUtteranceImmediateMaxWords: 4,
       },
       embedding: {
@@ -294,8 +294,6 @@ export const FLU_CONFIG = {
     responseDedupWindowMs: 8000,
     /** Throttle del log de interinos. VIVO: useFluVoiceAssistant lo lee; 0 = sin throttle. */
     streamLogThrottleMs: 0,
-    /** Pausa tras cancelar el TTS antes del comando de control (era un 100 literal). */
-    speechCancelSettleMs: 100,
     wakeWordCommandDelayMs: 3000,
     interimCommandDelayMs: 1400,
     /**
@@ -397,7 +395,6 @@ export const FLU_CONFIG = {
       diarizeIntervalMs: 120,
       defaultLabel: 'Hablante 1',
       maxSpeakers: 0,
-      labelTemplate: 'Hablante {n}',
       paragraphBreakMs: 2200,
       paragraphBreakOnPause: true,
       autoAdvanceOnPause: false,
@@ -451,6 +448,8 @@ export const FLU_CONFIG = {
    */
   agenda: {
     enabled: true,
+    tickMs: 15000, // scheduler de agenda (ms); 0 = sin timer
+    autoStopMs: 30000, // auto-stop del timbre (ms); 0 = sin limite
     maxItems: 5,
     minImportance: 0.3,
     injectOnStartup: true,
@@ -2072,11 +2071,6 @@ export const FLU_CONFIG = {
    * No usar hybrid/stream salvo API de pago (p. ej. Deepgram). Ver docs/transcripcion-conversaciones.md § Stack gratuito.
    */
   transcript: {
-    /**
-     * Config del transcriptor Whisper — SOLO para el laboratorio dev
-     * (`src/dev/asrLab/`). PRODUCCIÓN usa Chrome SpeechRecognition (Google,
-     * online); el resto del pipeline es agnóstico al motor.
-     */
     asr: {
       provider: 'whisper-wasm',
       /** §9 UN solo modelo (`tiny`): sin contención de CPU ni doble memoria. */

@@ -207,6 +207,26 @@ export function resolveVoiceIdentity(vector, { model = voiceVectorModel(), candi
     return { voiceId: unico.voiceId, name: unico.name, vector: unico.vector }
 }
 
+/**
+ * OLVIDA un NOMBRE del directorio de sesion (borrado de participante).
+ *
+ * Sin esto el nombre borrado SEGUIA resolviendose por voz y reaparecia en las filas nuevas
+ * (auditoria 2026-10-22): el directorio es memoria de sesion y nadie lo limpiaba.
+ * @param {string} name Nombre (o etiqueta) cuyo vinculo se olvida.
+ * @returns {number} Entradas olvidadas.
+ */
+export function forgetVoiceName(name = '') {
+    const objetivo = foldSpeakerKey(name)
+    if (!objetivo) return 0
+    let olvidadas = 0
+    voiceNames.forEach((entry, voiceId) => {
+        if (foldSpeakerKey(entry?.name || entry?.label || '') !== objetivo) return
+        voiceNames.delete(voiceId)
+        olvidadas += 1
+    })
+    return olvidadas
+}
+
 /** Vacía el directorio (reset de sesión). */
 export function resetVoiceDirectory() {
     voiceNames.clear()

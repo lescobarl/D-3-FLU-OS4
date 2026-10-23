@@ -376,8 +376,8 @@ export const AUTONOMY_THRESHOLD_DEFAULTS = {
  * de respaldo inline en speakerDiarization.js.
  */
 export const VOICE_DIARIZATION_DEFAULTS = {
-    cosineContinuity: 0.74,
-    cosineNewVoice: 0.68,
+    cosineContinuity: 0.80,
+    cosineNewVoice: 0.64,
     classroomReuseRelax: 0.03,
     classroomNewVoiceRelax: 0.04,
     classroomLastSpeakerSwitchMargin: 0.06,
@@ -389,8 +389,10 @@ export const VOICE_DIARIZATION_DEFAULTS = {
     /** Margen del switch del rematch del primario (fraccion de SWITCH). */
     primaryRematchSwitchFactor: 0.5,
     turnBoundaryClusterReabsorbMargin: 0.035,
-    cosineMatch: 0.76,
-    cosineRegisteredMatch: 0.72,
+    cosineMatch: 0.85,
+    /** Re-identificacion room-rematch estricta (512-D L2 + coseno). */
+    roomRematch: 0.80,
+    cosineRegisteredMatch: 0.76,
     /** Piso de match contra un ANCLA VERIFICADA de la base de participantes.
      * Medido en la sesion del dueno (2026-10-19, sesion 18f3888c): la MISMA voz
      * (Luis) contra su ancla verificada da 0.629–0.714, y una voz DISTINTA
@@ -406,8 +408,11 @@ export const VOICE_DIARIZATION_DEFAULTS = {
     continuityBoundaryFactor: 0.82,
     newVoiceBoundaryFactor: 0.88,
     turnBoundaryNewVoiceMultiFactor: 0.72,
-    turnBoundaryVoicedFactor: 0.55,
+    turnBoundaryVoicedFactor: 0.32,
+    turnBoundaryNewVoiceFactor: 0.82,
     turnBoundaryLastTurnFactor: 0.48,
+    shortUtteranceHistoricalMatch: 0.74,
+    shortUtteranceImmediateContinuity: 0.76,
     stickyClusterReidentifyMargin: 0.025,
     stickyMatchFactor: 0.92,
     lastClusterMatchFactor: 0.95,

@@ -1,3 +1,4 @@
+import { normalizeLang } from '../core/config/localeConfig'
 // ============================================================
 // SearchControlCenter — Fase 5: Centro de Control del Buscador
 // ------------------------------------------------------------
@@ -343,7 +344,7 @@ export function SearchControlCenter({
             </p>
             <div className="flu-reminders-list" data-testid="search-roles-list">
               {Object.entries(defaultsByRole).map(([role, roleCfg]) => {
-                const lang = String(roleCfg.language || 'es');
+                const lang = normalizeLang(roleCfg.language as string | undefined);
                 const level = String(roleCfg.readingLevel || 'simple');
                 const langText = languageLabel(lang);
                 const levelText = browserUi[`level_${level}`] || level;

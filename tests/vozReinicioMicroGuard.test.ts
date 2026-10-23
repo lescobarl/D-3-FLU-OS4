@@ -20,6 +20,7 @@ import {
   getActiveRecognition,
   resetActiveRecognitionForTest,
   startSpeechRecognition,
+  speechRecognitionState,
   stopSpeechRecognition,
 } from '../src/voice/lib/speechRecognitionLocal.js'
 
@@ -70,7 +71,10 @@ describe('ciclo de vida del microfono', () => {
     const r = fakeRecognition({ throwOnSecondStart: true })
     bindSpeechRecognition(r as never, {})
     expect(startSpeechRecognition(r as never)).toBe(true)
-    expect(startSpeechRecognition(r as never), 'sin confirmacion el 2.o start avisa (false)').toBe(false)
+    // ESTADOS (auditoria 2026-10-23): 'arrancando' no es 'arrancado' y NINGUNO re-arranca; el
+    // estado fino se consulta aparte (startSpeechRecognition devuelve true = no reinicies).
+    expect(startSpeechRecognition(r as never)).toBe(true)
+    expect(speechRecognitionState(r as never)).toBe('starting')
     expect(
       (r as unknown as { start: { mock: { calls: unknown[] } } }).start.mock.calls.length,
       'P9.70: no se re-arranca (el lock es del INTENTO)',

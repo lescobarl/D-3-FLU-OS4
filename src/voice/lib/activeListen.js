@@ -44,7 +44,7 @@ export {
 } from './conversationStream.js'
 
 import { shouldRelaxIngressTextGuards } from './ingressGuards.js'
-import { parseSpeakerIndex } from './speakerCore.js';
+import { autoSpeakerLabel,  parseSpeakerIndex } from './speakerCore.js';
 
 export { isSpeakerVoiceAbruptChange, shouldRelaxIngressTextGuards } from './ingressGuards.js'
 
@@ -168,9 +168,16 @@ export function wouldShrinkListenLog(capture = '', lastEmitted = '') {
   return false
 }
 
-export function formatListenSpeakerLabel(index, speakersCfg) {
-  const template = speakersCfg.labelTemplate || 'Hablante {n}'
-  return template.replace('{n}', String(index))
+/**
+ * Etiqueta automatica de la ESCUCHA. DUENO UNICO de la plantilla: `autoSpeakerLabel`
+ * (`voiceIdentity.labels.template`). Antes esta funcion leia `speakers.labelTemplate` y
+ * reemplazaba SOLO la primera `{n}`: dos plantillas y dos semantica (auditoria 2026-10-22).
+ * @param {number} index
+ * @param {object} [_speakersCfg] ya no se lee (se conserva la firma por compatibilidad)
+ * @returns {string}
+ */
+export function formatListenSpeakerLabel(index, _speakersCfg) {
+  return autoSpeakerLabel(index)
 }
 
 export function getSpeakerLabel(state) {
@@ -275,6 +282,7 @@ export function clearPendingFinal(state) {
   if (!state) return ''
   const pendiente = cleanForSpeech(state.pendingFinal || '')
   state.pendingFinal = ''
+  state.pendingFinalTurn = null
   return pendiente
 }
 
@@ -286,13 +294,6 @@ export function phrasesEquivalent(a = '', b = '') {
   const left = foldSpeechKey(a)
   const right = foldSpeechKey(b)
   return Boolean(left) && left === right
-}
-
-export function phrasesRelate(lastLine = '', nextPhrase = '') {
-  const last = foldSpeechKey(lastLine)
-  const next = foldSpeechKey(nextPhrase)
-  if (!last || !next) return false
-  return next.startsWith(last) || last.startsWith(next)
 }
 
 export function getRecognitionLanguage(language = 'es', activeLocale = '') {

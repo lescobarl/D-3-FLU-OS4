@@ -15,7 +15,7 @@ const HOOK = readFileSync('src/voice/hooks/useFluVoiceAssistant.js', 'utf8')
 
 /** true si el srGap EMPUJA el aviso (else el silencio no cierra ningun turno). */
 export function srGapEmpujaElAviso(src: string): boolean {
-  return /if \(srGap\.fire[\s\S]{0,80}\)\s*\{[\s\S]{0,200}pushSrGapEvent/.test(src)
+  return /if \(srGap\.fire[\s\S]{0,80}\)\s*\{[\s\S]{0,400}pushSrGapEvent/.test(src)
 }
 
 describe('cierre por silencio: el aviso se empuja (o el turno no cierra nunca)', () => {

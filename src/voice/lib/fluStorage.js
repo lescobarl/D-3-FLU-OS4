@@ -1,4 +1,4 @@
-import { fluDb, newId } from '../../core/db/fluDatabase'
+import { fluDb } from '../../core/db/fluDatabase'
 import { buildSyncTuple } from '../../core/db/syncTuple'
 import { persistVoiceProfile } from '../../hooks/useVoiceProfiles'
 import { putConversationRecord } from '../../hooks/useConversationPersistence'
@@ -13,26 +13,6 @@ function voiceRecordToProfile(record) {
     embedding: record.embedding,
     updatedAt: new Date(record.timestamp).toISOString(),
   }
-}
-
-export async function saveVoiceProfile(profile = {}) {
-  const label = String(profile.label || '').trim()
-  let id = String(profile.id || '').trim()
-  const existing = id ? await fluDb.voiceProfiles.get(id) : undefined
-  if (!id) {
-    id = newId()
-  }
-  const record = {
-    id,
-    label,
-    speakerId: String(profile.speakerId || existing?.speakerId || ''),
-    signature: Array.isArray(profile.signature) ? profile.signature : existing?.signature ?? null,
-    embedding: Array.isArray(profile.embedding) ? profile.embedding : existing?.embedding ?? null,
-    timestamp: Date.now(),
-    sync: buildSyncTuple(existing?.sync, Date.now()),
-  }
-  await persistVoiceProfile(record)
-  return voiceRecordToProfile(record)
 }
 
 export async function listVoiceProfiles() {
@@ -85,10 +65,11 @@ export async function deleteAuditLogsBySpeaker(speaker, { speakerId } = {}) {
 }
 
 async function persistSessionState(session = {}) {
-  const value = {
-    ...session,
-    history: Array.isArray(session?.history) ? session.history : [],
-  }
+  // El HISTORIAL no se persiste aqui: su fuente canonica es fluDb.conversations
+  // (useConversationPersistence). Esta copia no tenia lector y era la misma entidad
+  // guardada en dos sistemas (ruta doble de datos, AGENTS 6.3).
+  const value = { ...session }
+  delete value.history
   const existing = await fluDb.sessionState.get('current')
   await fluDb.sessionState.put({
     id: 'current',
@@ -113,7 +94,7 @@ export async function loadSessionState() {
   const record = await fluDb.sessionState.get('current')
   if (!record) return null
   const value = record.value && typeof record.value === 'object' ? record.value : {}
-  return { ...value, history: Array.isArray(value.history) ? value.history : [] }
+  return { ...value }
 }
 
 /**

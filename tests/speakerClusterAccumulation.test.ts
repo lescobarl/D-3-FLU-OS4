@@ -22,7 +22,7 @@ import {
   resolveTurnSpeakerAtCommit,
   applyResolvedSpeakerToSessionRefs,
 } from '../src/voice/lib/turnSpeakerCommit.js'
-import { flattenChunksWindow } from '../src/voice/lib/speakerClusters.js'
+import { flattenChunksWindow, findClusterByLabel } from '../src/voice/lib/speakerClusters.js'
 import { scheduleTurnSpeakerPreflight } from '../src/voice/lib/turnSpeakerPreflight.js'
 import { resolveConversationSpeaker } from '../src/voice/lib/speakerDiarization.js'
 import { enqueueSpeakerIdentityJob } from '../src/voice/lib/voiceIdentityQueue.js'
@@ -300,3 +300,17 @@ describe('piso de evidencia: una ventana sin VOZ medida no abre un "Hablante N" 
     expect(resolverPiso([])).toBe('Hablante ?')
   })
 })
+
+describe(
+  'cache de clusters: el renombrado en sitio se ve (no se sirve el mapa viejo)',
+  () => {
+    it('tras cambiar `label`, findClusterByLabel encuentra el nombre NUEVO', () => {
+      const clusters = [{ label: 'Hablante 1', speakerId: 'speaker_1' }] as Array<{ label: string; speakerId: string }>
+      expect(findClusterByLabel(clusters, 'Hablante 1')).toBe(clusters[0])
+      // Renombrado MUTANDO el mismo objeto (lo hace speakerDiarization al unificar voces).
+      clusters[0].label = 'Luis'
+      expect(findClusterByLabel(clusters, 'Luis'), 'el nombre nuevo tiene que verse').toBe(clusters[0])
+      expect(findClusterByLabel(clusters, 'Hablante 1'), 'el viejo ya no').toBeNull()
+    })
+  },
+)

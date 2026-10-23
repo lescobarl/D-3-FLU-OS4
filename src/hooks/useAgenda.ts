@@ -75,7 +75,8 @@ export function useAgenda({
     onFire,
     audio,
     now,
-    tickMs = 15000,
+    // Sin default local: la frecuencia tiene UN dueno (FLU_CONFIG.agenda.tickMs). 0 = sin timer.
+    tickMs = Number(FLU_CONFIG.agenda?.tickMs) || 0,
 }: UseAgendaOptions): UseAgendaResult {
     const [items, setItems] = useState<AgendaItem[]>([]);
     const [ringing, setRinging] = useState<AgendaRinging | null>(null);
@@ -106,7 +107,8 @@ export function useAgenda({
     // Timer del auto-stop (silenciado automático si nadie pulsa "Detener").
     const ringingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const agendaConfig = (FLU_CONFIG.agenda || {}) as Record<string, unknown>;
-    const autoStopMs = Number(agendaConfig.autoStopMs) || 30000;
+    // 0 = sin auto-stop (el dueno del valor es la config, sin fallback local).
+    const autoStopMs = Number(agendaConfig.autoStopMs) || 0;
 
     useEffect(() => {
         let cancelled = false;
@@ -152,11 +154,15 @@ export function useAgenda({
                 if (fires.length > 0 && stopEpochRef.current === epoch) {
                     // Auto-stop configurable: si nadie pulsa "Detener", se silencia solo.
                     if (ringingTimerRef.current) clearTimeout(ringingTimerRef.current);
+                    // 0 = sin auto-stop: no se programa timer (un setTimeout(0) silenciaria
+                    // el timbre al instante).
+                    if (autoStopMs > 0) {
                     ringingTimerRef.current = setTimeout(() => {
                         audioDriver.stop();
                         setRinging(null);
                         ringingTimerRef.current = null;
                     }, autoStopMs);
+                    }
                 }
             } catch (err) {
                 logCaughtError('[useAgenda] scheduler tick error', err);
@@ -167,6 +173,9 @@ export function useAgenda({
                 const delay = nextTick
                     ? Math.max(1000, Math.min(nextTick - nowRef.current(), tickMs))
                     : tickMs;
+                // `tickMs = 0` = sin polling: sin frecuencia no se reprograma (un delay 0
+                // seria un bucle de timers).
+                if (!(Number(delay) > 0)) return
                 timer = setTimeout(() => void tick(), delay);
             }
         };

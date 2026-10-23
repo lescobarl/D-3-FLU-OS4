@@ -6,6 +6,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { resolveSrGapTrigger } from '../src/voice/lib/fluTranscriptPause.js'
+import { evaluateSrGapSegmentCommit } from '../src/voice/lib/conversationStream.js'
 import { registerVoiceName, rememberVoiceVector, resetVoiceDirectory, resolveVoiceName } from '../src/voice/lib/speakerDirectory.js'
 
 /**
@@ -65,3 +66,29 @@ describe('P5 - el nombre NO se propaga a otra clave (regresion medida en su corr
   })
 })
 
+// El TRIGGER dispara por cambio de hablante, pero el EVALUADOR del cierre exigia SILENCIO: el
+// cierre se descartaba con reason "sr-active" y la locucion quedaba abierta (auditoria
+// 2026-10-22). Aqui se fijan las dos caras: con el motivo CIERRA, sin el motivo NO.
+describe('P4.b - el EVALUADOR del cierre respeta el motivo', () => {
+  it('con reason sr-speaker-change cierra aunque no haya pasado el silencio', () => {
+    const r = evaluateSrGapSegmentCommit({ openLine: 'estoy dictando una locucion' }, {
+      sinceLastResultMs: 0,
+      published: 'estoy dictando una locucion',
+      lastCommitted: '',
+      reason: 'sr-speaker-change',
+    })
+    expect(r.flush, 'el cambio de hablante es puerta de cierre').toBe(true)
+    expect(String(r.capture)).toContain('estoy dictando')
+  })
+
+  it('sin motivo y sin silencio NO cierra (no se vacia a mitad del dictado)', () => {
+    const r = evaluateSrGapSegmentCommit({ openLine: 'estoy dictando una locucion' }, {
+      sinceLastResultMs: 0,
+      published: 'estoy dictando una locucion',
+      lastCommitted: '',
+      reason: '',
+    })
+    expect(r.flush).toBe(false)
+    expect(r.reason).toBe('sr-active')
+  })
+})

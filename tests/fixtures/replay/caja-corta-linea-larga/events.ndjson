@@ -1,0 +1,5 @@
+{"seq":1,"t":1000,"iso":"1970-01-01T00:00:01.000Z","category":"listen","event":"chrome-raw","data":{"t":1000,"stage":"chrome-raw","seq":1,"kind":"interim","text":"vamos a preparar la receta"}}
+{"seq":2,"t":1600,"iso":"1970-01-01T00:00:01.600Z","category":"listen","event":"chrome-raw","data":{"t":1600,"stage":"chrome-raw","seq":2,"kind":"interim","text":"prepara la receta completa con todos los ingredientes"}}
+{"seq":3,"t":2200,"iso":"1970-01-01T00:00:02.200Z","category":"listen","event":"chrome-raw","data":{"t":2200,"stage":"chrome-raw","seq":3,"kind":"final","text":"prepara la receta completa con todos los ingredientes y el horno"}}
+{"seq":4,"t":7000,"iso":"1970-01-01T00:00:07.000Z","category":"listen","event":"chrome-raw","data":{"t":7000,"stage":"chrome-raw","seq":4,"kind":"interim","text":"y despues horneamos"}}
+{"seq":5,"t":7600,"iso":"1970-01-01T00:00:07.600Z","category":"listen","event":"chrome-raw","data":{"t":7600,"stage":"chrome-raw","seq":5,"kind":"final","text":"y despues horneamos"}}

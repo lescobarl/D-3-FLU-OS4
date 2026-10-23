@@ -13,7 +13,7 @@
 // El respaldo se usa SOLO cuando no hay etiqueta.
 // ============================================================
 import { beforeEach, describe, expect, it } from 'vitest'
-import { commitUserTurnRow, preserveProperSpeaker, renameSpeakerRows, resolveRowSpeakerName, updateTurnRowSpeaker } from '../src/voice/lib/conversationTurnRow'
+import { commitUserTurnRow, renameSpeakerRows, resolveRowSpeakerName, updateTurnRowSpeaker } from '../src/voice/lib/conversationTurnRow'
 import { resolveRowSpeakerLabel } from '../src/voice/lib/conversationRow'
 import { resetVoiceDirectory } from '../src/voice/lib/speakerDirectory.js'
 import { useIntegrationStore } from '../src/store/integrationStore'
@@ -51,8 +51,8 @@ describe('A5 corregida - la etiqueta del resolver se escribe y el renombre susti
       turnId: 12,
     } as never)
     expect(filas()[0], 'la etiqueta de diarizacion se escribe tal cual').toBe('Hablante 2')
-    expect(resolveRowSpeakerName('Hablante 3', false)).toBe('Hablante 3')
-    expect(resolveRowSpeakerName('luis', false), 'etiqueta no-propia del resolver').toBe('luis')
+expect(resolveRowSpeakerName('Hablante 3')).toBe('Hablante 3')
+expect(resolveRowSpeakerName('luis'), 'etiqueta no-propia del resolver').toBe('luis')
   })
 
   it('(util) tras "soy <nombre>" el renombre SUSTITUYE las filas de esa voz', () => {
@@ -86,19 +86,14 @@ describe('A5 corregida - la etiqueta del resolver se escribe y el renombre susti
   it('la fila NUNCA queda vacia: sin etiqueta -> respaldo', () => {
     commitUserTurnRow({ text: 'hola', turnId: 1 } as never)
     expect(filas()[0]).toBe(RESPALDO)
-    expect(resolveRowSpeakerName('', false)).toBe(RESPALDO)
-    expect(resolveRowSpeakerName('   ', false)).toBe(RESPALDO)
+    expect(resolveRowSpeakerName('')).toBe(RESPALDO)
+    expect(resolveRowSpeakerName('   ')).toBe(RESPALDO)
   })
 
-  it('(flanco) fila VACIA + nombre propio SIN evidencia ni texto -> NO se estampa', () => {
+  it('(flanco) fila VACIA + nombre propio SIN evidencia -> NO se estampa', () => {
     // El relleno tardio de identidad pedia "Luis" sin evidencia sobre una fila vacia y
     // colaba el nombre en una voz que no era la suya. Sin evidencia acustica NI del
     // texto, la fila se queda con el RESPALDO, no con el nombre propio.
-    const respaldo = preserveProperSpeaker('Luis', '', false, { evidenciaDeTexto: false })
-    expect(respaldo, 'no se estampa el nombre propio').not.toBe('Luis')
-    expect(respaldo).toBe(String((FLU_CONFIG as any).voiceIdentity?.labels?.fallbackSpeaker || ''))
-    expect(preserveProperSpeaker('Luis', '', true), 'con evidencia SI asciende').toBe('Luis')
-    expect(preserveProperSpeaker('Luis', '', false), 'si viene del texto SI se estampa').toBe('Luis')
     // Por la puerta REAL: el relleno tardio sobre una fila vacia no escribe el nombre.
     commitUserTurnRow({ text: 'okay flu soy luis', speakerName: 'Hablante 2', evidenciaAcustica: false, turnId: 25 } as never)
     useIntegrationStore.setState({ conversationHistory: useIntegrationStore.getState().conversationHistory.map((e) => ((e as { turnId?: number }).turnId === 25 ? { ...e, speakerName: '' } : e)) })
@@ -106,14 +101,14 @@ describe('A5 corregida - la etiqueta del resolver se escribe y el renombre susti
     expect(filaDe(25), 'la fila vacia no estampa el nombre propio').not.toBe('Luis')
   })
 
-  it('PRUEBA DE DETECTOR (el detector no es decorativo): la etiqueta y el respaldo discriminan', () => {    // Con etiqueta: se escribe la etiqueta (no el respaldo inyectado).
-    expect(resolveRowSpeakerName('Hablante 2', false, {}, 'Hablante 9')).toBe('Hablante 2')
+  it('PRUEBA DE DETECTOR (el detector no es decorativo): la etiqueta y el respaldo discriminan', () => {
+    // Con etiqueta: se escribe la etiqueta (no el respaldo inyectado).
+    expect(resolveRowSpeakerName('Hablante 2', 'Hablante 9')).toBe('Hablante 2')
     // Sin etiqueta: manda el respaldo inyectado.
-    expect(resolveRowSpeakerName('', false, {}, 'Hablante 9')).toBe('Hablante 9')
-    // El vinculo registrado NO asciende: la etiqueta se escribe tal cual (la unica via del
-    // nombre propio es el texto del comando; la voz no lo introduce).
-    const LUIS = { registeredLabel: 'Hablante 2', registeredName: 'Luis' }
-    expect(resolveRowSpeakerName('Hablante 2', false, LUIS)).toBe('Hablante 2')
-    expect(resolveRowSpeakerName('Hablante 2', true, LUIS)).toBe('Hablante 2')
+    expect(resolveRowSpeakerName('', 'Hablante 9')).toBe('Hablante 9')
+    // Una etiqueta automatica NO asciende por el vinculo con un participante registrado:
+    // la unica via del nombre propio es el texto del comando; la voz no lo introduce.
+    commitUserTurnRow({ text: 'hola a todos', speakerName: 'Hablante 2', evidenciaAcustica: true, turnId: 41 } as never)
+    expect(filaDe(41), 'la voz no introduce el nombre').toBe('Hablante 2')
   })
 })

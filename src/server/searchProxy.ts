@@ -1,3 +1,4 @@
+import { normalizeLang } from '../core/config/localeConfig.ts'
 // ============================================================
 // searchProxy.ts — Proxy del Buscador (F3 web + IA; F4 imágenes/vídeo)
 // Mismo patrón que browserProxy:
@@ -141,7 +142,7 @@ async function handleSearch(
   if (!parsed) return;
 
   const query = (parsed.searchParams.get('q') || '').trim();
-  const lang = parsed.searchParams.get('lang') || 'es';
+  const lang = normalizeLang(parsed.searchParams.get('lang'));
   const allowlist = parseAllowlist(parsed.searchParams.get('allowlist'));
   const timeoutMs = Number(parsed.searchParams.get('timeout')) || defaultProxyMs;
   const maxResults = Number(parsed.searchParams.get('max')) || DEFAULT_MAX_RESULTS;

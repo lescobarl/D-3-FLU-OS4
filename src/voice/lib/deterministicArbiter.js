@@ -1,3 +1,4 @@
+import { normalizeLang } from '../../core/config/localeConfig'
 // ============================================================
 // FLU OS4 — Árbitro determinista UNIFICADO (módulo puro)
 // ------------------------------------------------------------
@@ -446,7 +447,7 @@ const CONFIG_LABEL_EN = Object.freeze({
  * @returns {string} Frase de cortesía ('' si el motor local ya habla).
  */
 export function resolveDeterministicCourtesySpeech(action = null, domain = '', language = 'es') {
-  const isEn = String(language || 'es').toLowerCase().startsWith('en')
+  const isEn = normalizeLang(language) === 'en'
   if (!action) return ''
 
   if (domain === 'game' || domain === 'environment') {

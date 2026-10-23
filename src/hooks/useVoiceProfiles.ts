@@ -87,9 +87,15 @@ export function useVoiceProfiles() {
     }, []);
 
     /** Renombrar un perfil de voz */
-    const renameProfile = useCallback(async (id: string, newLabel: string) => {
+    /**
+     * Renombrar un perfil de voz. DEVUELVE el perfil ya guardado: `App.handleRenameProfile`
+     * lo necesita para renombrar la voz de la SESION y auditar; sin valor de retorno el
+     * nombre cambiaba en Dexie y no en la sesion (auditoria 2026-10-22).
+     * @returns {Promise<VoiceProfileUI | null>}
+     */
+    const renameProfile = useCallback(async (id: string, newLabel: string): Promise<VoiceProfileUI | null> => {
         const existing = await fluDb.voiceProfiles.get(id);
-        if (!existing) return;
+        if (!existing) return null;
 
         const updated: VoiceProfileRecord = {
             ...existing,
@@ -97,7 +103,9 @@ export function useVoiceProfiles() {
             sync: buildSyncTuple(existing.sync, Date.now()),
         };
         await persistVoiceProfile(updated);
-        setProfiles((prev) => prev.map((p) => (p.id === id ? toUI(updated) : p)));
+        const ui = toUI(updated);
+        setProfiles((prev) => prev.map((p) => (p.id === id ? ui : p)));
+        return ui;
     }, []);
 
     /** Eliminar un perfil de voz (borrado lógico) */

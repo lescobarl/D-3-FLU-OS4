@@ -193,7 +193,11 @@ describe('D · margen entre DOS anclas verificadas (verifiedAnchorMargin)', () =
   it('si la mejor ancla NO saca 0.05 a la segunda, NO se adivina el nombre', () => {
     const diagnosis: Record<string, unknown> = {}
     const label = resolver(vozConDosCosenos(0.64, 0.62), { clusters: dosAnclas(), diagnosis })
-    expect(label, '0.64 vs 0.62 es ambiguo: ninguna identidad se afirma').toBe('Hablante 1')
+    // Politica gris (fase 1, 2026-10-21): una voz ambigua NO se atribuye; queda
+    // PROVISIONAL hasta que su propio vector la resuelva. Antes se abria un "Hablante N".
+    expect(label, '0.64 vs 0.62 es ambiguo: ninguna identidad se afirma').toBe(
+      FLU_CONFIG.voiceIdentity.labels.pendingSpeaker,
+    )
     expect(label).not.toBe('Luis')
     expect(label).not.toBe('Ana')
   })

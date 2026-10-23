@@ -17,6 +17,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useServiceRef } from './useServiceRef';
 import { FLU_CONFIG } from '../voice/lib/fluConfig';
+import { repairConfirmationNameDuplicates } from '../core/multiuser/confirmationNameRepair';
 import { fluDb, type ParticipantRecord } from '../core/db/fluDatabase';
 import {
   createParticipantRegistry,
@@ -36,6 +37,9 @@ import { localGet, localRemove, localSetSafe } from '../core/storage/localStore'
 import { voiceVectorModel } from '../voice/lib/speakerDirectory';
 import { speakerIdToDefaultName } from '../voice/lib/conversationRow.js';
 import { useIntegrationStore } from '../store/integrationStore';
+import { renameRowSpeakerName } from '../voice/lib/conversationTurnRow';
+import { setParticipantAnchorsProvider } from '../voice/lib/conversationTurnRow';
+import { participantVoiceAnchorsForDiarization } from '../voice/lib/participantVoiceAnchors';
 
 /** Gateway único de la tabla onboardingStates (C44: un solo escritor). */
 const onboardingGateway = createOnboardingService({ db: fluDb.onboardingStates });
@@ -145,6 +149,14 @@ export function useParticipants({ now }: UseParticipantsOptions = {}): UsePartic
       .finally(() => refresh().catch((e) => logCaughtError('src/hooks/useParticipants.ts: refresh', e)));
   }, [seedAnonymous, refresh, service]);
 
+  // UNA SOLA FUENTE DE CANDIDATOS (auditoria 2026-10-23): la fila resolvia la voz sin las
+  // anclas de la base y App con ellas, asi que la misma voz salia conocida en una ruta y
+  // desconocida en la otra. El dueno del dato (esta base) las inyecta; la fila solo consulta.
+  useEffect(() => {
+    setParticipantAnchorsProvider(() => participantVoiceAnchorsForDiarization(participants));
+    return () => setParticipantAnchorsProvider(null);
+  }, [participants]);
+
   // REPARACION UNICA (2026-10-21): el eco de FLU creo "Luis Registrado" con un vector
   // medido y lo escribio en la base; el rename por clave lo propago a filas de otras
   // voces. La creacion ya esta cerrada (stopwords + ventana de eco + no-reanclaje), pero
@@ -157,39 +169,30 @@ export function useParticipants({ now }: UseParticipantsOptions = {}): UsePartic
     const KEY = 'flu-identity-confirmation-repair-2026-10-21';
     if (typeof window === 'undefined') return;
     if (localGet(KEY) === '1') return;
-    const baseOf = (name: string): string => {
-      const match = String(name || '').trim().match(/^(.*\S)\s+(registrado|registrada|registered)$/i);
-      return match ? match[1].trim() : '';
-    };
-    const run = async () => {
-      const all = await service.list();
-      const byName = new Map(all.map((p) => [String(p.name || '').trim().toLowerCase(), p]));
-      const duplicates = all.filter((p) => {
-        const base = baseOf(p.name);
-        return Boolean(base) && byName.has(base.toLowerCase()) && base.toLowerCase() !== String(p.name || '').trim().toLowerCase();
-      });
-      for (const duplicate of duplicates) {
-        const base = byName.get(baseOf(duplicate.name).toLowerCase());
-        if (!base) continue;
-        await service.remove(duplicate.id);
-        // NO se toca el ancla del participante base: no hay evidencia de que ESTA
-        // concreta estuviera contaminada y borrarla destruiria una identidad valida.
-        // La creacion de anclas por eco ya esta cerrada; aqui solo se retira el
-        // participante duplicado y se limpia el nombre que se le pego a las filas.
+    // La MIGRACION vive en su modulo (dos duenos, inyectados por puertos); aqui solo se
+    // dispara una vez. Antes este efecto borraba participantes y reescribia filas con
+    // acceso directo al store (logica de datos en UI).
+    repairConfirmationNameDuplicates({
+      listParticipants: () => service.list(),
+      removeParticipant: (id) => service.remove(id),
+      userRowsOfCurrentEpoch: () => {
         const store = useIntegrationStore.getState();
         const epoch = Number(store.conversationEpoch);
-        for (const entry of store.conversationHistory) {
-          if (entry.role !== 'user') continue;
-          if (Number(entry.epoch) !== epoch) continue;
-          if (String(entry.speakerName || '').trim() !== String(duplicate.name || '').trim()) continue;
-          const fallback = speakerIdToDefaultName(String(entry.speakerId || ''));
-          if (fallback && fallback !== entry.speakerName) store.setEntrySpeakerName(entry.id, fallback);
-        }
-      }
-      localSetSafe(KEY, '1', 'src/hooks/useParticipants.ts: confirmation-name repair');
-      if (duplicates.length) await refresh();
-    };
-    run().catch((error) => logCaughtError('src/hooks/useParticipants.ts: confirmation-name repair', error));
+        return store.conversationHistory
+          .filter((entry) => entry.role === 'user' && Number(entry.epoch) === epoch)
+          .map((entry) => ({ id: entry.id, speakerId: entry.speakerId, speakerName: entry.speakerName }));
+      },
+      // MIGRACION declarada: devolver a su etiqueta una fila que nacio con el sufijo de
+      // confirmacion ("Luis Registrado"). Va por el store a proposito: el freeze del dueno
+      // NO degrada un nombre propio a etiqueta automatica, y aqui eso es justo lo que toca.
+      setRowSpeakerName: (id, name) => renameRowSpeakerName(id, name),
+      fallbackNameForSpeakerId: (speakerId) => speakerIdToDefaultName(speakerId),
+    })
+      .then(({ removed }) => {
+        localSetSafe(KEY, '1', 'src/hooks/useParticipants.ts: confirmation-name repair');
+        return removed ? refresh() : undefined;
+      })
+      .catch((error) => logCaughtError('src/hooks/useParticipants.ts: confirmation-name repair', error));
   }, [refresh, service]);
 
   // REGISTRO VIVO ENTRE PESTANAS: si OTRA pestana de la app registra un participante o

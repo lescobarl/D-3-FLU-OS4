@@ -2,7 +2,7 @@
    FLU OS4 — Estilos Globales con Sistema Unificado
    ============================================================
    Orden de importación real (desde main.tsx → App.tsx → index.css):
-      1. src/avatar/App.css        — :root CSS variables + BunnyControlCenter
+      1. src/avatar/App.css        — :root CSS
       2. src/styles/unified.css    — Sistema unificado: layout legacy de la
                                      app (ex-App.css) + componentes flu-*
       3. src/index.css             — Global overrides (este archivo, el último)

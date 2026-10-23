@@ -49,12 +49,13 @@ type EstadoDeEscuchaConRelojes = {
  * Arnes: el cierre REAL por srGap sobre el estado y las filas del caso. Los
  * colaboradores (EVAL, portones y escritor de la fila) son los de produccion.
  */
-function cerrarPorSrGap({ openLine = '', live = '', filas = [] as string[] }) {
+function cerrarPorSrGap({ openLine = '', live = '', final = '', filas = [] as string[] }) {
   // El estado REAL de escucha + los dos relojes que usa el EVAL del srGap (el
   // tipo publico del modulo no los declara porque los escribe conversationStream).
   const listenState = createActiveListenState() as unknown as EstadoDeEscuchaConRelojes
   const hace4s = Date.now() - 4000
   listenState.openLine = openLine
+  listenState.pendingFinal = final
   listenState.openLineStartedAtMs = hace4s
   listenState.openLineLastTouchMs = hace4s
 
@@ -200,12 +201,36 @@ describe('srGap: el cierre retiene la referencia viva completa', () => {
     expect(filas.at(-1)).toBe(LOCUCION)
   })
 
-  it('B.3: si la CAJA es la corta, la fila es la corta (no se inventa el buffer oculto)', () => {
-    const corta = 'buenos dias a todos los presentes'
-    const { filas } = cerrarPorSrGap({ openLine: LOCUCION, live: corta, filas: [] })
+  it('P11.9: caja CORTA + FINAL confirmado mas completo -> la fila lleva el final y la caja crece', () => {
+    // Mutacion: si el cierre borra el texto vivo (o commitea la caja a secas), esta
+    // expectativa falla. Es el defecto medido: la caja habia bloqueado una emision mas
+    // completa y el final confirmado se perdia al cerrar por silencio.
+    const corta = 'quiero que me expliques con calma todos los pasos'
+    const { filas } = cerrarPorSrGap({ openLine: LOCUCION, live: corta, final: LOCUCION, filas: [] })
     console.log(`  DET frame=${filas.map((t) => t.length).join(',')}`)
-    // La caja es la frase canonica visible. Escribir el buffer largo seria romper
-    // "fila = caja" (Anexo B.3); el buffer no puede ser una segunda verdad.
-    expect(filas.at(-1)).toBe(corta)
+    expect(filas.at(-1), 'la fila lleva el FINAL confirmado, no la caja corta').toBe(LOCUCION)
+  })
+
+  it('P11.9b: caja CORTA + viva de la MISMA revision que CONSERVA el bloque y trae mas texto -> la fila lleva la completa (sin final)', () => {
+    const corta = 'quiero que me expliques con calma'
+    const { filas } = cerrarPorSrGap({ openLine: LOCUCION, live: corta, filas: [] })
+    // La viva conserva TODAS las palabras de la caja: la fila puede crecer sin perder nada.
+    expect(filas.at(-1)).toBe(LOCUCION)
+  })
+
+  it('P11.9c: viva mas larga que NO conserva el bloque de la caja -> manda la caja (no hay perdida)', () => {
+    const caja = 'vamos a preparar la receta'
+    const ajena = 'pon la mesa y trae los platos y los cubiertos para la cena'
+    const { filas } = cerrarPorSrGap({ openLine: ajena, live: caja, filas: [] })
+    // Otra hipotesis no puede llevarse la fila: la caja es la verdad visible.
+    expect(filas.at(-1)).toBe(caja)
+  })
+
+  it('B.3: otra HIPOTESIS (arranque distinto) no se mezcla: manda la caja', () => {
+    const ajena = 'buenos dias a todos los presentes'
+    const { filas } = cerrarPorSrGap({ openLine: LOCUCION, live: ajena, filas: [] })
+    // Nunca se concatenan dos hipotesis: la fila es UNA emision entera, la que muestra la caja.
+    expect(filas.at(-1)).toBe(ajena)
+    expect(filas.at(-1)).not.toContain('quiero que me expliques')
   })
 })

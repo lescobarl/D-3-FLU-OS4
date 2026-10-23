@@ -35,6 +35,7 @@ import {
   sameVoiceFloor,
   updateClusterSignature,
   verifiedAnchorFloor,
+  verifiedAnchorMargin,
 } from './speakerClusters.js'
 
 function nextSessionSpeakerLabel(speakerClusters = [], extraLabels = [], maxAutoSpeakers = 0, highWater = 0) {
@@ -169,6 +170,11 @@ export function namedAssignmentConfirmed({
   if (!isRegisteredSpeakerLabel(label) || shortWindow) return false
   if (!anchorVerified && similarity < namedAssignFloor(thresholds)) return false
   if (bestAlternative < 0) return true
+  // Un ancla VERIFICADA solo se salta el margen cuando la alternativa esta POR DEBAJO
+  // de su piso (otra voz distinta). Si la alternativa es una voz alta y cercana (turno
+  // mezclado), el margen generico sigue siendo obligatorio: bajar el margen a cinco
+  // centesimas devolvia "Luis" a un turno mezclado medido.
+  if (anchorVerified && bestAlternative < verifiedAnchorFloor(thresholds)) return true
   return similarity - bestAlternative >= namedAssignMargin(thresholds)
 }
 
@@ -216,10 +222,7 @@ function resolveProductionSpeakerAtBoundary({
   // el piso registrado general (0,76) la MISMA persona no confirma y su fila cae a
   // «Hablante N».
   const VERIFIED_ANCHOR = verifiedAnchorFloor(thresholds)
-  const verifiedMarginRaw = Number(thresholds?.verifiedAnchorMargin)
-  const VERIFIED_MARGIN = Number.isFinite(verifiedMarginRaw)
-    ? verifiedMarginRaw
-    : VOICE_DIARIZATION_DEFAULTS.verifiedAnchorMargin
+  const VERIFIED_MARGIN = verifiedAnchorMargin(thresholds)
   const HISTORICAL = cosineThreshold(thresholds, 'shortUtteranceHistoricalMatch', SHORT_UTTERANCE_HISTORICAL_MATCH)
   const reuseRelax = Number(roomCfg.classroomReuseRelax)
   const REUSE_EFF = classroom ? REUSE - (Number.isFinite(reuseRelax) ? reuseRelax : VOICE_DIARIZATION_DEFAULTS.classroomReuseRelax) : REUSE

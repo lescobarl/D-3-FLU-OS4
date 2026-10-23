@@ -25,15 +25,12 @@ import { useIntegrationStore } from '../src/store/integrationStore'
 import {
     commitUserTurnRow,
     updateTurnRowSpeaker,
-    resolveRowSpeakerName,
-    preserveProperSpeaker,
 } from '../src/voice/lib/conversationTurnRow'
 import { preflightEvidenceMeasured } from '../src/voice/lib/turnSpeakerPreflight.js'
 
 const TURN_ROW = readFileSync('src/voice/lib/conversationTurnRow.ts', 'utf8')
 const HOOK = readFileSync('src/voice/hooks/useFluVoiceAssistant.js', 'utf8')
 const STREAM = readFileSync('src/voice/lib/conversationStreamCommit.js', 'utf8')
-const LUIS = { registeredLabel: 'Hablante 1', registeredName: 'Luis' }
 
 function etiquetaDe(_turnId: number): string {
     const h = useIntegrationStore.getState().conversationHistory
@@ -48,9 +45,11 @@ beforeEach(() => {
 })
 
 describe('A) omitir la marca de evidencia NO es "medida" (fuente)', () => {
-    it('los tres duelos de la fila declaran el default en FALSE', () => {
+    it('los duelos de la fila declaran el default en FALSE', () => {
         expect(/(evidenciaAcustica = true)/.test(TURN_ROW), 'ningun dueno puede tener el default en true').toBe(false)
-        expect(TURN_ROW.match(/evidenciaAcustica = false/g)?.length).toBe(3)
+        // DOS duelos reales de la fila (updateTurnRowSpeaker + commitUserTurnRow). El tercero
+        // era `preserveProperSpeaker`, retirado por duplicar la regla sin consumidor.
+        expect(TURN_ROW.match(/evidenciaAcustica = false/g)?.length).toBe(2)
     })
     it('el PARTICIPANTE elegido NO estampa su nombre sin coincidencia (solo el mandato "soy X")', () => {
         // Medido 2026-10-11: tras elegir a Luis en el onboarding sus filas salian "Luis" sin decir
@@ -73,22 +72,15 @@ describe('A) omitir la marca de evidencia NO es "medida" (fuente)', () => {
 })
 
 describe('A) la fila NO asciende al nombre sin evidencia declarada', () => {
-    it('resolveRowSpeakerName sin evidencia deja la etiqueta automatica (no el nombre)', () => {
-        expect(resolveRowSpeakerName('Hablante 1', false, LUIS)).toBe('Hablante 1')
-        expect(resolveRowSpeakerName('Hablante 1', undefined as unknown as boolean, LUIS)).toBe('Hablante 1')
-    })
-    it('commitUserTurnRow SIN la marca NO estampa el nombre registrado', () => {
-        commitUserTurnRow({ text: 'hola a todos', speakerName: 'Hablante 1', registeredSpeaker: LUIS, turnId: 1 } as never)
+    it('commitUserTurnRow SIN la marca NO estampa un nombre propio', () => {
+        commitUserTurnRow({ text: 'hola a todos', speakerName: 'Hablante 1', turnId: 1 } as never)
         expect(etiquetaDe(1), 'la etiqueta automatica no asciende sin coincidencia').toBe('Hablante 1')
     })
-    it('updateTurnRowSpeaker SIN la marca NO estampa el nombre registrado', () => {
+    it('updateTurnRowSpeaker SIN la marca NO escribe el nombre; CON ella lo CONFIRMA', () => {
         commitUserTurnRow({ text: 'hola', speakerName: 'Hablante 1', turnId: 2 } as never)
-        updateTurnRowSpeaker(2, 'Hablante 1', { registeredSpeaker: LUIS } as never)
-        expect(etiquetaDe(2)).toBe('Hablante 1')
-        updateTurnRowSpeaker(2, 'Hablante 1', { registeredSpeaker: LUIS, evidenciaAcustica: true } as never)
-        expect(etiquetaDe(2), 'la evidencia de VOZ no introduce el nombre (solo lo confirma)').toBe('Hablante 1')
-    })
-    it('preserveProperSpeaker sin evidencia no deja pasar un nombre propio de otra voz', () => {
-        expect(preserveProperSpeaker('Luis', 'Hablante 2', false, { evidenciaDeTexto: false })).toBe('Hablante 2')
+        updateTurnRowSpeaker(2, 'Luis', { evidenciaAcustica: false } as never)
+        expect(etiquetaDe(2), 'sin coincidencia medida no se escribe el nombre proprio').toBe('Hablante 1')
+        updateTurnRowSpeaker(2, 'Luis', { evidenciaAcustica: true } as never)
+        expect(etiquetaDe(2), 'con coincidencia medida la voz CONFIRMA el nombre').toBe('Luis')
     })
 })

@@ -71,6 +71,8 @@ let activeRecognition = null
 let capturing = new WeakSet()
 /** Instancias cuyo arranque CONFIRMO el motor (`onstart`) - P9.76. */
 let confirmed = new WeakSet()
+/** Instancias cuyo ULTIMO start() fallo (estado `failed` de la API de estados). */
+let failed = new WeakSet()
 
 /** Instancia que está capturando ahora mismo (o null). Solo lectura. */
 export function getActiveRecognition() {
@@ -84,6 +86,24 @@ export function resetActiveRecognitionForTest() {
   // marcas, el caso siguiente mediria el estado del anterior).
   capturing = new WeakSet()
   confirmed = new WeakSet()
+  failed = new WeakSet()
+}
+
+/**
+ * Estado REAL del motor de reconocimiento para una instancia.
+ *
+ * Tres estados, un solo dueno: `starting` (start() aceptado, `onstart` aun no),
+ * `started` (el motor confirmo `onstart`), `failed` (el ultimo start() lanzo y no se
+ * pudo arrancar) y `idle` (no es la captura activa). Antes el llamador solo tenia un
+ * booleano y no podia distinguir "arrancando" de "arrancado" (auditoria 2026-10-23).
+ * @param {object|null} recognition instancia de SpeechRecognition
+ * @returns {'starting'|'started'|'failed'|'idle'}
+ */
+export function speechRecognitionState(recognition) {
+  if (!recognition) return 'idle'
+  if (failed.has(recognition)) return 'failed'
+  if (activeRecognition !== recognition || !capturing.has(recognition)) return 'idle'
+  return confirmed.has(recognition) ? 'started' : 'starting'
 }
 
 export function startSpeechRecognition(recognition) {
@@ -95,7 +115,13 @@ export function startSpeechRecognition(recognition) {
   // CONFIRMO el arranque (`onstart`). Sin confirmar devuelve false para que el llamante
   // conserve su via de recuperacion (stop + retry + rebuild): antes devolvia true siempre
   // y esa senal desaparecia (el micro podia quedarse muerto en silencio).
-  if (activeRecognition === recognition && capturing.has(recognition)) return confirmed.has(recognition)
+  if (activeRecognition === recognition && capturing.has(recognition)) {
+    // ESTADOS (auditoria 2026-10-23): "arrancando" y "arrancado" NO son lo mismo, pero
+    // ambos significan "no re-arrancar". Devolver `false` mientras `onstart` no llegaba
+    // hacia que el llamador reiniciara el micro creyendo que no estaba capturando.
+    // El estado fino se consulta con `speechRecognitionState`.
+    return true
+  }
   if (activeRecognition && activeRecognition !== recognition) {
     // Otra instancia estaba capturando: se detiene antes de arrancar esta.
     stopSpeechRecognition(activeRecognition)
@@ -109,6 +135,7 @@ export function startSpeechRecognition(recognition) {
     // mensaje decia 'already started'; con otro idioma/version del motor la rama no entraba,
     // devolvia false y el micro NO volvia, en silencio.
     capturing.add(recognition)
+    failed.delete(recognition)
     return true
   } catch (error) {
         logCaughtError('[catch] src/voice/lib/speechRecognitionLocal.js', error);
@@ -118,8 +145,10 @@ export function startSpeechRecognition(recognition) {
       activeRecognition = recognition
       capturing.add(recognition)
       confirmed.add(recognition)
+      failed.delete(recognition)
       return true
     }
+    failed.add(recognition)
     return false
   }
 }

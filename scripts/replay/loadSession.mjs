@@ -42,7 +42,7 @@ function readJson(file, code) {
   }
 }
 
-function readNdjson(file) {
+export function readNdjson(file) {
   if (!existsSync(file)) return null
   const rows = []
   const lines = readFileSync(file, 'utf8').split('\n')
@@ -55,6 +55,35 @@ function readNdjson(file) {
     }
   })
   return rows
+}
+
+/**
+ * Lee y VALIDA el manifiesto de una sesion. DUENO UNICO de "que version es valida" y de
+ * "que meta se lee": lo consumen el replay (`loadSession`) y el playback, que antes tenia
+ * su propia copia del conjunto de versiones (auditoria 2026-10-23).
+ * @param {string} sessionDir
+ * @returns {{ manifest: object, schemaVersion: number, meta: object }}
+ */
+export function readSessionManifest(sessionDir) {
+  const manifest = readJson(join(sessionDir, 'manifest.json'), 'missing-manifest')
+  const version = Number(manifest?.schemaVersion)
+  if (!Number.isFinite(version)) {
+    throw new SessionError(
+      'missing-schema-version',
+      'manifest.json no declara `schemaVersion`: sin version no se sabe como reinyectar la sesion. ' +
+        'Vuelve a grabar con el sink actual o marca el manifiesto con `--stamp-manifest`.',
+      { dir: sessionDir },
+    )
+  }
+  if (!SUPPORTED_MANIFEST_VERSIONS.includes(version)) {
+    throw new SessionError(
+      'unsupported-schema-version',
+      `schemaVersion ${version} no soportada (soportadas: ${SUPPORTED_MANIFEST_VERSIONS.join(', ')})`,
+      { version },
+    )
+  }
+  const meta = existsSync(join(sessionDir, 'meta.json')) ? readJson(join(sessionDir, 'meta.json'), 'invalid-meta') : {}
+  return { manifest, schemaVersion: version, meta }
 }
 
 /**
@@ -72,21 +101,7 @@ export function loadSession({ dir, mode = 'events' } = {}) {
     throw new SessionError('missing-session', `la carpeta de la sesion no existe: ${sessionDir}`, { dir: sessionDir })
   }
 
-  const manifest = readJson(join(sessionDir, 'manifest.json'), 'missing-manifest')
-  const version = Number(manifest?.schemaVersion)
-  if (!Number.isFinite(version)) {
-    throw new SessionError(
-      'missing-schema-version',
-      'manifest.json no declara `schemaVersion`: sin version no se sabe como reinyectar la sesion. ' +
-        'Vuelve a grabar con el sink actual o marca el manifiesto con `--stamp-manifest`.',
-      { dir: sessionDir },
-    )
-  }
-  if (!SUPPORTED_MANIFEST_VERSIONS.includes(version)) {
-    throw new SessionError('unsupported-schema-version', `schemaVersion ${version} no soportada (soportadas: ${SUPPORTED_MANIFEST_VERSIONS.join(', ')})`, { version })
-  }
-
-  const meta = existsSync(join(sessionDir, 'meta.json')) ? readJson(join(sessionDir, 'meta.json'), 'invalid-meta') : {}
+  const { manifest, meta } = readSessionManifest(sessionDir)
   const events = readNdjson(join(sessionDir, 'events.ndjson')) || []
   if (mode === 'events') {
     if (!existsSync(join(sessionDir, 'events.ndjson'))) {

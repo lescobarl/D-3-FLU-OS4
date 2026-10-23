@@ -354,11 +354,14 @@ export function speakResponse(text, language = 'es', { allowWhileSpeaking = fals
   // NO cancelar el speech en curso porque interrumpe la animación de boca.
   // En su lugar, retornar la promesa existente o rechazar silenciosamente.
   if (!allowWhileSpeaking && (synth.speaking || synth.pending)) {
-    // En lugar de cancelar, retornar la promesa existente si hay una
+    // El TEXTO PEDIDO no se dice (el motor esta ocupado con otro). Devolver la promesa
+    // del texto en curso hacia CREER al llamante que el suyo se dijo y ademas lo dejaba
+    // esperando un habla ajena (auditoria 2026-10-22). Se resuelve ya y el descarte queda
+    // registrado con el dueno unico de errores capturados.
     if (activeSpeechPromise) {
-      return activeSpeechPromise
+      logCaughtError('fluSpeech.speakResponse:ocupado', new Error('speech ocupado: texto descartado'), { texto: String(text || '').slice(0, 120) })
+      return Promise.resolve()
     }
-    // Sin promesa propia pero el sintetizador dice estar ocupado: el flag
     // global quedó pegado (bug de Chrome tras intercalar cancel/speak/resume).
     // Se limpia en vez de descartar el habla en silencio para siempre.
     try {

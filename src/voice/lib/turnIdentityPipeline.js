@@ -177,22 +177,36 @@ export function primeTurnSpeakerPreflight(turnId, runFinalSnapshot, { onClusters
   if (!Number.isFinite(id) || id <= 0) return Promise.resolve(null)
   const yaResuelto = peekTurnSpeakerPreflight(id)
   if (yaResuelto?.ready) return Promise.resolve(yaResuelto)
-  if (typeof runFinalSnapshot === 'function') {
-    scheduleTurnSpeakerPreflight(id, finalSnapshotRunner(runFinalSnapshot, id), { continuous: false, onClusters, onResolved })
-  }
   const waitMs = Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : 0
-  return new Promise((resolve) => {
-    const started = Date.now()
-    const check = () => {
-      const slot = peekTurnSpeakerPreflight(id)
-      if (slot?.ready || Date.now() - started >= waitMs) {
-        resolve(slot || null)
-        return
-      }
-      setTimeout(check, 30)
+  // El pipeline AVISA al resolver (onResolved); el sondeo de 30 ms era una segunda
+  // espera fija sobre el mismo evento. El tope sigue siendo `waitMs` (no bloquea).
+  let finalizar = () => {}
+  const espera = new Promise((resolve) => {
+    let terminado = false
+    finalizar = (slot) => {
+      if (terminado) return
+      terminado = true
+      resolve(slot || null)
     }
-    check()
+    if (waitMs > 0) {
+      setTimeout(() => finalizar(peekTurnSpeakerPreflight(id)), waitMs)
+    }
   })
+  if (typeof runFinalSnapshot === 'function') {
+    scheduleTurnSpeakerPreflight(id, finalSnapshotRunner(runFinalSnapshot, id), {
+      continuous: false,
+      onClusters,
+      onResolved: (resuelto) => {
+        if (typeof onResolved === 'function') onResolved(resuelto)
+        finalizar(peekTurnSpeakerPreflight(id))
+      },
+    })
+  }
+  // Sin tope o sin trabajo programado no se espera: se resuelve con el slot actual.
+  if (waitMs <= 0 || typeof runFinalSnapshot !== 'function') {
+    finalizar(peekTurnSpeakerPreflight(id))
+  }
+  return espera
 }
 
 export function resetTurnIdentityPipeline() {

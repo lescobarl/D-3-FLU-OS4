@@ -184,25 +184,6 @@ export function monotonicDisplay(previous = '', next = '') {
   return prev
 }
 
-/**
- * Calcula qué texto nuevo registrar en el log del turno actual.
- * lastLoggedCapture = acumulado del mismo turno (finales acumulativos del navegador).
- * Tras cada commit de turno, lastLoggedCapture se reinicia a ''.
- */
-export function prepareLogCommit(lastLoggedCapture = '', turnCapture = '') {
-  const capture = cleanForSpeech(turnCapture)
-  if (!capture) return null
-
-  const previous = cleanForSpeech(lastLoggedCapture)
-  if (!previous) {
-    return { logText: capture, loggedCapture: capture }
-  }
-  if (capture === previous) return null
-  const logText = getTranscriptDeltaFromBoundary(previous, capture)
-  if (!logText) return null
-  return { logText, loggedCapture: capture }
-}
-
 /** Promueve interino a confirmado antes del commit (si el navegador no emitió final a tiempo). */
 export function sealInterimForCommit(state) {
   if (!state?.interim) return
@@ -239,7 +220,11 @@ export function appendSpillText(...parts) {
 }
 
 /** Espera a que el texto de captura deje de cambiar antes de registrar el turno. */
-export async function waitForCaptureSettle(readCapture, timing = FLU_CONFIG.timing) {
+export async function waitForCaptureSettle(readCapture, timing = FLU_CONFIG.timing, { settled = false } = {}) {
+  // EVENTO, NO RELOJ (auditoria 2026-10-23): si el dueno de la captura ya observo su FIN
+  // (onend / cierre real), el texto esta asentado y no hay nada que esperar. El sondeo por
+  // reloj queda SOLO para llamadores que no tienen ese evento.
+  if (settled) return cleanForSpeech(readCapture())
   const stepMs = timing.transcriptSettleStepMs
   const stableMs = timing.transcriptSettleStableMs
   const maxMs = timing.transcriptSettleMaxMs

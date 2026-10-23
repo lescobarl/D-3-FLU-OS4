@@ -270,20 +270,34 @@ describe('P11.20 — revision del ASR (cola re-oida con variacion)', () => {
   })
 
   it('el commit de la cola re-oida no abre fila nueva (dueno del dedupe)', () => {
-    const now = 20000
+    // DENTRO de la ventana de eco: la reemision es el MISMO evento (una sola fila).
+    const now = 18800
     expect(isDuplicateTurnCommit(LOCUCION_A_REVISION, {
       lastEmitted: LOCUCION_A_LOGROW,
       lastCommitted: LOCUCION_A_LOGROW,
-      lastResultAt: 19000,
+      lastResultAt: 18600,
       lastCommitAt: 18000,
       now,
+      echoWindowMs: 1200,
     })).toBe(true)
     expect(isDuplicateTurnCommit(LOCUCION_B_REVISION, {
       lastEmitted: LOCUCION_B_LOGROW,
       lastCommitted: LOCUCION_B_LOGROW,
-      lastResultAt: 19000,
+      lastResultAt: 18600,
       lastCommitAt: 18000,
       now,
+      echoWindowMs: 1200,
     })).toBe(true)
+  })
+
+  it('PASADA la ventana de eco, la misma cola es habla nueva (auditoria 2026-10-23)', () => {
+    expect(isDuplicateTurnCommit(LOCUCION_A_REVISION, {
+      lastEmitted: LOCUCION_A_LOGROW,
+      lastCommitted: LOCUCION_A_LOGROW,
+      lastResultAt: 23000,
+      lastCommitAt: 18000,
+      now: 23100,
+      echoWindowMs: 1200,
+    })).toBe(false)
   })
 })

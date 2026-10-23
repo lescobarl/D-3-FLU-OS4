@@ -16,7 +16,20 @@ describe('fluStorage — perfiles de voz y sesión', () => {
     it('guarda, lista, busca por label y borra un perfil', async () => {
         const storage = await import('../src/voice/lib/fluStorage');
 
-        const saved = await storage.saveVoiceProfile({ label: 'Ana', signature: [1, 2, 3] });
+        // El CRUD vivo de perfiles es la PUERTA UNICA de useVoiceProfiles: el wrapper
+        // `saveVoiceProfile` se retiro por no tener lector (auditoria 2026-10-22).
+        const { insertVoiceProfile } = await import('../src/hooks/useVoiceProfiles');
+        const idAna = `p-${Date.now()}-ana`
+        await insertVoiceProfile({
+            id: idAna,
+            label: 'Ana',
+            speakerId: 'speaker_1',
+            signature: [1, 2, 3],
+            embedding: null,
+            timestamp: Date.now(),
+            sync: { revision: 1, updated_at: new Date().toISOString(), deleted: false },
+        });
+        const saved = (await storage.listVoiceProfiles()).find((p) => p.id === idAna)!;
         expect(saved.id).toBeTruthy();
         expect(saved.label).toBe('Ana');
 
@@ -41,7 +54,9 @@ describe('fluStorage — perfiles de voz y sesión', () => {
         const loaded = await storage.loadSessionState();
 
         expect(loaded).toBeTruthy();
-        expect(Array.isArray(loaded?.history)).toBe(true);
+        // El historial NO se persiste aqui: la fuente canonica es fluDb.conversations
+        // (useConversationPersistence). Antes se guardaba una copia sin lector.
+        expect(loaded?.history).toBeUndefined();
         expect(loaded?.language).toBe('es');
     });
 });

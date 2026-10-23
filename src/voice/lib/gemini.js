@@ -1688,7 +1688,9 @@ const prompts = {
 
 const prompt = prompts[profile] || prompts.tutor
 
-const vision = FLU_CONFIG.gemini?.vision || {}
+// `vision` vive en la RAIZ de FLU_CONFIG (fluConfig.js): leerla dentro de `gemini` devolvia
+// SIEMPRE {} y la configuracion de vision no se aplicaba nunca (auditoria 2026-10-22).
+const vision = FLU_CONFIG.vision || {}
 const messages = [
   {
     role: 'user',

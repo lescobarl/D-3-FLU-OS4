@@ -10,7 +10,7 @@
  * - Interinos no diarizan en límite de turno (solo el final asigna por audio).
  */
 import { FLU_CONFIG } from './fluConfig.js'
-import { detectWakeIntroducedName } from './audioMath.js'
+import { detectIntroducedName, detectWakeIntroducedName } from './audioMath.js'
 import { isAutoSpeakerLabel, normalizeSpeakerLabel } from './voiceIdentity.js'
 import { anonymousSpeakerLabel } from './speakerLabels.js'
 import { isPhraseShortForSpeakerHeuristics } from './fluTranscriptPause.js'
@@ -40,8 +40,10 @@ export function resolveSpeakerNameFromUtterance(
 ) {
   const wakeName = detectWakeIntroducedName(text, wakeWords)
   if (wakeName) return wakeName
+  // SIN WAKE: solo se admite si la config lo permite. Antes las DOS ramas devolvian '' y
+  // `requireWakeWordForSpeakerName: false` no tenia ningun efecto (auditoria 2026-10-22).
   if (requiresWakeWordForSpeakerName(roomCfg)) return ''
-  return ''
+  return detectIntroducedName(text)
 }
 
 export function isSoloRoomSticky() {

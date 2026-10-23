@@ -11,16 +11,24 @@ import { isCalculatingSpeakerId } from './conversationRow.js'
 import { FLU_CONFIG } from './fluConfig.js'
 import { resolveSpeakerNameFromUtterance } from './speakerPolicy.js'
 import { sortSessionSpeakers, normalizeSpeakerLabel, expandSessionSpeakerNames } from './voiceIdentity.js'
+import { committedEchoStreakWindowMs } from './activeListen.js'
 import {
   getTranscriptDelta,
   getTurnCommitText,
   getTurnDisplay,
-  normalizeTranscriptText,
-  prepareLogCommit,
   readTurnCaptureForCommit,
 } from './turnTranscript.js'
 
-export function readTurnDisplayCapture(turnState, pendingSpill = '') {
+/**
+ * Texto visible del turno: el display del turno y, si hay `pendingSpill`, la fusion de
+ * ambos (gana el mas largo cuando uno es prefijo del otro). DUENO de esa fusion; la
+ * consume `readCommandSnapshot`, la API viva del turno. No se exporta: dos nombres para
+ * la misma regla invitaban a elegir uno distinto en cada sitio.
+ * @param {object} turnState
+ * @param {string} [pendingSpill]
+ * @returns {string}
+ */
+function readTurnDisplayCapture(turnState, pendingSpill = '') {
   const display = getTurnDisplay(turnState)
   if (!pendingSpill) return display
   if (!display) return cleanForSpeech(pendingSpill)
@@ -28,10 +36,6 @@ export function readTurnDisplayCapture(turnState, pendingSpill = '') {
     return display.length >= pendingSpill.length ? display : pendingSpill
   }
   return cleanForSpeech(`${pendingSpill} ${display}`)
-}
-
-export function getLiveTurnDisplay(turnState, pendingSpill = '') {
-  return readTurnDisplayCapture(turnState, pendingSpill)
 }
 
 /** Cola de 1 letra suelta ("… se l") — no bloquear "me escuchas", "estás", etc. */
@@ -45,32 +49,29 @@ export function endsWithPartialWord(text = '') {
   return !completeShort.has(tail)
 }
 
-/** Texto nuevo para el log de conversación. */
-export function resolveConversationLogText(
-  sessionBoundary = '',
-  turnCapture = '',
-  lastLineLogged = '',
-) {
-  const capture = cleanForSpeech(turnCapture)
-  if (!capture) return ''
-
-  const session = trimRecognitionBoundary(sessionBoundary)
-  if (session && capture === session) return ''
-
-  const candidate = getTranscriptDelta(session, capture)
-  if (!candidate) return ''
-
-  const normalized = normalizeTranscriptText(candidate)
-  if (!normalized) return ''
-  if (isDuplicateLogPhrase(normalized, lastLineLogged)) return ''
-  return normalized
-}
-
-export function isDuplicateLogPhrase(phrase = '', lastLogged = '') {
+/**
+ * Misma linea VISIBLE ya registrada. Es la regla del LOG (no la de la captura ni la del
+ * commit), y comparte con ellas UN solo criterio de tiempo: la ventana de eco del ASR
+ * (`committedEchoStreakWindowMs`, dueno en activeListen).
+ *
+ * Dentro de la ventana, la reemision identica/prefijo/sufijo es el MISMO evento (doble final
+ * / loop de Chrome: una sola fila). PASADA la ventana la repeticion es habla NUEVA: una
+ * pregunta mas corta segundos despues de otra larga se colapsaba como duplicada y la
+ * locucion se quedaba SIN fila (clase de defecto medida 2026-10-18 en el ingreso: el mismo
+ * criterio estaba duplicado aqui, sin el escape de la pausa).
+ *
+ * @param {string} phrase frase candidata
+ * @param {string} lastLogged ultima frase registrada
+ * @param {{ msSinceLastEmit?: number }} [options] ms desde el ultimo registro; 0 = sin dato
+ * @returns {boolean} `true` si NO hay que registrar una fila nueva
+ */
+export function isDuplicateLogPhrase(phrase = '', lastLogged = '', { msSinceLastEmit = 0 } = {}) {
   const current = cleanForSpeech(phrase)
   const previous = cleanForSpeech(lastLogged)
   if (!current) return true
   if (!previous) return false
+  // Habla nueva: una pausa real (>= ventana de eco) separa DOS locuciones distintas.
+  if (Number(msSinceLastEmit) > 0 && Number(msSinceLastEmit) >= committedEchoStreakWindowMs()) return false
   if (current === previous) return true
   if (previous.length > current.length) {
     if (previous.startsWith(current) || previous.endsWith(` ${current}`)) return true
@@ -104,10 +105,6 @@ export function createCommitQueue() {
       return run
     },
   }
-}
-
-export function shouldSkipTurnLog(lastLoggedCapture = '', turnCapture = '') {
-  return !prepareLogCommit(lastLoggedCapture, turnCapture)
 }
 
 export function listSessionSpeakers(history = []) {

@@ -1,3 +1,4 @@
+import { normalizeLang } from '../core/config/localeConfig'
 // ============================================================
 // GeminiService — Adapter de transporte (proxy Gemini) sobre el motor único
 // ============================================================
@@ -134,7 +135,7 @@ Genera la minuta en formato JSON.`;
         const response = await postGeminiContract({
             mode: 'minute',
             apiKey: resolveGeminiKeyForRequest(request.options.apiKey).apiKey,
-            language: request.options.language || 'es',
+            language: normalizeLang(request.options.language),
             role: request.options.role || '',
             theme: request.options.theme || '',
             history: request.history,
@@ -183,7 +184,7 @@ Genera la minuta en formato JSON.`;
         const response = await postGeminiContract({
             mode: 'minute',
             apiKey: resolveGeminiKeyForRequest(options.apiKey).apiKey,
-            language: options.language || 'es',
+            language: normalizeLang(options.language),
             role: options.role || '',
             theme: options.theme || '',
             history: history,
@@ -270,7 +271,7 @@ Responde como ${botName}:`;
             mode: 'response',
             apiKey: resolveGeminiKeyForRequest(options.apiKey).apiKey,
             transcript: userText,
-            language: options.language || 'es',
+            language: normalizeLang(options.language),
             role: options.role || '',
             theme: options.theme || '',
             history: history,
@@ -303,7 +304,7 @@ Responde como ${botName}:`;
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 apiKey: resolveGeminiKeyForRequest(options.apiKey).apiKey,
-                language: options.language || 'es',
+                language: normalizeLang(options.language),
                 role: options.role || '',
                 theme: options.theme || '',
                 conversationLog,
@@ -477,7 +478,7 @@ Responde como ${botName}:`;
             mode: 'contract',
             apiKey: resolveGeminiKeyForRequest(options.apiKey).apiKey,
             transcript,
-            language: options.language || 'es',
+            language: normalizeLang(options.language),
             role: options.role || '',
             theme: options.theme || '',
             history,

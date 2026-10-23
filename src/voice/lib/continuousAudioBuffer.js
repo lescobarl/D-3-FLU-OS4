@@ -118,7 +118,7 @@ export class ContinuousAudioBuffer {
     if (captureCfg.conversationTurnLastVoicedSpan !== false && window.length) {
       const voicedSpan = selectVoicedWindow(window, {
         sampleRate: this.sampleRate,
-        maxGapMs: Number(captureCfg.conversationTurnVoicedGapMs) || SPEAKER_ASSIGN.turnVoicedGapMs,
+        maxGapMs: Number(captureCfg.conversationTurnVoicedGapMs) || SPEAKER_ASSIGN.conversationTurnVoicedGapMs,
         prefer: 'last',
       })
       if (voicedSpan.length) return voicedSpan

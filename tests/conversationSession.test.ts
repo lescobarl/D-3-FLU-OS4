@@ -18,16 +18,12 @@ import {
     createCommitQueue,
     endsWithPartialWord,
     filterSessionHistoryByStart,
-    getLiveTurnDisplay,
     isDuplicateLogPhrase,
     listSessionSpeakers,
     readCommandSnapshot,
     readTurnCapture,
     readTurnCaptureForCommit,
-    readTurnDisplayCapture,
-    resolveConversationLogText,
     resolvePassiveSpeaker,
-    shouldSkipTurnLog,
     trimRecognitionBoundary,
 } from '../src/voice/lib/conversationSession.js';
 import { applyRecognitionResult, createTurnState } from '../src/voice/lib/turnTranscript.js';
@@ -67,18 +63,6 @@ describe('conversationSession — frontera del reconocimiento', () => {
 });
 
 describe('conversationSession — log de conversacion', () => {
-    it('el texto del log es el DELTA respecto a la frontera', () => {
-        expect(resolveConversationLogText('', '', '')).toBe('');
-        expect(resolveConversationLogText('hola como estas', 'hola como estas en clase', '')).toBe('en clase');
-        // La frontera y la captura iguales no aportan linea nueva.
-        expect(resolveConversationLogText('hola como estas', 'hola como estas', '')).toBe('');
-    });
-
-    it('no se registra dos veces la misma linea', () => {
-        expect(resolveConversationLogText('hola', 'hola en clase', 'en clase')).toBe('');
-        expect(resolveConversationLogText('hola', 'hola en clase', 'otra cosa')).toBe('en clase');
-    });
-
     it('una frase duplicada se reconoce tambien por prefijo o sufijo', () => {
         expect(isDuplicateLogPhrase('', '')).toBe(true);
         expect(isDuplicateLogPhrase('hola', '')).toBe(false);
@@ -90,11 +74,13 @@ describe('conversationSession — log de conversacion', () => {
         expect(isDuplicateLogPhrase('Hola', 'hola')).toBe(false);
     });
 
-    it('el salto entre log y captura es lo que queda por registrar', () => {
-        expect(shouldSkipTurnLog('hola', 'hola')).toBe(true);
-        expect(shouldSkipTurnLog('', '')).toBe(true);
-        expect(shouldSkipTurnLog('', 'hola')).toBe(false);
-        expect(shouldSkipTurnLog('hola', 'hola y algo mas')).toBe(false);
+    it('pasada la pausa, la misma frase es habla NUEVA (una sola ventana de eco)', () => {
+        // Falsificacion del colapso que perdia locuciones: una pregunta MAS CORTA segundos
+        // despues de otra larga es un turno nuevo, no un duplicado de la anterior.
+        const corta = 'ok flu como voy';
+        const larga = 'ok flu como voy en ingles';
+        expect(isDuplicateLogPhrase(corta, larga), 'dentro de la ventana: mismo evento').toBe(true);
+        expect(isDuplicateLogPhrase(corta, larga, { msSinceLastEmit: 5000 }), 'pasada la pausa: habla nueva').toBe(false);
     });
 
     it('el sobrante tras registrar es el delta entre lo registrado y la captura', () => {
@@ -108,19 +94,17 @@ describe('conversationSession — lo que se muestra y lo que se compromete', () 
     it('la ultima frase y el snapshot de comando SON la misma cosa', () => {
         const state = turn({ interim: 'hola como estas' });
 
-        expect(readTurnDisplayCapture(state)).toBe('hola como estas');
-        expect(getLiveTurnDisplay(state)).toBe(readTurnDisplayCapture(state));
-        expect(readCommandSnapshot(state)).toBe(readTurnDisplayCapture(state));
+        expect(readCommandSnapshot(state)).toBe('hola como estas');
     });
 
     it('con sobrante pendiente, manda el texto mas largo o se unen', () => {
         const state = turn({ interim: 'hola como estas' });
 
-        expect(readTurnDisplayCapture(state, 'hola como estas')).toBe('hola como estas');
-        expect(readTurnDisplayCapture(state, 'hola')).toBe('hola como estas');
-        expect(readTurnDisplayCapture(state, 'hola como estas en clase')).toBe('hola como estas en clase');
-        expect(readTurnDisplayCapture(state, 'otra cosa aparte')).toBe('otra cosa aparte hola como estas');
-        expect(readTurnDisplayCapture(turn(), 'solo sobrante')).toBe('solo sobrante');
+        expect(readCommandSnapshot(state, 'hola como estas')).toBe('hola como estas');
+        expect(readCommandSnapshot(state, 'hola')).toBe('hola como estas');
+        expect(readCommandSnapshot(state, 'hola como estas en clase')).toBe('hola como estas en clase');
+        expect(readCommandSnapshot(state, 'otra cosa aparte')).toBe('otra cosa aparte hola como estas');
+        expect(readCommandSnapshot(turn(), 'solo sobrante')).toBe('solo sobrante');
     });
 
     it('la captura del commit incluye el sobrante y coincide con su dueno en turnTranscript', () => {
