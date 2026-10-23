@@ -581,3 +581,35 @@ describe('P11.19 - la cola de una locucion ya escrita no abre fila nueva (eco de
     ).toBe(false)
   })
 })
+
+// ============================================================
+// FIRMA DEL TURNO (auditoria 2026-10-23): la fila lleva la MEDIDA del turno o NADA.
+// Antes la cadena sticky le prestaba la firma del cluster al que asignaba el turno, y la
+// grabacion guardaba una referencia. El replay `vectors` comparaba entonces el cluster
+// consigo mismo (7fce0045: 149 commits / 17 firmas). El dueno unico es `turnMeasurement`
+// (turnSpeakerCommit): sin medida, la firma se LIMPIA; nunca se hereda la del turno anterior.
+// ============================================================
+describe('conversationStreamCommit — la firma del turno no se presta', () => {
+    it('un commit SIN medida propia LIMPIA la firma: no hereda la del turno anterior', () => {
+        resetTurnSpeakerPreflights();
+        const deps = makeDeps();
+        deps.chunkTotalSamplesRef.current = 4800;
+        // Firma de un turno ANTERIOR: si el commit no la limpia, la fila de ESTE turno se
+        // graba con una medida que no es la suya (y `lastSim` compara contra otra voz).
+        (deps.lastTurnSignatureRef as { current: number[] | null }).current = [0.9, 0.8, 0.7];
+
+        handleConversationStreamSync(deps, { capture: 'hola mundo', turnCommit: true, settlesTurn: true });
+
+        expect(deps.lastTurnSignatureRef.current).toBeNull();
+    });
+
+    it('un commit CON medida del turno la conserva tal cual', async () => {
+        const deps = makeDeps();
+        deps.chunkTotalSamplesRef.current = 4800;
+        await preflightSnapshots(['Hablante 1']);
+
+        handleConversationStreamSync(deps, { capture: 'hola mundo', turnCommit: true, settlesTurn: true });
+
+        expect(deps.lastTurnSignatureRef.current).toEqual([1, 0.5, 0.25]);
+    });
+});

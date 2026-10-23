@@ -391,7 +391,9 @@ export function compararSpeakers(vectors = {}) {
       covered: false,
       partial: true,
       coverage: 0,
-      detail: `NO CONCLUYENTE (${motivos}): ${omitidos.length} turno(s) sin vector o sin duracion de ${commits} commit(s)`,
+      // El motivo REAL, no una plantilla: una firma repetida no es "sin vector ni duracion".
+      detail: `NO CONCLUYENTE (${motivos}): ${omitidos.length} turno(s) sin evidencia evaluable de ${commits} commit(s)` +
+        (motivosOmitidos ? `: ${motivosOmitidos}` : ''),
     }
   }
   const fallos = turnos.filter((turno) => !turno.match)

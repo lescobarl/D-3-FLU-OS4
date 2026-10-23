@@ -65,6 +65,71 @@ function clustersDeTurno(clusters = []) {
 }
 
 /**
+ * CLAVE de una firma para detectar REUSO dentro de la sesion (comparacion exacta, no coseno:
+ * el reuso es una COPIA del mismo vector, no una voz parecida).
+ * @param {number[]} vector
+ * @returns {string}
+ */
+function claveDeFirma(vector = []) {
+  return Array.isArray(vector) && vector.length ? vector.join('|') : ''
+}
+
+/**
+ * CLAVE del texto de un commit (misma normalizacion que la fuente: sin acentos, sin signos).
+ * Sirve para distinguir una LOCUCION distinta de una FILA duplicada de la misma locucion.
+ * @param {string} text
+ * @returns {string}
+ */
+function claveDeTexto(text = '') {
+  return String(text || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9 ]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+/**
+ * DUENO UNICO de "esta firma es una MEDIDA del turno".
+ *
+ * Una misma firma bajo DOS LOCUCIONES distintas no puede ser la medida de las dos: dos tramos
+ * de audio distintos no producen el mismo vector de 512 componentes. Cuando eso pasa, la
+ * grabacion guardo una REFERENCIA (la firma de un cluster o la del commit anterior: lo que
+ * hacia la cadena `sticky` antes de la auditoria 2026-10-23) y NO la medida del turno. Desde
+ * esa auditoria el dueno unico es `turnMeasurement` (`src/voice/lib/turnSpeakerCommit.js`):
+ * la fila lleva la medida del turno o no lleva firma. Las grabaciones ANTERIORES a ese cambio
+ * conservan la referencia, y por eso este criterio las sigue descartando.
+ *
+ * FILA DUPLICADA NO ES REUSO: dos commits con el MISMO texto pueden ser la MISMA locucion
+ * escrita dos veces, y entonces comparten legitimamente su medida. Solo se descarta cuando la
+ * firma aparece bajo textos diferentes.
+ *
+ * MEDIDO (2026-10-23) en las dos grabaciones del dueno, con este criterio:
+ *   `7fce0045`: 147 commits con firma y 17 firmas -> 141 comparten su vector con OTRA locucion
+ *               (el reporte descarta 112 de ellos; los otros 29 no tienen duracion) y quedan 6
+ *               filas duplicadas del mismo texto, evaluables.
+ *   `d4c1c8f3`:  20 commits con firma y 2 firmas -> los 20 comparten vector con otra locucion
+ *               (el reporte descarta 15; 5 no tienen duracion) y 9 commits sin firma.
+ * La cobertura de hablantes de esas grabaciones es 4 % / 0 %, no el 79 %/52 % que se
+ * reportaba: ese porcentaje contaba comparaciones circulares como evidencia.
+ *
+ * LIMITE DECLARADO (conservador): un tick continuo del preflight puede actualizar el cluster
+ * con el tramo del turno EN CURSO; si esa actualizacion se escribe antes del commit anterior,
+ * la firma del turno coincide con la del cluster y este criterio descarta un turno que si
+ * tenia medida. Se prefiere perder una validacion a reportar una que no se sostiene.
+ *
+ * @param {string} clave clave de la firma del commit
+ * @param {Map<string, { veces: number, textos: Set<string> }>} firmas lo visto en la sesion
+ * @returns {boolean} true si la firma PUEDE ser la medida de ESTE turno
+ */
+function firmaPropiaDelTurno(clave, firmas) {
+  const visto = firmas?.get(clave)
+  if (!visto) return Boolean(clave)
+  return Number(visto.veces || 0) <= 1 || Number(visto.textos?.size || 0) <= 1
+}
+
+/**
  * Primary de la sesion ANTES del primer commit: el participante ACTIVO del `base` (nombre
  * propio y ancla verificada). Con cero o varios candidatos NO se adivina: `''` + aviso.
  * @param {Array<object>} participants
@@ -105,6 +170,17 @@ export async function runVectorsSession({ session, thresholds } = {}) {
     participantesBase.filter((p) => isProperSpeakerName(String(p?.name || '').trim())).map((p) => String(p.name).trim()),
   )
 
+  // REUSO de firmas en la sesion: el criterio vive en `firmaPropiaDelTurno`.
+  const firmasDeLaSesion = new Map()
+  for (const commit of commits) {
+    const clave = claveDeFirma(commit?.signature)
+    if (!clave) continue
+    const visto = firmasDeLaSesion.get(clave) || { veces: 0, textos: new Set() }
+    visto.veces += 1
+    visto.textos.add(claveDeTexto(commit?.text))
+    firmasDeLaSesion.set(clave, visto)
+  }
+
   const turnos = []
   let speakerMatches = 0
   let speakerMismatches = 0
@@ -128,6 +204,12 @@ export async function runVectorsSession({ session, thresholds } = {}) {
     if (!(voiced > 0)) {
       skipped.push({ index: i, motivo: 'sin-duracion' })
       if (!motivos.includes('sin-duracion')) motivos.push('sin-duracion')
+      continue
+    }
+    // SIN MEDIDA PROPIA no hay validacion: ver `firmaPropiaDelTurno`.
+    if (!firmaPropiaDelTurno(claveDeFirma(vector), firmasDeLaSesion)) {
+      skipped.push({ index: i, motivo: 'firma-repetida' })
+      if (!motivos.includes('firma-repetida')) motivos.push('firma-repetida')
       continue
     }
 
@@ -194,7 +276,8 @@ export async function runVectorsSession({ session, thresholds } = {}) {
     evaluated: evaluados,
     conclusive,
     notConclusive: conclusive ? [] : motivos,
-    avisos,
+    // Aviso ESTRUCTURAL (no un recuento): la grabacion no guarda la medida del turno.
+    avisos: motivos.includes('firma-repetida') ? [...avisos, 'firma-no-propia-del-turno'] : avisos,
     commits: commits.length,
     reconstructed: {
       base: Boolean(base),

@@ -653,19 +653,25 @@ describe.runIf(existsSync(REAL_SESSION))('replay events - grabacion real d4c1c8f
     expect(datos.approved).toBe(false)
   })
 
-  it('los HABLANTES de la sesion real quedan en PARTIAL: no es una validacion completa', async () => {
+  it('los HABLANTES de la sesion real NO son validables: la firma guardada no es la medida del turno', async () => {
     const report = join(tmpDir('replay-real-vec-'), 'report.json')
     const out = await replay(['--session', REAL_SESSION, '--mode', 'vectors', '--report', report])
 
     expect(out.stderr, out.stderr).not.toMatch(/error inesperado/)
     const datos = JSON.parse(readFileSync(report, 'utf8'))
-    // La grabacion NO guarda vector/duracion de todos los turnos: se evalua lo que hay y
-    // el modo se declara `partial` con su cobertura. Un parcial jamas es un OK.
-    expect(datos.speakers.covered).toBe(true)
-    expect(datos.speakers.partial).toBe(true)
-    expect(datos.speakers.coverage).toBeGreaterThan(0)
-    expect(datos.speakers.coverage).toBeLessThan(1)
-    expect(datos.status).toBe('partial')
+    // La grabacion NO guarda la medida de cada turno: guarda REFERENCIAS (la firma del cluster
+    // o la del commit anterior). La misma firma aparece bajo decenas de locuciones distintas,
+    // asi que evaluarla era comparar el cluster consigo mismo. El modo se declara NO
+    // CONCLUYENTE: cero aciertos y cero mismatches contados (una cifra de "52 % de cobertura"
+    // aqui seria un artefacto, no evidencia).
+    expect(datos.speakers.covered).toBe(false)
+    expect(datos.speakers.evaluated).toBe(0)
+    expect(datos.speakers.matches).toBe(0)
+    expect(datos.speakers.mismatches).toBe(0)
+    expect(datos.speakers.coverage).toBe(0)
+    expect(datos.speakers.notConclusive).toContain('firma-repetida')
+    expect(datos.speakers.avisos).toContain('firma-no-propia-del-turno')
+    expect(datos.status).toBe('not-conclusive')
     expect(datos.checks.find((check: { name: string }) => check.name === 'speakers').ok).toBe(false)
     expect(out.code, out.stdout + out.stderr).toBe(2)
   })

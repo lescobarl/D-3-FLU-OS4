@@ -201,8 +201,13 @@ El `speaker` del commit **no se pasa como entrada**: es el **esperado**. Se comp
 nombres **canónicos** (`Luis`, `Hablante N`) contra lo que devuelve
 `resolveConversationSpeaker`.
 
-- turno **sin vector** o **sin duración** → `skipped` con su motivo (`sin-vector`,
-  `sin-duracion`); no se inventa nada;
+- turno **sin vector** o **sin duración** o **con una firma que se repite en la sesión**
+  (`firma-repetida`) → `skipped` con su motivo; no se inventa nada. Una firma repetida no es
+  la medida del turno: la grabación guarda ahí una **referencia** (la firma de un cluster o
+  la del commit anterior, lo que hacía la cadena `sticky` hasta la auditoría 2026-10-23), y
+  preguntar al resolutor con la firma de un cluster es comparar el cluster consigo mismo. El
+  dueño único de la firma de fila es `turnMeasurement` (`src/voice/lib/turnSpeakerCommit.js`):
+  medida del turno o campo ausente;
 - **cobertura** = turnos evaluados / commits. Con cobertura < 100 % el modo se declara
   **`partial`** (exit 2): lo evaluado puede coincidir, pero NO es una validación completa de
   hablantes y no se vende como tal. El reporte guarda `coverage`, `partial`, `evaluated` y
@@ -219,11 +224,22 @@ nombres **canónicos** (`Luis`, `Hablante N`) contra lo que devuelve
 - `speakerHighWater` se reconstruye de los clusters previos: no ve etiquetas renombradas o
   borradas antes de ese punto (el store sí las ve).
 
-**Cobertura medida (d4c1c8f3)**: 15 de 29 commits evaluables (52 %) → `partial`, exit 2. Los
-14 restantes **no se pueden evaluar** sin evidencia nueva: 9 commits no guardaron `signature`
-y 5 tienen `audioEndSample === audioStartSample`. Mejorarlo exigiría recalcular la firma sobre
-`audio.pcm` con el modelo (fuera del runner) o grabar la cuenta de muestras con voz — ambas
-cosas son cambios de producto/grabación, no del runner.
+**Cobertura medida (2026-10-23, las dos grabaciones del dueño)**: la evidencia de hablante
+casi no existe en ellas. `7fce0045` tiene 149 commits y **17 firmas distintas**: 141 de los 147
+commits con firma comparten su vector con **otra locución** (dos tramos de audio no producen el
+mismo vector de 512 componentes), así que son referencias, no medidas. La cobertura real queda
+en **4 %** (6 filas duplicadas del mismo texto, que sí pueden compartir su medida) → `partial`,
+exit 2. `d4c1c8f3` tiene 29 commits y **2 firmas** (20 comparten vector y 9 no tienen firma):
+cobertura **0 %** → `not-conclusive`, exit 2. El «52 % / 79 %» que se reportaba antes contaba
+comparaciones circulares como si fueran evidencia.
+
+Para validar hablantes hace falta que la grabación guarde la **medida del turno** (el vector
+con el que se decidió, no la firma del cluster al que se asignó). Ese es el cambio de producto
+ya hecho en `turnMeasurement` (`src/voice/lib/turnSpeakerCommit.js`): la fila lleva la medida
+del turno o **no lleva firma**. Las grabaciones hechas ANTES de ese cambio siguen sin servir
+para validar identidad; hace falta una sesión **nueva** (grabada después). Mientras no exista,
+`vectors` mide estructura (que el resolutor corre, que el estado previo se reconstruye) y
+**no** valida identidad.
 
 ## Artefactos
 

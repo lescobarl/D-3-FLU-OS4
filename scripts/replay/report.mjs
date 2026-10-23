@@ -142,7 +142,7 @@ export function printReport(report, io = {}) {
         ? `  hablantes ${s.matches} acierto(s) · ${s.mismatches} mismatch(s) · ` +
             `${s.skipped.length}/${s.commits} sin evidencia (cobertura ${Math.round((s.coverage || 0) * 100)}%)` +
             (s.partial ? ' · PARTIAL: no es validacion completa' : '')
-        : `  hablantes NO CONCLUYENTE: ${(s.notConclusive || []).join(', ') || 'sin evidencia'} (${s.skipped.length} turno(s) sin vector/duracion)`,
+        : `  hablantes NO CONCLUYENTE: ${(s.notConclusive || []).join(', ') || 'sin evidencia'} (${s.skipped.length} turno(s) sin evidencia evaluable)`,
     )
     if (s.avisos?.length) print(`  AVISO    hablantes: ${s.avisos.join(', ')}`)
     if (s.covered && s.skipped?.length) {

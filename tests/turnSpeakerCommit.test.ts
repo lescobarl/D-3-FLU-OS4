@@ -13,7 +13,6 @@
 import { describe, it, expect } from 'vitest';
 import {
     resolveTurnSpeakerAtCommit,
-    resolveCommitRowSignature,
     applyResolvedSpeakerToSessionRefs,
 } from '../src/voice/lib/turnSpeakerCommit.js';
 
@@ -146,50 +145,6 @@ describe('turnSpeakerCommit — pinned y sticky', () => {
         } as any);
         expect(r.speakerName).toBe('Hablante 3');
         expect(r.source).toBe('sticky-preflight-pending');
-    });
-});
-
-describe('turnSpeakerCommit — resolveCommitRowSignature', () => {
-    it('usa signatureVector del resolved primero', () => {
-        const sig = resolveCommitRowSignature({ resolved: { signatureVector: [0.1, 0.2] } } as any);
-        expect(sig).toEqual([0.1, 0.2]);
-    });
-
-    it('usa preflight.signatureVector cuando resolved no trae', () => {
-        const sig = resolveCommitRowSignature({
-            resolved: {},
-            preflight: { ready: true, signatureVector: [0.3, 0.4] },
-        } as any);
-        expect(sig).toEqual([0.3, 0.4]);
-    });
-
-    it('busca el cluster cuando el preflight no está listo', () => {
-        const sig = resolveCommitRowSignature({
-            resolved: { speakerName: 'Hablante 2' },
-            preflight: { ready: false },
-            clusters: [{ speakerId: 'X2', label: 'Hablante 2', signature: [0.5, 0.6] }],
-        } as any);
-        expect(sig).toEqual([0.5, 0.6]);
-    });
-
-    it('cae al lastSignature', () => {
-        const sig = resolveCommitRowSignature({
-            resolved: {},
-            preflight: null,
-            clusters: [],
-            lastSignature: [0.7],
-        } as any);
-        expect(sig).toEqual([0.7]);
-    });
-
-    it('retorna null sin fuentes de firma', () => {
-        const sig = resolveCommitRowSignature({
-            resolved: {},
-            preflight: null,
-            clusters: [],
-            lastSignature: null,
-        } as any);
-        expect(sig).toBeNull();
     });
 });
 

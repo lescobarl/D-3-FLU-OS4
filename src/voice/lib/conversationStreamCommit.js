@@ -1568,9 +1568,11 @@ export function handleConversationStreamSync(
           registerParticipant,
         },
       )
-      if (resolved.signatureVector?.length) {
-        lastTurnSignatureRef.current = resolved.signatureVector
-      }
+      // FIRMA DEL TURNO = su medida, o NADA (dueno: `turnMeasurement`, turnSpeakerCommit).
+      // Sin medida se LIMPIA: heredar la del turno anterior haria comparar contra una voz
+      // que ya no es la de `lastSpeaker`; `resolveLastTurnSimilarity` cae entonces a la
+      // firma del cluster de `lastSpeaker`, que es la evidencia correcta.
+      lastTurnSignatureRef.current = resolved.signatureVector?.length ? resolved.signatureVector : null
       syncSpeakerIndexFromLabel(listenStateRef.current, segmentSpeaker)
       marcarUltimaLinea(segmentText)
       lastLoggedSpeakerRef.current = segmentSpeaker
@@ -1644,9 +1646,8 @@ export function handleConversationStreamSync(
       registerParticipant,
     },
   )
-  if (resolved.signatureVector?.length) {
-    lastTurnSignatureRef.current = resolved.signatureVector
-  }
+  // FIRMA DEL TURNO = su medida, o NADA (dueno: `turnMeasurement`, turnSpeakerCommit).
+  lastTurnSignatureRef.current = resolved.signatureVector?.length ? resolved.signatureVector : null
   syncSpeakerIndexFromLabel(listenStateRef.current, speakerName)
   marcarUltimaLinea(capture)
   lastLoggedSpeakerRef.current = speakerName

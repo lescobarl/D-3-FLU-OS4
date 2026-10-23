@@ -7,49 +7,38 @@ import { FLU_CONFIG } from './fluConfig.js'
 import { resolveSpeakerNameFromUtterance } from './speakerPolicy.js'
 import { labelToSpeakerId, normalizeRowSignature } from './conversationRow.js'
 import { normalizeSpeakerLabel } from './voiceIdentity.js'
-import { foldSpeakerKey } from './speakerLabels.js'
 import { registerSpeakerIdentity } from './speakerIdentityRegister.js'
 import { detectNextSpeakerPhrase, nextSpeakerLabel } from './activeListen.js'
 import { isNewAudioSegment, getLastCommitPerfAt } from './audioSegmentClock.js'
 import { isPhraseShortForSpeakerHeuristics } from './fluTranscriptPause.js'
 import { setSessionPrimarySpeaker } from './sessionPrimarySpeaker.js'
 
-function clusterSignatureFor(clusters = [], { speakerId = '', speakerName = '' } = {}) {
-  const sid = String(speakerId || '').trim()
-  const name = normalizeSpeakerLabel(speakerName)
-  const cluster = (Array.isArray(clusters) ? clusters : []).find((entry) => {
-    const label = normalizeSpeakerLabel(entry?.label)
-    return (
-      (sid && String(entry?.speakerId || '').trim() === sid) ||
-      // Plegado (`foldSpeakerKey`): 'Luis'/'luis' son la MISMA voz.
-      (name && foldSpeakerKey(label) === foldSpeakerKey(name))
-    )
-  })
-  return normalizeRowSignature(cluster?.signature)
+/**
+ * FIRMA DE LA FILA = la MEDIDA del turno, o nada.
+ *
+ * DUENO UNICO de esa decision (auditoria 2026-10-23). Antes la firma se "prestaba" de tres
+ * fuentes cuando el turno no tenia medida propia: la firma del CLUSTER al que se asignaba el
+ * turno, la de sus `workingClusters` y la del commit anterior. Eso hacia que la fila afirmara
+ * una evidencia que nunca se midio:
+ *   - el renombre por firma (`freezeVoiceName`, `renameVoiceRowsByKey`) alcanzaba filas de
+ *     OTRA voz, porque su firma era la del cluster asignado;
+ *   - la resolucion tardia de filas pendientes (`pickPendingRowLabel`) decidia con un vector
+ *     que no era el del turno;
+ *   - la grabacion guardaba la referencia y el replay `vectors` acababa comparando el cluster
+ *     consigo mismo (medido 2026-10-23: 149 commits / 17 firmas en 7fce0045).
+ * Sin medida, el campo NO se emite: el ledger del preflight (`getSessionSpeakerSnapshots`) es
+ * la evidencia de la fila que nacio sin firma propia.
+ *
+ * @param {object|null} preflight resultado del preflight de identidad del turno
+ * @returns {number[]|null} medida del turno, o null si no la hubo
+ */
+function turnMeasurement(preflight = null) {
+  const measured = normalizeRowSignature(preflight?.signatureVector)
+  return measured?.length ? measured : null
 }
 
 function isShortCommitForSpeakerSplit(phrase = '', lastCommitted = '') {
   return isPhraseShortForSpeakerHeuristics(phrase, lastCommitted)
-}
-
-export function resolveCommitRowSignature({
-  resolved = {},
-  preflight = null,
-  clusters = [],
-  lastSignature = null,
-} = {}) {
-  const fromResolved = normalizeRowSignature(resolved?.signatureVector)
-  if (fromResolved?.length) return fromResolved
-
-  if (preflight?.ready) {
-    const fromPreflight = normalizeRowSignature(preflight?.signatureVector)
-    if (fromPreflight?.length) return fromPreflight
-  }
-
-  const fromCluster = clusterSignatureFor(clusters, resolved)
-  if (fromCluster?.length) return fromCluster
-
-  return normalizeRowSignature(lastSignature) || null
 }
 
 export function resolveTurnSpeakerAtCommit({
@@ -63,7 +52,6 @@ export function resolveTurnSpeakerAtCommit({
   preflight = null,
   knownSpeakerLabels = [],
   pinnedSpeaker = '',
-  clusters = [],
   lastCommitPerfAt = getLastCommitPerfAt(),
   forceNewRowOnSegment = false,
   staleInterimFlush = false,
@@ -94,7 +82,7 @@ export function resolveTurnSpeakerAtCommit({
     // esto el rename usaba la etiqueta de continuidad, que puede ser de otra persona.
     // `workingClusters` viaja para que el commit escriba los clusters. Sin medida NO
     // se emiten los campos: el contrato es "el campo existe si hay dato", no null.
-    const introSignature = normalizeRowSignature(preflight?.signatureVector)
+    const introSignature = turnMeasurement(preflight)
     const introClusters = preflight?.workingClusters || null
     return {
       speakerId: labelToSpeakerId(intro),
@@ -137,7 +125,7 @@ export function resolveTurnSpeakerAtCommit({
       !isShortCommitForSpeakerSplit(phrase) &&
       preflight.reason !== 'no-audio' &&
       preflight.reason !== 'no-vector' &&
-      normalizeRowSignature(preflight.signatureVector)?.length
+      turnMeasurement(preflight)
     ) {
       const labels = Array.isArray(knownSpeakerLabels) ? knownSpeakerLabels.filter(Boolean) : []
       const nextName = normalizeSpeakerLabel(nextSpeakerLabel(labels))
@@ -145,21 +133,19 @@ export function resolveTurnSpeakerAtCommit({
         return {
           speakerId: labelToSpeakerId(nextName),
           speakerName: nextName,
-          signatureVector:
-            normalizeRowSignature(preflight.signatureVector) ||
-            clusterSignatureFor(preflight.workingClusters || [], preflight),
+          signatureVector: turnMeasurement(preflight),
           workingClusters: preflight.workingClusters || null,
           source: 'segment-chrono-split',
         }
       }
     }
 
+    const measured = turnMeasurement(preflight)
     return {
       speakerId: preflight.speakerId,
       speakerName: preflightName,
-      signatureVector:
-        normalizeRowSignature(preflight.signatureVector) ||
-        clusterSignatureFor(preflight.workingClusters || [], preflight),
+      // SOLO la medida del turno: sin ella el campo NO existe (ver `turnMeasurement`).
+      ...(measured ? { signatureVector: measured } : {}),
       workingClusters: preflight.workingClusters || null,
       source: 'preflight-audio',
     }
@@ -186,7 +172,9 @@ export function resolveTurnSpeakerAtCommit({
   return {
     speakerId: labelToSpeakerId(name),
     speakerName: name,
-    signatureVector: clusterSignatureFor(clusters, { speakerName: name }),
+    // SIN MEDIDA PROPIA la fila no lleva firma: la cadena sticky no midio la voz, solo
+    // eligio una etiqueta. Prestarle la firma del cluster convertia el renombre por
+    // firma y la resolucion tardia en decisiones sobre una evidencia inexistente.
     source: preflight?.pending ? 'sticky-preflight-pending' : 'sticky',
   }
 }

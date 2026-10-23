@@ -90,7 +90,6 @@ describe('la separacion de voces exige que el cluster se ACUMULE entre turnos', 
     const resolved = resolveTurnSpeakerAtCommit({
       phrase: 'hola',
       preflight: pre,
-      clusters: [],
       lastLogged: '',
     })
     expect(resolved.workingClusters?.length, 'el commit debe recibir el cluster').toBe(1)
