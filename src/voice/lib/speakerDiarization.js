@@ -13,6 +13,7 @@ import {
   anonymousSpeakerLabel,
   foldSpeakerKey,
   isAutoSpeakerLabel,
+  isProperSpeakerName,
   isRegisteredSpeakerLabel,
   pendingSpeakerLabel,
   normalizeSpeakerLabel,
@@ -179,6 +180,54 @@ export function namedAssignmentConfirmed({
 }
 
 /** Nearest Neighbor en commit de sala: reutiliza clúster más cercano o abre uno nuevo. */
+/**
+ * CONTINUIDAD DE MONOLOGO (auditoria 2026-10-23): en una sesion con UN SOLO cluster de voz
+ * automatica, la etiqueta de ESE cluster es la continuidad de su unica voz. La etiqueta
+ * pendiente ("Hablante ?") queda para cuando NO hay una unica voz o no hay etiqueta que
+ * conservar. Nunca afirma un nombre propio: solo devuelve una etiqueta automatica CON numero.
+ * @param {Array<{ label?: string | null, signature?: number[] | null, anchorVerified?: boolean }>} speakerClusters clusters de la sesion
+ * @returns {string} etiqueta de continuidad, o '' si no aplica
+ */
+export function continuityLabelForMonologue(speakerClusters = [], { lastSpeaker = '' } = {}) {
+  const medidos = (Array.isArray(speakerClusters) ? speakerClusters : []).filter(
+    (c) => Array.isArray(c?.signature) && c.signature.length > 0,
+  )
+  // SIN NINGUN cluster medido no hay voces que comparar: la continuidad es la etiqueta del
+  // turno anterior (la unica voz de la sesion). Con clusters, esto NO se aplica: ahi la
+  // etiqueta del turno anterior es justo la que no se puede heredar (la mujer y el dueno).
+  if (!medidos.length) {
+    const anterior = normalizeSpeakerLabel(String(lastSpeaker || ''))
+    if (!anterior || anterior === pendingSpeakerLabel()) return ''
+    if (isAutoSpeakerLabel(anterior) && /\d/.test(anterior)) return anterior
+    return isProperSpeakerName(anterior) ? anterior : ''
+  }
+  // MONOLOGO = TODOS los clusters medidos son la MISMA voz (coseno >= piso de "misma voz",
+  // el mismo criterio de la sesion). Asi una voz partida en varios clusters no deja la fila
+  // en "?"; dos voces distintas si (ahi `?` es legitimo, no se fuerza nada).
+  const referencia = medidos[0].signature
+  const piso = sameVoiceFloor()
+  const unaSolaVoz = medidos.every(
+    (c) =>
+      c.signature === referencia ||
+      compareCosineSignatures(referencia, c.signature) >= piso,
+  )
+  if (!unaSolaVoz) return ''
+  // Etiqueta de continuidad: la AUTOMATICA con numero de menor indice (la primera de la
+  // sesion). Es continuidad, no un nombre: no se asciende ninguna identidad aqui.
+  const automaticas = medidos
+    .map((c) => normalizeSpeakerLabel(String(c?.label || '')))
+    .filter((label) => label && label !== pendingSpeakerLabel() && isAutoSpeakerLabel(label) && /\d/.test(label))
+    .sort()
+  if (automaticas.length) return automaticas[0]
+  // Sin etiqueta automatica: el nombre propio solo si TODA la voz medida es ancla verificada.
+  const etiquetas = [...new Set(medidos.map((c) => normalizeSpeakerLabel(String(c?.label || ''))))].filter(Boolean)
+  if (etiquetas.length === 1 && isProperSpeakerName(etiquetas[0]) && medidos.every((c) => c?.anchorVerified === true)) {
+    return etiquetas[0]
+  }
+  return ''
+}
+
+
 function resolveProductionSpeakerAtBoundary({
   vector,
   speakerClusters,
@@ -206,7 +255,7 @@ function resolveProductionSpeakerAtBoundary({
     // 2026-10-18 — el nombre del onboarding se estampaba en la primera voz).
     // Sin medida no hay identidad NI continuidad: etiqueta PROVISIONAL (config), no el
     // lastSpeaker (la mujer heredaba la etiqueta del dueno).
-    const keep = pendingSpeakerLabel()
+    const keep = continuityLabelForMonologue(speakerClusters, { lastSpeaker }) || pendingSpeakerLabel()
     note?.({ reason: 'no-vector-pending', speaker: keep, lastSim: 0, bestSim: 0 })
     return keep
   }
@@ -592,7 +641,7 @@ function resolveProductionSpeakerAtBoundary({
     // etiqueta es PROVISIONAL (config) y la fila se completa cuando llega el vector del
     // audio de ESTE turno: heredar la etiqueta del turno anterior le daba a la mujer la
     // del dueno (medido: `production-short-window-continuity`).
-    const pending = pendingSpeakerLabel()
+    const pending = continuityLabelForMonologue(speakerClusters, { lastSpeaker }) || pendingSpeakerLabel()
     note?.({ reason: 'production-short-window-pending', speaker: pending, lastSim, bestSim, autoCount })
     return pending
   }
@@ -603,7 +652,7 @@ function resolveProductionSpeakerAtBoundary({
   // propio vector cuando la sesion tenga el cluster.
   const verdict = classifyVoiceAgainstClusters({ vector: normalized, speakerClusters, thresholds })
   if (verdict.verdict === 'grey') {
-    const pending = pendingSpeakerLabel()
+    const pending = continuityLabelForMonologue(speakerClusters, { lastSpeaker }) || pendingSpeakerLabel()
     note?.({ reason: 'production-grey-pending', speaker: pending, bestSim: verdict.bestSim, lastSim, autoCount })
     return pending
   }
@@ -899,7 +948,7 @@ export function resolveConversationSpeaker({
   if (!hasVoiceMeasurement(vector)) {
     // SIN MEDIDA no hay identidad: la etiqueta se conserva SOLO si es ANONIMA; un
     // nombre propio (el del onboarding / lastLogged) NO se hereda (mandato 2026-10-18).
-    const keep = pendingSpeakerLabel()
+    const keep = continuityLabelForMonologue(speakerClusters, { lastSpeaker }) || pendingSpeakerLabel()
     note({ reason: 'no-vector', speaker: keep })
     return keep
   }
@@ -965,7 +1014,7 @@ export function resolveConversationSpeaker({
   if (!voicedSampleCount || voicedSampleCount < minVoicedSamples) {
     // Sin audio suficiente no hay medida: NUNCA se afirma un nombre propio; se
     // conserva la etiqueta anonima con la que venia esa voz (mandato 2026-10-18).
-    const keep = pendingSpeakerLabel()
+    const keep = continuityLabelForMonologue(speakerClusters, { lastSpeaker }) || pendingSpeakerLabel()
     note({ reason: 'insufficient-voiced', voicedSampleCount, minVoicedSamples, speaker: keep })
     return keep
   }

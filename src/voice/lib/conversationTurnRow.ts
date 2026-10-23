@@ -19,7 +19,7 @@ import { isAutoSpeakerLabel, isProperSpeakerName } from './voiceIdentity';
 import { compareCosineSignatures } from './speakerCore';
 import { registerVoiceName, resolveVoiceIdentity } from './speakerDirectory.js';
 import { differentVoiceFloor, sameVoiceFloor } from './speakerClusters.js';
-import { classifyVoiceAgainstClusters, namedAssignmentConfirmed } from './speakerDiarization.js';
+import { classifyVoiceAgainstClusters, namedAssignmentConfirmed, continuityLabelForMonologue } from './speakerDiarization.js';
 import { canonicalSpeakerName, normalizeSpeakerLabel, pendingSpeakerLabel } from './speakerLabels';
 import { getVoiceIdentityConfig } from './speakerLabels';
 import { autoSpeakerIndexFromKey, getFallbackSpeaker } from './speakerCore';
@@ -369,14 +369,63 @@ export function resolvePendingSpeakerRows(
             normalizeRowSignature(e.signature) ||
             porTurno.get(turnByRow.get(String(e.id)) || '') ||
             null;
-        if (!deSuTurno) continue;
+        if (!deSuTurno) {
+            // MONOLOGO sin vector (auditoria 2026-10-23): con UNA sola etiqueta en la sesion no
+            // hay otra voz a la que atribuir el turno; su etiqueta es la continuidad.
+            const continuidad = etiquetaUnicaDeLaSesion(store.conversationHistory, epochActual) || continuityLabelForMonologue(clusters);
+            if (!continuidad) continue;
+            store.setEntrySpeakerName(e.id, continuidad);
+            changed += 1;
+            continue;
+        }
         const elegida = pickPendingRowLabel(clusters, deSuTurno, floor, umbralesDeLaSesion());
-        if (!elegida) continue;
+        if (!elegida) {
+            // Sin margen para afirmar identidad, la CONTINUIDAD solo vale si NO hay evidencia
+            // de otra voz: si la firma de la fila cae por debajo del piso de "voz distinta"
+            // frente a TODOS los clusters medidos, esta fila es de OTRA persona y forzar la
+            // etiqueta seria el defecto medido (la mujer heredaba la etiqueta del dueno).
+            const medidas = clusters
+                .map((c) => normalizeRowSignature(c?.signature))
+                .filter((v): v is number[] => Array.isArray(v) && v.length > 0);
+            if (medidas.length) {
+                const similitudMax = Math.max(...medidas.map((v) => compareCosineSignatures(deSuTurno, v)));
+                if (similitudMax < differentVoiceFloor()) continue;
+            }
+            const continuidad = etiquetaUnicaDeLaSesion(store.conversationHistory, epochActual) || continuityLabelForMonologue(clusters, { lastSpeaker: '' });
+            if (!continuidad) continue;
+            store.setEntrySpeakerName(e.id, continuidad);
+            changed += 1;
+            continue;
+        }
         store.setEntrySpeaker(e.id, elegida.speakerId, { signature: deSuTurno });
         store.setEntrySpeakerName(e.id, elegida.label);
         changed += 1;
     }
     return changed;
+}
+
+/**
+ * ETIQUETA UNICA DE LA SESION (mandato del dueno 2026-10-23): si las filas de usuario del
+ * epoch usan UNA sola etiqueta automatica, esa es la continuidad de la unica voz. Devuelve ''
+ * con cero etiquetas o con dos o mas (ahi `?` es legitimo y no se fuerza nada).
+ * @param history filas de la conversacion
+ * @param epoch epoch vigente de la fila
+ * @returns etiqueta automatica unica, o ''
+ */
+function etiquetaUnicaDeLaSesion(
+    history: Array<{ role?: string; epoch?: number | string; speakerName?: string }> = [],
+    epoch?: number,
+): string {
+    const etiquetas = new Set<string>();
+    for (const entry of history || []) {
+        if (entry?.role !== 'user') continue;
+        if (Number.isFinite(Number(entry?.epoch)) && Number(entry.epoch) !== Number(epoch)) continue;
+        const name = normalizeSpeakerLabel(String(entry?.speakerName || '').trim());
+        if (!name || name === pendingSpeakerLabel()) continue;
+        if (!isAutoSpeakerLabel(name) || !/\d/.test(name)) continue;
+        etiquetas.add(name);
+    }
+    return etiquetas.size === 1 ? [...etiquetas][0] : '';
 }
 
 /**
@@ -839,7 +888,14 @@ function commitUserTurnRowInner({
     // con su ancla salia «Hablante 2») porque su TIMBRE habia casado antes con la clave de
     // otra etiqueta: la clave agrupa el timbre, la etiqueta la decide el turno (medido
     // 2026-10-19, sesion 18f3888c). El respaldo no aporta etiqueta y se completa con la VOZ.
-    const etiquetaDeLaFila = resolveRowVisibleLabel(resolved, vozDeLaFila);
+    const etiquetaVisible = resolveRowVisibleLabel(resolved, vozDeLaFila);
+    // MONOLOGO (mandato del dueno 2026-10-23): una fila CERRADA no puede quedar en la etiqueta
+    // pendiente cuando la sesion entera tiene UNA sola etiqueta automatica; esa etiqueta es la
+    // continuidad de su unica voz. Con 2+ etiquetas, `?` sigue siendo legitimo.
+    const etiquetaDeLaFila =
+        etiquetaVisible === pendingSpeakerLabel()
+            ? etiquetaUnicaDeLaSesion(history, epochDeLaFila) || etiquetaVisible
+            : etiquetaVisible;
     // ROTULO PROPIO: la fila solo lleva `speakerName` cuando el resolver aporto identidad de
     // ESTE turno (etiqueta de diarizacion distinta del RESPALDO, nombre propio del texto o
     // medida). El respaldo no se escribe: es lo que su VOZ ya muestra al renderizar, y
