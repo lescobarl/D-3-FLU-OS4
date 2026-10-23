@@ -38,8 +38,7 @@ export function getAsrSampleRate(config = getAsrConfig()) {
  * @param {object} [config] Bloque `vad` de config.
  * @param {number} [sampleRate] Tasa del PCM entrante (Hz).
  * @returns {VoiceSegmenter}
- */
-export function createVoiceSegmenter(config = getVadConfig(), sampleRate = getAsrSampleRate()) {
+ */export function createVoiceSegmenter(config = getVadConfig(), sampleRate = getAsrSampleRate()) {
   // Un solo lector del bloque de segmentacion (respaldos en `VAD_DEFAULTS`): el
   // `0` legitimo se respeta (`preRollMs: 0` = sin pre-roll, no "sin valor").
   const segmentCfg = getVadSegmentConfig(config)
@@ -165,4 +164,34 @@ export function createVoiceSegmenter(config = getVadConfig(), sampleRate = getAs
   }
 
   return { push, flush, reset }
+}
+
+/**
+ * TRAMOS de un PCM completo: [{ inicioMs, finMs }] por locución (silencio→voz→silencio).
+ *
+ * Es el dueño único de "dónde empieza y dónde acaba cada locución" para consumidores que
+ * no empujan audio en vivo (el portero del tramo, el playback, los tests). En vivo se usa
+ * `createVoiceSegmenter` directamente; aquí solo se le da de comer el PCM por bloques.
+ *
+ * @param {Float32Array} samples PCM mono
+ * @param {number} sampleRate tasa del PCM (Hz)
+ * @param {object} [config] bloque `vad` de config (por defecto el de la app)
+ * @returns {Array<{ inicioMs: number, finMs: number }>}
+ */
+export function tramosDeAudio(samples, sampleRate, config = undefined) {
+  if (!samples || !samples.length || !(sampleRate > 0)) return []
+  const segmenter = createVoiceSegmenter(config, sampleRate)
+  const salida = []
+  const bloque = Math.max(1, Math.round(sampleRate * 0.5))
+  const recoger = (eventos) => {
+    for (const evento of eventos || []) {
+      if (evento.type !== 'speech-end') continue
+      salida.push({ inicioMs: evento.startMs, finMs: evento.startMs + evento.durationMs })
+    }
+  }
+  for (let i = 0; i < samples.length; i += bloque) {
+    recoger(segmenter.push(samples.subarray(i, Math.min(samples.length, i + bloque))))
+  }
+  recoger(segmenter.flush())
+  return salida
 }

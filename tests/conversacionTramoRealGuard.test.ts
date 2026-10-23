@@ -17,7 +17,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { describe, expect, it } from 'vitest'
-import { createVoiceSegmenter } from '../src/voice/lib/asr/voiceActivitySegmenter.js'
+import { tramosDeAudio } from '../src/voice/lib/asr/voiceActivitySegmenter.js'
 import { VAD_DEFAULTS } from '../src/voice/lib/asr/asrDefaults.js'
 
 const SESION = join(tmpdir(), 'flu-recordings', '8f3112c2-7a22-4e68-9045-590858aef34a')
@@ -45,30 +45,12 @@ function leerWav(ruta: string): { samples: Float32Array; sampleRate: number } {
   throw new Error('WAV sin chunk data')
 }
 
-/** Tramos [inicioMs, finMs] que produce el segmentador VAD real. */
-function tramos(samples: Float32Array, sampleRate: number): Array<{ inicioMs: number; finMs: number }> {
-  const segmenter = createVoiceSegmenter(undefined, sampleRate)
-  const salida: Array<{ inicioMs: number; finMs: number }> = []
-  const bloque = Math.round(sampleRate * 0.5) // 0,5 s por empujón (como el micro real)
-  for (let i = 0; i < samples.length; i += bloque) {
-    for (const evento of segmenter.push(samples.subarray(i, Math.min(samples.length, i + bloque)))) {
-      if (evento.type !== 'speech-end') continue
-      salida.push({ inicioMs: evento.startMs, finMs: evento.startMs + evento.durationMs })
-    }
-  }
-  for (const evento of segmenter.flush()) {
-    if (evento.type !== 'speech-end') continue
-    salida.push({ inicioMs: evento.startMs, finMs: evento.startMs + evento.durationMs })
-  }
-  return salida
-}
-
 describe.skipIf(!HAY)('PORTERO A1 · tramo por locución con VAD real sobre audio real', () => {
   it('el audio se corta en tramos: no vacíos, ordenados y DISJUNTOS (R1/R2 ejecutables)', { timeout: 120_000 }, () => {
     const { samples, sampleRate } = leerWav(join(SESION, 'audio.wav'))
     expect(samples.length, 'el audio no puede estar vacío').toBeGreaterThan(0)
 
-    const cortes = tramos(samples, sampleRate)
+    const cortes = tramosDeAudio(samples, sampleRate)
     const segundos = samples.length / sampleRate
     console.log(
       `VAD(${VAD_DEFAULTS.minSilenceMs} ms de silencio, ${VAD_DEFAULTS.frameMs} ms de trama): ` +
@@ -100,7 +82,7 @@ describe.skipIf(!HAY)('PORTERO A1 · tramo por locución con VAD real sobre audi
   // el gate queda verde y este test se pone ROJO (hay que pasarlo a `it`) cuando el PCM sea fiel.
   it.fails('los tramos caen donde el ASR emitió sus `final` (el texto se puede pegar a su audio)', { timeout: 120_000 }, () => {
     const { samples, sampleRate } = leerWav(join(SESION, 'audio.wav'))
-    const cortes = tramos(samples, sampleRate)
+    const cortes = tramosDeAudio(samples, sampleRate)
     const eventos = readFileSync(join(SESION, 'events.ndjson'), 'utf8')
       .trim()
       .split('\n')
