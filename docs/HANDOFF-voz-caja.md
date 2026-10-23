@@ -20,7 +20,37 @@ reglas**: las reglas están en `AGENTS.md`.
 **Cómo se usa:** una sesión nueva (o otro agente) lo lee ANTES de tocar nada. La sección
 `ESTADO DEL ÁRBOL` la regenera `node scripts/handoff.mjs`; el resto es conocimiento y solo
 cambia cuando cambia el diagnóstico.
-**Última revisión del diagnóstico:** 2026-10-22 (auditoría estática, sin ejecutar nada).
+**Última revisión del diagnóstico:** 2026-10-23 (auditoría ejecutada: medidor y firma corregidos).
+
+---
+
+## 0.0 Estado 2026-10-23 — la auditoría se EJECUTÓ (leer antes que el TL;DR)
+
+**El TL;DR de abajo es del 2026-10-22 y describe el árbol de Kilo** (P1 abierto, H14 sin
+commitear). Se conserva como historia; lo vigente es esto:
+
+1. **Cerrado: la firma de la fila.** `turnMeasurement` (`src/voice/lib/turnSpeakerCommit.js`) es
+   el dueño único: la fila lleva la MEDIDA del turno o no lleva firma. Se retiraron los tres
+   préstamos (cluster asignado, `workingClusters`, commit anterior), el export muerto
+   `resolveCommitRowSignature` y, en `conversationStreamCommit.js`, la firma sin medida se
+   LIMPIA (no se hereda la del turno anterior).
+2. **La validación de hablantes no medía nada.** `commit.signature` guardaba una REFERENCIA, no
+   la medida del turno: `7fce0045` tiene 149 commits y 17 firmas (141 compartidas entre
+   locuciones distintas), `d4c1c8f3` 29 commits y 2 firmas. El modo `vectors` lo detecta
+   (`firma-repetida`) y reporta el motivo real: cobertura **4 % / 0 %**, no el 79 %/52 % que se
+   venía citando. **Las grabaciones anteriores a este cambio no sirven para validar identidad**:
+   hace falta una sesión nueva.
+3. **Defecto de producto medido y pendiente de decisión:** 8 locuciones de `7fce0045` aparecen
+   con DOS etiquetas (la misma captura se commitea otra vez 4,5 s después y el preflight de esa
+   segunda fila la vuelve a renombrar). Se MIDE en cada replay
+   (`locucionesConEtiquetasDistintas`, aviso «una locucion es UNA voz») y **no se corrige**:
+   el Anexo B.14 prohíbe tocar la deduplicación para arreglar repeticiones.
+4. **`App.tsx` salió del techo:** 4638 → 4485 líneas (helpers de despacho a
+   `src/app/appDispatchHelpers.ts`); el techo del trinquete baja a 4485.
+
+**Lo que queda:** H13 (`vaciarLaCaja({visible:false})` en mitad de la locución, acoplado al
+cierre por srGap), el margen de `useFluVoiceAssistant.js` (4381/4383), una grabación NUEVA para
+validar identidad, y el E2E/pantalla (DoD del dueño).
 
 ---
 
@@ -148,18 +178,14 @@ npm run build
 ## 7. ESTADO DEL ÁRBOL (generado)
 
 <!-- AUTO:ESTADO -->
-generado: 2026-10-22 16:21:45
+generado: 2026-10-23 19:02:58
 
 - rama: `feature/auditoria-codigo-unificaciones-01`
-- HEAD: `2f604502 feat(playback): FLU Playback fase 1 y runner estable`
+- HEAD: `63b3cac2 docs(voz): handoff al dia con la auditoria ejecutada (firma, replay y 8 locuciones)`
 - sin cambios en ficheros rastreados
-- modificados: 3
-  - `M  scripts/guard-files.mjs`
-  - `M  src/voice/lib/speakerDiarization.js`
-  - `A  tests/simulacionReglasVoz.test.ts`
-- sin trackear: 2
-  - `?? docs/`
-  - `?? scripts/handoff.mjs`
+- modificados: 0
+- sin trackear: 1
+  - `?? .aider.chat.history.md`
 
 > El estado de arriba es el arbol REAL en el momento de generar. Si el dueño no ha
 > commiteado, una sesion nueva NO hereda estos cambios: los hereda del disco, no de git.
