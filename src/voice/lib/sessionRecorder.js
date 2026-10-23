@@ -99,6 +99,15 @@ const persistFailures = new Map()
 /** Canales detenidos tras 5 fallos consecutivos: no se reintentan ni se registran. */
 /** @type {Set<string>} */
 const persistChannelsDown = new Set()
+/**
+ * HUECOS DE AUDIO declarados: el audio NUNCA se apaga (un canal roto de audio deja la
+ * grabación sin la locución que se quiere medir). Si un lote se pierde, se anota dónde
+ * faltó y se sigue: la grabación queda marcada como incompleta en vez de truncada en
+ * silencio (medido 2026-10-23: el PCM terminaba antes que la sesión y los últimos
+ * `final` del ASR caían sobre "silencio" que en realidad nunca se guardó).
+ * @type {Array<{ sample: number, at: number }>}
+ */
+const audioGaps = []
 // Tras cerrar la sesión no se abre otra por eventos tardíos (los logs siguen
 // corriendo después de `finalize`): la captura queda cerrada hasta un enable.
 let persistClosed = false
@@ -297,6 +306,13 @@ function enqueuePersist(label, task) {
     .catch((error) => {
       const attempts = (persistFailures.get(label) || 0) + 1
       persistFailures.set(label, attempts)
+      // AUDIO: nunca se apaga. Un lote perdido es un HUECO declarado, no el fin del audio
+      // (sin audio fiel no hay tramo, ni medida, ni playback: ver PORTERO A1).
+      if (label === 'audio') {
+        audioGaps.push({ sample: audioSamples, at: Date.now() })
+        if (attempts === 5) logCaughtError('sessionRecorder.audioGap', error, { attempts })
+        return
+      }
       if (attempts < 5) return
       persistChannelsDown.add(label)
       // CIRCUIT BREAKER por canal: se detiene el canal roto y se registra UNA vez.
@@ -612,6 +628,7 @@ export function clearSessionRecording() {
   audioSamples = 0
   recordingSampleRate = 0
   audioTruncated = false
+  audioGaps.length = 0
   audioMarkers = []
   lastMarkerAt = 0
   events = []
@@ -764,6 +781,7 @@ export function getSessionRecordingStatus() {
     audioSeconds: Math.round((audioSamples / rate) * 100) / 100,
     sampleRate: rate,
     audioTruncated,
+    audioGaps: audioGaps.length,
     events: events.length,
     droppedEvents,
     maxMinutes: resolveMaxMinutes(),
