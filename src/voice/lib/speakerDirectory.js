@@ -18,6 +18,7 @@ import { getEmbeddingConfig, getModelId } from './embeddingConfig.js'
 import { compareCosineSignatures, isAutoSpeakerLabel, normalizeEmbeddingVector } from './speakerCore.js'
 import { registeredVoiceFloor, sameVoiceFloor, verifiedAnchorFloor } from './speakerClusters.js'
 import { foldSpeakerKey, isProperSpeakerName } from './speakerLabels.js'
+import { getParticipantAnchors } from './participantVoiceAnchors.ts'
 
 /**
  * CLAVE DE COMPARABILIDAD del vector: modelo + dtype del embedder (dueno unico:
@@ -111,7 +112,7 @@ export function resolveRowVoiceName(voiceId, signature = null) {
     const entry = voiceNames.get(id)
     const sig = normalizeEmbeddingVector(Array.isArray(signature) ? signature : [])
     if (sig.length) {
-        const conocida = resolveVoiceIdentity(sig)
+        const conocida = resolveVoiceIdentity(sig, { candidates: getParticipantAnchors() })
         if (conocida?.name) return conocida.name
         if (entry?.name && !entry?.vector?.length) return entry.name
         return ''

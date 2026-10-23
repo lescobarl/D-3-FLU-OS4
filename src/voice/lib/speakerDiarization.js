@@ -13,7 +13,6 @@ import {
   anonymousSpeakerLabel,
   foldSpeakerKey,
   isAutoSpeakerLabel,
-  isProperSpeakerName,
   isRegisteredSpeakerLabel,
   pendingSpeakerLabel,
   normalizeSpeakerLabel,
@@ -198,8 +197,10 @@ export function continuityLabelForMonologue(speakerClusters = [], { lastSpeaker 
   if (!medidos.length) {
     const anterior = normalizeSpeakerLabel(String(lastSpeaker || ''))
     if (!anterior || anterior === pendingSpeakerLabel()) return ''
-    if (isAutoSpeakerLabel(anterior) && /\d/.test(anterior)) return anterior
-    return isProperSpeakerName(anterior) ? anterior : ''
+    // SIN clusters medidos no hay ancla verificada que consultar: SOLO etiqueta automatica.
+    // Un nombre propio exigiria `namedAssignmentConfirmed` y aqui no hay medida que lo
+    // sostenga (auditoria 2026-10-23: el JSDoc ya lo decia y el codigo lo contradecia).
+    return isAutoSpeakerLabel(anterior) && /\d/.test(anterior) ? anterior : ''
   }
   // MONOLOGO = TODOS los clusters medidos son la MISMA voz (coseno >= piso de "misma voz",
   // el mismo criterio de la sesion). Asi una voz partida en varios clusters no deja la fila
@@ -214,18 +215,21 @@ export function continuityLabelForMonologue(speakerClusters = [], { lastSpeaker 
     : (c) => c.signature === referencia || compareCosineSignatures(referencia, c.signature || []) >= piso
   const unaSolaVoz = medidos.every(esLaMismaVoz)
   if (!unaSolaVoz) return ''
-  // Etiqueta de continuidad: la AUTOMATICA con numero de menor indice (la primera de la
-  // sesion). Es continuidad, no un nombre: no se asciende ninguna identidad aqui.
+  // Etiqueta de continuidad: la AUTOMATICA de MENOR INDICE NUMERICO (la primera de la
+  // sesion). `.sort()` textual colocaria "Hablante 10" antes que "Hablante 2" (auditoria
+  // 2026-10-23). Es continuidad, no un nombre: no se asciende ninguna identidad aqui.
+  const indiceDe = (label) => {
+    const numero = String(label || '').match(/(\d+)\s*$/)
+    return numero ? Number(numero[1]) : Number.MAX_SAFE_INTEGER
+  }
   const automaticas = medidos
     .map((c) => normalizeSpeakerLabel(String(c?.label || '')))
     .filter((label) => label && label !== pendingSpeakerLabel() && isAutoSpeakerLabel(label) && /\d/.test(label))
-    .sort()
+    .sort((a, b) => indiceDe(a) - indiceDe(b))
   if (automaticas.length) return automaticas[0]
-  // Sin etiqueta automatica: el nombre propio solo si TODA la voz medida es ancla verificada.
-  const etiquetas = [...new Set(medidos.map((c) => normalizeSpeakerLabel(String(c?.label || ''))))].filter(Boolean)
-  if (etiquetas.length === 1 && isProperSpeakerName(etiquetas[0]) && medidos.every((c) => c?.anchorVerified === true)) {
-    return etiquetas[0]
-  }
+  // SIN etiqueta automatica NO se devuelve un nombre propio: afirmar un nombre exige
+  // `namedAssignmentConfirmed` (mandato 2026-10-23) y aqui no hay medida del turno que lo
+  // sostenga. La fila queda en la etiqueta pendiente, no en un nombre.
   return ''
 }
 

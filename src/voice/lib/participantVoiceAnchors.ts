@@ -51,3 +51,22 @@ export function participantVoiceAnchorsForDiarization(
     }))
     .filter((anchor) => Array.isArray(anchor.vector) && anchor.vector.length > 0)
 }
+
+/**
+ * LECTURA de las anclas de voz de la base, inyectada por su dueno (useParticipants).
+ * La consumen TODOS los que resuelven identidad por voz (fila, App, directorio): sin esto
+ * una ruta resolvia sin candidatos y la misma voz salia conocida en una y desconocida en la
+ * otra (auditoria 2026-10-23).
+ */
+let participantAnchorsProvider: () => ParticipantVoiceAnchor[] = () => [];
+
+/** Inyecta el lector de anclas (null restaura la lista vacia). */
+export function setParticipantAnchorsProvider(provider: (() => ParticipantVoiceAnchor[]) | null): void {
+  participantAnchorsProvider = typeof provider === 'function' ? provider : () => [];
+}
+
+/** Anclas vigentes de la base (dueno: useParticipants). */
+export function getParticipantAnchors(): ParticipantVoiceAnchor[] {
+  const anchors = participantAnchorsProvider();
+  return Array.isArray(anchors) ? anchors : [];
+}

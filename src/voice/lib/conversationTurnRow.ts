@@ -18,12 +18,13 @@ import { voiceProbe } from './voiceProbe';
 import { isAutoSpeakerLabel, isProperSpeakerName } from './voiceIdentity';
 import { compareCosineSignatures } from './speakerCore';
 import { registerVoiceName, resolveVoiceIdentity } from './speakerDirectory.js';
-import { differentVoiceFloor, sameVoiceFloor } from './speakerClusters.js';
+import { differentVoiceFloor, sameVoiceFloor, getSessionClusters } from './speakerClusters.js';
 import { classifyVoiceAgainstClusters, namedAssignmentConfirmed, continuityLabelForMonologue } from './speakerDiarization.js';
 import { canonicalSpeakerName, normalizeSpeakerLabel, pendingSpeakerLabel } from './speakerLabels';
 import { getVoiceIdentityConfig } from './speakerLabels';
 import { autoSpeakerIndexFromKey, getFallbackSpeaker } from './speakerCore';
 import { labelToSpeakerId, resolveRowSpeakerLabel, speakerIdToDefaultName } from './conversationRow';
+import { getParticipantAnchors } from './participantVoiceAnchors';
 import { voiceKeyFor } from './speakerDirectory.js';
 import { normalizeRowSignature } from './conversationRow';
 import { isFragmentOfLocution } from './turnStream';
@@ -35,29 +36,6 @@ import { isFragmentOfLocution } from './turnStream';
  */
 let currentTurn: { id: number | string | null; rowId: string | null } = { id: null, rowId: null };
 
-/**
- * CANDIDATOS de identidad por voz para esta capa: las anclas MEDIDAS de la base de
- * participantes (`participantVoiceAnchorsForDiarization`).
- *
- * POR QUE UN PUERTO: la fila resolvia la voz con `resolveVoiceIdentity(vector)` SIN
- * candidatos mientras App la resolvia CON ellos; la MISMA voz podia ser conocida en una
- * ruta y desconocida en la otra (auditoria 2026-10-23). El proveedor se inyecta una vez
- * desde App (dueno de la base) y aqui solo se consulta: una sola llamada, los mismos datos.
- * @type {() => Array<{ name?: string, vector?: number[], model?: string, verified?: boolean }>}
- */
-type ParticipantAnchors = Array<{ name?: string; vector?: number[]; model?: string; verified?: boolean }>;
-
-let participantAnchorsProvider: () => ParticipantAnchors = () => [];
-
-/**
- * Inyecta los candidatos de identidad por voz (anclas de participantes).
- * @param provider devuelve las anclas vigentes; null restaura la lista vacia.
- */
-export function setParticipantAnchorsProvider(
-    provider: (() => Array<{ name?: string; vector?: number[]; model?: string; verified?: boolean }>) | null,
-): void {
-    participantAnchorsProvider = typeof provider === 'function' ? provider : () => [];
-}
 
 /**
  * ¿La fila puede pertenecer al turno `turnId`?
@@ -75,10 +53,13 @@ function filaPuedeSerDeEsteTurno(
     turnId: number | string | null | undefined,
 ): boolean {
     if (!entry) return false;
-    if (turnId === null || turnId === undefined) return true;
-    const turnoDeLaFila = entry.turnId;
-    if (turnoDeLaFila === null || turnoDeLaFila === undefined) return true;
-    return String(turnoDeLaFila) === String(turnId);
+    const desconocido = (valor: unknown) => valor === null || valor === undefined || String(valor) === '';
+    // IDENTIDAD DE TURNO: con AMBOS ids conocidos tienen que coincidir. Si falta uno no se
+    // puede afirmar "otro turno" (la fusion por trozo del MISMO turno depende de ello), asi
+    // que la garantia vive en el LLAMADOR: App acuña el turno antes del commit
+    // (auditoria 2026-10-23) y el flujo real nunca llega aqui con null.
+    if (desconocido(turnId) || desconocido(entry.turnId)) return true;
+    return String(entry.turnId) === String(turnId);
 }
 
 /**
@@ -404,6 +385,7 @@ export function resolvePendingSpeakerRows(
     return changed;
 }
 
+
 /**
  * ETIQUETA UNICA DE LA SESION (mandato del dueno 2026-10-23): si las filas de usuario del
  * epoch usan UNA sola etiqueta automatica, esa es la continuidad de la unica voz. Devuelve ''
@@ -720,7 +702,7 @@ export function updateTurnRowSpeaker(
     if (isAutoSpeakerLabel(name) && measuredVector) {
         // MISMOS CANDIDATOS QUE App (auditoria 2026-10-23): sin ellos esta ruta no veia las
         // anclas de la base y la misma voz salia conocida en App y desconocida en la fila.
-        const conocida = resolveVoiceIdentity(measuredVector, { candidates: participantAnchorsProvider() });
+        const conocida = resolveVoiceIdentity(measuredVector, { candidates: getParticipantAnchors() });
         if (conocida?.name && isProperSpeakerName(conocida.name)) return false;
     }
     const vozDeEtiqueta = String(entry.speakerId || '') || labelToSpeakerId(actualName);
@@ -894,7 +876,9 @@ function commitUserTurnRowInner({
     // continuidad de su unica voz. Con 2+ etiquetas, `?` sigue siendo legitimo.
     const etiquetaDeLaFila =
         etiquetaVisible === pendingSpeakerLabel()
-            ? etiquetaUnicaDeLaSesion(history, epochDeLaFila) || etiquetaVisible
+            ? etiquetaUnicaDeLaSesion(history, epochDeLaFila) ||
+              continuityLabelForMonologue(getSessionClusters(), { lastSpeaker: '' }) ||
+              etiquetaVisible
             : etiquetaVisible;
     // ROTULO PROPIO: la fila solo lleva `speakerName` cuando el resolver aporto identidad de
     // ESTE turno (etiqueta de diarizacion distinta del RESPALDO, nombre propio del texto o

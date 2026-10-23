@@ -47,6 +47,15 @@ function resolver(
 
 const PENDING = pendingSpeakerLabel()
 
+/**
+ * GUARD del mandato: en MONOLOGO la etiqueta final NUNCA puede ser la pendiente.
+ * Es la barrera con su falsificacion: alimentarla con `?` la pone roja.
+ * @param label etiqueta que devolvio el resolutor
+ */
+function exigirEtiquetaFinalDeMonologo(label: string) {
+  if (label === PENDING) throw new Error(`monologo con etiqueta pendiente: "${label}"`)
+}
+
 describe('continuidad de monologo', () => {
   it('un solo cluster CON MEDIDA con etiqueta automatica -> esa etiqueta', () => {
     expect(continuityLabelForMonologue([{ label: 'Hablante 1', signature: [...LUIS] }])).toBe('Hablante 1')
@@ -94,7 +103,15 @@ describe('resolutor en monologo (mutacion: hasVoiceMeasurement = false)', () => 
       const label = resolver(vector, clusters)
       expect(label, `monologo con vector de ${vector.length} no puede quedar en "?"`).not.toBe(PENDING)
       expect(label, 'y no inventa otro hablante').toBe('Hablante 1')
+      exigirEtiquetaFinalDeMonologo(label)
     }
+  })
+
+  it('G U A R D (mutacion): forzar el pendiente pone rojo el detector', () => {
+    // Falsificacion del guard: si un camino devolviera `?`, `exigirEtiquetaFinalDeMonologo`
+    // lanza. Sin esto el guard podria pasar sin medir nada.
+    expect(() => exigirEtiquetaFinalDeMonologo(PENDING)).toThrow(/pendiente/)
+    expect(() => exigirEtiquetaFinalDeMonologo('Hablante 1')).not.toThrow()
   })
 
   it('DOS voces: "?" sigue siendo legitimo (no se fuerza la etiqueta)', () => {
@@ -113,9 +130,11 @@ describe('resolutor en monologo (mutacion: hasVoiceMeasurement = false)', () => 
     expect(label).toBe(PENDING)
   })
 
-  it('ANCLA VERIFICADA unica: la continuidad es su nombre (no se inventa etiqueta)', () => {
+  it('ANCLA VERIFICADA unica: tampoco se afirma su nombre (exige namedAssignmentConfirmed)', () => {
     const clusters = [{ label: 'Luis', signature: [...LUIS], anchorVerified: true }]
-    expect(resolver([], clusters)).toBe('Luis')
+    const label = resolver([], clusters)
+    expect(label, 'sin medida del turno no hay confirmacion de nombre').not.toBe('Luis')
+    expect(label).toBe(PENDING)
   })
 })
 

@@ -38,7 +38,7 @@ import { voiceVectorModel } from '../voice/lib/speakerDirectory';
 import { speakerIdToDefaultName } from '../voice/lib/conversationRow.js';
 import { useIntegrationStore } from '../store/integrationStore';
 import { renameRowSpeakerName } from '../voice/lib/conversationTurnRow';
-import { setParticipantAnchorsProvider } from '../voice/lib/conversationTurnRow';
+import { setParticipantAnchorsProvider } from '../voice/lib/participantVoiceAnchors';
 import { participantVoiceAnchorsForDiarization } from '../voice/lib/participantVoiceAnchors';
 
 /** Gateway único de la tabla onboardingStates (C44: un solo escritor). */

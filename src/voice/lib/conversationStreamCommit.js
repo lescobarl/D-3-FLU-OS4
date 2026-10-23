@@ -722,10 +722,18 @@ export function resolverEmisionDeLaCaja(mostrado = '', nuevo = '') {
     const noEsTrozo = !isFragmentOfLocution(nuevo, mostrado)
     const noEncojeBajoLoConfirmado = nuevas.length >= comun
     const crece = nuevas.length >= mostradas.length
+    // EXTENSION de lo mostrado (la emision empieza por las MISMAS palabras): es la misma
+    // locucion creciendo ("no" -> "no no"), asi que no necesita un tramo adicional.
+    const esExtensionDeLoMostrado =
+      crece && mostradas.every((palabra, i) => mismaPalabraDeLaCaja(palabra, nuevas[i]))
     if (
       arranqueEstable &&
       noEsTrozo &&
       noEncojeBajoLoConfirmado &&
+      // MISMO TRAMO OBLIGATORIO (auditoria 2026-10-23): compartir el arranque no basta para
+      // sustituir la caja; hace falta un tramo MAS ALLA del arranque, salvo que la emision
+      // sea la MISMA locucion creciendo palabra a palabra.
+      (esExtensionDeLoMostrado || comparteTramoTrasElArranque(mostradas, nuevas, comun)) &&
       (crece || alcanzaElFinalDeLoMostrado(mostradas, nuevas))
     ) {
       return { aplica: true, destino: String(nuevo), motivo: 'revision' }
@@ -798,7 +806,10 @@ export function crearCajaDeLaFrase(deps = {}) {
     if (!nuevo || nuevo === mostrado) {
       return { aplicado: false, destino: mostrado, previo: mostrado.length }
     }
-    const turnoActivo = opciones.turnId ?? null
+    // EL TURNO DE LA CAJA SIEMPRE EXISTE (auditoria 2026-10-23): si el llamador no lo pasa, se
+    // toma el turno VIVO del motor. Con `null` la caja no marcaba frontera y una locucion de
+    // otro turno podia heredar el boceto.
+    const turnoActivo = opciones.turnId ?? deps.activeTurnIdRef?.current ?? null
     // FRONTERA POR IDENTIDAD: lo mostrado pertenece a OTRO turno -> no se hereda ni se
     // fusiona por texto (evita "se borra y luego vuelve a poner" al cruzar locuciones).
     const cambioDeTurno =

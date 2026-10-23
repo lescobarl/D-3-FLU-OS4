@@ -30,6 +30,19 @@ beforeEach(() => {
 });
 
 describe('commitUserTurnRow — un solo escritor de la fila del usuario', () => {
+    it('LAS DOS ENTRADAS (commit temprano y commit del turno) escriben UNA sola fila', () => {
+        // Entrada A: `commitAndResolveTurn` (commit temprano, sin hablante resuelto).
+        const temprano = commitUserTurnRow({ text: FRASE, turnId: 7 });
+        // Entrada B: el commit del TURNO sobre el stream (`settlesTurn`) con el hablante ya
+        // resuelto: reutiliza la MISMA fila (identidad de turno) y solo completa el hablante.
+        const final = commitUserTurnRow({ text: FRASE, speakerName: 'Hablante 1', turnId: 7, replaceLast: true });
+        const rows = history().filter((e) => e.role === 'user');
+        expect(temprano.id).toBe(final.id);
+        expect(rows).toHaveLength(1);
+        expect(rows[0].text).toBe(FRASE);
+        expect(resolveRowSpeakerLabel(rows[0])).toBe('Hablante 1');
+    });
+
     it('temprano → cruda → final deja UNA sola fila', () => {
         commitUserTurnRow({ text: FRASE, turnId: 1 });                       // commit temprano
         commitUserTurnRow({ text: FRASE, speakerName: 'Hablante 1', turnId: 1 }); // emisión cruda

@@ -393,7 +393,6 @@ export const FLU_CONFIG = {
     speakers: {
       /** Mínimo entre diarizaciones por audio (ms). Más bajo = más sensible. */
       diarizeIntervalMs: 120,
-      defaultLabel: 'Hablante 1',
       maxSpeakers: 0,
       paragraphBreakMs: 2200,
       paragraphBreakOnPause: true,

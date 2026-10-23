@@ -169,7 +169,7 @@ import {
   getDialogueContextSlice,
   isFluSpeaker,
 } from '../lib/conversationDialogue.js'
-import { isAutoSpeakerLabel, payloadSeparacionDeTurno } from '../lib/speakerCore.js';
+import { getFallbackSpeaker, isAutoSpeakerLabel, payloadSeparacionDeTurno } from '../lib/speakerCore.js';
 import { countVoicedSamples, selectVoicedWindow } from '../lib/voicedActivity.js';
 import { reservedSpeakerLabels } from '../lib/speakerLabels.js';
 import { useParticipantSpeakerRef } from '../../app/useParticipantSpeakerRef';
@@ -868,9 +868,9 @@ const lastResolvedTurnRef = useRef(0)
     resetVoiceDisplay()
     clearListeningAck()
     setSpeakerClusters([])
-    const { speakers } = getConversationConfig()
-    lastSpeakerRef.current = speakers.defaultLabel
-    lastLoggedSpeakerRef.current = speakers.defaultLabel
+    // UNA sola fuente de la etiqueta inicial (auditoria 2026-10-23): getFallbackSpeaker.
+    lastSpeakerRef.current = getFallbackSpeaker()
+    lastLoggedSpeakerRef.current = getFallbackSpeaker()
     lastTurnSignatureRef.current = null
   }, [clearListeningAck, resetVoiceDisplay, setSpeakerClusters])
 

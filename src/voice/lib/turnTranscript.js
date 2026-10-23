@@ -1,5 +1,6 @@
 import { cleanForSpeech, sliceWordsLower } from './audioMath.js';
 import { FLU_CONFIG } from './fluConfig.js'
+import { getTranscriptPolicyCfg } from './fluTranscriptMotor.js'
 import {
   getTranscriptDelta as getTranscriptDeltaFromBoundary,
   mergeTranscriptText,
@@ -130,7 +131,12 @@ function collapseStutterPass(text = '', minWords = 2) {
 }
 
 export function normalizeTranscriptText(text = '') {
-  return collapseStutterRepeat(collapseInlineRepeat(text, 24), 2)
+  // POLITICAS DE TRANSCRIPCION: una sola tabla (`getTranscriptPolicyCfg`).
+  const politica = getTranscriptPolicyCfg()
+  return collapseStutterRepeat(
+    collapseInlineRepeat(text, Number(politica.inlineRepeatMinChars) || 24),
+    Number(politica.stutterRepeatMinCount) || 2,
+  )
 }
 
 /**
@@ -143,7 +149,7 @@ export function normalizeTurnCapture(turnCapture = '', { conversationActive = fa
 }
 
 /** Colapsa párrafos repetidos consecutivos (ASR tras pausa). */
-export function collapseInlineRepeat(text = '', minRepeatChars = 32) {
+export function collapseInlineRepeat(text = '', minRepeatChars = Number(getTranscriptPolicyCfg().collapseInlineRepeatMinChars) || 32) {
   const value = cleanForSpeech(text)
   if (value.length < minRepeatChars * 2) return value
 

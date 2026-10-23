@@ -428,11 +428,20 @@ describe('F - la frase canonica sustituye el boceto cuando el boceto no aporta h
 // audio), unirla pegaba "vamos a ver si es cie" + "esta todo resuelto". La reentrega de la
 // COLA de lo mostrado y su continuacion SI se anade (ahi la emision continua, no reescribe).
 describe('G - la caja no fabrica con un arranque compartido', () => {
-  it('arranque compartido + cola AJENA no se concatena (se decide bloqueado o revision)', () => {
+  it('arranque compartido + cola AJENA NO se aplica (ni solape ni revision)', () => {
     const mostrado = 'vamos a ver si es cie lo que nos dijo'
     const otraHipotesis = 'vamos a ver si es cie esta todo resuelto'
     expect(colaNuevaTrasSolape(mostrado, otraHipotesis)).toBe('')
-    expect(resolverEmisionDeLaCaja(mostrado, otraHipotesis).motivo).not.toBe('solape')
+    // El dueño de la emision NO puede sustituir la caja por compartir el arranque.
+    expect(resolverEmisionDeLaCaja(mostrado, otraHipotesis).aplica).toBe(false)
+    expect(resolverEmisionDeLaCaja(mostrado, otraHipotesis).motivo).toBe('bloqueado')
+  })
+
+  it('arranque compartido de DOS palabras + frase distinta mas larga NO sustituye la caja', () => {
+    // Caso literal de la auditoria (2026-10-23): solo comparten "vamos a".
+    const caja = 'vamos a preparar la receta'
+    const otra = 'vamos a comprar el helado en la tienda'
+    expect(resolverEmisionDeLaCaja(caja, otra).aplica).toBe(false)
   })
 
   it('la reentrega de la COLA con continuacion SI se anade', () => {

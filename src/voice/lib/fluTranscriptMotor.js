@@ -41,6 +41,12 @@ const TRANSCRIPT_POLICY = Object.freeze({
   stutterCharFloor: 48,
   /** Letras minimas para que dos palabras compartan clave (prefijo). */
   sameWordMinLetters: 2,
+  /** Caracteres minimos para colapsar un parrafo repetido consecutivo (transcripcion). */
+  inlineRepeatMinChars: 24,
+  /** Repeticiones seguidas minimas que se colapsan como tartamudeo del ASR. */
+  stutterRepeatMinCount: 2,
+  /** Default del colapsador cuando el llamador no pasa minimo (misma familia de politica). */
+  collapseInlineRepeatMinChars: 32,
 })
 
 export function getAsrSegmentationCfg() {

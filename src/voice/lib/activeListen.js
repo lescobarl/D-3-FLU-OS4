@@ -44,7 +44,7 @@ export {
 } from './conversationStream.js'
 
 import { shouldRelaxIngressTextGuards } from './ingressGuards.js'
-import { autoSpeakerLabel,  parseSpeakerIndex } from './speakerCore.js';
+import { autoSpeakerLabel, getFallbackSpeaker, parseSpeakerIndex } from './speakerCore.js';
 
 export { isSpeakerVoiceAbruptChange, shouldRelaxIngressTextGuards } from './ingressGuards.js'
 
@@ -364,7 +364,6 @@ export function nextSpeakerLabel(knownLabels = []) {
 }
 
 export function resolveSpeakerByText(transcript = '', lastSpeaker = '') {
-  const { speakers } = getActiveListenConfig()
   const wakeWords = FLU_CONFIG.voiceCommands?.wakeWords || []
   const introduced = detectWakeIntroducedName(transcript, wakeWords)
   if (introduced) return introduced
@@ -372,9 +371,9 @@ export function resolveSpeakerByText(transcript = '', lastSpeaker = '') {
   // Sin wake no se estampa un nombre propio por continuidad: el habla pasiva
   // (sala/TV) es generica (Hablante N). Config: requireWakeWordForSpeakerName.
   if (last && requiresWakeWordForSpeakerName() && isProperSpeakerName(last)) {
-    return speakers.defaultLabel
+    return getFallbackSpeaker()
   }
-  return last || speakers.defaultLabel
+  return last || getFallbackSpeaker()
 }
 
 export function advanceSpeaker(state) {
