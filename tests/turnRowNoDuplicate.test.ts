@@ -113,6 +113,9 @@ describe('la fila del turno se reutiliza por IDENTIDAD de turno', () => {
         const marcas = [
             ...(hook.match(/turnId: activeTurnIdRef\.current/g) || []),
             ...(hook.match(/turnId: turnIdDeLaFrase/g) || []),
+            // La puerta del LOG tambien puede derivar el turno de la frase emitida cuando la
+            // emision es un RECORTE de ella (mandato 2026-10-23: identidad de turno unica).
+            ...(hook.match(/turnId: turnIdDeLaFila \?\? activeTurnIdRef\.current/g) || []),
         ];
         expect(marcas).toHaveLength(3);
     });

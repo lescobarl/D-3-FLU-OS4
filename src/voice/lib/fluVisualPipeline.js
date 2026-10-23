@@ -10,6 +10,7 @@ import {
 } from '../../core/config/sharedConfig.ts'
 import { VISUAL_CONFIG } from './visualConfig.js'
 import { normalizeSpaces, shortText } from '../../lib/textUtils.ts'
+import { defaultLanguage } from './languageDefault.ts'
 
 export const VISUAL_PIPELINE_KEYS = [
   'primary',
@@ -80,7 +81,7 @@ export function resolveVisualBriefCore(workspace = {}) {
   )
 }
 
-function templateForType(tipo = '', language = 'es') {
+function templateForType(tipo = '', language = defaultLanguage()) {
   const promptCfg = cfg().prompt || {}
   if (tipo === 'diagram') {
     return pickLabel(promptCfg.diagramLead, language, promptCfg.diagramLead?.es ?? '')
@@ -94,7 +95,7 @@ function templateForType(tipo = '', language = 'es') {
 /**
  * Prompt de generación fiel al workspace (misma fuente para foto, diagrama y 3D).
  */
-export function buildVisualGenerationPrompt(workspace = {}, language = 'es') {
+export function buildVisualGenerationPrompt(workspace = {}, language = defaultLanguage()) {
   const type = String(workspace.tipo || '').trim().toLowerCase()
   const core = resolveVisualBriefCore(workspace)
   if (!core) return ''

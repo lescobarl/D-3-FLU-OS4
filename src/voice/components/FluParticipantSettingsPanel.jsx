@@ -14,6 +14,7 @@ import {
   resolveFluParticipantFieldLabel,
   setFluParticipantOverrides,
 } from '../lib/fluParticipantConfig.js'
+import { defaultLanguage } from '../lib/languageDefault.ts'
 
 function readFieldValue(key, cfg) {
   const field = FLU_PARTICIPANT_EDITABLE_FIELDS.find((item) => item.key === key)
@@ -43,7 +44,7 @@ function serializeDraftForSave(draft) {
 }
 
 export default function FluParticipantSettingsPanel({
-  language = 'es',
+  language = defaultLanguage(),
   onConfigChange,
   voices,
 }) {

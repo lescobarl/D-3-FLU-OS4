@@ -1423,6 +1423,17 @@ export function handleConversationStreamSync(
   const refreshNeeded =
     !replaceLast || shouldRefreshStream(lastEmittedTranscriptRef.current, capture)
 
+  // TURNO DE LA FILA (mandato 2026-10-23, 3a pasada): un RECORTE de la frase YA emitida
+  // escribe SU turno, no el que acaba de acuñar el preview. Es la MISMA regla de
+  // `commitAndResolveTurn` (el turno de la frase, no el vivo). El criterio de "es un recorte"
+  // es el dueño unico del trozo (`isFragmentOfLocution`): una REPETICION identica NO es un
+  // trozo y sigue siendo un turno nuevo (Anexo B.14: no se funde una repeticion genuina).
+  const recorteDeLaEmitida =
+    replaceLast &&
+    lastEmittedTurnRef?.current &&
+    Boolean(isFragmentOfLocution(capture, lastEmittedTranscriptRef.current))
+  const turnIdDeLaFila = recorteDeLaEmitida ? lastEmittedTurnRef.current : activeTurnIdRef.current
+
   const fallbackSpeaker = speaker || getSpeakerLabel(listenStateRef.current)
   const phrase = cleanForSpeech(utterance) || capture
   const forceWakeDiarize = Boolean(detectWakeIntroducedName(phrase, wakeWords))
@@ -1597,6 +1608,7 @@ export function handleConversationStreamSync(
           streamUpdate: false,
           turnCommit: true,
           settlesTurn,
+          turnId: turnIdDeLaFila,
         })
         if (delivered) {
           lastEmittedTranscriptRef.current = segmentText
@@ -1686,6 +1698,7 @@ export function handleConversationStreamSync(
         streamUpdate: false,
         turnCommit: true,
         settlesTurn: true,
+        turnId: turnIdDeLaFila,
       })
       if (delivered) {
         lastEmittedTranscriptRef.current = capture

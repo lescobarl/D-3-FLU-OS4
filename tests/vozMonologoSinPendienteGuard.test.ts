@@ -1,12 +1,21 @@
 // @vitest-environment node
 /**
- * GUARD: en MODO MONOLOGO una fila cerrada de usuario nunca se queda en la etiqueta
- * pendiente ("Hablante ?").
+ * GUARD: en MODO MONOLOGO una fila cerrada de usuario no se queda en la etiqueta
+ * pendiente ("Hablante ?") cuando hay una VOZ de la que heredar la etiqueta.
  *
  * Regla (mandato del dueno 2026-10-23):
  *  - con UN solo cluster de voz, la etiqueta de continuidad de ESA voz es la respuesta;
  *  - "?" sigue siendo legitimo cuando hay 2+ voces o no hay etiqueta que conservar;
  *  - ningun nombre propio se afirma sin `namedAssignmentConfirmed`.
+ *
+ * DOS EXCEPCIONES DECLARADAS (por escrito, decision del dueno 2026-10-23 — no son verdes
+ * silenciosos):
+ *  1. NOMBRE PROPIO sin confirmacion (aunque su ancla este verificada y sea la unica voz):
+ *     la continuidad NO lo afirma; la fila queda en "?". La confirmacion exige la MEDIDA del
+ *     turno contra el ancla, y en un turno sin medida no existe. Preferimos "?" a estampar un
+ *     nombre por continuidad (es el defecto medido de la mujer saliendo "Luis").
+ *  2. CERO clusters medidos y CERO etiqueta en el historial: no hay ninguna voz de la que
+ *     heredar, asi que "?" es la respuesta correcta (no se inventa "Hablante 1").
  */
 import { describe, expect, it } from 'vitest'
 import {
@@ -141,9 +150,11 @@ describe('resolutor en monologo (mutacion: hasVoiceMeasurement = false)', () => 
     expect(label).toBe(PENDING)
   })
 
-  it('ANCLA VERIFICADA unica: tampoco se afirma su nombre (exige namedAssignmentConfirmed)', () => {
+  it('EXCEPCION DECLARADA: ancla verificada unica SIN medida -> "?" (no se afirma el nombre)', () => {
     const clusters = [{ label: 'Luis', signature: [...LUIS], anchorVerified: true }]
     const label = resolver([], clusters)
+    // Se conserva "?" a proposito: afirmar "Luis" por continuidad es exactamente el defecto
+    // medido (la mujer con la etiqueta del dueno). Ver la cabecera del guard, excepcion 1.
     expect(label, 'sin medida del turno no hay confirmacion de nombre').not.toBe('Luis')
     expect(label).toBe(PENDING)
   })
@@ -210,5 +221,26 @@ describe('fila CERRADA (capa de escritura) en monologo', () => {
     const cambiadas = resolvePendingSpeakerRows([{ label: 'Hablante 1', signature: [...LUIS] }])
     expect(cambiadas).toBe(1)
     expect(String(useIntegrationStore.getState().conversationHistory[0].speakerName || '')).toBe('Hablante 1')
+  })
+
+  it('EXCEPCION DECLARADA: primera fila sin cluster MEDIDO ni etiqueta en el historial -> "?"', () => {
+    // No hay ninguna voz de la que heredar (0 clusters medidos) ni historial con etiqueta: la
+    // unica respuesta honesta es la pendiente. Ver la cabecera del guard, excepcion 2.
+    useIntegrationStore.setState({
+      conversationHistory: [
+        {
+          id: 'r-sin-evidencia',
+          role: 'user',
+          text: 'primera frase sin evidencia',
+          timestamp: 1,
+          speakerName: PENDING,
+        },
+      ],
+      conversationEpoch: 0,
+    })
+
+    const cambiadas = resolvePendingSpeakerRows([{ label: 'Hablante 1' }])
+    expect(cambiadas).toBe(0)
+    expect(String(useIntegrationStore.getState().conversationHistory[0].speakerName || '')).toBe(PENDING)
   })
 })

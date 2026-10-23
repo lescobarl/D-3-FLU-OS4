@@ -13,6 +13,7 @@ import {
 } from './fluVisualPipeline.js'
 import { GENERATION_FAILED_SOURCE } from '../../lib/generationTrace';
 import { fetchWithDeadline } from '../../lib/fetchWithDeadline'
+import { defaultLanguage } from './languageDefault.ts'
 
 export {
   buildVisualGenerationPrompt,
@@ -85,7 +86,7 @@ function buildNotVisualTrace() {
   }
 }
 
-export async function resolveWorkspaceAiImageSource({ workspace = {}, language = 'es' } = {}) {
+export async function resolveWorkspaceAiImageSource({ workspace = {}, language = defaultLanguage() } = {}) {
   const prompt = buildVisualGenerationPrompt(workspace, language)
   const subject = resolveVisualBriefCore(workspace)
   return {
@@ -102,7 +103,7 @@ export async function resolveWorkspaceAiImageSource({ workspace = {}, language =
   }
 }
 
-export async function buildWorkspaceImageArtifact(workspace = {}, language = 'es') {
+export async function buildWorkspaceImageArtifact(workspace = {}, language = defaultLanguage()) {
   const c = getVisualPipelineConfig()
   const type = String(workspace.tipo || '').trim().toLowerCase()
   const prompt = buildVisualGenerationPrompt(workspace, language)
@@ -124,11 +125,11 @@ export async function buildWorkspaceImageArtifact(workspace = {}, language = 'es
   return buildPollinationsArtifact(prompt, { seedInput: `${language}::${prompt}` })
 }
 
-function buildWorkspaceImageRequestKey(workspace = {}, language = 'es') {
+function buildWorkspaceImageRequestKey(workspace = {}, language = defaultLanguage()) {
   return `${language}::${buildVisualGenerationPrompt(workspace, language)}`
 }
 
-async function resolveErrorFallback(workspace = {}, language = 'es', error = '') {
+async function resolveErrorFallback(workspace = {}, language = defaultLanguage(), error = '') {
   if (!shouldUseLocalSvgOnError()) {
     return {
       image_url: '',
@@ -152,7 +153,7 @@ async function resolveErrorFallback(workspace = {}, language = 'es', error = '')
   }
 }
 
-export async function fetchWorkspaceImageSource({ workspace = {}, language = 'es', apiKey = '' } = {}) {
+export async function fetchWorkspaceImageSource({ workspace = {}, language = defaultLanguage(), apiKey = '' } = {}) {
   const prompt = buildVisualGenerationPrompt(workspace, language)
   const type = String(workspace.tipo || '').trim().toLowerCase()
   const c = getVisualPipelineConfig()
@@ -262,7 +263,7 @@ export async function fetchWorkspaceImageSource({ workspace = {}, language = 'es
  */
 export async function fetchOpenRouterImageFallback({
   workspace = {},
-  language = 'es',
+  language = defaultLanguage(),
   apiKey = '',
 } = {}) {
   const prompt = buildVisualGenerationPrompt(workspace, language)
@@ -343,7 +344,7 @@ export async function fetchOpenRouterImageFallback({
  * POST /api/fal-video → { videoUrl (url del clip), trace }.
  * Devuelve { video_url, trace }; video_url vacío si no hay key o falla.
  */
-export async function fetchFalVideo({ prompt = '', language = 'es', apiKey = '', model = '' } = {}) {
+export async function fetchFalVideo({ prompt = '', language = defaultLanguage(), apiKey = '', model = '' } = {}) {
   if (!prompt.trim()) {
     return {
       video_url: '',

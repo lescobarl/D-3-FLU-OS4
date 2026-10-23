@@ -6,6 +6,7 @@ import { getVisualPipelineConfig, resolveVisualBriefCore } from './fluVisualPipe
 import { fetchTextEngine } from '../../core/ai/httpClient'
 import { normalizeSpaces } from '../../lib/textUtils'
 import { logCaughtError } from '../../lib/caughtError';
+import { defaultLanguage } from './languageDefault.ts'
 
 async function fetchJsonWithTimeout(url, timeoutMs) {
   try {
@@ -47,7 +48,7 @@ function scoreOpenverseResult(result = {}, brief = '') {
  * @param {object} workspace
  * @param {string} language
  */
-export async function resolveOpenverseStockArtifact(workspace = {}, language = 'es') {
+export async function resolveOpenverseStockArtifact(workspace = {}, language = defaultLanguage()) {
   const c = getVisualPipelineConfig()
   if (!c.stockSearchEnabled) return null
 

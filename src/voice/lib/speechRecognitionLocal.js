@@ -5,13 +5,14 @@ import { getActiveListenConfig } from './fluConfig'
 import { getRecognitionLanguage } from './activeListen'
 import { relayLog } from '../../lib/clientLogRelay'
 import { logCaughtError } from '../../lib/caughtError';
+import { defaultLanguage } from './languageDefault.ts'
 
 export function isSpeechRecognitionSupported() {
   if (typeof window === 'undefined') return false
   return Boolean(window.SpeechRecognition || window.webkitSpeechRecognition)
 }
 
-export function createSpeechRecognition(language = 'es', activeLocale = '') {
+export function createSpeechRecognition(language = defaultLanguage(), activeLocale = '') {
   if (!isSpeechRecognitionSupported()) return null
 
   const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition
@@ -31,7 +32,7 @@ export function createSpeechRecognition(language = 'es', activeLocale = '') {
  * consumidor (motor de voz, onboarding) obtiene su instancia por aquí; nadie
  * más invoca la fábrica de Web Speech API.
  */
-export function acquireSpeechRecognition(language = 'es', activeLocale = '') {
+export function acquireSpeechRecognition(language = defaultLanguage(), activeLocale = '') {
   return createSpeechRecognition(language, activeLocale)
 }
 

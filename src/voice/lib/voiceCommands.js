@@ -12,6 +12,7 @@ import {
   planConversationDispatch,
 } from './audioMath.js'
 import { COMMAND_IDS } from './commandIds.js'
+import { defaultLanguage } from './languageDefault.ts'
 
 export const NAVIGATION_COMMAND_IDS = Object.freeze([
   FLU_CONFIG.navigation.sessionResetCommand,
@@ -109,7 +110,7 @@ export function resolveVoiceConversationAction(text = '', voiceCommands = getVoi
 
 export function getCommandSpeech(
   comando = '',
-  language = 'es',
+  language = defaultLanguage(),
   config = FLU_CONFIG,
   params = {},
 ) {

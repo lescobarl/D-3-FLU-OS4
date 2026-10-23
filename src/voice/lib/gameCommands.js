@@ -36,6 +36,7 @@ import {
 import { getActiveGameSession, isGameSuspended } from '../../core/games/gameSessionStore'
 import { hasGameOrderFrame, isExplicitOrderFor } from '../../core/games/gameUtils'
 import { logCaughtError } from '../../lib/caughtError';
+import { defaultLanguage } from './languageDefault.ts'
 
 // ------------------------------------------------------------
 // Sonda de audio en reproducción (dueño único: la capa de App la conecta a
@@ -155,7 +156,7 @@ export function consumesGameTurn(action) {
  * @returns {boolean} true si otro dominio reclama el turno.
  */
 export function isClaimedByOtherDomain(text = '', options = {}) {
-  const { language = 'es', now } = options || {}
+  const { language = defaultLanguage(), now } = options || {}
   const owned = (intent) => Boolean(intent?.handled && intent.action)
   const run = (owner) => {
     try {

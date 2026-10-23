@@ -30,6 +30,7 @@ import { parseAgendaCommand } from '../../core/agenda/agendaCommandParser'
 import { parseShoppingIntent } from '../../core/reminders/shoppingIntentParser'
 import { resolveNavigationCommandFromTexts } from './voiceCommands.js'
 import { cleanForSpeech, splitTranscriptAtWakeWord, normalizeSpokenCommand } from './audioMath.js'
+import { defaultLanguage } from './languageDefault.ts'
 
 /**
  * C36 — La normalización (wake word + tartamudeo ASR) es la MISMA función
@@ -134,7 +135,7 @@ function resolveChannelForNavigation(commandId = '') {
  */
 export function resolveDeterministicCommand(text = '', options = {}) {
   const {
-    language = 'es',
+    language = defaultLanguage(),
     texts = null,
     now,
   } = options || {}
@@ -260,7 +261,7 @@ export function resolveDeterministicCommand(text = '', options = {}) {
  * @returns {{ config: object|null, game: object|null, env: object|null, music: { accion: string, cancion?: string }|null }}
  */
 export function resolveStatefulDomains(text = '', options = {}) {
-  const { language = 'es', now } = options || {}
+  const { language = defaultLanguage(), now } = options || {}
   // B.11 — el mandato EMPIEZA en la wake word. Los resolutores de estado anclan
   // sus gramaticas al inicio (`resolveMusicIntent` exige verbo + objeto al
   // principio), asi que reciben el texto YA normalizado por el dueno unico de
@@ -330,7 +331,7 @@ export function resolveVoiceCommand(text = '', options = {}) {
   const {
     requireWake = false,
     wakeWords = [],
-    language = 'es',
+    language = defaultLanguage(),
     texts = null,
     ...arbiterOptions
   } = options || {}
@@ -446,7 +447,7 @@ const CONFIG_LABEL_EN = Object.freeze({
  * @param {string} [language='es'] Idioma detectado ('es'|'en').
  * @returns {string} Frase de cortesía ('' si el motor local ya habla).
  */
-export function resolveDeterministicCourtesySpeech(action = null, domain = '', language = 'es') {
+export function resolveDeterministicCourtesySpeech(action = null, domain = '', language = defaultLanguage()) {
   const isEn = normalizeLang(language) === 'en'
   if (!action) return ''
 
@@ -498,7 +499,7 @@ export function resolveDeterministicCourtesySpeech(action = null, domain = '', l
  */
 export function resolveDeterministicSkipGeminiContract({
   text = '',
-  language = 'es',
+  language = defaultLanguage(),
   skipGeminiOnMatch = false,
 } = {}) {
   if (!skipGeminiOnMatch) return null

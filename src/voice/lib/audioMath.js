@@ -11,6 +11,7 @@ import { DEFAULT_SAMPLE_RATE } from './audioConstants.js'
 import { COMMAND_IDS } from './commandIds.js'
 import { isTutoringGlobalProgressQuery, isTutoringProgressQuery, isTutoringReviewQuery } from '../../core/tutoring/tutoringModel.ts'
 import { CONFIRMATION_SUFFIXES } from '../../lib/confirmationSuffix.ts'
+import { defaultLanguage } from './languageDefault.ts'
 
 // Fuente única de normalización de espacios y del plegado NFD
 // (src/lib/textUtils.ts). `stripDiacritics` se re-exporta con el contrato
@@ -1596,7 +1597,7 @@ export async function computeAudioSignature(samples = [], sampleRate = DEFAULT_S
   }
 }
 
-export function detectRole(text = '', language = 'es') {
+export function detectRole(text = '', language = defaultLanguage()) {
   const normalized = stripDiacritics(text)
   const isEnglish = language === 'en'
 

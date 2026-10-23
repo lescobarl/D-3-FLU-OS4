@@ -12,7 +12,7 @@
  */
 import { beforeEach, describe, expect, it } from 'vitest'
 import { useIntegrationStore } from '../src/store/integrationStore'
-import { commitUserTurnRow } from '../src/voice/lib/conversationTurnRow'
+import { commitUserTurnRow, escribeFilaDeUsuario } from '../src/voice/lib/conversationTurnRow'
 import { resetVoiceDirectory } from '../src/voice/lib/speakerDirectory.js'
 
 const userRows = () => useIntegrationStore.getState().conversationHistory.filter((row) => row.role === 'user')
@@ -54,10 +54,62 @@ describe('una locución = una fila, por identidad de turno', () => {
     expect(String(filas[0].speakerName || '')).toBe(String(antes.speakerName || ''))
   })
 
+  it('FALSIFICACION: un fragmento con OTRO turno (10 -> 11) es DOS filas', () => {
+    // Mandato del dueño (2026-10-23, 3.ª pasada): P9.67 ya NO cruza turnos. El turno es la
+    // única identidad: el recorte se funde con SU fila (mismo turnId), no con la del anterior.
+    commitUserTurnRow({ text: 'voy a decir el comando Okay flu Soy Luis', speakerName: 'Hablante 1', turnId: 10 })
+    commitUserTurnRow({ text: 'voy a decir el comando', speakerName: 'Hablante 1', turnId: 11, replaceLast: true })
+
+    expect(userRows()).toHaveLength(2)
+  })
+
+  it('el MISMO turno SÍ funde el recorte (una fila, gana la completa)', () => {
+    commitUserTurnRow({ text: 'voy a decir el comando Okay flu Soy Luis', speakerName: 'Hablante 1', turnId: 10 })
+    commitUserTurnRow({ text: 'voy a decir el comando', speakerName: 'Hablante 1', turnId: 10, replaceLast: true })
+
+    expect(userRows()).toHaveLength(1)
+  })
+
   it('dos turnos DISTINTOS con el mismo texto = dos filas', () => {
     commitUserTurnRow({ text: 'otra vez lo mismo', turnId: 10 })
     commitUserTurnRow({ text: 'otra vez lo mismo', turnId: 11 })
 
     expect(userRows()).toHaveLength(2)
+  })
+})
+
+/**
+ * LAS DOS PUERTAS DE COMMIT (`commitAndResolveTurn` del hook y `emitConversationLog` del
+ * stream) se encuentran en el MISMO escritor (`commitUserTurnRow`): lo que decide si una
+ * "escribe de más" es el payload, y eso es lo que se fija aquí con las funciones REALES.
+ */
+describe('las dos puertas de commit no escriben dos filas', () => {
+  const hayTexto = (payload: { transcript?: string }) => Boolean(String(payload.transcript || '').trim())
+
+  it('el commit TEMPRANO no escribe fila; el del stream sí (una sola vez)', () => {
+    const temprano = { userCommitOnly: true, transcript: 'prepara la receta', turnId: 21 }
+    expect(escribeFilaDeUsuario(temprano, { hayTexto: hayTexto(temprano), hablable: true })).toBe(false)
+
+    const stream = { rawOnly: true, transcript: 'prepara la receta', turnId: 21 }
+    expect(escribeFilaDeUsuario(stream, { hayTexto: hayTexto(stream), hablable: true })).toBe(true)
+  })
+
+  it('las dos puertas que SÍ escriben, con el mismo turno, dejan UNA fila', () => {
+    const stream = { rawOnly: true, transcript: 'prepara la receta', speakerName: 'Hablante 1', turnId: 21 }
+    const contrato = { rawOnly: false, transcript: 'prepara la receta', speakerName: 'Hablante 1', turnId: 21 }
+
+    for (const payload of [stream, contrato]) {
+      if (!escribeFilaDeUsuario(payload, { hayTexto: hayTexto(payload), hablable: true })) continue
+      commitUserTurnRow({ text: payload.transcript, speakerName: payload.speakerName, turnId: payload.turnId })
+    }
+
+    expect(userRows()).toHaveLength(1)
+  })
+
+  it('un payload sin texto no escribe (ni el del stream ni el del contrato)', () => {
+    for (const payload of [{ rawOnly: true, transcript: '   ', turnId: 22 }, { transcript: '', turnId: 22 }]) {
+      expect(escribeFilaDeUsuario(payload, { hayTexto: hayTexto(payload), hablable: false })).toBe(false)
+    }
+    expect(userRows()).toHaveLength(0)
   })
 })

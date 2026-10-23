@@ -4,6 +4,7 @@ import { normalizeLang } from '../../core/config/localeConfig';
  * Mensajes de error Gemini legibles para la UI (es/en).
  */
 import { REMOTE_RESOURCE_URLS } from '../../core/config/sharedConfig'
+import { defaultLanguage } from './languageDefault.ts'
 
 // URL oficial para crear/gestionar la Gemini API key (Rule #1: NO HARDCODE).
 const GEMINI_API_KEY_URL = REMOTE_RESOURCE_URLS.GEMINI_API_KEY_PAGE
@@ -39,7 +40,7 @@ const HINTS = {
   },
 }
 
-function pickLang(language = 'es') {
+function pickLang(language = defaultLanguage()) {
   return normalizeLang(language)
 }
 
@@ -69,7 +70,7 @@ export function hasGeminiFailureSignal({
   )
 }
 
-export function formatGeminiUserMessage(error = null, language = 'es', { fallback = false } = {}) {
+export function formatGeminiUserMessage(error = null, language = defaultLanguage(), { fallback = false } = {}) {
   const lang = pickLang(language)
   const code = String(error?.code || '').trim()
   const raw = String(error?.message || error?.error || '').trim()
@@ -120,7 +121,7 @@ export function formatGeminiUserMessage(error = null, language = 'es', { fallbac
   return lang === 'en' ? GENERIC_FAILURE_EN : GENERIC_FAILURE_ES
 }
 
-export function formatGeminiErrorHint(error = null, language = 'es', { fallback = false } = {}) {
+export function formatGeminiErrorHint(error = null, language = defaultLanguage(), { fallback = false } = {}) {
   const lang = pickLang(language)
   const code = String(error?.code || '').trim()
   const entry = HINTS[code]
@@ -156,7 +157,7 @@ export function resolveGeminiErrorPresentation({
   error = '',
   diagnostics = null,
   lastErrorEvent = null,
-  language = 'es',
+  language = defaultLanguage(),
 } = {}) {
   const hasFailure = hasGeminiFailureSignal({ error, diagnostics, lastErrorEvent })
 

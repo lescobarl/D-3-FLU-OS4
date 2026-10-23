@@ -16,6 +16,7 @@
 import { FLU_CONFIG } from './fluConfig.js'
 import { cleanForSpeech, splitTranscriptAtWakeWord, stripDiacritics } from './audioMath.js'
 import { optionalConfigBlock } from './configGuard.js'
+import { defaultLanguage } from './languageDefault.ts'
 
 /** Ordenes de politica (valor interno, no dato de config). */
 export const WAKE_POLICY_ORDER = Object.freeze({ ON: 'on', OFF: 'off' })
@@ -64,7 +65,7 @@ export function applyWakePolicyOrder(order, config = FLU_CONFIG) {
 }
 
 /** Frase de confirmacion del turno (una sola fuente, es/en). */
-export function wakePolicySpeech(order, language = 'es', config = FLU_CONFIG) {
+export function wakePolicySpeech(order, language = defaultLanguage(), config = FLU_CONFIG) {
     const phrases = getWakePolicyPhrases(config)
     const entry = order === WAKE_POLICY_ORDER.OFF ? phrases.speechOff : phrases.speechOn
     if (!entry) return ''

@@ -51,14 +51,15 @@ function makeDeps(over: Record<string, unknown> = {}) {
     srGapFiredForOpenLineRef: { current: true },
     processConversationFluQueryRef: { current: vi.fn() },
     lastEmittedTranscriptRef: { current: '' },
+    lastEmittedTurnRef: { current: 0 },
     // ESCRITOR REAL de la fila (el dueno unico de la conversacion).
     emitConversationLog: (text: string, options?: object) => {
-      const o = (options || {}) as { speakerName?: string; replaceLastRawLog?: boolean }
+      const o = (options || {}) as { speakerName?: string; replaceLastRawLog?: boolean; turnId?: number | string | null }
       commitUserTurnRow({
         text,
         speakerName: o.speakerName,
         replaceLast: o.replaceLastRawLog === true,
-        turnId: deps.activeTurnIdRef.current,
+        turnId: o.turnId ?? deps.activeTurnIdRef.current,
       } as never)
       return true
     },
@@ -89,6 +90,8 @@ const filasTexto = () =>
 function sembrarLocucion(deps: ReturnType<typeof makeDeps>, texto: string, turnId: number) {
   deps.activeTurnIdRef.current = turnId
   commitUserTurnRow({ text: texto, speakerName: 'Hablante 1', turnId } as never)
+  // El commit real deja la marca del turno de la frase (conversationStreamCommit).
+  deps.lastEmittedTurnRef.current = turnId
   deps.logRowsTextRef.current = [...filasTexto()]
   useIntegrationStore.setState({
     conversationHistory: [...useIntegrationStore.getState().conversationHistory, filaDeFlu('Ok.')] as never,
@@ -215,11 +218,12 @@ describe('P9.67 - una locucion con wake produce UNA fila', () => {
   it('el trozo va en LOS DOS sentidos: la completa sobre una recortada funde en UNA (dueno de la fila)', () => {
     // Se mide en el DUENO de la fila: por el stream, la wake INLINE recorta el mandato y
     // este sentido no es alcanzable desde ahi (el log lo dejo por la ruta cruda).
+    // Mismo TURNO en las dos entregas (mandato 2026-10-23: P9.67 no cruza turnos).
     commitUserTurnRow({ text: LOCUCION_RECORTE, speakerName: 'Hablante 1', turnId: 20 } as never)
     useIntegrationStore.setState({
       conversationHistory: [...useIntegrationStore.getState().conversationHistory, filaDeFlu('Ok.')] as never,
     })
-    commitUserTurnRow({ text: LOCUCION_LOGROW, speakerName: 'Hablante 1', replaceLast: true, turnId: 21 } as never)
+    commitUserTurnRow({ text: LOCUCION_LOGROW, speakerName: 'Hablante 1', replaceLast: true, turnId: 20 } as never)
     expect(filasTexto(), 'una sola fila, con el texto COMPLETO').toEqual([LOCUCION_LOGROW])
   })
 

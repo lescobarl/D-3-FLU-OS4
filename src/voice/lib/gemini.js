@@ -54,6 +54,7 @@ export {
   shouldGenerateWorkspaceImage,
 } from './workspaceContract.js'
 import { COMMAND_IDS } from './commandIds.js'
+import { defaultLanguage } from './languageDefault.ts'
 
 // NOTA (OS4): Toda la generación de texto (voz, contrato, resumen, evaluación,
 // visión/OCR) se enruta por el motor único OpenAI-compatible (defaults/lógica en
@@ -291,7 +292,7 @@ function buildSchemaFormatBlock(schema) {
   ].join('\n')
 }
 
-export async function generateWorkspaceImage({ workspace, language = 'es' }) {
+export async function generateWorkspaceImage({ workspace, language = defaultLanguage() }) {
   const prompt = buildVisualGenerationPrompt(workspace, language)
   if (!prompt) {
     return {
@@ -345,7 +346,7 @@ export async function generateWorkspaceImage({ workspace, language = 'es' }) {
 export async function generateOpenRouterImage({
   apiKey = '',
   prompt = '',
-  language = 'es',
+  language = defaultLanguage(),
 } = {}) {
   if (!prompt) {
     return {
@@ -953,7 +954,7 @@ export function buildConversationMessages({
   return messages
 }
 
-function buildConversationSummaryPrompt({ history = [], language = 'es', role = '', theme = '' }) {
+function buildConversationSummaryPrompt({ history = [], language = defaultLanguage(), role = '', theme = '' }) {
   const isEnglish = language === 'en'
   const recentHistory = selectConversationSummaryWindow(history)
   const conversationText = recentHistory
@@ -986,7 +987,7 @@ function buildConversationSummaryPrompt({ history = [], language = 'es', role = 
 export async function generateConversationSummary({
   apiKey,
   history = [],
-  language = 'es',
+  language = defaultLanguage(),
   role = '',
   theme = '',
   model: modelParam,
@@ -1074,7 +1075,7 @@ export async function generateConversationSummary({
 
 function buildParticipantEvaluationPrompt({
   conversationLog = '',
-  language = 'es',
+  language = defaultLanguage(),
   role = '',
   theme = '',
   maxDraftChars = 420,
@@ -1105,7 +1106,7 @@ function buildParticipantEvaluationPrompt({
 export async function generateParticipantEvaluation({
   apiKey,
   conversationLog = '',
-  language = 'es',
+  language = defaultLanguage(),
   role = '',
   theme = '',
   maxDraftChars = 420,
@@ -1356,7 +1357,7 @@ export async function generateFluContract({
   theme,
   role,
   phase,
-  language = 'es',
+  language = defaultLanguage(),
   history = [],
   knowledgeBase = '',
   knowledgeBase2 = '',
@@ -1671,7 +1672,7 @@ export async function generateFluContract({
 * @param {{ apiKey: string, imageBase64: string, mimeType: string, language?: string, profile?: string }} params
 * @returns {Promise<{ materia: string, problemas: string[], instrucciones: string, nivel: string, texto_extraido: string }>}
 */
-export async function analyzeImage({ apiKey, imageBase64, mimeType, language = 'es', profile = 'tutor' }) {
+export async function analyzeImage({ apiKey, imageBase64, mimeType, language = defaultLanguage(), profile = 'tutor' }) {
 const resolvedKey = resolveServerGeminiApiKey(apiKey)
 if (!hasUsableVoiceBackend(resolvedKey.apiKey)) {
   return { materia: '', problemas: [], instrucciones: '', nivel: '', texto_extraido: '' }
@@ -1754,7 +1755,7 @@ try {
 export async function generateVideoViaFal({
   apiKey = '',
   prompt = '',
-  language = 'es',
+  language = defaultLanguage(),
   aspectRatio = '',
   model: modelOverride = '',
 } = {}) {

@@ -928,18 +928,15 @@ function commitUserTurnRowInner({
             return { id: entry.id, action: 'reused' };
         }
         // RECORTE POSTERIOR (P9.67): si el texto es un TROZO contiguo de la última fila de
-        // usuario (o al revés), la fila se REUTILIZA aunque el turno haya cambiado — el wake
-        // recorta la locución y el commit va con el turno vivo; el dueno de ese criterio es
-        // `isFragmentOfLocution` (uno solo). Fundir por texto no reescribe lo ya commitado
-        // (write-once arriba), solo evita la segunda fila del recorte.
-        // IDENTIDAD (auditoria 2026-10-23, 2a pasada): esta rama CRUZA turnos A PROPOSITO
-        // (P9.67), pero SOLO entre turnos CONOCIDOS: un commit sin turno no puede completar ni
-        // renombrar una fila ajena, y una fila sin turno (legacy) tampoco se adopta.
-        const ultima = turnoDesconocido(turnId)
-            ? undefined
-            : [...history]
-                .reverse()
-                .find((e) => e?.role === 'user' && !turnoDesconocido((e as { turnId?: number | string | null }).turnId));
+        // usuario (o al revés), la fila se REUTILIZA — el wake recorta la locución y el commit
+        // llega con la MISMA frase. El dueno de "es trozo" es `isFragmentOfLocution` (uno solo).
+        // IDENTIDAD DE TURNO OBLIGATORIA (mandato del dueno 2026-10-23, 3a pasada): la fusion
+        // exige que la fila sea DEL MISMO turno. Antes se admitia "aunque el turno haya
+        // cambiado" y un fragmento podia completar la fila de OTRO turno (turnId 10 -> 11). Si
+        // el turno cambia, la fila la escribe SU commit: identidad manda sobre parecido de texto.
+        const ultima = [...history]
+            .reverse()
+            .find((e) => e?.role === 'user' && filaPuedeSerDeEsteTurno(e as { turnId?: number | string | null }, turnId));
         if (ultima) {
             const previo = String(ultima.text || '');
             const rawEsTrozo = isFragmentOfLocution(raw, previo);

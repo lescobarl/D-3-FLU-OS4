@@ -4,6 +4,7 @@ import { recordFluSpeechEnd } from './echoPolicy.js'
 import { relayLog } from '../../lib/clientLogRelay'
 import { logCaughtError } from '../../lib/caughtError';
 import { SCRIPT_SPEECH_LOCALES, SPEECH_LOCALES } from '../../core/config/localeConfig'
+import { defaultLanguage } from './languageDefault.ts'
 
 /**
  * Caché de la configuración de voz leída desde el integrationStore de OS3.
@@ -115,7 +116,7 @@ function detectSpeechScriptLocale(text = '') {
   return null
 }
 
-function resolveSpeechLocale(language = 'es', text = '') {
+function resolveSpeechLocale(language = defaultLanguage(), text = '') {
   // El idioma de la VOZ lo decide el TEXTO que se va a pronunciar (es/en), y el
   // ajuste de sesion es solo respaldo: asi una respuesta en ingles NO se lee con
   // la voz espanola (acento "chilango"). El script no-latino ya se resolvio arriba.
@@ -323,7 +324,7 @@ function speakSingleChunk(spoken, language, overrides = {}) {
  * @param {string} [language]
  * @param {SpeechResponseOptions} [options]
  */
-export function speakResponse(text, language = 'es', { allowWhileSpeaking = false, volume, rate, pitch } = {}) {
+export function speakResponse(text, language = defaultLanguage(), { allowWhileSpeaking = false, volume, rate, pitch } = {}) {
   if (typeof window === 'undefined' || !window.speechSynthesis) {
     return Promise.resolve()
   }

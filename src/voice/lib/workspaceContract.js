@@ -5,6 +5,7 @@ import {
   isGenerationWorkspaceTipo,
   isVisualWorkspaceTipo,
 } from '../../core/config/sharedConfig.ts'
+import { defaultLanguage } from './languageDefault.ts'
 
 const HORARIO_WORKSPACE_MODOS = ['semana', 'dia', 'proxima', 'recordatorios']
 
@@ -287,7 +288,7 @@ export function selectConversationSummaryWindow(history = [], limit) {
  * @param {string} transcript
  * @param {string} language
  */
-export function buildVisualAnchorBlock(transcript = '', language = 'es') {
+export function buildVisualAnchorBlock(transcript = '', language = defaultLanguage()) {
   if (!isVisualRequestText(transcript)) return ''
 
   // Calificador visual explícito («con imágenes», «con fotos»): aunque la frase
@@ -380,7 +381,7 @@ export function extractConversationTopic(history = []) {
  * @param {string} language
  * @returns {object|null} workspace image_prompt determinista o null si no hay tema.
  */
-export function buildBareVisualFallbackWorkspace(transcript = '', history = [], language = 'es') {
+export function buildBareVisualFallbackWorkspace(transcript = '', history = [], language = defaultLanguage()) {
   if (!isBareVisualRequest(transcript)) return null
 
   const subject = extractConversationTopic(history)

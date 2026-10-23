@@ -51,8 +51,9 @@ describe('P9.65 - la fila de usuario SIEMPRE lleva hablante', () => {
     commitUserTurnRow({ text: 'hola que tal', speakerName: 'Hablante 2', turnId: 1 } as never)
     // 2) reutilizada por identidad de turno (texto mas completo)
     commitUserTurnRow({ text: 'hola que tal y buenos dias', speakerName: 'Hablante 2', turnId: 1 } as never)
-    // 3) reemplazada (misma emision, `replaceLast`)
-    commitUserTurnRow({ text: 'hola que tal y buenos dias', speakerName: 'luis', replaceLast: true, turnId: 2 } as never)
+    // 3) reemplazada (misma emision, `replaceLast`). MISMO turno: la identidad de turno es
+    // el unico criterio de reutilizacion (mandato 2026-10-23, 3a pasada).
+    commitUserTurnRow({ text: 'hola que tal y buenos dias', speakerName: 'luis', replaceLast: true, turnId: 1 } as never)
     const h = hablantes()
     expect(h).toHaveLength(1)
     h.forEach((nombre, i) => expect(nombre, `fila ${i} sin hablante`).not.toBe(''))

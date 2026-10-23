@@ -21,6 +21,7 @@ import {
   setFluParticipantOverrides,
 } from './fluParticipantConfig.js'
 import { COMMAND_IDS } from './commandIds.js'
+import { defaultLanguage } from './languageDefault.ts'
 
 export {
   FLU_PARTICIPANT_CONFIG_KEYS,
@@ -31,7 +32,7 @@ export {
   setFluParticipantOverrides,
 }
 
-export function resolveParticipantFloorLabel(key = '', language = 'es', config = FLU_CONFIG) {
+export function resolveParticipantFloorLabel(key = '', language = defaultLanguage(), config = FLU_CONFIG) {
   const entry = config.fluParticipant?.ui?.[key] || {}
   const lang = resolveAppLanguage(language, entry.en || entry.es || '')
   return entry[lang] || entry.es || entry.en || ''

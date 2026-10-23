@@ -6,6 +6,7 @@ import { FLU_CONFIG } from './fluConfig.js'
 import { logCaughtError } from '../../lib/caughtError.ts';
 import { normalizeLang } from '../../core/config/localeConfig.ts';
 import { hasLocalStorage, localGet, localRemove, localSet } from '../../core/storage/localStore.ts';
+import { defaultLanguage } from './languageDefault.ts'
 
 export const FLU_PARTICIPANT_STORAGE_KEY = 'flu-participant-settings'
 const LEGACY_ENABLED_KEY = 'flu-participant-enabled'
@@ -184,13 +185,13 @@ export function isFluParticipantEnabled(config = FLU_CONFIG) {
   return getFluParticipantConfig(config).enabled === true
 }
 
-export function resolveFluParticipantFieldLabel(key = '', language = 'es', config = FLU_CONFIG) {
+export function resolveFluParticipantFieldLabel(key = '', language = defaultLanguage(), config = FLU_CONFIG) {
   const entry = config.fluParticipant?.ui?.fields?.[key] || {}
   const lang = normalizeLang(language)
   return entry[lang] || entry.es || entry.en || key
 }
 
-export function resolveFluParticipantFieldHint(key = '', language = 'es', config = FLU_CONFIG) {
+export function resolveFluParticipantFieldHint(key = '', language = defaultLanguage(), config = FLU_CONFIG) {
   const entry = config.fluParticipant?.ui?.fieldHints?.[key] || {}
   const lang = normalizeLang(language)
   return entry[lang] || entry.es || entry.en || ''

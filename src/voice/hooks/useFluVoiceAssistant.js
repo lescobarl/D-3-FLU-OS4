@@ -177,6 +177,7 @@ import { COMMAND_IDS } from '../lib/commandIds.js'
 import { createEmissionDeduper, shouldSkipCapture } from '../lib/captureDedup.js'
 import { isAssistantSpeechEcho, isAssistantVoiceEcho } from '../lib/conversationStream.js'
 import { voiceProbe, isVoiceProbeEnabled } from '../lib/voiceProbe'
+import { defaultLanguage } from '../lib/languageDefault.ts'
 const CONTEXT_HISTORY_LIMIT = FLU_CONFIG.limits.contextHistoryMax
 // Sample rate de captura: fuente única en FLU_CONFIG.audio.sampleRate (sin hardcode).
 const AUDIO_SAMPLE_RATE = FLU_CONFIG.audio?.sampleRate ?? 0
@@ -192,7 +193,7 @@ function createRecognition(language, activeLocale = '') {
   return acquireSpeechRecognition(language, activeLocale)
 }
 
-function deriveSession(transcript, currentRole = '', language = 'es') {
+function deriveSession(transcript, currentRole = '', language = defaultLanguage()) {
   const role = detectRole(transcript, language) || currentRole || FLU_CONFIG.sessionDefaults.role
   const theme = extractTheme(transcript, role, FLU_CONFIG.voiceCommands.wakeWords)
   return {
@@ -204,7 +205,7 @@ function deriveSession(transcript, currentRole = '', language = 'es') {
 export function useFluVoiceAssistant({
   apiKey,
   onContractResolved,
-  language = 'es',
+  language = defaultLanguage(),
   conversationActiveRef,
   knowledgeBase = '',
   getMinuteKnowledgeBase = () => '',
@@ -236,10 +237,8 @@ export function useFluVoiceAssistant({
     useIntegrationStore.getState().setLastCommittedTranscript(typeof text === 'string' ? text : '')
   }, [])
   /**
-   * §9: ÚNICO punto de commit de la locución del turno. Limpia UNA vez y
-   * devuelve la frase canónica para que la fila de conversación use EXACTAMENTE
-   * el mismo texto (display === fila). Ninguna rama llama ya
-   * `commitVisibleTranscript` directo (salvo el reset).
+   * §9: ÚNICO punto de commit de la locución del turno: limpia UNA vez y devuelve la frase
+   * canónica para que la fila use EXACTAMENTE el mismo texto (display === fila).
    */
   // Wake words efectivas (Ajustes o default): UN solo criterio. Van declaradas ANTES del commit porque el commit las consume para recortar el eco.
   const resolvedWakeWords = resolveWakeWords(wakeWords)
@@ -1566,6 +1565,7 @@ const lastResolvedTurnRef = useRef(0)
         replaceLastRawLog = false,
         streamUpdate = false,
         turnCommit = false,
+        turnId: turnIdDeLaFila = null,
       } = {},
     ) => {
       const capture = normalizeTurnCapture(turnCapture, {
@@ -1609,7 +1609,7 @@ const lastResolvedTurnRef = useRef(0)
         speakerName,
         speakerAlias: null,
         phase,
-        turnId: activeTurnIdRef.current,
+        turnId: turnIdDeLaFila ?? activeTurnIdRef.current,
         timestamp: currentClock,
         signature: lastTurnSignatureRef.current,
         language: detectTranscriptLanguage(capture),

@@ -45,6 +45,7 @@ export {
 
 import { shouldRelaxIngressTextGuards } from './ingressGuards.js'
 import { autoSpeakerLabel, getFallbackSpeaker, parseSpeakerIndex } from './speakerCore.js';
+import { defaultLanguage } from './languageDefault.ts'
 
 export { isSpeakerVoiceAbruptChange, shouldRelaxIngressTextGuards } from './ingressGuards.js'
 
@@ -296,7 +297,7 @@ export function phrasesEquivalent(a = '', b = '') {
   return Boolean(left) && left === right
 }
 
-export function getRecognitionLanguage(language = 'es', activeLocale = '') {
+export function getRecognitionLanguage(language = defaultLanguage(), activeLocale = '') {
   const { languages, bilingual } = getActiveListenConfig()
   if (activeLocale) return activeLocale
   if (language === 'both') {
@@ -311,7 +312,7 @@ export function isBilingualListenMode(language = '') {
 }
 
 /** Locale BCP-47 del motor SR según modo UI y texto detectado. */
-export function resolveRecognitionLocale(language = 'es', detected = '') {
+export function resolveRecognitionLocale(language = defaultLanguage(), detected = '') {
   const { languages } = getActiveListenConfig()
   if (!isBilingualListenMode(language)) {
     return getRecognitionLanguage(language)
