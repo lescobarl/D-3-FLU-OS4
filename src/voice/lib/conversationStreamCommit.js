@@ -768,7 +768,7 @@ export function resolverEmisionDeLaCaja(mostrado = '', nuevo = '') {
  *     (alineada con el final de lo mostrado) o se BLOQUEA: nunca se sustituye.
  * El vaciado legitimo (cierre confirmado / parrafo nuevo / reset de sesion) es
  * `vaciarLaCaja`: NO lo decide la regla de acumulacion.
- * @param {{ publishedLiveRef?: { current: string }, cancelLiveTranscriptUpdate?: Function, scheduleLiveTranscriptUpdate?: Function, setLiveTranscript?: Function }} deps
+ * @param {{ publishedLiveRef?: { current: string }, activeTurnIdRef?: { current: number | string | null }, cancelLiveTranscriptUpdate?: Function, scheduleLiveTranscriptUpdate?: Function, setLiveTranscript?: Function }} deps
  * @returns {{ publicarEnLaCaja: Function, vaciarLaCaja: Function }}
  */
 export function crearCajaDeLaFrase(deps = {}) {
@@ -799,7 +799,10 @@ export function crearCajaDeLaFrase(deps = {}) {
   const leer = () => String(publishedLiveRef?.current || '')
   // TURNO DEL BOCETO: a que locucion pertenece lo que la caja muestra. La caja solo
   // acumula dentro de la MISMA locucion; un turno distinto parte limpio.
-  let turnoDelBoceto = null
+  // `undefined` = TODAVIA NO SE PUBLICO NADA (identidad desconocida). Es distinto de `null`,
+  // que es un turno SIN id: asi null -> 5 SI marca frontera (antes `null` significaba a la vez
+  // "sin publicar" y "sin id", y un commit sin turno no partia la caja; auditoria 2026-10-23).
+  let turnoDelBoceto
   const publicarEnLaCaja = (texto = '', opciones = {}) => {
     const nuevo = String(texto || '')
     const mostrado = leer()
@@ -813,7 +816,7 @@ export function crearCajaDeLaFrase(deps = {}) {
     // FRONTERA POR IDENTIDAD: lo mostrado pertenece a OTRO turno -> no se hereda ni se
     // fusiona por texto (evita "se borra y luego vuelve a poner" al cruzar locuciones).
     const cambioDeTurno =
-      Boolean(mostrado) && turnoDelBoceto !== null && turnoActivo !== null && turnoDelBoceto !== turnoActivo
+      Boolean(mostrado) && turnoDelBoceto !== undefined && turnoDelBoceto !== turnoActivo
     let destino = nuevo
     if (!cambioDeTurno) {
       if (mostrado) {
@@ -854,7 +857,7 @@ export function crearCajaDeLaFrase(deps = {}) {
         }
       }
     }
-    turnoDelBoceto = turnoActivo ?? turnoDelBoceto
+    turnoDelBoceto = turnoActivo
     if (publishedLiveRef) publishedLiveRef.current = destino
     escribirVisible(destino, Boolean(opciones.inmediato))
     return { aplicado: true, destino, previo: cambioDeTurno ? 0 : mostrado.length }
@@ -865,10 +868,16 @@ export function crearCajaDeLaFrase(deps = {}) {
   // "borra y luego vuelve a poner" medido por el dueno.
   const vaciarLaCaja = (opciones = {}) => {
     if (publishedLiveRef) publishedLiveRef.current = ''
-    turnoDelBoceto = null
+    // `undefined` = no se publico nada desde el vaciado (identidad desconocida provisional).
+    turnoDelBoceto = undefined
     if (opciones.visible !== false) escribirVisible('', true)
   }
-  return { publicarEnLaCaja, vaciarLaCaja, turnoActual: () => turnoDelBoceto }
+  return {
+    publicarEnLaCaja,
+    vaciarLaCaja,
+    // Contrato publico: `null` = turno desconocido (el sentinel interno es `undefined`).
+    turnoActual: () => (turnoDelBoceto === undefined ? null : turnoDelBoceto),
+  }
 }
 
 /**

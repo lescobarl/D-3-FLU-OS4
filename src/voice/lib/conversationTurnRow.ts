@@ -38,27 +38,37 @@ let currentTurn: { id: number | string | null; rowId: string | null } = { id: nu
 
 
 /**
+ * ¿El turno es DESCONOCIDO (sin id)? Un `null`/`''`/`undefined` no identifica nada.
+ * @param valor id de turno
+ * @returns true si no hay identidad
+ */
+function turnoDesconocido(valor: unknown): boolean {
+    return valor === null || valor === undefined || String(valor) === '';
+}
+
+/**
  * ¿La fila puede pertenecer al turno `turnId`?
  *
- * Regla UNICA de identidad de turno para TODAS las ramas que reutilizan/completan una fila
+ * Regla UNICA de identidad de turno para las ramas que reutilizan una fila por IDENTIDAD
  * (auditoria 2026-10-23: el bucle principal la tenia y la rama P9.67 no, asi que un trozo
- * podia completar/renombrar la fila del turno ANTERIOR). Si alguno de los dos ids se
- * desconoce no se puede afirmar que sea de otro turno: se conserva la conducta anterior.
+ * podia completar/renombrar la fila del turno ANTERIOR).
+ *
+ * SIN IDENTIDAD NO SE REUTILIZA (2a pasada): antes, si faltaba el id de la fila o el del
+ * commit, se devolvia `true` "para conservar la conducta anterior". Eso dejaba que un commit
+ * SIN turno (la resolucion tardia o el fallback de App) completara la fila de OTRO turno. El id
+ * se acuña ANTES del commit y la fila lo guarda (`ConversationEntry.turnId`); si aun asi falta,
+ * la respuesta segura es NO reutilizar: se escribe fila nueva.
+ *
  * @param entry fila de conversacion
  * @param turnId turno del texto que se esta commiteando
- * @returns true si la fila es (o puede ser) de ese turno
+ * @returns true si la fila es DEL MISMO turno (ambos ids conocidos e iguales)
  */
 function filaPuedeSerDeEsteTurno(
     entry: { turnId?: number | string | null } | null | undefined,
     turnId: number | string | null | undefined,
 ): boolean {
     if (!entry) return false;
-    const desconocido = (valor: unknown) => valor === null || valor === undefined || String(valor) === '';
-    // IDENTIDAD DE TURNO: con AMBOS ids conocidos tienen que coincidir. Si falta uno no se
-    // puede afirmar "otro turno" (la fusion por trozo del MISMO turno depende de ello), asi
-    // que la garantia vive en el LLAMADOR: App acuña el turno antes del commit
-    // (auditoria 2026-10-23) y el flujo real nunca llega aqui con null.
-    if (desconocido(turnId) || desconocido(entry.turnId)) return true;
+    if (turnoDesconocido(turnId) || turnoDesconocido(entry.turnId)) return false;
     return String(entry.turnId) === String(turnId);
 }
 
@@ -922,12 +932,14 @@ function commitUserTurnRowInner({
         // recorta la locución y el commit va con el turno vivo; el dueno de ese criterio es
         // `isFragmentOfLocution` (uno solo). Fundir por texto no reescribe lo ya commitado
         // (write-once arriba), solo evita la segunda fila del recorte.
-        // IDENTIDAD DE TURNO (auditoria 2026-10-23): esta rama tambien exige que la fila sea
-        // del turno que se commitea (`filaPuedeSerDeEsteTurno`, el MISMO criterio del bucle
-        // principal). Sin esto un trozo podia completar/renombrar la fila del turno ANTERIOR.
-        const ultima = [...history]
-            .reverse()
-            .find((e) => e?.role === 'user' && filaPuedeSerDeEsteTurno(e as { turnId?: number | string | null }, turnId));
+        // IDENTIDAD (auditoria 2026-10-23, 2a pasada): esta rama CRUZA turnos A PROPOSITO
+        // (P9.67), pero SOLO entre turnos CONOCIDOS: un commit sin turno no puede completar ni
+        // renombrar una fila ajena, y una fila sin turno (legacy) tampoco se adopta.
+        const ultima = turnoDesconocido(turnId)
+            ? undefined
+            : [...history]
+                .reverse()
+                .find((e) => e?.role === 'user' && !turnoDesconocido((e as { turnId?: number | string | null }).turnId));
         if (ultima) {
             const previo = String(ultima.text || '');
             const rawEsTrozo = isFragmentOfLocution(raw, previo);
@@ -952,7 +964,8 @@ function commitUserTurnRowInner({
     //    distinto) NO se fusiona con la anterior aunque FLU no haya hablado.
     //    Un solo criterio: la rama POSICIONAL (relacion prefijo/sufijo) se retiro
     //    porque era un segundo criterio para la misma decision.
-    const mismoTurnoPorId = currentTurn.id === turnId && currentTurn.rowId != null;
+    const mismoTurnoPorId =
+        !turnoDesconocido(turnId) && !turnoDesconocido(currentTurn.id) && currentTurn.id === turnId && currentTurn.rowId != null;
     if (mismoTurnoPorId) {
         const entry = history.find((e) => e.id === currentTurn.rowId);
         if (entry && entry.role === 'user') {
@@ -977,6 +990,9 @@ function commitUserTurnRowInner({
         epoch: epochDeLaFila,
         text: raw,
         speakerId: vozDeLaFila,
+        // El TURNO viaja con la fila (identidad durable, auditoria 2026-10-23): sin este dato
+        // la fila no se puede reutilizar ni completar con seguridad.
+        ...(turnoDesconocido(turnId) ? {} : { turnId }),
         // SIN ROTULO PROPIO no se escribe nada en la fila (regla del dueno 2026-10-08,
         // e2e `A3`): sin medida ni etiqueta propia la fila queda SIN hablante escrito y su
         // rotulo lo da su VOZ al MOSTRAR. El respaldo jamas se estampa aqui.

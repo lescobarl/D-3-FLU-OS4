@@ -78,6 +78,17 @@ describe('continuidad de monologo', () => {
     expect(continuityLabelForMonologue([{ label: 'Hablante 1' }, { label: 'Hablante 2' }])).toBe('')
   })
 
+  it('la continuidad se elige por INDICE numerico, no por orden textual', () => {
+    // `.sort()` textual colocaria "Hablante 10" antes que "Hablante 2" (auditoria 2026-10-23).
+    // Con la MISMA firma los dos clusters son la misma voz -> monologo; manda el de menor indice.
+    expect(
+      continuityLabelForMonologue([
+        { label: 'Hablante 10', signature: [...LUIS] },
+        { label: 'Hablante 2', signature: [...LUIS] },
+      ]),
+    ).toBe('Hablante 2')
+  })
+
   it('un NOMBRE propio sin ancla verificada no es continuidad de monologo', () => {
     expect(continuityLabelForMonologue([{ label: 'Luis', signature: [...LUIS] }])).toBe('')
   })
@@ -177,5 +188,27 @@ describe('fila CERRADA (capa de escritura) en monologo', () => {
     const cambiadas = resolvePendingSpeakerRows([{ label: 'Hablante 1', signature: [...LUIS] }])
     expect(cambiadas).toBe(0)
     expect(String(useIntegrationStore.getState().conversationHistory[0].speakerName || '')).toBe(PENDING)
+  })
+
+  it('la PRIMERA fila (sin historial con etiqueta y SIN firma) sale por la continuidad del cluster', () => {
+    // Auditoria 2026-10-23: la rama solo miraba `etiquetaUnicaDeLaSesion`; con la primera fila
+    // no hay historial con etiqueta y la fila se quedaba en "?". Ahora cae a
+    // `continuityLabelForMonologue(clusters)`, el dueño de la continuidad de la unica voz.
+    useIntegrationStore.setState({
+      conversationHistory: [
+        {
+          id: 'r-primera',
+          role: 'user',
+          text: 'primera frase del monologo',
+          timestamp: 1,
+          speakerId: 'speaker_1',
+          speakerName: PENDING,
+        },
+      ],
+      conversationEpoch: 0,
+    })
+    const cambiadas = resolvePendingSpeakerRows([{ label: 'Hablante 1', signature: [...LUIS] }])
+    expect(cambiadas).toBe(1)
+    expect(String(useIntegrationStore.getState().conversationHistory[0].speakerName || '')).toBe('Hablante 1')
   })
 })

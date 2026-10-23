@@ -131,11 +131,12 @@ function collapseStutterPass(text = '', minWords = 2) {
 }
 
 export function normalizeTranscriptText(text = '') {
-  // POLITICAS DE TRANSCRIPCION: una sola tabla (`getTranscriptPolicyCfg`).
+  // POLITICAS DE TRANSCRIPCION: una sola tabla (`getTranscriptPolicyCfg`). Los dos umbrales
+  // salen de ahi SIN literales de respaldo: el valor y su lector no pueden divergir.
   const politica = getTranscriptPolicyCfg()
   return collapseStutterRepeat(
-    collapseInlineRepeat(text, Number(politica.inlineRepeatMinChars) || 24),
-    Number(politica.stutterRepeatMinCount) || 2,
+    collapseInlineRepeat(text, Number(politica.inlineRepeatMinChars)),
+    Number(politica.stutterRepeatMinCount),
   )
 }
 
@@ -149,7 +150,7 @@ export function normalizeTurnCapture(turnCapture = '', { conversationActive = fa
 }
 
 /** Colapsa párrafos repetidos consecutivos (ASR tras pausa). */
-export function collapseInlineRepeat(text = '', minRepeatChars = Number(getTranscriptPolicyCfg().collapseInlineRepeatMinChars) || 32) {
+export function collapseInlineRepeat(text = '', minRepeatChars = Number(getTranscriptPolicyCfg().inlineRepeatMinChars)) {
   const value = cleanForSpeech(text)
   if (value.length < minRepeatChars * 2) return value
 

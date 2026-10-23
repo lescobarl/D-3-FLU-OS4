@@ -97,6 +97,12 @@ export interface ConversationEntry {
             interruptionText?: string;
         };
     };
+    /**
+     * IDENTIDAD DEL TURNO que escribio la fila (auditoria 2026-10-23): la acuña el dueno del
+     * turno ANTES del commit y es el UNICO criterio para reutilizar/completar una fila.
+     * Sin este dato una fila no se puede reutilizar: un commit sin turno no toca la de otro.
+     */
+    turnId?: number | string | null;
     /** Firma de embedding (OS2: signature) */
     signature?: number[] | null;
     /** Fase de la conversación (OS2: phase) */
