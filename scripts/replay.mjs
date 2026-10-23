@@ -24,7 +24,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { loadSession, manifestFidelity, SessionError, SUPPORTED_MANIFEST_VERSIONS } from './replay/loadSession.mjs'
 import { installDeterministicEnv } from './replay/deterministicEnv.mjs'
-import { compararSpeakers, compareExpected, growingPrefixRun, duplicatedBlock } from './replay/compareExpected.mjs'
+import { compararSpeakers, compareExpected, growingPrefixRun, duplicatedBlock, locucionesConEtiquetasDistintas } from './replay/compareExpected.mjs'
 import { buildReport, printReport, writeReport } from './replay/report.mjs'
 
 const MODES = ['events', 'vectors']
@@ -253,6 +253,11 @@ async function main() {
       checks: [checkSpeakers],
       notCovered: checkSpeakers.partial ? ['hablantes-cobertura-parcial'] : [],
       source: null,
+      // Una locucion es UNA voz: la fuente de esta grabacion puede traer la misma frase con
+      // dos etiquetas. Se mide aqui tambien (modo de hablantes), con el mismo dueno.
+      speakerFlips: locucionesConEtiquetasDistintas(
+        (session.turns || []).filter((row) => String(row?.kind || '') === 'commit'),
+      ),
       classification: { perdidas: [], duplicadas: [], ventanas: 0 },
     }
     const status = vectors.conclusive ? comparison.status : 'not-conclusive'

@@ -30,7 +30,7 @@ export const TECHOS: Record<string, number> = {
   // LLAMADA y su import siguen teniendo que estar en App (los manejadores se asignan ahi).
   // -43 al sacar la lista de componentes monitoreados a su dueno
   // (DEFAULT_MONITORED_COMPONENTS): App dejo de recopiarla.
-  'src/App.tsx': 4643, // 5391 antes de P6.6
+  // -158 (2026-10-23): los helpers de despacho a nivel modulo (isRedundantTextWorkspace,\n  // buildArbiterOptions, resolveDomainScopedIntent y los dev hooks) salieron a\n  // src/app/appDispatchHelpers.ts: funciones puras de sus argumentos, sin estado del\n  // componente. App los importa y no conserva copia.\n  'src/App.tsx': 4485, // 5391 antes de P6.6
   // -40 en P8.32: el bloque de parametros del turno salio a src/voice/lib/contractParams.js
   // (buildContractParams), dueno unico de la lista de entradas del contrato de voz.
   // -3: la frase viva no se vacia al cerrar/entregar el turno (spec del dueno 2026-10-11).

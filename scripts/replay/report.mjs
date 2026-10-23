@@ -79,6 +79,10 @@ export function buildReport(input) {
     extraAceptadas: Number(input.comparison?.source?.extraAceptadas?.length) || 0,
     extraUnique: Number(input.comparison?.source?.extraUnique?.length) || 0,
     textVariants: Number(input.comparison?.source?.textVariants?.length) || 0,
+    // LOCUCIONES con 2+ etiquetas en la fuente: una locucion es UNA voz. Se cuenta, no falla.
+    sourceSpeakerFlips: Number(
+      (input.comparison?.speakerFlips || input.comparison?.source?.speakerFlips || []).length,
+    ) || 0,
     sourceDiff: input.comparison?.source
       ? {
           sourceUnique: input.comparison.source.sourceUnique,
@@ -86,6 +90,7 @@ export function buildReport(input) {
           extraAceptadas: input.comparison.source.extraAceptadas,
           extraUnique: input.comparison.source.extraUnique,
           variants: input.comparison.source.textVariants,
+          etiquetasDivergentes: input.comparison.source.speakerFlips || [],
         }
       : null,
     classification: {
@@ -159,6 +164,14 @@ export function printReport(report, io = {}) {
         `duplicadas en la fuente ${report.sourceDuplicates} · faltan ${report.missingUnique} · ` +
         `sobran ${report.extraAceptadas + report.extraUnique} (${report.extraAceptadas} aceptada(s) como repeticion, ` +
         `${report.extraUnique} sin justificar) · variantes ${report.textVariants}`,
+    )
+  }
+  // UNA LOCUCION ES UNA VOZ: si la fuente trae la misma frase con dos etiquetas, es un dato
+  // del producto (duplicado de turno + continuidad), no del replay. Se avisa en los dos modos.
+  if (report.sourceSpeakerFlips) {
+    print(
+      `  AVISO    ${report.sourceSpeakerFlips} locucion(es) de la FUENTE con 2+ etiquetas: ` +
+        'una locucion es UNA voz (mismo texto, hablantes distintos)',
     )
   }
   if (report.session.fidelityWarnings?.length) {

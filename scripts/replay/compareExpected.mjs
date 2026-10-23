@@ -249,6 +249,39 @@ export function esMismaLocucion(a = '', b = '', { minVariantWords = 2, similitud
 }
 
 /**
+ * LOCUCIONES con MAS DE UNA etiqueta de hablante en la FUENTE.
+ *
+ * Una locucion es UNA voz: si la misma frase aparece en la grabacion con dos etiquetas, una
+ * de las dos es falsa. Defecto MEDIDO (7fce0045, 2026-10-23): 8 locuciones con dos etiquetas;
+ * `#54/#55` ("qué hija las cosas hija déjame acompañarte por favor") sale "Hablante 2" y,
+ * 4,5 s despues, la misma captura se commitea otra vez como "Hablante 1", y el preflight
+ * asincrono de ESA segunda fila la reescribe a "Luis Registrado". Una locucion, tres etiquetas.
+ *
+ * SE MIDE, NO SE CORRIGE AQUI: el Anexo B.14 prohibe tocar la deduplicacion para "arreglar"
+ * repeticiones (la dedupe de emision identica rompio turnos legitimos). El numero queda en el
+ * reporte para que la decision de producto sea del dueno.
+ *
+ * @param {Array<{ text?: string, speaker?: string }>} rows filas de la fuente (commits)
+ * @returns {Array<{ text: string, labels: string[], indices: number[] }>}
+ */
+export function locucionesConEtiquetasDistintas(rows = []) {
+  const porTexto = new Map()
+  ;(Array.isArray(rows) ? rows : []).forEach((row, index) => {
+    const key = normalizarFila(row?.text)
+    if (!key) return
+    if (!porTexto.has(key)) porTexto.set(key, [])
+    porTexto.get(key).push({ index, label: String(row?.speaker || '').trim(), text: String(row?.text || '') })
+  })
+  const salida = []
+  for (const [, filas] of porTexto) {
+    const labels = [...new Set(filas.map((fila) => fila.label).filter(Boolean))]
+    if (labels.length < 2) continue
+    salida.push({ text: filas[0].text, labels, indices: filas.map((fila) => fila.index) })
+  }
+  return salida
+}
+
+/**
  * Diferencias entre las filas FUENTE (`turns.ndjson`, `kind === "commit"`) y las filas que
  * el replay observo. La fuente NO es un golden: la sesion real ya trae duplicados.
  *
@@ -265,7 +298,7 @@ export function esMismaLocucion(a = '', b = '', { minVariantWords = 2, similitud
  * @param {Array<{ text?: string }>} sourceRows filas de la fuente (ya filtradas a commits)
  * @param {Array<{ text?: string }>} observedRows filas del replay
  * @param {{ minVariantWords?: number, similitudMinima?: number }} [options]
- * @returns {{ sourceRows: number, observedRows: number, sourceUnique: number, sourceDuplicates: number, missingUnique: Array<{ text: string }>, textVariants: Array<{ source: string, observed: string }>, extraAceptadas: Array<{ text: string, repiteDe: string, vecesEnFuente: number, similitud: number }>, extraUnique: Array<{ text: string }> }}
+ * @returns {{ sourceRows: number, observedRows: number, sourceUnique: number, sourceDuplicates: number, missingUnique: Array<{ text: string }>, textVariants: Array<{ source: string, observed: string }>, extraAceptadas: Array<{ text: string, repiteDe: string, vecesEnFuente: number, similitud: number }>, extraUnique: Array<{ text: string }>, speakerFlips: Array<{ text: string, labels: string[], indices: number[] }> }}
  */
 export function sourceRowDiff(sourceRows = [], observedRows = [], { minVariantWords = 2, similitudMinima = 0.7 } = {}) {
   const minVariant = Math.max(1, Math.floor(Number(minVariantWords) || 2))
@@ -349,6 +382,8 @@ export function sourceRowDiff(sourceRows = [], observedRows = [], { minVariantWo
     textVariants,
     extraAceptadas,
     extraUnique,
+    // LOCUCIONES con DOS etiquetas en la fuente (una locucion es UNA voz): se mide, no falla.
+    speakerFlips: locucionesConEtiquetasDistintas(sourceRows),
   }
 }
 
@@ -469,7 +504,8 @@ export function compareExpected({ observed, expected, options = {} } = {}) {
       `fuente ${source.sourceRows} (${source.sourceUnique} unicas, ${source.sourceDuplicates} duplicadas) · ` +
       `replay ${source.observedRows} · faltan ${source.missingUnique.length} · ` +
       `sobran ${source.extraAceptadas.length + source.extraUnique.length} (${source.extraAceptadas.length} aceptada(s), ` +
-      `${source.extraUnique.length} sin justificar) · variantes ${source.textVariants.length}`
+      `${source.extraUnique.length} sin justificar) · variantes ${source.textVariants.length} · ` +
+      `locuciones con 2+ etiquetas ${source.speakerFlips.length}`
     const ok = source.missingUnique.length === 0 && source.extraUnique.length === 0
     checks.push({
       name: 'sourceRows',
