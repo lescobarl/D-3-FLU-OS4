@@ -14,6 +14,8 @@ import {
   resolveConversationSpeaker,
 } from '../src/voice/lib/speakerDiarization.js'
 import { pendingSpeakerLabel } from '../src/voice/lib/speakerLabels.js'
+import { resolvePendingSpeakerRows } from '../src/voice/lib/conversationTurnRow'
+import { useIntegrationStore } from '../src/store/integrationStore'
 
 const unit = (pairs: Array<[number, number]>) => {
   const v = new Array(512).fill(0)
@@ -114,5 +116,47 @@ describe('resolutor en monologo (mutacion: hasVoiceMeasurement = false)', () => 
   it('ANCLA VERIFICADA unica: la continuidad es su nombre (no se inventa etiqueta)', () => {
     const clusters = [{ label: 'Luis', signature: [...LUIS], anchorVerified: true }]
     expect(resolver([], clusters)).toBe('Luis')
+  })
+})
+
+describe('fila CERRADA (capa de escritura) en monologo', () => {
+  it('la fila pendiente de un MONOLOGO se resuelve a la etiqueta de la unica voz', () => {
+    useIntegrationStore.setState({
+      conversationHistory: [
+        {
+          id: 'r-pend',
+          role: 'user',
+          text: 'frase del monologo sin medida',
+          timestamp: 1,
+          speakerId: 'speaker_1',
+          speakerName: PENDING,
+          signature: [...LUIS],
+        },
+      ],
+      conversationEpoch: 0,
+    })
+    const cambiadas = resolvePendingSpeakerRows([{ label: 'Hablante 1', signature: [...LUIS] }])
+    expect(cambiadas).toBe(1)
+    expect(String(useIntegrationStore.getState().conversationHistory[0].speakerName || '')).toBe('Hablante 1')
+  })
+
+  it('G U A R D: con DOS voces (firma por debajo del piso) la fila SIGUE pendiente', () => {
+    useIntegrationStore.setState({
+      conversationHistory: [
+        {
+          id: 'r-otra',
+          role: 'user',
+          text: 'frase de otra voz',
+          timestamp: 1,
+          speakerId: 'speaker_1',
+          speakerName: PENDING,
+          signature: [...MUJER],
+        },
+      ],
+      conversationEpoch: 0,
+    })
+    const cambiadas = resolvePendingSpeakerRows([{ label: 'Hablante 1', signature: [...LUIS] }])
+    expect(cambiadas).toBe(0)
+    expect(String(useIntegrationStore.getState().conversationHistory[0].speakerName || '')).toBe(PENDING)
   })
 })
