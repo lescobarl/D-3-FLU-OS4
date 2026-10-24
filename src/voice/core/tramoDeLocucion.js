@@ -73,11 +73,15 @@ export function crearDetectorDeFronteras({ sampleRate = DEFAULT_SAMPLE_RATE, con
  * @param {{ frontera?: number, consumida?: number, lineaAbierta?: string, texto?: string }} [estado]
  * @returns {boolean}
  */
-export function hayFronteraDeAudio({ frontera = 0, consumida = 0, lineaAbierta = '', texto = '' } = {}) {
+export function hayFronteraDeAudio({ frontera = 0, consumida = 0, lineaAbierta = '', texto = '', quietaMs = 0, minQuietaMs = 0 } = {}) {
   const marca = Number(frontera) || 0
   const yaVista = Number(consumida) || 0
   if (!(marca > 0) || marca <= yaVista) return false
   const abierta = String(lineaAbierta || '').trim()
   if (!abierta) return false
+  // TERCERA condicion: la linea lleva QUIETA el silencio del VAD. Sin esto, un reinicio
+  // de hipotesis del ASR a media frase (texto distinto, 200 ms despues) se tomaba por
+  // frontera y partia la locucion: 2 filas extra medidas en playback 8f3112c2.
+  if (Number(minQuietaMs) > 0 && Number(quietaMs) < Number(minQuietaMs)) return false
   return estadoDeLocucion(abierta, String(texto || '')).locucionNueva
 }

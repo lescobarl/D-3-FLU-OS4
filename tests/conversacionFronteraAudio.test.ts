@@ -181,6 +181,8 @@ describe('DEFECTO A — dos locuciones sin pausa = DOS filas (frontera de audio)
     h.inject(chromeEvent([{ isFinal: false, transcript: LOCUCION_1 }]))
     // El VAD cierra la primera locución: hay 1,2 s de silencio antes de la siguiente.
     h.fronteraRef.current = 192000
+    // La linea lleva QUIETA el silencio del VAD (2 s): es la tercera evidencia.
+    Object.assign(h.listenStateRef.current, { openLineLastTouchMs: 1 }) // la linea lleva quieta desde el inicio
     h.inject(chromeEvent([{ isFinal: false, transcript: LOCUCION_2 }]))
     h.end()
 
@@ -193,6 +195,8 @@ describe('DEFECTO A — dos locuciones sin pausa = DOS filas (frontera de audio)
     const h = createHarness({ fronteraActiva: false })
     h.inject(chromeEvent([{ isFinal: false, transcript: LOCUCION_1 }]))
     h.fronteraRef.current = 192000
+    // La linea lleva QUIETA el silencio del VAD (2 s): es la tercera evidencia.
+    Object.assign(h.listenStateRef.current, { openLineLastTouchMs: 1 }) // la linea lleva quieta desde el inicio
     h.inject(chromeEvent([{ isFinal: false, transcript: LOCUCION_2 }]))
     h.end()
 

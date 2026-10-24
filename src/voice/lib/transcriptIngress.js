@@ -4,6 +4,7 @@
 import { cleanForSpeech, pickBestRecognitionTranscript, stripDiacritics } from './audioMath.js'
 import { estadoDeLocucion } from '../core/locucion.js'
 import { hayFronteraDeAudio } from '../core/tramoDeLocucion.js'
+import { getVadSegmentConfig } from './asr/asrConfig.js'
 import { FLU_CONFIG } from './fluConfig.js'
 import {
   analyzeWakeTurn,
@@ -882,7 +883,8 @@ function ingestInterimChunk({ interim, ctx }) {
   const fronteraAudio = Number(ctx.getAudioFrontera?.() || 0)
   const lineaAbierta = cleanForSpeech(readTurnLive(listenState) || '')
   const fronteraConsumida = Number(listenState.audioFronteraConsumida) || 0
-  if (hayFronteraDeAudio({ frontera: fronteraAudio, consumida: fronteraConsumida, lineaAbierta, texto: cleanedInterim })) {
+  const quietudDeLaLineaMs = Date.now() - Number(listenState.openLineLastTouchMs || 0)
+  if (hayFronteraDeAudio({ frontera: fronteraAudio, consumida: fronteraConsumida, lineaAbierta, texto: cleanedInterim, quietaMs: quietudDeLaLineaMs, minQuietaMs: getVadSegmentConfig().minSilenceMs })) {
     listenState.audioFronteraConsumida = fronteraAudio
     // La locucion cerrada se escribe por la puerta del commit; el TURNO sigue abierto
     // (`settlesTurn: false`) para que el final del ASR de ESTA misma locucion llegue

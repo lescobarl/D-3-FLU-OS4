@@ -1065,6 +1065,27 @@ export function handleConversationStreamSync(
     return
   }
 
+  // CAPTURA VACIA NUNCA ESCRIBE FILA DESDE LA CAJA (mandato 2026-10-24): si el llamador no
+  // trae captura y NO hay locucion abierta (ni linea viva, ni final pendiente), lo que la
+  // caja muestra es la locucion SIGUIENTE a medias. Se cierra con la captura del tramo o
+  // no se escribe: la caja no es la fuente de una fila por si misma.
+  if (turnCommit && !precomputed) {
+    const estadoVivo = listenStateRef.current || {}
+    const hayTextoAbierto = Boolean(
+      cleanForSpeech(estadoVivo.openLine || '') ||
+        cleanForSpeech(estadoVivo.pendingFinal || '') ||
+        cleanForSpeech(estadoVivo.pendingInterim || ''),
+    )
+    if (!hayTextoAbierto) {
+      if (settlesTurn) {
+        lastCommitAtRef.current = Date.now()
+        vaciarLaCaja()
+        closeLiveTurn(deps)
+      }
+      relayLog('LOG', 'conversationStreamCommit', 'commit sin captura ni locucion abierta: no se escribe fila (caja != tramo)')
+      return
+    }
+  }
   let capture =
     precomputed ||
     advancePublishedDisplay(publishedLiveRef.current, listenStateRef.current, {
