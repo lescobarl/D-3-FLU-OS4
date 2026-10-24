@@ -215,6 +215,9 @@ export async function runVectorsSession({ session, thresholds } = {}) {
     // (`audioEndSample === audioStartSample`), asi que el producto midio ESE turno con 0
     // muestras. Se evalua con el MISMO dato que tuvo el producto (0) y se declara.
     const sinDuracion = !(voiced > 0)
+    // La fila declara si su tramo era valido al commitear (ETAPA 1). Se cuenta: un tramo
+    // invalido no puede pasar por "sin duracion" sin que el reporte lo diga.
+    const tramoInvalido = commit?.tramoValido === false
     // SIN MEDIDA PROPIA (firma compartida con otra locucion) el turno SE EVALUA igual, pero su
     // veredicto es CIRCULAR: el vector que se le pasa es el de un cluster, asi que el resultado
     // lo decide el dato de entrada. Se cuenta en `circular`, nunca como acierto ni mismatch.
@@ -288,6 +291,7 @@ export async function runVectorsSession({ session, thresholds } = {}) {
       categoria,
       evidenciaPropia,
       sinDuracion,
+      tramoInvalido,
       reason: String(diagnosis?.reason || ''),
     })
   }

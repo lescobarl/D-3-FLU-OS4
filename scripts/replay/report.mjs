@@ -67,6 +67,7 @@ export function buildReport(input) {
           conEvidencia: input.vectors.conEvidencia,
           evaluatedCircular: input.vectors.circulares,
           sinDuracion: input.vectors.sinDuracionTotal,
+          tramoInvalido: (input.vectors.turns || []).filter((t) => t.tramoInvalido).length,
           matches: input.vectors.speakerMatches,
           mismatches: input.vectors.speakerMismatches,
           skipped: input.vectors.skipped,
