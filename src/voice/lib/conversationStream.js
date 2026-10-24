@@ -2,6 +2,10 @@
  * Motor único: mic → turno vivo (openLine) → UI/log. Archivo (session) solo al cerrar turno.
  */
 import { cleanForSpeech, sliceWordsLower, speechWords } from './audioMath.js';
+// PREDICADO DE LOCUCION: una sola definicion en core/locucion.js. Este modulo lo USA (13
+// sitios) y lo RE-EXPORTA para sus consumidores historicos (import + export, no solo uno).
+import { countSharedSpeechWords, estadoDeLocucion, utterancesSameRevision } from '../core/locucion.js'
+export { countSharedSpeechWords, utterancesSameRevision }
 import { FLU_CONFIG } from './fluConfig.js'
 import {
   collapseRepeatedSpeech,
@@ -15,7 +19,6 @@ import {
 } from './speechMerge.js'
 import { shouldForceNewLogRowOnCommit } from './ingressGuards.js'
 import { getTranscriptPauseCfg, countSpeechWords as countWordsFromPauseCfg, srGapSilenceReached } from './fluTranscriptPause.js'
-import { getTranscriptPolicyCfg } from './fluTranscriptMotor.js'
 import { normalizeForMatch } from '../../lib/textUtils'
 import { VOICE_DIARIZATION_DEFAULTS } from '../../core/config/sharedConfig'
 
@@ -140,6 +143,29 @@ export function isTailOnlyInterimCapture(capture = '', turnLive = '', lastCommit
   return false
 }
 
+
+/**
+ * ¿`viva` conserva TODAS las palabras de `mostrada`, en el mismo orden?
+ *
+ * GUARDA DE LA CAJA (ETAPA 5, defecto medido 2026-10-23): la caja solo acumula. Una emisión
+ * que sustituye lo mostrado sin conservar sus palabras (una revisión del ASR que se come un
+ * término del medio o la cola) NO puede entrar: la fila acabaría sin lo que el usuario vio.
+ *
+ * @param {string} mostrada
+ * @param {string} viva
+ * @returns {boolean}
+ */
+export function conservaLasPalabrasDe(mostrada = '', viva = '') {
+  const objetivo = speechWords(mostrada)
+  const emision = speechWords(viva)
+  if (!objetivo.length || emision.length < objetivo.length) return false
+  let j = 0
+  for (let i = 0; i < emision.length && j < objetivo.length; i += 1) {
+    if (emision[i] === objetivo[j]) j += 1
+  }
+  return j === objetivo.length
+}
+
 /**
  * Tras commit reciente: interino acumulativo de Chrome que re-incluye la fila cerrada
  * → conservar solo la continuación (ej. «le salto la pelota bastante»).
@@ -174,57 +200,6 @@ export function bridgeInterimAfterCommitPause(interim = '', lastCommitted = '', 
   }
 
   return chunk
-}
-
-/** Palabras iniciales compartidas (tolera typo ASR: táctil/táctico). */
-export function countSharedSpeechWords(a = '', b = '') {
-  const aw = speechWords(a)
-  const bw = speechWords(b)
-  let shared = 0
-  while (shared < aw.length && shared < bw.length) {
-    const left = aw[shared].toLowerCase()
-    const right = bw[shared].toLowerCase()
-    if (left === right) {
-      shared += 1
-      continue
-    }
-    if (
-      left.length >= 4 &&
-      right.length >= 4 &&
-      (left.slice(0, 4) === right.slice(0, 4) || left.startsWith(right) || right.startsWith(left))
-    ) {
-      shared += 1
-      continue
-    }
-    break
-  }
-  return shared
-}
-
-/**
- * Revisión ASR del mismo enunciado (no turno nuevo): prefijo largo compartido
- * aunque utterancesRelate falle por corrección táctil→táctico, etc.
- */
-export function utterancesSameRevision(previous = '', next = '') {
-  const prev = cleanForSpeech(previous)
-  const nxt = cleanForSpeech(next)
-  if (!prev || !nxt) return false
-  if (utterancesRelate(prev, nxt)) return true
-
-  const minLen = Math.min(speechWords(prev).length, speechWords(nxt).length)
-  if (minLen < 3) return false
-
-  const shared = countSharedSpeechWords(prev, nxt)
-  if (shared >= 4) return true
-  if (shared >= 3 && shared >= Math.floor(minLen * 0.55)) return true
-
-  let chars = 0
-  const max = Math.min(prev.length, nxt.length)
-  while (chars < max && prev[chars].toLowerCase() === nxt[chars].toLowerCase()) {
-    chars += 1
-  }
-  // POLITICA DE TRANSCRIPCION (una tabla): `transcript.policy.sameRevisionMinSharedChars`.
-  return chars >= (Number(getTranscriptPolicyCfg().sameRevisionMinSharedChars) || 24)
 }
 
 export function readOpenLine(state) {
@@ -451,7 +426,7 @@ export function fraseDeCierreDeLocucion({ caja = '', lineaViva = '', finalConfir
   // cierra y la caja pertenece a la que viene: se cierra con el final y la caja no se toca.
   // Si es la MISMA locucion, manda la caja (y si el final trae mas, la caja crece antes de
   // cerrar: eso lo hace el cierre por silencio, no esta funcion).
-  if (mostrada && confirmada && !utterancesSameRevision(mostrada, confirmada)) {
+  if (mostrada && confirmada && estadoDeLocucion(mostrada, confirmada).locucionNueva) {
     return { texto: confirmada, motivo: 'final' }
   }
   if (mostrada) return { texto: mostrada, motivo: 'caja' }

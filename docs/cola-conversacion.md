@@ -15,6 +15,11 @@ La primera casilla sin marcar es la siguiente. No se re-decide.
 | 5 | **Caja**: un solo texto (la caja es la locución abierta) | [x] caja dentro de su locucion; crece con el final |
 | 6 | **Playback**: misma tubería, stub determinista | [x] comparabilidad declarada |
 
+## Defectos ABIERTOS (no aceptados como variante)
+
+- **A**: una fila lleva DOS locuciones pegadas (replay 44 palabras vs fuente 22, id 1792789182623): sin silencio entre ellas la caja acumula la siguiente.
+- **B**: una palabra del medio se pierde ("esto"; en el mismo evento llegan 3 finales: dos con "esto", uno con "escucha"). La cola ya se conserva; falta decidir la union de alternativas.
+
 ## Reglas de la etapa en curso (1)
 
 - El tramo sale del **segmento VAD** (`tramosDeAudio` / `createVoiceSegmenter`), no de restar contadores.

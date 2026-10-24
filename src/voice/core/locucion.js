@@ -11,9 +11,64 @@
  *  - `locucionNueva`: ni lo uno ni lo otro → el texto abre otra locución.
  *
  * No decide el commit: informa. Quien escribe la fila consulta el estado.
+ *
+ * HOJA: no importa nada que importe a este modulo (sin ciclos). `conversationStream` importa
+ * de aqui `countSharedSpeechWords` y `utterancesSameRevision`, y los re-exporta.
  */
-import { utterancesSameRevision } from '../lib/conversationStream.js'
+import { cleanForSpeech, speechWords } from '../lib/audioMath.js'
 import { utterancesRelate } from '../lib/speechMerge.js'
+import { getTranscriptPolicyCfg } from '../lib/fluTranscriptMotor.js'
+
+/** Palabras iniciales compartidas (tolera typo ASR: táctil/táctico). */
+export function countSharedSpeechWords(a = '', b = '') {
+  const aw = speechWords(a)
+  const bw = speechWords(b)
+  let shared = 0
+  while (shared < aw.length && shared < bw.length) {
+    const left = aw[shared].toLowerCase()
+    const right = bw[shared].toLowerCase()
+    if (left === right) {
+      shared += 1
+      continue
+    }
+    if (
+      left.length >= 4 &&
+      right.length >= 4 &&
+      (left.slice(0, 4) === right.slice(0, 4) || left.startsWith(right) || right.startsWith(left))
+    ) {
+      shared += 1
+      continue
+    }
+    break
+  }
+  return shared
+}
+
+/**
+ * Revisión ASR del mismo enunciado (no turno nuevo): prefijo largo compartido
+ * aunque utterancesRelate falle por corrección táctil→táctico, etc.
+ */
+export function utterancesSameRevision(previous = '', next = '') {
+  const prev = cleanForSpeech(previous)
+  const nxt = cleanForSpeech(next)
+  if (!prev || !nxt) return false
+  if (utterancesRelate(prev, nxt)) return true
+
+  const minLen = Math.min(speechWords(prev).length, speechWords(nxt).length)
+  if (minLen < 3) return false
+
+  const shared = countSharedSpeechWords(prev, nxt)
+  if (shared >= 4) return true
+  if (shared >= 3 && shared >= Math.floor(minLen * 0.55)) return true
+
+  let chars = 0
+  const max = Math.min(prev.length, nxt.length)
+  while (chars < max && prev[chars].toLowerCase() === nxt[chars].toLowerCase()) {
+    chars += 1
+  }
+  // POLITICA DE TRANSCRIPCION (una tabla): `transcript.policy.sameRevisionMinSharedChars`.
+  return chars >= (Number(getTranscriptPolicyCfg().sameRevisionMinSharedChars) || 24)
+}
 
 /**
  * @param {string} anterior texto ya conocido (pendiente, última fila o lo mostrado)

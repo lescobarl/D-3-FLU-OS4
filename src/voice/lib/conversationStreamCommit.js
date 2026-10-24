@@ -26,7 +26,8 @@ import {
   utterancesSameRevision,
   committedEchoStreakWindowMs,
 } from './activeListen.js'
-import { readTurnLive, countSharedSpeechWords } from './conversationStream.js'
+import { readTurnLive, countSharedSpeechWords, conservaLasPalabrasDe } from './conversationStream.js'
+import { canonSinTartamudeo } from './transcriptIngress.js'
 import { debugHotPath, fluDebugHot } from './fluDebug.js'
 import { relayLog } from '../../lib/clientLogRelay'
 import { voiceProbe } from './voiceProbe'
@@ -721,6 +722,8 @@ export function resolverEmisionDeLaCaja(mostrado = '', nuevo = '') {
         comun >= (Number(politica.boxShortBoxPrefixWords) || 1))
     const noEsTrozo = !isFragmentOfLocution(nuevo, mostrado)
     const noEncojeBajoLoConfirmado = nuevas.length >= comun
+    // NINGUNA sustitucion puede perder palabras de la caja (solo acumula).
+    const conservaLaCaja = conservaLasPalabrasDe(mostrado, nuevo)
     const crece = nuevas.length >= mostradas.length
     // EXTENSION de lo mostrado (la emision empieza por las MISMAS palabras): es la misma
     // locucion creciendo ("no" -> "no no"), asi que no necesita un tramo adicional.
@@ -733,6 +736,7 @@ export function resolverEmisionDeLaCaja(mostrado = '', nuevo = '') {
       // MISMO TRAMO OBLIGATORIO (auditoria 2026-10-23): compartir el arranque no basta para
       // sustituir la caja; hace falta un tramo MAS ALLA del arranque, salvo que la emision
       // sea la MISMA locucion creciendo palabra a palabra.
+      conservaLaCaja &&
       (esExtensionDeLoMostrado || comparteTramoTrasElArranque(mostradas, nuevas, comun)) &&
       (crece || alcanzaElFinalDeLoMostrado(mostradas, nuevas))
     ) {
@@ -834,7 +838,12 @@ export function crearCajaDeLaFrase(deps = {}) {
         // ninguna se cumple y no se toca: ahi el no-encogimiento sigue mandando.
         if (
           opciones.canonica &&
-          (nuevo.length >= mostrado.length || bocetoCubiertoPor(mostrado, nuevo))
+          (nuevo.length >= mostrado.length || bocetoCubiertoPor(mostrado, nuevo)) &&
+          // La frase canonica SUSTITUYE: no puede comerse palabras de la caja. La unica
+          // perdida legitima es el TARTAMUDEO, que el canon colapsa ("Cloud Cloud" -> "Cloud");
+          // se compara contra la caja ya canonizada. Defecto medido 2026-10-23: la canonica
+          // perdio "esto" y "escucha" en medio/final de la locucion.
+          conservaLasPalabrasDe(canonSinTartamudeo(mostrado), nuevo)
         ) {
           destino = nuevo
         } else {
