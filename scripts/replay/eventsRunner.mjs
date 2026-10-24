@@ -155,7 +155,14 @@ export function buildHarness(app, clock) {
     // fila se queda con menos texto y NO es un prefijo (se comio un tramo del medio).
     const filaEsPrefijoDeLaViva = Boolean(text) &&
       live.toLowerCase().startsWith(String(text).toLowerCase())
-    observed.rows.push({ text: String(text || ''), speaker: String(options?.speakerName || '') })
+    // ESCRITOR DE LA FILA (mismo contrato que produccion): `replaceLastRawLog` manda. El
+    // commit decide si la emision es una REVISION de la ultima fila; si el arnes siempre
+    // insertara, una revision se contaria como fila NUEVA y "una fila por tramo" no se
+    // podria medir.
+    const fila = { text: String(text || ''), speaker: String(options?.speakerName || '') }
+    const replaceLast = options?.replaceLastRawLog === true && observed.rows.length > 0
+    if (replaceLast) observed.rows[observed.rows.length - 1] = fila
+    else observed.rows.push(fila)
     observed.boxAtCommit.push(box)
     const boxMismaRevision = Boolean(
       box && text && typeof utterancesSameRevision === 'function' && utterancesSameRevision(box, text),
@@ -169,6 +176,7 @@ export function buildHarness(app, clock) {
       // su tramo (la wake y su cola), asi que no se compara contra la linea viva entera.
       text: String(text || ''),
       commandTurn: options?.commandTurn === true,
+      replacedLast: replaceLast,
       locutionClosed: options?.locutionClosed === true,
       closeTurnOnly: options?.closeTurnOnly === true,
       settlesTurn: options?.settlesTurn === true,
@@ -226,6 +234,11 @@ export function buildHarness(app, clock) {
     commitTurnToSessionRows,
     // La CAJA es la duena del texto (ETAPA 5): el arnes expone la MISMA via que produccion.
     publicarEnLaCaja: (texto, opciones) => deps.cajaDeLaFrase?.publicarEnLaCaja?.(texto, opciones),
+    // UNA SOLA CAJA: el vaciado del ingress limpia la MISMA instancia que mide el runner
+    // (`refs.publishedLiveRef` via `vaciarCajaObservada`). Sin este binding, `ctx.vaciarLaCaja`
+    // era una flecha inerte y el cierre de una locucion por frontera de audio vaciaba OTRA
+    // caja (medido: publishedDespues seguia con "Okay flu Soy Luis").
+    vaciarLaCaja: (opciones) => vaciarCajaObservada(opciones),
     syncConversationStream: (payload = {}) => handleConversationStreamSync(deps, payload),
     markAudioSegmentStart: () => {},
     touchMeaningfulIngress: () => {},

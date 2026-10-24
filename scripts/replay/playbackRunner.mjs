@@ -10,7 +10,7 @@
  */
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { buildHarness } from './eventsRunner.mjs'
+import { buildHarness, medirCongelacionCaja } from './eventsRunner.mjs'
 
 const SPEECH = 'chrome-raw'
 const SR_GAP = 'sr-gap'
@@ -209,6 +209,17 @@ export async function runPlaybackSession({ session, clock, inferMarks = true, sr
 
   observed.applied = applied
   observed.marks = marks
+  // CONGELACION de la caja: MISMO dueno que el modo `events` (`medirCongelacionCaja`); sin
+  // esto el comparador caia al hueco crudo entre trazas, que cuenta el SILENCIO (una pausa
+  // sin voz) como caja congelada. El criterio del producto: solo cuenta una ventana con
+  // ASR pidiendo CRECER a la caja.
+  const speechEvents = speech
+    .map((row) => ({ t: Number(row?.t), text: String(row?.data?.text || '') }))
+    .filter((entry) => Number.isFinite(entry.t))
+    .sort((a, b) => a.t - b.t)
+  observed.boxStall = medirCongelacionCaja(observed.boxTrace, speechEvents, {
+    decisions: observed.boxDecisions,
+  })
   observed.config = { srGapCommitMs: Number(transcriptPause.getTranscriptPauseCfg?.()?.srGapCommitMs) || 0 }
   // DECLARACION DEL RUNNER (no etiqueta de la heuristica): el ASR es un stub determinista
   // sobre el audio de la grabacion, asi que la corrida es COMPARABLE.

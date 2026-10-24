@@ -10,7 +10,7 @@ La primera casilla sin marcar es la siguiente. No se re-decide.
 | 0 | Congelar comportamiento (casos raros + tramo determinista) | [x] `8ebf297d` |
 | 1 | **Tramo**: `[inicio,fin]` desde el segmento VAD, en la fila | [~] `tramoDelTurno` = ventana del TURNO (limitacion L1) |
 | 2 | **Transcripción**: estado con dos preguntas (revisión / crecimiento) | [x] dos sitios del ingress unificados |
-| 3 | **Commit**: una fila por tramo; fuera la segunda puerta | [~] `mismoTramo` (una fila por TRAMO, no por locucion: L1) |
+| 3 | **Commit**: una fila por tramo; fuera la segunda puerta | [x] una fila por LOCUCION cerrada por audio (`locutionClosed` emite; medidas abajo) |
 | 4 | **Hablantes**: identidad con medida del tramo; un solo escritor de etiqueta | [x] `escribirEtiquetaDeFila` |
 | 5 | **Caja**: un solo texto (la caja es la locución abierta) | [x] caja dentro de su locucion; crece con el final |
 | 6 | **Playback**: misma tubería, stub determinista | [x] comparabilidad declarada |
@@ -31,10 +31,37 @@ Evidencia:
   apagada -> UNA fila (rojo comprobado).
 - Playback real (`npm run replay -- --mode playback`, audio + ASR stub): faltan 0.
 
-PENDIENTE (no cerrado): en esa misma corrida de playback sobran 1 fila sin justificar
-("Es algo extraño Porque muchos de ustedes creo") y la caja se queda 16,5 s sin crecer
-tras la frontera. Es la reconciliacion entre el cierre por VAD y el final del ASR de la
-misma locucion: mientras no este en 0/0/0, el tramo por locucion NO se declara cerrado.
+CERRADO (2026-10-24). Tres causas raiz, una por sintoma:
+
+1. **Caja**: el vaciado del ingress no estaba cableado en el arnes del replay
+   (`bindings.vaciarLaCaja` no existia), asi que limpiaba OTRA caja y la medida
+   (`publishedLiveRef`) seguia con el texto viejo. Ahora hay UNA sola caja: la misma
+   instancia que mide el runner.
+2. **Texto de la locucion cerrada**: la fila de la frontera usa `openLine` COMPLETA (el
+   display de `readTurnLive` podia devolver la hipotesis parcial del ASR y perdia
+   palabras). El final confirmado pendiente del MISMO tramo se une sin perder tokens.
+3. **Fila antes de medir**: `locutionClosed` emite su fila por la puerta REAL del commit
+   sin cerrar el TURNO (`settlesTurn: false`); el final tardio del ASR la REEMPLAZA
+   (nunca abre otra) y un final de otro tramo produce otra fila.
+   La congelacion se mide en `playback` con el criterio unico del producto
+   (`medirCongelacionCaja`); antes ese modo caia al hueco crudo entre trazas y contaba el
+   SILENCIO (una pausa sin voz) como caja congelada.
+
+Medido en la sesion 8f3112c2 (`%TEMP%\flu-recordings\8f3112c2-...`):
+
+| modo | filas | faltan/sobran | boxStall | boxLost | boxShrink | rowShorterThanBox | boxCanonica |
+|---|---|---|---|---|---|---|---|
+| playback | 13 | 0 / 0 | 0 ms | 0 | 0 | 0 | 2 (informada) |
+| events | 13 | 0 / 0 | 0 ms | 0 | 0 | 0 | 2 (informada) |
+
+Guards: `tests/conversacionFronteraArnes.test.ts` (arnes REAL del replay: captura vacia ->
+no fila; final tardio del mismo tramo -> 1 fila; final de otro tramo -> 2 filas) y
+`tests/conversacionFronteraAudio.test.ts` (misma locucion creciendo NO se parte; la
+mutacion apaga la QUIETUD, que es la evidencia real de la frontera).
+
+Sigue en pie la limitacion L1 del **campo `tramo` de la fila** (Etapa 1): `tramoDelTurno`
+es la ventana del TURNO, no el segmento de la locucion. La SEPARACION de filas ya no
+depende de el (la decide el audio + la quietud + el texto ajeno).
 
 ## Defectos A y B (decision del dueno 2026-10-23)
 

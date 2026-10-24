@@ -515,6 +515,42 @@ function ingestFinalChunk({ finalChunk, ctx }) {
   // nueva. Reproducido: sin esto la locucion larga (1112 chars) quedaba sin fila.
   const pendientePrevio = cleanForSpeech(ctx.listenState?.pendingFinal || '')
   const finalLimpio = cleanForSpeech(finalChunk || '')
+  // CONFIRMACION TARDIA DE LA LOCUCION QUE LA FRONTERA YA CERRO: su fila existe (la escribio
+  // la frontera) y lo que llega es su MISMO tramo, mas completo. NO abre linea ni toca la
+  // caja de la locucion SIGUIENTE: se escribe como revision de ESA fila (`locutionClosed`
+  // sin cerrar el turno) y se conserva como canon del cierre.
+  const cerradaPorFrontera = cleanForSpeech(ctx.listenState?.fronteraCerrada || '')
+  // La locucion cerrada SOLO puede revisarse mientras su fila siga siendo la ULTIMA: si ya
+  // se escribio otra fila, este final pertenece a otro tramo (una repeticion genuina no se
+  // funde con la anterior).
+  const ultimaFila = cleanForSpeech(ctx.logRowsTextRef?.current?.at(-1) || '')
+  const finalDeLaCerrada =
+    Boolean(cerradaPorFrontera) &&
+    Boolean(finalLimpio) &&
+    Boolean(ultimaFila) &&
+    (ultimaFila === cerradaPorFrontera ||
+      phrasesEquivalent(ultimaFila, cerradaPorFrontera) ||
+      utterancesSameRevision(ultimaFila, cerradaPorFrontera)) &&
+    (utterancesSameRevision(cerradaPorFrontera, finalLimpio) ||
+      isProgressiveExtension(cerradaPorFrontera, finalLimpio) ||
+      isProgressiveExtension(finalLimpio, cerradaPorFrontera))
+  if (finalDeLaCerrada) {
+    // La ORDEN de esta locucion se despacha igual: el despacho es fire-and-forget y la
+    // FILA la gobierna el commit de abajo, no el valor de retorno.
+    ctx.tryDispatch?.(finalLimpio, { interim: false, source: 'final-tardio' })
+    ctx.listenState.pendingFinal = finalLimpio
+    ctx.scheduleTurnCommit?.({
+      capture: finalLimpio,
+      utterance: finalLimpio,
+      turnCommit: true,
+      locutionClosed: true,
+      freshUtterance: false,
+      forceNewRow: false,
+    })
+    return { handled: false, capture: finalLimpio, redundant: true }
+  }
+  // Un final que NO es de la locucion cerrada termina su ventana de revision.
+  if (cerradaPorFrontera && finalLimpio) ctx.listenState.fronteraCerrada = ''
   // ESTADO (dos preguntas, no un `||`): el pendiente solo se vuelca cuando lo que llega
   // abre OTRA locucion; una revision del ASR o un crecimiento NO lo vuelcan.
   if (pendientePrevio && finalLimpio && estadoDeLocucion(pendientePrevio, finalLimpio).locucionNueva) {
@@ -814,14 +850,27 @@ function ingestInterimChunk({ interim, ctx }) {
   const ahoraMs = Number(ctx.nowMs?.() ?? Date.now())
   const quietudDeLaLineaMs = ahoraMs - Number(listenState.openLineLastTouchMs || 0)
   if (hayFronteraDeAudio({ frontera: fronteraAudio, consumida: fronteraConsumida, lineaAbierta, texto: cleanedInterim, quietaMs: quietudDeLaLineaMs, minQuietaMs: getVadSegmentConfig().minSilenceMs })) {
-    if (Math.abs(ahoraMs - 1792789185047) < 300) console.log('[DIAG-DENTRO]', JSON.stringify({ entra: true }))
     listenState.audioFronteraConsumida = fronteraAudio
-    // La locucion cerrada se escribe por la puerta del commit; el TURNO sigue abierto
-    // (`settlesTurn: false`) para que el final del ASR de ESTA misma locucion llegue
-    // como revision y REEMPLACE la fila en vez de abrir otra (una locucion = una fila).
+    // TEXTO DE LA LOCUCION CERRADA: `openLine` COMPLETA, no `lineaAbierta` (el display de
+    // `readTurnLive` puede devolver la hipotesis parcial del ASR y perdia palabras) ni la
+    // caja (puede llevar la locucion siguiente). El final confirmado de ESTA misma locucion,
+    // si sigue pendiente, es el canon del mismo tramo: se une SIN perder tokens.
+    const lineaCompleta = cleanForSpeech(listenState.openLine || '') || lineaAbierta
+    const finalPendiente = cleanForSpeech(listenState.pendingFinal || '')
+    const mismoTramoPendiente =
+      Boolean(finalPendiente) &&
+      (utterancesSameRevision(finalPendiente, lineaCompleta) ||
+        isProgressiveExtension(finalPendiente, lineaCompleta) ||
+        isProgressiveExtension(lineaCompleta, finalPendiente))
+    const cerrada = mismoTramoPendiente
+      ? cleanForSpeech(unirVariantesDelMismoTramo(finalPendiente, lineaCompleta))
+      : lineaCompleta
+    // La fila de la locucion cerrada la escribe la puerta REAL del commit: `locutionClosed`
+    // emite su fila sin cerrar el TURNO (`settlesTurn: false`), para que el final del ASR de
+    // ESTA misma locucion llegue como revision y REEMPLACE la fila en vez de abrir otra.
     ctx.scheduleTurnCommit?.({
-      capture: lineaAbierta,
-      utterance: lineaAbierta,
+      capture: cerrada,
+      utterance: cerrada,
       turnCommit: true,
       locutionClosed: true,
       freshUtterance: true,
@@ -831,11 +880,17 @@ function ingestInterimChunk({ interim, ctx }) {
     listenState.pendingInterim = ''
     listenState.openLineBook = null
     clearInterimOpenLineClock(listenState)
+    // El final pendiente ya viajo en la fila de la frontera y se CONSERVA como canon de
+    // esta locucion: el cierre por silencio lo vuelve a elegir (`fraseDeCierreDeLocucion`)
+    // y su propia comparacion con la ultima fila lo reconoce como ya escrito. Vaciarlo
+    // dejaba al silencio con la linea de la locucion SIGUIENTE y escribia una fila extra
+    // (medido en playback 8f3112c2: "Es algo extraño Porque muchos de ustedes creo").
+    if (mismoTramoPendiente) listenState.pendingFinal = cerrada
     ctx.vaciarLaCaja?.()
-    listenState.fronteraCerrada = lineaAbierta
+    listenState.fronteraCerrada = cerrada
     fluTrace('ingress', 'locucion-frontera-audio', {
       frontera: fronteraAudio,
-      cerrada: lineaAbierta.slice(-80),
+      cerrada: cerrada.slice(-80),
     })
   } else if (fronteraAudio > fronteraConsumida && !lineaAbierta) {
     // Sin linea abierta no hay nada que cerrar: la frontera queda consumida para no

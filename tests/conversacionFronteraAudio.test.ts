@@ -191,12 +191,13 @@ describe('DEFECTO A — dos locuciones sin pausa = DOS filas (frontera de audio)
     expect(h.rows[1]).toContain('magistrado Luis')
   })
 
-  it('MUTACIÓN: con el tramo por evento APAGADO las dos locuciones se pegan en UNA fila', () => {
-    const h = createHarness({ fronteraActiva: false })
+  it('MUTACIÓN: con la linea ACTIVA (sin la quietud del VAD) las dos locuciones se pegan en UNA fila', () => {
+    // La marca del VAD es CONTEXTO y no decide (`hayFronteraDeAudio`): la evidencia es la
+    // QUIETUD de la linea + el texto ajeno. Se muta esa evidencia: la linea se toca con
+    // cada interino (200 ms), asi que no hay silencio y NO hay frontera.
+    const h = createHarness()
     h.inject(chromeEvent([{ isFinal: false, transcript: LOCUCION_1 }]))
     h.fronteraRef.current = 192000
-    // La linea lleva QUIETA el silencio del VAD (2 s): es la tercera evidencia.
-    Object.assign(h.listenStateRef.current, { openLineLastTouchMs: 1 }) // la linea lleva quieta desde el inicio
     h.inject(chromeEvent([{ isFinal: false, transcript: LOCUCION_2 }]))
     h.end()
 

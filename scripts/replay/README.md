@@ -102,6 +102,10 @@ ventana se mide **hasta la última voz** (el silencio final no suma). Una caja d
 abierto no puede cambiar si nadie habla, y esa espera (en el producto la acota
 `srGapCommitMs`) no es una caja congelada.
 
+Los DOS runners (`events` y `playback`) la calculan con el mismo dueño
+(`medirCongelacionCaja`, en el runner); el comparador solo cae al hueco crudo entre trazas
+si el runner no la aporta.
+
 ## `expected.json`
 
 ```json

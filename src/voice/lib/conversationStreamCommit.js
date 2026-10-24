@@ -924,6 +924,8 @@ function closeLiveTurn(deps) {
   openPreviewTurnRef.current = false
   listenStateRef.current.openLine = ''
   listenStateRef.current.pendingInterim = ''
+  // El cierre REAL termina el tramo de la frontera: su marca no puede sobrevivir al turno.
+  listenStateRef.current.fronteraCerrada = ''
   clearPendingFinal(listenStateRef.current)
   preflightScheduledForTurnRef.current = false
   srGapFiredForOpenLineRef.current = false
@@ -1576,8 +1578,11 @@ export function handleConversationStreamSync(
   const speakerName = normalizeSpeakerLabel(speakerResuelto)
   const speakerEscrito = speakerName
 
+  // UNA LOCUCION CERRADA (frontera de audio) es UNA unidad de texto: no se trocea. El
+  // troceo es para un TURNO con varias locuciones/hablantes; partir aqui volveria a
+  // repartir la locucion en varias filas.
   let segmentPlan =
-    !sameRevisionReplace && turnCommit
+    !sameRevisionReplace && turnCommit && !locutionClosed
       ? planAsrTurnSegments({
           phrase: capture,
           priorTexts: logRowsTextRef.current,
@@ -1707,13 +1712,15 @@ export function handleConversationStreamSync(
   relayLog('LOG', 'RowTrace', `refresh=${refreshNeeded} blocked=${ambientRowBlocked} replace=${replaceLast} turn=${activeTurnIdRef.current} cap="${capture.slice(0, 60)}"`) // BANDERA DE DIAGNOSTICO
   voiceProbe('commit', { preReady: Boolean(preflight?.ready), src: resolved.source, name: resolved.speakerName, written: speakerEscrito, shown: publishedLiveRef.current.slice(0, 220), wc: resolved.workingClusters?.length ?? 0, refClusters: speakerClustersRef.current?.length ?? 0, sticky: stickyFallback, turn: activeTurnIdRef.current, replace: replaceLast, len: capture.length, capture: capture.slice(0, 220) }) // BANDERA DE DIAGNOSTICO
   let delivered = false
-  // La fila de CONVERSACION solo se escribe al CIERRE REAL del turno. Chrome cierra
-  // SEGMENTOS mientras sigues hablando (un `final` por tramo) y esos commits NO
-  // declaran `settlesTurn`: antes cada tramo volcaba la ultima frase a la
-  // conversacion (medido 2026-10-08 por el dueno: al llegar al 9 ya estaba
+  // La fila de CONVERSACION se escribe al CIERRE REAL del turno O cuando la LOCUCION ya
+  // esta CERRADA por audio (`locutionClosed`, frontera VAD): esa locucion tiene su propia
+  // fila aunque el TURNO siga abierto (el final tardio del ASR la reemplaza).
+  // Chrome cierra SEGMENTOS mientras sigues hablando (un `final` por tramo) y esos
+  // commits NO declaran ninguna de las dos cosas: antes cada tramo volcaba la ultima
+  // frase a la conversacion (medido 2026-10-08 por el dueno: al llegar al 9 ya estaba
   // vaciada). El texto NO se pierde: sigue en la locucion viva (ULTIMA FRASE) y en
   // la fila de SESION; el cierre (onend, srGap, split por wake) la escribe completa.
-  if (settlesTurn) {
+  if (settlesTurn || locutionClosed) {
     // La fila se escribe si hay REFRESCO o si la frase AUN NO esta en la ultima fila:
     // un cierre podia llegar con `refreshNeeded:false` (misma marca emitida) y la fila
     // sin el texto, y el vaciado incondicional la borraba (defecto 1 del dueno
@@ -1727,7 +1734,8 @@ export function handleConversationStreamSync(
         replaceLastRawLog: replaceLast,
         streamUpdate: false,
         turnCommit: true,
-        settlesTurn: true,
+        settlesTurn: Boolean(settlesTurn),
+        locutionClosed,
         turnId: turnIdDeLaFila,
       })
       if (delivered) {
@@ -1750,7 +1758,9 @@ export function handleConversationStreamSync(
     //
     // Si la locucion ya estaba confirmada (`locutionClosed`), la memoria se resetea y
     // la frase viva se deja en pantalla (pertenece al dictado siguiente).
-    if (delivered || yaEstaEnFila || ambientRowBlocked) vaciarTrasCierre()
+    // `locutionClosed` sin `settlesTurn`: el TURNO sigue abierto y el vaciado de la caja lo
+    // hace el dueno de la frontera (el ingress), que acaba de escribir esta fila.
+    if (settlesTurn && (delivered || yaEstaEnFila || ambientRowBlocked)) vaciarTrasCierre()
   }
   commitTurnToSessionRows(capture, speakerEscrito, { replaceLast })
   // `lastEmittedTranscriptRef` es el texto de la ULTIMA locucion EMITIDA y ademas la FUENTE
