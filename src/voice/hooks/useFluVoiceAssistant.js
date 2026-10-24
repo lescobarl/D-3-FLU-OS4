@@ -1655,7 +1655,7 @@ const lastResolvedTurnRef = useRef(0)
         lastSpeakerRef.current ||
         getSpeakerLabel(listenStateRef.current),
       )
-      recordSessionTurn({ kind: 'commit', text: capture, speaker, signature: lastTurnSignatureRef.current, clusters: speakerClustersRef.current, lastSpeaker: lastSpeakerRef.current, primary: sessionPrimarySpeakerRef.current, audioStartSample: turnAudioStartSampleRef.current, audioEndSample: chunkTotalSamplesRef.current, sessionTurnId: activeTurnIdRef.current })
+      recordSessionTurn({ kind: 'commit', text: capture, speaker, signature: lastTurnSignatureRef.current, clusters: speakerClustersRef.current, lastSpeaker: lastSpeakerRef.current, primary: sessionPrimarySpeakerRef.current, audioStartSample: turnAudioStartSampleRef.current, audioEndSample: chunkTotalSamplesRef.current, tramoValido: chunkTotalSamplesRef.current > turnAudioStartSampleRef.current, sessionTurnId: activeTurnIdRef.current })
 
       if (!isFluSpeaker(speaker)) {
         archiveCommittedTurn(listenStateRef.current, capture, {
