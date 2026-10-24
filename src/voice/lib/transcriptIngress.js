@@ -858,18 +858,10 @@ export function processMicConversationIngress({ interimChunks = [], finalChunks 
   ctx.ingressSource = 'mic'
 
   for (const finalChunk of commitList) {
+    // ESTADO (dos preguntas, un solo dueno): el final ABSORBE al interino cuando NO abre
+    // otra locucion (misma revision del ASR o crecimiento del dictado).
     interimAbsorbedByFinal =
-      Boolean(interim) &&
-      (() => {
-        const capturePreview = cleanForSpeech(finalChunk)
-        return (
-          capturePreview === interim ||
-          capturePreview.startsWith(interim) ||
-          interim.startsWith(capturePreview) ||
-          utterancesRelate(capturePreview, interim) ||
-          utterancesSameRevision(capturePreview, interim)
-        )
-      })()
+      Boolean(interim) && !estadoDeLocucion(interim, cleanForSpeech(finalChunk)).locucionNueva
 
     ctx.interimAbsorbedByFinal = interimAbsorbedByFinal
 

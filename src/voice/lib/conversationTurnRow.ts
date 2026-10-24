@@ -763,6 +763,31 @@ export function updateTurnRowSpeaker(
     return true;
 }
 
+/**
+ * TRAMO valido: dos enteros con `fin > inicio`. Un tramo invalido no identifica audio.
+ * @param tramo
+ * @returns tramo canonico o null
+ */
+function normalizarTramo(tramo?: { inicio?: number; fin?: number } | null): { inicio: number; fin: number } | null {
+    const inicio = Number(tramo?.inicio);
+    const fin = Number(tramo?.fin);
+    if (!Number.isFinite(inicio) || !Number.isFinite(fin) || fin <= inicio) return null;
+    return { inicio, fin };
+}
+
+/**
+ * ¿Los dos tramos son el MISMO audio? Dueno unico (lo usan el escritor de la fila y sus
+ * consumidores). Sin tolerancia: el tramo es una medida en muestras, no una estimacion.
+ * @param a
+ * @param b
+ * @returns true si son el mismo tramo
+ */
+export function mismoTramo(a?: { inicio?: number; fin?: number } | null, b?: { inicio?: number; fin?: number } | null): boolean {
+    const uno = normalizarTramo(a);
+    const otro = normalizarTramo(b);
+    return Boolean(uno && otro && uno.inicio === otro.inicio && uno.fin === otro.fin);
+}
+
 export interface UserTurnRowInput {
     /** Frase canónica de la locución (con wake word, tal como se muestra). */
     text: string;
@@ -792,6 +817,12 @@ export interface UserTurnRowInput {
      * resolucion. Es el UNICO criterio de reutilizacion de la fila.
      */
     turnId: number | string | null;
+    /**
+     * TRAMO de audio de la locucion (muestras absolutas). Es la IDENTIDAD del audio: dos
+     * commits con el mismo tramo son la MISMA locucion y comparten fila (ETAPA 1/3).
+     * Un tramo invalido (`fin <= inicio`) se ignora: no identifica nada.
+     */
+    tramo?: { inicio: number; fin: number } | null;
 }
 
 export type UserTurnRowAction = 'replaced' | 'reused' | 'added' | 'skipped';
@@ -876,6 +907,7 @@ function commitUserTurnRowInner({
     signature = null,
     sentiment = 'neutral',
     epoch,
+    tramo: tramoDeEntrada = null,
 }: UserTurnRowInput): UserTurnRowResult {
     const raw = String(text || '');
     const norm = cleanForSpeech(raw).toLowerCase();
@@ -925,6 +957,26 @@ function commitUserTurnRowInner({
     const hayRotuloPropio =
         evidenciaAcustica || String(resolved || '').trim() !== respaldoHablante;
     const stamp = typeof timestamp === 'number' ? timestamp : Date.now();
+
+    // 0) MISMO TRAMO = MISMA LOCUCION (ETAPA 3): si este commit trae el tramo de una fila
+    // que ya existe en el epoch, es el MISMO audio (el ASR reemitió la locucion). Se
+    // reutiliza esa fila: una locucion = un tramo = una fila (R1).
+    const tramo = normalizarTramo(tramoDeEntrada);
+    if (tramo) {
+        const misma = [...history]
+            .reverse()
+            .find(
+                (e) =>
+                    e?.role === 'user' &&
+                    Number(e?.epoch ?? epochDeLaFila) === Number(epochDeLaFila) &&
+                    mismoTramo(e?.tramo, tramo),
+            );
+        if (misma) {
+            if (!esNombrePropioDeFila(misma) && hayRotuloPropio) freezeResolvedSpeakerName(store, misma.id, etiquetaDeLaFila);
+            rememberTurn(turnId, misma.id);
+            return { id: misma.id, action: 'reused' };
+        }
+    }
 
     // 1) Emisión que crece: la fila del turno se reutiliza (UNA), pero su TEXTO no se
     //    reescribe — la conversación solo se INSERTA (spec del dueño 2026-10-12). El texto
@@ -1023,6 +1075,7 @@ function commitUserTurnRowInner({
         // SIN IDENTIDAD al escribir: la fila lleva la CONTINUIDAD (nunca "?") y queda marcada
         // para que el resolutor la complete cuando llegue la medida de su turno.
         ...(faltabaIdentidad ? { speakerPending: true } : {}),
+        ...(tramo ? { tramo } : {}),
         timestamp: stamp,
         sentiment,
         signature: normalizeRowSignature(signature),

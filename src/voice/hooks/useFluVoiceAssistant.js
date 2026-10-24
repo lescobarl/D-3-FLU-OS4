@@ -1613,6 +1613,7 @@ const lastResolvedTurnRef = useRef(0)
         turnId: turnIdDeLaFila ?? activeTurnIdRef.current,
         timestamp: currentClock,
         signature: lastTurnSignatureRef.current,
+        tramo: tramoDelTurno({ chunks: chunksRef.current, totalSamples: chunkTotalSamplesRef.current, sinceSample: turnAudioStartSampleRef.current, sampleRate: sampleRateRef.current }),
         language: detectTranscriptLanguage(capture),
       }
       const debugMeta = { text: capture, speaker: speakerName, replaceLast: replaceLastRawLog }
@@ -4220,7 +4221,6 @@ const lastResolvedTurnRef = useRef(0)
         // Fallback local (recuperacion -> rebuild -> degradacion): decide y ejecuta
         // el dueno unico `useLocalAsrFallback`; aqui solo se respeta el orden.
         if (fallback.watchdogTick() === 'handled') return
-
 
         const sinceResult = now - (lastOnresultAtRef.current || 0)
         const openLine = cleanForSpeech(

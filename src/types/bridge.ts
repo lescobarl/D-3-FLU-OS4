@@ -108,6 +108,11 @@ export interface ConversationEntry {
      * resolutor la completa cuando llega la medida de su turno y limpia esta marca.
      */
     speakerPending?: boolean;
+    /**
+     * TRAMO de audio de la locucion (muestras absolutas): identidad del AUDIO. Dos filas con
+     * el mismo tramo son la misma locucion (una locucion = un tramo = una fila).
+     */
+    tramo?: { inicio: number; fin: number } | null;
     /** Firma de embedding (OS2: signature) */
     signature?: number[] | null;
     /** Fase de la conversación (OS2: phase) */

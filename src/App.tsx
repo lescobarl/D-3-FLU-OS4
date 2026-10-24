@@ -1216,6 +1216,7 @@ function App() {
                     sentiment: detectSentiment(transcript),
                     evidenciaAcustica: resolved?.evidenciaAcustica === true,
                     replaceLast: resolved?.replaceLastRawLog === true,
+                    tramo: (resolved as { tramo?: { inicio: number; fin: number } | null })?.tramo ?? null,
                     // ACUÑADO EN EL LLAMADOR (auditoria 2026-10-23): el turno se conoce aqui.
                     turnId: resolved?.turnId ?? `app-${Date.now()}`,
                 });
@@ -4481,4 +4482,3 @@ const {
 }
 
 export default App;
-
