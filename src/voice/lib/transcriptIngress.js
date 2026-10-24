@@ -886,6 +886,13 @@ function ingestInterimChunk({ interim, ctx }) {
     // dejaba al silencio con la linea de la locucion SIGUIENTE y escribia una fila extra
     // (medido en playback 8f3112c2: "Es algo extraño Porque muchos de ustedes creo").
     if (mismoTramoPendiente) listenState.pendingFinal = cerrada
+    // MEDIDA DE VOZ POR LOCUCION: la ventana de audio es la de ESTA locucion, no la del
+    // dictado. Se abre el segmento en la frontera (silencio) y se pide SU medida; el id de
+    // la locucion nueva ya lo acuno el commit de la fila cerrada, asi que la medida cae en
+    // el slot correcto. Sin esto la 2 heredaba la firma/etiqueta de la 1.
+    if (typeof ctx.markAudioSegmentStart === 'function') ctx.markAudioSegmentStart(nowPerf())
+    if (ctx.preflightScheduledForTurnRef) ctx.preflightScheduledForTurnRef.current = false
+    ctx.scheduleIdentityPreflight?.({ utterance: cleanedInterim })
     ctx.vaciarLaCaja?.()
     listenState.fronteraCerrada = cerrada
     fluTrace('ingress', 'locucion-frontera-audio', {

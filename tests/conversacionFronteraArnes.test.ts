@@ -57,6 +57,7 @@ type ArnésReplay = {
     getIngressVoiceContext?: unknown
     nowMs?: () => number
     scheduleIdentityPreflight?: (payload?: { utterance?: string }) => void
+    markAudioSegmentStart?: (atMs?: number) => void
   }
   observed: {
     rows: Array<{ text: string; speaker: string }>
@@ -87,7 +88,9 @@ function createArnés() {
   bindings.getIngressVoiceContext = () => ({ audioFrontera: 0 })
   bindings.nowMs = () => ahora
   /** Avisos de medida de voz pedidos (una entrada por VENTANA medida). */
-  const medidas: Array<{ utterance: string }> = []
+  const medidas: Array<{ utterance: string; turnId: number }> = []
+  /** Aperturas de ventana de audio (`markAudioSegmentStart`). */
+  let segmentos = 0
   const runtime = createConversationIngressRuntime({ getBindings: () => bindings })
   return {
     deps,
@@ -95,13 +98,19 @@ function createArnés() {
     observed,
     refs,
     medidas,
+    get segmentos() {
+      return segmentos
+    },
     /** Enciende el aviso de identidad con la MISMA guarda que el hook (`preflightScheduledForTurnRef`). */
     activarMedidaDeVoz() {
       refs.preflightScheduledForTurnRef.current = false
+      bindings.markAudioSegmentStart = () => {
+        segmentos += 1
+      }
       bindings.scheduleIdentityPreflight = (payload = {}) => {
         if (refs.preflightScheduledForTurnRef.current) return
         refs.preflightScheduledForTurnRef.current = true
-        medidas.push({ utterance: String(payload.utterance || '') })
+        medidas.push({ utterance: String(payload.utterance || ''), turnId: refs.activeTurnIdRef.current })
       }
     },
     avanzar(ms: number) {
@@ -194,22 +203,23 @@ describe('una locucion = un id de turno (minteo) y una medida de voz', () => {
     expect(ids[0], 'la locucion 2 NO reutiliza el id de la 1').not.toBe(ids[1])
   })
 
-  // L1 DECLARADA (medida de voz): el aviso de identidad se pide UNA vez por dictado
-  // (`preflightScheduledForTurnRef`), no una vez por locucion. La locucion 2 NO tiene
-  // medida propia: hereda la firma/etiqueta de la 1. Cuando exista la medida por locucion
-  // este test se pone ROJO y hay que pasarlo a `it` (protocolo del repo, como el `it.fails`
-  // del tramo real). NO se declara diarizacion cerrada.
-  it.fails('L1: cada locucion pide SU medida de voz (dos firmas distintas)', () => {
+  it('cada locucion pide SU medida de voz (la firma NO es del dictado)', () => {
     const h = createArnés()
     h.activarMedidaDeVoz()
     h.interim(LOCUCION_1)
     h.avanzar(2000)
-    h.interim(LOCUCION_2) // frontera
+    h.interim(LOCUCION_2) // frontera: abre la ventana de la locucion 2
     h.avanzar(500)
     h.interim(`${LOCUCION_2} otra vez`) // la locucion 2 sigue dictandose
     h.end()
 
     expect(h.medidas, 'una medida por LOCUCION, no una por dictado').toHaveLength(2)
+    expect(h.medidas[0].utterance).toContain('voy a decir')
+    expect(h.medidas[1].utterance, 'la 2 se mide con SU texto').toContain('magistrado Luis')
+    // La ventana se abre dos veces (inicio del dictado y frontera) y la medida de la 2 ya
+    // lleva el id de la locucion NUEVA (el commit de la frontera lo acuño antes).
+    expect(h.segmentos, 'una ventana de audio por locucion').toBe(2)
+    expect(h.medidas[1].turnId, 'la medida 2 cae en el turno de la locucion 2').toBe(2)
   })
 
   it('con una medida por locucion, dos firmas distintas dan DOS etiquetas', async () => {

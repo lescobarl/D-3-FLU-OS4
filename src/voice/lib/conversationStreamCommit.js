@@ -1775,6 +1775,16 @@ export function handleConversationStreamSync(
   // como duplicado -> la locucion entera se perdia sin fila (defecto medido P9.59).
   finalizeAndNotify()
 
+  // MINTEO DE LA LOCUCION SIGUIENTE (frontera de audio): una locucion cerrada termina el
+  // TURNO DE HABLA, asi que el id siguiente se acuña AQUI y no en su primer interino. Sin
+  // esto, la MEDIDA de voz que el ingress pide justo despues (la de la locucion nueva)
+  // caia en el slot de la locucion CERRADA y la 2 heredaba la firma de la 1.
+  if (locutionClosed && !settlesTurn) {
+    openPreviewTurnRef.current = false
+    activeTurnIdRef.current += 1
+    openPreviewTurnRef.current = true
+  }
+
   if (import.meta.env.DEV && debugHotPath) {
     fluDebugHot('stream-commit', {
       capture,
