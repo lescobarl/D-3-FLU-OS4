@@ -9,13 +9,22 @@
  *
  * A: la fila 5 del replay (id de fuente 1792789182623, 22 palabras) llevaba DOS locuciones
  *    pegadas (la segunda es la fila 1792789202635). NO se corrige uniendo: se corrige con
- *    el tramo/frontera. Aqui se fija lo unico demostrable sin audio por evento: la caja no
- *    pega una locucion ajena, y las dos locuciones son DOS (no una variante).
+ *    el tramo/frontera. Hoy el tramo es la ventana del TURNO (limitacion L1 declarada en
+ *    docs/cola-conversacion.md): dos locuciones sin pausa suficiente comparten tramo y fila,
+ *    y ESO SE FIJA AQUI para que nadie venda "una locucion = una fila" como cerrado.
  */
 import { describe, expect, it } from 'vitest'
 import { unirVariantesDelMismoTramo } from '../src/voice/lib/transcriptIngress.js'
 import { crearCajaDeLaFrase, resolverEmisionDeLaCaja } from '../src/voice/lib/conversationStreamCommit.js'
 import { estadoDeLocucion } from '../src/voice/core/locucion.js'
+import { useIntegrationStore } from '../src/store/integrationStore'
+import { commitUserTurnRow } from '../src/voice/lib/conversationTurnRow'
+
+const filas = () => useIntegrationStore.getState().conversationHistory
+
+beforeEach(() => {
+  useIntegrationStore.setState({ conversationHistory: [], conversationEpoch: 0 } as never)
+})
 
 /** Los TRES finales del evento t=1792789332116, tal cual los emitio el motor. */
 const FINAL_CON_ESTO_Y_ESCUCHA =
@@ -104,6 +113,26 @@ describe('DEFECTO A — dos locuciones no se pegan (se separan por tramo/fronter
     expect(decision.aplica).toBe(false)
     expect(decision.motivo).toBe('bloqueado')
     expect(decision.destino).not.toContain('magistrado')
+  })
+
+  it('LIMITACION L1 (declarada): el tramo del TURNO cubre las dos y reutiliza la fila', () => {
+    // El tramo de la fila es la ventana CON VOZ del turno: las dos locuciones caen dentro.
+    // Mientras el tramo sea del turno (y no de la locucion) esto es una LIMITACION, no un
+    // comportamiento cerrado: queda escrito para que no se venda como "una fila por locucion".
+    const tramoDelTurno = { inicio: 0, fin: 96000 }
+    const primera = commitUserTurnRow({ text: LOCUCION_1, turnId: 1, tramo: tramoDelTurno })
+    const segunda = commitUserTurnRow({ text: LOCUCION_2, turnId: 2, tramo: tramoDelTurno })
+
+    expect(primera.action).toBe('added')
+    expect(segunda.action, 'mismo tramo del turno = misma fila (L1, NO cerrado)').toBe('reused')
+    expect(filas()).toHaveLength(1)
+  })
+
+  it('MUTACION: con tramos DISTINTOS la frontera si separa las dos locuciones', () => {
+    commitUserTurnRow({ text: LOCUCION_1, turnId: 1, tramo: { inicio: 0, fin: 96000 } })
+    commitUserTurnRow({ text: LOCUCION_2, turnId: 2, tramo: { inicio: 168000, fin: 264000 } })
+
+    expect(filas(), 'la salida real es el VAD por locucion (Etapa 1)').toHaveLength(2)
   })
 
   it('MUTACION: la MISMA locucion creciendo SI entra en la caja (no se bloquea todo)', () => {
