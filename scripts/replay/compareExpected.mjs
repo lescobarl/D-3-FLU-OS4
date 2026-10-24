@@ -736,10 +736,15 @@ export function compareExpected({ observed, expected, options = {} } = {}) {
     name: 'boxShrink',
     ok: acortes.length === 0,
     detail: acortes.length
-      ? `${acortes.length} acorte(s) aplicados; primero: ${acortes[0].previo} -> ${acortes[0].destino} chars`
-      : canonicos.length
-        ? `ningun acorte de jitter; ${canonicos.length} transferencia(s) de la frase canonica`
-        : 'ningun acorte aplicado en la caja',
+      ? `${acortes.length} acorte(s) de jitter aplicados; primero: ${acortes[0].previo} -> ${acortes[0].destino} chars`
+      : 'ningun acorte de jitter en la caja',
+  })
+  // TRANSFERENCIAS DE LA FRASE CANONICA: metrica APARTE (legitima por diseno: el canon
+  // quita el tartamudeo). No se esconde dentro de boxShrink.
+  checks.push({
+    name: 'boxCanonica',
+    ok: true,
+    detail: `${canonicos.length} transferencia(s) de la frase canonica (acorte del canon, no jitter)`,
   })
 
   // FILA MAS CORTA QUE LA CAJA de su MISMA locucion (numero §3.3). Si la caja del instante

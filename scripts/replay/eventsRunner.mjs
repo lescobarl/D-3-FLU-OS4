@@ -218,6 +218,7 @@ export function buildHarness(app, clock) {
     debugHotPath: false,
     fluDebugHot: () => {},
     getIngressVoiceContext: () => ({}),
+    nowMs: () => clock.now(),
     tryDispatchConversationAction: () => false,
     flushTranscriptOnFinal: () => {},
     flushPcmAfterTurnCommit: () => {},

@@ -74,6 +74,9 @@ export function buildConversationIngressCtx(bindings = {}) {
     // FRONTERA DE AUDIO (VAD por evento): posicion en muestras del fin de la locucion
     // que el segmentador ya cerro. La escribe el hook (unico que ve el PCM del turno).
     getAudioFrontera: () => Number(bindings.getIngressVoiceContext?.()?.audioFrontera || 0),
+    // RELOJ UNICO de la decision de frontera: en vivo Date.now; el replay/playback inyecta
+    // el `t` del evento (la frontera y la quietud usan EL MISMO reloj).
+    nowMs: () => (typeof bindings.nowMs === 'function' ? Number(bindings.nowMs()) : Date.now()),
     onTurnFinalized: () => bindings.onTurnFinalized?.(),
     peekTurnBridgeText: () => bindings.peekTurnBridgeText?.() || '',
     stashTurnBridgeText: (text) => bindings.stashTurnBridgeText?.(text),

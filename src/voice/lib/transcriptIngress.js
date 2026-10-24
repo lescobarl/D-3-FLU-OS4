@@ -811,7 +811,8 @@ function ingestInterimChunk({ interim, ctx }) {
   const fronteraAudio = Number(ctx.getAudioFrontera?.() || 0)
   const lineaAbierta = cleanForSpeech(readTurnLive(listenState) || '')
   const fronteraConsumida = Number(listenState.audioFronteraConsumida) || 0
-  const quietudDeLaLineaMs = Date.now() - Number(listenState.openLineLastTouchMs || 0)
+  const ahoraMs = Number(ctx.nowMs?.() ?? Date.now())
+  const quietudDeLaLineaMs = ahoraMs - Number(listenState.openLineLastTouchMs || 0)
   if (hayFronteraDeAudio({ frontera: fronteraAudio, consumida: fronteraConsumida, lineaAbierta, texto: cleanedInterim, quietaMs: quietudDeLaLineaMs, minQuietaMs: getVadSegmentConfig().minSilenceMs })) {
     listenState.audioFronteraConsumida = fronteraAudio
     // La locucion cerrada se escribe por la puerta del commit; el TURNO sigue abierto
