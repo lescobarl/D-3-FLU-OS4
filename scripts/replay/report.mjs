@@ -235,10 +235,12 @@ export function printReport(report, io = {}) {
   // TRIAGE de la fuente (siempre visible): sin clasificar o bug => el replay NO esta resuelto.
   if (report.sourceTriage) {
     const t = report.sourceTriage
+    // Solo DOS clases existen (duplicado exacto de la fuente o bug): el triage no puede
+    // nombrar clases retiradas sin mentir (una lista vacia siempre daria 0).
+    const copias = (filas) => filas.filter((f) => f.clase === 'duplicado-exacto-de-fuente').length
     print(
-      `  triage   missing ${t.missing.length} (cola-sin-final ` +
-        `${t.missing.filter((f) => f.clase === 'cola-sin-final').length}, bug ${report.bugsMissing}) · ` +
-        `extra ${t.extra.length} (habla-del-asr ${t.extra.filter((f) => f.clase === 'habla-del-asr').length}, bug ${report.bugsExtra}) · ` +
+      `  triage   missing ${t.missing.length} (copia exacta ${copias(t.missing)}, bug ${report.bugsMissing}) · ` +
+        `extra ${t.extra.length} (repetida ${copias(t.extra)}, bug ${report.bugsExtra}) · ` +
         `sin clasificar ${report.unclassifiedMissing + report.unclassifiedExtra}`,
     )
   }
