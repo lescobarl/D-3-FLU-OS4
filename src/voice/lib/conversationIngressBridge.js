@@ -71,6 +71,9 @@ export function buildConversationIngressCtx(bindings = {}) {
         ? bindings.getIngressVoiceContext()
         : {},
     markAudioSegmentStart: (atMs) => bindings.markAudioSegmentStart?.(atMs),
+    // FRONTERA DE AUDIO (VAD por evento): posicion en muestras del fin de la locucion
+    // que el segmentador ya cerro. La escribe el hook (unico que ve el PCM del turno).
+    getAudioFrontera: () => Number(bindings.getIngressVoiceContext?.()?.audioFrontera || 0),
     onTurnFinalized: () => bindings.onTurnFinalized?.(),
     peekTurnBridgeText: () => bindings.peekTurnBridgeText?.() || '',
     stashTurnBridgeText: (text) => bindings.stashTurnBridgeText?.(text),

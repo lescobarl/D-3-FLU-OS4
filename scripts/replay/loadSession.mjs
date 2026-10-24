@@ -103,7 +103,7 @@ export function loadSession({ dir, mode = 'events' } = {}) {
 
   const { manifest, meta } = readSessionManifest(sessionDir)
   const events = readNdjson(join(sessionDir, 'events.ndjson')) || []
-  if (mode === 'events') {
+  if (mode === 'events' || mode === 'playback') {
     if (!existsSync(join(sessionDir, 'events.ndjson'))) {
       throw new SessionError('missing-events', `la sesion no tiene events.ndjson: ${sessionDir}`, { dir: sessionDir })
     }
@@ -117,6 +117,14 @@ export function loadSession({ dir, mode = 'events' } = {}) {
         `sesion INCOMPLETA: el manifiesto declara ${declaredEvents} eventos y hay ${events.length}`,
         { declared: declaredEvents, actual: events.length },
       )
+    }
+  }
+
+  if (mode === 'playback') {
+    const audio =
+      existsSync(join(sessionDir, 'audio.wav')) ? join(sessionDir, 'audio.wav') : existsSync(join(sessionDir, 'audio.pcm')) ? join(sessionDir, 'audio.pcm') : ''
+    if (!audio) {
+      throw new SessionError('missing-audio', `playback exige audio (audio.wav / audio.pcm): ${sessionDir}`, { dir: sessionDir })
     }
   }
 

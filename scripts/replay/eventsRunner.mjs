@@ -32,7 +32,7 @@ const REBUILD = 'rebuild'
  * @param {{ now: () => number }} clock reloj virtual del replay
  * @returns {{ deps: object, bindings: object, observed: object, refs: object }}
  */
-function buildHarness(app, clock) {
+export function buildHarness(app, clock) {
   const { createActiveListenState, handleConversationStreamSync, crearCajaDeLaFrase, readTurnLive, utterancesSameRevision } = app
   const observed = {
     rows: [],

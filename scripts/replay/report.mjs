@@ -160,7 +160,7 @@ export function buildReport(input) {
       detalleDuplicadas: classification.duplicadas || [],
     },
     // PLAYBACK (ETAPA 6): misma tuberia; comparable solo con ASR determinista.
-    playback: declararPlayback(input.session?.events || []),
+    playback: input.observed?.playback || declararPlayback(input.session?.events || []),
     notCovered: input.notCovered || input.comparison?.notCovered || [],
     boxStall: input.observed?.boxStall || null,
     box: {

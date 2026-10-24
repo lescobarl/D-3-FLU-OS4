@@ -3,6 +3,7 @@
  */
 import { cleanForSpeech, pickBestRecognitionTranscript, stripDiacritics } from './audioMath.js'
 import { estadoDeLocucion } from '../core/locucion.js'
+import { hayFronteraDeAudio } from '../core/tramoDeLocucion.js'
 import { FLU_CONFIG } from './fluConfig.js'
 import {
   analyzeWakeTurn,
@@ -866,6 +867,40 @@ function ingestInterimChunk({ interim, ctx }) {
   }
 
   // §9: ÚNICA FUENTE DE VERDAD del texto del turno (misma que finales).
+  // FRONTERA DE AUDIO (VAD por evento): el segmentador cerro el habla (>= minSilenceMs)
+  // aunque el reloj del turno aun no (srGapCommitMs es MAS largo). La locucion ABIERTA se
+  // cierra por la puerta real y la linea arranca limpia: dos locuciones = DOS filas.
+  const fronteraAudio = Number(ctx.getAudioFrontera?.() || 0)
+  const lineaAbierta = cleanForSpeech(readTurnLive(listenState) || '')
+  const fronteraConsumida = Number(listenState.audioFronteraConsumida) || 0
+  if (hayFronteraDeAudio({ frontera: fronteraAudio, consumida: fronteraConsumida, lineaAbierta, texto: cleanedInterim })) {
+    listenState.audioFronteraConsumida = fronteraAudio
+    // La locucion cerrada se escribe por la puerta del commit; el TURNO sigue abierto
+    // (`settlesTurn: false`) para que el final del ASR de ESTA misma locucion llegue
+    // como revision y REEMPLACE la fila en vez de abrir otra (una locucion = una fila).
+    ctx.scheduleTurnCommit?.({
+      capture: lineaAbierta,
+      utterance: lineaAbierta,
+      turnCommit: true,
+      locutionClosed: true,
+      freshUtterance: true,
+      forceNewRow: false,
+    })
+    listenState.openLine = ''
+    listenState.pendingInterim = ''
+    listenState.openLineBook = null
+    clearInterimOpenLineClock(listenState)
+    ctx.vaciarLaCaja?.()
+    fluTrace('ingress', 'locucion-frontera-audio', {
+      frontera: fronteraAudio,
+      cerrada: lineaAbierta.slice(-80),
+    })
+  } else if (fronteraAudio > fronteraConsumida && !lineaAbierta) {
+    // Sin linea abierta no hay nada que cerrar: la frontera queda consumida para no
+    // partir despues una linea que ya empezo DESPUES de ese silencio.
+    listenState.audioFronteraConsumida = fronteraAudio
+  }
+
   let interimForPacket = resolveIngressCaptureText(cleanedInterim, lastCommitted, { atFreshVoice })
   if (pendingBridge) {
     interimForPacket = mergeTurnBridgeWithInterim(pendingBridge, interimForPacket)

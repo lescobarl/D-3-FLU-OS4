@@ -26,3 +26,6 @@ export function tramoDelTurno({ chunks = [], totalSamples = 0, sinceSample = 0, 
     tramoValido: hayVoz === true && fin > inicio,
   }
 }
+
+// Frontera de AUDIO por locucion (VAD por evento): misma unidad que el tramo.
+export { crearDetectorDeFronteras, hayFronteraDeAudio } from './tramoDeLocucion.js'

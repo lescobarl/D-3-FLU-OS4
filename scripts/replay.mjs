@@ -27,7 +27,7 @@ import { installDeterministicEnv } from './replay/deterministicEnv.mjs'
 import { compararSpeakers, compareExpected, growingPrefixRun, duplicatedBlock, locucionesConEtiquetasDistintas } from './replay/compareExpected.mjs'
 import { buildReport, printReport, writeReport } from './replay/report.mjs'
 
-const MODES = ['events', 'vectors']
+const MODES = ['events', 'vectors', 'playback']
 /** Tope de pared por defecto del replay (ms). Se cambia con `--timeout`. */
 const DEFAULT_TIMEOUT_MS = 120000
 /** Prefijo minimo (palabras) para considerar dos textos "el mismo tramo" con otra grafia. */
@@ -63,10 +63,11 @@ function parseArgs(argv = []) {
 
 function usage() {
   return [
-    'uso: npm run replay -- --session <carpeta> --mode events|vectors [--expected <archivo>] [--report <archivo>]',
+    'uso: npm run replay -- --session <carpeta> --mode events|vectors|playback [--expected <archivo>] [--report <archivo>]',
     '',
     '  --session <carpeta>        carpeta de la grabacion (manifest.json + NDJSON del modo)',
     '  --mode events              filas y caja (exige events.ndjson)',
+    '  --mode playback            filas y caja desde el AUDIO (VAD real) + ASR stub',
     '  --mode vectors             hablantes: reconstruye el estado previo y llama al resolutor real',
     '  --expected <archivo>       expected.json APROBADO (separado de la grabacion)',
     '  --report <archivo>         escribe el reporte JSON',
@@ -295,9 +296,13 @@ async function main() {
   let observed
   try {
     // El runner se carga DESPUES del reloj virtual (ver cabecera: import estatico roto).
-    const { runEventsSession } = await import('./replay/eventsRunner.mjs')
+    // Mismo arnes, mismo comparador: solo cambia quien alimenta el audio.
+    const runner =
+      args.mode === 'playback'
+        ? (await import('./replay/playbackRunner.mjs')).runPlaybackSession
+        : (await import('./replay/eventsRunner.mjs')).runEventsSession
     observed = await conTimeout(
-      runEventsSession({ session, clock, inferMarks: args.inferMarks }),
+      runner({ session, clock, inferMarks: args.inferMarks }),
       args.timeoutMs,
       setTimeoutReal,
       clearTimeoutReal,
