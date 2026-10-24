@@ -2,6 +2,7 @@
  * ingestFinalChunk: flush absoluto + final-only + commit async vía hook.
  */
 import { cleanForSpeech, pickBestRecognitionTranscript } from './audioMath.js'
+import { estadoDeLocucion } from '../core/locucion.js'
 import { FLU_CONFIG } from './fluConfig.js'
 import {
   analyzeWakeTurn,
@@ -411,12 +412,9 @@ function ingestFinalChunk({ finalChunk, ctx }) {
   // nueva. Reproducido: sin esto la locucion larga (1112 chars) quedaba sin fila.
   const pendientePrevio = cleanForSpeech(ctx.listenState?.pendingFinal || '')
   const finalLimpio = cleanForSpeech(finalChunk || '')
-  if (
-    pendientePrevio &&
-    finalLimpio &&
-    !utterancesRelate(pendientePrevio, finalLimpio) &&
-    !utterancesSameRevision(pendientePrevio, finalLimpio)
-  ) {
+  // ESTADO (dos preguntas, no un `||`): el pendiente solo se vuelca cuando lo que llega
+  // abre OTRA locucion; una revision del ASR o un crecimiento NO lo vuelcan.
+  if (pendientePrevio && finalLimpio && estadoDeLocucion(pendientePrevio, finalLimpio).locucionNueva) {
     ctx.scheduleTurnCommit?.({
       capture: pendientePrevio,
       utterance: pendientePrevio,
