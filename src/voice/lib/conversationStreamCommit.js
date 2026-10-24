@@ -1190,6 +1190,11 @@ export function handleConversationStreamSync(
     if (prevNorm.length >= 10 && nextNorm.length > prevNorm.length && nextNorm.startsWith(prevNorm)) return true
     return false
   }
+  // MINTEO DEL ID: se acuña al ABRIR el turno de habla. En el pipeline de micro ese "turno"
+  // es la LOCUCION: la frontera de audio cierra el turno vivo (`openPreviewTurnRef=false` al
+  // emitir la fila de la locucion cerrada), asi que la locucion siguiente vuelve a acuñar y
+  // NO reutiliza la fila de la anterior. El id es, por tanto, la identidad de la LOCUCION
+  // en la fila (mismo id = re-emision de la misma locucion).
   const ensureTurnId = (isTurn, sameLive, sameLocution = false) => {
     if (!isTurn) return
     if (openPreviewTurnRef.current) return

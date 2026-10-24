@@ -828,6 +828,8 @@ export interface UserTurnRowInput {
      * Identidad del TURNO (obligatoria): la produce el dueno del turno al ABRIRLO
      * y la comparten el commit temprano, la emision que crece, el log crudo y la
      * resolucion. Es el UNICO criterio de reutilizacion de la fila.
+     * En el pipeline de micro el id se acuña por LOCUCION (la frontera de audio cierra el
+     * turno vivo): mismo id = re-emision de la misma locucion; locucion nueva = otro id.
      */
     turnId: number | string | null;
     /**

@@ -68,9 +68,18 @@ la frontera de audio. Guard: `tests/conversacionEtapa3UnaFilaPorTramo.test.ts` (
 locuciones, MISMA `turnWindow` -> DOS filas; mutacion con la identidad por ventana -> rojo;
 guard de fuente que prohibe `mismoTramo`/`e?.tramo`/`tramoDeEntrada` en el escritor).
 
-Sigue en pie la limitacion L1 de la **medicion** (Etapa 1): `tramoDelTurno` mide la ventana
-del TURNO, no el segmento de cada locucion. Ya NO afecta a la identidad ni al numero de
-filas.
+Sigue en pie la limitacion L1 de la **medicion** (Etapa 1), en dos piezas medidas:
+
+1. `tramoDelTurno` mide la ventana del TURNO, no el segmento de cada locucion. Ya NO afecta
+   a la identidad ni al numero de filas.
+2. **La firma de voz / etiqueta se mide UNA vez por dictado, no por locucion**: el aviso de
+   identidad se pide una sola vez (`preflightScheduledForTurnRef`) y la locucion 2 hereda la
+   medida de la 1. Medido con el arnes real: 2 locuciones -> **1 medida**. Fijado con
+   `it.fails` en `tests/conversacionFronteraArnes.test.ts` ("L1: cada locucion pide SU medida
+   de voz"): el gate queda verde y ese test se pone ROJO cuando exista la medida por
+   locucion (entonces se pasa a `it`). Con dos medidas sembradas, el commit SI produce dos
+   etiquetas (test hermano en el mismo archivo): lo que falta es la MEDIDA, no la escritura.
+   **Diarizacion NO cerrada.**
 
 ## Defectos A y B (decision del dueno 2026-10-23)
 

@@ -176,6 +176,9 @@ export function buildHarness(app, clock) {
       // su tramo (la wake y su cola), asi que no se compara contra la linea viva entera.
       text: String(text || ''),
       commandTurn: options?.commandTurn === true,
+      // ID con el que se acuño la fila: la frontera cierra el turno vivo y la locucion
+      // siguiente recibe OTRO id (una locucion = un id = una fila). Es dato de medida.
+      turnId: options?.turnId ?? null,
       replacedLast: replaceLast,
       locutionClosed: options?.locutionClosed === true,
       closeTurnOnly: options?.closeTurnOnly === true,

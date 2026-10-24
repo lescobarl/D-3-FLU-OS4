@@ -57,12 +57,15 @@ describe('ETAPA 3 — la ventana del turno NO decide la fila', () => {
     expect((filas()[0] as { turnWindow?: unknown }).turnWindow).toBeUndefined()
   })
 
-  it('la identidad de la fila sigue siendo el TURNO (mismo turnId = misma fila)', () => {
+  it('la identidad es el ID ACUÑADO: el mismo id es una re-emisión de la MISMA locución', () => {
+    // El id lo acuña el dueño del turno al abrirlo; en el pipeline de micro se acuña por
+    // LOCUCIÓN (la frontera cierra el turno vivo). Dos locuciones distintas NO llegan aquí
+    // con el mismo id: reciben ids distintos en la frontera (medido en el arnés real).
     const primera = commitUserTurnRow({ text: 'hola a todos', turnId: 7, turnWindow: VENTANA_DEL_TURNO })
     const reemision = commitUserTurnRow({ text: 'hola a todos', turnId: 7, turnWindow: VENTANA_DEL_TURNO })
 
     expect(primera.action).toBe('added')
-    expect(reemision.action, 'el mismo turno reutiliza su fila').toBe('reused')
+    expect(reemision.action, 'la re-emisión de la misma locución reutiliza su fila').toBe('reused')
     expect(filas()).toHaveLength(1)
   })
 
