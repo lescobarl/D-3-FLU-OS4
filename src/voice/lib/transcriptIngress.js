@@ -307,6 +307,15 @@ export function flushSrGapSegmentThroughIngress(ctx, { sinceLastResultMs = 0, re
   // ETAPA 5: si el ASR confirmo un final MAS COMPLETO de la MISMA revision, lo que crece es
   // la CAJA (su duena); despues se cierra con lo que la caja muestra. Sin esto la fila
   // llevaba un fragmento y el texto confirmado se quedaba fuera de la conversacion.
+  // SIN LOCUCION ABIERTA NO HAY NADA QUE CERRAR: si la frontera de audio ya cerro la
+  // locucion y el silencio llega con la linea vacia, lo que hay en la caja es la
+  // locucion SIGUIENTE (a medias). Cerrarla por silencio escribia su trozo como fila y
+  // despues su final volvia a escribirla: la fila extra medida en playback.
+  const sinLocucionAbierta =
+    !cleanForSpeech(ctx.listenState?.openLine || '') && !cleanForSpeech(ctx.listenState?.pendingFinal || '')
+  if (cleanForSpeech(ctx.listenState?.fronteraCerrada || '') && sinLocucionAbierta) {
+    return { flushed: false, reason: 'frontera-cerrada', capture: '' }
+  }
   const confirmada = cleanForSpeech(ctx.listenState?.pendingFinal || '')
   const mostrada = cleanForSpeech(ctx.publishedLiveRef?.current || '')
   if (
@@ -891,6 +900,7 @@ function ingestInterimChunk({ interim, ctx }) {
     listenState.openLineBook = null
     clearInterimOpenLineClock(listenState)
     ctx.vaciarLaCaja?.()
+    listenState.fronteraCerrada = lineaAbierta
     fluTrace('ingress', 'locucion-frontera-audio', {
       frontera: fronteraAudio,
       cerrada: lineaAbierta.slice(-80),
