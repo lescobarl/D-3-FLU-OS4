@@ -115,7 +115,7 @@ describe('DEFECTO A — dos locuciones no se pegan (se separan por tramo/fronter
     expect(decision.destino).not.toContain('magistrado')
   })
 
-  it('LIMITACION L1 (declarada): el tramo del TURNO cubre las dos y reutiliza la fila', () => {
+  it('el tramo del TURNO cubre las dos: por eso la frontera la pone el AUDIO (tramoDeLocucion)', () => {
     // El tramo de la fila es la ventana CON VOZ del turno: las dos locuciones caen dentro.
     // Mientras el tramo sea del turno (y no de la locucion) esto es una LIMITACION, no un
     // comportamiento cerrado: queda escrito para que no se venda como "una fila por locucion".

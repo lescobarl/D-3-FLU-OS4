@@ -17,22 +17,24 @@ La primera casilla sin marcar es la siguiente. No se re-decide.
 
 ## Limitaciones DECLARADAS (no son "cerrado")
 
-### L1 - El tramo es la ventana del TURNO, no de la locucion (Etapa 1 parcial)
+### Tramo por locucion (VAD por evento) - IMPLEMENTADO
 
-`tramoDelTurno` devuelve la ventana CON VOZ del turno (`ventanaConVoz` sobre el PCM del
-turno). Su unidad es el TURNO. Consecuencia medida (sesion 8f3112c2, fila 5 del replay):
-**dos locuciones SIN pausa suficiente comparten tramo y, por tanto, FILA**.
+Dueño: `src/voice/core/tramoDeLocucion.js` (`crearDetectorDeFronteras`, `hayFronteraDeAudio`).
+El audio cierra la locucion en cuanto hay `minSilenceMs` (900 ms) de silencio, antes que el
+reloj del turno (`srGapCommitMs` 3500). El ingress cierra la locucion ABIERTA en esa
+frontera y arranca la siguiente; el TURNO sigue abierto para que el final del ASR de la
+misma locucion reemplace la fila (una locucion = una fila).
 
-- Caso concreto: ids de fuente 1792789182623 (22 palabras) y 1792789202635 (32) quedaron
-  en una sola fila porque la pausa entre ellas (2,44 s) es menor que `srGapCommitMs` (3500)
-  y el tramo del turno cubre las dos.
-- Lo que SI esta cerrado: mismo tramo = misma fila (no hay filas duplicadas por reemision
-  del ASR); distinto tramo = fila distinta.
-- Lo que NO esta cerrado: **"una locucion = una fila"**. No se vende como cerrado.
-- No se corrige por texto: cortar por `estadoDeLocucion` en cada interino se midio y se
-  revirtio (57 filas: Chrome reinicia la hipotesis a media frase). El texto NO es frontera.
-- Salida si el dueno no acepta la limitacion: reabrir Etapa 1 con **VAD por evento**
-  (tramo por locucion desde el audio), no un parche de texto.
+Evidencia:
+- Fixture `tests/conversacionFronteraAudio.test.ts` (6/6): la fila 5 de la sesion 8f3112c2
+  (ids 1792789182623 / 1792789202635) se parte en DOS filas; **mutacion** con la frontera
+  apagada -> UNA fila (rojo comprobado).
+- Playback real (`npm run replay -- --mode playback`, audio + ASR stub): faltan 0.
+
+PENDIENTE (no cerrado): en esa misma corrida de playback sobran 1 fila sin justificar
+("Es algo extraño Porque muchos de ustedes creo") y la caja se queda 16,5 s sin crecer
+tras la frontera. Es la reconciliacion entre el cierre por VAD y el final del ASR de la
+misma locucion: mientras no este en 0/0/0, el tramo por locucion NO se declara cerrado.
 
 ## Defectos A y B (decision del dueno 2026-10-23)
 
