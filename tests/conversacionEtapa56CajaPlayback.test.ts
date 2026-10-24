@@ -15,17 +15,36 @@ import { fraseDeCierreDeLocucion } from '../src/voice/lib/conversationStream.js'
 import { declararPlayback } from '../scripts/replay/report.mjs'
 
 describe('ETAPA 5 · la caja es el texto de la locución (sin cadena de candidatos)', () => {
-  it('con caja: manda la caja, aunque el final y la viva traigan más texto', () => {
+  it('MISMA locucion: manda la caja (aunque el final traiga mas texto)', () => {
+    // Si el final es la misma revision y trae mas, la CAJA crece antes de cerrar; esta
+    // funcion nunca devuelve otra candidata para la misma locucion.
     const cierre = fraseDeCierreDeLocucion({
-      caja: 'vamos a preparar la receta',
-      lineaViva: 'pon la mesa y trae los platos y los cubiertos para la cena',
+      caja: 'quiero que me expliques con calma',
+      lineaViva: '',
       finalConfirmado: 'quiero que me expliques con calma todos los pasos del sistema',
     })
-    expect(cierre.texto).toBe('vamos a preparar la receta')
+    expect(cierre.texto).toBe('quiero que me expliques con calma')
     expect(cierre.motivo).toBe('caja')
   })
 
-  it('MUTACIÓN: antes la fila saltaba al final confirmado; ahora NO (no hay segundo candidato)', () => {
+  it('OTRA locucion en la caja: cierra el FINAL de la que se cierra (la caja es de la siguiente)', () => {
+    // Defecto medido 2026-10-23: el ASR ya habia emitido la locucion SIGUIENTE (la caja
+    // mostraba su interino) y el final confirmado de la anterior se perdia. La caja no puede
+    // cerrar una locucion que no es la suya.
+    const cierre = fraseDeCierreDeLocucion({
+      caja: 'Es algo extraño Porque muchos de ustedes creo',
+      lineaViva: '',
+      finalConfirmado: 'papás de pollo frito coreano picante y estas son creo que de caramelo',
+    })
+    expect(cierre.texto).toBe('papás de pollo frito coreano picante y estas son creo que de caramelo')
+    expect(cierre.motivo).toBe('final')
+  })
+
+  it('la linea viva NUNCA compite con la caja', () => {
+    const cierre = fraseDeCierreDeLocucion({ caja: 'la caja manda', lineaViva: 'una linea viva mas larga y distinta' })
+    expect(cierre.texto).toBe('la caja manda')
+  })
+  it('MUTACIÓN: sin caja no hay segundo candidato que gane (entra el final)', () => {
     const cierre = fraseDeCierreDeLocucion({
       caja: 'quiero que me expliques con calma',
       lineaViva: '',

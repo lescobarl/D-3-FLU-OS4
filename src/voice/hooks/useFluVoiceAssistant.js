@@ -2296,7 +2296,6 @@ const lastResolvedTurnRef = useRef(0)
 
   wireRecognitionEventsRef.current = wireRecognitionEvents
 
-
   const rebuildRecognition = useCallback(() => {
     if (!isListeningRef.current || isStoppingRef.current) return false
 
@@ -4288,6 +4287,7 @@ const lastResolvedTurnRef = useRef(0)
       turnBridgeTextRef.current = ''
       return bridge
     },
+    publicarEnLaCaja: (texto, opciones) => cajaVivaRef.current?.publicarEnLaCaja?.(texto, opciones),
     onTurnFinalized: () => {
       preflightScheduledForTurnRef.current = false
     },

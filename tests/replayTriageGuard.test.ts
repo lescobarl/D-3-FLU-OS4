@@ -13,7 +13,7 @@
 import { describe, expect, it } from 'vitest'
 import { clasificarFuente } from '../scripts/replay/compareExpected.mjs'
 
-type Fila = { text: string; clase: string; ids?: Array<number | string | null> }
+type Fila = { text: string; clase: string; ids?: Array<number | string | null>; evidencia?: string }
 
 const fuente = [
   { id: 101, text: 'Dios te bendiga mi amor estoy muy orgullosa de ti' },
@@ -24,7 +24,21 @@ const fuente = [
 ]
 
 describe('triage del replay: solo el duplicado EXACTO de la fuente absuelve', () => {
-  it('missing cuya frase la fuente escribio DOS veces -> copia, con los ids de la fuente', () => {
+  it('missing cuya frase la fuente escribio DOS veces Y el replay tiene una -> copia', () => {
+    const { missing, bugsMissing } = clasificarFuente(
+      [{ text: 'Dios te bendiga mi amor estoy muy orgullosa de ti' }],
+      [],
+      { sourceRows: fuente },
+      [{ text: 'Dios te bendiga mi amor estoy muy orgullosa de ti' }],
+    ) as { missing: Fila[]; bugsMissing: number }
+
+    expect(missing[0].clase).toBe('duplicado-exacto-de-fuente')
+    expect(missing[0].ids).toEqual([101, 102])
+    expect(bugsMissing).toBe(0)
+  })
+
+  it('MUTACION: la fuente la escribio dos veces pero el replay NINGUNA -> bug-perdida', () => {
+    // Una copia de la fuente no explica una perdida total: sin fila en el replay no hay copia.
     const { missing, bugsMissing } = clasificarFuente(
       [{ text: 'Dios te bendiga mi amor estoy muy orgullosa de ti' }],
       [],
@@ -32,9 +46,10 @@ describe('triage del replay: solo el duplicado EXACTO de la fuente absuelve', ()
       [],
     ) as { missing: Fila[]; bugsMissing: number }
 
-    expect(missing[0].clase).toBe('duplicado-exacto-de-fuente')
+    expect(missing[0].clase).toBe('bug-perdida')
     expect(missing[0].ids).toEqual([101, 102])
-    expect(bugsMissing).toBe(0)
+    expect(missing[0].evidencia).toMatch(/no hay copia que explique/)
+    expect(bugsMissing).toBe(1)
   })
 
   it('missing que la fuente escribio UNA vez -> bug-perdida (el ASR decirlo NO absuelve)', () => {
@@ -88,7 +103,7 @@ describe('triage del replay: solo el duplicado EXACTO de la fuente absuelve', ()
       [{ text: 'estás ahí' }, { text: 'texto que la fuente no tiene' }],
       [{ text: 'estás ahí' }, { text: 'otro texto inventado' }],
       { sourceRows: fuente },
-      [],
+      [{ text: 'estás ahí' }],
     ) as { missing: Fila[]; extra: Fila[]; unclassifiedMissing: number; unclassifiedExtra: number }
 
     expect(r.unclassifiedMissing).toBe(0)

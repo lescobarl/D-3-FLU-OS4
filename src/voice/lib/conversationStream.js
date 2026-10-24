@@ -445,8 +445,16 @@ export { clearStaleCommittedEchoFromState }
  */
 export function fraseDeCierreDeLocucion({ caja = '', lineaViva = '', finalConfirmado = '' } = {}) {
   const mostrada = cleanForSpeech(caja)
-  if (mostrada) return { texto: mostrada, motivo: 'caja' }
   const confirmada = cleanForSpeech(finalConfirmado)
+  // UNA pregunta: ¿la caja sigue siendo la locucion que se cierra? Si el ASR ya emitio la
+  // SIGUIENTE (la caja muestra otra locucion), el final confirmado es el texto de la que se
+  // cierra y la caja pertenece a la que viene: se cierra con el final y la caja no se toca.
+  // Si es la MISMA locucion, manda la caja (y si el final trae mas, la caja crece antes de
+  // cerrar: eso lo hace el cierre por silencio, no esta funcion).
+  if (mostrada && confirmada && !utterancesSameRevision(mostrada, confirmada)) {
+    return { texto: confirmada, motivo: 'final' }
+  }
+  if (mostrada) return { texto: mostrada, motivo: 'caja' }
   if (confirmada) return { texto: confirmada, motivo: 'final' }
   return { texto: cleanForSpeech(lineaViva), motivo: 'linea-viva' }
 }

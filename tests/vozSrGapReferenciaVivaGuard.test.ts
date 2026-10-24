@@ -129,6 +129,7 @@ function cerrarPorSrGap({ openLine = '', live = '', final = '', filas = [] as st
     isTurnLive: () => false,
   }
 
+  const publicaciones: string[] = []
   const ctx = {
     conversationActive: true,
     ingressSource: 'mic',
@@ -142,6 +143,11 @@ function cerrarPorSrGap({ openLine = '', live = '', final = '', filas = [] as st
     lastStreamPreviewRef: refs.lastStreamPreviewRef,
     lastCommitAtRef: refs.lastCommitAtRef,
     preflightScheduledForTurnRef: refs.preflightScheduledForTurnRef,
+    // La CAJA es la duena del texto: el arnes la hace crecer igual que produccion.
+    publicarEnLaCaja: (texto: string) => {
+      refs.publishedLiveRef.current = String(texto || '')
+      publicaciones.push(String(texto || ''))
+    },
     tryDispatch: () => false,
     maybeSwitchLocale: () => {},
     syncConversationStream: (payload: object) =>
@@ -164,7 +170,7 @@ function cerrarPorSrGap({ openLine = '', live = '', final = '', filas = [] as st
   }
 
   const result = flushSrGapSegmentThroughIngress(ctx as never, { sinceLastResultMs: 4000 })
-  return { result, filas: refs.logRowsTextRef.current, listenState }
+  return { result, filas: refs.logRowsTextRef.current, listenState, publicaciones }
 }
 
 describe('srGap: el cierre retiene la referencia viva completa', () => {
@@ -208,12 +214,13 @@ describe('srGap: el cierre retiene la referencia viva completa', () => {
     expect(filas.at(-1), 'la fila es la caja, que ya trae el final').toBe(LOCUCION)
   })
 
-  it('P11.9-bis: caja CORTA y final mas completo SIN publicar -> la fila NO elige otro candidato', () => {
-    // Cadena BORRADA: antes la fila saltaba al final confirmado. Ahora manda la caja; si la
-    // caja se quedo corta, el defecto es de la CAJA (que solo acumula), no de la fila.
+  it('P11.9-bis: caja CORTA + final confirmado mas completo -> la CAJA crece y la fila la sigue', () => {
+    // La caja es la duena del texto: si el ASR confirma mas de la MISMA revision, la caja
+    // crece (publicacion canonica) y despues se cierra con ella. La fila nunca elige.
     const corta = 'quiero que me expliques con calma todos los pasos'
-    const { filas } = cerrarPorSrGap({ openLine: LOCUCION, live: corta, final: LOCUCION, filas: [] })
-    expect(filas.at(-1), 'la fila es la caja: no hay segundo candidato').toBe(corta)
+    const { filas, publicaciones } = cerrarPorSrGap({ openLine: LOCUCION, live: corta, final: LOCUCION, filas: [] })
+    expect(publicaciones, 'la caja crece con el final confirmado').toContain(LOCUCION)
+    expect(filas.at(-1), 'la fila es la caja ya crecida (sin perdida)').toBe(LOCUCION)
   })
 
   it('P11.9b: la LINEA VIVA no compite con la caja (aunque traiga mas texto)', () => {

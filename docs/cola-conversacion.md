@@ -12,7 +12,7 @@ La primera casilla sin marcar es la siguiente. No se re-decide.
 | 2 | **Transcripción**: estado con dos preguntas (revisión / crecimiento) | [x] dos sitios del ingress unificados |
 | 3 | **Commit**: una fila por tramo; fuera la segunda puerta | [x] `mismoTramo` en el escritor |
 | 4 | **Hablantes**: identidad con medida del tramo; un solo escritor de etiqueta | [x] `escribirEtiquetaDeFila` |
-| 5 | **Caja**: un solo texto (la caja es la locución abierta) | [x] sin cadena de 3 candidatos |
+| 5 | **Caja**: un solo texto (la caja es la locución abierta) | [x] caja dentro de su locucion; crece con el final |
 | 6 | **Playback**: misma tubería, stub determinista | [x] comparabilidad declarada |
 
 ## Reglas de la etapa en curso (1)

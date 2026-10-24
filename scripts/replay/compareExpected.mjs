@@ -335,9 +335,12 @@ export function clasificarFuente(missing = [], extra = [], asrDigest = {}, obser
     const texto = String(fila?.text || '')
     const key = normalizarFila(texto)
     const ids = porTexto.get(key) || []
+    // La copia de la fuente solo explica el missing si el replay ESCRIBIO esa frase al menos
+    // una vez. Con CERO filas en el replay no hay copia que explicar: se perdieron todas.
+    const enReplay = (observedRows || []).filter((fila) => normalizarFila(fila?.text) === key).length
     // UNICO artefacto admitido: la fuente ESCRIBIO ESA MISMA FRASE MAS DE UNA VEZ (duplicado
-    // exacto, con sus ids). Entonces la fila que "falta" es la copia, no contenido perdido.
-    if (ids.length > 1) {
+    // exacto, con sus ids) Y el replay la tiene. Entonces la que "falta" es la copia.
+    if (ids.length > 1 && enReplay > 0) {
       return {
         text: texto,
         clase: 'duplicado-exacto-de-fuente',
@@ -350,7 +353,7 @@ export function clasificarFuente(missing = [], extra = [], asrDigest = {}, obser
       clase: 'bug-perdida',
       ids,
       evidencia: ids.length
-        ? `la fuente escribio esta locucion UNA sola vez (id ${ids[0]}) y el replay no la tiene`
+        ? `la fuente tiene ${ids.length} fila(s) con este texto (ids ${ids.join(', ')}) y el replay ${enReplay} fila(s): no hay copia que explique la perdida`
         : 'la fuente escribio esta locucion y el replay no la tiene',
     }
   })

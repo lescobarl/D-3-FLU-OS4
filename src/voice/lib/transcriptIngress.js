@@ -224,6 +224,19 @@ export function flushSrGapSegmentThroughIngress(ctx, { sinceLastResultMs = 0, re
   // mas completa, la fila se quedaba corta y el final se perdia. La frase elegida se siembra
   // EN EL OBJETO del estado (mutacion in-place) ANTES del EVAL, para que el EVAL, sus
   // portones y el commit partan de la MISMA referencia.
+  // ETAPA 5: si el ASR confirmo un final MAS COMPLETO de la MISMA revision, lo que crece es
+  // la CAJA (su duena); despues se cierra con lo que la caja muestra. Sin esto la fila
+  // llevaba un fragmento y el texto confirmado se quedaba fuera de la conversacion.
+  const confirmada = cleanForSpeech(ctx.listenState?.pendingFinal || '')
+  const mostrada = cleanForSpeech(ctx.publishedLiveRef?.current || '')
+  if (
+    confirmada &&
+    mostrada &&
+    confirmada.length > mostrada.length &&
+    !estadoDeLocucion(mostrada, confirmada).locucionNueva
+  ) {
+    ctx.publicarEnLaCaja?.(confirmada, { canonica: true })
+  }
   const cierre = fraseDeCierreDeLocucion({
     caja: ctx.publishedLiveRef?.current || '',
     lineaViva: readTurnLive(ctx.listenState),

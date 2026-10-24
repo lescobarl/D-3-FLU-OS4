@@ -223,6 +223,8 @@ function buildHarness(app, clock) {
     flushPcmAfterTurnCommit: () => {},
     maybeSwitchRecognitionLocale: () => {},
     commitTurnToSessionRows,
+    // La CAJA es la duena del texto (ETAPA 5): el arnes expone la MISMA via que produccion.
+    publicarEnLaCaja: (texto, opciones) => deps.cajaDeLaFrase?.publicarEnLaCaja?.(texto, opciones),
     syncConversationStream: (payload = {}) => handleConversationStreamSync(deps, payload),
     markAudioSegmentStart: () => {},
     touchMeaningfulIngress: () => {},

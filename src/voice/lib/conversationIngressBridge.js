@@ -58,6 +58,9 @@ export function buildConversationIngressCtx(bindings = {}) {
     // El ingress vacia TRANSCRIPCION, nunca PCM: el audio del turno sigue siendo la
     // medida de la identidad hasta el cierre real (dueño del vaciado: finalizeTurnCommit).
     flushRecognitionOnFinal: () => bindings.flushTranscriptOnFinal?.(),
+    // La CAJA es la duena del texto de la locucion abierta: el cierre por silencio la hace
+    // crecer con el final confirmado ANTES de cerrar (ETAPA 5).
+    publicarEnLaCaja: (texto, opciones) => bindings.publicarEnLaCaja?.(texto, opciones),
     commitTurnToSessionRows: (text, speaker, opts) =>
       bindings.commitTurnToSessionRows?.(text, speaker, opts),
     debugHotPath: Boolean(import.meta.env?.DEV && bindings.debugHotPath),
