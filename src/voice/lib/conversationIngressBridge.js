@@ -61,6 +61,7 @@ export function buildConversationIngressCtx(bindings = {}) {
     // La CAJA es la duena del texto de la locucion abierta: el cierre por silencio la hace
     // crecer con el final confirmado ANTES de cerrar (ETAPA 5).
     publicarEnLaCaja: (texto, opciones) => bindings.publicarEnLaCaja?.(texto, opciones),
+    vaciarLaCaja: (opciones) => bindings.vaciarLaCaja?.(opciones),
     commitTurnToSessionRows: (text, speaker, opts) =>
       bindings.commitTurnToSessionRows?.(text, speaker, opts),
     debugHotPath: Boolean(import.meta.env?.DEV && bindings.debugHotPath),

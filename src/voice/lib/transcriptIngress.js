@@ -449,6 +449,36 @@ function ingestFinalChunk({ finalChunk, ctx }) {
     })
     clearPendingFinal(ctx.listenState)
   }
+  // LOCUCION NUEVA CON LA CAJA OCUPADA (defecto medido 2026-10-23): la caja pertenece a la
+  // locucion ANTERIOR, que aun no tiene fila. Se cierra ELLA (puerta real) y la caja queda
+  // libre para el final, que abre la nueva. Sin esto el merge devolvia la CAJA como captura
+  // y el texto del final se perdia (fila "magistrado Luis..." nunca escrita: 2 filas de la
+  // fuente con ids 1792789199134 y 1792789202635, replay 0).
+  const cajaPrevia = cleanForSpeech(ctx.publishedLiveRef?.current || '')
+  if (cajaPrevia && finalLimpio && estadoDeLocucion(cajaPrevia, finalLimpio).locucionNueva) {
+    const filaAnterior = cleanForSpeech(ctx.logRowsTextRef?.current?.at(-1) || '')
+    if (cajaPrevia !== filaAnterior) {
+      ctx.scheduleTurnCommit?.({
+        capture: cajaPrevia,
+        utterance: cajaPrevia,
+        newParagraph: false,
+        speaker: ctx.lastLoggedSpeakerRef?.current || '',
+        turnCommit: true,
+        settlesTurn: true,
+        freshUtterance: false,
+        turnBoundary: true,
+        atTurnBoundary: true,
+        forceNewRow: false,
+        forceNewRowOnSegment: false,
+        locutionClosed: true,
+        turnId: ctx.listenState?.pendingFinalTurn ?? null,
+      })
+    }
+    // La caja se vacia para que el final NO se mezcle con la locucion anterior.
+    ctx.vaciarLaCaja?.()
+    if (ctx.listenState) clearPendingFinal(ctx.listenState)
+  }
+
   const lastCommittedRow = cleanForSpeech(
     ctx.logRowsTextRef?.current?.at(-1) || ctx.lastEmittedTranscriptRef?.current || '',
   )

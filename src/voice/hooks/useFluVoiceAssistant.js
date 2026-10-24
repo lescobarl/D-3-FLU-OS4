@@ -1987,7 +1987,6 @@ const lastResolvedTurnRef = useRef(0)
     setupPassiveAudioCapture,
   ])
 
-
   const wireRecognitionEvents = useCallback(
     (Recognition) => {
       const requireWake = requiresWakeWord(conversationActiveRef?.current)
@@ -4288,6 +4287,7 @@ const lastResolvedTurnRef = useRef(0)
       return bridge
     },
     publicarEnLaCaja: (texto, opciones) => cajaVivaRef.current?.publicarEnLaCaja?.(texto, opciones),
+    vaciarLaCaja: (opciones) => cajaVivaRef.current?.vaciarLaCaja?.(opciones),
     onTurnFinalized: () => {
       preflightScheduledForTurnRef.current = false
     },

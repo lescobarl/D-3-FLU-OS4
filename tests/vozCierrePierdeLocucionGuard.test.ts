@@ -84,6 +84,13 @@ function createHarness() {
             rows.push(text)
             return true
         },
+        // La CAJA como en produccion: publicar escribe lo visible, vaciar la limpia.
+        publicarEnLaCaja: (texto: string) => {
+            ;(bindings.publishedLiveRef as { current: string }).current = String(texto || '')
+        },
+        vaciarLaCaja: () => {
+            ;(bindings.publishedLiveRef as { current: string }).current = ''
+        },
         // sink del ingress = COMMIT REAL (mismo cableado que produccion)
         syncConversationStream: (payload: any = {}) => handleConversationStreamSync(ctx, payload),
     }
@@ -218,4 +225,31 @@ describe('P9.68-b: una locucion LARGA abierta NO se descarta al llegar otra', ()
         expect(todo, 'la LARGA no puede perderse · filas=' + JSON.stringify(h.rows)).toContain('bien ahí detuve')
         expect(todo, 'la NUEVA tambien · filas=' + JSON.stringify(h.rows)).toContain('ya el otro escribe')
     })
+
+describe('P9.59-b · el FINAL de una locucion NUEVA con la caja ocupada', () => {
+    it('cierra la locucion de la caja Y conserva el texto del final (ninguna se pierde)', () => {
+        // Defecto medido 2026-10-23 (grabacion 8f3112c2): con la caja mostrando la locucion
+        // ANTERIOR sin fila, el merge devolvia la CAJA como captura y el texto del final se
+        // tiraba (2 filas de la fuente, 0 en el replay).
+        const h = createHarness()
+        const anterior = 'voy a decir el comando para que sustituya todos los nombres'
+        const nueva = 'magistrado Luis ya le puso Luis a todo a todas las intervenciones'
+        h.result(chromeEvent([{ isFinal: false, transcript: anterior }], 0))
+        h.result(chromeEvent([{ isFinal: true, transcript: nueva }], 0))
+        h.srGap()
+
+        const todo = h.rows.join(' | ')
+        expect(todo, 'la locucion de la caja se escribe: ' + JSON.stringify(h.rows)).toContain('sustituya todos los nombres')
+        expect(todo, 'el texto del FINAL no se pierde: ' + JSON.stringify(h.rows)).toContain('magistrado Luis')
+    })
+
+    it('MUTACION: un final de la MISMA locucion NO abre una fila aparte', () => {
+        const h = createHarness()
+        h.result(chromeEvent([{ isFinal: false, transcript: 'vamos a probar la diarizacion' }], 0))
+        h.result(chromeEvent([{ isFinal: true, transcript: 'vamos a probar la diarizacion ahora' }], 0))
+        h.srGap()
+        const filas = h.rows.filter((f) => /diarizacion/.test(f))
+        expect(filas.length, 'una locucion = una fila: ' + JSON.stringify(h.rows)).toBe(1)
+    })
+})
 })
