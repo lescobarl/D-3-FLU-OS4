@@ -12,13 +12,7 @@ import { BASE_LANGS } from '../core/config/localeConfig'
 //     testables sin navegador real.
 // ============================================================
 
-import {
-    cancelSpeech,
-    getSpeechVoices,
-    isSpeechBusy,
-    isSpeechSupported,
-    speakResponse,
-} from '../voice/lib/fluSpeech';
+import { cancelSpeech, getSpeechVoices, isSpeechBusy, isSpeechSupported, speakResponse } from '../voice/api/speech';
 
 export interface LocalTtsOptions {
     lang?: string;

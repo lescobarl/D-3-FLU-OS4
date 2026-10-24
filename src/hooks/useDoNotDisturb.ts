@@ -5,7 +5,7 @@
 // usuario (STORAGE_KEYS.DND_*). Re-evalúa el estado cada tickMs.
 // ============================================================
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { FLU_CONFIG } from '../voice/lib/fluConfig';
+import { FLU_CONFIG } from '../voice/api/config';
 import { STORAGE_KEYS } from '../core/config/appConfig';
 import { describeDndSchedule, isDoNotDisturbActive, type DndSchedule } from '../core/dnd/dndPolicy';
 import { logCaughtError } from '../lib/caughtError';

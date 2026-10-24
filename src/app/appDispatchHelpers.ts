@@ -10,8 +10,9 @@
  * NO es una ruta doble: `App.tsx` las importa y no conserva copia.
  */
 import { normalizeSpaces } from '../lib/textUtils'
-import { FLU_CONFIG } from '../voice/lib/fluConfig'
-import { resolveNoteVoiceIntent } from '../voice/lib/noteIntentParser'
+import { resolveNoteVoiceIntent } from '../voice/api/commands'
+import { FLU_CONFIG } from '../voice/api/config'
+
 import { resolveDiaryVoiceIntent } from '../core/diary/diaryIntentParser'
 import { resolveAgendaDomainIntent } from '../core/agenda/domainScopedIntent'
 import type { ArbiterResult } from './arbiterDispatch'

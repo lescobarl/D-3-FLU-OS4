@@ -16,7 +16,7 @@
 // ============================================================
 import { useState } from 'react';
 import type { FormEvent } from 'react';
-import { FLU_CONFIG } from '../voice/lib/fluConfig';
+import { FLU_CONFIG } from '../voice/api/config';
 import type { ContactRecord, ParticipantRecord } from '../core/db/fluDatabase';
 import type { BirthdayContact, ContactInput } from '../core/contacts/contactService';
 import { useAsyncAction } from '../hooks/useAsyncAction';

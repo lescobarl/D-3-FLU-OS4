@@ -3,9 +3,9 @@
  * Flu usa el mismo mecanismo que los hablantes automáticos (sin canal paralelo).
  */
 import { cleanForSpeech } from './audioMath.js'
-import { resolveRowSpeakerLabel } from './conversationRow';
+import { resolveRowSpeakerLabel } from './conversationRow.js';
 import { FLU_CONFIG } from './fluConfig.js'
-import { equalsTrimmed } from '../../lib/textUtils'
+import { equalsTrimmed } from '../../lib/textUtils.ts'
 
 const FALLBACK_SPEAKER = FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker
 

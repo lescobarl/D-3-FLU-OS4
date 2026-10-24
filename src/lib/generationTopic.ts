@@ -1,4 +1,6 @@
-import { resolveRowSpeakerLabel } from '../voice/lib/conversationRow';
+import { normalizeSpokenCommand } from '../voice/api/audio'
+import { FLU_CONFIG } from '../voice/api/config'
+import { resolveRowSpeakerLabel } from '../voice/api/conversation';
 // ============================================================
 // generationTopic.ts — Tema/contenido real para la generación de
 // documento/video desde el estado de conversación (función pura).
@@ -10,8 +12,6 @@ import { resolveRowSpeakerLabel } from '../voice/lib/conversationRow';
 // contenido/tema limpiado del verbo de mando.
 // ============================================================
 import { normalizeSpaces } from './textUtils';
-import { FLU_CONFIG } from '../voice/lib/fluConfig';
-import { normalizeSpokenCommand } from '../voice/lib/audioMath';
 
 export interface GenerationConversationSlice {
     conversationHistory?: Array<{

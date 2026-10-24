@@ -1,4 +1,4 @@
-import { logCaughtError } from '../../lib/caughtError';
+import { logCaughtError } from '../../lib/caughtError.ts';
 
 // ============================================================
 // conversationMode — dueño ÚNICO del modo conversación de la escucha

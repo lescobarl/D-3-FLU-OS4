@@ -15,8 +15,8 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { STORAGE_KEYS, UI_DEFAULTS, resolveTextApiKey, resolveDedicatedGeminiApiKey, resolveFalVideoModel } from '../core/config/appConfig';
-import { FLU_CONFIG } from '../voice/lib/fluConfig';
-import { getSpeechVoices, subscribeSpeechVoices } from '../voice/lib/fluSpeech';
+import { FLU_CONFIG } from '../voice/api/config'
+import { getSpeechVoices, subscribeSpeechVoices } from '../voice/api/speech';
 import { useAuditLog } from './useAuditLog';
 import { logCaughtError } from '../lib/caughtError';
 import { localGet, localKeys, localRemove, localSetSafe } from '../core/storage/localStore';

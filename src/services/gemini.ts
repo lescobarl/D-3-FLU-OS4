@@ -35,7 +35,7 @@ import { logCaughtError } from '../lib/caughtError';
 import { POLLINATIONS_DEFAULTS, resolveApiKey } from '../core/config/sharedConfig';
 import { fetchTextEngineResilient, REQUEST_TIMEOUT_PRESETS } from '../core/ai/httpClient';
 import { resolveConfiguredTemperature } from './aiTemperature';
-import { VISUAL_CONFIG } from '../voice/lib/visualConfig';
+import { VISUAL_CONFIG } from '../voice/api/uiConfig';
 import {
     BaseAIService,
     buildConversationLog,
@@ -70,7 +70,6 @@ export function buildDiagnostics(apiKeySource: string, model?: string): FluDiagn
 function resolveGeminiKeyForRequest(apiKey: string = ''): { apiKey: string; apiKeySource: string } {
     return resolveApiKey(apiKey, resolveTextApiKey);
 }
-
 
 // -----------------------------------------------------------
 // GeminiService — Adapter de transporte (proxy Gemini)

@@ -24,14 +24,7 @@
 // navegador y se apaga en onend/onerror/stop. Nunca es optimista.
 // ============================================================
 import { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  acquireSpeechRecognition,
-  abortSpeechRecognition,
-  bindSpeechRecognition,
-  isSpeechRecognitionSupported,
-  startSpeechRecognition,
-  stopSpeechRecognition,
-} from '../voice/lib/speechRecognitionLocal';
+import { abortSpeechRecognition, acquireSpeechRecognition, bindSpeechRecognition, isSpeechRecognitionSupported, startSpeechRecognition, stopSpeechRecognition } from '../voice/api/speech';
 import type { SpeechRecognitionLike } from '../types/fluWindow';
 
 export interface UseOnboardingVoiceCaptureOptions {

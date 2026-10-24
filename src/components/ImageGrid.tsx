@@ -13,7 +13,7 @@
 // ============================================================
 
 import { useMemo } from 'react';
-import { FLU_CONFIG } from '../voice/lib/fluConfig';
+import { FLU_CONFIG } from '../voice/api/config';
 import { SEARCH_PROVIDER_IDS } from '../core/config/sharedConfig';
 import { configLabel } from './configText';
 import { pickLabel } from '../lib/textUtils';

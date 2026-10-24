@@ -62,7 +62,7 @@ export interface VideoAssemblyParams {
 // Imagen del sujeto (Bug #5): base de Pollinations desde appConfig (sin hardcode).
 import { POLLINATIONS_CONFIG, buildPollinationsUrl } from '../core/config/appConfig';
 import { logCaughtError } from '../lib/caughtError';
-import { hashPromptSeed } from '../voice/lib/fluVisualPipeline';
+import { hashPromptSeed } from '../voice/api/media';
 
 /** URL de imagen del sujeto pedido por el usuario (p. ej. "un conejo saltando").
  *  Sin hardcode: la base sale de appConfig (POLLINATIONS_CONFIG.BASE_URL). */

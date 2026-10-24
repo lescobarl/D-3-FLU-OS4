@@ -1,9 +1,9 @@
 import { cleanForSpeech, detectTranscriptLanguage } from './audioMath.js'
 import { FLU_CONFIG } from './fluConfig.js'
 import { recordFluSpeechEnd } from './echoPolicy.js'
-import { relayLog } from '../../lib/clientLogRelay'
-import { logCaughtError } from '../../lib/caughtError';
-import { SCRIPT_SPEECH_LOCALES, SPEECH_LOCALES } from '../../core/config/localeConfig'
+import { relayLog } from '../../lib/clientLogRelay.ts'
+import { logCaughtError } from '../../lib/caughtError.ts';
+import { SCRIPT_SPEECH_LOCALES, SPEECH_LOCALES } from '../../core/config/localeConfig.ts'
 import { defaultLanguage } from './languageDefault.ts'
 
 /**
@@ -19,7 +19,7 @@ let _cachedVoiceConfig = { rate: 1.0, voiceURI: '' }
 async function refreshVoiceConfigCache() {
   try {
     // Dynamic import to avoid circular dependency
-    const mod = await import('../../store/integrationStore')
+    const mod = await import('../../store/integrationStore.ts')
     const store = mod.useIntegrationStore?.getState?.()
     if (store?.voiceConfig) {
       _cachedVoiceConfig = {
@@ -53,7 +53,7 @@ function getVoiceConfig() {
  */
 async function enterSpeakingState() {
   try {
-    const mod = await import('../../store/integrationStore')
+    const mod = await import('../../store/integrationStore.ts')
     const store = mod.useIntegrationStore?.getState?.()
     if (!store || typeof store.setConversationState !== 'function') return null
     const prevState = store.conversationState

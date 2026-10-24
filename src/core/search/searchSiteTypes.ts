@@ -10,7 +10,7 @@
 // barra, tiles y resultados sin tocar código.
 // ============================================================
 
-import { FLU_CONFIG } from '../../voice/lib/fluConfig.js';
+import { FLU_CONFIG } from '../../voice/api/config.ts';
 import { normalizeHost } from '../browser/browserSession.ts';
 
 /** Nivel de lectura de un sitio (equivalente a browser.readingLevels). */

@@ -19,9 +19,9 @@ import {
     dayOfWeek,
     MS_DAY,
     parseTimeOfDayToMs,
-} from '../temporal/scheduleEngine';
-import type { SyncTuple } from '../db/fluDatabase';
-import { stripDiacriticsLower } from '../../lib/textUtils';
+} from '../temporal/scheduleEngine.ts';
+import type { SyncTuple } from '../db/fluDatabase.ts';
+import { stripDiacriticsLower } from '../../lib/textUtils.ts';
 
 export type AgendaKind = 'recordatorio' | 'cita' | 'junta' | 'clase' | 'alarma';
 

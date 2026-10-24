@@ -19,8 +19,8 @@ import {
 } from './speechMerge.js'
 import { shouldForceNewLogRowOnCommit } from './ingressGuards.js'
 import { getTranscriptPauseCfg, countSpeechWords as countWordsFromPauseCfg, srGapSilenceReached } from './fluTranscriptPause.js'
-import { normalizeForMatch } from '../../lib/textUtils'
-import { VOICE_DIARIZATION_DEFAULTS } from '../../core/config/sharedConfig'
+import { normalizeForMatch } from '../../lib/textUtils.ts'
+import { VOICE_DIARIZATION_DEFAULTS } from '../../core/config/sharedConfig.ts'
 
 /**
  * Palabras mínimas para tratar un fragmento como eco del TTS de FLU.

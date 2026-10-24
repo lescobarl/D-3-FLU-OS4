@@ -24,7 +24,7 @@ import { stripDiacriticsLower } from '../../lib/textUtils';
 import { INVALID_INPUT } from '../../lib/resultReasons';
 import type { InvalidInput } from '../../lib/resultReasons';
 import { listAliveByName } from '../db/entityMutations';
-import { normalizeEmbeddingVector } from '../../voice/lib/speakerCore';
+import { normalizeEmbeddingVector } from '../../voice/api/identity';
 
 /**
  * Canal de difusion de cambios del registro de participantes ENTRE PESTANAS de la

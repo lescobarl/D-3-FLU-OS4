@@ -108,7 +108,11 @@ describe('P4.3/P4.4/P4.5/P4.9/P4.13 duplicacion - un algoritmo, una copia', () =
       .flatMap((f) => downsampleOffenders(readFileSync(f, 'utf8'), rel(f)));
     expect(offenders, 'downsample redefinido fuera de ' + DOWNSAMPLE_OWNER + ':\n  ' + offenders.join('\n  ')).toEqual([]);
     expect(readFileSync(join(ROOT, 'src/voice/lib/asr/whisperRecognitionEngine.js'), 'utf8')).toContain("from './resample.js'");
-    expect(readFileSync(join(ROOT, 'src/dev/asrLab/AsrLab.tsx'), 'utf8')).toContain("from '../../voice/lib/asr/resample.js'");
+    // R7: el consumidor ya no importa la ruta profunda; consume el `downsample` del DUENO a
+    // traves de la fachada publica (el re-export vive en `src/voice/api/audio.ts`).
+    const asrLab = readFileSync(join(ROOT, 'src/dev/asrLab/AsrLab.tsx'), 'utf8');
+    expect(asrLab).toContain("downsample");
+    expect(asrLab).toContain("from '../../voice/api/audio'");
   });
 });
 describe('P4.3/P4.4/P4.5/P4.9/P4.13 duplicacion - el detector no es decorativo', () => {

@@ -27,7 +27,7 @@
 // ============================================================
 import { useMemo, useState } from 'react';
 import type { CSSProperties } from 'react';
-import { FLU_CONFIG } from '../voice/lib/fluConfig';
+import { FLU_CONFIG } from '../voice/api/config';
 import type {
     RegisterResult,
     UpdateResult,

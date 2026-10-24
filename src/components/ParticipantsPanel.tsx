@@ -15,7 +15,7 @@
 // ============================================================
 import { useState } from 'react';
 import type { FormEvent } from 'react';
-import { FLU_CONFIG } from '../voice/lib/fluConfig';
+import { FLU_CONFIG } from '../voice/api/config';
 import { useAsyncAction } from '../hooks/useAsyncAction';
 import type { CommunicationProfileRecord, ParticipantRecord } from '../core/db/fluDatabase';
 import type { ParticipantInput, ParticipantRegisterResult } from '../core/multiuser/participantRegistry';

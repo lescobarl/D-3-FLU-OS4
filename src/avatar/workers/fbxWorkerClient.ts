@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { REQUEST_TIMEOUT_DEFAULTS } from '../../core/config/sharedConfig';
 import { isWorkerRuntime } from '../../lib/workerRuntime';
-import { createWorkerPendingBridge } from '../../voice/lib/workerPendingBridge.js';
+import { createWorkerPendingBridge } from '../../voice/api/workers';
 
 /**
  * Cliente del Web Worker de parseo FBX (espejo de voiceIdWorkerClient.js).

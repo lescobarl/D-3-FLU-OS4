@@ -9,7 +9,7 @@
 // (mismo tipo+etiqueta+disparo en agenda; misma etiqueta en nota). Dos textos
 // distintos que resuelven al MISMO evento cuentan como uno.
 // ============================================================
-import { normalizeAgendaLabel } from '../../core/agenda/agendaModel';
+import { normalizeAgendaLabel } from '../../core/agenda/agendaModel.ts';
 
 type ResolvedResult = { domain?: string | null; action?: unknown } | null | undefined;
 

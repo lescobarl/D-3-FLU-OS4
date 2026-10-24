@@ -24,7 +24,8 @@
  *     `debug.log`) y avisa por `BroadcastChannel` para que las demás pestañas
  *     recarguen su estado en memoria.
  */
-import { FLU_CONFIG } from '../voice/lib/fluConfig.js';
+import { FLU_CONFIG } from '../voice/api/config'
+import { enableSessionRecorder, getSessionRecordingStatus } from '../voice/api/sessionLog';
 import { fluDb } from '../core/db/fluDatabase';
 import {
     createParticipantRegistry,
@@ -34,10 +35,6 @@ import {
 import { createOnboardingService } from '../core/onboarding/onboardingService';
 import { DEFAULT_VOICE_CONFIG, STORAGE_KEYS } from '../core/config/appConfig';
 import { localGet, localRemove } from '../core/storage/localStore';
-import {
-    enableSessionRecorder,
-    getSessionRecordingStatus,
-} from '../voice/lib/sessionRecorder.js';
 import { flushLogs, relayLog } from './clientLogRelay';
 import { logCaughtError } from './caughtError';
 

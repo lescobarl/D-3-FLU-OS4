@@ -7,7 +7,7 @@
 // fluParticipant, listeningAck, listenParity.
 // ============================================================
 
-import { FLU_CONFIG, getCanonicalWakeWord } from '../voice/lib/fluConfig';
+import { FLU_CONFIG, getCanonicalWakeWord } from '../voice/api/config';
 
 interface VoiceAssistantBarWrapperProps {
     status: string;

@@ -17,7 +17,7 @@ import { useIntegrationStore } from '../store/integrationStore';
 import type { ConversationEntry } from '../types/bridge';
 import { logCaughtError } from '../lib/caughtError';
 import { SYSTEM_EVENT_PREFIX } from '../lib/systemEventLog';
-import { sessionSpeakerHighWater } from '../voice/lib/speakerCore.js';
+import { sessionSpeakerHighWater } from '../voice/api/identity';
 
 const MAX_LOADED_ROWS = 180; // OS2: conversationLogMax
 

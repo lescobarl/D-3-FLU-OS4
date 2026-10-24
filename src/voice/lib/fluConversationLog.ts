@@ -10,7 +10,7 @@
 // Regla: hablar y registrar van juntos, por este único punto.
 // ============================================================
 
-import { useIntegrationStore } from '../../store/integrationStore';
+import { useIntegrationStore } from '../../store/integrationStore.ts';
 
 /**
  * Registra una intervención hablada de FLU en el historial de conversación.

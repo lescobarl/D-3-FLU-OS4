@@ -19,7 +19,7 @@ import { createVoiceSegmenter, getAsrConfig, getAsrSampleRate } from './voiceAct
 import { countSpeechLikeSamples, rmsOf } from '../voicedActivity.js'
 import { createWhisperWasmTranscriber } from './whisperWasmTranscriber.js'
 import { isSpeechSynthesisSpeaking } from '../fluSpeech.js'
-import { logCaughtError } from '../../../lib/caughtError';
+import { logCaughtError } from '../../../lib/caughtError.ts';
 import { DEFAULT_SAMPLE_RATE } from '../audioConstants.js'
 import { downsample } from './resample.js'
 import { concatFloat32 } from '../pcmChunks.js'

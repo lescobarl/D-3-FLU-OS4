@@ -16,7 +16,7 @@
 // ============================================================
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { pickLabel } from '../lib/textUtils';
-import { FLU_CONFIG } from '../voice/lib/fluConfig';
+import { FLU_CONFIG } from '../voice/api/config';
 import { configChild, configLabel } from './configText';
 
 // ------------------------------------------------------------

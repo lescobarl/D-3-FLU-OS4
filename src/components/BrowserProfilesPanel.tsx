@@ -16,7 +16,7 @@
 //     usuario con referencias de array.
 // ============================================================
 import { useEffect, useState } from 'react';
-import { FLU_CONFIG } from '../voice/lib/fluConfig';
+import { FLU_CONFIG } from '../voice/api/config';
 import { logCaughtError } from '../lib/caughtError';
 import type { BrowserProfileRecord, ParticipantRecord } from '../core/db/fluDatabase';
 import type {

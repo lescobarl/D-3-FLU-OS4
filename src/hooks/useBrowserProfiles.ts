@@ -17,7 +17,7 @@
 // ============================================================
 import { useCallback, useEffect, useState } from 'react';
 import { useServiceRef } from './useServiceRef';
-import { FLU_CONFIG } from '../voice/lib/fluConfig';
+import { FLU_CONFIG } from '../voice/api/config';
 import { fluDb, type BrowserProfileRecord } from '../core/db/fluDatabase';
 import { logCaughtError } from '../lib/caughtError';
 import {

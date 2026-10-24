@@ -21,7 +21,7 @@ import { runAgendaCycle, type AgendaFireAction } from '../core/agenda/agendaMoto
 import type { AgendaService, AgendaCreateInput, AgendaTargetSelector } from '../core/agenda/agendaService';
 import type { AgendaItem, AgendaKind, AgendaStatus } from '../core/agenda/agendaModel';
 import { createWebAudioDriver, type AudioDriver } from '../core/temporal/audioAlert';
-import { FLU_CONFIG } from '../voice/lib/fluConfig';
+import { FLU_CONFIG } from '../voice/api/config';
 import { logCaughtError } from '../lib/caughtError';
 
 export type { AgendaFireAction };

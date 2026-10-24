@@ -13,7 +13,7 @@
 import type { AgendaItem, AgendaKind, AgendaStatus, AgendaTrigger } from './agendaModel';
 import { agendaDedupKey, normalizeAgendaLabel } from './agendaModel';
 import { buildSyncTuple } from '../db/syncTuple';
-import { FLU_CONFIG } from '../../voice/lib/fluConfig';
+import { FLU_CONFIG } from '../../voice/api/config';
 
 // ------------------------------------------------------------
 // Calendario unificado (AgendaItem) — CRUD + dedup + borrado lógico

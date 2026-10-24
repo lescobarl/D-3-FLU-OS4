@@ -23,9 +23,9 @@ import {
     useRef,
     type FormEvent,
 } from 'react';
-import { FLU_CONFIG } from '../voice/lib/fluConfig';
+import { splitTranscriptAtWakeWord } from '../voice/api/audio'
+import { FLU_CONFIG } from '../voice/api/config';
 import { configTextMap } from './configText';
-import { splitTranscriptAtWakeWord } from '../voice/lib/audioMath';
 import type { SearchLevel } from '../hooks/useWorkspaceSearch';
 import type { SearchConfigOverrides } from '../core/search/searchConfigOverrides';
 

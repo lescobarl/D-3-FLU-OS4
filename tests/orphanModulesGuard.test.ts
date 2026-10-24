@@ -27,7 +27,10 @@ import { describe, expect, it } from 'vitest'
 const ROOT = process.cwd()
 const SRC = join(ROOT, 'src')
 const SRC_EXT = /\.(ts|tsx|js|jsx|mjs)$/
-const ENTRYPOINTS = ['src/main.tsx', 'vite.config.ts']
+// `src/voice/server.ts` es la fachada de SERVIDOR del modulo de voz (R7): la consumen los
+// middlewares de `src/server/**`, que estan EXCLUIDOS del grafo por ser dev-server. Sin
+// declararla entrypoint, su unico importador queda fuera y la fachada parece huerfana.
+const ENTRYPOINTS = ['src/main.tsx', 'vite.config.ts', 'src/voice/api/server.ts']
 
 /** Un fichero esta exento del escaneo por no ser produccion alcanzable por import. */
 export function isExcluded(rel: string): boolean {

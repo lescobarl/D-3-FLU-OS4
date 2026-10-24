@@ -16,7 +16,7 @@ import {
 import { pickTimeOfDay, scanTimesOfDay, stripTimesOfDay } from '../temporal/timeOfDay.ts';
 import { parseTimeOfDayToMs, MS_DAY } from '../temporal/scheduleEngine.ts';
 import { WEEKDAYS_ES } from '../temporal/calendarNames.ts';
-import { normalizeSpokenCommand } from '../../voice/lib/audioMath.js';
+import { normalizeSpokenCommand } from '../../voice/api/audio.ts';
 import type { AgendaKind, AgendaTrigger } from './agendaModel.ts';
 import { normalizeForMatchExact } from '../../lib/textUtils.ts';
 
@@ -86,7 +86,6 @@ const DAILY_RE = /\b(?:todos\s+los\s+d[ií]as|cada\s+d[ií]a|diario|diariamente)
 /** Recurrencia de CLASE "toda la semana / todos los días" = horario de 7 días. */
 const CLASE_ALL_DAYS_RE = /\b(?:toda\s+la\s+semana|toda\s+semana|todos\s+los\s+d[ií]as|cada\s+d[ií]a|diario|diariamente)\b/i;
 const COUNTDOWN_RE = /\b(?:en|de|in)\s+(\d+)\s+(segundos?|minutos?|horas?|seconds?|minutes?|hours?)\b/i;
-
 
 /** Colapsa tartamudeo de cuantificador: "todo toda" → "toda", "todo todo" → "todo". */
 function collapseQuantifierStutter(text: string): string {

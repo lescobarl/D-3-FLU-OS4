@@ -12,15 +12,15 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import type { GenerationWorkspaceTipo } from '../core/config/sharedConfig';
-import { speakResponse, isSpeechBusy, waitForSpeechIdle } from '../voice/lib/fluSpeech';
-import { FLU_CONFIG, isSessionResetCommand } from '../voice/lib/fluConfig';
-import { userRequestedNavigationCommand } from '../voice/lib/voiceCommands';
+import { deriveSearchQuery } from '../voice/api/audio'
+import { COMMAND_IDS, userRequestedNavigationCommand } from '../voice/api/commands'
+import { FLU_CONFIG, isSessionResetCommand } from '../voice/api/config'
+import { logFluReply, setNavSettlePending } from '../voice/api/conversation'
+import { registerSpeakerIdentityFromCommand } from '../voice/api/identity'
+import { isSpeechBusy, speakResponse, waitForSpeechIdle } from '../voice/api/speech';
 import { dispatchFluEvent, FLU_EVENTS, dispatchFluSearch, onFluSearchReady } from '../core/events/fluEvents';
 import { resolveBrowserNavigation } from '../core/browser/browserNavigation';
 import { extractSiteFromPhrase, resolveSiteCandidate } from '../core/browser/browserSession';
-import { deriveSearchQuery } from '../voice/lib/audioMath';
-import { setNavSettlePending } from '../voice/lib/navSettleFlag';
-import { logFluReply } from '../voice/lib/fluConversationLog';
 import {
     applyLanguageToHost,
     resolveSearchLanguage,
@@ -33,8 +33,6 @@ import { logCaughtError } from '../lib/caughtError';
 
 import { normalizeLang } from '../core/config/localeConfig';
 import { pickText } from '../lib/uiStrings';
-import { COMMAND_IDS } from '../voice/lib/commandIds';
-import { registerSpeakerIdentityFromCommand } from '../voice/lib/speakerIdentityRegister';
 import type { IdentitySessionRefs } from '../app/useIdentitySessionRef';
 /** Overrides opcionales de voz por llamada (p.ej. "grito" de victoria en juegos). */
 export interface FluSpeechOptions {

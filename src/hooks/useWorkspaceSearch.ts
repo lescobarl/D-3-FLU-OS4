@@ -15,7 +15,7 @@
 // viven en FLU_CONFIG.browser.search (config-driven).
 // ============================================================
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { FLU_CONFIG } from '../voice/lib/fluConfig';
+import { FLU_CONFIG } from '../voice/api/config';
 import { relayLog } from '../lib/clientLogRelay';
 import type {
     SearchResult,

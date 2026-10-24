@@ -9,8 +9,8 @@
 //   window.__fluClientLog.enable(false)
 // ============================================================
 
-import { FLU_CONFIG } from '../voice/lib/fluConfig.js';
-import { recordSessionEvent } from '../voice/lib/sessionRecorder.js';
+import { FLU_CONFIG } from '../voice/api/config.ts'
+import { recordSessionEvent } from '../voice/api/sessionLog.ts';
 
 type LogLevel = 'LOG' | 'INFO' | 'WARN' | 'ERROR';
 

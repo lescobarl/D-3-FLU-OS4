@@ -66,9 +66,15 @@ import { useDocumentGeneration } from './hooks/useDocumentGeneration';
 import { buildGenerationTopic, normalizeWorkspaceDocumentFields, resolveDocumentTitle, type GenerationConversationSlice } from './lib/generationTopic';
 import { isDataUrl } from './lib/formatAdapters';
 import { resolveTurnArtifactKind } from './lib/turnArtifactKind';
-import { commitUserTurnRow, escribeFilaDeUsuario } from './voice/lib/conversationTurnRow';
-import { createConversationModeController } from './voice/lib/conversationMode';
-import { logFluReply } from './voice/lib/fluConversationLog';
+import { isMinuteGenerationRequest, isRecoverableRecognitionError } from './voice/api/audio'
+import { COMMAND_IDS, getCommandSpeech, normalizeJuego, resolveDeterministicCommand, resolveNoteVoiceIntent } from './voice/api/commands'
+import { FLU_CONFIG } from './voice/api/config'
+import { buildFluSpeechAuditRows, commitUserTurnRow, createConversationModeController, deriveUserLastText, escribeFilaDeUsuario, evaluateListenParity, logFluReply, resolvedActionIdentity, resolveRowSpeakerLabel, selectVisiblePhrase } from './voice/api/conversation'
+import { applyKnownVoiceName, forgetVoiceName, isAutoSpeakerLabel, participantVoiceAnchorsForDiarization, resolveVoiceIdentity, resolveVoiceParticipants } from './voice/api/identity'
+import { resolveGeminiErrorPresentation } from './voice/api/media'
+import { cancelSpeech, isSpeechBusy, speakResponse, waitForSpeechIdle } from './voice/api/speech'
+import { deleteAuditLogsBySpeaker, deleteVoiceProfile, findVoiceProfileByLabel } from './voice/api/storage'
+import { formatStreamSttUiStatus, getFluParticipantConfig, isFluParticipantEnabled, setFluParticipantOverrides } from './voice/api/uiConfig';
 import { createMediaRequestGate } from './core/media/mediaRequestGate';
 import { buildResponseKey, isDuplicateResponseIn, pushResponseState } from './core/voice/responseGate';
 import {
@@ -140,7 +146,6 @@ import { parseShoppingIntent, type ShoppingIntent } from './core/reminders/shopp
 import { summarizeAgenda, agendaSummaryText } from './core/agenda/agendaSummary';
 import { nextAgendaDue, type AgendaColorMap, type AgendaKind } from './core/agenda/agendaModel';
 import { describeTriggerWhen, describeWeekdays } from './core/agenda/describeTriggerText';
-import { resolvedActionIdentity } from './voice/lib/resolvedActionIdentity';
 import { buildDemoNotes, selectDemoAgendaInputs } from './core/agenda/demoSeed';
 import { MS_DAY } from './core/temporal/scheduleEngine';
 import { useAgenda } from './hooks/useAgenda';
@@ -150,15 +155,6 @@ import { createWebAudioDriver, type AudioDriver, type SoundOptions } from './cor
 // OS2 Library Imports — local paths (formerly flu-voz alias)
 // ============================================================
 import { useFluVoiceAssistant } from './voice/hooks/useFluVoiceAssistant';
-import { speakResponse, waitForSpeechIdle, isSpeechBusy, cancelSpeech } from './voice/lib/fluSpeech';
-import { FLU_CONFIG } from './voice/lib/fluConfig';
-import {
-    isRecoverableRecognitionError,
-    isMinuteGenerationRequest,
-} from './voice/lib/audioMath';
-import { resolveDeterministicCommand } from './voice/lib/deterministicArbiter';
-import { normalizeJuego } from './voice/lib/configCommands';
-import { resolveNoteVoiceIntent } from './voice/lib/noteIntentParser';
 import { resolveDiaryVoiceIntent } from './core/diary/diaryIntentParser';
 import { normalizeEnvironment } from './core/environments/environmentIntents';
 import { applyEnvironment, resetEnvironment } from './core/environments/applyEnvironment';
@@ -168,13 +164,6 @@ import {
     DEFAULT_AMBIENTE_ID,
 } from './core/environments/environmentRegistry';
 import { useEnvironmentStore } from './store/environmentStore';
-import { getCommandSpeech } from './voice/lib/voiceCommands';
-import { formatStreamSttUiStatus } from './voice/lib/transcriptConfig';
-import {
-    getFluParticipantConfig,
-    setFluParticipantOverrides,
-    isFluParticipantEnabled,
-} from './voice/lib/fluParticipantConfig';
 import {
     buildMinuteKnowledgeBase2,
     resolveMinuteQuery,
@@ -190,22 +179,12 @@ import {
     buildSystemConversationEntry,
     type SystemEvent,
 } from './lib/systemEventLog';
-import { buildFluSpeechAuditRows, deriveUserLastText, selectVisiblePhrase } from './voice/lib/conversationDialogue';
-import { evaluateListenParity } from './voice/lib/listenParity';
-import { resolveGeminiErrorPresentation } from './voice/lib/geminiDiagnostics';
-import { deleteAuditLogsBySpeaker, findVoiceProfileByLabel, deleteVoiceProfile } from './voice/lib/fluStorage';
 import { logCaughtError } from './lib/caughtError';
 import { localGet, localRemove, localSet } from './core/storage/localStore';
 import { pathForTab, type RightTab, tabFromPath } from './app/tabRoutes';
 import { useFluBridgesLifecycle } from './app/fluBridges';
-import { resolveRowSpeakerLabel } from './voice/lib/conversationRow';
-import { participantVoiceAnchorsForDiarization } from './voice/lib/participantVoiceAnchors';
 import { registerParticipantVoice } from './app/registerParticipantVoice';
 import { useIdentitySessionRef } from './app/useIdentitySessionRef';
-import { applyKnownVoiceName } from './voice/lib/speakerIdentityRegister';
-import { resolveVoiceIdentity, forgetVoiceName } from './voice/lib/speakerDirectory';
-import { isAutoSpeakerLabel } from './voice/lib/voiceIdentity';
-import { resolveVoiceParticipants } from './voice/lib/voiceParticipantsSource';
 import { isAIProvider } from './app/appTypeGuards';
 import { type FastPathExecutedMarks, arbiterDomainRoute, isTurnAlreadyExecuted } from './app/arbiterDomainRoutes';
 import { type ArbiterResult, dispatchArbiterIntent, readStringProp } from './app/arbiterDispatch';
@@ -219,8 +198,6 @@ import {
 } from './core/notes/superNoteTarget';
 import { superNoteIncoming, writeSuperNoteList } from './app/superNoteActions';
 import { runNoteRemovalIntent } from './app/noteRemovalActions';
-import { COMMAND_IDS } from './voice/lib/commandIds';
-
 
 // Vistas por tab cargadas con lazy (cada una es un chunk separado).
 const FluWorkspaceTabView = lazy(() => import('./components/FluWorkspaceTabView'));
@@ -240,15 +217,9 @@ const FluSystemTabView = lazy(() => import('./components/FluSystemTabView'));
 // - STORAGE_KEYS.LANGUAGE
 // - STORAGE_KEYS.SESSION_ROLE
 
-
-
-
-
-
 // ============================================================
 // App
 // ============================================================
-
 
 // ============================================================
 // Helpers de despacho determinista (nivel módulo)
@@ -260,7 +231,6 @@ const FluSystemTabView = lazy(() => import('./components/FluSystemTabView'));
 // conversacional (Siri/Alexa/Google-style) y los parsers deterministas
 // ejecutan la intención estructurada precisa (dueAt, durationMs, etc.).
 // ============================================================
-
 
 /** Marca si la última acción despachada NO logró escribir (para no confirmar en falso). */
 let lastActionFailed = false;
@@ -304,8 +274,6 @@ type ContractResolution = FastPathExecutedMarks & {
 };
 
 /** Intención estructurada de nota aceptada por el manejador de voz. */
-
-
 
 function App() {
     const [_currentState, setCurrentState] = useState<ConversationState>('IDLE');
@@ -968,7 +936,6 @@ function App() {
     // pisarse con estado obsoleto.
     const searchOverridesRef = useRef<SearchConfigOverrides>(searchOverrides);
     searchOverridesRef.current = searchOverrides;
-
 
     // ============================================================
     // OS2: useFluVoiceAssistant — Instanciado AQUÍ en App.tsx
@@ -2096,7 +2063,6 @@ function App() {
                 contextualEmotionRef.current?.(sentiment);
             }
 
-
             // ============================================================
             // OS2 parity: unified navigation command handler
             // (FluShell.jsx lines 476-579)
@@ -2291,7 +2257,6 @@ function App() {
         activeParticipantSpeakerLabel: activeParticipantSpeakerLabelForVoice,
         participantVoiceAnchors: participantVoiceAnchorsForVoice,
         identitySession: identitySessionRef,    });
-
 
     // ---- Navigation commands (extraído a hook) ----
     const navigationCommands = useNavigationCommands(
@@ -3380,7 +3345,6 @@ function App() {
     }, [minuteKnowledge.minutes.length, integrationStore.minuteHistory.length, minuteKnowledge]);
 
     // ---- Handlers ----
-
 
     const handleParticipantConfigChange = useCallback((overrides: Record<string, unknown>) => {
         const prev = participantConfig;

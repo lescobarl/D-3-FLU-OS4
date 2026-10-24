@@ -12,12 +12,12 @@
  */
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { OPENROUTER_DEFAULTS } from '../../core/config/sharedConfig'
-import { acquireSpeechRecognition } from '../../voice/lib/speechRecognitionLocal'
+import { concatFloat32, downsample, loadWhisperRecognitionEngine, loadWhisperWasmTranscriber } from '../../voice/api/audio'
+import { acquireSpeechRecognition } from '../../voice/api/speech'
 import { logCaughtError } from '../../lib/caughtError';
 import { writeAscii } from '../../lib/dataViewAscii.ts'
 import { SPEECH_LOCALES } from '../../core/config/localeConfig'
 import { AI_PROVIDER_IDS } from '../../core/config/sharedConfig'
-import { downsample } from '../../voice/lib/asr/resample.js'
 
 const RATE = 16000
 
@@ -35,8 +35,6 @@ interface OpenRouterChatResponse {
   choices?: Array<{ message?: { content?: string } }>
   error?: { message?: string }
 }
-
-import { concatFloat32 } from '../../voice/lib/pcmChunks.js';
 
 async function capturePcm(ms: number): Promise<Float32Array> {
   const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
@@ -106,7 +104,7 @@ async function runChrome(ms: number): Promise<ProbeResult> {
 async function runWhisper(modelId: string, pcm: Float32Array): Promise<ProbeResult> {
   const id: ProbeId = modelId.includes('tiny') ? 'whisper-tiny' : 'whisper-base'
   try {
-    const mod = await import('../../voice/lib/asr/whisperWasmTranscriber')
+    const mod = await loadWhisperWasmTranscriber()
     const transcriber = mod.createWhisperWasmTranscriber({ modelId, dtype: 'fp32' })
     await transcriber.preload()
     const started = Date.now()
@@ -301,8 +299,8 @@ export default function AsrLab() {  const [pcm, setPcm] = useState<Float32Array 
     const AudioCtx = (window.AudioContext || window.webkitAudioContext) as typeof AudioContext
     const ctx = new AudioCtx()
     const modelId = liveEngine === 'whisper-tiny' ? 'Xenova/whisper-tiny' : 'Xenova/whisper-base'
-    const tMod = await import('../../voice/lib/asr/whisperWasmTranscriber')
-    const eMod = await import('../../voice/lib/asr/whisperRecognitionEngine')
+    const tMod = await loadWhisperWasmTranscriber()
+    const eMod = await loadWhisperRecognitionEngine()
     const transcriber = tMod.createWhisperWasmTranscriber({ modelId, dtype: 'fp32' })
     const engine = eMod.createWhisperRecognitionEngine({ sampleRate: ctx.sampleRate, transcriber })
     engine.onresult = (event) => {

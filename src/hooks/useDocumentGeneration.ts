@@ -13,7 +13,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { aiService } from '../services/aiServiceFactory';
 import { useIntegrationStore } from '../store/integrationStore';
 import { assembleVideo, type VideoAssemblyResult } from '../services/videoAssembler';
-import { fetchFalVideo } from '../voice/lib/imageGeneration';
+import { fetchFalVideo } from '../voice/api/media';
 import { resolveFalApiKey, resolveFalVideoModel } from '../core/config/appConfig';
 import { logCaughtError } from '../lib/caughtError';
 import type {

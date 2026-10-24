@@ -14,7 +14,7 @@
 // ============================================================
 import { useState } from 'react';
 import type { FormEvent } from 'react';
-import { FLU_CONFIG } from '../voice/lib/fluConfig';
+import { FLU_CONFIG } from '../voice/api/config';
 import { configText } from './configText';
 import { useAsyncAction } from '../hooks/useAsyncAction';
 import type { MateriaGrisRecord, ParticipantRecord } from '../core/db/fluDatabase';

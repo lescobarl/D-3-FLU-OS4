@@ -13,7 +13,7 @@
 // pinta desde `latestResponse`), así que no reemplaza a ningún otro tipo.
 // ============================================================
 import { isVisualWorkspaceTipo } from '../core/config/sharedConfig';
-import { COMMAND_IDS } from '../voice/lib/commandIds';
+import { COMMAND_IDS } from '../voice/api/commands';
 
 export type TurnArtifactKind = 'video' | 'doc' | 'image' | 'text';
 

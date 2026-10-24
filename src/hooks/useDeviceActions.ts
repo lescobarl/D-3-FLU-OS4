@@ -16,7 +16,7 @@
 //     (tel:, wa.me, sms:, mailto:) — nunca envía sin el usuario.
 // ============================================================
 import { useMemo } from 'react';
-import { FLU_CONFIG } from '../voice/lib/fluConfig';
+import { FLU_CONFIG } from '../voice/api/config';
 import type { ContactRecord } from '../core/db/fluDatabase';
 import type { ContactService } from '../core/contacts/contactService';
 import { logCaughtError } from '../lib/caughtError';

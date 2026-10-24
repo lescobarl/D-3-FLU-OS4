@@ -13,7 +13,7 @@
 // ============================================================
 import { useState } from 'react';
 import type { FormEvent } from 'react';
-import { FLU_CONFIG } from '../voice/lib/fluConfig';
+import { FLU_CONFIG } from '../voice/api/config';
 import type { ShoppingItemRecord } from '../core/db/fluDatabase';
 import { useAsyncAction } from '../hooks/useAsyncAction';
 

@@ -13,7 +13,7 @@
 // ============================================================
 
 import { useMemo } from 'react';
-import { FLU_CONFIG } from '../voice/lib/fluConfig';
+import { FLU_CONFIG } from '../voice/api/config';
 import { SEARCH_PROVIDER_IDS } from '../core/config/sharedConfig';
 import type { SearchResult } from '../core/search/searchSession';
 

@@ -13,7 +13,7 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { aiService } from '../services/aiServiceFactory';
-import { fetchOpenRouterImageFallback } from '../voice/lib/imageGeneration';
+import { fetchOpenRouterImageFallback } from '../voice/api/media';
 import { resolveTextApiKey } from '../core/config/appConfig';
 import { relayLog } from '../lib/clientLogRelay';
 import { logCaughtError } from '../lib/caughtError';

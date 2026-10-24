@@ -8,7 +8,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { aiService } from '../services/aiServiceFactory';
-import { isSpeechBusy } from '../voice/lib/fluSpeech';
+import { isSpeechBusy } from '../voice/api/speech';
 import { logCaughtError } from '../lib/caughtError';
 import { resolveConfiguredTemperature } from '../services/aiTemperature';
 import {

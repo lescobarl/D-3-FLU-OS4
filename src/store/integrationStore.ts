@@ -12,7 +12,7 @@
 //   - Obligación #7: Sync tuple [revision, updated_at, deleted]
 // ============================================================
 
-import { normalizeRowSignature, resolveRowSpeakerLabel } from '../voice/lib/conversationRow.js';
+import { normalizeRowSignature, resolveRowSpeakerLabel } from '../voice/api/conversation.ts';
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { resolveSafeStorage } from './storage.ts';
@@ -511,7 +511,6 @@ export const useIntegrationStore = create<IntegrationStore>()(
                     n > current.speakerHighWater ? { speakerHighWater: n } : {},
                 );
             },
-
 
             batchLoadHistory: (entries: ConversationEntry[]) => {
                 // MIGRACION UNICA de filas legacy (sin `epoch`): se estampan con el epoch

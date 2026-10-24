@@ -19,7 +19,7 @@
 // y selfKnowledge.ts NO está en ALLOWED_CONFIG_FILES).
 // ============================================================
 
-import { FLU_CONFIG } from '../../voice/lib/fluConfig.js';
+import { FLU_CONFIG } from '../../voice/api/config.ts';
 import { GAME_CATALOG } from '../games/gameCatalog.ts';
 import { WORKSPACE_TIPOS } from '../config/sharedConfig.ts';
 import { FLU_CAPABILITIES } from '../../services/capabilities.ts';

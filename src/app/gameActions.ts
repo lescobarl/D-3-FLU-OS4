@@ -17,8 +17,8 @@ import { relayLog } from '../lib/clientLogRelay';
 import { resolveEmotionAnims } from '../lib/transcriptProcessor';
 import { isMusicPlaying, playSong, stopMusic } from '../services/musicPlayer';
 import { useIntegrationStore } from '../store/integrationStore';
-import { FLU_CONFIG } from '../voice/lib/fluConfig';
-import { setAudioPlayingProbe, isClaimedByOtherDomain } from '../voice/lib/gameCommands';
+import { isClaimedByOtherDomain, setAudioPlayingProbe } from '../voice/api/commands'
+import { FLU_CONFIG } from '../voice/api/config';
 import type React from 'react';
 // ============================================================
 // Juegos por voz (fast-path determinista) — plan-juegos §7

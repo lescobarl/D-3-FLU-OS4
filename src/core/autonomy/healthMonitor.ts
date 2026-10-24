@@ -26,7 +26,7 @@ import { NETWORK_PROBE_URLS, buildTextApiUrl, isLocalTextEndpoint, resolveTextAp
 import { fetchTextEngineResilient } from '../ai/httpClient';
 import { AUTONOMY_THRESHOLD_DEFAULTS } from '../config/sharedConfig';
 import { AUTONOMY_POLICY } from './autonomyPolicy';
-import { isSpeechSupported, getSpeechVoices } from '../../voice/lib/fluSpeech';
+import { getSpeechVoices, isSpeechSupported } from '../../voice/api/speech';
 import { logCaughtError } from '../../lib/caughtError';
 import { probeIndexedDb } from '../db/fluDatabase';
 
@@ -812,8 +812,6 @@ export class HealthMonitor extends IntervalLifecycle<HealthMonitorConfig> {
         void this.performHealthCheck();
     }
 
-
-
     async performHealthCheck(): Promise<SystemHealth> {
         Date.now();
         const components: ComponentHealth[] = [];
@@ -928,7 +926,6 @@ export class HealthMonitor extends IntervalLifecycle<HealthMonitorConfig> {
             this.listeners.splice(index, 1);
         }
     }
-
 
     getConfig(): HealthMonitorConfig {
         return { ...this.config, monitoredComponents: [...this.config.monitoredComponents] };

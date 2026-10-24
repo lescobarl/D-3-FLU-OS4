@@ -24,7 +24,7 @@
 //     acciones (mismo patrón que AmbientesPanel)
 // ============================================================
 import { useState } from 'react';
-import { FLU_CONFIG } from '../voice/lib/fluConfig';
+import { FLU_CONFIG } from '../voice/api/config';
 import { configChild, configTextMap } from './configText';
 import type {
     RegisterResult,

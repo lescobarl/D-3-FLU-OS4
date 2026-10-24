@@ -64,15 +64,7 @@ import {
 
 // ─── Import canonical implementations from OS2 ──────────────
 // These are the exact same functions OS2 uses in its Express server.
-import {
-    generateFluContract,
-    generateConversationSummary,
-    generateOpenRouterImage,
-    generateVideoViaFal,
-    generateParticipantEvaluation,
-    generateWorkspaceImage,
-    analyzeImage,
-} from '../voice/lib/gemini.js';
+import { analyzeImage, generateConversationSummary, generateFluContract, generateOpenRouterImage, generateParticipantEvaluation, generateVideoViaFal, generateWorkspaceImage } from '../voice/api/server.ts';
 
 // ─── Response Cache ──────────────────────────────────────────
 // Evita llamadas duplicadas a Gemini.

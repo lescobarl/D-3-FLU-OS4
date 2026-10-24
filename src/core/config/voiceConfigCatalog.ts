@@ -16,7 +16,7 @@
 
 import { getPaletteKeys } from '../branding/seasonalPalettes.ts';
 import { AI_PROVIDERS, AVAILABLE_TRAITS, AVAILABLE_TONES, FLU_PROFILES, OPENROUTER_DEFAULTS } from './sharedConfig.ts';
-import { getCanonicalWakeWord } from '../../voice/lib/fluConfig.js';
+import { getCanonicalWakeWord } from '../../voice/api/config.ts';
 
 // ------------------------------------------------------------
 // Tipos del catálogo

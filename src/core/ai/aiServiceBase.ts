@@ -18,7 +18,7 @@
 
 import { v4 as uuidv4 } from 'uuid';
 import { GENERATION_TIMEOUT_MS, TEXT_TOKEN_BUDGETS, isVisualWorkspaceTipo } from '../config/appConfig';
-import { resolveRowSpeakerLabel } from '../../voice/lib/conversationRow';
+import { resolveRowSpeakerLabel } from '../../voice/api/conversation';
 import { buildMinuteSystemPrompt } from './prompts';
 import {
     buildMapPrompt,

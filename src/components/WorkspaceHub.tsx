@@ -19,7 +19,7 @@
 // ============================================================
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { pickLabel } from '../lib/textUtils';
-import { FLU_CONFIG } from '../voice/lib/fluConfig';
+import { FLU_CONFIG } from '../voice/api/config';
 import { WorkspaceSearch } from './WorkspaceSearch';
 import { ResultFeed, type ResultFeedItem } from './ResultFeed';
 import { AgendaPanel, type AgendaPanelProps } from './AgendaPanel';

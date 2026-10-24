@@ -13,7 +13,7 @@
 // ============================================================
 
 import type { DocumentSheetInfo, DocumentTipo, DocumentContract } from '../types/documentContracts';
-import { FLU_CONFIG } from '../voice/lib/fluConfig';
+import { FLU_CONFIG } from '../voice/api/config';
 
 import { pickText } from './uiStrings';
 export interface ChunkContext {

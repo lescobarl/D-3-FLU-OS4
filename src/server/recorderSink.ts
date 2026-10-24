@@ -31,7 +31,7 @@ import { tmpdir } from 'node:os';
 import { sendJson, type MiddlewareHost } from './httpJson.ts';
 import { parseRequestUrl } from './requestUrl.ts';
 import { logCaughtError } from '../lib/caughtError.ts';
-import { DEFAULT_SAMPLE_RATE } from '../voice/lib/audioConstants.js';
+import { DEFAULT_SAMPLE_RATE } from '../voice/api/server.ts';
 
 /** Control one-shot leído por el cliente en cada arranque. */
 export interface RecorderControl {

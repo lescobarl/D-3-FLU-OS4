@@ -10,7 +10,7 @@
 // Habla el paso inicial al montar y reacciona a answer()/skip()/reset().
 // ============================================================
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { FLU_CONFIG } from '../voice/lib/fluConfig';
+import { FLU_CONFIG } from '../voice/api/config';
 import {
   advanceOnboarding,
   createInitialState,

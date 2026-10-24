@@ -13,7 +13,7 @@
 // ============================================================
 import { useState } from 'react';
 import type { FormEvent } from 'react';
-import { FLU_CONFIG } from '../voice/lib/fluConfig';
+import { FLU_CONFIG } from '../voice/api/config';
 import { setGroupedField, useEditableFields } from '../hooks/useEditableFields';
 import { submitCatalogEditor } from './editorSubmit';
 import { configChild, configTextMap } from './configText';

@@ -2,19 +2,14 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import App from './App';
-import { FLU_CONFIG } from './voice/lib/fluConfig';
+import { FLU_CONFIG } from './voice/api/config'
+import { configureSessionSink, createHttpSessionSink, disableSessionRecorder, enableSessionRecorder } from './voice/api/sessionLog';
 import { logCaughtError } from './lib/caughtError';
 import {
     DEV_VALIDATION_CHANNEL,
     DEV_VALIDATION_PARAM,
     runDevValidationCommand,
 } from './lib/devValidationReset';
-import {
-    configureSessionSink,
-    createHttpSessionSink,
-    disableSessionRecorder,
-    enableSessionRecorder,
-} from './voice/lib/sessionRecorder.js';
 import './index.css';
 
 // Declaración global del tipo de window.FLU_CONFIG (asignado abajo).

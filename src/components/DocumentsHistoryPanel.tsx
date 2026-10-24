@@ -6,7 +6,7 @@
 // ============================================================
 import { pickLabel } from '../lib/textUtils';
 import { TIMEOUT_POLICY_MS } from '../core/config/appConfig';
-import { FLU_CONFIG } from '../voice/lib/fluConfig';
+import { FLU_CONFIG } from '../voice/api/config';
 import type { DocumentRecord } from '../core/db/fluDatabase';
 
 export interface DocumentsHistoryPanelProps {

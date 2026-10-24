@@ -6,7 +6,7 @@
 // evaluation scheduling, hand-raise timeout, cooldown,
 // rate limiting, and UI presentation.
 // ============================================================
-import { FLU_CONFIG } from '../voice/lib/fluConfig';
+import { FLU_CONFIG } from '../voice/api/config';
 
 import { pickText } from './uiStrings';
 import { normalizeLang } from '../core/config/localeConfig';

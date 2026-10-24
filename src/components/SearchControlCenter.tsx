@@ -28,7 +28,7 @@ import { normalizeLang } from '../core/config/localeConfig'
 // ============================================================
 import { useEffect, useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
-import { FLU_CONFIG } from '../voice/lib/fluConfig';
+import { FLU_CONFIG } from '../voice/api/config';
 import { asConfigNode, configTextMap } from './configText';
 import {
   buildRuntimeConfig,

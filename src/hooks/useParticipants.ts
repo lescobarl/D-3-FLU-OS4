@@ -16,7 +16,9 @@
 // ============================================================
 import { useCallback, useEffect, useState } from 'react';
 import { useServiceRef } from './useServiceRef';
-import { FLU_CONFIG } from '../voice/lib/fluConfig';
+import { FLU_CONFIG } from '../voice/api/config'
+import { renameRowSpeakerName, speakerIdToDefaultName } from '../voice/api/conversation'
+import { participantVoiceAnchorsForDiarization, setParticipantAnchorsProvider, voiceVectorModel } from '../voice/api/identity';
 import { repairConfirmationNameDuplicates } from '../core/multiuser/confirmationNameRepair';
 import { fluDb, type ParticipantRecord } from '../core/db/fluDatabase';
 import {
@@ -34,12 +36,7 @@ import { DEFAULT_VOICE_CONFIG, STORAGE_KEYS } from '../core/config/appConfig';
 import { createOnboardingService } from '../core/onboarding/onboardingService';
 import { logCaughtError } from '../lib/caughtError';
 import { localGet, localRemove, localSetSafe } from '../core/storage/localStore';
-import { voiceVectorModel } from '../voice/lib/speakerDirectory';
-import { speakerIdToDefaultName } from '../voice/lib/conversationRow.js';
 import { useIntegrationStore } from '../store/integrationStore';
-import { renameRowSpeakerName } from '../voice/lib/conversationTurnRow';
-import { setParticipantAnchorsProvider } from '../voice/lib/participantVoiceAnchors';
-import { participantVoiceAnchorsForDiarization } from '../voice/lib/participantVoiceAnchors';
 
 /** Gateway único de la tabla onboardingStates (C44: un solo escritor). */
 const onboardingGateway = createOnboardingService({ db: fluDb.onboardingStates });

@@ -4,7 +4,7 @@
  */
 import { cleanForSpeech } from './audioMath.js'
 import { requireConfigBlock } from './configGuard.js'
-import { voiceProbe } from './voiceProbe'
+import { voiceProbe } from './voiceProbe.ts'
 
 export const TRANSCRIPT_PAUSE_KEYS = [
   'interimOpenLineFlushMs',

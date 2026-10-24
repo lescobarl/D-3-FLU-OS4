@@ -12,22 +12,22 @@
 // ============================================================
 
 import { v4 as uuidv4 } from 'uuid';
-import { useIntegrationStore } from '../../store/integrationStore';
-import { cleanForSpeech } from './audioMath';
-import { voiceProbe } from './voiceProbe';
-import { isAutoSpeakerLabel, isProperSpeakerName } from './voiceIdentity';
-import { compareCosineSignatures } from './speakerCore';
+import { useIntegrationStore } from '../../store/integrationStore.ts';
+import { cleanForSpeech } from './audioMath.js';
+import { voiceProbe } from './voiceProbe.ts';
+import { isAutoSpeakerLabel, isProperSpeakerName } from './voiceIdentity.js';
+import { compareCosineSignatures } from './speakerCore.js';
 import { registerVoiceName, resolveVoiceIdentity } from './speakerDirectory.js';
 import { differentVoiceFloor, sameVoiceFloor, getSessionClusters } from './speakerClusters.js';
 import { classifyVoiceAgainstClusters, namedAssignmentConfirmed, continuityLabelForTurn } from './speakerDiarization.js';
-import { canonicalSpeakerName, normalizeSpeakerLabel, nextAvailableSpeakerLabel, pendingSpeakerLabel } from './speakerLabels';
-import { getVoiceIdentityConfig } from './speakerLabels';
-import { autoSpeakerIndexFromKey, getFallbackSpeaker } from './speakerCore';
-import { labelToSpeakerId, resolveRowSpeakerLabel, speakerIdToDefaultName } from './conversationRow';
-import { getParticipantAnchors } from './participantVoiceAnchors';
+import { canonicalSpeakerName, normalizeSpeakerLabel, nextAvailableSpeakerLabel, pendingSpeakerLabel } from './speakerLabels.js';
+import { getVoiceIdentityConfig } from './speakerLabels.js';
+import { autoSpeakerIndexFromKey, getFallbackSpeaker } from './speakerCore.js';
+import { labelToSpeakerId, resolveRowSpeakerLabel, speakerIdToDefaultName } from './conversationRow.js';
+import { getParticipantAnchors } from './participantVoiceAnchors.ts';
 import { voiceKeyFor } from './speakerDirectory.js';
-import { normalizeRowSignature } from './conversationRow';
-import { isFragmentOfLocution } from './turnStream';
+import { normalizeRowSignature } from './conversationRow.js';
+import { isFragmentOfLocution } from './turnStream.js';
 
 /**
  * Turno actual de la conversacion: su id y la fila de usuario que le pertenece.

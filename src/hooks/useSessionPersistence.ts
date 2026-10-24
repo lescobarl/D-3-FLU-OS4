@@ -19,11 +19,7 @@
 
 import { useEffect, useRef } from 'react';
 import { logCaughtError } from '../lib/caughtError';
-import {
-    loadUiSessionState,
-    saveUiSessionState,
-    clearUiSessionState,
-} from '../voice/lib/fluStorage';
+import { clearUiSessionState, loadUiSessionState, saveUiSessionState } from '../voice/api/storage';
 
 export interface SessionState {
     activeTab: string;

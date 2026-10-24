@@ -20,7 +20,7 @@ import type {
   SheetRol,
   DocumentAnalysisResult,
 } from '../types/documentContracts';
-import { FLU_CONFIG } from '../voice/lib/fluConfig';
+import { FLU_CONFIG } from '../voice/api/config';
 import { logCaughtError } from './caughtError';
 
 // ------------------------------------------------------------

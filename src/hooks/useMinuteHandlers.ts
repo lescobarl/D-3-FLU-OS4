@@ -12,15 +12,15 @@
 import { useState, useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { aiService } from '../services/aiServiceFactory';
-import { speakResponse } from '../voice/lib/fluSpeech';
-import { FLU_CONFIG } from '../voice/lib/fluConfig';
+import { COMMAND_IDS } from '../voice/api/commands'
+import { FLU_CONFIG } from '../voice/api/config'
+import { speakResponse } from '../voice/api/speech';
 import { createMinuteDraftFromSummary } from '../lib/minuteKnowledgeHelpers';
 import type { IntegrationStore } from '../store/integrationStore';
 import type { MinuteUIEntry } from './useMinuteKnowledge';
 import type { AuditLogEntry, MinuteSummarySnapshot } from '../core/db/fluDatabase';
 import { logCaughtError } from '../lib/caughtError';
 import { resolveConfiguredTemperature } from '../services/aiTemperature';
-import { COMMAND_IDS } from '../voice/lib/commandIds';
 import { resolveMinuteTutoringArea } from '../core/tutoring/tutoringModel';
 
 /**

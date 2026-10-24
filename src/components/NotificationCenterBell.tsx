@@ -7,7 +7,7 @@
 // FLU_CONFIG.notifications.ui (Regla #1: sin hardcode).
 // ============================================================
 import { useEffect, useRef, useState } from 'react';
-import { FLU_CONFIG } from '../voice/lib/fluConfig';
+import { FLU_CONFIG } from '../voice/api/config';
 import { asConfigNode, configText } from './configText';
 import type { NotificationCenterItem } from '../hooks/useNotificationCenter';
 import './NotificationCenterBell.css';

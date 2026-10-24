@@ -11,7 +11,7 @@
 import { arbiterDomainRoute, dispatcherHandlerFor } from './arbiterDomainRoutes';
 import { logCaughtError } from '../lib/caughtError';
 import { relayLog } from '../lib/clientLogRelay';
-import { FLU_CONFIG } from '../voice/lib/fluConfig';
+import { FLU_CONFIG } from '../voice/api/config';
 
 /** Resultado del árbitro determinista (contrato de deterministicArbiter.js). */
 export interface ArbiterResult {

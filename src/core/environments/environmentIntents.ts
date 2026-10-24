@@ -7,7 +7,7 @@
 // catálogo de ambientes (ver environmentRegistry.ts).
 // ============================================================
 
-import { normalizeForMatch, hasVoiceToken } from '../../voice/lib/configCommands.js';
+import { hasVoiceToken, normalizeForMatch } from '../../voice/api/commands';
 import {
     getAmbientes,
     isAmbienteId,

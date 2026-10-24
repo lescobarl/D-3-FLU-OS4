@@ -1,4 +1,4 @@
-import { equalsTrimmed, pickLabel } from '../../lib/textUtils';
+import { equalsTrimmed, pickLabel } from '../../lib/textUtils.ts';
 /**
  * Escucha activa: estado, hablantes, finales. Motor de texto en conversationStream.js.
  */

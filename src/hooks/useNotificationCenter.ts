@@ -8,7 +8,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useServiceRef } from './useServiceRef';
 import { logCaughtError } from '../lib/caughtError';
-import { FLU_CONFIG } from '../voice/lib/fluConfig';
+import { FLU_CONFIG } from '../voice/api/config';
 import {
   createNotificationService,
   NOTIFICATION_EVENT,

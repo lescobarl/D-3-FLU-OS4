@@ -8,7 +8,7 @@
 // de FLU_CONFIG (Rule #1: NO HARDCODE).
 // ============================================================
 import type { RefObject } from 'react';
-import { FLU_CONFIG } from '../voice/lib/fluConfig';
+import { FLU_CONFIG } from '../voice/api/config';
 import { FluTabPanel } from '../voice/components/FluShellTabs';
 import { PanelFrame } from '../voice/components/PanelFrame';
 import { MinuteDraftPanel } from '../voice/components/MinuteDraftPanel';

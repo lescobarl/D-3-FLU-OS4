@@ -23,8 +23,8 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { BunnyViewer } from '../avatar';
-import { speakResponse } from '../voice/lib/fluSpeech';
-import { FLU_CONFIG } from '../voice/lib/fluConfig';
+import { FLU_CONFIG } from '../voice/api/config'
+import { speakResponse } from '../voice/api/speech';
 import { useIntegrationStore } from '../store/integrationStore';
 import { useAvatarVoiceSync } from '../hooks/useAvatarVoiceSync';
 import { useFluBridge } from '../context/FluBridgeContext';

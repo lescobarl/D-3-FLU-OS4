@@ -9,9 +9,7 @@
 // con un numero que nadie midio es basura.
 // ============================================================
 import type { ParticipantRegistry } from '../core/multiuser/participantRegistry';
-import { compareCosineSignatures, normalizeEmbeddingVector } from '../voice/lib/speakerCore.js';
-import { sameVoiceFloor } from '../voice/lib/speakerClusters.js';
-import { voiceVectorModel } from '../voice/lib/speakerDirectory';
+import { compareCosineSignatures, normalizeEmbeddingVector, sameVoiceFloor, voiceVectorModel } from '../voice/api/identity';
 
 /**
  * Registra al participante CON su voz medida; si ya existe, le RE-ANCLA esa voz.
