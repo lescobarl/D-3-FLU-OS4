@@ -92,13 +92,13 @@ function esNombrePropioDeFila(entry?: { speakerId?: string | null; speakerName?:
  * etiqueta automatica.
  */
 function freezeResolvedSpeakerName(
-    store: { conversationHistory: Array<{ id: string; speakerName?: string }>; setEntrySpeakerName: (id: string, name: string) => void },
+    store: { conversationHistory: Array<{ id: string; speakerName?: string }>; setEntrySpeakerName: (id: string, name: string, options?: { resolved?: boolean }) => void },
     rowId: string,
     resolved: string,
 ): void {
     const actual = String(store.conversationHistory.find((e) => e.id === rowId)?.speakerName || '').trim();
     if (isProperSpeakerName(actual) && !isProperSpeakerName(resolved)) return;
-    store.setEntrySpeakerName(rowId, resolved);
+    escribirEtiquetaDeFila(rowId, { nombre: resolved }, store);
 }
 
 /**
@@ -369,7 +369,7 @@ export function resolvePendingSpeakerRows(
             // es la continuidad de la voz que la sesion venia usando (nunca un nombre propio).
             const continuidad = etiquetaDeContinuidadDeLaSesion(store.conversationHistory, epochActual, clusters);
             if (!continuidad) continue;
-            store.setEntrySpeakerName(e.id, continuidad, { resolved: true });
+            escribirEtiquetaDeFila(e.id, { nombre: continuidad, resuelta: true });
             changed += 1;
             continue;
         }
@@ -396,19 +396,19 @@ export function resolvePendingSpeakerRows(
                         voiceKeyFor({ voiceId: labelToSpeakerId(nueva), signature: deSuTurno }),
                         { signature: deSuTurno },
                     );
-                    store.setEntrySpeakerName(e.id, nueva, { resolved: true });
+                    escribirEtiquetaDeFila(e.id, { nombre: nueva, resuelta: true });
                     changed += 1;
                     continue;
                 }
             }
             const continuidad = etiquetaDeContinuidadDeLaSesion(store.conversationHistory, epochActual, clusters);
             if (!continuidad) continue;
-            store.setEntrySpeakerName(e.id, continuidad, { resolved: true });
+            escribirEtiquetaDeFila(e.id, { nombre: continuidad, resuelta: true });
             changed += 1;
             continue;
         }
         store.setEntrySpeaker(e.id, elegida.speakerId, { signature: deSuTurno });
-        store.setEntrySpeakerName(e.id, elegida.label, { resolved: true });
+        escribirEtiquetaDeFila(e.id, { nombre: elegida.label, resuelta: true });
         changed += 1;
     }
     return changed;
@@ -461,7 +461,7 @@ export function renameRowSpeakerName(rowId: string, speakerName: string): boolea
     const store = useIntegrationStore.getState();
     const entry = store.conversationHistory.find((e) => e.id === id);
     if (!entry || entry.role !== 'user') return false;
-    store.setEntrySpeakerName(id, name);
+    escribirEtiquetaDeFila(id, { nombre: name });
     return true;
 }
 
@@ -585,7 +585,7 @@ export function renameVoiceRowsByKey(
         // renombrarlas es exactamente lo que ponia el nombre del titular a la mujer.
         if (claveMixta && anonima && bestSim < floor) continue;
         if (actual === name) continue;
-        store.setEntrySpeakerName(e.id, name);
+        escribirEtiquetaDeFila(e.id, { nombre: name });
         changed += 1;
     }
     return changed;
@@ -684,7 +684,7 @@ export function freezeVoiceName(
             store.setEntrySpeaker(e.id, voz, { signature: rowSignature });
         }
         if (actual === name) return;
-        store.setEntrySpeakerName(e.id, name);
+        escribirEtiquetaDeFila(e.id, { nombre: name });
         changed += 1;
     });
     return changed;
@@ -758,7 +758,7 @@ export function updateTurnRowSpeaker(
     store.setEntrySpeaker(rowId, voz, { signature: measuredVector });
     // FREEZE del nombre en ESTA fila (mandato 2026-10-17): el nombre queda congelado aqui y no
     // se re-resuelve desde el directorio; una voz distinta que reutilice la clave no lo hereda.
-    store.setEntrySpeakerName(rowId, name);
+    escribirEtiquetaDeFila(rowId, { nombre: name });
     voiceProbe('row-update', { turnId, voz, nombre: name, fila: rowId, evidencia: evidenciaAcustica, medida: measuredVector?.length ?? 0 });
     return true;
 }
@@ -786,6 +786,31 @@ export function mismoTramo(a?: { inicio?: number; fin?: number } | null, b?: { i
     const uno = normalizarTramo(a);
     const otro = normalizarTramo(b);
     return Boolean(uno && otro && uno.inicio === otro.inicio && uno.fin === otro.fin);
+}
+
+/**
+ * ESCRITOR UNICO DE LA ETIQUETA (ETAPA 4).
+ *
+ * Toda escritura de `speakerName` pasa por aqui. Dos decisiones distintas, un solo sitio:
+ *  - IDENTIDAD: la elige el dueno de diarizacion (`pickPendingRowLabel`) con MEDIDA del
+ *    tramo y `namedAssignmentConfirmed`; llega con `resuelta: true`.
+ *  - CONTINUIDAD: sin medida, la etiqueta de la voz de la sesion (`continuityLabelForTurn`).
+ *    Nunca "?" en una fila cerrada.
+ *
+ * Ninguna otra ruta toca la etiqueta: dos decisiones sobre la misma fila no pueden divergir.
+ *
+ * @param id fila
+ * @param {{ nombre: string, resuelta?: boolean }} etiqueta
+ * @param store store del historial (inyectable en pruebas)
+ */
+function escribirEtiquetaDeFila(
+    id: string,
+    { nombre, resuelta = false }: { nombre: string; resuelta?: boolean },
+    store: { setEntrySpeakerName: (id: string, name: string, options?: { resolved?: boolean }) => void } = useIntegrationStore.getState(),
+): void {
+    const limpio = String(nombre || '').trim();
+    if (!limpio) return;
+    store.setEntrySpeakerName(id, limpio, resuelta ? { resolved: true } : undefined);
 }
 
 export interface UserTurnRowInput {
