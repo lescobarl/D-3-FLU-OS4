@@ -427,67 +427,28 @@ function clearStaleCommittedEchoFromState(state, lastCommitted = '') {
 
 export { clearStaleCommittedEchoFromState }
 
-/**
- * ¿`viva` conserva TODAS las palabras de `mostrada`, en el mismo orden?
- *
- * Es la guarda que hace seguro preferir la linea viva en el cierre: si la emision mas larga
- * no contiene el bloque visible, es OTRA hipotesis y la caja no puede ceder (medido
- * 2026-10-23 en d4c1c8f3: sin esta guarda, 4 filas perdian el bloque de la caja).
- * @param {string} mostrada
- * @param {string} viva
- * @returns {boolean}
- */
-function conservaLasPalabrasDe(mostrada = '', viva = '') {
-  const objetivo = speechWords(mostrada)
-  const emision = speechWords(viva)
-  if (!objetivo.length || emision.length < objetivo.length) return false
-  let j = 0
-  for (let i = 0; i < emision.length && j < objetivo.length; i += 1) {
-    if (emision[i] === objetivo[j]) j += 1
-  }
-  return j === objetivo.length
-}
 
 /**
- * FRASE DE CIERRE de la locucion: UNICA regla para los DOS cierres reales (onend y srGap).
+ * FRASE DE CIERRE de la locucion: **la CAJA**, y nada mas.
  *
- * - FINAL confirmado: es el veredicto del ASR para ese audio. Manda, salvo que la caja o
- *   la linea viva sean la MISMA revision y traigan mas texto (la caja acumula).
- * - Sin final: manda la caja; la linea viva solo la supera si es la MISMA revision y es
- *   mas completa (`utterancesSameRevision`, dueno unico de "mismo tramo").
- * - NUNCA se concatenan dos hipotesis: cada candidato es una emision entera.
+ * La caja ES el texto de la locucion abierta: es lo que el usuario vio. Antes habia TRES
+ * candidatos (caja / linea viva / final confirmado) que se arbitraban entre si, y esa cadena
+ * era la que dejaba la fila distinta de lo mostrado (acortes y sustos de caja). Ahora:
+ *
+ * - con caja: la fila es la caja, tal cual (ni el final ni la linea viva la superan: si el
+ *   ASR confirma mas texto, lo que crece es la CAJA, que es su duena);
+ * - sin caja (cierre sin preview: onend/rebuild/tests): se usa el final confirmado;
+ * - sin caja ni final: la linea viva, como ultimo rescate.
  *
  * @param {{ caja?: string, lineaViva?: string, finalConfirmado?: string }} [partes]
- * @returns {{ texto: string, motivo: 'final'|'revision'|'caja'|'linea-viva' }}
+ * @returns {{ texto: string, motivo: 'caja'|'final'|'linea-viva' }}
  */
 export function fraseDeCierreDeLocucion({ caja = '', lineaViva = '', finalConfirmado = '' } = {}) {
   const mostrada = cleanForSpeech(caja)
-  const viva = cleanForSpeech(lineaViva)
+  if (mostrada) return { texto: mostrada, motivo: 'caja' }
   const confirmada = cleanForSpeech(finalConfirmado)
-  if (confirmada) {
-    // La caja puede superar al final SOLO si es la misma revision y acumulo mas texto
-    // (el final es un tramo de la locucion que la caja ya mostraba entera).
-    if (
-      mostrada &&
-      utterancesSameRevision(confirmada, mostrada) &&
-      mostrada.length > confirmada.length
-    ) {
-      return { texto: mostrada, motivo: 'revision' }
-    }
-    return { texto: confirmada, motivo: 'final' }
-  }
-  // SIN final: la caja es la verdad visible. La linea viva solo entra si NO hay caja
-  // (rescate del cierre, defecto 1 del dueno 2026-10-19). NUNCA se prefiere la linea
-  // viva acumulada sobre la caja: puede traer ya la locucion SIGUIENTE (medido
-  // 2026-10-19: la fila del dictado se llevaba "voy a hacer un alto...").
-  // SIN final: manda la caja; la linea viva SOLO la supera si es la MISMA revision, trae MAS
-  // texto y CONSERVA todas las palabras de la caja (en el mismo orden). La ultima condicion es
-  // la que hace la regla segura: asi la fila nunca puede perder el bloque que la caja mostraba
-  // (medido 2026-10-23: sin ella, la sesion real d4c1c8f3 pasaba de 0 a 4 `boxLost`).
-  if (mostrada && viva && viva.length > mostrada.length && utterancesSameRevision(viva, mostrada)) {
-    if (conservaLasPalabrasDe(mostrada, viva)) return { texto: viva, motivo: 'revision' }
-  }
-  return { texto: mostrada || viva, motivo: mostrada ? 'caja' : 'linea-viva' }
+  if (confirmada) return { texto: confirmada, motivo: 'final' }
+  return { texto: cleanForSpeech(lineaViva), motivo: 'linea-viva' }
 }
 
 /**

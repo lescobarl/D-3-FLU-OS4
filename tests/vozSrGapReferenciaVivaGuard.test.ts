@@ -201,21 +201,27 @@ describe('srGap: el cierre retiene la referencia viva completa', () => {
     expect(filas.at(-1)).toBe(LOCUCION)
   })
 
-  it('P11.9: caja CORTA + FINAL confirmado mas completo -> la fila lleva el final y la caja crece', () => {
-    // Mutacion: si el cierre borra el texto vivo (o commitea la caja a secas), esta
-    // expectativa falla. Es el defecto medido: la caja habia bloqueado una emision mas
-    // completa y el final confirmado se perdia al cerrar por silencio.
-    const corta = 'quiero que me expliques con calma todos los pasos'
-    const { filas } = cerrarPorSrGap({ openLine: LOCUCION, live: corta, final: LOCUCION, filas: [] })
-    console.log(`  DET frame=${filas.map((t) => t.length).join(',')}`)
-    expect(filas.at(-1), 'la fila lleva el FINAL confirmado, no la caja corta').toBe(LOCUCION)
+  it('P11.9: el FINAL confirmado ya publicado en la caja -> la fila es la caja (sin arbitraje)', () => {
+    // ETAPA 5: la caja es el texto de la locucion abierta. El final confirmado crece la CAJA
+    // (su duena, al commitear el final); al cerrar, la fila es lo que la caja muestra.
+    const { filas } = cerrarPorSrGap({ openLine: LOCUCION, live: LOCUCION, final: LOCUCION, filas: [] })
+    expect(filas.at(-1), 'la fila es la caja, que ya trae el final').toBe(LOCUCION)
   })
 
-  it('P11.9b: caja CORTA + viva de la MISMA revision que CONSERVA el bloque y trae mas texto -> la fila lleva la completa (sin final)', () => {
+  it('P11.9-bis: caja CORTA y final mas completo SIN publicar -> la fila NO elige otro candidato', () => {
+    // Cadena BORRADA: antes la fila saltaba al final confirmado. Ahora manda la caja; si la
+    // caja se quedo corta, el defecto es de la CAJA (que solo acumula), no de la fila.
+    const corta = 'quiero que me expliques con calma todos los pasos'
+    const { filas } = cerrarPorSrGap({ openLine: LOCUCION, live: corta, final: LOCUCION, filas: [] })
+    expect(filas.at(-1), 'la fila es la caja: no hay segundo candidato').toBe(corta)
+  })
+
+  it('P11.9b: la LINEA VIVA no compite con la caja (aunque traiga mas texto)', () => {
+    // ETAPA 5: la linea viva deja de ser candidata; si la fila la llevara, mostraria algo
+    // que la caja no muestra.
     const corta = 'quiero que me expliques con calma'
     const { filas } = cerrarPorSrGap({ openLine: LOCUCION, live: corta, filas: [] })
-    // La viva conserva TODAS las palabras de la caja: la fila puede crecer sin perder nada.
-    expect(filas.at(-1)).toBe(LOCUCION)
+    expect(filas.at(-1), 'la fila es la caja').toBe(corta)
   })
 
   it('P11.9c: viva mas larga que NO conserva el bloque de la caja -> manda la caja (no hay perdida)', () => {
