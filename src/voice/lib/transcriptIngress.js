@@ -1,7 +1,7 @@
 /**
  * ingestFinalChunk: flush absoluto + final-only + commit async vía hook.
  */
-import { cleanForSpeech, pickBestRecognitionTranscript } from './audioMath.js'
+import { cleanForSpeech, pickBestRecognitionTranscript, stripDiacritics } from './audioMath.js'
 import { estadoDeLocucion } from '../core/locucion.js'
 import { FLU_CONFIG } from './fluConfig.js'
 import {
@@ -73,6 +73,84 @@ export function canonSinTartamudeo(value = '') {
   ).join(' ')
 }
 
+/** Palabras de un texto tal cual se dijeron (con su grafia), para no perder mayusculas. */
+function palabrasCrudas(texto = '') {
+  return String(texto || '').trim().split(/\s+/).filter(Boolean)
+}
+
+/** Clave comparable de una palabra: sin acentos, minusculas, sin signos. */
+function claveDePalabra(texto = '') {
+  return stripDiacritics(String(texto || '')).toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '')
+}
+
+/**
+ * UNE dos VARIANTES DEL MISMO TRAMO conservando TODAS las palabras (decision del dueno
+ * 2026-10-23): alineacion por subsecuencia comun, sin elegir una variante que pierda un
+ * token y sin repetir una palabra que ya esta.
+ *
+ * El motor emite, para UN mismo tramo de audio, varias hipotesis del mismo enunciado
+ * (medido 8f3112c2, evento t=1792789332116: una trae "esto", otra la cola "escucha").
+ * Quedarse con la mas larga pesaba mas que conservar el habla: la fila perdia "esto".
+ *
+ * El tramo lo garantiza el LLAMADOR: solo se unen los finales del MISMO evento del motor.
+ * Si la variante anade MUCHO al final (>3 palabras) no es una variante del mismo tramo
+ * sino otra locucion pegada: NO se une (esa frontera la decide el tramo, no este merge).
+ *
+ * @param {string} elegido variante vigente
+ * @param {string} candidata variante hermana del mismo tramo
+ * @returns {string} union alineada (o la variante mas completa si no se puede unir)
+ */
+export function unirVariantesDelMismoTramo(elegido = '', candidata = '') {
+  const a = palabrasCrudas(elegido)
+  const b = palabrasCrudas(candidata)
+  if (!a.length) return String(candidata || '')
+  if (!b.length) return String(elegido || '')
+  const ka = a.map(claveDePalabra)
+  const kb = b.map(claveDePalabra)
+  // Subsecuencia comun mas larga por CLAVE (tolera acentos y mayusculas).
+  const tabla = Array.from({ length: ka.length + 1 }, () => new Array(kb.length + 1).fill(0))
+  for (let i = ka.length - 1; i >= 0; i -= 1) {
+    for (let j = kb.length - 1; j >= 0; j -= 1) {
+      tabla[i][j] = ka[i] === kb[j] ? tabla[i + 1][j + 1] + 1 : Math.max(tabla[i + 1][j], tabla[i][j + 1])
+    }
+  }
+  const salida = []
+  const yaEsta = (clave) => salida.some((palabra) => claveDePalabra(palabra) === clave)
+  let i = 0
+  let j = 0
+  let anadidasAlFinal = 0
+  while (i < a.length && j < b.length) {
+    if (ka[i] === kb[j]) {
+      salida.push(a[i])
+      i += 1
+      j += 1
+      continue
+    }
+    // Palabra que solo trae la candidata: se ANADE en su posicion alineada.
+    if (tabla[i][j + 1] >= tabla[i + 1][j]) {
+      if (!yaEsta(kb[j])) salida.push(b[j])
+      j += 1
+      continue
+    }
+    salida.push(a[i])
+    i += 1
+  }
+  while (i < a.length) {
+    salida.push(a[i])
+    i += 1
+  }
+  while (j < b.length) {
+    if (!yaEsta(kb[j])) {
+      salida.push(b[j])
+      anadidasAlFinal += 1
+    }
+    j += 1
+  }
+  // Cola grande y ajena: es otra locucion pegada. No se une (lo decide el tramo).
+  if (anadidasAlFinal > 3) return elegido.length >= candidata.length ? String(elegido) : String(candidata)
+  return salida.join(' ')
+}
+
 function buildFinalCommitList(finalChunks = []) {
   const normalized = finalChunks
     .map((chunk) => cleanForSpeech(chunk))
@@ -124,7 +202,8 @@ function buildFinalCommitList(finalChunks = []) {
         else if (!repetidaLast && !repetidaCapture && cCapture.length >= cLast.length) commits[commits.length - 1] = capture
         // Ambas tartamudeadas o solo la nueva: se conserva la previa.
       } else if (cCapture.length >= cLast.length) {
-        commits[commits.length - 1] = capture
+        // MISMO TRAMO (mismo evento del motor): se UNEN conservando todas las palabras.
+        commits[commits.length - 1] = unirVariantesDelMismoTramo(last, capture)
       }
       continue
     }
