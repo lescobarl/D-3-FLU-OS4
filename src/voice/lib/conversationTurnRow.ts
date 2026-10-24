@@ -229,7 +229,7 @@ function rememberTurn(turnId: number | string | null, rowId: string): void {
  * Evidencia de un turno de la sesion: su medida (`signatureVector`) y el turno al que
  * pertenece. Es lo que el preflight entrega desde el LEDGER (`getSessionSpeakerSnapshots`).
  */
-export interface PendingRowEvidence {
+interface PendingRowEvidence {
     turnId?: number;
     signatureVector?: number[];
 }
@@ -801,7 +801,7 @@ function escribirEtiquetaDeFila(
     store.setEntrySpeakerName(id, limpio, resuelta ? { resolved: true } : undefined);
 }
 
-export interface UserTurnRowInput {
+interface UserTurnRowInput {
     /** Frase canónica de la locución (con wake word, tal como se muestra). */
     text: string;
     /** Hablante resuelto (puede llegar en el commit final, no en el temprano). */
@@ -840,7 +840,7 @@ export interface UserTurnRowInput {
     turnWindow?: { inicio: number; fin: number } | null;
 }
 
-export type UserTurnRowAction = 'replaced' | 'reused' | 'added' | 'skipped';
+type UserTurnRowAction = 'replaced' | 'reused' | 'added' | 'skipped';
 
 /**
  * DECISIÓN de escritura de la fila del usuario: ¿este payload de resolución
@@ -880,7 +880,7 @@ export function escribeFilaDeUsuario(
     return hayTexto && (!payload?.rawOnly || hablable);
 }
 
-export interface UserTurnRowResult {
+interface UserTurnRowResult {
     id: string | null;
     action: UserTurnRowAction;
 }

@@ -70,7 +70,7 @@ export function resetActiveListenState(state) {
   state.openLineBook = null
 }
 
-export function resolveActiveSpeaker(state, utterance = '') {
+function resolveActiveSpeaker(state, utterance = '') {
   const wakeWords = FLU_CONFIG.voiceCommands?.wakeWords || []
   const introduced = detectWakeIntroducedName(utterance, wakeWords)
   if (introduced) return introduced
@@ -187,7 +187,7 @@ export function getSpeakerLabel(state) {
   return formatListenSpeakerLabel(Number.isFinite(index) && index >= 1 ? index : 1, speakers)
 }
 
-export function shouldOpenNewParagraph(state, nowMs = Date.now()) {
+function shouldOpenNewParagraph(state, nowMs = Date.now()) {
   const { speakers } = getActiveListenConfig()
   const breakOnPause = speakers.paragraphBreakOnPause !== false
   if (!breakOnPause) return false
@@ -287,7 +287,7 @@ export function clearPendingFinal(state) {
   return pendiente
 }
 
-export function foldSpeechKey(text = '') {
+function foldSpeechKey(text = '') {
   return cleanForSpeech(text).toLowerCase()
 }
 

@@ -160,6 +160,26 @@ describe('frontera de audio sobre el arnes real del replay', () => {
     ).toBe(LOCUCION_2)
   })
 
+  it('MUTACION: con la linea ACTIVA (sin quietud) las dos locuciones quedan en UNA fila', () => {
+    const h = createArnés()
+    h.interim(LOCUCION_1)
+    h.interim(LOCUCION_2) // sin pausa: la linea se toca con cada interino
+    h.end()
+
+    expect(h.observed.rows, 'sin quietud no hay frontera').toHaveLength(1)
+    expect(h.observed.rows[0].text).toContain('magistrado Luis')
+  })
+
+  it('una locucion que CRECE no se parte (mismo tramo, sin quietud)', () => {
+    const h = createArnés()
+    h.interim('vamos a preparar la receta')
+    h.interim('vamos a preparar la receta de pan casero')
+    h.end()
+
+    expect(h.observed.rows).toHaveLength(1)
+    expect(h.observed.rows[0].text).toBe('vamos a preparar la receta de pan casero')
+  })
+
   it('MUTACION 2: final tardio del MISMO tramo -> UNA fila (reemplaza, no abre otra)', () => {
     const h = createArnés()
     h.interim(LOCUCION_1)

@@ -10,11 +10,11 @@ import { autoSpeakerLabel, isAutoSpeakerLabel } from './speakerCore.js'
 import { equalsTrimmed } from '../../lib/textUtils.ts'
 
 export const SPEAKER_ID_CALCULATING = 'calculando'
-export const SPEAKER_ID_FLU = 'flu'
+const SPEAKER_ID_FLU = 'flu'
 
 const SPEAKER_ID_PATTERN = /^speaker_[a-z0-9_]+$/
 
-export function getIdentifyingSpeakerName(config = FLU_CONFIG) {
+function getIdentifyingSpeakerName(config = FLU_CONFIG) {
   const label = String(config?.ui?.identifyingSpeakerName || '').trim()
   return label || 'Identificando...'
 }
@@ -23,7 +23,7 @@ export function isCalculatingSpeakerId(speakerId = '') {
   return equalsTrimmed(speakerId, SPEAKER_ID_CALCULATING)
 }
 
-export function isValidSpeakerId(speakerId = '') {
+function isValidSpeakerId(speakerId = '') {
   const id = String(speakerId || '').trim()
   if (!id) return false
   if (id === SPEAKER_ID_CALCULATING || id === SPEAKER_ID_FLU) return true

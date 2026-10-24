@@ -170,7 +170,7 @@ export function conservaLasPalabrasDe(mostrada = '', viva = '') {
  * Tras commit reciente: interino acumulativo de Chrome que re-incluye la fila cerrada
  * → conservar solo la continuación (ej. «le salto la pelota bastante»).
  */
-export function bridgeInterimAfterCommitPause(interim = '', lastCommitted = '', msSinceCommit = 0) {
+function bridgeInterimAfterCommitPause(interim = '', lastCommitted = '', msSinceCommit = 0) {
   const chunk = cleanForSpeech(interim)
   const prior = cleanForSpeech(lastCommitted)
   if (!chunk || !prior) return chunk
@@ -202,7 +202,7 @@ export function bridgeInterimAfterCommitPause(interim = '', lastCommitted = '', 
   return chunk
 }
 
-export function readOpenLine(state) {
+function readOpenLine(state) {
   return state?.openLine || ''
 }
 
@@ -229,7 +229,7 @@ export function markInterimOpenLineActivity(state, { text = '', nowMs = Date.now
 }
 
 /** Recupera texto cuando strip vacía un interino acumulativo de Chrome pero el raw trae continuación. */
-export function recoverInterimAfterStrip(rawInterim = '', priorTexts = []) {
+function recoverInterimAfterStrip(rawInterim = '', priorTexts = []) {
   const raw = cleanForSpeech(rawInterim)
   if (!raw) return ''
   const priors = priorTexts.map((t) => cleanForSpeech(t)).filter(Boolean)
@@ -374,7 +374,7 @@ export function isAssistantSpeechEcho(event = null, assistantText = '') {
 }
 
 /** Separa texto nuevo cuando Chrome prependea el turno ya cerrado. */
-export function peelCommittedPrefixFromInterim(interim = '', lastCommitted = '') {
+function peelCommittedPrefixFromInterim(interim = '', lastCommitted = '') {
   const chunk = cleanForSpeech(interim)
   const prior = cleanForSpeech(lastCommitted)
   if (!chunk || !prior) return chunk
@@ -526,7 +526,7 @@ export function evaluateSrGapSegmentCommit(
   }
 }
 
-export function readPending(state) {
+function readPending(state) {
   return state?.pendingInterim || ''
 }
 
@@ -604,7 +604,7 @@ export function stripLastClosedTurnFromInterim(interim = '', priorTexts = []) {
   return stripRecentClosedTurnsFromInterim(interim, priorTexts, 1)
 }
 
-export function applyInterimPriorStrip(interim = '', priorTexts = [], config = FLU_CONFIG) {
+function applyInterimPriorStrip(interim = '', priorTexts = [], config = FLU_CONFIG) {
   const transcript = config.transcript || {}
   if (transcript.stripPriorTurnsOnInterim === false) return cleanForSpeech(interim)
   const priors = priorTexts.filter(Boolean)
@@ -751,7 +751,7 @@ const NEW_UTTERANCE_BRIDGE_RE =
 /**
  * Separa final ASR vs cola de preview que pertenece al siguiente turno/hablante.
  */
-export function splitFinalAndBridgeTail(finalText = '', previewText = '') {
+function splitFinalAndBridgeTail(finalText = '', previewText = '') {
   const fin = cleanForSpeech(finalText)
   const preview = cleanForSpeech(previewText)
   if (!fin) return { commit: preview || '', bridge: '' }

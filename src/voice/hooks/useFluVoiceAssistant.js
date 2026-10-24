@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { tramoDelTurno, crearDetectorDeFronteras } from '../core/tramo.js'
+import { tramoDelTurno } from '../core/tramo.js'
 import {
   computeAudioSignature,
   cleanForSpeech,
@@ -339,7 +339,6 @@ export function useFluVoiceAssistant({
   const finalizeGraceUsedRef = useRef(false)
   const sampleRateRef = useRef(AUDIO_SAMPLE_RATE)
   const chunksRef = useRef([])
-  const detectorAudioRef = useRef(null) // FRONTERA DE AUDIO por locucion (VAD por evento)
   const sessionLoadedRef = useRef(false)
   // §9 vistas de SOLO LECTURA del store `conversationHistory` (sin setter: escribir lanza).
   const dialogueView = useMemo(
@@ -842,7 +841,7 @@ const lastResolvedTurnRef = useRef(0)
   const clearCaptureState = useCallback(() => {
     clearTurnBuffers()
     chunksRef.current = []
-    chunkTotalSamplesRef.current = 0; detectorAudioRef.current?.reset?.()
+    chunkTotalSamplesRef.current = 0
   }, [clearTurnBuffers])
 
   const resetVoiceDisplay = useCallback(() => {
@@ -1924,7 +1923,6 @@ const lastResolvedTurnRef = useRef(0)
       onPcmBlock: (input) => {
         chunksRef.current.push(new Float32Array(input))
         chunkTotalSamplesRef.current += input.length
-        ;(detectorAudioRef.current ||= crearDetectorDeFronteras({ sampleRate: sampleRateRef.current || AUDIO_SAMPLE_RATE })).push(input)
         probePcmBlock({ total: chunkTotalSamplesRef.current, chunks: chunksRef.current.length, listening: isListeningRef.current, conversation: Boolean(conversationActiveRef?.current) })
         trimAudioChunkBuffer(
           chunksRef,
@@ -2477,7 +2475,7 @@ const lastResolvedTurnRef = useRef(0)
       }
       clearTurnBuffers()
       chunksRef.current = []
-      chunkTotalSamplesRef.current = 0; detectorAudioRef.current?.reset?.()
+      chunkTotalSamplesRef.current = 0
       if (!resume) {
         resetActiveListenState(listenStateRef.current)
         pendingSpillRef.current = ''
@@ -4275,7 +4273,6 @@ const lastResolvedTurnRef = useRef(0)
       previewSignature: lastTurnSignatureRef.current,
       finalSignature: lastTurnSignatureRef.current,
       ...resolveEchoContext(useIntegrationStore.getState().conversationHistory, getLastCompletedSpeechAt()),
-      audioFrontera: detectorAudioRef.current?.frontera?.() || 0,
     }),
     peekTurnBridgeText: () => turnBridgeTextRef.current,
     stashTurnBridgeText: (text) => {

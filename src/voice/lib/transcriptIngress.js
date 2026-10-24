@@ -841,16 +841,13 @@ function ingestInterimChunk({ interim, ctx }) {
   const turnBoundary = !openPreviewTurnRef.current
   const cleanedInterim = cleanForSpeech(interim)
 
-  // FRONTERA DE AUDIO (VAD por evento): el segmentador cerro el habla (>= minSilenceMs)
-  // aunque el reloj del turno aun no (srGapCommitMs es MAS largo). La locucion ABIERTA se
-  // cierra por la puerta real y la linea arranca limpia: dos locuciones = DOS filas.
-  const fronteraAudio = Number(ctx.getAudioFrontera?.() || 0)
+  // FRONTERA DE LOCUCION (dueno unico: `hayFronteraDeAudio`): la linea viva lleva QUIETA
+  // el silencio minimo y lo que llega abre OTRA locucion. La locucion ABIERTA se cierra por
+  // la puerta real y la linea arranca limpia: dos locuciones = DOS filas.
   const lineaAbierta = cleanForSpeech(readTurnLive(listenState) || '')
-  const fronteraConsumida = Number(listenState.audioFronteraConsumida) || 0
   const ahoraMs = Number(ctx.nowMs?.() ?? Date.now())
   const quietudDeLaLineaMs = ahoraMs - Number(listenState.openLineLastTouchMs || 0)
-  if (hayFronteraDeAudio({ frontera: fronteraAudio, consumida: fronteraConsumida, lineaAbierta, texto: cleanedInterim, quietaMs: quietudDeLaLineaMs, minQuietaMs: getVadSegmentConfig().minSilenceMs })) {
-    listenState.audioFronteraConsumida = fronteraAudio
+  if (hayFronteraDeAudio({ lineaAbierta, texto: cleanedInterim, quietaMs: quietudDeLaLineaMs, minQuietaMs: getVadSegmentConfig().minSilenceMs })) {
     // TEXTO DE LA LOCUCION CERRADA: `openLine` COMPLETA, no `lineaAbierta` (el display de
     // `readTurnLive` puede devolver la hipotesis parcial del ASR y perdia palabras) ni la
     // caja (puede llevar la locucion siguiente). El final confirmado de ESTA misma locucion,
@@ -895,14 +892,9 @@ function ingestInterimChunk({ interim, ctx }) {
     ctx.scheduleIdentityPreflight?.({ utterance: cleanedInterim })
     ctx.vaciarLaCaja?.()
     listenState.fronteraCerrada = cerrada
-    fluTrace('ingress', 'locucion-frontera-audio', {
-      frontera: fronteraAudio,
+    fluTrace('ingress', 'locucion-frontera', {
       cerrada: cerrada.slice(-80),
     })
-  } else if (fronteraAudio > fronteraConsumida && !lineaAbierta) {
-    // Sin linea abierta no hay nada que cerrar: la frontera queda consumida para no
-    // partir despues una linea que ya empezo DESPUES de ese silencio.
-    listenState.audioFronteraConsumida = fronteraAudio
   }
 
   const pendingBridge =

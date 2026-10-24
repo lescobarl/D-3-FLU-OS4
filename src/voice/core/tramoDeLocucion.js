@@ -1,24 +1,30 @@
 /**
- * TRAMO POR LOCUCIÓN — frontera de AUDIO entre dos locuciones (dueño único).
+ * FRONTERA DE LOCUCIÓN — dueño único de «¿aquí acabó una locución y empieza otra?».
  *
- * El tramo de la fila (`tramoDelTurno`) es la ventana del TURNO. Eso deja un agujero medido
- * (sesión 8f3112c2): dos locuciones SIN pausa suficiente comparten turno y acaban en UNA
- * fila (ids 1792789182623 / 1792789202635), porque el reloj del turno no cierra hasta
+ * El tramo de la fila (`turnWindow`) es la ventana del TURNO y NO identifica la locución.
+ * Eso dejaba un agujero medido (sesión 8f3112c2): dos locuciones sin pausa suficiente
+ * compartían turno y acababan en UNA fila, porque el reloj del turno no cierra hasta
  * `srGapCommitMs` (3500 ms) y la pausa entre ellas era 2440 ms.
  *
- * El AUDIO sí lo sabe antes: el segmentador de voz cierra la locución en cuanto hay
- * `minSilenceMs` (900 ms) de silencio. Este módulo expone esa frontera como una POSICIÓN en
- * muestras del PCM del turno; el ingress la consume para cerrar la locución abierta y
- * arrancar la siguiente (una locución = una fila), sin tocar el reloj del turno.
+ * La frontera se decide con DOS evidencias independientes:
+ *   1. QUIETUD de la línea viva: el ASR lleva `minSilenceMs` (900 ms) sin tocarla.
+ *   2. TEXTO AJENO: la emisión que llega abre OTRA locución (`estadoDeLocucion`).
  *
- * No decide texto: solo responde «¿dónde acabó el habla?», que es lo que el texto no puede
- * demostrar (cortar por texto produjo 57 filas: el ASR reinicia su hipótesis a media frase).
+ * Solo el texto no basta (el ASR reinicia su hipótesis a media frase: 57 filas medidas) y
+ * solo la pausa tampoco (un dictado normal tiene pausas de 1-2 s dentro de la misma
+ * locución: cortar en cada una partió 24 filas). Las dos juntas sí identifican el corte.
+ *
+ * `crearDetectorDeFronteras` sigue siendo el dueño del VAD por evento para MEDIR audio
+ * (playback y diagnóstico). Su marca NO decide la frontera: en la sesión real no hay
+ * frontera de audio después de 77,7 s y la locución sí acabó.
  */
 import { createVoiceSegmenter } from '../lib/asr/voiceActivitySegmenter.js'
 import { DEFAULT_SAMPLE_RATE } from '../lib/audioConstants.js'
 import { estadoDeLocucion } from './locucion.js'
 
 /**
+ * Detector de fronteras de audio por evento (VAD). Devuelve la posición, en muestras, del
+ * último fin de habla que vio el segmentador.
  * @param {{ sampleRate?: number, config?: object }} [options]
  * @returns {{ push: (samples: Float32Array | number[]) => number, frontera: () => number,
  *   muestras: () => number, reset: () => void }}
@@ -59,33 +65,19 @@ export function crearDetectorDeFronteras({ sampleRate = DEFAULT_SAMPLE_RATE, con
 }
 
 /**
- * ¿Hay FRONTERA de locución? Exige DOS evidencias independientes:
+ * ¿Hay FRONTERA de locución? Dueño único del predicado.
  *
- *  1. **AUDIO**: el segmentador cerró el habla después de la última frontera consumida.
- *  2. **TEXTO**: la emisión que llega abre OTRA locución (dueño único: `estadoDeLocucion`).
+ * Exige las dos evidencias: la línea lleva QUIETA el silencio mínimo y lo que llega abre
+ * otra locución. Sin la quietud, un reinicio de hipótesis del ASR a media frase (texto
+ * distinto, 200 ms después) se tomaba por frontera y partía la locución (2 filas extra
+ * medidas en playback 8f3112c2).
  *
- * Solo el audio no basta: en un dictado normal hay pausas de 1-2 s dentro de la MISMA
- * locución (el producto cierra por silencio a los 3500 ms justamente por eso), y cortar en
- * cada pausa partió 24 filas en la sesión 8f3112c2. Solo el texto tampoco basta (el ASR
- * reinicia su hipótesis a media frase: 57 filas medidas). Las dos señales juntas sí
- * identifican «aquí acabó una locución y empieza otra».
- *
- * @param {{ frontera?: number, consumida?: number, lineaAbierta?: string, texto?: string }} [estado]
+ * @param {{ lineaAbierta?: string, texto?: string, quietaMs?: number, minQuietaMs?: number }} [estado]
  * @returns {boolean}
  */
-export function hayFronteraDeAudio({ frontera = 0, consumida = 0, lineaAbierta = '', texto = '', quietaMs = 0, minQuietaMs = 0 } = {}) {
-  const marca = Number(frontera) || 0
-  const yaVista = Number(consumida) || 0
-  // La marca del VAD es CONTEXTO (se informa); la EVIDENCIA que decide es la quietud de la
-  // linea + el texto ajeno: el VAD solo ve el PCM que el recorder conservo (medido: en la
-  // sesion 8f3112c2 no hay frontera de audio despues de 77,7 s y la locucion si acabo).
-  void marca
-  void yaVista
+export function hayFronteraDeAudio({ lineaAbierta = '', texto = '', quietaMs = 0, minQuietaMs = 0 } = {}) {
   const abierta = String(lineaAbierta || '').trim()
   if (!abierta) return false
-  // TERCERA condicion: la linea lleva QUIETA el silencio del VAD. Sin esto, un reinicio
-  // de hipotesis del ASR a media frase (texto distinto, 200 ms despues) se tomaba por
-  // frontera y partia la locucion: 2 filas extra medidas en playback 8f3112c2.
   if (Number(minQuietaMs) > 0 && Number(quietaMs) < Number(minQuietaMs)) return false
   return estadoDeLocucion(abierta, String(texto || '')).locucionNueva
 }

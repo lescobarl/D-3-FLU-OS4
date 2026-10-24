@@ -72,7 +72,7 @@ export function captureTurnAudioSnapshot(turnId = 0, { buildWindow, meta = {} } 
 }
 
 /** Snapshot del turno SOLO si pertenece a ese turno (si no, `null`). */
-export function readTurnAudioSnapshot(turnId = 0) {
+function readTurnAudioSnapshot(turnId = 0) {
   const entry = snapshotsByTurn.get(Number(turnId) || 0)
   return entry?.samples?.length ? entry.samples : null
 }

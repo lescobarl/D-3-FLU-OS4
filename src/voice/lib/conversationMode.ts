@@ -14,7 +14,7 @@ import { logCaughtError } from '../../lib/caughtError.ts';
 // la escucha en conversación, para que no existan dos caminos divergentes.
 // ============================================================
 
-export interface ConversationModeBindings {
+interface ConversationModeBindings {
     /** Ref que lee el motor de voz (`conversationActiveRef`). */
     conversationActiveRef: { current: boolean };
     /** Abre la escucha principal del motor (`os2StartListening`). */
@@ -30,7 +30,7 @@ export interface ConversationModeBindings {
     onTransition?: (info: { event: string; active: boolean }) => void;
 }
 
-export interface ConversationModeController {
+interface ConversationModeController {
     /** Entra en modo conversación sin abrir la escucha (reinicios propios). */
     enter: () => void;
     /** Sale del modo conversación (modo comando). */

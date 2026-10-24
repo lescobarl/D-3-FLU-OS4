@@ -11,7 +11,7 @@ const FALLBACK_SPEAKER = FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker
 
 export const FLU_DIALOGUE_SPEAKER = 'Flu'
 
-export const DIALOGUE_SOURCE = Object.freeze({
+const DIALOGUE_SOURCE = Object.freeze({
   LOG: 'log',
   QUERY: 'query',
   PARTICIPANT: 'participant',
@@ -22,7 +22,7 @@ export function isFluSpeaker(speaker = '') {
   return equalsTrimmed(speaker, FLU_DIALOGUE_SPEAKER)
 }
 
-export function trimDialogueHistory(history = [], max = FLU_CONFIG.limits.contextHistoryMax) {
+function trimDialogueHistory(history = [], max = FLU_CONFIG.limits.contextHistoryMax) {
   const limit = Number(max)
   if (!Number.isFinite(limit) || limit <= 0) return [...history]
   return history.length <= limit ? [...history] : history.slice(-limit)
@@ -129,7 +129,7 @@ export function resolveEchoContext(conversationHistory = [], completedSpeechAt =
     }
 }
 
-export function deriveAssistantLastAtMs(conversationHistory = []) {
+function deriveAssistantLastAtMs(conversationHistory = []) {
   const entry = lastFluEntry(conversationHistory)
   const at = Number(entry?.timestamp)
   return Number.isFinite(at) && at > 0 ? at : 0

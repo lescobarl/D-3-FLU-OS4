@@ -96,11 +96,12 @@ export async function runPlaybackSession({ session, clock, inferMarks = true, sr
   }
   const { observed, bindings } = buildHarness(app, clock)
 
-  // AUDIO -> segmentador de voz: la unica fuente de FRONTERAS de locucion.
+  // AUDIO -> segmentador VAD: se mide el numero de fronteras que vio el segmentador
+  // (`observed.audio.frontiers`). La frontera de LOCUCION la decide el ingress con la
+  // quietud de la linea + el texto ajeno (dueno unico: `hayFronteraDeAudio`).
   const rateDeclarada = Number(session?.manifest?.sampleRate) || Number(session?.meta?.sampleRate) || 0
   const { samples, sampleRate, file: audioFile } = decodeSessionAudio(session.dir, rateDeclarada)
   const detector = crearDetectorDeFronteras({ sampleRate })
-  bindings.getIngressVoiceContext = () => ({ audioFrontera: detector.frontera() })
 
   const runtime = bridge.createConversationIngressRuntime({ getBindings: () => bindings })
   const { buildMicBurstEvent } = producer
