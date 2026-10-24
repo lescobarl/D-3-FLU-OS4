@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { tramoDelTurno } from '../core/tramo.js'
 import {
   computeAudioSignature,
   cleanForSpeech,
@@ -1655,7 +1656,8 @@ const lastResolvedTurnRef = useRef(0)
         lastSpeakerRef.current ||
         getSpeakerLabel(listenStateRef.current),
       )
-      recordSessionTurn({ kind: 'commit', text: capture, speaker, signature: lastTurnSignatureRef.current, clusters: speakerClustersRef.current, lastSpeaker: lastSpeakerRef.current, primary: sessionPrimarySpeakerRef.current, audioStartSample: turnAudioStartSampleRef.current, audioEndSample: chunkTotalSamplesRef.current, tramoValido: chunkTotalSamplesRef.current > turnAudioStartSampleRef.current, sessionTurnId: activeTurnIdRef.current })
+      const tramoFila = tramoDelTurno({ chunks: chunksRef.current, totalSamples: chunkTotalSamplesRef.current, sinceSample: turnAudioStartSampleRef.current, sampleRate: sampleRateRef.current })
+      recordSessionTurn({ kind: 'commit', text: capture, speaker, signature: lastTurnSignatureRef.current, clusters: speakerClustersRef.current, lastSpeaker: lastSpeakerRef.current, primary: sessionPrimarySpeakerRef.current, audioStartSample: tramoFila.audioStartSample, audioEndSample: tramoFila.audioEndSample, tramoValido: tramoFila.tramoValido, sessionTurnId: activeTurnIdRef.current })
 
       if (!isFluSpeaker(speaker)) {
         archiveCommittedTurn(listenStateRef.current, capture, {
@@ -2630,7 +2632,6 @@ const lastResolvedTurnRef = useRef(0)
         resetActiveListenState(listenStateRef.current)
         lastEmittedTranscriptRef.current = ''
         openPreviewTurnRef.current = false
-        // Los DOS contadores son UN estado: sin el total, el tramo del commit sale ACUMULATIVO.
         turnAudioStartSampleRef.current = chunkTotalSamplesRef.current = 0
         lastStreamPreviewRef.current = ''
         lastLogLineTextRef.current = ''
@@ -4379,4 +4380,3 @@ const lastResolvedTurnRef = useRef(0)
     setRecentMemory,
   }
 }
-

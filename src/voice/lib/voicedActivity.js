@@ -286,31 +286,23 @@ export function rmsOfBlocks(blocks, { sampleRate = DEFAULT_SAMPLE_RATE, windowMs
 }
 
 /**
- * DUENO UNICO de "que tramo de la ventana del turno se EMBEBE".
+ * VENTANA CON VOZ de una ventana de turno: devuelve los BORDES en muestras (no una copia).
  *
- * La ventana del turno termina en el FINAL del ASR, que llega DESPUES de la pausa:
- * su cola es silencio, y en los bordes puede quedar audio ajeno (eco/TV). Embeber la
- * ventana entera diluye el timbre de la voz del turno y produjo similitudes medidas
- * de 0.10-0.43 contra la MISMA voz (log del dueno 2026-10-18: turno 11, 2 s de
- * ventana con voz solo en una parte). Aqui se devuelve el TRAMO CON VOZ:
+ * Dueno unico de "donde esta la voz dentro de este audio". Lo consumen la medida de
+ * identidad (`selectVoicedWindow`, que solo recorta) y el TRAMO de la locucion
+ * (`core/tramo.js`, que necesita [inicio, fin] en muestras para la fila).
  *
  * - se marcan las tramas VAD (mismo umbral y trama que `countVoicedSamples`);
- * - se unen las tramas vivas separadas por pausas <= `maxGapMs` (una respiracion
- *   dentro de la frase no parte el timbre);
- * - se elige el tramo con MAS muestras de voz y se recorta a sus bordes (sin
- *   silencio inicial/final);
- * - sin ninguna trama viva se devuelve la cola de siempre (`maxSamples`): el piso de
- *   voz del llamador decide si alcanza; aqui NO se fabrica voz.
+ * - se unen las tramas vivas separadas por pausas <= `maxGapMs`;
+ * - se elige el tramo con MAS muestras de voz (`prefer: "last"` = el ultimo contiguo);
+ * - SIN ninguna trama viva: `hayVoz: false` y los bordes son la cola de siempre
+ *   (`maxSamples` o toda la ventana). Aqui NO se fabrica voz.
  *
- * @param {Float32Array|number[]} samples Ventana del turno (mono, [-1,1]).
+ * @param {Float32Array|number[]} samples
  * @param {{ sampleRate?: number, maxSamples?: number, frameMs?: number, rmsFloor?: number, maxGapMs?: number, prefer?: "longest"|"last" }} [opts]
- *   `maxSamples` acota el tramo devuelto (0/ausente = toda la ventana).
- *   `prefer: "last"` devuelve el ULTIMO tramo contiguo de voz (el que el ASR acaba de
- *   confirmar); "longest" (defecto) el de mas voz. Un turno con DOS voces se mide sobre
- *   una sola: promediarlas era lo que arrastraba el nombre del primario.
- * @returns {Float32Array} Tramo con voz (copia), o la cola si no hay voz.
+ * @returns {{ inicio: number, fin: number, hayVoz: boolean }}
  */
-export function selectVoicedWindow(
+export function ventanaConVoz(
   samples,
   {
     sampleRate = DEFAULT_SAMPLE_RATE,
@@ -323,12 +315,12 @@ export function selectVoicedWindow(
 ) {
   const data = samples && samples.length ? samples : null
   const limit = Math.floor(Number(maxSamples)) > 0 ? Math.floor(Number(maxSamples)) : 0
-  if (!data) return new Float32Array(0)
+  if (!data) return { inicio: 0, fin: 0, hayVoz: false }
   const rate = Number(sampleRate)
   const frame = frameSamplesFor(rate, frameMs)
   if (!(rate > 0) || !(frame > 0)) {
     const tail = limit > 0 ? Math.min(limit, data.length) : data.length
-    return new Float32Array(data.subarray(data.length - tail))
+    return { inicio: data.length - tail, fin: data.length, hayVoz: false }
   }
   const floor = Number(rmsFloor)
   const frameCount = Math.ceil(data.length / frame)
@@ -343,13 +335,12 @@ export function selectVoicedWindow(
     }
   }
 
-  const tailCopy = () => {
+  const cola = () => {
     const tail = limit > 0 ? Math.min(limit, data.length) : data.length
-    return new Float32Array(data.subarray(data.length - tail))
+    return { inicio: data.length - tail, fin: data.length, hayVoz: false }
   }
-  if (!voicedFrames) return tailCopy()
+  if (!voicedFrames) return cola()
 
-  // Tramos: una pausa de mas de `maxGapMs` los separa (dos voces/frases distintas).
   const gapFrames = Math.max(1, Math.round(Number(maxGapMs) / Math.max(1, Number(frameMs))))
   const runs = []
   let best = null
@@ -368,15 +359,25 @@ export function selectVoicedWindow(
     if (current.voiced > best.voiced) best = current
   }
 
-  // El tramo con mas voz (defecto) o el ULTIMO contiguo (`prefer: "last"`): el turno
-  // puede traer dos voces separadas por una pausa y se mide UNA, no la mezcla.
   const chosen = prefer === 'last' && runs.length ? runs[runs.length - 1] : best
-  let startSample = chosen.first * frame
-  let endSample = Math.min(data.length, (chosen.last + 1) * frame)
-  if (limit > 0 && endSample - startSample > limit) {
-    // Mas voz que el tope: se queda el tramo MAS RECIENTE (el final del turno es el
-    // que el ASR acaba de confirmar).
-    startSample = Math.max(startSample, endSample - limit)
+  let inicio = chosen.first * frame
+  let fin = Math.min(data.length, (chosen.last + 1) * frame)
+  if (limit > 0 && fin - inicio > limit) {
+    // Mas voz que el tope: se queda el tramo MAS RECIENTE (el final es lo confirmado).
+    inicio = Math.max(inicio, fin - limit)
   }
-  return new Float32Array(data.subarray(startSample, endSample))
+  return { inicio, fin, hayVoz: fin > inicio }
+}
+
+/**
+ * Tramo con VOZ de una ventana del turno (copia). Delegado en `ventanaConVoz`.
+ * @param {Float32Array|number[]} samples
+ * @param {object} [opts]
+ * @returns {Float32Array}
+ */
+export function selectVoicedWindow(samples, opts = {}) {
+  const data = samples && samples.length ? samples : null
+  if (!data) return new Float32Array(0)
+  const { inicio, fin } = ventanaConVoz(data, opts)
+  return new Float32Array(data.subarray(inicio, fin))
 }
