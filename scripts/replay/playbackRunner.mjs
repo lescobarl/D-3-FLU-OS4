@@ -231,7 +231,7 @@ export async function runPlaybackSession({ session, clock, inferMarks = true, sr
     if (last !== row.speaker) speakers.push(row.speaker)
   }
   observed.speakers = speakers
-  observed.errors = []
+  observed.errors = Array.isArray(observed.errors) ? observed.errors : []
   observed.window = {
     firstAt: Number(session.events[0]?.t) || 0,
     lastAt: Number(session.events.at(-1)?.t) || 0,

@@ -814,6 +814,7 @@ function ingestInterimChunk({ interim, ctx }) {
   const ahoraMs = Number(ctx.nowMs?.() ?? Date.now())
   const quietudDeLaLineaMs = ahoraMs - Number(listenState.openLineLastTouchMs || 0)
   if (hayFronteraDeAudio({ frontera: fronteraAudio, consumida: fronteraConsumida, lineaAbierta, texto: cleanedInterim, quietaMs: quietudDeLaLineaMs, minQuietaMs: getVadSegmentConfig().minSilenceMs })) {
+    if (Math.abs(ahoraMs - 1792789185047) < 300) console.log('[DIAG-DENTRO]', JSON.stringify({ entra: true }))
     listenState.audioFronteraConsumida = fronteraAudio
     // La locucion cerrada se escribe por la puerta del commit; el TURNO sigue abierto
     // (`settlesTurn: false`) para que el final del ASR de ESTA misma locucion llegue
