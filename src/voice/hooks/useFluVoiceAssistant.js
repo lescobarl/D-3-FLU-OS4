@@ -2630,7 +2630,8 @@ const lastResolvedTurnRef = useRef(0)
         resetActiveListenState(listenStateRef.current)
         lastEmittedTranscriptRef.current = ''
         openPreviewTurnRef.current = false
-        turnAudioStartSampleRef.current = 0
+        // Los DOS contadores son UN estado: sin el total, el tramo del commit sale ACUMULATIVO.
+        turnAudioStartSampleRef.current = chunkTotalSamplesRef.current = 0
         lastStreamPreviewRef.current = ''
         lastLogLineTextRef.current = ''
         lastLogLineWasCommandRef.current = false
