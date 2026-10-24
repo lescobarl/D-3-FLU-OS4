@@ -109,10 +109,13 @@ export interface ConversationEntry {
      */
     speakerPending?: boolean;
     /**
-     * TRAMO de audio de la locucion (muestras absolutas): identidad del AUDIO. Dos filas con
-     * el mismo tramo son la misma locucion (una locucion = un tramo = una fila).
+     * VENTANA DE AUDIO DEL TURNO (muestras absolutas): dato informativo. NO es identidad:
+     * dos locuciones del MISMO turno comparten esta ventana, y por eso no puede decidir la
+     * reutilizacion/creacion de fila. La identidad de la fila es el TURNO (`turnId`); la
+     * separacion de locuciones la pone la frontera de audio del ingress. Se llamaba `tramo`
+     * y esa identidad se retiro (2026-10-24).
      */
-    tramo?: { inicio: number; fin: number } | null;
+    turnWindow?: { inicio: number; fin: number } | null;
     /** Firma de embedding (OS2: signature) */
     signature?: number[] | null;
     /** Fase de la conversación (OS2: phase) */

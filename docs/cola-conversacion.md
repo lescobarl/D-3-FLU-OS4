@@ -8,7 +8,7 @@ La primera casilla sin marcar es la siguiente. No se re-decide.
 | # | Etapa | Estado |
 |---|---|---|
 | 0 | Congelar comportamiento (casos raros + tramo determinista) | [x] `8ebf297d` |
-| 1 | **Tramo**: `[inicio,fin]` desde el segmento VAD, en la fila | [~] `tramoDelTurno` = ventana del TURNO (limitacion L1) |
+| 1 | **Tramo**: `[inicio,fin]` desde el segmento VAD, en la fila | [~] `turnWindow` = ventana del TURNO, dato (NO identidad); el segmento por locucion no se mide |
 | 2 | **Transcripción**: estado con dos preguntas (revisión / crecimiento) | [x] dos sitios del ingress unificados |
 | 3 | **Commit**: una fila por tramo; fuera la segunda puerta | [x] una fila por LOCUCION cerrada por audio (`locutionClosed` emite; medidas abajo) |
 | 4 | **Hablantes**: identidad con medida del tramo; un solo escritor de etiqueta | [x] `escribirEtiquetaDeFila` |
@@ -59,9 +59,18 @@ no fila; final tardio del mismo tramo -> 1 fila; final de otro tramo -> 2 filas)
 `tests/conversacionFronteraAudio.test.ts` (misma locucion creciendo NO se parte; la
 mutacion apaga la QUIETUD, que es la evidencia real de la frontera).
 
-Sigue en pie la limitacion L1 del **campo `tramo` de la fila** (Etapa 1): `tramoDelTurno`
-es la ventana del TURNO, no el segmento de la locucion. La SEPARACION de filas ya no
-depende de el (la decide el audio + la quietud + el texto ajeno).
+**Ventana del turno vs identidad de fila (2026-10-24, opcion 2).** El campo de la fila se
+llamaba `tramo` y ademas era IDENTIDAD: dos locuciones del mismo turno comparten la ventana
+y se fundian en una fila. Se retiro la identidad y el campo se renombro a `turnWindow`
+(`bridge.ts`, `conversationTurnRow.ts`, payload del hook y `App.tsx`): es un DATO de la
+fila, no la locucion. La identidad de fila es `turnId`; la separacion de locuciones la pone
+la frontera de audio. Guard: `tests/conversacionEtapa3UnaFilaPorTramo.test.ts` (dos
+locuciones, MISMA `turnWindow` -> DOS filas; mutacion con la identidad por ventana -> rojo;
+guard de fuente que prohibe `mismoTramo`/`e?.tramo`/`tramoDeEntrada` en el escritor).
+
+Sigue en pie la limitacion L1 de la **medicion** (Etapa 1): `tramoDelTurno` mide la ventana
+del TURNO, no el segmento de cada locucion. Ya NO afecta a la identidad ni al numero de
+filas.
 
 ## Defectos A y B (decision del dueno 2026-10-23)
 

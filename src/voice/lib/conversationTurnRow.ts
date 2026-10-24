@@ -764,28 +764,16 @@ export function updateTurnRowSpeaker(
 }
 
 /**
- * TRAMO valido: dos enteros con `fin > inicio`. Un tramo invalido no identifica audio.
- * @param tramo
- * @returns tramo canonico o null
+ * VENTANA valida: dos enteros con `fin > inicio`. Solo se GUARDA como dato de la fila; no
+ * identifica la locucion (la identidad es `turnId`).
+ * @param ventana
+ * @returns ventana canonica o null
  */
-function normalizarTramo(tramo?: { inicio?: number; fin?: number } | null): { inicio: number; fin: number } | null {
-    const inicio = Number(tramo?.inicio);
-    const fin = Number(tramo?.fin);
+function normalizarVentanaDelTurno(ventana?: { inicio?: number; fin?: number } | null): { inicio: number; fin: number } | null {
+    const inicio = Number(ventana?.inicio);
+    const fin = Number(ventana?.fin);
     if (!Number.isFinite(inicio) || !Number.isFinite(fin) || fin <= inicio) return null;
     return { inicio, fin };
-}
-
-/**
- * ¿Los dos tramos son el MISMO audio? Dueno unico (lo usan el escritor de la fila y sus
- * consumidores). Sin tolerancia: el tramo es una medida en muestras, no una estimacion.
- * @param a
- * @param b
- * @returns true si son el mismo tramo
- */
-export function mismoTramo(a?: { inicio?: number; fin?: number } | null, b?: { inicio?: number; fin?: number } | null): boolean {
-    const uno = normalizarTramo(a);
-    const otro = normalizarTramo(b);
-    return Boolean(uno && otro && uno.inicio === otro.inicio && uno.fin === otro.fin);
 }
 
 /**
@@ -843,11 +831,11 @@ export interface UserTurnRowInput {
      */
     turnId: number | string | null;
     /**
-     * TRAMO de audio de la locucion (muestras absolutas). Es la IDENTIDAD del audio: dos
-     * commits con el mismo tramo son la MISMA locucion y comparten fila (ETAPA 1/3).
-     * Un tramo invalido (`fin <= inicio`) se ignora: no identifica nada.
+     * VENTANA DE AUDIO DEL TURNO (muestras absolutas). Dato informativo: dos locuciones del
+     * mismo turno la comparten, asi que NO identifica la locucion ni decide la fila
+     * (auditoria 2026-10-24). La identidad de la fila es `turnId`.
      */
-    tramo?: { inicio: number; fin: number } | null;
+    turnWindow?: { inicio: number; fin: number } | null;
 }
 
 export type UserTurnRowAction = 'replaced' | 'reused' | 'added' | 'skipped';
@@ -932,7 +920,7 @@ function commitUserTurnRowInner({
     signature = null,
     sentiment = 'neutral',
     epoch,
-    tramo: tramoDeEntrada = null,
+    turnWindow: ventanaDelTurnoDeEntrada = null,
 }: UserTurnRowInput): UserTurnRowResult {
     const raw = String(text || '');
     const norm = cleanForSpeech(raw).toLowerCase();
@@ -983,25 +971,11 @@ function commitUserTurnRowInner({
         evidenciaAcustica || String(resolved || '').trim() !== respaldoHablante;
     const stamp = typeof timestamp === 'number' ? timestamp : Date.now();
 
-    // 0) MISMO TRAMO = MISMA LOCUCION (ETAPA 3): si este commit trae el tramo de una fila
-    // que ya existe en el epoch, es el MISMO audio (el ASR reemitió la locucion). Se
-    // reutiliza esa fila: una locucion = un tramo = una fila (R1).
-    const tramo = normalizarTramo(tramoDeEntrada);
-    if (tramo) {
-        const misma = [...history]
-            .reverse()
-            .find(
-                (e) =>
-                    e?.role === 'user' &&
-                    Number(e?.epoch ?? epochDeLaFila) === Number(epochDeLaFila) &&
-                    mismoTramo(e?.tramo, tramo),
-            );
-        if (misma) {
-            if (!esNombrePropioDeFila(misma) && hayRotuloPropio) freezeResolvedSpeakerName(store, misma.id, etiquetaDeLaFila);
-            rememberTurn(turnId, misma.id);
-            return { id: misma.id, action: 'reused' };
-        }
-    }
+    // VENTANA DEL TURNO: se GUARDA como dato, NUNCA como identidad (2026-10-24). Dos
+    // locuciones del mismo turno comparten ventana y reutilizar por ella las fundia en UNA
+    // fila. La identidad de la fila es `turnId`; la separacion de locuciones la pone la
+    // frontera de audio del ingress.
+    const ventanaDelTurno = normalizarVentanaDelTurno(ventanaDelTurnoDeEntrada);
 
     // 1) Emisión que crece: la fila del turno se reutiliza (UNA), pero su TEXTO no se
     //    reescribe — la conversación solo se INSERTA (spec del dueño 2026-10-12). El texto
@@ -1100,7 +1074,7 @@ function commitUserTurnRowInner({
         // SIN IDENTIDAD al escribir: la fila lleva la CONTINUIDAD (nunca "?") y queda marcada
         // para que el resolutor la complete cuando llegue la medida de su turno.
         ...(faltabaIdentidad ? { speakerPending: true } : {}),
-        ...(tramo ? { tramo } : {}),
+        ...(ventanaDelTurno ? { turnWindow: ventanaDelTurno } : {}),
         timestamp: stamp,
         sentiment,
         signature: normalizeRowSignature(signature),

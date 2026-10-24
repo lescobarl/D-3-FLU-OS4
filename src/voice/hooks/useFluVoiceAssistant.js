@@ -1611,7 +1611,7 @@ const lastResolvedTurnRef = useRef(0)
         turnId: turnIdDeLaFila ?? activeTurnIdRef.current,
         timestamp: currentClock,
         signature: lastTurnSignatureRef.current,
-        tramo: tramoDelTurno({ chunks: chunksRef.current, totalSamples: chunkTotalSamplesRef.current, sinceSample: turnAudioStartSampleRef.current, sampleRate: sampleRateRef.current }),
+        turnWindow: tramoDelTurno({ chunks: chunksRef.current, totalSamples: chunkTotalSamplesRef.current, sinceSample: turnAudioStartSampleRef.current, sampleRate: sampleRateRef.current }),
         language: detectTranscriptLanguage(capture),
       }
       const debugMeta = { text: capture, speaker: speakerName, replaceLast: replaceLastRawLog }

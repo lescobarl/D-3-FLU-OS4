@@ -115,24 +115,25 @@ describe('DEFECTO A — dos locuciones no se pegan (se separan por tramo/fronter
     expect(decision.destino).not.toContain('magistrado')
   })
 
-  it('el tramo del TURNO cubre las dos: por eso la frontera la pone el AUDIO (tramoDeLocucion)', () => {
-    // El tramo de la fila es la ventana CON VOZ del turno: las dos locuciones caen dentro.
-    // Mientras el tramo sea del turno (y no de la locucion) esto es una LIMITACION, no un
-    // comportamiento cerrado: queda escrito para que no se venda como "una fila por locucion".
-    const tramoDelTurno = { inicio: 0, fin: 96000 }
-    const primera = commitUserTurnRow({ text: LOCUCION_1, turnId: 1, tramo: tramoDelTurno })
-    const segunda = commitUserTurnRow({ text: LOCUCION_2, turnId: 2, tramo: tramoDelTurno })
+  it('la ventana del TURNO NO funde las dos locuciones: dos filas con la MISMA ventana', () => {
+    // La ventana CON VOZ es del TURNO: las dos locuciones caen dentro y la comparten. Usarla
+    // como identidad las fundia en UNA fila (auditoria 2026-10-24). La identidad es el turno;
+    // la separacion la pone la frontera de audio del ingress.
+    const ventanaDelTurno = { inicio: 0, fin: 96000 }
+    const primera = commitUserTurnRow({ text: LOCUCION_1, turnId: 1, turnWindow: ventanaDelTurno })
+    const segunda = commitUserTurnRow({ text: LOCUCION_2, turnId: 2, turnWindow: ventanaDelTurno })
 
     expect(primera.action).toBe('added')
-    expect(segunda.action, 'mismo tramo del turno = misma fila (L1, NO cerrado)').toBe('reused')
-    expect(filas()).toHaveLength(1)
+    expect(segunda.action, 'la ventana compartida no reutiliza la fila').toBe('added')
+    expect(filas()).toHaveLength(2)
   })
 
-  it('MUTACION: con tramos DISTINTOS la frontera si separa las dos locuciones', () => {
-    commitUserTurnRow({ text: LOCUCION_1, turnId: 1, tramo: { inicio: 0, fin: 96000 } })
-    commitUserTurnRow({ text: LOCUCION_2, turnId: 2, tramo: { inicio: 168000, fin: 264000 } })
+  it('MUTACION: la ventana del turno se guarda como dato, no decide nada', () => {
+    commitUserTurnRow({ text: LOCUCION_1, turnId: 1, turnWindow: { inicio: 0, fin: 96000 } })
+    commitUserTurnRow({ text: LOCUCION_2, turnId: 2, turnWindow: { inicio: 168000, fin: 264000 } })
 
-    expect(filas(), 'la salida real es el VAD por locucion (Etapa 1)').toHaveLength(2)
+    expect(filas()).toHaveLength(2)
+    expect((filas()[0] as { turnWindow?: unknown }).turnWindow).toEqual({ inicio: 0, fin: 96000 })
   })
 
   it('MUTACION: la MISMA locucion creciendo SI entra en la caja (no se bloquea todo)', () => {
