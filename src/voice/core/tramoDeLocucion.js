@@ -76,7 +76,11 @@ export function crearDetectorDeFronteras({ sampleRate = DEFAULT_SAMPLE_RATE, con
 export function hayFronteraDeAudio({ frontera = 0, consumida = 0, lineaAbierta = '', texto = '', quietaMs = 0, minQuietaMs = 0 } = {}) {
   const marca = Number(frontera) || 0
   const yaVista = Number(consumida) || 0
-  if (!(marca > 0) || marca <= yaVista) return false
+  // La marca del VAD es CONTEXTO (se informa); la EVIDENCIA que decide es la quietud de la
+  // linea + el texto ajeno: el VAD solo ve el PCM que el recorder conservo (medido: en la
+  // sesion 8f3112c2 no hay frontera de audio despues de 77,7 s y la locucion si acabo).
+  void marca
+  void yaVista
   const abierta = String(lineaAbierta || '').trim()
   if (!abierta) return false
   // TERCERA condicion: la linea lleva QUIETA el silencio del VAD. Sin esto, un reinicio
