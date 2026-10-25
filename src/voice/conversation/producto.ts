@@ -1,11 +1,17 @@
 /**
  * PUNTO DE COMPOSICIÓN del motor CONVERSACIÓN para el producto.
  *
- * Vive fuera de `adaptersAsr.ts` para que ese archivo SOLO traduzca la fuente de
- * reconocimiento a `AsrPort` (una responsabilidad por archivo): aquí se unen los
- * adaptadores reales (Dexie, reloj, ids, config, wake, VAD) con el motor y se
- * expone el ciclo de escucha que consume el hook. El adaptador de ASR no conoce
- * el motor ni el almacén.
+ * Aquí se unen los adaptadores reales (Dexie, reloj, ids, config, wake, VAD) con
+ * el motor y se expone el ciclo de escucha que consume el hook. El adaptador de
+ * ASR no se usa en esta composición: el hook ya posee LA instancia de escucha y
+ * entrega sus resultados por `evento()` (AGENTS, Anexo B invariante 1).
+ *
+ * IDENTIDAD DEL SEGMENTO (dueño único: este ingestor). Un segmento de voz tiene
+ * UN `tramoId`; todos los finales de SEGMENTO que Chrome entrega durante el
+ * dictado reutilizan ese id y entran como REVISIÓN de texto. Un `final` del
+ * reconocedor no es el cierre de la locución: el cierre real es la frontera VAD
+ * (silencio) o el fin de la sesión (`cerrar`). Así una locución = un tramo =
+ * una fila, y no se escribe una fila por cada corte de Chrome.
  */
 import {
   crearAlmacenDexieProducto,
@@ -18,7 +24,6 @@ import {
   registrarFallo,
 } from './adapters.ts'
 import { crearConversacion } from './motor.ts'
-import type { EventoResultado } from './adaptersAsr.ts'
 import type { IdiomaLocucion, MotivoCierre } from './ports.ts'
 import type {
   ConversacionApi,
@@ -26,8 +31,18 @@ import type {
   InstantaneaConversacion,
 } from './tipos.ts'
 
+/** Alternativa de transcripción de un resultado del reconocedor. */
+type AlternativaProducto = Readonly<{ transcript?: string }>
+
+/** Resultado del reconocedor (la nube y el motor local comparten esta forma). */
+type ResultadoProducto = ArrayLike<AlternativaProducto> &
+  Readonly<{ isFinal?: boolean }>
+
 /** Evento real de ASR con el índice del primer resultado nuevo. */
-export type EventoProducto = EventoResultado & Readonly<{ resultIndex?: number }>
+export type EventoProducto = Readonly<{
+  results?: ArrayLike<ResultadoProducto>
+  resultIndex?: number
+}>
 
 /** Controlador que el producto usa en el ciclo real de escucha. */
 export type MotorConversacionProducto = Readonly<{
@@ -83,6 +98,27 @@ export function crearMotorConversacionProducto({
   /** Último FINAL ya ingerido en esta sesión del reconocedor (índice + texto). */
   let ultimoFinal: Readonly<{ indice: number; texto: string }> | null = null
 
+  // Una locución cerrada es una frontera: el texto que llegue después abre un
+  // segmento NUEVO, nunca promueve la fila ya cerrada.
+  api.subscribe((evento) => {
+    if (evento.tipo === 'locution.closed') tramoId = null
+  })
+
+  /**
+   * Id del segmento vigente. La locución abierta manda; si no hay ninguna, el
+   * tramo de audio que abrió el VAD (frontera nueva); si tampoco, un id nuevo.
+   * @returns El `tramoId` que identifica la locución en curso.
+   */
+  function tramoDelSegmento(): string {
+    const retrato = api.snapshot()
+    const abierta = retrato.locucionAbierta
+    if (abierta) return abierta.locutionId
+    const audio = retrato.tramoAudio?.tramoId
+    if (audio) return audio
+    if (!tramoId) tramoId = id.uuid()
+    return tramoId
+  }
+
   return {
     abrir: () => {
       // Cada `onstart` del reconocedor abre una sesión de resultados NUEVA:
@@ -93,7 +129,7 @@ export function crearMotorConversacionProducto({
       if (activa) return
       activa = true
       turnId = id.uuid()
-      tramoId = id.uuid()
+      tramoId = null
       cursorMuestras = 0
       inicioMuestra = 0
       ultimoMs = reloj.ahora()
@@ -101,13 +137,17 @@ export function crearMotorConversacionProducto({
     },
 
     evento: (evento) => {
-      if (!activa || !turnId || !tramoId) return Promise.resolve()
+      if (!activa || !turnId) return Promise.resolve()
       const resultados = evento.results
       if (!resultados || resultados.length === 0) return Promise.resolve()
       const ingestas: Promise<void>[] = []
       const ahora = reloj.ahora()
       const porReloj = Math.max(1, Math.round(((ahora - ultimoMs) * sampleRate) / 1000))
       const primero = evento.resultIndex ?? 0
+      // Un solo segmento por lote de resultados: la identidad no rota entre
+      // finales del MISMO tramo (Chrome corta segmentos mientras se sigue
+      // hablando; ese corte no es una locución nueva).
+      const segmento = tramoDelSegmento()
       for (let indice = primero; indice < resultados.length; indice += 1) {
         const resultado = resultados[indice]
         const texto = String(resultado?.[0]?.transcript || '').trim()
@@ -126,20 +166,19 @@ export function crearMotorConversacionProducto({
           registrarFallo(
             'conversacion.producto.ingest.error',
             api.ingestAsr({
-              tramoId,
+              tramoId: segmento,
               texto,
-              final,
+              // El final del reconocedor NO cierra la locución: solo declara
+              // el corte de SU segmento. El cierre lo decide la frontera VAD o
+              // `cerrar()` (una fila por segmento, no una por corte de Chrome).
+              final: false,
               idioma,
               tramo: { inicio, fin, sampleRate },
               turnId,
             }),
           ),
         )
-        if (final) {
-          ultimoFinal = { indice, texto }
-          tramoId = id.uuid()
-          inicioMuestra = Math.max(fin, cursorMuestras)
-        }
+        if (final) ultimoFinal = { indice, texto }
       }
       ultimoMs = ahora
       return Promise.all(ingestas).then(() => undefined)
@@ -172,9 +211,27 @@ export function crearMotorConversacionProducto({
     cerrar: (motivo) => {
       if (!activa) return
       activa = false
+      // Cierre REAL: la locución abierta se declara final con SU texto ya
+      // fusionado (nunca con la última reentrega, que puede ser solo la cola)
+      // y recién entonces se detiene la sesión. Una sola fila por segmento.
+      const abierta = api.snapshot().locucionAbierta
+      if (abierta && String(abierta.texto || '').trim()) {
+        registrarFallo(
+          'conversacion.producto.final.error',
+          api.ingestAsr({
+            tramoId: abierta.locutionId,
+            texto: abierta.texto,
+            final: true,
+            idioma,
+            tramo: abierta.tramo,
+            ...(turnId ? { turnId } : {}),
+          }),
+        )
+      }
       registrarFallo('conversacion.producto.stop.error', api.stop(motivo))
       turnId = null
       tramoId = null
+      ultimoFinal = null
     },
   }
 }

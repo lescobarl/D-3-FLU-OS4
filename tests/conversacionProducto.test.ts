@@ -334,16 +334,21 @@ describe('producto — engine new escribe la fila desde el reconocedor real', ()
     await act(async () => {
       h.recognition.onresult?.(eventoAsr('ok flu hola mundo', true));
     });
-    // Caso de caja del replay 2026-10-19: al comprometerse la frase, la caja
-    // se vacía en el acto y no queda nada que la repinte.
-    await waitFor(() => expect(result.current.liveTranscript).toBe(''));
+    // Un final de SEGMENTO del reconocedor NO cierra la locución: la caja sigue
+    // viva y no hay fila; el cierre real es el `onend`/VAD.
+    await waitFor(() => expect(result.current.liveTranscript).toBe('ok flu hola mundo'));
+    expect(await fluDb.conversationFilas.count()).toBe(0);
     // Reentrega del MISMO final (Chrome lo repite): no añade una segunda fila.
     await act(async () => {
       h.recognition.onresult?.(eventoAsr('ok flu hola mundo', true));
     });
+    expect(await fluDb.conversationFilas.count()).toBe(0);
+    // Cierre REAL: aquí nace la ÚNICA fila y la caja se vacía en el acto
+    // (caso de caja del replay 2026-10-19).
     await act(async () => {
       await result.current.stopListening({ closing: true });
     });
+    await waitFor(() => expect(result.current.liveTranscript).toBe(''));
 
     await waitFor(async () => {
       const filas = await fluDb.conversationFilas.toArray();
@@ -386,6 +391,57 @@ describe('producto — engine new escribe la fila desde el reconocedor real', ()
     // escribe el módulo, así que no hay dos escritores. La reentrega del mismo
     // final la deduplica el ingress, no este handler.
     expect(h.ingressPush).toHaveBeenCalled();
+  });
+
+  it('cinco finales del MISMO segmento producen UNA fila y UN commit al cerrar', async () => {
+    fijarMotorEnUrl('new');
+    darSoporteNavegador();
+    const { result } = montar();
+    await waitFor(() => expect(result.current.isSupported).toBe(true));
+
+    await act(async () => {
+      await result.current.startListening();
+    });
+    act(() => h.recognition.onstart?.());
+
+    const finales = [
+      'uno',
+      'uno dos',
+      'uno dos tres',
+      'uno dos tres cuatro',
+      'uno dos tres cuatro cinco',
+    ];
+    for (const texto of finales) {
+      await act(async () => {
+        h.recognition.onresult?.(eventoAsr(texto, true));
+      });
+      await waitFor(() => expect(result.current.liveTranscript).toBe(texto));
+      // Defecto medido (P7): cada final de SEGMENTO de Chrome escribía su fila.
+      // El dictado no puede vaciarse antes del cierre real.
+      expect(await fluDb.conversationFilas.count()).toBe(0);
+      expect(h.setCommitted).not.toHaveBeenCalled();
+    }
+
+    h.recognition.stop.mockImplementation(() => h.recognition.onend?.());
+    await act(async () => {
+      await result.current.stopListening({ closing: true });
+    });
+
+    await waitFor(async () => {
+      const filas = await fluDb.conversationFilas.toArray();
+      expect(filas).toHaveLength(1);
+    });
+    const fila = (await fluDb.conversationFilas.toArray())[0];
+    if (!fila) throw new Error('sin fila persistida');
+    expect(fila.texto).toBe('uno dos tres cuatro cinco');
+    expect(fila.provisional).toBe(false);
+    // UN `row.committed`: la proyección al historial no se multiplica.
+    expect(h.setCommitted).toHaveBeenCalledTimes(1);
+    expect(h.setCommitted).toHaveBeenCalledWith(fila.texto);
+    expect(
+      (h.integration as unknown as { addConversationEntry: ReturnType<typeof vi.fn> })
+        .addConversationEntry,
+    ).toHaveBeenCalledTimes(1);
   });
 });
 
