@@ -461,14 +461,69 @@ export { crearAlmacenDexie } from '../lib/conversationFilaStore.ts'
   (`fake-indexeddb`, un caso por operación) + `npm run typecheck`.
 - No se aplica ahora: los 3 archivos están fuera de la whitelist.
 
+## Paso 4 — cableado de producto (medido 2026-10-25)
+
+- Punto único: import en `src/App.tsx:76` y composición en `src/App.tsx:2262`,
+  inmediatamente después de `useFluVoiceAssistant(...)`. UNA sola llamada a
+  `crearConversacion`.
+- Compuerta: `motorConversacionActivo()` lee la tabla del plan
+  (`CONVERSACION_CONFIG.conversation.engine`, `ports.ts:252`), `legacy` por
+  defecto. Con `new` compone adaptadores reales: `crearRelojSistema`,
+  `crearIdUuid`, `crearRegistroCaughtError`, `crearConfigFlu`,
+  `crearPartidorWake` y `crearAlmacenMemoria`.
+- Sin `asr` propio: se conserva la instancia ÚNICA de reconocimiento del
+  producto (Anexo B.1). `ultimoTextoDicho` devuelve
+  `isSpeechBusy() ? useIntegrationStore.getState().lastResponse : ''`.
+- Tamaño: `src/App.tsx` = 4477 líneas (techo 4485 de `godFileSizeGuard`).
+- Commits: `77bf3128` (App) y `5594a998` (test de producto), cada uno con su
+  gate.
+- Prueba de producto: `npm run test:file tests/conversacionProducto.test.ts`
+  → `2 passed`; `npm run typecheck` → `tsc -b` sin salida. Con
+  `conversation.engine: new` la MISMA API que compone App recibe un ASR final
+  y persiste UNA fila con su evento `row.committed`.
+- ENCENDIDO EN VIVO: **NO**. `conversacionNuevaRef` queda compuesto pero no
+  recibe `start`/`ingestAsr`; el audio/ASR del hook sigue en la tubería legacy
+  (`Recognition.onresult`, `startListening`/`stopListening`). Alimentarlo
+  exigiría sustituir esos puntos, y un tramo sintético en el producto sería
+  dato inventado (regla 1). Estado honesto para pantalla: **escrito, sin
+  encender**.
+- Autoverificación 5, comando exigido
+  `npx vitest run $(rg -l "useFluVoiceAssistant" tests)`, medida:
+  `Test Files 1 failed | 47 passed (48)` y `Tests 1 failed | 518 passed (519)`.
+  Falla `tests/vozReplayDueno20261019Caja.test.ts:488` (la fila 2 conserva la
+  repetición del ASR en vez del cuerpo reconciliado). **No es del cableado**:
+  se reprodujo idéntica con `git stash push -- src/App.tsx`; ese test solo
+  nombra `useFluVoiceAssistant` en comentarios (líneas 16 y 52), no monta el
+  hook. El archivo no está en la whitelist de este encargo: su arreglo queda
+  registrado aquí, fuera de este paso, y los otros 47 archivos del conjunto
+  están verdes.
+- `legacy` sin cambios: la composición está compuerta y con el default no se
+  ejecuta; el conjunto que sí monta el hook quedó verde salvo la falla
+  preexistente declarada arriba.
+
+## Paso 5 — fixture sintético (medido 2026-10-25)
+
+- No existe grabación del dueño. `tests/conversacionFixtures.test.ts` usa un
+  fixture SINTÉTICO declarado (3 locuciones con interinos que crecen y final
+  limpio) y mide `N/0/0`: N filas, 0 pérdidas y 0 duplicados, en dos corridas
+  deterministas.
+- `npm run test:file tests/conversacionFixtures.test.ts` → `2 passed`;
+  `npm run typecheck` verde; commit `e25313b7`.
+- Aceptación REAL `N/0/0`: **PENDIENTE**. `N` es el número de locuciones de la
+  grabación del dueño y no se inventa. Comando de cierre exacto cuando exista
+  la grabación: `npm run test:file tests/conversacionFixtures.test.ts`, con
+  `FIXTURE` reemplazado por los tramos transcritos del log real; debe reportar
+  `filas=N`, `perdidas=0`, `duplicados=0` con el N declarado por el dueño.
+
 ## Pendiente de producto
 
 - Fixture `N`: no existe grabación; los guards usan fixtures sintéticos. La
   aceptación `N/0/0` queda PENDIENTE, no cumplida.
-- Cableado de producto: la whitelist de este encargo SÍ incluye el hook de voz,
-  `src/App.tsx` y `src/voice/api/server.ts` para cablear/retirar el seed. El paso
-  4 llama `crearConversacion` UNA vez en el punto de composición del hook,
-  detrás de `conversation.engine` (default `legacy`).
+- Cableado en vivo del motor nuevo: compuesto en `src/App.tsx` (paso 4) pero
+  sin `start`/`ingestAsr` desde el hook; la sustitución del audio/ASR legacy
+  queda para el paso de retirada, después de la validación de pantalla.
+- Autoverificación 5: falla preexistente declarada en el paso 4
+  (`vozReplayDueno20261019Caja`), fuera de la whitelist.
 - Almacén Dexie: patch arriba; hasta que aterrice, el producto inyecta
   `crearAlmacenMemoria` (real, con la misma tupla y borrado lógico).
 - Regla 7 (playback con otro `AudioSource`): es consumo de producto. El módulo
