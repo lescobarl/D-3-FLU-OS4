@@ -8,11 +8,13 @@
  *  - config:  wake words y etiqueta semilla;
  *  - audio:   `splitTranscriptAtWakeWord`;
  *  - voz:     ASR de nube/local. `ultimoTextoDicho` NO se adapta aquí: lo entrega
- *    el consumidor como dependencia obligatoria (el módulo no habla). El ASR de
- *    nube arrastra `lib/speechRecognitionLocal.js`, cuyos imports sin extensión
- *    rompen el `viteConfigNativenessGuard` al entrar en el grafo del bundle del
- *    config (este módulo cuelga de `api/server.ts`, que el config carga).
- *    `AsrPort` sigue inyectable y su cableado real se declara PENDIENTE.
+ *    el consumidor como dependencia obligatoria (el módulo no habla). La instancia
+ *    de reconocimiento se inyecta por `FuenteAsr` y la traduce `adaptersAsr.ts`:
+ *    el producto construye esa fuente con `api/speech` y `api/audio` en su punto
+ *    de composición. El módulo no importa esas fachadas porque
+ *    `lib/speechRecognitionLocal.js` tiene imports sin extensión y rompería el
+ *    `viteConfigNativenessGuard` (este módulo cuelga de `api/server.ts`, que el
+ *    config carga).
  *  - nada de: captura de micrófono, extracción de embeddings ni escritura de filas.
  *    Esas piezas quedan como puertos inyectables; su cableado de producto se
  *    declara PENDIENTE en `docs/LAE-cola-ejecucion.md`.
@@ -62,6 +64,24 @@ export function crearIdUuid(): IdPort {
 /** Registro del proyecto: todo hecho del módulo pasa por `logCaughtError`. */
 export function crearRegistroCaughtError(): RegistroPort {
   return { registrar: (contexto, ...detalles) => logCaughtError(contexto, ...detalles) }
+}
+
+/**
+ * Ejecuta una operación del motor de ASR y registra el fallo con su excepción.
+ * Es el ÚNICO `try/catch` del adaptador de ASR: el registro central recibe
+ * siempre la excepción (AGENTS §1.5) y este archivo es la frontera declarada.
+ * @param contexto Contexto del fallo (p. ej. `conversacion.asr.start.error`).
+ * @param accion Operación a ejecutar.
+ * @returns `true` si terminó sin lanzar; `false` si el fallo se registró.
+ */
+export function intentarRegistrando(contexto: string, accion: () => void): boolean {
+  try {
+    accion()
+    return true
+  } catch (error) {
+    logCaughtError(contexto, error)
+    return false
+  }
 }
 
 /** Configuración viva de voz leída por la fachada pública de config. */
