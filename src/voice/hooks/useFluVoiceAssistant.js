@@ -63,7 +63,8 @@ import {
 } from '../lib/voiceIdentity'
 import { setSessionPrimarySpeaker } from '../lib/sessionPrimarySpeaker'
 import { applySessionCommandToPrimary } from '../lib/sessionLifecycle.js'
-import { updateTurnRowSpeaker } from '../lib/conversationTurnRow'
+import { renameVoiceRowsByKey, updateTurnRowSpeaker } from '../lib/conversationTurnRow'
+import { labelToSpeakerId } from '../lib/conversationRow.js'
 import { resetVoiceDirectory } from '../lib/speakerDirectory.js'
 import { participantRegisterPort, registerSpeakerIdentity } from '../lib/speakerIdentityRegister'
 import { resolveSpeakerIdentityFromVector } from '../lib/voiceIdentityResolve.js'
@@ -179,7 +180,7 @@ import { createEmissionDeduper, shouldSkipCapture } from '../lib/captureDedup.js
 import { isAssistantSpeechEcho, isAssistantVoiceEcho } from '../lib/conversationStream.js'
 import { voiceProbe, isVoiceProbeEnabled } from '../lib/voiceProbe'
 import { defaultLanguage } from '../lib/languageDefault.ts'
-import { crearMotorConversacionProducto, motorConversacionActivo } from '../conversation/index'
+import { crearConfigFlu, crearMotorConversacionProducto, motorConversacionActivo } from '../conversation/index'
 const CONTEXT_HISTORY_LIMIT = FLU_CONFIG.limits.contextHistoryMax
 // Sample rate de captura: fuente única en FLU_CONFIG.audio.sampleRate (sin hardcode).
 const AUDIO_SAMPLE_RATE = FLU_CONFIG.audio?.sampleRate ?? 0
@@ -493,7 +494,7 @@ const lastResolvedTurnRef = useRef(0)
   const languageRef = useRef(language)
   languageRef.current = language
   const abrirMotorConversacion = useCallback(() => {
-    if (!motorConversacionActivo()) return
+    if (!motorConversacionActivo(crearConfigFlu())) return
     if (motorConversacionRef.current) {
       motorConversacionRef.current.abrir()
       return
@@ -503,11 +504,13 @@ const lastResolvedTurnRef = useRef(0)
       sampleRate: AUDIO_SAMPLE_RATE,
       ultimoTextoDicho: () => resolveEchoContext(useIntegrationStore.getState().conversationHistory, getLastCompletedSpeechAt()).lastAssistantText,
     })
-    // Con `engine: new` el módulo es el ÚNICO escritor; la frase visible es la de la fila.
     motorConversacionRef.current.suscribir((evento) => {
       if (evento.tipo === 'box.updated') setLiveTranscript(evento.texto)
       if (evento.tipo === 'row.committed') {
         useIntegrationStore.getState().setLastCommittedTranscript(evento.fila.texto)
+        useIntegrationStore.getState().addConversationEntry({ id: evento.fila.locutionId, role: 'user', text: evento.fila.texto, timestamp: evento.fila.updated_at, speakerName: evento.fila.etiqueta, speakerId: labelToSpeakerId(evento.fila.etiqueta) })
+        const nombreDicho = resolveSpeakerNameFromUtterance(evento.fila.texto)
+        if (nombreDicho) renameVoiceRowsByKey(labelToSpeakerId(evento.fila.etiqueta), nombreDicho)
         setLiveTranscript('')
       }
     })
@@ -518,10 +521,7 @@ const lastResolvedTurnRef = useRef(0)
     motorConversacionRef.current.cerrar(motivo)
     motorConversacionRef.current = null
   }, [])
-  useEffect(() => () => {
-    motorConversacionRef.current?.cerrar('system')
-    motorConversacionRef.current = null
-  }, [])
+  useEffect(() => () => cerrarMotorConversacion('system'), [cerrarMotorConversacion])
 
   // Fallback LOCAL del ASR (degradar a Whisper, gatear sus resultados y recuperar
   // Chrome): dueno unico en `useLocalAsrFallback`. El cableado se pasa por ref para
@@ -2103,7 +2103,7 @@ const lastResolvedTurnRef = useRef(0)
         if (conversationActiveRef?.current) {
           if (motorConversacionRef.current) {
             motorConversacionRef.current.evento(event)
-            return
+            if (!finalText) return
           }
           if (finalText) { const w = analyzeWakeTurn(finalText, { lastCommitted: userRowsTextView.current.at(-1) || '' }); voiceProbe('asrFinal', { engine: localEngineActive ? 'whisper' : 'chrome', ms: event?.metrics?.durationMs ?? null, speechLikeMs: event?.metrics?.speechLikeMs ?? null, rms: event?.metrics?.rms ?? null, turn: activeTurnIdRef.current, wake: w.wakeWordMatched, inline: w.hasInlineBoundary, before: w.passiveOnly.slice(0, 80), after: w.afterWake.slice(0, 80), len: w.cleaned.length, text: w.cleaned }) }
           try {
@@ -2122,8 +2122,7 @@ const lastResolvedTurnRef = useRef(0)
               fluDebugHot('history-error', { detail: String(error?.message || error) })
             }
           }
-          // §9 — El preview lo publica el INGRESS; este handler DELEGA y NO escribe
-          // la frase viva (voiceLiveSingleWriter / ingressSimulation).
+          // §9 — El preview lo publica el INGRESS; este handler DELEGA y NO escribe la frase viva.
           return
         }
 
@@ -2277,6 +2276,7 @@ const lastResolvedTurnRef = useRef(0)
         }
 
         if (!isListeningRef.current && !(conversationActiveRef?.current && !isStoppingRef.current)) return
+        if (motorConversacionRef.current && conversationActiveRef?.current) cerrarMotorConversacion('system')
 
         if (!motorConversacionRef.current && conversationActiveRef?.current && !isStoppingRef.current) {
           ingressRuntimeRef.current?.pushRecognitionEndEvent({ immediate: true })
@@ -2305,7 +2305,7 @@ const lastResolvedTurnRef = useRef(0)
       }
     },
     [
-      abrirMotorConversacion,
+      abrirMotorConversacion, cerrarMotorConversacion,
       cleanupAudio,
       clearAutoProcessTimer,
       conversationActiveRef,

@@ -14,8 +14,10 @@
  *  - `legacy`  el módulo NO se instancia y el ingress legacy SÍ recibe el
  *              resultado; no hay fila en Dexie.
  *
- * Se sustituye solo la bandera (`motorConversacionActivo`): el motor, el
- * almacén Dexie y el adaptador de ASR son los reales del módulo.
+ * La bandera NO se sustituye: se siembra el override de runtime en la URL
+ * (`?conversationEngine=new`), que es la vía real de `crearConfigFlu`. El motor,
+ * el almacén Dexie y el adaptador de ASR son los reales del módulo; solo se
+ * envuelve la fábrica para contar instancias.
  */
 import 'fake-indexeddb/auto'
 import { act, renderHook, waitFor } from '@testing-library/react'
@@ -41,7 +43,6 @@ const h = vi.hoisted(() => {
   return {
     integration,
     recognition,
-    motorNuevo: false,
     crearMotorLlamadas: 0,
     setCommitted: vi.fn(),
     ingressPush: vi.fn(),
@@ -84,7 +85,6 @@ vi.mock('../src/voice/conversation/index', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../src/voice/conversation/index')>()
   return {
     ...actual,
-    motorConversacionActivo: () => h.motorNuevo,
     crearMotorConversacionProducto: (opciones: unknown) => {
       h.crearMotorLlamadas += 1
       return actual.crearMotorConversacionProducto(
@@ -218,6 +218,18 @@ function quitarSoporteNavegador() {
   delete (navigator as unknown as Record<string, unknown>).mediaDevices;
 }
 
+/**
+ * Siembra el override de runtime del motor en la URL real del documento.
+ * Es la vía del E2E: sin localStorage, sin globales y sin tocar el default.
+ * @param motor Motor pedido, o `null` para dejar la URL sin override.
+ */
+function fijarMotorEnUrl(motor: 'new' | 'legacy' | null) {
+  const url = new URL(window.location.href)
+  if (motor) url.searchParams.set('conversationEngine', motor)
+  else url.searchParams.delete('conversationEngine')
+  window.history.replaceState(null, '', url.toString())
+}
+
 /** Evento de resultado con la forma que entregan Chrome y el motor local. */
 function eventoAsr(texto: string, final: boolean): unknown {
   const resultado = { 0: { transcript: texto }, isFinal: final, length: 1 };
@@ -240,7 +252,7 @@ function montar() {
 beforeEach(async () => {
   vi.clearAllMocks();
   await fluDb.conversationFilas.clear();
-  h.motorNuevo = false;
+  fijarMotorEnUrl(null);
   h.crearMotorLlamadas = 0;
   h.integration.lastCommittedTranscript = '';
   h.integration.conversationHistory = [];
@@ -249,6 +261,7 @@ beforeEach(async () => {
     h.integration.lastCommittedTranscript = typeof text === 'string' ? text : '';
   });
   (h.integration as unknown as Record<string, unknown>).setLastCommittedTranscript = h.setCommitted;
+  (h.integration as unknown as Record<string, unknown>).addConversationEntry = vi.fn();
   h.ingressPush.mockReset();
 
   Object.assign(h.recognition, {
@@ -300,7 +313,7 @@ afterEach(() => {
 
 describe('producto — engine new escribe la fila desde el reconocedor real', () => {
   it('un final del SpeechRecognition produce UNA fila en Dexie, su commit y la caja', async () => {
-    h.motorNuevo = true;
+    fijarMotorEnUrl('new');
     darSoporteNavegador();
     const { result } = montar();
     await waitFor(() => expect(result.current.isSupported).toBe(true));
@@ -357,14 +370,28 @@ describe('producto — engine new escribe la fila desde el reconocedor real', ()
     // UN `row.committed`: el módulo es el ÚNICO que compromete la frase.
     expect(h.setCommitted).toHaveBeenCalledTimes(1);
     expect(h.setCommitted).toHaveBeenCalledWith(fila.texto);
-    // El ingress legacy NO recibe el resultado (no hay dos escritores).
-    expect(h.ingressPush).not.toHaveBeenCalled();
+    // La MISMA fila se proyecta al historial visible (una entrada, con su etiqueta).
+    expect(
+      (h.integration as unknown as { addConversationEntry: ReturnType<typeof vi.fn> })
+        .addConversationEntry,
+    ).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: fila.locutionId,
+        role: 'user',
+        text: fila.texto,
+        speakerName: fila.etiqueta,
+      }),
+    );
+    // Solo los finales alimentan el ingress (comandos); la fila es una sola y la
+    // escribe el módulo, así que no hay dos escritores. La reentrega del mismo
+    // final la deduplica el ingress, no este handler.
+    expect(h.ingressPush).toHaveBeenCalled();
   });
 });
 
 describe('producto — engine legacy no instancia el módulo', () => {
   it('el resultado va al ingress legacy y Dexie queda vacía', async () => {
-    h.motorNuevo = false;
+    fijarMotorEnUrl('legacy');
     darSoporteNavegador();
     const { result } = montar();
     await waitFor(() => expect(result.current.isSupported).toBe(true));
