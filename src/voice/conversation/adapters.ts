@@ -37,6 +37,7 @@ import { fluDb, type ConversationFilaRecord } from '../../core/db/fluDatabase.ts
 import { buildSyncTuple } from '../../core/db/syncTuple.ts'
 import { crearAlmacenDexie } from './adaptersAlmacen.ts'
 import type { DbLike, RegistroFila } from './adaptersAlmacen.ts'
+import { CONVERSACION_CONFIG, esMotorConversacion } from './ports.ts'
 import type {
   AlmacenPort,
   CambiosFila,
@@ -45,6 +46,7 @@ import type {
   FilaNueva,
   IdPort,
   MedidaVad,
+  MotorConversacion,
   PartidorPort,
   RegistroPort,
   RelojPort,
@@ -99,17 +101,52 @@ export function intentarRegistrando(contexto: string, accion: () => void): boole
  * @param contexto Contexto del fallo.
  * @param promesa Operación en curso.
  */
-export function registrarFallo(contexto: string, promesa: Promise<unknown>): void {
-  void promesa.catch((error) => {
-    logCaughtError(contexto, error)
-  })
+export function registrarFallo(contexto: string, promesa: Promise<unknown>): Promise<void> {
+  return promesa
+    .catch((error) => {
+      logCaughtError(contexto, error)
+    })
+    .then(() => undefined)
 }
 
-/** Configuración viva de voz leída por la fachada pública de config. */
+/** Parámetro de URL del override de runtime (lo siembra el E2E antes del goto). */
+const PARAM_MOTOR_CONVERSACION = 'conversationEngine'
+
+/**
+ * Override de runtime del motor: solo un valor declarado cuenta; el resto se ignora
+ * (un parámetro ausente o inventado no enciende nada). Es la vía del E2E, no una
+ * segunda configuración: no escribe estado ni se persiste.
+ * @returns El motor pedido por la URL, o `null` si no hay override válido.
+ */
+function motorPorOverrideRuntime(): MotorConversacion | null {
+  if (typeof window === 'undefined') return null
+  const valor = new URLSearchParams(window.location.search).get(PARAM_MOTOR_CONVERSACION)
+  return esMotorConversacion(valor) ? valor : null
+}
+
+/**
+ * Motor declarado en la configuración del producto, si esa clave existe hoy.
+ * `FLU_CONFIG` no publica `conversation`: el producto cae al valor del plan.
+ * @returns El motor del producto, o `null` si la clave no está declarada.
+ */
+function motorPorConfigProducto(): MotorConversacion | null {
+  const producto = FLU_CONFIG as { conversation?: { engine?: unknown } }
+  const valor = producto.conversation?.engine
+  return esMotorConversacion(valor) ? valor : null
+}
+
+/**
+ * Configuración viva de voz leída por la fachada pública de config.
+ * El motor se resuelve en orden: override de runtime → configuración del
+ * producto → valor del plan (`legacy`). El default del plan no se toca.
+ * @returns Puerto de configuración que consume el hook (y App para su compuerta).
+ */
 export function crearConfigFlu(): ConfigPort {
   return {
     wakeWords: () => [...FLU_CONFIG.voiceCommands.wakeWords],
     semillaEtiqueta: () => String(FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker || ''),
+    conversationEngine: () =>
+      motorPorOverrideRuntime() ?? motorPorConfigProducto() ?? CONVERSACION_CONFIG.conversation.engine,
   }
 }
 

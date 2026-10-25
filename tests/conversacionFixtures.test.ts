@@ -68,6 +68,7 @@ function crearMotorDeFixture() {
   const config: ConfigPort = {
     wakeWords: () => ['ok flu'],
     semillaEtiqueta: () => 'Hablante 1',
+    conversationEngine: () => 'legacy',
   }
   const almacen = crearAlmacenMemoria({ reloj: RELOJ })
   const api = crearConversacion({

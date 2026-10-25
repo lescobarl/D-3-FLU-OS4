@@ -26,9 +26,9 @@ import {
 import type {
   AsrPort,
   ConfigPort,
-  ConfiguracionConversacion,
   EmbebedorPort,
   FilaNueva,
+  MotorConversacion,
   RelojPort,
   VadPort,
 } from '../src/voice/conversation/ports'
@@ -51,9 +51,10 @@ const filaNueva = (locutionId: string, overrides: Partial<FilaNueva> = {}): Fila
   ...overrides,
 })
 
-const configDePrueba = (): ConfigPort => ({
+const configDePrueba = (motor: MotorConversacion = 'legacy'): ConfigPort => ({
   wakeWords: () => ['ok flu'],
   semillaEtiqueta: () => 'Hablante 1',
+  conversationEngine: () => motor,
 })
 
 describe('configuración del plan — una sola fuente', () => {
@@ -75,18 +76,11 @@ describe('configuración del plan — una sola fuente', () => {
     expect(Object.isFrozen(CONVERSACION_CONFIG.conversation)).toBe(true)
   })
 
-  it('legacy por defecto; new solo con la bandera inyectada', () => {
-    expect(motorConversacionActivo()).toBe(false)
-    const nueva: ConfiguracionConversacion = {
-      ...CONVERSACION_CONFIG,
-      conversation: { engine: 'new' },
-    }
-    expect(motorConversacionActivo(nueva)).toBe(true)
-    const vieja: ConfiguracionConversacion = {
-      ...CONVERSACION_CONFIG,
-      conversation: { engine: 'legacy' },
-    }
-    expect(motorConversacionActivo(vieja)).toBe(false)
+  it('el plan mantiene legacy; el puerto decide el motor', () => {
+    expect(CONVERSACION_CONFIG.conversation.engine).toBe('legacy')
+    expect(motorConversacionActivo(configDePrueba())).toBe(false)
+    expect(motorConversacionActivo(configDePrueba('new'))).toBe(true)
+    expect(motorConversacionActivo(configDePrueba('legacy'))).toBe(false)
   })
 })
 

@@ -127,6 +127,8 @@ export interface ConfigPort {
   wakeWords(): readonly string[]
   /** Etiqueta de la primera locución sin medida ni continuidad. */
   semillaEtiqueta(): string
+  /** Motor de conversación resuelto: override de runtime → producto → plan. */
+  conversationEngine(): MotorConversacion
 }
 
 /** Frase canónica y su presentación. La wake se quita SOLO para mostrar. */
@@ -244,13 +246,16 @@ export const CONVERSACION_CONFIG: ConfiguracionConversacion = Object.freeze({
   conversation: Object.freeze({ engine: 'legacy' }),
 })
 
+/** ¿El valor es un motor declarado? Evita re-enumerar `'legacy' | 'new'` fuera. */
+export function esMotorConversacion(valor: unknown): valor is MotorConversacion {
+  return valor === 'legacy' || valor === 'new'
+}
+
 /**
- * ¿Arranca el motor nuevo? Solo con `conversation.engine: 'new'`.
- * @param config Configuración inyectada (default: la del plan).
+ * ¿Arranca el motor nuevo? Solo si el puerto resuelve `'new'`.
+ * @param config Puerto de configuración que aporta el producto.
  * @returns `true` si el motor nuevo debe escribir filas.
  */
-export function motorConversacionActivo(
-  config: ConfiguracionConversacion = CONVERSACION_CONFIG,
-): boolean {
-  return config.conversation.engine === 'new'
+export function motorConversacionActivo(config: ConfigPort): boolean {
+  return config.conversationEngine() === 'new'
 }

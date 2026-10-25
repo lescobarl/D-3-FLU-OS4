@@ -62,6 +62,7 @@ const crearRegistro = () => {
 const configDePrueba = (): ConfigPort => ({
   wakeWords: () => ['ok flu'],
   semillaEtiqueta: () => 'Hablante 1',
+  conversationEngine: () => 'legacy',
 })
 
 function crearEscenario(extra: Partial<DependenciasConversacion> = {}) {
