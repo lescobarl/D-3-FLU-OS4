@@ -97,9 +97,15 @@ const PARAM_MOTOR_CONVERSACION = 'conversationEngine'
  * Override de runtime del motor: solo un valor declarado cuenta; el resto se ignora
  * (un parámetro ausente o inventado no enciende nada). Es la vía del E2E, no una
  * segunda configuración: no escribe estado ni se persiste.
+ *
+ * CANDADO DE PRODUCCIÓN: la rama vive tras `import.meta.env.DEV`, que el build
+ * sustituye por `false`; en un build de producción `?conversationEngine=` no
+ * enciende NADA (ni siquiera se lee el parámetro). Sin el candado, cualquier
+ * usuario podía activar un motor sin terminar desde la URL.
  * @returns El motor pedido por la URL, o `null` si no hay override válido.
  */
 function motorPorOverrideRuntime(): MotorConversacion | null {
+  if (!import.meta.env.DEV) return null
   if (typeof window === 'undefined') return null
   const valor = new URLSearchParams(window.location.search).get(PARAM_MOTOR_CONVERSACION)
   return esMotorConversacion(valor) ? valor : null
