@@ -5,9 +5,11 @@
  * `BackupSystem.restoreLatestBackup()` parsea el JSON persistido en
  * `flu-backup-<id>` (la misma clave que escribe `saveBackup`) y restaura
  * `conversation_state` en el store. La persistencia de conversación es la que
- * lleva esas N filas a `conversations`:
- *   - `legacy`: N filas escritas, una vez cada una;
- *   - `new`: N filas en total, sin duplicar ni reescribir las que ya existían.
+ * lleva esas N filas a `conversations`, y lo hace por el escritor ÚNICO:
+ *   - `legacy`: no hay módulo que las haya escrito antes, así que escribe las N
+ *     del backup — cada una una sola vez, en un único `bulkPut`;
+ *   - `new`: escribe SOLO las que faltan; la ya persistida e idéntica se
+ *     reconoce (`mismaFilaPersistida`) y NO se reescribe ni sube `revision`.
  *
  * La tabla va por `id`, así que un put repetido ACTUALIZA, no duplica: lo que
  * se mide aquí es el conteo de escrituras, no una barrera contra filas dobles.
