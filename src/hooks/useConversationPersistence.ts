@@ -113,6 +113,30 @@ function entryToRow(
 }
 
 /**
+ * Serializa un valor con las claves de objeto ordenadas recursivamente.
+ * Dos metadatos equivalentes con distinto orden de inserción (por ejemplo, tras
+ * parsear un backup) producen la MISMA cadena; los arrays conservan su orden
+ * porque ahí el orden es significativo. No es un deep-equal: compara contenido
+ * serializado de forma canónica.
+ * @param valor Valor a serializar.
+ * @returns Cadena canónica (misma entrada → misma salida).
+ */
+function serializarCanonica(valor: unknown): string {
+    if (valor === undefined) return 'null';
+    if (valor === null || typeof valor !== 'object') return JSON.stringify(valor) ?? 'null';
+    if (Array.isArray(valor)) {
+        return `[${valor.map((item) => serializarCanonica(item)).join(',')}]`;
+    }
+    const objeto = valor as Record<string, unknown>;
+    const claves = Object.keys(objeto)
+        .filter((clave) => objeto[clave] !== undefined)
+        .sort();
+    return `{${claves
+        .map((clave) => `${JSON.stringify(clave)}:${serializarCanonica(objeto[clave])}`)
+        .join(',')}}`;
+}
+
+/**
  * ¿La fila persistida ya representa EXACTAMENTE esta entrada?
  * Se usa con `engine: new` para no reescribir la fila que el módulo acaba de
  * escribir (misma locución = una sola escritura). Un renombre de voz, una fila
@@ -128,7 +152,7 @@ function mismaFilaPersistida(entry: ConversationEntry, row: ConversationRow): bo
         row.speakerId === speakerId &&
         row.speakerName === speakerName &&
         (row.sessionId || '') === (entry.sessionId || '') &&
-        JSON.stringify(row.meta || null) === JSON.stringify(entry.meta || null)
+        serializarCanonica(row.meta || null) === serializarCanonica(entry.meta || null)
     );
 }
 

@@ -94,6 +94,18 @@ function fijarMotorEnUrl(motor: 'new' | 'legacy' | null) {
   window.history.replaceState(null, '', url.toString())
 }
 
+/** Copia un valor con las claves de objeto en orden inverso (mismo contenido). */
+function invertirClaves<T>(valor: T): T {
+  if (Array.isArray(valor)) return valor.map(invertirClaves) as T
+  if (!valor || typeof valor !== 'object') return valor
+  const origen = valor as Record<string, unknown>
+  const salida: Record<string, unknown> = {}
+  for (const clave of Object.keys(origen).reverse()) {
+    salida[clave] = invertirClaves(origen[clave])
+  }
+  return salida as T
+}
+
 beforeEach(async () => {
   await fluDb.conversations.clear()
   useIntegrationStore.setState({ conversationHistory: [] })
@@ -159,5 +171,37 @@ describe('conteo de escrituras — legacy y new', () => {
       meta: { origin: 'import', sessionId: 'sesion-importada' },
       sync: { revision: 1, deleted: false },
     })
+  })
+
+  it('new: el mismo meta con distinto orden de claves no repite la escritura', async () => {
+    fijarMotorEnUrl('new')
+    await escribirRegistroConversacion(REGISTRO_MODULO, {
+      participantId: 'user-a',
+      speakerId: labelToSpeakerId(REGISTRO_MODULO.etiqueta),
+      speakerName: REGISTRO_MODULO.etiqueta,
+    })
+    const bulkPut = vi.spyOn(fluDb.conversations, 'bulkPut')
+    const entrada = entradaModulo()
+    // Mismo contenido, claves en orden inverso (como puede devolver un JSON
+    // importado). La tabla va por `id`: si se reescribe, actualiza; lo que se
+    // mide aquí es la OPTIMIZACIÓN de escritura, no la unicidad de la fila.
+    const entradaConOrdenInvertido: ConversationEntry = {
+      ...entrada,
+      meta: invertirClaves(entrada.meta),
+    }
+    useIntegrationStore.setState({
+      conversationHistory: [entradaConOrdenInvertido, entradaImportada()],
+    })
+
+    renderHook(() => useConversationPersistence('user-a'))
+
+    await waitFor(async () => {
+      expect(await fluDb.conversations.count()).toBe(2)
+    })
+    // El lote lleva SOLO la importada: la fila del módulo se reconoció idéntica.
+    expect(bulkPut).toHaveBeenCalledTimes(1)
+    expect(bulkPut.mock.calls[0]?.[0]?.map((fila) => fila.id)).toEqual(['loc-importada'])
+    const modulo = await fluDb.conversations.get(REGISTRO_MODULO.locutionId)
+    expect(modulo?.sync.revision).toBe(1)
   })
 })
