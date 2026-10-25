@@ -123,11 +123,11 @@ src/voice/conversation/
   adapters.ts       única puerta externa; compose la DB       279/300
   adaptersAlmacen.ts almacén Dexie con `DbLike` inyectado     157/300
   producto.ts       composición real; segmento: `tramoDelSegmento` y final único en `cerrar()`  237/300
-  cierre.ts         reglas de cierre y fila
-  ingesta.ts        audio, ASR, frontera y pendientes
-  sesion.ts         estado, caja, voz y sesión
-  texto.ts          revisión/extensión de la locución
-  tramos.ts         registro de tramos y buffer de ASR
+  cierre.ts         reglas de cierre y fila                261
+  ingesta.ts        audio, ASR, frontera y pendientes      208
+  sesion.ts         estado, caja, voz y sesión             247
+  texto.ts          revisión/extensión de la locución      206
+  tramos.ts         registro de tramos y buffer de ASR     100
 ```
 
 `adapters.ts` es la ÚNICA puerta que importa fuera del módulo: importa
