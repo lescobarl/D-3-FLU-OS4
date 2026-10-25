@@ -30,6 +30,12 @@ import {
 
 type Page = Parameters<typeof readHistoryRows>[0];
 
+/**
+ * Override de runtime del motor CONVERSACION: `new` se siembra en la URL antes
+ * del goto (la vía real de `crearConfigFlu`). Sin la variable, corre `legacy`.
+ */
+const MOTOR_E2E = process.env.FLU_E2E_ENGINE === 'new' ? 'new' : null;
+
 const esperarListo = async (page: Page) => {
     await page.waitForFunction(
         () => (window as any).__fluStore?.getState?.().conversationState === 'LISTENING',
@@ -62,6 +68,13 @@ test.describe('voz - escenario reportado por el dueño (simulacion REAL)', () =>
         await autoSkipOnboarding(page);
         await stubLocalSpeech(page);
         await stubSpeechRecognition(page);
+        if (MOTOR_E2E) {
+            await page.addInitScript((motor) => {
+                const url = new URL(window.location.href);
+                url.searchParams.set('conversationEngine', motor);
+                window.history.replaceState(null, '', url.toString());
+            }, MOTOR_E2E);
+        }
         await gotoClean(page);
     });
 
