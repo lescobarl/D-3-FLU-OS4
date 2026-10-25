@@ -171,9 +171,79 @@
   - `npm run lint:eslint` → verde.
 - Siguiente: `index.ts` (API de 7 llamadas y 6 eventos).
 
+## 2026-10-25 — etapa 1e: index.ts (API de 7 llamadas y 6 eventos)
+
+- Creados:
+  - `src/voice/conversation/index.ts` completo: orquestador con las 7 llamadas
+    (`start`, `stop`, `ingestAudio`, `ingestAsr`, `snapshot`, `subscribe`,
+    `registerName`) y los 6 eventos (`locution.closed`, `row.committed`,
+    `speaker.labeled`, `box.updated`, `asr.status`, `barge.in`). Ingesta
+    serializada en una cola: dos llamadas concurrentes no duplican fila.
+  - `tests/conversacionApi.test.ts` (34 casos), registrado en
+    `scripts/guard-files.mjs` (solo alta).
+- Decisiones declaradas:
+  - El TEXTO entra primero y luego se evalúa la frontera (regla 2). Un tramo
+    ajeno sin silencio suficiente se retiene en `pendientes` (no se mezcla, no se
+    pierde): se abre al cerrar la locución actual. Los pendientes caducados por
+    `orphanBufferMs` se cuentan como `huerfano`.
+  - Una sola locución abierta; el cierre vacía la caja (regla 6). Un final del
+    mismo tramo cierra la fila con la mejor versión; una revisión que pierde
+    palabras no se pinta. El final tardío de un tramo ya cerrado promueve la fila
+    (también entre sesiones) en vez de abrir una segunda.
+  - `stop(user|system|watchdog)` es el único cierre manual; `aborted` lanza como
+    motivo de fila (es estado del ASR). Sin texto, el cierre cuenta `sinTexto`.
+  - `registerName` bautiza solo la voz identificada; sin `vozId` lanza (no se
+    bautiza a quien no habló) y `?` se rechaza.
+  - Eco: cobertura y sufijo de PALABRAS contra el último TTS; un texto que no es
+    eco emite `barge.in` y detiene el TTS. Sin TTS inyectado no hay eco ni barge-in.
+  - Los resultados del `AsrPort` se retienen y drenan en la siguiente llamada
+    pública o en `stop`; los estados terminales (`watchdog`/`error`/`aborted`)
+    cierran lo abierto con `reason` declarado y `causa:'asr'`.
+  - Sin cerrojo entre pestañas (declarado, el plan lo permite). El motor nuevo
+    solo arranca con `conversation.engine: 'new'` (`motorConversacionActivo`).
+- Corrección de gates (causa raíz, sin tocar guards):
+  - `duplicationGuard` marcaba el plegado NFD copiado en `index.ts`. Se retiró la
+    copia: `adapters.ts` expone `normalizarParaComparar` y delega en el dueño
+    único `normalizeForMatch` (`src/lib/textUtils.ts`), excepción de frontera
+    declarada en la cabecera de `adapters.ts`.
+  - `configSingleSourceGuard` marcaba `motorAsr === 'local'`. El vocabulario del
+    motor vive ahora en `ports.ts` (`MOTOR_ASR_LOCAL` privado y
+    `asrEmpujaAudio`), y `index.ts` consulta el predicado, sin literal comparado.
+- Gates medidos:
+  - `npm run test:file tests/conversacionApi.test.ts` → 34/34.
+  - `npm run typecheck` → verde.
+  - guards afectados (orphan, deadExports, structureDuplication, duplication,
+    catchSilencioso, nonNullAssertion, eol, utf8, uuidV4Insercion,
+    sampleRateConfig, umbralesConfig, timeoutsConfig, smallDuplicatesSingleOwner,
+    voiceFacade, viteConfigNativeness, configSingleSource, localStorageGateway,
+    ttsPuntoUnico, hardcode, consoleDebug, godFileSize) → verdes tras las dos
+    correcciones (los 21 archivos juntos dieron 132 casos; la primera pasada
+    marcó exactamente esos 2 defectos, corregidos y re-medidos en grupos:
+    59 + 7 + 5 = 71 casos verdes).
+  - Nota honesta: una corrida agrupada quedó con un error no controlado de
+    vitest (`Timeout calling "onTaskUpdate"`) tras una suspensión de la máquina
+    (duración reportada 18 484 s). Los mismos guards, re-ejecutados en grupos,
+    pasan verdes; no hubo aserción fallida reproducible.
+  - `npm run verify:fast` → EOL 0/0 + tipos + ESLint verdes.
+  - `npm run build` → `✓ built in 1.84s` (avisos previos de tamaño de chunk y
+    dynamic imports inefectivos, ajenos a este módulo).
+- Siguiente: cierre de etapa (cableado de producto fuera de la whitelist) y
+  entrega final.
+
 ## Pendiente de producto
 
 - Fixture `N`: no existe grabación; los guards usan fixtures sintéticos. La
   aceptación `N/0/0` queda PENDIENTE, no cumplida.
 - Cableado de producto (hook/App) fuera de la whitelist; el arranque queda tras
-  `conversation.engine` dentro del módulo.
+  `conversation.engine` dentro del módulo. Encender el motor nuevo exige que el
+  producto llame `crearConversacion(...)` solo si `motorConversacionActivo()`;
+  el default es `legacy`.
+- Regla 7 (playback con otro `AudioSource`): es consumo de producto. El módulo
+  entrega filas y tramos con `sampleRate`; no abre fuentes de audio.
+- Borrado del seed `src/voice/conversation/domain/locucion.ts` y de la costura
+  `crearEstadoDeLocucion` en `src/voice/api/server.ts`: bloqueado por la
+  whitelist (`api/server.ts` está fuera). Además, el plan §3 pasos reserva el
+  borrado de la tubería vieja para después de la validación de pantalla del
+  dueño.
+- TTS/ASR de nube y ASR local siguen PENDIENTES con causa medida (arriba): los
+  puertos son inyectables y el cableado real pertenece al producto.

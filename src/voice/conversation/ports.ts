@@ -164,6 +164,19 @@ export interface TtsPort {
 /** Motor concreto de ASR (el `auto` se resuelve antes de abrir). */
 export type MotorAsr = 'cloud' | 'local'
 
+/** Motor local de ASR: única etiqueta del valor dentro del módulo. */
+const MOTOR_ASR_LOCAL: MotorAsr = 'local'
+
+/**
+ * ¿El motor elegido consume PCM por el puerto (`empujarAudio`)?
+ * La nube captura por su cuenta; solo el motor local recibe bloques.
+ * @param motor Motor elegido al abrir, o `null` si no hay ASR.
+ * @returns `true` solo para el motor local.
+ */
+export function asrEmpujaAudio(motor: MotorAsr | null): boolean {
+  return motor === MOTOR_ASR_LOCAL
+}
+
 /** Estado del ASR. `aborted` es estado del ASR, nunca de la fila. */
 export type EstadoAsr =
   | 'idle'

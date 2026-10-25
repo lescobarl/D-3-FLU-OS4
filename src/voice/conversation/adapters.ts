@@ -17,12 +17,16 @@
  *    Esas piezas quedan como puertos inyectables; su cableado de producto se
  *    declara PENDIENTE en `docs/LAE-cola-ejecucion.md`.
  *
- * Excepción de frontera declarada: `logCaughtError` (`src/lib/caughtError.ts`) no
- * está en `src/voice/api/**`, pero el plan (§Logs) y AGENTS §1.5 lo exigen como
- * ÚNICO registro de hechos y errores capturados. Se importa aquí y en ningún otro
- * archivo del módulo.
+ * Excepciones de frontera declaradas:
+ *  - `logCaughtError` (`src/lib/caughtError.ts`): el plan (§Logs) y AGENTS §1.5 lo
+ *    exigen como ÚNICO registro de hechos y errores capturados.
+ *  - `normalizeForMatch` (`src/lib/textUtils.ts`): el plegado NFD tiene un dueño
+ *    único y `duplicationGuard` prohíbe reimplementarlo. El eco compara palabras
+ *    normalizadas por esa función, no por una copia local.
+ * Ambos se importan aquí y en ningún otro archivo del módulo.
  */
 import { logCaughtError } from '../../lib/caughtError.ts'
+import { normalizeForMatch } from '../../lib/textUtils.ts'
 import { splitTranscriptAtWakeWord } from '../api/audio.ts'
 import { FLU_CONFIG } from '../api/config.ts'
 import type {
@@ -68,6 +72,16 @@ export function crearConfigFlu(): ConfigPort {
     localFallbackHabilitado: () =>
       Boolean(FLU_CONFIG.voiceIdentity.capture.recognition.localFallbackEnabled),
   }
+}
+
+/**
+ * Normaliza texto para comparar palabras (eco): delega en el dueño único del
+ * plegado NFD. No se reimplementa el algoritmo en el módulo.
+ * @param texto Texto crudo (puede traer mayúsculas, acentos y signos).
+ * @returns Texto en minúsculas, sin diacríticos y con espacios colapsados.
+ */
+export function normalizarParaComparar(texto: string): string {
+  return normalizeForMatch(String(texto || ''))
 }
 
 /**
