@@ -127,8 +127,6 @@ export interface ConfigPort {
   wakeWords(): readonly string[]
   /** Etiqueta de la primera locución sin medida ni continuidad. */
   semillaEtiqueta(): string
-  /** ¿Está habilitado el fallback local de reconocimiento? */
-  localFallbackHabilitado(): boolean
 }
 
 /** Frase canónica y su presentación. La wake se quita SOLO para mostrar. */
@@ -147,18 +145,6 @@ export type FrasePartida = Readonly<{
 export interface PartidorPort {
   /** Parte el texto en frase canónica, texto para mostrar y mandato. */
   partir(texto: string): FrasePartida
-}
-
-/** TTS por puerto: un solo punto de síntesis en el proyecto. */
-export interface TtsPort {
-  /** Habla el texto en el idioma de la locución. */
-  hablar(texto: string, idioma: IdiomaLocucion): Promise<void>
-  /** ¿Hay habla en curso? */
-  hablando(): boolean
-  /** Corta la síntesis y cierra la ventana de eco. */
-  detener(): void
-  /** Último texto que ESTE módulo entregó al TTS. */
-  ultimoTexto(): string
 }
 
 /** Motor concreto de ASR (el `auto` se resuelve antes de abrir). */

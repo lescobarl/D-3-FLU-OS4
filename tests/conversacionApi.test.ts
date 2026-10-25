@@ -33,7 +33,6 @@ import type {
   MotivoCierre,
   OpcionesAsr,
   ResultadoAsr,
-  TtsPort,
 } from '../src/voice/conversation/ports'
 
 const SAMPLE_RATE = 16000
@@ -63,7 +62,6 @@ const crearRegistro = () => {
 const configDePrueba = (): ConfigPort => ({
   wakeWords: () => ['ok flu'],
   semillaEtiqueta: () => 'Hablante 1',
-  localFallbackHabilitado: () => true,
 })
 
 function crearEscenario(extra: Partial<DependenciasConversacion> = {}) {
@@ -78,6 +76,7 @@ function crearEscenario(extra: Partial<DependenciasConversacion> = {}) {
     almacen,
     config,
     partidor: crearPartidorWake(config),
+    ultimoTextoDicho: () => '',
     ...extra,
   })
   const eventos: EventoConversacion[] = []
@@ -141,19 +140,14 @@ function crearAsrFalso(soportado: (motor: 'cloud' | 'local') => boolean = () => 
   }
 }
 
-function crearTtsFalso(ultimo: string) {
-  let hablando = true
-  let detenido = 0
-  const tts: TtsPort = {
-    hablar: async () => undefined,
-    hablando: () => hablando,
-    detener: () => {
-      detenido += 1
-      hablando = false
+function crearDicho(ultimo: string) {
+  let dicho = ultimo
+  return {
+    ultimoTextoDicho: () => dicho,
+    dejaDeHablar: () => {
+      dicho = ''
     },
-    ultimoTexto: () => ultimo,
   }
-  return { tts, detenido: () => detenido, dejaDeHablar: () => { hablando = false } }
 }
 
 describe('ciclo de vida — 7 llamadas', () => {
@@ -171,6 +165,22 @@ describe('ciclo de vida — 7 llamadas', () => {
     const { api } = crearEscenario()
     await api.start()
     await expect(api.start()).rejects.toThrow(/ya iniciada/)
+  })
+
+  it('sin ultimoTextoDicho el modulo no arranca', () => {
+    const reloj = crearReloj()
+    const config = configDePrueba()
+    const sinEco = {
+      reloj,
+      id: crearIdUuid(),
+      registro: crearRegistro(),
+      almacen: crearAlmacenMemoria({ reloj }),
+      config,
+      partidor: crearPartidorWake(config),
+    }
+    expect(() =>
+      crearConversacion(sinEco as unknown as DependenciasConversacion),
+    ).toThrow(/ultimoTextoDicho/)
   })
 
   it('ingerir antes de start no inventa sesión', async () => {
@@ -505,8 +515,8 @@ describe('eco y barge-in — la voz de FLU nunca es fila de usuario', () => {
   })
 
   it('el eco se cuenta y no mueve la caja; lo ajeno interrumpe y sí entra', async () => {
-    const ttsFalso = crearTtsFalso('hola mundo entero')
-    const { api, eventos } = crearEscenario({ tts: ttsFalso.tts })
+    const dicho = crearDicho('hola mundo entero')
+    const { api, eventos } = crearEscenario({ ultimoTextoDicho: dicho.ultimoTextoDicho })
     await api.start()
     const tramoId = await abrirConVoz(api)
 
@@ -517,17 +527,16 @@ describe('eco y barge-in — la voz de FLU nunca es fila de usuario', () => {
     expect(eventos.some((evento) => evento.tipo === 'barge.in')).toBe(false)
 
     const interrumpe = await api.ingestAsr(asr(tramoId, { texto: 'espera', final: true }))
-    expect(ttsFalso.detenido()).toBe(1)
     expect(interrumpe.filas[0].texto).toBe('espera')
     expect(eventos).toContainEqual(
       expect.objectContaining({ tipo: 'barge.in', texto: 'espera' }),
     )
   })
 
-  it('sin TTS hablando no hay eco ni barge-in', async () => {
-    const ttsFalso = crearTtsFalso('hola mundo entero')
-    ttsFalso.dejaDeHablar()
-    const { api, eventos } = crearEscenario({ tts: ttsFalso.tts })
+  it('sin voz de FLU no hay eco ni barge-in', async () => {
+    const dicho = crearDicho('hola mundo entero')
+    dicho.dejaDeHablar()
+    const { api, eventos } = crearEscenario({ ultimoTextoDicho: dicho.ultimoTextoDicho })
     await api.start()
     const tramoId = await abrirConVoz(api)
     const estado = await api.ingestAsr(asr(tramoId, { texto: 'mundo entero', final: true }))

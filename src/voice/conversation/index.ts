@@ -10,12 +10,12 @@
  * El texto se aplica primero y después se evalúa la frontera (regla 2); una
  * locución que pierde palabras no se pinta (regla 3 y 6).
  *
- * Sin imports fuera del módulo: ASR, audio, VAD, TTS, almacén y reloj entran por
+ * Sin imports fuera del módulo: ASR, audio, VAD, almacén y reloj entran por
  * `ports.ts`. Sin `Date.now()`: todo tiempo sale del reloj inyectado.
  *
- * Eco y barge-in: solo con un TTS inyectado y hablando. El eco se mide por
- * cobertura y sufijo de PALABRAS contra el último texto entregado al TTS; un
- * texto que no es eco interrumpe (`barge.in`) y el consumidor apaga el TTS.
+ * Eco y barge-in: el módulo NO habla. El consumidor entrega lo último que dijo
+ * FLU en `ultimoTextoDicho()` (dependencia obligatoria). Un texto que es eco se
+ * cuenta y descarta; uno ajeno emite `barge.in` y el consumidor apaga su voz.
  *
  * Decisiones declaradas:
  *  - `stop(user|system|watchdog)` es el único cierre manual; `aborted` es estado
@@ -50,7 +50,6 @@ import type {
   RelojPort,
   ResultadoAsr,
   TramoMuestreado,
-  TtsPort,
   VadPort,
 } from './ports.ts'
 
@@ -201,11 +200,16 @@ export type DependenciasConversacion = Readonly<{
   almacen: AlmacenPort
   config: ConfigPort
   partidor: PartidorPort
+  /**
+   * Lo último que dijo FLU, entregado por el consumidor. Obligatorio: el módulo
+   * no habla ni puede distinguir eco/barge-in sin esta función. Debe devolver
+   * vacío cuando FLU no tiene voz activa.
+   */
+  ultimoTextoDicho: () => string
   /** Tabla del plan; por defecto `CONVERSACION_CONFIG`. */
   configuracion?: ConfiguracionConversacion
   vad?: VadPort
   asr?: AsrPort
-  tts?: TtsPort
 }>
 
 /** Las 7 llamadas del plan. */
@@ -309,12 +313,11 @@ function fusionarVoz(base: EvidenciaVoz, nueva: EvidenciaVoz | undefined): Evide
 function elegirMotor(
   asr: AsrPort,
   configuracion: ConfiguracionConversacion,
-  config: ConfigPort,
 ): MotorAsr | null {
   const preferido = configuracion.asr.engine
   if (preferido === 'auto') {
     if (asr.soportado('cloud')) return 'cloud'
-    if (config.localFallbackHabilitado() && asr.soportado('local')) return 'local'
+    if (asr.soportado('local')) return 'local'
     return null
   }
   return asr.soportado(preferido) ? preferido : null
@@ -327,10 +330,14 @@ function elegirMotor(
  * @returns Las 7 llamadas del plan sobre un único escritor.
  */
 export function crearConversacion(dependencias: DependenciasConversacion): ConversacionApi {
-  const { reloj, id, registro, almacen, config, partidor } = dependencias
+  if (typeof dependencias.ultimoTextoDicho !== 'function') {
+    throw new Error(
+      'ultimoTextoDicho es obligatorio: el modulo no habla ni detecta eco sin el',
+    )
+  }
+  const { reloj, id, registro, almacen, config, partidor, ultimoTextoDicho } = dependencias
   const configuracion = dependencias.configuracion ?? CONVERSACION_CONFIG
   const asr = dependencias.asr
-  const tts = dependencias.tts
   const vad = dependencias.vad
 
   let activa = false
@@ -782,8 +789,9 @@ export function crearConversacion(dependencias: DependenciasConversacion): Conve
 
     const texto = String(entrada.texto || '')
 
-    if (tts && tts.hablando()) {
-      if (esEcoDeTts(texto, tts.ultimoTexto())) {
+    const dicho = String(ultimoTextoDicho() || '').trim()
+    if (dicho) {
+      if (esEcoDeTts(texto, dicho)) {
         contarDescarte('eco', tramoId, null)
         return
       }
@@ -793,7 +801,6 @@ export function crearConversacion(dependencias: DependenciasConversacion): Conve
         locutionId: abierta?.locutionId ?? tramoId,
         texto,
       })
-      tts.detener()
     }
 
     if (await promoverSiCorresponde(tramoId, texto)) return
@@ -919,7 +926,7 @@ export function crearConversacion(dependencias: DependenciasConversacion): Conve
     motorAsr = null
 
     if (asr) {
-      const motor = elegirMotor(asr, configuracion, config)
+      const motor = elegirMotor(asr, configuracion)
       if (!motor) {
         estadoAsr = 'no-permission'
         emitir({

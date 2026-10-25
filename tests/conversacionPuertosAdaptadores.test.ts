@@ -4,7 +4,7 @@
  *
  * Mide los contratos y los adaptadores REALES que hoy pueden construirse dentro
  * de la frontera del módulo: tabla de config, bandera de motor, ids, reloj,
- * almacén en memoria con tupla de sync, splitter de wake, TTS y ASR de nube.
+ * almacén en memoria con tupla de sync, splitter de wake y ASR.
  *
  * No mide las reglas de frontera/revisión/fila (tienen sus propios guards) ni
  * finge los adaptadores que la fachada pública todavía no expone: micrófono,
@@ -30,7 +30,6 @@ import type {
   EmbebedorPort,
   FilaNueva,
   RelojPort,
-  TtsPort,
   VadPort,
 } from '../src/voice/conversation/ports'
 
@@ -54,7 +53,6 @@ const filaNueva = (locutionId: string): FilaNueva => ({
 const configDePrueba = (): ConfigPort => ({
   wakeWords: () => ['ok flu'],
   semillaEtiqueta: () => 'Hablante 1',
-  localFallbackHabilitado: () => false,
 })
 
 describe('configuración del plan — una sola fuente', () => {
@@ -170,11 +168,11 @@ describe('splitter de wake — canónica completa, presentación sin wake', () =
 })
 
 describe('config viva — sale de FLU_CONFIG, no inventa wake', () => {
-  it('expone wake, semilla y la política de fallback local', () => {
+  it('expone wake y semilla; el fallback local ya no lo lee el módulo', () => {
     const config = crearConfigFlu()
     expect(config.wakeWords().length).toBeGreaterThan(0)
     expect(config.semillaEtiqueta()).not.toBe('')
-    expect(typeof config.localFallbackHabilitado()).toBe('boolean')
+    expect('localFallbackHabilitado' in config).toBe(false)
   })
 })
 
@@ -191,24 +189,7 @@ describe('puertos inyectables — VAD, embeddings y registro', () => {
     expect(typeof registro.registrar).toBe('function')
   })
 
-  it('TTS y ASR se implementan sin el módulo (contrato usable)', async () => {
-    const dichos: string[] = []
-    const tts: TtsPort = {
-      hablar: async (texto) => {
-        dichos.push(texto)
-      },
-      hablando: () => dichos.length > 0,
-      detener: () => {
-        dichos.length = 0
-      },
-      ultimoTexto: () => dichos[dichos.length - 1] ?? '',
-    }
-    await tts.hablar('hola', 'es')
-    expect(tts.ultimoTexto()).toBe('hola')
-    expect(tts.hablando()).toBe(true)
-    tts.detener()
-    expect(tts.hablando()).toBe(false)
-
+  it('ASR se implementa sin el módulo (contrato usable)', async () => {
     const vistos: string[] = []
     const asr: AsrPort = {
       soportado: () => true,

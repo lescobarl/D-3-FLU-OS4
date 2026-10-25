@@ -7,12 +7,12 @@
  * Alcance medido de `src/voice/api/**` (superficie pública disponible hoy):
  *  - config:  wake words y etiqueta semilla;
  *  - audio:   `splitTranscriptAtWakeWord`;
- *  - voz:     TTS y ASR de nube NO se adaptan aquí todavía. `api/speech` arrastra
- *    `lib/speechRecognitionLocal.js`, cuyos imports sin extensión rompen el
- *    `viteConfigNativenessGuard` al entrar en el grafo del bundle del config
- *    (este módulo cuelga de `api/server.ts`, que el config carga). Corregir ese
- *    archivo queda fuera de la whitelist; `TtsPort`/`AsrPort` siguen inyectables
- *    y su cableado de producto se declara PENDIENTE.
+ *  - voz:     ASR de nube/local. `ultimoTextoDicho` NO se adapta aquí: lo entrega
+ *    el consumidor como dependencia obligatoria (el módulo no habla). El ASR de
+ *    nube arrastra `lib/speechRecognitionLocal.js`, cuyos imports sin extensión
+ *    rompen el `viteConfigNativenessGuard` al entrar en el grafo del bundle del
+ *    config (este módulo cuelga de `api/server.ts`, que el config carga).
+ *    `AsrPort` sigue inyectable y su cableado real se declara PENDIENTE.
  *  - nada de: captura de micrófono, extracción de embeddings ni escritura de filas.
  *    Esas piezas quedan como puertos inyectables; su cableado de producto se
  *    declara PENDIENTE en `docs/LAE-cola-ejecucion.md`.
@@ -69,8 +69,6 @@ export function crearConfigFlu(): ConfigPort {
   return {
     wakeWords: () => [...FLU_CONFIG.voiceCommands.wakeWords],
     semillaEtiqueta: () => String(FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker || ''),
-    localFallbackHabilitado: () =>
-      Boolean(FLU_CONFIG.voiceIdentity.capture.recognition.localFallbackEnabled),
   }
 }
 
