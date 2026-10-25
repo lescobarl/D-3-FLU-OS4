@@ -197,14 +197,15 @@ describe('regla 4 — tramo válido y texto producen una fila', () => {
     expect(JSON.stringify(original)).toBe(antes)
   })
 
-  it('el almacén real rechaza una segunda fila de la misma locución', async () => {
+  it('el almacén real hace upsert de la misma locución: una fila y revisión 2', async () => {
     const almacen = crearAlmacenMemoria({ reloj: { ahora: () => 1000 } })
     const resultado = construirFila(cierre({ final: true }))
     expect(resultado.fila).not.toBeNull()
     if (!resultado.fila) return
     const guardada = await almacen.guardar(resultado.fila)
     expect(guardada).toMatchObject({ revision: 1, updated_at: 1000, deleted: false })
-    await expect(almacen.guardar(resultado.fila)).rejects.toThrow(/duplicada/)
+    const repetida = await almacen.guardar(resultado.fila)
+    expect(repetida.revision).toBe(2)
     expect(await almacen.leerSesion('s1')).toHaveLength(1)
   })
 })
