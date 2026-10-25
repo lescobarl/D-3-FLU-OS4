@@ -488,6 +488,27 @@ export interface BrowserProfileRecord {
 }
 
 // -----------------------------------------------------------
+// Conversation Fila (motor de conversacion nuevo)
+// -----------------------------------------------------------
+/** Una locucion cerrada = una fila. Clave = `locutionId` (UUIDv4 del tramo). */
+export interface ConversationFilaRecord {
+    locutionId: string;
+    sessionId: string;
+    turnId: string;
+    texto: string;
+    inicioMs: number;
+    finMs: number;
+    sampleRate: number;
+    etiqueta: string;
+    evidencia: string;
+    idioma: string;
+    overlap: boolean;
+    provisional: boolean;
+    reason: string;
+    sync: SyncTuple;
+}
+
+// -----------------------------------------------------------
 // Esquema Dexie - FUENTE UNICA de la lista de tablas
 // -----------------------------------------------------------
 /**
@@ -620,6 +641,11 @@ const DEXIE_VERSIONS: ReadonlyArray<{
         goalCheckIns: null,
         moodCheckIns: null,
     } },
+    // v25: filas del motor de conversacion nuevo (una locucion cerrada = una fila).
+    // El borrado es logico via sync.deleted; no hay borrado fisico.
+    { version: 25, stores: {
+        conversationFilas: 'locutionId, sessionId',
+    } },
 ];
 
 /** Tablas resultantes del esquema: altas menos bajas, en orden de aparicion. */
@@ -660,6 +686,7 @@ export class FluDatabase extends Dexie {
     notes!: EntityTable<NoteRecord, 'id'>;
     documents!: EntityTable<DocumentRecord, 'id'>;
     agenda!: EntityTable<AgendaItem, 'id'>;
+    conversationFilas!: EntityTable<ConversationFilaRecord, 'locutionId'>;
 
     constructor() {
         super('flu-os3');
