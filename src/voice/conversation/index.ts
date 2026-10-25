@@ -1162,7 +1162,6 @@ export function crearConversacion(dependencias: DependenciasConversacion): Conve
   }
 }
 
-export { crearEstado as crearEstadoDeLocucion } from './domain/locucion.ts'
 export { decidirRevision }
 export type { DecisionRevision, TramoAbierto } from './revision.ts'
 export { decidirFrontera }

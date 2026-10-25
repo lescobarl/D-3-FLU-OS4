@@ -32,6 +32,16 @@ export type DecisionRevision = Readonly<{
   completa: boolean
 }>
 
+/** Resultado de unir dos versiones del MISMO tramo. */
+export type TextoUnido = Readonly<{
+  /** Texto que queda en la locución abierta. */
+  texto: string
+  /** `false` si la nueva versión pierde palabras: no se pinta. */
+  pintar: boolean
+  /** `extiende` si creció; `revisa` si se mantuvo o perdió palabras. */
+  tipo: 'extiende' | 'revisa'
+}>
+
 /**
  * Número de palabras de un texto (espacios colapsados; vacío = 0).
  * Es la unidad de la regla 3: "más largo" y "pierde palabras" se miden así.
@@ -40,6 +50,31 @@ export type DecisionRevision = Readonly<{
 function contarPalabras(texto: string): number {
   const limpio = String(texto || '').trim()
   return limpio ? limpio.split(/\s+/).length : 0
+}
+
+/**
+ * Une dos versiones del MISMO tramo (dueño único de la regla 3).
+ *
+ * La versión nueva gana si crece o si empata en palabras; si pierde palabras,
+ * se conserva la anterior y se declara que no debe pintarse. Nunca concatena
+ * colas distintas: eso inventaría texto que nadie dijo.
+ *
+ * @param anterior Texto ya pintado en la locución abierta.
+ * @param nuevo Texto reemitido por el ASR para el mismo `tramoId`.
+ * @returns Texto a conservar, si se pinta y el tipo de revisión.
+ */
+export function unirRevision(anterior: string, nuevo: string): TextoUnido {
+  const previo = String(anterior || '').trim()
+  const siguiente = String(nuevo || '').trim()
+  const palabrasNuevas = contarPalabras(siguiente)
+  const palabrasAnteriores = contarPalabras(previo)
+  if (palabrasNuevas > palabrasAnteriores) {
+    return { texto: siguiente, pintar: true, tipo: 'extiende' }
+  }
+  if (palabrasNuevas === palabrasAnteriores && palabrasNuevas > 0) {
+    return { texto: siguiente, pintar: true, tipo: 'revisa' }
+  }
+  return { texto: previo, pintar: false, tipo: 'revisa' }
 }
 
 /**
@@ -68,15 +103,6 @@ export function decidirRevision(
     return { tipo: 'nueva', texto: nuevo, pintar: true, completa }
   }
 
-  const anterior = String(abierto.texto || '').trim()
-  const palabrasNuevas = contarPalabras(nuevo)
-  const palabrasAnteriores = contarPalabras(anterior)
-
-  if (palabrasNuevas > palabrasAnteriores) {
-    return { tipo: 'extiende', texto: nuevo, pintar: true, completa }
-  }
-  if (palabrasNuevas === palabrasAnteriores && palabrasNuevas > 0) {
-    return { tipo: 'revisa', texto: nuevo, pintar: true, completa }
-  }
-  return { tipo: 'revisa', texto: anterior, pintar: false, completa }
+  const union = unirRevision(abierto.texto, nuevo)
+  return { tipo: union.tipo, texto: union.texto, pintar: union.pintar, completa }
 }

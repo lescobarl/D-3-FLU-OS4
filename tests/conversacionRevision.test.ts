@@ -5,10 +5,11 @@
  * Cada caso falla si se quita la rama que mide: extensión por más palabras,
  * revisión por las mismas palabras, guarda de no-pérdida y locución nueva.
  * La unidad es la palabra: un texto con menos palabras no se pinta aunque tenga
- * más caracteres.
+ * más caracteres. `unirRevision` es el dueño único de la unión del mismo tramo;
+ * `decidirRevision` solo le añade el tramo y el `final`.
  */
 import { describe, expect, it } from 'vitest'
-import { decidirRevision } from '../src/voice/conversation/revision'
+import { decidirRevision, unirRevision } from '../src/voice/conversation/revision'
 import type {
   DecisionRevision,
   TramoAbierto,
@@ -84,6 +85,48 @@ describe('regla 3 — mismo tramo, revisa o extiende', () => {
       texto: 'a b',
       pintar: true,
       completa: false,
+    })
+  })
+})
+
+describe('regla 3 — unirRevision, dueño único de la unión', () => {
+  it('más palabras extienden y pintan la versión nueva', () => {
+    expect(unirRevision('vamos a probar', 'vamos a probar el modulo')).toEqual({
+      texto: 'vamos a probar el modulo',
+      pintar: true,
+      tipo: 'extiende',
+    })
+  })
+
+  it('las mismas palabras permiten la corrección explícita de la cola', () => {
+    expect(unirRevision('vamos a probar', 'vamos a revisar')).toEqual({
+      texto: 'vamos a revisar',
+      pintar: true,
+      tipo: 'revisa',
+    })
+  })
+
+  it('perder palabras conserva la versión anterior y no la pinta', () => {
+    expect(unirRevision('vamos a probar el modulo', 'vamos a probar')).toEqual({
+      texto: 'vamos a probar el modulo',
+      pintar: false,
+      tipo: 'revisa',
+    })
+  })
+
+  it('un texto ajeno con prefijo distinto pero más largo extiende igual', () => {
+    expect(unirRevision('hola que tal', 'magistrado luis ya le puso')).toEqual({
+      texto: 'magistrado luis ya le puso',
+      pintar: true,
+      tipo: 'extiende',
+    })
+  })
+
+  it('una reemisión vacía no borra la locución abierta', () => {
+    expect(unirRevision('vamos a probar', '   ')).toEqual({
+      texto: 'vamos a probar',
+      pintar: false,
+      tipo: 'revisa',
     })
   })
 })
