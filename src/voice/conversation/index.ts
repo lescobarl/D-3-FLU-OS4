@@ -19,6 +19,15 @@ export type {
   EntradaFrontera,
   UmbralesFrontera,
 } from './frontera.ts'
+export { construirFila, promoverFila, resolverEtiqueta } from './fila.ts'
+export type {
+  CierreLocucion,
+  EntradaEtiqueta,
+  EtiquetaResuelta,
+  MotivoDescarte,
+  ResultadoFila,
+  VozEtiqueta,
+} from './fila.ts'
 export { CONVERSACION_CONFIG, motorConversacionActivo } from './ports.ts'
 export {
   crearAlmacenMemoria,

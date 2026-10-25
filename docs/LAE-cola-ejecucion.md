@@ -138,6 +138,39 @@
   - `npm run lint:eslint` → verde.
 - Siguiente: `fila.ts`.
 
+## 2026-10-24 — etapa 1d: fila.ts (reglas 4–5)
+
+- Creados:
+  - `src/voice/conversation/fila.ts`: puro; `construirFila` (regla 4) devuelve
+    fila o descarte con motivo, `resolverEtiqueta` (regla 5) aplica la prioridad
+    del plan, `promoverFila` reutiliza `decidirRevision` para el final del mismo
+    tramo.
+  - `tests/conversacionFila.test.ts` (19 casos), registrado en
+    `scripts/guard-files.mjs` (solo alta).
+  - `index.ts` re-exporta `construirFila`, `promoverFila`, `resolverEtiqueta` y
+    sus tipos (alcanzable).
+- Decisiones declaradas:
+  - Un tramo inválido (`fin` nulo/no avanza, `sampleRate` no positivo) o un texto
+    vacío NO inventan fila: devuelven `tramoInvalido` / `sinTexto` para que el
+    llamador lo cuente (regla 4).
+  - `locutionId` = `tramoId` debe ser UUIDv4; una secuencia numérica lanza (regla
+    de inserción del plan). El almacén rechaza una segunda fila del mismo id.
+  - Etiqueta: nombre confirmado → voz medida → continuidad → semilla; los valores
+    en blanco no cuentan como evidencia; `?` y semilla vacía lanzan (regla 5).
+  - `provisional: !final`; `promoverFila` solo cambia texto/provisional, conserva
+    el texto si el final pierde palabras y no toca una fila borrada lógicamente.
+  - La entrada no se muta; sin `Date.now()` ni escritura externa (puertos).
+- Gates medidos:
+  - `npm run test:file tests/conversacionFila.test.ts` → 19/19.
+  - `npm run typecheck` → verde.
+  - guards afectados (orphan, deadExports, structureDuplication, eol, utf8,
+    nonNullAssertion, duplication, godFileSize, uuidV4Insercion,
+    sampleRateConfig, umbralesConfig, timeoutsConfig, catchSilencioso,
+    smallDuplicatesSingleOwner, voiceFacade, viteConfigNativeness,
+    configSingleSource) → 17 archivos / 119 tests verdes.
+  - `npm run lint:eslint` → verde.
+- Siguiente: `index.ts` (API de 7 llamadas y 6 eventos).
+
 ## Pendiente de producto
 
 - Fixture `N`: no existe grabación; los guards usan fixtures sintéticos. La
