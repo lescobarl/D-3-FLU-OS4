@@ -61,3 +61,10 @@ export {
   crearRegistroCaughtError,
   crearRelojSistema,
 } from './adapters.ts'
+export { crearAsrReconocimiento } from './adaptersAsr.ts'
+export type {
+  EventoError,
+  EventoResultado,
+  FuenteAsr,
+  MotorReconocimiento,
+} from './adaptersAsr.ts'
