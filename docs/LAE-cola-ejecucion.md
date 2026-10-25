@@ -857,11 +857,12 @@ src/voice/conversation/ingesta.ts:191  export function ingestaAsr(
 
 ### Techos (medidos) y gates de cierre
 
-Conteos (`Get-Content | Measure-Object -Line`): `index` 65/120 · `tipos` 233/250
-· `motor` 219/300 · `cola` 103/150 · `eco` 33/100 · `frontera` 58/100 ·
-`revision` 100/150 · `fila` 177/200 · `ports` 230/300 · `adapters` 262/300 ·
-`adaptersAlmacen` 148/300 · `producto` 224/300. Hook 4038 (sin cambios) y App
-4247 (sin cambios); `godFileSizeGuard` verde.
+Conteos con `wc -l` (incluye líneas en blanco, mismo criterio que `lineas()` del
+trinquete): `index` 66/120 · `tipos` 250/250 · `motor` 228/300 · `cola` 108/150
+· `eco` 35/100 · `frontera` 65/100 · `revision` 108/150 · `fila` 192/200 ·
+`ports` 261/300 · `adapters` 279/300 · `adaptersAlmacen` 157/300 · `producto`
+237/300. Hook 4382/4383 (sin cambios) y App 4452/4485 (sin cambios);
+`godFileSizeGuard` verde.
 
 - `npm run gate` → exit 0; guards `Test Files 304 passed | 1 skipped (305)` ·
   `Tests 2638 passed | 7 skipped (2645)`; `tsc -b` y `eslint
@@ -870,8 +871,8 @@ Conteos (`Get-Content | Measure-Object -Line`): `index` 65/120 · `tipos` 233/25
 
 ### Hallazgo fuera de alcance (declarado, no tocado)
 
-`docs/LAE_MODULO_CONVERSACION.MD:124,135` sigue mencionando `adaptersAsr.ts`.
-Está fuera de la whitelist de este cierre: se anota, no se edita.
+`docs/LAE_MODULO_CONVERSACION.MD:124,135` mencionaba `adaptersAsr.ts`. RESUELTO
+en el cierre administrativo del ítem 8 (abajo): el plan se actualizó.
 
 ### Queda para el dueño
 
@@ -879,3 +880,83 @@ Encender `?conversationEngine=new` en la app real y validar en pantalla el
 dictado con pausas: 0 filas durante el dictado, 1 al cerrar, caja que se vacía,
 etiqueta del hablante. El default sigue `legacy`; el DoD de producto es del
 dueño.
+
+---
+
+## Cierre administrativo 2026-10-25 — ítem 8 ejecutado
+
+Solo docs: no se tocó código ni comportamiento.
+
+### Default `legacy` intacto
+
+`rg -n "engine: 'legacy'|engine: \"legacy\"" src/voice/conversation/ports.ts`:
+
+```text
+246:  conversation: Object.freeze({ engine: 'legacy' }),
+```
+
+Override `?conversationEngine=new` solo en dev: `adapters.ts:108`
+(`if (!import.meta.env.DEV) return null`), antes de leer el parámetro.
+
+### Tubería vieja NO borrada
+
+```text
+git diff --stat 92f866a6..HEAD -- src/voice/lib        -> (sin salida: 0 cambios)
+git ls-tree -r --name-only 92f866a6 -- src/voice/lib   -> 124 ficheros
+git ls-tree -r --name-only HEAD -- src/voice/lib       -> 124 ficheros
+git diff --name-only --diff-filter=D 92f866a6..HEAD -- src/voice/lib -> 0
+```
+
+### Sin push
+
+```text
+git status -sb   -> ## feature/conversacion-modulo-nuevo
+git branch -vv   -> feature/conversacion-modulo-nuevo (sin [origin/...])
+git rev-parse --abbrev-ref --symbolic-full-name '@{u}'
+                 -> fatal: no upstream configured for branch
+                    'feature/conversacion-modulo-nuevo'
+```
+
+**No se ejecutó push.** La rama no tiene upstream; no existe `origin/...` que
+citar como prueba.
+
+### UI/look intacto salvo la compuerta
+
+```text
+git diff --stat 92f866a6..HEAD -- src/components src/App.tsx
+ src/App.tsx | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+```
+
+El diff es la compuerta del escritor: import de `crearConfigFlu` y
+`motorConversacionActivo(crearConfigFlu())` en el chequeo de fila de usuario.
+`src/components`: 0 cambios.
+
+### Fixture `N/0/0`
+
+- Real del dueño: **NO existe** (los `tests/fixtures/**` son playback/replay;
+  ninguna grabación de conversación). Sintético:
+  `npm run test:file tests/conversacionFixtures.test.ts` →
+  `Test Files 1 passed (1)` · `Tests 2 passed (2)` (2026-10-25 15:49).
+- Aceptación REAL: **PENDIENTE**. Comando exacto cuando exista la grabación:
+  `npm run test:file tests/conversacionFixtures.test.ts` con `FIXTURE`
+  reemplazado por los tramos transcritos del log real; debe reportar
+  `filas=N`, `perdidas=0`, `duplicados=0` con el N declarado por el dueño.
+
+### Suite completa
+
+**No se ejecutó; la corre el CI.** El pre-commit de esta rama corre
+`lint + typecheck` (`lint` = guards de comportamiento + ESLint), nunca la suite
+completa: sin desviación respecto a AGENTS §1.15. Los cuatro commits de este
+cierre muestran ese hook en su salida.
+
+### Plan actualizado
+
+`docs/LAE_MODULO_CONVERSACION.MD`: inventario 17 (sale `adaptersAsr`, entra
+`producto.ts` con `tramoDelSegmento` y final único en `cerrar()`), techos con la
+medida al lado, default `conversation.engine: legacy` y override solo dev.
+`rg -n "adaptersAsr" docs/LAE_MODULO_CONVERSACION.MD` → 0 coincidencias (exit 1).
+
+Techos medidos con `wc -l` (incluye líneas en blanco): `index` 66, `adapters`
+279, `producto` 237. La lista del mandato traía 65/262/224 para esos tres: eran
+los conteos sin líneas en blanco de la medición anterior; se anotó el medido.

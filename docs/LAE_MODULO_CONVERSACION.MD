@@ -111,18 +111,18 @@ Inventario REAL (medido con `Get-ChildItem` sobre el árbol de trabajo):
 
 ```text
 src/voice/conversation/
-  index.ts          API: solo compone y re-exporta             ≤120
-  tipos.ts          contrato público (fila, eventos, API)      ≤250
-  motor.ts          orquestador de la sesión                   ≤300
-  cola.ts           ingesta serializada y pendientes           ≤150
-  eco.ts            detector de eco por palabras               ≤100
-  frontera.ts       regla 2: cuándo cerrar                     ≤100
-  revision.ts       regla 3: mismo tramo / revisa / extiende   ≤150
-  fila.ts           reglas 4–5: commit, etiqueta y modelo      ≤200
-  ports.ts          ASR, audio, embeddings, store, reloj, VAD  ≤300
-  adapters.ts       única puerta externa; compose la DB        ≤300
-  adaptersAsr.ts    traduce la instancia de ASR inyectada
-  adaptersAlmacen.ts almacén Dexie con `DbLike` inyectado      ≤300
+  index.ts          API: solo compone y re-exporta            66/120
+  tipos.ts          contrato público (fila, eventos, API)     250/250 (SIN holgura)
+  motor.ts          orquestador de la sesión                  228/300
+  cola.ts           ingesta serializada y pendientes          108/150
+  eco.ts            detector de eco por palabras              35/100
+  frontera.ts       regla 2: cuándo cerrar                    65/100
+  revision.ts       regla 3: mismo tramo / revisa / extiende  108/150
+  fila.ts           reglas 4–5: commit, etiqueta y modelo     192/200 (casi sin holgura)
+  ports.ts          ASR, audio, embeddings, store, reloj, VAD 261/300
+  adapters.ts       única puerta externa; compose la DB       279/300
+  adaptersAlmacen.ts almacén Dexie con `DbLike` inyectado     157/300
+  producto.ts       composición real; segmento: `tramoDelSegmento` y final único en `cerrar()`  237/300
   cierre.ts         reglas de cierre y fila
   ingesta.ts        audio, ASR, frontera y pendientes
   sesion.ts         estado, caja, voz y sesión
@@ -132,8 +132,8 @@ src/voice/conversation/
 
 `adapters.ts` es la ÚNICA puerta que importa fuera del módulo: importa
 `FluDatabase` y le pasa un `DbLike` a `adaptersAlmacen.ts`, que NO importa
-`core/db`. `adaptersAsr.ts` recibe la fuente de ASR inyectada. Un archivo por
-encima de su techo no se entrega: se parte antes de commitear.
+`core/db`. Un archivo por encima de su techo no se entrega: se parte antes de
+commitear.
 
 ## Decisiones de motor (fijadas)
 
@@ -146,6 +146,9 @@ encima de su techo no se entrega: se parte antes de commitear.
   emite `barge.in`.
 - **`engine: new` APAGA el escritor legacy.** `legacy` no instancia el módulo.
   Dos escritores activos = entrega rechazada.
+- **Default: `conversation.engine: legacy`.** `?conversationEngine=new` es
+  override de runtime SOLO en dev (`import.meta.env.DEV`); en un build de
+  producción no enciende nada.
 
 ## Reglas de operación y repo
 
