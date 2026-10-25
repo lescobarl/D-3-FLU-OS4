@@ -17,6 +17,7 @@
  * y solo cambia texto/provisional. No hay borrado físico ni mutación de entrada.
  */
 import { decidirRevision } from './revision.ts'
+import type { EvidenciaVoz } from './tipos.ts'
 import type {
   CambiosFila,
   EvidenciaEtiqueta,
@@ -170,4 +171,22 @@ export function promoverFila(fila: Fila, textoFinal: string): CambiosFila | null
   })
   if (decision.texto === fila.texto && !fila.provisional) return null
   return { texto: decision.texto, provisional: false }
+}
+
+/**
+ * Fusiona evidencia de voz sin borrar lo ya medido con campos ausentes.
+ * @param base Evidencia previa de la locución.
+ * @param nueva Evidencia del resultado entrante, si la trae.
+ * @returns Evidencia fusionada (la base si no hay nada nuevo).
+ */
+export function fusionarVoz(base: EvidenciaVoz, nueva: EvidenciaVoz | undefined): EvidenciaVoz {
+  if (!nueva) return base
+  return {
+    vozId: nueva.vozId ?? base.vozId,
+    nombre: nueva.nombre ?? base.nombre,
+    nombreConfirmado: nueva.nombreConfirmado ?? base.nombreConfirmado,
+    hablante: nueva.hablante ?? base.hablante,
+    continuidad: nueva.continuidad ?? base.continuidad,
+    overlap: nueva.overlap ?? base.overlap,
+  }
 }
