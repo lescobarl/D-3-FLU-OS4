@@ -73,7 +73,7 @@ import { buildFluSpeechAuditRows, commitUserTurnRow, createConversationModeContr
 import { applyKnownVoiceName, forgetVoiceName, isAutoSpeakerLabel, participantVoiceAnchorsForDiarization, resolveVoiceIdentity, resolveVoiceParticipants } from './voice/api/identity'
 import { resolveGeminiErrorPresentation } from './voice/api/media'
 import { cancelSpeech, isSpeechBusy, speakResponse, waitForSpeechIdle } from './voice/api/speech'
-import { motorConversacionActivo } from './voice/conversation/index'
+import { crearConfigFlu, motorConversacionActivo } from './voice/conversation/index'
 import { deleteAuditLogsBySpeaker, deleteVoiceProfile, findVoiceProfileByLabel } from './voice/api/storage'
 import { formatStreamSttUiStatus, getFluParticipantConfig, isFluParticipantEnabled, setFluParticipantOverrides } from './voice/api/uiConfig';
 import { createMediaRequestGate } from './core/media/mediaRequestGate';
@@ -1176,7 +1176,7 @@ function App() {
             // Con `engine: new` la fila de la CONVERSACIÓN la escribe el módulo
             // (`row.committed`): el escritor legacy queda inerte en ese dominio.
             if (escribeFilaDeUsuario(resolved, { hayTexto: Boolean(transcript), hablable: Boolean(cleanForSpeech(transcript)) }) &&
-                !(motorConversacionActivo() && conversationActiveRef.current)) {
+                !(motorConversacionActivo(crearConfigFlu()) && conversationActiveRef.current)) {
                 // P8.40: la etiqueta de diarizacion se escribe TAL CUAL: el vinculo con un
                 // participante registrado NO la asciende (una sola via del nombre: el mandato).
                 // El dueno de esa decision es `resolveRowSpeakerName`. 
