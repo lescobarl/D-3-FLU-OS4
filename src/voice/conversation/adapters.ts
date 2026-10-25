@@ -31,6 +31,10 @@ import { logCaughtError } from '../../lib/caughtError.ts'
 import { normalizeForMatch } from '../../lib/textUtils.ts'
 import { splitTranscriptAtWakeWord } from '../api/audio.ts'
 import { FLU_CONFIG } from '../api/config.ts'
+import { fluDb, type ConversationFilaRecord } from '../../core/db/fluDatabase.ts'
+import { buildSyncTuple } from '../../core/db/syncTuple.ts'
+import { crearAlmacenDexie } from './adaptersAlmacen.ts'
+import type { DbLike, RegistroFila } from './adaptersAlmacen.ts'
 import type {
   AlmacenPort,
   CambiosFila,
@@ -129,8 +133,8 @@ export function crearPartidorWake(config: ConfigPort): PartidorPort {
 /**
  * Almacén en memoria con la tupla de sincronización del plan.
  * Un solo escritor (el motor de conversación) y borrado lógico: no existe método
- * de borrado físico. La integración Dexie queda PENDIENTE porque la fachada
- * pública de storage no expone escritura de filas de conversación.
+ * de borrado físico. Es el doble de pruebas y el respaldo sin IndexedDB; el
+ * almacén real es `crearAlmacenDexieProducto`.
  * @param opciones Reloj inyectado para `updated_at`.
  */
 export function crearAlmacenMemoria({ reloj }: { reloj: RelojPort }): AlmacenPort {
@@ -139,15 +143,13 @@ export function crearAlmacenMemoria({ reloj }: { reloj: RelojPort }): AlmacenPor
 
   return {
     guardar: async (fila: FilaNueva): Promise<Fila> => {
-      if (filas.has(fila.locutionId)) {
-        throw new Error(`fila duplicada para locucion ${fila.locutionId}`)
-      }
+      const previa = filas.get(fila.locutionId)
       const guardada: Fila = {
         ...fila,
         tramo: { ...fila.tramo },
-        revision: 1,
+        revision: (previa?.revision ?? 0) + 1,
         updated_at: reloj.ahora(),
-        deleted: false,
+        deleted: previa?.deleted ?? false,
       }
       filas.set(guardada.locutionId, guardada)
       return instantanea(guardada)
@@ -174,4 +176,38 @@ export function crearAlmacenMemoria({ reloj }: { reloj: RelojPort }): AlmacenPor
         .filter((fila) => fila.sessionId === sessionId)
         .map(instantanea),
   }
+}
+
+/** Proyecta el registro Dexie al contrato del adaptador (misma forma). */
+function aRegistroFila(registro: ConversationFilaRecord): RegistroFila {
+  return registro
+}
+
+/**
+ * Almacén Dexie del PRODUCTO: la ÚNICA puerta del módulo a `core/db`.
+ * La tabla y la tupla viven fuera; aquí solo se conectan por el `DbLike` que
+ * consume `adaptersAlmacen.ts`. El reloj llega inyectado.
+ * @param opciones Reloj inyectado para `updated_at`.
+ * @returns Un `AlmacenPort` sobre `conversationFilas` (upsert y borrado lógico).
+ */
+export function crearAlmacenDexieProducto({ reloj }: { reloj: RelojPort }): AlmacenPort {
+  const db: DbLike = {
+    leer: async (locutionId) => {
+      const registro = await fluDb.conversationFilas.get(locutionId)
+      return registro ? aRegistroFila(registro) : undefined
+    },
+    escribir: async (registro) => {
+      await fluDb.conversationFilas.put({ ...registro })
+    },
+    porSesion: async (sessionId) => {
+      const registros = await fluDb.conversationFilas
+        .where('sessionId')
+        .equals(sessionId)
+        .toArray()
+      return registros.map(aRegistroFila)
+    },
+    transaccion: async (operacion) =>
+      fluDb.transaction('rw', fluDb.conversationFilas, () => operacion()),
+  }
+  return crearAlmacenDexie({ db, reloj, sincronizar: buildSyncTuple })
 }
