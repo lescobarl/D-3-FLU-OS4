@@ -227,23 +227,256 @@
   - `npm run verify:fast` → EOL 0/0 + tipos + ESLint verdes.
   - `npm run build` → `✓ built in 1.84s` (avisos previos de tamaño de chunk y
     dynamic imports inefectivos, ajenos a este módulo).
-- Siguiente: cierre de etapa (cableado de producto fuera de la whitelist) y
-  entrega final.
+- Siguiente: paso 2 (troceo de `index.ts`).
+
+## 2026-10-25 — paso 1: un solo dominio (duplicado eliminado)
+
+- Commit `87d2ef5b`. Se migraron los casos útiles del seed y se borraron
+  `src/voice/conversation/domain/locucion.ts` y su test; se retiraron sus
+  re-exports de `index.ts` y de `src/voice/api/server.ts` (costura de arranque).
+- Medido: `rg -n "domain/locucion" src` → 0 coincidencias (este doc conserva el
+  histórico); `rg -n "function unirRevision" src` → una sola definición en
+  `src/voice/conversation/revision.ts:66`.
+- Siguiente: paso 2.
+
+## 2026-10-25 — paso 2: `index.ts` solo compone
+
+- Commit `77525792` (atómico declarado: los archivos nuevos no compilan hasta que
+  `index.ts`/`motor.ts` los consumen; trocearlo por archivo dejaría exports
+  muertos y tipos rojos).
+- Medido con `Get-ChildItem … | ForEach-Object { … }` (16 archivos):
+  `index 70` (techo 120), `tipos 250` (250), `motor 228` (300), `cola 108` (150),
+  `eco 35` (100), `frontera 65` (100), `revision 108` (150), `fila 192` (200),
+  `ports 256` (300), `adapters 159` (300). Troceos adicionales declarados:
+  `sesion 247`, `cierre 261`, `texto 206`, `ingesta 208`, `tramos 100`,
+  `adaptersAsr 199`.
+- Causa medida del troceo extra: la primera pasada dejó `cola.ts` 206 (>150),
+  `ingesta.ts` 369 y `sesion.ts` 431 (>300). Se separaron `tramos.ts`,
+  `cierre.ts` y `texto.ts`, y se recortaron los tres. No se subió ningún techo.
+- La API pública conserva las 7 llamadas y los 6 eventos; `index.ts` no tiene
+  imports de runtime, solo re-exports.
+- Siguiente: paso 3 (adaptadores reales).
+
+## 2026-10-25 — paso 3a: adaptador real de ASR
+
+- Creado `src/voice/conversation/adaptersAsr.ts` (199 líneas) y su test
+  `tests/conversacionAsrAdapter.test.ts` (8 casos): un solo motor por sesión,
+  `auto` lo resuelve el motor ANTES de abrir, sin cambio en caliente ni umbrales
+  de degradación; traduce `onstart/onresult/onerror/onend` a `asr.status` y
+  `ResultadoAsr`; el PCM va solo al motor local; `detener` espera `whenIdle`.
+- La FUENTE se inyecta (`FuenteAsr`). Causa medida: `api/speech` arrastra
+  `lib/speechRecognitionLocal.js` con 4 imports sin extensión y el módulo cuelga
+  de `api/server.ts`; importarlo desde aquí rompería
+  `viteConfigNativenessGuard`. El producto construye la fuente con
+  `acquireSpeechRecognition` + `loadWhisperRecognitionEngine` en su punto de
+  composición (paso 4), fuera del grafo del config.
+- Test fuera de `GUARD_FILES`: la whitelist solo autoriza ese archivo para el
+  alta/baja del test del seed. Se ejecuta en `npm test` (cambiados), en CI y en
+  la autoverificación. Patch en cola (una línea): añadir
+  `conversacionAsrAdapter` a `GUARD_FILES` en `scripts/guard-files.mjs`.
+- Siguiente: paso 3b (almacén Dexie) y paso 4 (cableado).
+
+## 2026-10-25 — paso 3b: almacén Dexie — PATCH EN COLA (fuera de whitelist)
+
+Causa medida: `src/voice/api/storage.ts:7` solo re-exporta `lib/fluStorage.js`,
+que tiene 4 imports sin extensión (líneas 1–4) y arrastra `useVoiceProfiles`,
+`useConversationPersistence`, `integrationStore` y `api/identity`. Importarlo
+desde `adapters.ts` metería esa cadena en el grafo del config de Vite y rompería
+`viteConfigNativenessGuard`; además el almacén es inyección de producto, no
+frontera del módulo. Por eso se propone una fachada DEDICADA
+(`src/voice/api/conversationStore.ts`) que solo importa el almacén nuevo y no se
+re-exporta por `api/server.ts`.
+
+### Patch exacto
+
+`src/core/db/fluDatabase.ts` (3 hunks; líneas aproximadas):
+
+```diff
+@@ -61,6 +61,23 @@ export interface ConversationRow {
+     sync: SyncTuple;
+ }
+ 
++// -----------------------------------------------------------
++// Conversation Fila (motor de conversacion nuevo)
++// -----------------------------------------------------------
++/** Una locucion cerrada = una fila. Clave = `locutionId` (UUIDv4 del tramo). */
++export interface ConversationFilaRecord {
++    locutionId: string;
++    sessionId: string;
++    turnId: string;
++    texto: string;
++    inicioMs: number;
++    finMs: number;
++    sampleRate: number;
++    etiqueta: string;
++    evidencia: string;
++    idioma: string;
++    overlap: boolean;
++    provisional: boolean;
++    reason: string;
++    sync: SyncTuple;
++}
++
+@@ -618,6 +635,11 @@ const DEXIE_VERSIONS: ReadonlyArray<{
+         moodCheckIns: null,
+     } },
++    // v25: filas del motor de conversacion nuevo (una locucion cerrada = una fila).
++    // El borrado es logico via sync.deleted; no hay borrado fisico.
++    { version: 25, stores: {
++        conversationFilas: 'locutionId, sessionId',
++    } },
+ ];
+@@ -659,6 +681,7 @@ export class FluDatabase extends Dexie {
+     notes!: EntityTable<NoteRecord, 'id'>;
+     documents!: EntityTable<DocumentRecord, 'id'>;
+     agenda!: EntityTable<AgendaItem, 'id'>;
++    conversationFilas!: EntityTable<ConversationFilaRecord, 'locutionId'>;
+ 
+     constructor() {
+```
+
+`src/voice/lib/conversationFilaStore.ts` (new file):
+
+```ts
+import { fluDb, type ConversationFilaRecord } from '../../core/db/fluDatabase.ts'
+import { buildSyncTuple, type SyncTuple } from '../../core/db/syncTuple.ts'
+import type {
+  AlmacenPort,
+  CambiosFila,
+  Fila,
+  FilaNueva,
+  RelojPort,
+} from '../conversation/ports.ts'
+
+/** Proyecta la fila de dominio al registro persistente. */
+function aRegistro(fila: FilaNueva, sync: SyncTuple): ConversationFilaRecord {
+  return {
+    locutionId: fila.locutionId,
+    sessionId: fila.sessionId,
+    turnId: fila.turnId,
+    texto: fila.texto,
+    inicioMs: fila.tramo.inicio,
+    finMs: fila.tramo.fin,
+    sampleRate: fila.tramo.sampleRate,
+    etiqueta: fila.etiqueta,
+    evidencia: fila.evidencia,
+    idioma: fila.idioma,
+    overlap: fila.overlap,
+    provisional: fila.provisional,
+    reason: fila.reason,
+    sync,
+  }
+}
+
+/** Proyecta el registro al contrato del módulo (ms UTC desde la tupla ISO). */
+function aFila(registro: ConversationFilaRecord): Fila {
+  return {
+    locutionId: registro.locutionId,
+    sessionId: registro.sessionId,
+    turnId: registro.turnId,
+    texto: registro.texto,
+    tramo: {
+      inicio: registro.inicioMs,
+      fin: registro.finMs,
+      sampleRate: registro.sampleRate,
+    },
+    etiqueta: registro.etiqueta,
+    evidencia: registro.evidencia,
+    idioma: registro.idioma,
+    overlap: registro.overlap,
+    provisional: registro.provisional,
+    reason: registro.reason,
+    revision: registro.sync.revision,
+    updated_at: Date.parse(registro.sync.updated_at),
+    deleted: registro.sync.deleted,
+  }
+}
+
+/**
+ * Almacén Dexie de filas de conversación.
+ * @param opciones Reloj inyectado para `updated_at`.
+ * @returns Un `AlmacenPort` con upsert idempotente por `locutionId`.
+ */
+export function crearAlmacenDexie({ reloj }: { reloj: RelojPort }): AlmacenPort {
+  return {
+    guardar: async (fila: FilaNueva): Promise<Fila> =>
+      fluDb.transaction('rw', fluDb.conversationFilas, async () => {
+        const previo = await fluDb.conversationFilas.get(fila.locutionId)
+        const sync = buildSyncTuple(previo?.sync, reloj.ahora())
+        const registro = aRegistro(fila, sync)
+        await fluDb.conversationFilas.put(registro)
+        return aFila(registro)
+      }),
+
+    actualizar: async (locutionId: string, cambios: CambiosFila): Promise<Fila | null> =>
+      fluDb.transaction('rw', fluDb.conversationFilas, async () => {
+        const previo = await fluDb.conversationFilas.get(locutionId)
+        if (!previo) return null
+        const anterior = aFila(previo)
+        const sync = buildSyncTuple(previo.sync, reloj.ahora())
+        const registro = aRegistro(
+          {
+            ...anterior,
+            texto: cambios.texto ?? anterior.texto,
+            provisional: cambios.provisional ?? anterior.provisional,
+            reason: cambios.reason ?? anterior.reason,
+          },
+          cambios.deleted === undefined ? sync : { ...sync, deleted: cambios.deleted },
+        )
+        await fluDb.conversationFilas.put(registro)
+        return aFila(registro)
+      }),
+
+    leerSesion: async (sessionId: string): Promise<Fila[]> => {
+      const registros = await fluDb.conversationFilas
+        .where('sessionId')
+        .equals(sessionId)
+        .toArray()
+      return registros.map(aFila)
+    },
+  }
+}
+```
+
+`src/voice/api/conversationStore.ts` (new file):
+
+```ts
+/**
+ * FACHADA DEL ALMACÉN DE FILAS DEL MOTOR CONVERSACIÓN. Superficie PÚBLICA.
+ * No se re-exporta por `api/server.ts`: esa cadena entra en el grafo del config
+ * de Vite, y este almacén solo lo consume el punto de composición del producto.
+ */
+export { crearAlmacenDexie } from '../lib/conversationFilaStore.ts'
+```
+
+- Por qué `upsert`: el mandato lo exige por `locutionId`; repetir la misma
+  locución incrementa `revision` y no crea una segunda fila. La tupla se
+  construye con el dueño único `buildSyncTuple`; el borrado lógico se declara
+  con el mismo patrón que `fluStorage.js:38`
+  (`{ ...buildSyncTuple(...), deleted: true }`).
+- `updated_at` se persiste ISO (tupla canónica) y se proyecta a ms UTC en
+  `Fila.updated_at`; no se construye una segunda tupla.
+- El reloj llega inyectado; el archivo no llama `Date.now()`.
+- Al aterrizar: `npm run test:file tests/conversacionAlmacenDexie.test.ts`
+  (`fake-indexeddb`, un caso por operación) + `npm run typecheck`.
+- No se aplica ahora: los 3 archivos están fuera de la whitelist.
 
 ## Pendiente de producto
 
 - Fixture `N`: no existe grabación; los guards usan fixtures sintéticos. La
   aceptación `N/0/0` queda PENDIENTE, no cumplida.
-- Cableado de producto (hook/App) fuera de la whitelist; el arranque queda tras
-  `conversation.engine` dentro del módulo. Encender el motor nuevo exige que el
-  producto llame `crearConversacion(...)` solo si `motorConversacionActivo()`;
-  el default es `legacy`.
+- Cableado de producto: la whitelist de este encargo SÍ incluye el hook de voz,
+  `src/App.tsx` y `src/voice/api/server.ts` para cablear/retirar el seed. El paso
+  4 llama `crearConversacion` UNA vez en el punto de composición del hook,
+  detrás de `conversation.engine` (default `legacy`).
+- Almacén Dexie: patch arriba; hasta que aterrice, el producto inyecta
+  `crearAlmacenMemoria` (real, con la misma tupla y borrado lógico).
 - Regla 7 (playback con otro `AudioSource`): es consumo de producto. El módulo
   entrega filas y tramos con `sampleRate`; no abre fuentes de audio.
-- Borrado del seed `src/voice/conversation/domain/locucion.ts` y de la costura
-  `crearEstadoDeLocucion` en `src/voice/api/server.ts`: bloqueado por la
-  whitelist (`api/server.ts` está fuera). Además, el plan §3 pasos reserva el
-  borrado de la tubería vieja para después de la validación de pantalla del
-  dueño.
-- TTS/ASR de nube y ASR local siguen PENDIENTES con causa medida (arriba): los
-  puertos son inyectables y el cableado real pertenece al producto.
+- TTS: el módulo ya no tiene `TtsPort`; el eco se resuelve con
+  `ultimoTextoDicho()` obligatorio, que aporta el producto.
+- ASR local: `createWhisperRecognitionEngine` conserva su cerrojo de eco (descarta
+  audio mientras habla el TTS), que limita el barge-in del plan. Corregirlo está
+  fuera de la whitelist.
+- Borrado de la tubería vieja: reservado a después de la validación de pantalla
+  del dueño.
