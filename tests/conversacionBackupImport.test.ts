@@ -119,7 +119,7 @@ afterEach(() => {
 })
 
 describe('importación de backup — N filas por función, en ambos motores', () => {
-  it('legacy: N filas del JSON → N filas en conversations, una escritura cada una', async () => {
+  it('legacy: N filas del JSON → N filas en conversations en un solo bulkPut, sin duplicados', async () => {
     fijarMotorEnUrl('legacy')
     sembrarBackupJson()
     const sistema = new BackupSystem({ enabled: true })
