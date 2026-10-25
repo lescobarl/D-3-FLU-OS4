@@ -112,6 +112,32 @@
   - `npm run lint:eslint` → verde.
 - Siguiente: `frontera.ts`.
 
+## 2026-10-24 — etapa 1c: frontera.ts (regla 2)
+
+- Creados:
+  - `src/voice/conversation/frontera.ts`: puro; consume `MedidaVad` y los
+    umbrales de `CONVERSACION_CONFIG` (sin literales de ms en la lógica).
+  - `tests/conversacionFrontera.test.ts` (12 casos), registrado en
+    `scripts/guard-files.mjs`.
+  - `index.ts` re-exporta `decidirFrontera` y sus tipos (alcanzable).
+- Decisiones declaradas:
+  - Voz presente gana: no se cierra aunque la medida traiga silencio.
+  - Frontera: texto ajeno + silencio ≥ `minSilenceMs` → cierra `causa:'frontera'`.
+  - Silencio: sin texto ajeno + silencio ≥ `silenceCloseMs` → cierra
+    `causa:'silencio'`. Es el segundo cierre; la fila provisional/descarte la
+    decide la regla 4, no la frontera.
+  - Si coinciden ambos, la causa es `frontera` (el texto ajeno explicó el cierre).
+  - Medida inválida (NaN/negativa) se normaliza a 0; nunca cierra por error.
+  - `stop(user|system|watchdog)` no es frontera: lo resolverá la API (paso 5).
+- Gates medidos:
+  - `npm run test:file tests/conversacionFrontera.test.ts` → 12/12.
+  - `npm run typecheck` → verde.
+  - guards afectados (orphan, deadExports, structureDuplication, eol, utf8,
+    nonNullAssertion, duplication, godFileSize, umbralesConfig,
+    timeoutsConfig, sampleRateConfig) → 11 archivos / 60 tests verdes.
+  - `npm run lint:eslint` → verde.
+- Siguiente: `fila.ts`.
+
 ## Pendiente de producto
 
 - Fixture `N`: no existe grabación; los guards usan fixtures sintéticos. La

@@ -12,6 +12,13 @@
 export { crearEstado as crearEstadoDeLocucion } from './domain/locucion.ts'
 export { decidirRevision } from './revision.ts'
 export type { DecisionRevision, TramoAbierto } from './revision.ts'
+export { decidirFrontera } from './frontera.ts'
+export type {
+  CausaFrontera,
+  DecisionFrontera,
+  EntradaFrontera,
+  UmbralesFrontera,
+} from './frontera.ts'
 export { CONVERSACION_CONFIG, motorConversacionActivo } from './ports.ts'
 export {
   crearAlmacenMemoria,
