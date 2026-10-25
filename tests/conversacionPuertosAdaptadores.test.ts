@@ -36,7 +36,7 @@ import type {
 const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 /** Fila nueva mínima: datos de test, no valores del dominio. */
-const filaNueva = (locutionId: string): FilaNueva => ({
+const filaNueva = (locutionId: string, overrides: Partial<FilaNueva> = {}): FilaNueva => ({
   locutionId,
   sessionId: 's1',
   turnId: 't1',
@@ -48,6 +48,7 @@ const filaNueva = (locutionId: string): FilaNueva => ({
   overlap: false,
   provisional: false,
   reason: 'user',
+  ...overrides,
 })
 
 const configDePrueba = (): ConfigPort => ({
@@ -128,10 +129,12 @@ describe('almacén — una fila por locución y tupla [revision, updated_at, del
     expect(deSesion[0].deleted).toBe(true)
   })
 
-  it('no se inserta dos veces la misma locución', async () => {
+  it('repetir la misma locución es upsert: una fila y revisión incremental', async () => {
     const almacen = crearAlmacenMemoria({ reloj: { ahora: () => 1 } })
     await almacen.guardar(filaNueva('loc-1'))
-    await expect(almacen.guardar(filaNueva('loc-1'))).rejects.toThrow(/duplicada/)
+    const repetida = await almacen.guardar(filaNueva('loc-1', { texto: 'hola otra vez' }))
+    expect(repetida).toMatchObject({ revision: 2, texto: 'hola otra vez' })
+    expect(await almacen.leerSesion('s1')).toHaveLength(1)
   })
 
   it('actualizar una fila inexistente devuelve null, no inventa fila', async () => {
