@@ -576,3 +576,181 @@ export { crearAlmacenDexie } from '../lib/conversationFilaStore.ts'
   fuera de la whitelist.
 - Borrado de la tubería vieja: reservado a después de la validación de pantalla
   del dueño.
+
+## 2026-10-25 — preflight de configuración y cierre medido (legacy vs new)
+
+### Preflight (commit aparte, docs/config)
+
+- `ConfigPort.conversationEngine(): MotorConversacion` (`ports.ts:131`).
+- `crearConfigFlu()` (`adapters.ts:144-151`) resuelve en orden:
+  override de runtime → configuración del producto → valor del plan (`legacy`).
+  No se añade clave nueva a `FLU_CONFIG` ni al plan: el término de producto es
+  una lectura opcional (`FLU_CONFIG.conversation?.engine`) y el default del plan
+  sigue `legacy` (`ports.ts:247`).
+- Override de runtime: parámetro de URL `conversationEngine`
+  (`adapters.ts:113-125`); solo cuenta un valor declarado
+  (`esMotorConversacion`), no escribe estado ni se persiste. Es la vía del E2E:
+  `page.addInitScript` + `history.replaceState` antes de `gotoClean`
+  (`tests/e2e/voz-escenario-dueno.spec.ts:33-40, 71-78`); la prueba de producto
+  siembra la misma vía con `fijarMotorEnUrl`
+  (`tests/conversacionProducto.test.ts:228-235`). Sin globales y sin
+  localStorage: pasa `devGlobalsGuard` y `localStorageGatewayGuard`.
+- `motorConversacionActivo(config)` recibe el puerto (`ports.ts:259-261`); hook
+  y App pasan `crearConfigFlu()` (`useFluVoiceAssistant.js:497`,
+  `App.tsx:1179`). `FLU_CONFIG` solo se importa en `adapters.ts` (frontera
+  declarada): `rg -n "FLU_CONFIG" src/voice/conversation` → `adapters.ts:33,
+  129, 133, 146, 147` y un comentario en `ports.ts:126`; ninguna lectura dentro
+  del motor.
+- El default del producto NO se cambió a `new`.
+
+### Inventario real (líneas físicas, criterio del preflight)
+
+| Archivo | Líneas | Techo |
+|---|---:|---:|
+| `index.ts` | 73 | 120 |
+| `tipos.ts` | 250 | 250 |
+| `motor.ts` | 228 | 300 |
+| `cola.ts` | 108 | 150 |
+| `eco.ts` | 35 | 100 |
+| `frontera.ts` | 65 | 100 |
+| `revision.ts` | 108 | 150 |
+| `fila.ts` | 192 | 200 |
+| `ports.ts` | 261 | 300 |
+| `adapters.ts` | 292 | 300 |
+| `adaptersAlmacen.ts` | 157 | 300 |
+| `adaptersAsr.ts` | 188 | 300 |
+| `producto.ts` (nuevo) | 180 | sin techo asignado (declarado) |
+| `sesion.ts` | 247 | (troceo del paso 2) |
+| `cierre.ts` | 261 | (troceo del paso 2) |
+| `texto.ts` | 206 | (troceo del paso 2) |
+| `ingesta.ts` | 208 | (troceo del paso 2) |
+| `tramos.ts` | 100 | (troceo del paso 2) |
+| `useFluVoiceAssistant.js` | 4382 | 4383 (guard: 4383/4383) |
+| `App.tsx` | 4452 | 4485 (guard: 4453/4485) |
+
+El hook NO creció: HEAD y árbol miden lo mismo (4382 físicas; 4383 con el
+criterio `split(/\r?\n/).length` del guard). Con ese criterio (+1) los demás
+dan una línea más; los techos del mandato se midieron con el criterio físico y
+se respetan con ambos.
+
+### Troceo de `adaptersAsr.ts` (una responsabilidad por archivo)
+
+- `adaptersAsr.ts`: **353 → 188** líneas físicas (guard 354 → 189). Solo
+  traduce `FuenteAsr` → `AsrPort`: no conoce el motor, ni el almacén, ni llama
+  `api.ingestAsr`/`api.ingestAudio`
+  (`rg -n "api\.ingestAsr|api\.ingestAudio" src/voice/conversation/adaptersAsr.ts`
+  → 0 coincidencias, exit 1).
+- `producto.ts` (nuevo, 180): composición de producto (Dexie, reloj, ids,
+  config, wake, VAD + `crearConversacion`) y ciclo de escucha. Desviación
+  declarada del literal «composición en motor/index»: `motor.ts` mide 228/300 e
+  `index.ts` 73/120; +180 líneas rompería ambos techos. El archivo tiene una
+  sola responsabilidad y `index.ts` lo re-exporta.
+- `index.ts` (73) re-exporta `crearMotorConversacionProducto` y sus tipos.
+
+### E2E: legacy vs new (medido 2026-10-25)
+
+Comando idéntico en ambos modos; el modo lo elige `FLU_E2E_ENGINE`:
+
+- legacy (sin variable): `npm run e2e -- tests/e2e/voz-escenario-dueno.spec.ts`
+  → `7 passed (5.1m)` · `1 failed`. Log crudo:
+  `%TEMP%\e2e-legacy-full.txt`.
+- new: `$env:FLU_E2E_ENGINE='new'; npm run e2e -- tests/e2e/voz-escenario-dueno.spec.ts`
+  → `7 passed (5.2m)` · `1 failed`. Log crudo:
+  `%TEMP%\e2e-new-full.txt`. Logs de app preservados:
+  `/tmp/flu-logs/debug-new-1150.log`, `debug-legacy-1153.log`,
+  `debug-new-1156.log`.
+
+Las 7 pruebas que pasan son las MISMAS en ambos modos:
+
+1. P1: un interino acumulativo NO abre fila (solo el final la abre).
+2. P2: el final que trae solo la COLA no se come la cabeza.
+3. P3: "soy Luis" renombra su participacion (la etiqueta generica desaparece).
+4. P3b: "soy Luis" no deja etiquetas inventadas (sin etiqueta sembrada).
+5. P4: latencia final -> fila (medicion de rendimiento).
+6. P5: la locucion que Chrome NO cierra (interino + onend) llega a la conversacion.
+7. P6: la continuacion sin wake tras un turno commiteado conserva su texto.
+
+P7 (`dictado CON PAUSAS (1..25)`) falla en AMBOS modos, con causa distinta:
+
+- **new**: `[P7] filas durante el dictado = 5 (esperado 0)`;
+  `Expected: 0 · Received: 5`; las filas son prefijos acumulativos
+  (`"... 1 2 3"`, `"... 1 2 3 4 5"`, … `"... 15"`). Causa declarada del módulo
+  nuevo: la composición de producto rota `tramoId` en CADA final
+  (`producto.ts:138-141`), así que cada final de segmento commitea una fila en
+  vez de extender la locución abierta.
+- **legacy**: `[P7] filas durante el dictado = 0 (esperado 0)`, pero
+  `expect(filas).toHaveLength(1)` recibe 2 filas y la primera llega con relleno
+  duplicado (`"10 11 12 voy a contar ... 1 2 3 4 5 6 7 8 9 10 11 12"`). Causa
+  declarada: defecto de caja/segmento de la tubería vieja, el mismo que
+  documenta la dispensa del replay.
+
+Criterio P7: `new` pasa AL MENOS las 7 pruebas que pasa `legacy` — cumplido con
+la lista idéntica de arriba. P7 queda ROJO en ambos modos con causa declarada;
+la paridad wake/comando NO forma parte de este cierre (es corte). «P7 verde» no
+significa «el módulo sustituye al viejo».
+
+### Dispensas declaradas
+
+- `tests/vozReplayDueno20261019Caja.test.ts` (legacy, preexistente, fuera de la
+  whitelist): falla cruda de esta corrida en la línea 488:
+  `Expected: "o sea está hecho una mierda no sirves para nada" · Received: "o sea
+  está hecho una está hecha hecho una mierda no sirves para nada Claudia"`. NO
+  se toca, NO se salta (`it.skip` prohibido) y NO se rebaja.
+- `tests/conversacionTramoRealGuard.test.ts:83`: `it.fails` declarado desde
+  2026-10-23 — el PCM grabado no contiene el habla transcrita; el gate queda
+  verde mientras el defecto siga abierto y el test se pone ROJO cuando el PCM
+  sea fiel. No se modificó.
+
+### Firma del barrido que monta el hook (una sola invocación)
+
+Comando:
+
+`npx vitest run --reporter=dot --silent=true $(rg -l "useFluVoiceAssistant" tests -g "!tests/e2e/**")`
+
+Salida cruda: `Test Files 1 failed | 48 passed (49)` ·
+`Tests 1 failed | 520 passed (521)`. La única falla es la dispensa
+`vozReplayDueno20261019Caja` de arriba.
+
+### Autoverificación (salidas crudas)
+
+1. `rg -n "\.abrir\(|\.evento\(|\.audio\(|\.cerrar\(" src/voice/hooks/useFluVoiceAssistant.js`
+   → 499 `.abrir()`, 517 `.abrir()`, 521 `.cerrar(motivo)`, 1954 `.audio(...)`,
+   2105 `.evento(event)`.
+2. `rg -n "api\.ingestAsr|api\.ingestAudio" src/voice/conversation/adaptersAsr.ts`
+   → 0 coincidencias (exit 1).
+3. `rg -n "conversacionProducto|conversacionFixtures|conversacionAsrAdapter" scripts/guard-files.mjs`
+   → los tres nombres están en `GUARD_FILES` (línea 1, archivo de una línea).
+4. `rg -n "domain/locucion" src tests` → 0 coincidencias (exit 1; este doc
+   conserva el histórico).
+5. `rg -c "function unirRevision" src/voice/conversation` →
+   `revision.ts:1` (una sola definición).
+6. Conteos de líneas: tabla de arriba.
+7. Firma del hook: sección anterior (`48/49` archivos, `520/521` tests).
+8. `git status --porcelain` al cerrar el código: solo
+   `M docs/LAE-cola-ejecucion.md` pendiente (este doc). `git log --oneline`
+   de los commits de este cierre: `bac47910` (E2E), `08e688b3` (App),
+   `a87d980f` (hook + prueba de producto), `e4031f38` (troceo ASR +
+   `producto.ts`), `f3ebf1f1` (preflight de configuración); debajo queda
+   `92f866a6` (commit de partida). Sin `git push`.
+
+### Gates de cierre
+
+- `npm run verify:fast` → `fix:eol: 0 reparado(s), 0 ya correcto(s)` +
+  `tsc -b` + `eslint . --max-warnings=0` verdes.
+- `npm run build` → `✓ built in 1.93s` (avisos previos de tamaño de chunk y
+  dynamic imports inefectivos, ajenos a este módulo).
+- `npm run lint:guards` → 305 archivos / 2645 tests verdes, 1 archivo y 7 tests
+  skipped; 0 fallos.
+- `npm run lint:eslint` → verde (`--max-warnings=0`).
+
+### Queda solo para validación en pantalla (dueño)
+
+- Encender `?conversationEngine=new` en la app real y usarlo: wake, dictado con
+  pausas, «soy Luis» y un comando; confirmar filas del historial visible, caja
+  que se vacía al comprometer y etiqueta del hablante. El default sigue
+  `legacy`.
+- Fixture real `N/0/0`: PENDIENTE hasta que exista la grabación del dueño; el
+  sintético mide N=3/0/0 con el comando exacto ya documentado.
+- P7 del módulo nuevo: causa declarada (rotación de `tramoId` por final de
+  segmento). Corregirlo es el siguiente paso; no forma parte de este cierre.
+- Borrado de la tubería vieja: después de la validación de pantalla.
