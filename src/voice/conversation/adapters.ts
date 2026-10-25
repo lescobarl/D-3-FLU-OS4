@@ -31,6 +31,8 @@ import { logCaughtError } from '../../lib/caughtError.ts'
 import { normalizeForMatch } from '../../lib/textUtils.ts'
 import { splitTranscriptAtWakeWord } from '../api/audio.ts'
 import { FLU_CONFIG } from '../api/config.ts'
+import { getVadFrameMs } from '../lib/asr/asrConfig.js'
+import { frameSamplesFor, isVoicedFrame } from '../lib/voicedActivity.js'
 import { fluDb, type ConversationFilaRecord } from '../../core/db/fluDatabase.ts'
 import { buildSyncTuple } from '../../core/db/syncTuple.ts'
 import { crearAlmacenDexie } from './adaptersAlmacen.ts'
@@ -42,9 +44,11 @@ import type {
   Fila,
   FilaNueva,
   IdPort,
+  MedidaVad,
   PartidorPort,
   RegistroPort,
   RelojPort,
+  VadPort,
 } from './ports.ts'
 
 /** Reloj del sistema: la ÚNICA llamada a `Date.now()` del módulo, inyectada. */
@@ -88,6 +92,19 @@ export function intentarRegistrando(contexto: string, accion: () => void): boole
   }
 }
 
+/**
+ * Ejecuta una promesa y registra su fallo con contexto.
+ * Es el ÚNICO puente asíncrono hacia `logCaughtError` del módulo: ninguna
+ * promesa del producto queda sin registro (AGENTS §1.5).
+ * @param contexto Contexto del fallo.
+ * @param promesa Operación en curso.
+ */
+export function registrarFallo(contexto: string, promesa: Promise<unknown>): void {
+  void promesa.catch((error) => {
+    logCaughtError(contexto, error)
+  })
+}
+
 /** Configuración viva de voz leída por la fachada pública de config. */
 export function crearConfigFlu(): ConfigPort {
   return {
@@ -126,6 +143,31 @@ export function crearPartidorWake(config: ConfigPort): PartidorPort {
         comando: String(partida.commandText || '').trim(),
         wakeWordMatched,
       }
+    },
+  }
+}
+
+/**
+ * VAD del producto: mide voz y silencio ACUMULADO de cola con el dueño único
+ * de umbral y trama (`voicedActivity`). No decide cierres: eso es la frontera.
+ * @returns Puerto VAD con el silencio que arrastra el bloque actual.
+ */
+export function crearVadProducto(): VadPort {
+  let silencioAcumuladoMs = 0
+  return {
+    medir: (muestras, sampleRate): MedidaVad => {
+      const tasa = Number(sampleRate)
+      if (!(tasa > 0) || !muestras || muestras.length === 0) {
+        return { hayVoz: false, silencioMs: 0 }
+      }
+      const trama = frameSamplesFor(tasa, getVadFrameMs())
+      let finVoz = -1
+      for (let inicio = 0; inicio < muestras.length; inicio += trama) {
+        const fin = Math.min(inicio + trama, muestras.length)
+        if (isVoicedFrame(muestras, inicio, fin)) finVoz = fin
+      }
+      silencioAcumuladoMs += ((muestras.length - Math.max(0, finVoz)) / tasa) * 1000
+      return { hayVoz: finVoz >= 0, silencioMs: silencioAcumuladoMs }
     },
   }
 }
