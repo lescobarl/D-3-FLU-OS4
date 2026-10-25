@@ -82,6 +82,36 @@
     desbloqueo arriba). No se tocó el archivo ni el guard.
 - Siguiente: `revision.ts`.
 
+## 2026-10-24 — etapa 1b: revision.ts (regla 3)
+
+- Creados:
+  - `src/voice/conversation/revision.ts`: puro, sin imports. Decide
+    `nueva | extiende | revisa`; la revisión que pierde palabras devuelve el
+    texto anterior con `pintar: false`. Unidad = palabra (no carácter).
+  - `tests/conversacionRevision.test.ts` (12 casos), registrado en
+    `scripts/guard-files.mjs`.
+  - `index.ts` re-exporta `decidirRevision` y sus tipos: hace alcanzable el
+    módulo desde el entrypoint (`orphanModulesGuard`).
+- Decisiones declaradas:
+  - Mismo `tramoId` + más palabras → extiende; el prefijo no se exige.
+  - Mismo `tramoId` + las mismas palabras → revisa (reemplazo permitido).
+  - Mismo `tramoId` + menos palabras → revisa con el texto anterior y
+    `pintar:false` (la caja no retrocede). Un final en ese caso completa con la
+    mejor versión.
+  - `tramoId` distinto o sin locución abierta → nueva. `final` solo marca
+    `completa`; no decide el texto.
+  - `tramoId` vacío lanza: sin tramo no hay locución (regla 1).
+  - El seed `domain/locucion.ts` sigue vivo solo como costura hasta que
+    `fila.ts`/`index.ts` cubran las reglas 4–5; su `unirRevision` (unión) NO es
+    la regla 3 nueva y no debe consumirse desde el motor nuevo.
+- Gates medidos:
+  - `npm run test:file tests/conversacionRevision.test.ts` → 12/12.
+  - `npm run typecheck` → verde.
+  - guards afectados (orphan, deadExports, structureDuplication, eol, utf8,
+    nonNullAssertion, duplication, godFileSize) → 8 archivos / 54 tests verdes.
+  - `npm run lint:eslint` → verde.
+- Siguiente: `frontera.ts`.
+
 ## Pendiente de producto
 
 - Fixture `N`: no existe grabación; los guards usan fixtures sintéticos. La

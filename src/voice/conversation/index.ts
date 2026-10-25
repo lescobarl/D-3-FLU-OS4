@@ -10,6 +10,8 @@
  * única puerta externa y el orquestador (paso 5) los consume desde este módulo.
  */
 export { crearEstado as crearEstadoDeLocucion } from './domain/locucion.ts'
+export { decidirRevision } from './revision.ts'
+export type { DecisionRevision, TramoAbierto } from './revision.ts'
 export { CONVERSACION_CONFIG, motorConversacionActivo } from './ports.ts'
 export {
   crearAlmacenMemoria,
