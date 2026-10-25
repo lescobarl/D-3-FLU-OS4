@@ -461,45 +461,59 @@ export { crearAlmacenDexie } from '../lib/conversationFilaStore.ts'
   (`fake-indexeddb`, un caso por operación) + `npm run typecheck`.
 - No se aplica ahora: los 3 archivos están fuera de la whitelist.
 
-## Paso 4 — cableado de producto (medido 2026-10-25)
+## Paso 4 — cableado de producto (medido 2026-10-25; cerrado)
 
-- Punto único: import en `src/App.tsx:76` y composición en `src/App.tsx:2262`,
-  inmediatamente después de `useFluVoiceAssistant(...)`. UNA sola llamada a
-  `crearConversacion`.
-- Compuerta: `motorConversacionActivo()` lee la tabla del plan
-  (`CONVERSACION_CONFIG.conversation.engine`, `ports.ts:252`), `legacy` por
-  defecto. Con `new` compone adaptadores reales: `crearRelojSistema`,
-  `crearIdUuid`, `crearRegistroCaughtError`, `crearConfigFlu`,
-  `crearPartidorWake` y `crearAlmacenMemoria`.
-- Sin `asr` propio: se conserva la instancia ÚNICA de reconocimiento del
-  producto (Anexo B.1). `ultimoTextoDicho` devuelve
-  `isSpeechBusy() ? useIntegrationStore.getState().lastResponse : ''`.
-- Tamaño: `src/App.tsx` = 4477 líneas (techo 4485 de `godFileSizeGuard`).
-- Commits: `77bf3128` (App) y `5594a998` (test de producto), cada uno con su
-  gate.
-- Prueba de producto: `npm run test:file tests/conversacionProducto.test.ts`
-  → `2 passed`; `npm run typecheck` → `tsc -b` sin salida. Con
-  `conversation.engine: new` la MISMA API que compone App recibe un ASR final
-  y persiste UNA fila con su evento `row.committed`.
-- ENCENDIDO EN VIVO: **NO**. `conversacionNuevaRef` queda compuesto pero no
-  recibe `start`/`ingestAsr`; el audio/ASR del hook sigue en la tubería legacy
-  (`Recognition.onresult`, `startListening`/`stopListening`). Alimentarlo
-  exigiría sustituir esos puntos, y un tramo sintético en el producto sería
-  dato inventado (regla 1). Estado honesto para pantalla: **escrito, sin
-  encender**.
-- Autoverificación 5, comando exigido
-  `npx vitest run $(rg -l "useFluVoiceAssistant" tests)`, medida:
-  `Test Files 1 failed | 47 passed (48)` y `Tests 1 failed | 518 passed (519)`.
-  Falla `tests/vozReplayDueno20261019Caja.test.ts:488` (la fila 2 conserva la
-  repetición del ASR en vez del cuerpo reconciliado). **No es del cableado**:
-  se reprodujo idéntica con `git stash push -- src/App.tsx`; ese test solo
-  nombra `useFluVoiceAssistant` en comentarios (líneas 16 y 52), no monta el
-  hook. El archivo no está en la whitelist de este encargo: su arreglo queda
-  registrado aquí, fuera de este paso, y los otros 47 archivos del conjunto
-  están verdes.
-- `legacy` sin cambios: la composición está compuerta y con el default no se
-  ejecuta; el conjunto que sí monta el hook quedó verde salvo la falla
-  preexistente declarada arriba.
+- Punto único de composición: el hook `src/voice/hooks/useFluVoiceAssistant.js`,
+  NO App. Con `motorConversacionActivo()` (bandera
+  `CONVERSACION_CONFIG.conversation.engine`, `legacy` por defecto) compone
+  `crearMotorConversacionProducto` en el `onstart` del reconocedor ÚNICO del
+  producto (Anexo B.1) y lo cierra en `stopListening` y al desmontar.
+- ASR real: `Recognition.onresult` (evento de Chrome o del motor local) →
+  `evento()` → `ingestAsr` con `tramoId`, tramo y `turnId`. PCM real por
+  `onPcmBlock` → `audio()` → `ingestAudio` con el VAD del producto
+  (`crearVadProducto`, umbral/trama de `voicedActivity`). No hay un segundo
+  `SpeechRecognition`.
+- Persistencia REAL: `crearAlmacenDexieProducto` sobre
+  `fluDb.conversationFilas` (v25; tupla `[revision, updated_at, deleted]` dentro
+  de `sync`). Se retiró la semilla de App (`conversacionNuevaRef` con
+  `crearAlmacenMemoria`, que nunca recibía `start`): era una segunda
+  composición muerta y sin persistencia.
+- Un solo escritor: con `new` la fila la escribe el módulo y el escritor legacy
+  de App queda inerte SOLO en el dominio conversación
+  (`commitUserTurnRow` compuerta por
+  `motorConversacionActivo() && conversationActiveRef.current`); con `legacy`
+  el módulo no se instancia y el escritor legacy sigue vivo. La compuerta es de
+  conversación a propósito: las filas de un comando fuera de conversación no
+  cambian.
+- Prueba de producto por el seam real (`tests/conversacionProducto.test.ts`):
+  monta el hook, inyecta un `SpeechRecognition` falso donde el hook lo adquiere
+  (`acquireSpeechRecognition`), dispara `onstart`/`onresult` y lee la fila de
+  Dexie con `fake-indexeddb`. No se llama `ingestAsr` a mano.
+  - `new`: 1 fila, 1 `row.committed`, caja = fila, etiqueta sin `?`, UUIDv4 y
+    tupla canónica; el ingress legacy NO recibe el resultado.
+  - `legacy`: 0 filas; el ingress legacy SÍ recibe el resultado y el módulo no
+    se compone (0 llamadas a `crearMotorConversacionProducto`).
+- Reentrega del MISMO FINAL: medida en 2 filas por el adaptador de producto.
+  Corregida en `adaptersAsr.ts` por identidad del resultado (índice + texto) y
+  reinicio al abrir sesión de resultados (`onstart`), nunca por texto suelto
+  (AGENTS, invariante 14). La prueba de producto reentrega el final: sigue
+  habiendo 1 fila y la caja queda vacía.
+- Tamaños medidos con el criterio del guard (`split(/\r?\n/).length`): hook
+  4383 (techo 4383, exacto); App 4453 (techo 4485).
+- Gate por archivo: `npm run test:file <archivo>` + `npm run typecheck` +
+  pre-commit (`lint` + tipos).
+
+## Exclusión declarada — replay legacy de la caja (2026-10-25)
+
+- `tests/vozReplayDueno20261019Caja.test.ts` queda EXCLUIDO de la firma con
+  dispensa escrita: prueba la tubería legacy (ingress y caja viejos), que muere
+  en el corte. NO se toca, NO se salta (`it.skip` prohibido) y NO se rebaja.
+- Firma honesta del conjunto que monta el hook (comando exigido
+  `rg -l "useFluVoiceAssistant" tests`): 47/48 archivos y 518/519 tests; la
+  única falla es ese archivo legacy, preexistente y fuera de la whitelist.
+- Equivalente en el módulo nuevo: `tests/conversacionProducto.test.ts` mide el
+  mismo caso de caja (al comprometerse la frase la caja se vacía en el acto y
+  no se repinta) y la reentrega del final (1 fila).
 
 ## Paso 5 — fixture sintético (medido 2026-10-25)
 
@@ -519,13 +533,15 @@ export { crearAlmacenDexie } from '../lib/conversationFilaStore.ts'
 
 - Fixture `N`: no existe grabación; los guards usan fixtures sintéticos. La
   aceptación `N/0/0` queda PENDIENTE, no cumplida.
-- Cableado en vivo del motor nuevo: compuesto en `src/App.tsx` (paso 4) pero
-  sin `start`/`ingestAsr` desde el hook; la sustitución del audio/ASR legacy
-  queda para el paso de retirada, después de la validación de pantalla.
-- Autoverificación 5: falla preexistente declarada en el paso 4
-  (`vozReplayDueno20261019Caja`), fuera de la whitelist.
-- Almacén Dexie: patch arriba; hasta que aterrice, el producto inyecta
-  `crearAlmacenMemoria` (real, con la misma tupla y borrado lógico).
+- Cableado en vivo: compuesto y alimentado desde el hook con `engine: new`
+  (paso 4). El default sigue `legacy`; el encendido en pantalla lo valida el
+  dueño. La tubería legacy NO se borra todavía: muere en el corte, después de
+  esa validación.
+- Autoverificación 5: falla preexistente del archivo legacy declarada con
+  dispensa (sección anterior); los otros 47 archivos están verdes.
+- Almacén del producto: `crearAlmacenDexieProducto` sobre
+  `fluDb.conversationFilas` (v25). El almacén en memoria queda solo como doble
+  de pruebas; la semilla de App que lo usaba se retiró.
 - Regla 7 (playback con otro `AudioSource`): es consumo de producto. El módulo
   entrega filas y tramos con `sampleRate`; no abre fuentes de audio.
 - TTS: el módulo ya no tiene `TtsPort`; el eco se resuelve con
