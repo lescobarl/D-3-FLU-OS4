@@ -54,6 +54,7 @@ export type {
 } from './fila.ts'
 export { CONVERSACION_CONFIG, motorConversacionActivo } from './ports.ts'
 export {
+  crearAlmacenDexieProducto,
   crearAlmacenMemoria,
   crearConfigFlu,
   crearIdUuid,
