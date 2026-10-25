@@ -179,6 +179,7 @@ import { createEmissionDeduper, shouldSkipCapture } from '../lib/captureDedup.js
 import { isAssistantSpeechEcho, isAssistantVoiceEcho } from '../lib/conversationStream.js'
 import { voiceProbe, isVoiceProbeEnabled } from '../lib/voiceProbe'
 import { defaultLanguage } from '../lib/languageDefault.ts'
+import { crearMotorConversacionProducto, motorConversacionActivo } from '../conversation/index'
 const CONTEXT_HISTORY_LIMIT = FLU_CONFIG.limits.contextHistoryMax
 // Sample rate de captura: fuente única en FLU_CONFIG.audio.sampleRate (sin hardcode).
 const AUDIO_SAMPLE_RATE = FLU_CONFIG.audio?.sampleRate ?? 0
@@ -486,6 +487,41 @@ const lastResolvedTurnRef = useRef(0)
   const ultimoIndiceHablanteRef = useRef(NaN) // P4: ultimo indice (cambio = cierre real)
   const ingressBindingsRef = useRef({})
   const ingressRuntimeRef = useRef(null)
+
+  /** Motor CONVERSACIÓN del producto: solo con `engine: new` (legacy no lo instancia). */
+  const motorConversacionRef = useRef(null)
+  const languageRef = useRef(language)
+  languageRef.current = language
+  const abrirMotorConversacion = useCallback(() => {
+    if (!motorConversacionActivo()) return
+    if (motorConversacionRef.current) {
+      motorConversacionRef.current.abrir()
+      return
+    }
+    motorConversacionRef.current = crearMotorConversacionProducto({
+      idioma: normalizeLang(languageRef.current),
+      sampleRate: AUDIO_SAMPLE_RATE,
+      ultimoTextoDicho: () => resolveEchoContext(useIntegrationStore.getState().conversationHistory, getLastCompletedSpeechAt()).lastAssistantText,
+    })
+    // Con `engine: new` el módulo es el ÚNICO escritor; la frase visible es la de la fila.
+    motorConversacionRef.current.suscribir((evento) => {
+      if (evento.tipo === 'box.updated') setLiveTranscript(evento.texto)
+      if (evento.tipo === 'row.committed') {
+        useIntegrationStore.getState().setLastCommittedTranscript(evento.fila.texto)
+        setLiveTranscript('')
+      }
+    })
+    motorConversacionRef.current.abrir()
+  }, [])
+  const cerrarMotorConversacion = useCallback((motivo) => {
+    if (!motorConversacionRef.current) return
+    motorConversacionRef.current.cerrar(motivo)
+    motorConversacionRef.current = null
+  }, [])
+  useEffect(() => () => {
+    motorConversacionRef.current?.cerrar('system')
+    motorConversacionRef.current = null
+  }, [])
 
   // Fallback LOCAL del ASR (degradar a Whisper, gatear sus resultados y recuperar
   // Chrome): dueno unico en `useLocalAsrFallback`. El cableado se pasa por ref para
@@ -1030,10 +1066,8 @@ const lastResolvedTurnRef = useRef(0)
         },
       )
 
-      // FLU "thinking" (Pensando / Idle_1) mientras la IA procesa la petición:
-      // gobierna la EXPRESIÓN del avatar (no el overlay, que lo lleva el turno).
-      // Las consultas locales de minuta de arriba resuelven al instante, así que
-      // se saltan esto correctamente.
+      // FLU "thinking": gobierna la EXPRESIÓN del avatar (el overlay es del turno);
+      // las consultas locales de minuta resuelven antes y se lo saltan.
       useIntegrationStore.getState?.().setConversationState?.('THINKING')
       // El indicador "Pensando" (overlay) lo gobierna el TURNO (turnWorkIndicator),
       // no esta llamada: al resolver la IA el turno sigue trabajando (escrituras,
@@ -1499,12 +1533,8 @@ const lastResolvedTurnRef = useRef(0)
         }
       }
 
-      // MODO PASIVO: UNA sola decision de hablante, delegada al dueno canónico
-      // (`resolveConversationSpeaker` vía `resolveSpeakerIdentityFromVector`). Antes
-      // había un SEGUNDO resolver local (`matchSegmentNames`) con sus propios umbrales
-      // (1 - clusterMatchMaxDistance) y su propia base de perfiles: dos rutas que
-      // divergían sobre la MISMA señal. No se re-embebe: el vector ya sale de
-      // `computeTurnSignature` (único punto de firma por turno).
+      // MODO PASIVO: UNA decisión de hablante delegada al dueño canónico; el vector
+      // ya sale de `computeTurnSignature` (único punto de firma por turno, sin re-embeder).
       const identity = resolveSpeakerIdentityFromVector(signatureVector, {
         speakerClusters: speakerClustersRef.current,
         lastSpeaker: lastSpeakerRef.current,
@@ -1920,7 +1950,8 @@ const lastResolvedTurnRef = useRef(0)
       recordSource: source, // grabación CRUDA pre-ganancia: silencios reales, sonido natural
       sampleRate: sampleRateRef.current || AUDIO_SAMPLE_RATE,
       processEvery,
-      onPcmBlock: (input) => {
+      onPcmBlock: (input, meta) => {
+        motorConversacionRef.current?.audio(input, sampleRateRef.current || AUDIO_SAMPLE_RATE, meta?.sampleIndex)
         chunksRef.current.push(new Float32Array(input))
         chunkTotalSamplesRef.current += input.length
         probePcmBlock({ total: chunkTotalSamplesRef.current, chunks: chunksRef.current.length, listening: isListeningRef.current, conversation: Boolean(conversationActiveRef?.current) })
@@ -1990,6 +2021,7 @@ const lastResolvedTurnRef = useRef(0)
 
       Recognition.onstart = () => {
         recognitionActiveRef.current = true
+        if (conversationActiveRef?.current) abrirMotorConversacion()
         recognitionRetryCountRef.current = 0
         recognitionRestartPendingRef.current = false
         consecutiveEndsWithoutResultRef.current = 0
@@ -2069,6 +2101,10 @@ const lastResolvedTurnRef = useRef(0)
         }
 
         if (conversationActiveRef?.current) {
+          if (motorConversacionRef.current) {
+            motorConversacionRef.current.evento(event)
+            return
+          }
           if (finalText) { const w = analyzeWakeTurn(finalText, { lastCommitted: userRowsTextView.current.at(-1) || '' }); voiceProbe('asrFinal', { engine: localEngineActive ? 'whisper' : 'chrome', ms: event?.metrics?.durationMs ?? null, speechLikeMs: event?.metrics?.speechLikeMs ?? null, rms: event?.metrics?.rms ?? null, turn: activeTurnIdRef.current, wake: w.wakeWordMatched, inline: w.hasInlineBoundary, before: w.passiveOnly.slice(0, 80), after: w.afterWake.slice(0, 80), len: w.cleaned.length, text: w.cleaned }) }
           try {
             if (import.meta.env.DEV && debugHotPath) {
@@ -2086,12 +2122,8 @@ const lastResolvedTurnRef = useRef(0)
               fluDebugHot('history-error', { detail: String(error?.message || error) })
             }
           }
-          // §9 — ÚNICO escritor: el preview lo publica el INGRESS (vía
-          // syncConversationStream desde transcriptIngress, turnCommit:false).
-          // Este handler DELEGA (pushMicRecognitionEvent) y NO escribe la frase
-          // viva: antes había DOS publicaciones por evento (esta + el ingress) →
-          // alternancia/ciclo y cola duplicada en la caja. Ver
-          // tests/voiceLiveSingleWriter.test.ts y tests/ingressSimulation.test.ts.
+          // §9 — El preview lo publica el INGRESS; este handler DELEGA y NO escribe
+          // la frase viva (voiceLiveSingleWriter / ingressSimulation).
           return
         }
 
@@ -2143,10 +2175,8 @@ const lastResolvedTurnRef = useRef(0)
           return
         }
 
-        // Estabilización de fragmentos (Bug #3/#4): si el turno acumulado quedó
-        // en un comando incompleto ("ok flu busca en la web" sin consulta,
-        // "navega", "crea un video"…), NO se ejecuta todavía: se espera a que
-        // llegue el siguiente fragmento final (margen incompleteCommandWaitMs).
+        // Fragmentos (Bug #3/#4): un comando incompleto espera al siguiente final
+        // (margen incompleteCommandWaitMs); no se ejecuta a medias.
         const turnDecision = decideVoiceTurnDispatch(turnPhrase, FLU_CONFIG.voiceCommands, {
           requireWake,
         })
@@ -2248,7 +2278,7 @@ const lastResolvedTurnRef = useRef(0)
 
         if (!isListeningRef.current && !(conversationActiveRef?.current && !isStoppingRef.current)) return
 
-        if (conversationActiveRef?.current && !isStoppingRef.current) {
+        if (!motorConversacionRef.current && conversationActiveRef?.current && !isStoppingRef.current) {
           ingressRuntimeRef.current?.pushRecognitionEndEvent({ immediate: true })
         }
 
@@ -2275,6 +2305,7 @@ const lastResolvedTurnRef = useRef(0)
       }
     },
     [
+      abrirMotorConversacion,
       cleanupAudio,
       clearAutoProcessTimer,
       conversationActiveRef,
@@ -2562,16 +2593,10 @@ const lastResolvedTurnRef = useRef(0)
             speaker: result.speaker,
             utterance: capture,
             turnCommit: true,
-            // CIERRE REAL (onend): la fila se escribe AQUI y la linea se vacia. Sin
-            // `settlesTurn` el commit salia sin fila, la linea quedaba abierta y el
-            // sr-silence la re-commiteaba 3.5 s despues con OTRO turno (34 commits
-            // para 17 frases, medido en b218404f): el audio de ese turno ya estaba
-            // sellado y el preflight de las 34 filas salio preReady=false -> sticky
-            // "Hablante 1" en toda la sesion.
+            // CIERRE REAL (onend): sin `settlesTurn` el commit salía sin fila y el
+            // sr-silence re-commiteaba con OTRO turno (b218404f). El cierre consume
+            // el preflight de ESTE turno: si no, la evidencia medida no llega a la fila.
             settlesTurn: true,
-            // El cierre consume el preflight de ESTE turno (el que se acaba de
-            // esperar): si no, el sorteo del turno siguiente lo dejaba leyendo un
-            // slot vacio y la evidencia medida no llegaba a la fila.
             preflightTurnId: turnId,
           })
         }
@@ -2838,17 +2863,9 @@ const lastResolvedTurnRef = useRef(0)
     await emitActiveConversationCommand(COMMAND_IDS.FLU_ADELANTE, phrase)
   }, [emitActiveConversationCommand, resolvedWakeWords])
 
-  // ============================================================
-  // FAST-PATH DETERMINISTA (configuración por voz instantánea)
-  // ============================================================
-  // resolveConfigCommandFromText() resuelve comandos de configuración de forma
-  // DETERMINISTA y síncrona (sin red). Este helper los despacha por la MISMA ruta
-  // única (onContractResolved → applyConfigAction) apenas se captura el transcript,
-  // en paralelo con la llamada a la IA: la configuración se aplica de inmediato
-  // mientras la IA solo genera la confirmación verbal. El contrato tardío (con
-  // respuesta_voz) llega después con configuracion anulada (idempotencia: sin
-  // doble aplicación). Nunca dispara en conversación casual: el resolver tiene
-  // triple guardia (verbo + nombre + contexto) y aquí se exige det.accion.
+  // FAST-PATH DETERMINISTA: resuelve y despacha configuración por la MISMA ruta
+  // (onContractResolved → applyConfigAction) sin red; la IA solo confirma. El
+  // contrato tardío llega con configuración anulada (idempotencia) y se exige acción.
   /** Orden de politica de wake por voz (P8.68): aplica la bandera y confirma el turno. */
   const handleWakePolicyOrder = useCallback(
     async (text, { requireWake = false } = {}) => {
@@ -2942,12 +2959,9 @@ const lastResolvedTurnRef = useRef(0)
     [onContractResolved],
   )
 
-  // Fast-path determinista de AMBIENTE y de CONTROL DE MUSICA (modalidad del
-  // dispatcher de estado: un `tipo` de ambiente o una `accion` de musica). Despacha el
-  // contrato ya resuelto a la AsNICA ruta (onContractResolved -> applyEnvironment /
-  // play-stop music). El catalogo (src/core/environments/*) y la tabla de marcos
-  // (src/core/media/musicActions) son la fuente de verdad. Como los otros servicios,
-  // NO escribe la conversacion (`effectOnly`).
+  // Fast-path de AMBIENTE y MÚSICA: despacha el contrato ya resuelto por la ÚNICA
+  // ruta (onContractResolved); catálogo y marcos son la fuente. NO escribe la
+  // conversación (`effectOnly`).
   const dispatchFastEnvironmentCommand = useCallback(
     async (
       intent,
@@ -2983,14 +2997,9 @@ const lastResolvedTurnRef = useRef(0)
     [onContractResolved],
   )
 
-  // §3.1 — Árbitro determinista UNIFICADO. Centraliza la resolución y el despacho de
-  // los tres fast-paths deterministas (configuración/juego/ambiente) que antes se
-  // duplicaban en processConversationFluQuery y en las dos ramas de processCapture.
-  // Resuelve cada dominio desde el texto y lanza su despacho por la ÚNICA ruta
-  // (onContractResolved). Devuelve los objetos resueltos (para la idempotencia del
-  // contrato tardío) y un `dispatch` (Promise.allSettled que nunca rechaza) para que
-  // cada llamador decida cuándo esperarlo: en paralelo con la IA en conversación, o
-  // fire-and-forget antes de la confirmación verbal en captura.
+  // §3.1 — Árbitro determinista UNIFICADO: resuelve config/juego/ambiente y los
+  // despacha por la ÚNICA ruta (onContractResolved); devuelve los resueltos y un
+  // `dispatch` que nunca rechaza para que cada llamador decida cuándo esperarlo.
   const evaluateDeterministicFastPaths = useCallback(
     async ({
       text,
@@ -3100,11 +3109,8 @@ const lastResolvedTurnRef = useRef(0)
       // voz) + cronómetro del turno.
       turnLifecycleRef.current?.startTurn('voz')
       setError('')
-      // FIX estabilidad: `resolvedSpeakerName`, `speakerAlias` y `audioSignatureVector`
-      // se declaran FUERA del try porque el bloque catch los referencia. En JS
-      // let/const tienen ámbito de bloque, así que declararlos dentro del try lanzaba
-      // `ReferenceError: ... is not defined` en el path de error (cuando la IA falla),
-      // tumbando la UI de React.
+      // Declarados FUERA del try: el catch los referencia y `let/const` tienen
+      // ámbito de bloque (declararlos dentro lanzaba ReferenceError al fallar la IA).
       let resolvedSpeakerName = fallbackSpeaker
       let speakerAlias = null
       let audioSignatureVector = null
@@ -3121,15 +3127,9 @@ const lastResolvedTurnRef = useRef(0)
           speakerAlias = null
         }
 
-        // §2B — Semántica "si hay match determinista de estado → NO llamar a Gemini".
-        // Controlado por FLU_CONFIG.arbiter.skipGeminiOnMatch (por defecto APAGADO).
-        // La decisión + construcción del contrato determinista se delega a la función
-        // pura `resolveDeterministicSkipGeminiContract` (testeable sin React, paso 3B).
-        // Cuando devuelve un contrato (flag activo + match de config/juego/ambiente),
-        // se despacha con la frase de cortesía y se omite por completo la llamada a
-        // Gemini (requestFluContractForTranscript NO se invoca). Para juego/ambiente el
-        // motor local ya habla su propia voz, así que la frase de cortesía es '' (no se
-        // duplica el habla).
+        // §2B — Con match determinista de estado NO se llama a Gemini si el flag
+        // `arbiter.skipGeminiOnMatch` está activo; el contrato lo decide la función pura
+        // y, en juego/ambiente, la cortesía es '' porque el motor ya habla su voz.
         const skipGemini = resolveDeterministicSkipGeminiContract({
           text: transcriptForAi,
           language: detectedLanguage,
@@ -3413,8 +3413,7 @@ const lastResolvedTurnRef = useRef(0)
       }
 
       if (plan.action.kind === 'command') {
-        // §9/F: un comando requiere la wake en SU propio enunciado; no se hereda
-        // del wake de un turno anterior. Excepción: control de escucha.
+        // §9/F: cada comando exige la wake en SU enunciado (excepto control de escucha).
         const listeningControl = detectListeningControl(text, FLU_CONFIG.voiceCommands)
         const authorized = isCommandAuthorized(text, {
           wakeWords: resolvedWakeWords,
@@ -3629,12 +3628,8 @@ const lastResolvedTurnRef = useRef(0)
         return
       }
 
-      // OPTIMIZACIÓN LATENCIA (sin afectación funcional): bufferedTranscript, comando
-      // directo e intent son TEXTO PURO (sin I/O ni efectos laterales), así que se
-      // calculan ANTES de la diarización pesada. La diarización (resolveSpeaker) arranca
-      // EN PARALELO con la llamada a la API y se reconcilia justo antes de
-      // onContractResolved — mismo patrón que processConversationFluQuery (lote paralelo).
-      // Orden de politica de wake por voz (bandera P8.68): se aplica y se confirma.
+      // LATENCIA: texto puro (sin I/O) se calcula ANTES de la diarización, que arranca
+      // EN PARALELO con la API y se reconcilia antes de onContractResolved (bandera P8.68).
       if (await handleWakePolicyOrder(bufferedValidation.commandText)) {
         finishTurn(); await cleanupAudio(); setStatus('idle'); isListeningRef.current = false
         return
@@ -4153,6 +4148,12 @@ const lastResolvedTurnRef = useRef(0)
       return
     }
 
+    if (motorConversacionRef.current && conversationActiveRef?.current) {
+      if (closing) await finalizeRecognition()
+      cerrarMotorConversacion(closing ? 'user' : 'system')
+      return
+    }
+
     if (conversationActiveRef?.current) {
       if (closing) {
         await commitConversationTurn({ closing: true })
@@ -4164,8 +4165,10 @@ const lastResolvedTurnRef = useRef(0)
 
     await processCapture({ closing })
   }, [
+    cerrarMotorConversacion,
     commitConversationTurn,
     conversationActiveRef,
+    finalizeRecognition,
     flushPassiveConversation,
     processCapture,
     readActiveSnapshot,
