@@ -97,8 +97,6 @@ export interface AlmacenPort {
   guardar(fila: FilaNueva): Promise<Fila>
   /** Actualiza una fila existente e incrementa `revision`; `null` si no existe. */
   actualizar(locutionId: string, cambios: CambiosFila): Promise<Fila | null>
-  /** Filas de una sesión, incluidas las de borrado lógico (`deleted: true`). */
-  leerSesion(sessionId: string): Promise<Fila[]>
 }
 
 /** Medida del VAD para un bloque de audio. El VAD mide; la frontera decide. */

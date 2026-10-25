@@ -110,7 +110,7 @@ function contar(estado: InstantaneaConversacion): { filas: number; perdidas: num
 
 describe('fixture sintético N/0/0 del motor de conversación', () => {
   it('N locuciones producen N filas, 0 pérdidas y 0 duplicados', async () => {
-    const { api, almacen } = crearMotorDeFixture()
+    const { api } = crearMotorDeFixture()
     await api.start({ turnId: 'turno-fijo', idioma: 'es' })
 
     for (let indice = 0; indice < FIXTURE.length; indice += 1) {
@@ -123,10 +123,6 @@ describe('fixture sintético N/0/0 del motor de conversación', () => {
     expect(contar(estado)).toEqual({ filas: FIXTURE.length, perdidas: 0, duplicados: 0 })
     expect(estado.filas.map((fila) => fila.texto)).toEqual(FIXTURE.map((locucion) => locucion.final))
     expect(estado.filas.every((fila) => fila.revision === 1 && fila.deleted === false)).toBe(true)
-
-    const sessionId = estado.sessionId
-    if (!sessionId) throw new Error('la sesion cerrada no expone sessionId')
-    expect(await almacen.leerSesion(sessionId)).toHaveLength(FIXTURE.length)
   })
 
   it('la misma entrada produce el mismo conteo (determinista)', async () => {

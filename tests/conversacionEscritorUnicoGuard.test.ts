@@ -9,7 +9,8 @@ import { walkFiles } from './_helpers'
 
 const ROOT = process.cwd()
 const SRC = join(ROOT, 'src')
-const RE = /fluDb\.conversations\.(?:put|add|delete|bulkDelete)\s*\(|fluDb\.conversations\.where\s*\(/
+const RE =
+  /fluDb\.conversations\.(?:put|add|update|bulkPut|bulkAdd|bulkDelete|delete)\s*\(|fluDb\.conversations\.where\s*\(/
 
 describe('C8 conversacionEscritorUnico — un solo escritor de conversación', () => {
   it('un único archivo escribe fluDb.conversations', () => {
@@ -21,6 +22,7 @@ describe('C8 conversacionEscritorUnico — un solo escritor de conversación', (
       writers,
       `Escritores de fluDb.conversations (N=${writers.length}); debe quedar 1:\n  ${writers.join('\n  ')}`,
     ).toHaveLength(1)
+    expect(writers[0]).toBe('src/core/db/conversationRowWriter.ts')
   })
 })
 
@@ -31,6 +33,7 @@ describe('P2.4 conversacionEscritorUnicoGuard - el detector no es decorativo', (
   it('marca una entrada infractora y no marca una limpia', () => {
     const pred = (texto: string) => RE.test(texto)
     expect(pred("fluDb.conversations.put(row)")).toBe(true)
+    expect(pred("fluDb.conversations.bulkPut(rows)")).toBe(true)
     expect(pred("fluDb.notes.put(row)")).toBe(false)
   })
 })

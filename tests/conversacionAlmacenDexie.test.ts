@@ -2,9 +2,10 @@
 /**
  * ALMACÉN REAL Dexie del módulo CONVERSACIÓN.
  *
- * Usa `fake-indexeddb` (devDependency existente) y la MISMA tabla que el
- * producto (`conversationFilas`, v25). Fija: upsert idempotente por
- * `locutionId`, UUID, tupla `[revision, updated_at, deleted]` y borrado lógico.
+ * Usa `fake-indexeddb` (devDependency existente) y la ÚNICA tabla de
+ * conversación del producto (`conversations`, v26). Fija: upsert idempotente
+ * por `locutionId` (id de la fila), UUID, tupla `[revision, updated_at, deleted]`,
+ * borrado lógico y consulta por `sessionId` indexado.
  */
 import 'fake-indexeddb/auto'
 import { beforeEach, describe, expect, it } from 'vitest'
@@ -45,7 +46,7 @@ function filaNueva(overrides: Partial<FilaNueva> = {}): FilaNueva {
 
 describe('almacén Dexie de filas de conversación', () => {
   beforeEach(async () => {
-    await fluDb.conversationFilas.clear()
+    await fluDb.conversations.clear()
   })
 
   it('guarda una fila con UUID y tupla canónica', async () => {
@@ -59,11 +60,23 @@ describe('almacén Dexie de filas de conversación', () => {
       etiqueta: 'Hablante 1',
     })
     expect(new Date(fila.updated_at).toISOString()).toBe('2023-11-14T22:13:21.000Z')
-    const crudo = await fluDb.conversationFilas.get(LOCUTION_ID)
+    const crudo = await fluDb.conversations.get(LOCUTION_ID)
     expect(crudo?.sync).toEqual({
       revision: 1,
       updated_at: '2023-11-14T22:13:21.000Z',
       deleted: false,
+    })
+    expect(crudo?.sessionId).toBe('sesion-1')
+    expect(crudo?.meta?.conversacion).toEqual({
+      tramo: { inicio: 16_000, fin: 32_000 },
+      sampleRate: 16_000,
+      turnId: 'turno-1',
+      etiqueta: 'Hablante 1',
+      evidencia: 'semilla',
+      idioma: 'es',
+      overlap: false,
+      provisional: false,
+      reason: 'user',
     })
   })
 
@@ -74,8 +87,7 @@ describe('almacén Dexie de filas de conversación', () => {
 
     expect(segunda.revision).toBe(2)
     expect(segunda.texto).toBe('hola otra vez')
-    expect(await almacen.leerSesion('sesion-1')).toHaveLength(1)
-    expect(await fluDb.conversationFilas.count()).toBe(1)
+    expect(await fluDb.conversations.count()).toBe(1)
   })
 
   it('actualizar incrementa revisión y el borrado es lógico', async () => {
@@ -91,11 +103,12 @@ describe('almacén Dexie de filas de conversación', () => {
       revision: 2,
       deleted: true,
     })
-    expect(await fluDb.conversationFilas.count()).toBe(1)
-    expect(await almacen.leerSesion('sesion-1')).toHaveLength(1)
+    expect(await fluDb.conversations.count()).toBe(1)
+    const crudo = await fluDb.conversations.get(LOCUTION_ID)
+    expect(crudo?.sync.deleted).toBe(true)
   })
 
-  it('leerSesion filtra por sesión y no devuelve filas ajenas', async () => {
+  it('sessionId indexado separa las filas de cada sesión', async () => {
     const almacen = crearAlmacenDexieProducto({ reloj: crearReloj() })
     await almacen.guardar(filaNueva())
     await almacen.guardar(
@@ -105,13 +118,15 @@ describe('almacén Dexie de filas de conversación', () => {
       }),
     )
 
-    expect(await almacen.leerSesion('sesion-1')).toHaveLength(1)
-    expect(await almacen.leerSesion('sesion-2')).toHaveLength(1)
+    const sesion1 = await fluDb.conversations.where('sessionId').equals('sesion-1').toArray()
+    const sesion2 = await fluDb.conversations.where('sessionId').equals('sesion-2').toArray()
+    expect(sesion1.map((fila) => fila.id)).toEqual([LOCUTION_ID])
+    expect(sesion2.map((fila) => fila.id)).toEqual(['00000000-0000-4000-8000-000000000043'])
   })
 
   it('actualizar una locución inexistente devuelve null sin escribir', async () => {
     const almacen = crearAlmacenDexieProducto({ reloj: crearReloj() })
     expect(await almacen.actualizar('00000000-0000-4000-8000-000000000099', { texto: 'x' })).toBeNull()
-    expect(await fluDb.conversationFilas.count()).toBe(0)
+    expect(await fluDb.conversations.count()).toBe(0)
   })
 })

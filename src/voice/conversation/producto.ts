@@ -64,17 +64,21 @@ export type MotorConversacionProducto = Readonly<{
  * Compone el motor NUEVO para el producto con los adaptadores REALES.
  * Es el único punto que crea la sesión desde el hook: almacén Dexie, reloj,
  * ids y la configuración del plan; el eco se delega a `ultimoTextoDicho`.
- * @param opciones Idioma activo, frecuencia de captura y último texto de FLU.
+ * @param opciones Idioma activo, frecuencia de captura, último texto de FLU y
+ *   participante dueño de las filas.
  * @returns Controlador de apertura, ingesta y cierre.
  */
 export function crearMotorConversacionProducto({
   idioma,
   sampleRate,
   ultimoTextoDicho,
+  participantId,
 }: {
   idioma: IdiomaLocucion
   sampleRate: number
   ultimoTextoDicho: () => string
+  /** Participante activo: aísla las filas del motor por usuario. */
+  participantId?: string
 }): MotorConversacionProducto {
   const reloj = crearRelojSistema()
   const id = crearIdUuid()
@@ -83,7 +87,7 @@ export function crearMotorConversacionProducto({
     reloj,
     id,
     registro: crearRegistroCaughtError(),
-    almacen: crearAlmacenDexieProducto({ reloj }),
+    almacen: crearAlmacenDexieProducto({ reloj, participantId }),
     config,
     partidor: crearPartidorWake(config),
     vad: crearVadProducto(),

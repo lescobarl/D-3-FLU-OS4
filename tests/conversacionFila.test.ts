@@ -206,7 +206,6 @@ describe('regla 4 — tramo válido y texto producen una fila', () => {
     expect(guardada).toMatchObject({ revision: 1, updated_at: 1000, deleted: false })
     const repetida = await almacen.guardar(resultado.fila)
     expect(repetida.revision).toBe(2)
-    expect(await almacen.leerSesion('s1')).toHaveLength(1)
   })
 })
 

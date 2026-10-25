@@ -14,9 +14,9 @@
  *    una segunda escucha ni importa esas fachadas (su grafo arrastraría
  *    `lib/speechRecognitionLocal.js`, con imports sin extensión, y rompería el
  *    `viteConfigNativenessGuard`).
- *  - nada de: captura de micrófono, extracción de embeddings ni escritura de filas.
- *    Esas piezas quedan como puertos inyectables; su cableado de producto se
- *    declara PENDIENTE en `docs/LAE-cola-ejecucion.md`.
+ *  - nada de: captura de micrófono ni extracción de embeddings (puertos inyectables).
+ *    La fila SÍ se persiste, por el escritor ÚNICO de `core/db`; el cableado de
+ *    producto restante se declara PENDIENTE en `docs/LAE-cola-ejecucion.md`.
  *
  * Excepciones de frontera declaradas:
  *  - `logCaughtError` (`src/lib/caughtError.ts`): el plan (§Logs) y AGENTS §1.5 lo
@@ -31,11 +31,16 @@ import { normalizeForMatch } from '../../lib/textUtils.ts'
 import { splitTranscriptAtWakeWord } from '../api/audio.ts'
 import { FLU_CONFIG } from '../api/config.ts'
 import { getVadFrameMs } from '../lib/asr/asrConfig.js'
+import { labelToSpeakerId } from '../lib/conversationRow.js'
 import { frameSamplesFor, isVoicedFrame } from '../lib/voicedActivity.js'
-import { fluDb, type ConversationFilaRecord } from '../../core/db/fluDatabase.ts'
+import {
+  escribirRegistroConversacion,
+  leerRegistroConversacion,
+  transaccionConversaciones,
+} from '../../core/db/conversationRowWriter.ts'
 import { buildSyncTuple } from '../../core/db/syncTuple.ts'
 import { crearAlmacenDexie } from './adaptersAlmacen.ts'
-import type { DbLike, RegistroFila } from './adaptersAlmacen.ts'
+import type { DbLike } from './adaptersAlmacen.ts'
 import { CONVERSACION_CONFIG, esMotorConversacion } from './ports.ts'
 import type {
   AlmacenPort,
@@ -236,44 +241,33 @@ export function crearAlmacenMemoria({ reloj }: { reloj: RelojPort }): AlmacenPor
       filas.set(locutionId, siguiente)
       return instantanea(siguiente)
     },
-
-    leerSesion: async (sessionId: string): Promise<Fila[]> =>
-      [...filas.values()]
-        .filter((fila) => fila.sessionId === sessionId)
-        .map(instantanea),
   }
-}
-
-/** Proyecta el registro Dexie al contrato del adaptador (misma forma). */
-function aRegistroFila(registro: ConversationFilaRecord): RegistroFila {
-  return registro
 }
 
 /**
  * Almacén Dexie del PRODUCTO: la ÚNICA puerta del módulo a `core/db`.
- * La tabla y la tupla viven fuera; aquí solo se conectan por el `DbLike` que
- * consume `adaptersAlmacen.ts`. El reloj llega inyectado.
- * @param opciones Reloj inyectado para `updated_at`.
- * @returns Un `AlmacenPort` sobre `conversationFilas` (upsert y borrado lógico).
+ * El `DbLike` se implementa con el escritor ÚNICO de `conversations`
+ * (`conversationRowWriter.ts`): aquí no se toca la tabla directamente.
+ * El reloj y el participante llegan inyectados.
+ * @param opciones Reloj inyectado y participante dueño de la fila.
+ * @returns Un `AlmacenPort` sobre `conversations` (upsert y borrado lógico).
  */
-export function crearAlmacenDexieProducto({ reloj }: { reloj: RelojPort }): AlmacenPort {
+export function crearAlmacenDexieProducto({
+  reloj,
+  participantId,
+}: {
+  reloj: RelojPort
+  participantId?: string
+}): AlmacenPort {
   const db: DbLike = {
-    leer: async (locutionId) => {
-      const registro = await fluDb.conversationFilas.get(locutionId)
-      return registro ? aRegistroFila(registro) : undefined
-    },
-    escribir: async (registro) => {
-      await fluDb.conversationFilas.put({ ...registro })
-    },
-    porSesion: async (sessionId) => {
-      const registros = await fluDb.conversationFilas
-        .where('sessionId')
-        .equals(sessionId)
-        .toArray()
-      return registros.map(aRegistroFila)
-    },
-    transaccion: async (operacion) =>
-      fluDb.transaction('rw', fluDb.conversationFilas, () => operacion()),
+    leer: (locutionId) => leerRegistroConversacion(locutionId),
+    escribir: (registro) =>
+      escribirRegistroConversacion(registro, {
+        participantId,
+        speakerId: labelToSpeakerId(registro.etiqueta),
+        speakerName: registro.etiqueta,
+      }).then(() => undefined),
+    transaccion: (operacion) => transaccionConversaciones(operacion),
   }
   return crearAlmacenDexie({ db, reloj, sincronizar: buildSyncTuple })
 }

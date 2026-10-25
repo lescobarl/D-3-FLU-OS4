@@ -236,7 +236,7 @@ describe('regla 1 y 3 — el audio abre el tramo y el texto lo revisa', () => {
   })
 
   it('el final del mismo tramo cierra UNA fila con la mejor versión', async () => {
-    const { api, almacen } = crearEscenario()
+    const { api } = crearEscenario()
     await api.start()
     const tramoId = await abrirConVoz(api)
     await api.ingestAsr(asr(tramoId, { texto: 'hola mundo entero' }))
@@ -248,13 +248,10 @@ describe('regla 1 y 3 — el audio abre el tramo y el texto lo revisa', () => {
       provisional: false,
     })
     expect(estado.box).toEqual({ texto: '', abierta: false })
-    const sessionId = estado.sessionId
-    if (!sessionId) throw new Error('sin sesion')
-    expect(await almacen.leerSesion(sessionId)).toHaveLength(1)
   })
 
   it('dos llamadas concurrentes al mismo tramo no duplican la fila', async () => {
-    const { api, almacen } = crearEscenario()
+    const { api } = crearEscenario()
     await api.start()
     const tramoId = await abrirConVoz(api)
     await Promise.all([
@@ -263,8 +260,6 @@ describe('regla 1 y 3 — el audio abre el tramo y el texto lo revisa', () => {
     ])
     const estado = api.snapshot()
     expect(estado.filas).toHaveLength(1)
-    if (!estado.sessionId) throw new Error('sin sesion')
-    expect(await almacen.leerSesion(estado.sessionId)).toHaveLength(1)
   })
 })
 
@@ -371,7 +366,7 @@ describe('regla 4 y stop — provisional o descarte contado', () => {
 
 describe('promoción — el final del mismo tramo actualiza la provisional', () => {
   it('un final posterior promueve la fila cerrada por silencio', async () => {
-    const { api, almacen } = crearEscenario()
+    const { api } = crearEscenario()
     await api.start()
     const tramoId = await abrirConVoz(api)
     await api.ingestAsr(asr(tramoId, { texto: 'hola' }))
@@ -387,24 +382,31 @@ describe('promoción — el final del mismo tramo actualiza la provisional', () 
       provisional: false,
       revision: 2,
     })
-    if (!promovida.sessionId) throw new Error('sin sesion')
-    expect(await almacen.leerSesion(promovida.sessionId)).toHaveLength(1)
   })
 
   it('el final que llega tras stop(user) promueve la fila de la sesión anterior', async () => {
-    const { api, almacen } = crearEscenario()
+    const { api, eventos } = crearEscenario()
+    const filas = () =>
+      eventos.flatMap((evento) => (evento.tipo === 'row.committed' ? [evento.fila] : []))
     const primera = await api.start()
     const tramoId = await abrirConVoz(api)
     await api.ingestAsr(asr(tramoId, { texto: 'hola' }))
     await api.stop('user')
     if (!primera.sessionId) throw new Error('sin sesion')
-    const antes = await almacen.leerSesion(primera.sessionId)
-    expect(antes[0]).toMatchObject({ provisional: true, texto: 'hola' })
+    const antes = filas()
+    expect(antes).toHaveLength(1)
+    expect(antes[0]).toMatchObject({
+      sessionId: primera.sessionId,
+      provisional: true,
+      texto: 'hola',
+    })
 
     await api.start()
     await api.ingestAsr(asr(tramoId, { texto: 'hola mundo', final: true }))
-    const despues = await almacen.leerSesion(primera.sessionId)
-    expect(despues[0]).toMatchObject({
+    const despues = filas()
+    expect(despues).toHaveLength(2)
+    expect(despues[1]).toMatchObject({
+      sessionId: primera.sessionId,
       texto: 'hola mundo',
       provisional: false,
       revision: 2,

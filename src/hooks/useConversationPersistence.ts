@@ -13,6 +13,11 @@
 import { useEffect, useRef } from 'react';
 import { fluDb, type ConversationRow } from '../core/db/fluDatabase';
 import { buildSyncTuple } from '../core/db/syncTuple';
+import {
+    bulkPutConversationRecords,
+    softDeleteConversationRows,
+} from '../core/db/conversationRowWriter';
+import { crearConfigFlu, motorConversacionActivo } from '../voice/conversation/index';
 import { useIntegrationStore } from '../store/integrationStore';
 import type { ConversationEntry } from '../types/bridge';
 import { logCaughtError } from '../lib/caughtError';
@@ -22,20 +27,11 @@ import { sessionSpeakerHighWater } from '../voice/api/identity';
 const MAX_LOADED_ROWS = 180; // OS2: conversationLogMax
 
 /**
- * C8 — Puerta ÚNICA de escritura de `fluDb.conversations`. Ningún otro módulo
- * toca la tabla: App y fluStorage delegan aquí (una sola fuente por intención).
+ * C8 — el escritor ÚNICO vive en `core/db/conversationRowWriter.ts`.
+ * App importa el borrado lógico desde aquí por compatibilidad; el punto de
+ * escritura sigue siendo el mismo (una sola fuente por intención).
  */
-export async function putConversationRecord(record: ConversationRow): Promise<void> {
-    await fluDb.conversations.put(record);
-}
-
-/** Borrado lógico de las filas indicadas (marca sync.deleted). */
-export async function softDeleteConversationRows(ids: string[]): Promise<number> {
-    if (!ids.length) return 0;
-    return fluDb.conversations.where('id').anyOf(ids).modify((row) => {
-        row.sync = { ...buildSyncTuple(row.sync, Date.now()), deleted: true };
-    });
-}
+export { softDeleteConversationRows };
 
 /**
  * Normaliza el campo `sentiment` persistido (string libre en la fila) al
@@ -61,6 +57,7 @@ function rowToEntry(row: ConversationRow): ConversationEntry {
         // La VOZ de la fila; el nombre se resuelve al MOSTRAR (no se persiste como dato).
         speakerId: row.speakerId,
         speakerName: row.speakerName,
+        sessionId: row.sessionId,
         meta: row.meta || undefined,
         signature: row.signature || null,
         phase: row.phase || '',
@@ -70,9 +67,19 @@ function rowToEntry(row: ConversationRow): ConversationEntry {
 
 /**
  * Convert a ConversationEntry to a DB row format.
+ * @param entry Entrada del store.
+ * @param participantId Participante del scope actual.
+ * @param syncPrevio Tupla de la fila que ya existía (o `null`).
+ * @param existente Fila ya persistida; conserva los campos que la entrada no trae
+ *   (respuesta, firma, fase…) y evita perder `sessionId`.
  */
-function entryToRow(entry: ConversationEntry, participantId: string, syncPrevio?: { revision: number; updated_at: string; deleted: boolean } | null) {
-    return {
+function entryToRow(
+    entry: ConversationEntry,
+    participantId: string,
+    syncPrevio?: { revision: number; updated_at: string; deleted: boolean } | null,
+    existente?: ConversationRow | null,
+) {
+    const fila = {
         id: entry.id,
         role: entry.role,
         text: entry.text,
@@ -88,11 +95,41 @@ function entryToRow(entry: ConversationEntry, participantId: string, syncPrevio?
         phase: entry.phase || '',
         navigation: entry.navigation || null,
         participantId: entry.personId || participantId,
+        sessionId: entry.sessionId || existente?.sessionId,
         // REVISION QUE SE CONSERVA: la tupla incrementa sobre la fila que ya existe. Antes se
         // reiniciaba en 1 en CADA escritura (auditoria 2026-10-22) y la sincronizacion perdia el
         // rastro de las revisiones anteriores.
         sync: buildSyncTuple(syncPrevio ?? undefined, Date.now()),
     };
+    if (!existente) return fila;
+    // La entrada es la vista PARCIAL del store: no borra lo que solo vive en la fila.
+    return {
+        ...existente,
+        ...fila,
+        meta: fila.meta ?? existente.meta ?? null,
+        sessionId: fila.sessionId || existente.sessionId,
+        sync: fila.sync,
+    };
+}
+
+/**
+ * ¿La fila persistida ya representa EXACTAMENTE esta entrada?
+ * Se usa con `engine: new` para no reescribir la fila que el módulo acaba de
+ * escribir (misma locución = una sola escritura). Un renombre de voz, una fila
+ * importada que falte o cualquier cambio real NO coinciden y sí se persisten.
+ */
+function mismaFilaPersistida(entry: ConversationEntry, row: ConversationRow): boolean {
+    const speakerId = entry.role === 'flu' ? 'flu' : (entry.speakerId || 'usuario');
+    const speakerName = entry.role === 'flu' ? 'FLU' : (entry.speakerName || '');
+    return (
+        row.role === entry.role &&
+        row.text === entry.text &&
+        Number(row.timestamp) === Number(entry.timestamp) &&
+        row.speakerId === speakerId &&
+        row.speakerName === speakerName &&
+        (row.sessionId || '') === (entry.sessionId || '') &&
+        JSON.stringify(row.meta || null) === JSON.stringify(entry.meta || null)
+    );
 }
 
 /**
@@ -171,15 +208,9 @@ export function useConversationPersistence(participantId?: string) {
                             .map((e) => e.id)
                             .filter(Boolean);
                         if (idsToRemove.length > 0) {
-                            fluDb.conversations
-                                .where('id')
-                                .anyOf(idsToRemove)
-                                .modify((row) => {
-                                    row.sync = { ...buildSyncTuple(row.sync, Date.now()), deleted: true };
-                                })
-                                .catch((err) => {
-                                    logCaughtError('[ConversationPersistence] Error cleaning up system events from DB', err);
-                                });
+                            softDeleteConversationRows(idsToRemove).catch((err) => {
+                                logCaughtError('[ConversationPersistence] Error cleaning up system events from DB', err);
+                            });
                         }
                     }
 
@@ -228,14 +259,36 @@ export function useConversationPersistence(participantId?: string) {
             const cambiadas = historial.filter((e) => persistidas.get(String(e.id)) !== e);
             if (!cambiadas.length) return;
             cambiadas.forEach((e) => persistidas.set(String(e.id), e));
-            const filas = cambiadas.map((entry) => {
-                const id = String(entry.id);
-                const previa = syncPorFila.get(id) || null;
-                const fila = entryToRow(entry, scope, previa);
-                syncPorFila.set(id, fila.sync);
-                return fila;
-            });
-            fluDb.conversations.bulkPut(filas).catch((err) => {
+            const persistir = async () => {
+                // Con `engine: new` la fila de usuario ya la escribió el módulo (por el
+                // MISMO escritor). Solo se persiste si falta (import/backup) o si la
+                // entrada cambió de verdad (renombre de voz). Con `engine: legacy` no
+                // hay módulo: el usuario se persiste siempre, o sus filas desaparecen.
+                const motorNuevo = motorConversacionActivo(crearConfigFlu());
+                const existentes = new Map<string, ConversationRow>();
+                if (motorNuevo) {
+                    const ids = cambiadas.map((entry) => String(entry.id));
+                    const filas = await fluDb.conversations.bulkGet(ids);
+                    filas.forEach((fila, indice) => {
+                        if (fila) existentes.set(ids[indice], fila);
+                    });
+                }
+                const filas: ConversationRow[] = [];
+                for (const entry of cambiadas) {
+                    const id = String(entry.id);
+                    const existente = existentes.get(id) || null;
+                    if (motorNuevo && entry.role === 'user' && existente && mismaFilaPersistida(entry, existente)) {
+                        continue;
+                    }
+                    const previa = syncPorFila.get(id) || existente?.sync || null;
+                    const fila = entryToRow(entry, scope, previa, existente);
+                    syncPorFila.set(id, fila.sync);
+                    filas.push(fila);
+                }
+                if (!filas.length) return;
+                await bulkPutConversationRecords(filas);
+            };
+            persistir().catch((err) => {
                 logCaughtError('[ConversationPersistence] Error consolidando la fila', err);
             });
         };
@@ -266,11 +319,7 @@ export function useConversationPersistence(participantId?: string) {
                 const ids = all
                     .filter((row) => (row.participantId || 'global') === scope && !row.sync?.deleted)
                     .map((row) => row.id);
-                return ids.length
-                    ? fluDb.conversations.where('id').anyOf(ids).modify((row) => {
-                          row.sync = { ...buildSyncTuple(row.sync, Date.now()), deleted: true };
-                      })
-                    : undefined;
+                return ids.length ? softDeleteConversationRows(ids) : undefined;
             })
             .catch((err) => {
                 logCaughtError('[ConversationPersistence] Error clearing persisted history', err);

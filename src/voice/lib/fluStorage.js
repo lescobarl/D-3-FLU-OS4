@@ -1,7 +1,7 @@
 import { fluDb } from '../../core/db/fluDatabase'
 import { buildSyncTuple } from '../../core/db/syncTuple'
 import { persistVoiceProfile } from '../../hooks/useVoiceProfiles'
-import { putConversationRecord } from '../../hooks/useConversationPersistence'
+import { putConversationRecord } from '../../core/db/conversationRowWriter'
 
 
 function voiceRecordToProfile(record) {

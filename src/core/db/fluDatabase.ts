@@ -59,6 +59,8 @@ export interface ConversationRow {
     navigation?: Record<string, unknown> | null;
     /** Usuario (participante) dueño de la fila: aísla conversaciones por usuario. */
     participantId?: string;
+    /** Sesión del motor de conversación que produjo la fila (índice v26). */
+    sessionId?: string;
     sync: SyncTuple;
 }
 
@@ -488,27 +490,6 @@ export interface BrowserProfileRecord {
 }
 
 // -----------------------------------------------------------
-// Conversation Fila (motor de conversacion nuevo)
-// -----------------------------------------------------------
-/** Una locucion cerrada = una fila. Clave = `locutionId` (UUIDv4 del tramo). */
-export interface ConversationFilaRecord {
-    locutionId: string;
-    sessionId: string;
-    turnId: string;
-    texto: string;
-    inicioMs: number;
-    finMs: number;
-    sampleRate: number;
-    etiqueta: string;
-    evidencia: string;
-    idioma: string;
-    overlap: boolean;
-    provisional: boolean;
-    reason: string;
-    sync: SyncTuple;
-}
-
-// -----------------------------------------------------------
 // Esquema Dexie - FUENTE UNICA de la lista de tablas
 // -----------------------------------------------------------
 /**
@@ -526,7 +507,7 @@ export interface ConversationFilaRecord {
  * `null` = eliminar la tabla (semantica de Dexie). Cada version es inmutable:
  * el historico se conserva tal cual y solo se añade al final.
  */
-const DEXIE_VERSIONS: ReadonlyArray<{
+export const DEXIE_VERSIONS: ReadonlyArray<{
     version: number;
     stores: Record<string, string | null>;
 }> = [
@@ -646,6 +627,14 @@ const DEXIE_VERSIONS: ReadonlyArray<{
     { version: 25, stores: {
         conversationFilas: 'locutionId, sessionId',
     } },
+    // v26: UN SOLO ALMACEN para la conversacion. Las filas del motor viven en
+    // `conversations` (con `sessionId` indexado y `meta.conversacion` tipado);
+    // `conversationFilas` se retira. La v25 se conserva tal cual para los
+    // navegadores dev que ya la aplicaron: Dexie necesita ver la baja.
+    { version: 26, stores: {
+        conversations: 'id, role, timestamp, speakerId, participantId, sessionId',
+        conversationFilas: null,
+    } },
 ];
 
 /** Tablas resultantes del esquema: altas menos bajas, en orden de aparicion. */
@@ -686,7 +675,6 @@ export class FluDatabase extends Dexie {
     notes!: EntityTable<NoteRecord, 'id'>;
     documents!: EntityTable<DocumentRecord, 'id'>;
     agenda!: EntityTable<AgendaItem, 'id'>;
-    conversationFilas!: EntityTable<ConversationFilaRecord, 'locutionId'>;
 
     constructor() {
         super('flu-os3');

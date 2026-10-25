@@ -117,10 +117,6 @@ describe('almacén — una fila por locución y tupla [revision, updated_at, del
     ahora = 3000
     const borrada = await almacen.actualizar('loc-1', { deleted: true })
     expect(borrada).toMatchObject({ revision: 3, deleted: true })
-
-    const deSesion = await almacen.leerSesion('s1')
-    expect(deSesion).toHaveLength(1)
-    expect(deSesion[0].deleted).toBe(true)
   })
 
   it('repetir la misma locución es upsert: una fila y revisión incremental', async () => {
@@ -128,7 +124,6 @@ describe('almacén — una fila por locución y tupla [revision, updated_at, del
     await almacen.guardar(filaNueva('loc-1'))
     const repetida = await almacen.guardar(filaNueva('loc-1', { texto: 'hola otra vez' }))
     expect(repetida).toMatchObject({ revision: 2, texto: 'hola otra vez' })
-    expect(await almacen.leerSesion('s1')).toHaveLength(1)
   })
 
   it('actualizar una fila inexistente devuelve null, no inventa fila', async () => {

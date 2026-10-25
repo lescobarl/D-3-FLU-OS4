@@ -6,7 +6,7 @@
  * No se llama `ingestAsr` a mano: se monta `useFluVoiceAssistant`, se inyecta
  * un `SpeechRecognition` falso donde el hook lo adquiere (`api/speech`) y se
  * disparan `onstart`/`onresult` reales. La fila se lee de Dexie con
- * `fake-indexeddb` (la MISMA tabla `conversationFilas` v25 del producto).
+ * `fake-indexeddb` (la MISMA tabla `conversations` v26 del producto).
  *
  * Dos banderas, un solo escritor:
  *  - `new`     el módulo se compone (1 vez), la fila sale de Dexie y el ingress
@@ -29,6 +29,7 @@ const h = vi.hoisted(() => {
     conversationHistory: [] as unknown[],
     conversationState: 'IDLE',
     speakerHighWater: 0,
+    activePersonId: 'user-a',
   };
   const recognition = {
     lang: '',
@@ -251,7 +252,7 @@ function montar() {
 
 beforeEach(async () => {
   vi.clearAllMocks();
-  await fluDb.conversationFilas.clear();
+  await fluDb.conversations.clear();
   fijarMotorEnUrl(null);
   h.crearMotorLlamadas = 0;
   h.integration.lastCommittedTranscript = '';
@@ -308,6 +309,7 @@ beforeEach(async () => {
 
 afterEach(() => {
   vi.useRealTimers();
+  vi.restoreAllMocks();
   quitarSoporteNavegador();
 });
 
@@ -315,6 +317,7 @@ describe('producto — engine new escribe la fila desde el reconocedor real', ()
   it('un final del SpeechRecognition produce UNA fila en Dexie, su commit y la caja', async () => {
     fijarMotorEnUrl('new');
     darSoporteNavegador();
+    const put = vi.spyOn(fluDb.conversations, 'put');
     const { result } = montar();
     await waitFor(() => expect(result.current.isSupported).toBe(true));
 
@@ -337,12 +340,12 @@ describe('producto — engine new escribe la fila desde el reconocedor real', ()
     // Un final de SEGMENTO del reconocedor NO cierra la locución: la caja sigue
     // viva y no hay fila; el cierre real es el `onend`/VAD.
     await waitFor(() => expect(result.current.liveTranscript).toBe('ok flu hola mundo'));
-    expect(await fluDb.conversationFilas.count()).toBe(0);
+    expect(await fluDb.conversations.count()).toBe(0);
     // Reentrega del MISMO final (Chrome lo repite): no añade una segunda fila.
     await act(async () => {
       h.recognition.onresult?.(eventoAsr('ok flu hola mundo', true));
     });
-    expect(await fluDb.conversationFilas.count()).toBe(0);
+    expect(await fluDb.conversations.count()).toBe(0);
     // Cierre REAL: aquí nace la ÚNICA fila y la caja se vacía en el acto
     // (caso de caja del replay 2026-10-19).
     await act(async () => {
@@ -351,40 +354,47 @@ describe('producto — engine new escribe la fila desde el reconocedor real', ()
     await waitFor(() => expect(result.current.liveTranscript).toBe(''));
 
     await waitFor(async () => {
-      const filas = await fluDb.conversationFilas.toArray();
+      const filas = await fluDb.conversations.toArray();
       expect(filas).toHaveLength(1);
     });
-    const filas = await fluDb.conversationFilas.toArray();
+    const filas = await fluDb.conversations.toArray();
     const fila = filas[0];
     if (!fila) throw new Error('sin fila persistida');
 
     expect(h.crearMotorLlamadas).toBe(1);
     expect(fila).toMatchObject({
-      texto: 'ok flu hola mundo',
-      provisional: false,
+      text: 'ok flu hola mundo',
+      sessionId: expect.any(String),
+      meta: {
+        origin: 'conversation-module',
+        conversacion: expect.objectContaining({ provisional: false }),
+      },
       sync: { revision: 1, deleted: false },
     });
+    expect(put).toHaveBeenCalledTimes(1);
     expect(fila.sync.updated_at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
-    expect(fila.locutionId).toMatch(
+    expect(fila.id).toMatch(
       /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
     );
-    expect(fila.etiqueta).toBe(FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker);
-    expect(fila.etiqueta).not.toContain('?');
+    expect(fila.speakerName).toBe(FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker);
+    expect(fila.speakerName).not.toContain('?');
     // Caja = fila: la frase de la caja es exactamente la frase de la fila.
-    expect(caja).toBe(fila.texto);
+    expect(caja).toBe(fila.text);
     // UN `row.committed`: el módulo es el ÚNICO que compromete la frase.
     expect(h.setCommitted).toHaveBeenCalledTimes(1);
-    expect(h.setCommitted).toHaveBeenCalledWith(fila.texto);
+    expect(h.setCommitted).toHaveBeenCalledWith(fila.text);
     // La MISMA fila se proyecta al historial visible (una entrada, con su etiqueta).
     expect(
       (h.integration as unknown as { addConversationEntry: ReturnType<typeof vi.fn> })
         .addConversationEntry,
     ).toHaveBeenCalledWith(
       expect.objectContaining({
-        id: fila.locutionId,
+        id: fila.id,
         role: 'user',
-        text: fila.texto,
-        speakerName: fila.etiqueta,
+        text: fila.text,
+        speakerName: fila.speakerName,
+        sessionId: fila.sessionId,
+        meta: expect.objectContaining({ origin: 'conversation-module' }),
       }),
     );
     // Solo los finales alimentan el ingress (comandos); la fila es una sola y la
@@ -418,7 +428,7 @@ describe('producto — engine new escribe la fila desde el reconocedor real', ()
       await waitFor(() => expect(result.current.liveTranscript).toBe(texto));
       // Defecto medido (P7): cada final de SEGMENTO de Chrome escribía su fila.
       // El dictado no puede vaciarse antes del cierre real.
-      expect(await fluDb.conversationFilas.count()).toBe(0);
+      expect(await fluDb.conversations.count()).toBe(0);
       expect(h.setCommitted).not.toHaveBeenCalled();
     }
 
@@ -428,16 +438,16 @@ describe('producto — engine new escribe la fila desde el reconocedor real', ()
     });
 
     await waitFor(async () => {
-      const filas = await fluDb.conversationFilas.toArray();
+      const filas = await fluDb.conversations.toArray();
       expect(filas).toHaveLength(1);
     });
-    const fila = (await fluDb.conversationFilas.toArray())[0];
+    const fila = (await fluDb.conversations.toArray())[0];
     if (!fila) throw new Error('sin fila persistida');
-    expect(fila.texto).toBe('uno dos tres cuatro cinco');
-    expect(fila.provisional).toBe(false);
+    expect(fila.text).toBe('uno dos tres cuatro cinco');
+    expect(fila.meta?.conversacion?.provisional).toBe(false);
     // UN `row.committed`: la proyección al historial no se multiplica.
     expect(h.setCommitted).toHaveBeenCalledTimes(1);
-    expect(h.setCommitted).toHaveBeenCalledWith(fila.texto);
+    expect(h.setCommitted).toHaveBeenCalledWith(fila.text);
     expect(
       (h.integration as unknown as { addConversationEntry: ReturnType<typeof vi.fn> })
         .addConversationEntry,
@@ -463,6 +473,6 @@ describe('producto — engine legacy no instancia el módulo', () => {
     expect(h.crearMotorLlamadas).toBe(0);
     expect(h.ingressPush).toHaveBeenCalledTimes(1);
     expect(h.setCommitted).not.toHaveBeenCalled();
-    expect(await fluDb.conversationFilas.count()).toBe(0);
+    expect(await fluDb.conversations.count()).toBe(0);
   });
 });

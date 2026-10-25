@@ -50,8 +50,6 @@ export type DbLike = Readonly<{
   leer(locutionId: string): Promise<RegistroFila | undefined>
   /** Escribe (inserta o reemplaza) una fila y espera la confirmación. */
   escribir(registro: RegistroFila): Promise<void>
-  /** Filas de una sesión, incluidas las de borrado lógico. */
-  porSesion(sessionId: string): Promise<RegistroFila[]>
   /** Ejecuta las operaciones como una transacción de escritura. */
   transaccion<T>(operacion: () => Promise<T>): Promise<T>
 }>
@@ -148,10 +146,5 @@ export function crearAlmacenDexie({
         await db.escribir(registro)
         return aFila(registro)
       }),
-
-    leerSesion: async (sessionId: string): Promise<Fila[]> => {
-      const registros = await db.porSesion(sessionId)
-      return registros.map(aFila)
-    },
   }
 }

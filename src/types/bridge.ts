@@ -42,6 +42,58 @@ export interface VoiceBridgeEvent {
 }
 
 /**
+ * Metadatos canónicos de una fila del motor de conversación.
+ * Se persisten TIPADOS (no como JSON opaco) y se leen de vuelta con la MISMA
+ * función de mapeo (`src/core/db/conversationRowMapping.ts`).
+ */
+export interface ConversationMetaFila {
+    /** Tramo de audio de la locución, en muestras del `sampleRate`. */
+    tramo: { inicio: number; fin: number };
+    /** Frecuencia de captura del tramo. */
+    sampleRate: number;
+    /** Turno que agrupó la locución. */
+    turnId: string;
+    /** Etiqueta afirmada de la voz (nunca `?`). */
+    etiqueta: string;
+    /** Evidencia con la que se afirmó la etiqueta. */
+    evidencia: 'nombre' | 'medida' | 'continuidad' | 'semilla';
+    /** Idioma de la locución. */
+    idioma: 'es' | 'en';
+    /** ¿Hubo solape de voces? */
+    overlap: boolean;
+    /** Cierre humano o de sistema, promovible con el final del mismo tramo. */
+    provisional: boolean;
+    /** Motivo declarado del cierre. */
+    reason: 'user' | 'system' | 'watchdog';
+}
+
+/** Metadatos adicionales de una entrada (OS2: meta.response). */
+export interface ConversationMeta {
+    response?: string;
+    /** P9.83: esta fila es la RESPUESTA a un evento de sistema (la marca el escritor) */
+    systemEventReply?: boolean;
+    /** Marcador de evento del sistema (no controlado por Gemini) */
+    systemEvent?: {
+        type: 'participant_ignored' | 'participant_rejected' | 'participant_granted'
+        | 'user_praise' | 'user_criticism' | 'topic_change' | 'interruption_detected';
+        participantName?: string;
+        waitedMs?: number;
+        reason?: string;
+        praiseText?: string;
+        criticismText?: string;
+        previousTopic?: string;
+        newTopic?: string;
+        interruptionText?: string;
+    };
+    /** Campos de la fila del motor de conversación, TIPADOS. */
+    conversacion?: ConversationMetaFila;
+    /** Ruta que escribió la fila: módulo nuevo o importación. */
+    origin?: 'conversation-module' | 'import';
+    /** Sesión del motor que produjo la fila. */
+    sessionId?: string;
+}
+
+/**
  * Una entrada en el historial de conversación.
  * Compatible con OS2: speakerName, response, meta, signature, phase, navigation.
  */
@@ -79,24 +131,9 @@ export interface ConversationEntry {
     /** Respuesta de FLU a este mensaje (OS2: response) */
     response?: string;
     /** Metadatos adicionales (OS2: meta.response) */
-    meta?: {
-        response?: string;
-        /** P9.83: esta fila es la RESPUESTA a un evento de sistema (la marca el escritor) */
-        systemEventReply?: boolean;
-        /** Marcador de evento del sistema (no controlado por Gemini) */
-        systemEvent?: {
-            type: 'participant_ignored' | 'participant_rejected' | 'participant_granted'
-            | 'user_praise' | 'user_criticism' | 'topic_change' | 'interruption_detected';
-            participantName?: string;
-            waitedMs?: number;
-            reason?: string;
-            praiseText?: string;
-            criticismText?: string;
-            previousTopic?: string;
-            newTopic?: string;
-            interruptionText?: string;
-        };
-    };
+    meta?: ConversationMeta;
+    /** Sesión del motor de conversación que produjo la fila (si aplica). */
+    sessionId?: string;
     /**
      * IDENTIDAD DEL TURNO que escribio la fila (auditoria 2026-10-23): la acuña el dueno del
      * turno ANTES del commit y es el UNICO criterio para reutilizar/completar una fila.

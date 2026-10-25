@@ -65,6 +65,7 @@ import { setSessionPrimarySpeaker } from '../lib/sessionPrimarySpeaker'
 import { applySessionCommandToPrimary } from '../lib/sessionLifecycle.js'
 import { renameVoiceRowsByKey, updateTurnRowSpeaker } from '../lib/conversationTurnRow'
 import { labelToSpeakerId } from '../lib/conversationRow.js'
+import { metaDeFilaConversacion } from '../../core/db/conversationRowMapping'
 import { resetVoiceDirectory } from '../lib/speakerDirectory.js'
 import { participantRegisterPort, registerSpeakerIdentity } from '../lib/speakerIdentityRegister'
 import { resolveSpeakerIdentityFromVector } from '../lib/voiceIdentityResolve.js'
@@ -495,20 +496,17 @@ const lastResolvedTurnRef = useRef(0)
   languageRef.current = language
   const abrirMotorConversacion = useCallback(() => {
     if (!motorConversacionActivo(crearConfigFlu())) return
-    if (motorConversacionRef.current) {
-      motorConversacionRef.current.abrir()
-      return
-    }
+    if (motorConversacionRef.current) { motorConversacionRef.current.abrir(); return }
     motorConversacionRef.current = crearMotorConversacionProducto({
       idioma: normalizeLang(languageRef.current),
-      sampleRate: AUDIO_SAMPLE_RATE,
+      sampleRate: AUDIO_SAMPLE_RATE, participantId: useIntegrationStore.getState().activePersonId,
       ultimoTextoDicho: () => resolveEchoContext(useIntegrationStore.getState().conversationHistory, getLastCompletedSpeechAt()).lastAssistantText,
     })
     motorConversacionRef.current.suscribir((evento) => {
       if (evento.tipo === 'box.updated') setLiveTranscript(evento.texto)
       if (evento.tipo === 'row.committed') {
         useIntegrationStore.getState().setLastCommittedTranscript(evento.fila.texto)
-        useIntegrationStore.getState().addConversationEntry({ id: evento.fila.locutionId, role: 'user', text: evento.fila.texto, timestamp: evento.fila.updated_at, speakerName: evento.fila.etiqueta, speakerId: labelToSpeakerId(evento.fila.etiqueta) })
+        useIntegrationStore.getState().addConversationEntry({ id: evento.fila.locutionId, role: 'user', text: evento.fila.texto, timestamp: evento.fila.updated_at, speakerName: evento.fila.etiqueta, speakerId: labelToSpeakerId(evento.fila.etiqueta), sessionId: evento.fila.sessionId, meta: metaDeFilaConversacion(evento.fila, evento.fila.sessionId) })
         const nombreDicho = resolveSpeakerNameFromUtterance(evento.fila.texto)
         if (nombreDicho) renameVoiceRowsByKey(labelToSpeakerId(evento.fila.etiqueta), nombreDicho)
         setLiveTranscript('')
