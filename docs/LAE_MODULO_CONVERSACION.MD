@@ -64,10 +64,11 @@ Sin estas claves no hay `900 ms`, ni `auto`, ni retención: sería hardcode. `ov
 
 - **`cloud`:** Chrome `SpeechRecognition`; `lang` = idioma activo de la app. El audio sale del equipo.
 - **`local`:** Whisper WASM (`Xenova/whisper-tiny`). El audio no sale.
-- **`auto`:** Chrome primero; degrada a Whisper solo si está habilitado (`voiceIdentity.capture.recognition.localFallbackEnabled`) y hay error `network`/`no-speech` o el reconocedor lleva **12 000 ms** mudo (+1 000 de margen, 2 rebuilds, 600 ms de habla, evaluación 1 000 ms). Recupera a Chrome a los **20 000 ms** o 3 segmentos; sonda 4 000 ms.
+- **`auto`:** elige **UN** motor al abrir la sesión con criterio (permiso de micrófono, modelo local disponible, latencia y configuración). **No hay swap en caliente.** Si el elegido no arranca, el módulo publica `asr.status` y el usuario reinicia con otro motor. Costo declarado: **sin swap automático, un error `network` deja al usuario sin transcripción hasta que reinicie.**
+- **`voiceIdentity.capture.recognition.localFallbackEnabled` queda fuera de uso:** el módulo NO lee esa clave. No se reimplementa el fallback leyendo una clave que ya no significa nada.
 - **Gate de resultados locales:** final ≥180 ms de habla; parcial ≥300 ms.
-- **VAD:** trama 30 ms, energía 0,02, habla mínima 450 ms, silencio 900 ms, segmento máximo 8 000 ms, pre-roll 180 ms.
-- **Swap, no convivencia:** al cambiar de motor se suelta el anterior; nunca dos reconocedores activos.
+- **VAD/medición:** los umbrales se leen de la config del módulo (`ports.ts`) o de la config existente; no se re-declaran ni se hardcodean. Si falta una clave, se añade a `CONVERSACION_CONFIG` con dueño y test.
+- **Un solo reconocedor:** al reiniciar con otro motor se suelta el anterior; nunca dos reconocedores activos.
 - **Diarización:** local (`Xenova/wavlm-base-plus-sv`, 512-D, en worker). El audio no sale; solo se descargan los pesos la primera vez.
 
 ## API
@@ -76,6 +77,8 @@ Sin estas claves no hay `900 ms`, ni `auto`, ni retención: sería hardcode. `ov
 `snapshot()` incluye `fraseCanonica` y `fraseParaMostrar`.
 
 **6 eventos:** `locution.closed`, `row.committed`, `speaker.labeled`, `box.updated`, `asr.status`, `barge.in`.
+
+**Dependencia obligatoria:** `ultimoTextoDicho(): string` — lo último que dijo FLU, entregado por el consumidor. El módulo **NO habla** y **NO tiene `TtsPort`**; sin esta dependencia no arranca. `esEcoDeTts` compara contra esa función y desde ahí se emite `barge.in`.
 
 `stop(stopKind)`:
 
@@ -102,24 +105,32 @@ Sin estas claves no hay `900 ms`, ni `auto`, ni retención: sería hardcode. `ov
 - Fixture: `events.ndjson`, `turns.ndjson`, `audio`, `manifest.json`; aceptación `N/0/0`.
 - **Barge-in: sí.** El eco es el portero y el módulo emite **`barge.in`**; el consumidor apaga `fluSpeech`. La voz de FLU no es fila del usuario.
 
-## 6 archivos
+## 10 archivos
 
 ```text
 src/voice/conversation/
-  index.ts       API
-  frontera.ts    regla 2: cuándo cerrar
-  revision.ts    regla 3: mismo tramo / revisa / extiende
-  fila.ts        reglas 4–5: commit, etiqueta y modelo
-  ports.ts       ASR, audio, embeddings, store, reloj, VAD
-  adapters.ts    micrófono, archivo, ASR, embeddings, store
+  index.ts       API: solo compone y re-exporta            ≤120
+  tipos.ts       contrato público (fila, eventos, API)     ≤250
+  motor.ts       orquestador de la sesión                  ≤300
+  cola.ts        ingesta serializada y pendientes          ≤150
+  eco.ts         detector de eco por palabras              ≤100
+  frontera.ts    regla 2: cuándo cerrar                     ≤100
+  revision.ts    regla 3: mismo tramo / revisa / extiende   ≤150
+  fila.ts        reglas 4–5: commit, etiqueta y modelo      ≤200
+  ports.ts       ASR, audio, embeddings, store, reloj, VAD  ≤300
+  adapters.ts    micrófono, archivo, ASR, embeddings, store ≤300
 ```
+
+`adapters.ts` puede partirse en `adapters/*.ts`; el conteo se actualiza en el
+mismo commit. Un archivo por encima de su techo no se entrega: se parte antes de
+commitear.
 
 ## Reglas de operación y repo
 
 - Un **solo ASR** y un **solo escritor de fila** por sesión. `auto` elige uno al abrir con criterio: permiso de micrófono, modelo local disponible, latencia y configuración; no fallback en caliente. Sin permiso: `asr.status: no-permission` y no arranca.
 - Una **cola de ingesta** ordenada por tiempo; ASR antes de locución se retiene, no se duplica. Si llega después del cierre: descarte contado o locución nueva; no se mezcla.
 - **Frase canónica única**; wake solo para mostrar; IA y comandos reciben la misma.
-- **Eco**: detector propio por comparación contra el último TTS (cobertura, sufijo, mínimo de palabras). `normalizeSpokenCommand` es higiene de comandos, no el eco. Barge-in consume el detector.
+- **Eco**: detector propio por comparación contra `ultimoTextoDicho()` (cobertura, sufijo, mínimo de palabras). `normalizeSpokenCommand` es higiene de comandos, no el eco. Barge-in consume el detector.
 - **ASR lifecycle**: permiso, error y watchdog; locución abierta se cierra o se marca `aborted`.
 - **Silencio sin texto ajeno**: cierra por `silenceCloseMs` (provisional o descarte contado). Es un segundo cierre, distinto de la frontera.
 - **Buffer por locución** y retención para sesiones largas; no se usa el contador del turno.
@@ -127,7 +138,7 @@ src/voice/conversation/
 - **Privacidad**: si `asr.engine: cloud`, el audio sale; se declara.
 - **Datos viejos**: exportar y versionar antes del corte; no migrar a ciegas.
 - **Logs**: apertura, cierre y motivo de descarte con `sessionId`, `locutionId` y tramo; `logCaughtError`, no `console.*`.
-- **Imports**: config, splitter y TTS entran por **ports**; no se importa `api/*` mientras re-exporte `lib`.
+- **Imports**: config, splitter y `ultimoTextoDicho` entran por **dependencias/ports**; no se importa `api/*` mientras re-exporte `lib`.
 - **Dos pestañas**: una pestaña activa escribe; la segunda es solo lectura. Sin lock, se declara.
 - UUIDv4, tupla `[revision, updated_at, deleted]`, borrado lógico, un solo escritor.
 - Reloj inyectado; cero `Date.now()` dentro del módulo.
