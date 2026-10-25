@@ -73,7 +73,7 @@ import { buildFluSpeechAuditRows, commitUserTurnRow, createConversationModeContr
 import { applyKnownVoiceName, forgetVoiceName, isAutoSpeakerLabel, participantVoiceAnchorsForDiarization, resolveVoiceIdentity, resolveVoiceParticipants } from './voice/api/identity'
 import { resolveGeminiErrorPresentation } from './voice/api/media'
 import { cancelSpeech, isSpeechBusy, speakResponse, waitForSpeechIdle } from './voice/api/speech'
-import { crearAlmacenMemoria, crearConfigFlu, crearConversacion, crearIdUuid, crearPartidorWake, crearRegistroCaughtError, crearRelojSistema, motorConversacionActivo } from './voice/conversation/index'
+import { motorConversacionActivo } from './voice/conversation/index'
 import { deleteAuditLogsBySpeaker, deleteVoiceProfile, findVoiceProfileByLabel } from './voice/api/storage'
 import { formatStreamSttUiStatus, getFluParticipantConfig, isFluParticipantEnabled, setFluParticipantOverrides } from './voice/api/uiConfig';
 import { createMediaRequestGate } from './core/media/mediaRequestGate';
@@ -1173,7 +1173,10 @@ function App() {
             // §9 — UNICO escritor de la fila del usuario (`commitUserTurnRow`). Un
             // SERVICIO (`effectOnly`) aplica su efecto y no escribe la conversacion.
             if (rawOnly && transcript && !cleanForSpeech(transcript)) return;
-            if (escribeFilaDeUsuario(resolved, { hayTexto: Boolean(transcript), hablable: Boolean(cleanForSpeech(transcript)) })) {
+            // Con `engine: new` la fila de la CONVERSACIÓN la escribe el módulo
+            // (`row.committed`): el escritor legacy queda inerte en ese dominio.
+            if (escribeFilaDeUsuario(resolved, { hayTexto: Boolean(transcript), hablable: Boolean(cleanForSpeech(transcript)) }) &&
+                !(motorConversacionActivo() && conversationActiveRef.current)) {
                 // P8.40: la etiqueta de diarizacion se escribe TAL CUAL: el vinculo con un
                 // participante registrado NO la asciende (una sola via del nombre: el mandato).
                 // El dueno de esa decision es `resolveRowSpeakerName`. 
@@ -2258,33 +2261,6 @@ function App() {
         activeParticipantSpeakerLabel: activeParticipantSpeakerLabelForVoice,
         participantVoiceAnchors: participantVoiceAnchorsForVoice,
         identitySession: identitySessionRef,    });
-
-    // Motor de CONVERSACIÓN nuevo: UNA composición en el punto de producto,
-    // apagada por defecto (`conversation.engine: legacy`). Con la bandera en
-    // `new` el motor queda compuesto y listo para sus 7 llamadas; el enrutado
-    // del audio/ASR del hook sigue siendo el legacy hasta la sustitución
-    // completa. Sin `asr` propio: el reconocedor del producto es único.
-    const conversacionNuevaRef = useRef<ReturnType<typeof crearConversacion> | null>(null)
-    useEffect(() => {
-        if (!motorConversacionActivo()) return
-        const reloj = crearRelojSistema()
-        const config = crearConfigFlu()
-        conversacionNuevaRef.current = crearConversacion({
-            reloj,
-            id: crearIdUuid(),
-            registro: crearRegistroCaughtError(),
-            almacen: crearAlmacenMemoria({ reloj }),
-            config,
-            partidor: crearPartidorWake(config),
-            ultimoTextoDicho: () => {
-                if (!isSpeechBusy()) return ''
-                return String(useIntegrationStore.getState().lastResponse || '')
-            },
-        })
-        return () => {
-            conversacionNuevaRef.current = null
-        }
-    }, [])
 
     // ---- Navigation commands (extraído a hook) ----
     const navigationCommands = useNavigationCommands(
