@@ -25,6 +25,63 @@
     `structureDuplicationGuard`, `speakerDiarizationUnified` → 28/28 verde.
 - Siguiente: `ports.ts` + `adapters.ts`.
 
+## 2026-10-24 — etapa 1a: puertos y adaptadores
+
+- Creados:
+  - `src/voice/conversation/ports.ts`: puertos + tabla de config del plan.
+  - `src/voice/conversation/adapters.ts`: única puerta externa (`api/*` y
+    `logCaughtError`).
+  - `tests/conversacionPuertosAdaptadores.test.ts` (14 casos), registrado en
+    `scripts/guard-files.mjs` (solo alta).
+- Decisiones declaradas:
+  - La tabla de config vive en `ports.ts` porque `fluConfig.js` queda fuera de la
+    whitelist. Es la única fuente de `900`/`5000`/`8000`/`auto`/`es`/`120`/`null`
+    y de `conversation.engine`. Para probar el motor nuevo se inyecta
+    `conversation.engine: 'new'`; el default sigue `legacy`.
+  - `Fila` (forma del plan) vive en `ports.ts` como contrato del almacén;
+    `fila.ts` conserva la propiedad de las reglas 4–5 y de su construcción.
+  - `adapters.ts` importa `logCaughtError` (`src/lib/caughtError.ts`), fuera de
+    `api/*`: excepción declarada que exigen el plan (§Logs) y AGENTS §1.5.
+- Adaptadores reales: reloj del sistema, UUIDv4, registro por `logCaughtError`,
+  config viva (`FLU_CONFIG`), splitter de wake y almacén en memoria con tupla
+  `[revision, updated_at, deleted]` y borrado lógico.
+- PENDIENTES con causa medida (no simulados):
+  - TTS y ASR de nube: `api/speech` arrastra `lib/speechRecognitionLocal.js`, que
+    tiene 4 imports sin extensión (`./fluConfig`, `./activeListen`,
+    `../../lib/clientLogRelay`, `../../lib/caughtError`). El módulo cuelga de
+    `api/server.ts` (costura de arranque) y el config de Vite carga esa cadena:
+    `viteConfigNativenessGuard` los marca. Corregir ese archivo (añadir `.js` /
+    `.ts`) queda fuera de la whitelist; los puertos `TtsPort`/`AsrPort` siguen
+    inyectables y el cableado de producto los aporta. Un bloqueo durable
+    alternativo es corregir esas 4 extensiones.
+  - ASR local: `createWhisperRecognitionEngine` descarta el audio mientras el TTS
+    habla (cerrojo de eco propio) → impide el barge-in del plan; cambiarlo queda
+    fuera de la whitelist. El puerto queda inyectable.
+  - Micrófono/archivo: son `AudioSource` de producto; no hay superficie pública
+    en `api/*` y su cableado pertenece al paso 2 (detrás de bandera).
+  - Embeddings y `registerName` persistente: `api/identity` no expone extracción
+    de embeddings y re-exporta `speakerClusters` (tubería vieja prohibida). El
+    puerto queda inyectable.
+  - Almacén Dexie: `api/storage` no expone escritura de filas de conversación; el
+    adaptador en memoria es real y el almacén Dexie se inyecta en el paso 2.
+- Gates medidos:
+  - `npm run test:file tests/conversacionPuertosAdaptadores.test.ts` → 14/14.
+  - `npm run typecheck` → verde.
+  - `npm run lint:guards` → 298 archivos / 2550 tests verdes, 1 archivo y 7
+    tests skipped; 0 fallos.
+  - `npm run lint:eslint` → verde (`--max-warnings=0`).
+  - `npm run verify:fast` → EOL 0 reparados / 0 ya correctos + tipos + ESLint.
+  - `npm run build` → `✓ built in 1.67s`.
+- Corrección de gates (causa raíz, sin tocar guards):
+  - `configSingleSourceGuard` marcaba `adapters.ts: === 'local'` (comparación del
+    motor ASR local). Al retirar el adaptador ASR concreto desaparece el literal.
+  - `viteConfigNativenessGuard` marcaba los 4 imports sin extensión de
+    `speechRecognitionLocal.js`, alcanzados por `adapters.ts → api/speech.ts`
+    dentro del grafo del config. Se retiró esa arista: `adapters.ts` ya no importa
+    `api/speech`; TTS/ASR quedan como puertos inyectables PENDIENTES (causa y
+    desbloqueo arriba). No se tocó el archivo ni el guard.
+- Siguiente: `revision.ts`.
+
 ## Pendiente de producto
 
 - Fixture `N`: no existe grabación; los guards usan fixtures sintéticos. La
