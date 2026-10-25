@@ -508,12 +508,36 @@ export { crearAlmacenDexie } from '../lib/conversationFilaStore.ts'
 - `tests/vozReplayDueno20261019Caja.test.ts` queda EXCLUIDO de la firma con
   dispensa escrita: prueba la tubería legacy (ingress y caja viejos), que muere
   en el corte. NO se toca, NO se salta (`it.skip` prohibido) y NO se rebaja.
-- Firma honesta del conjunto que monta el hook (comando exigido
-  `rg -l "useFluVoiceAssistant" tests`): 47/48 archivos y 518/519 tests; la
-  única falla es ese archivo legacy, preexistente y fuera de la whitelist.
+- Firma MEDIDA del conjunto que monta el hook (comando exigido
+  `rg -l "useFluVoiceAssistant" tests`): 50 archivos listados. Uno es el spec
+  Playwright `tests/e2e/voz-escenario-dueno.spec.ts`, que `vitest.config.ts`
+  excluye (`exclude: ['tests/e2e/**']`): no es una falla, su puerta es
+  `npm run e2e`. Denominador vitest: 49 archivos y 521 tests.
+  Resultado: **48/49 archivos verdes y 520/521 tests verdes**; la única falla
+  es `tests/vozReplayDueno20261019Caja.test.ts` (1 de sus 5 tests), legacy,
+  preexistente y fuera de la whitelist (dispensa de arriba). La estimación
+  previa (47/48 y 518/519) no incluía aún `tests/conversacionProducto.test.ts`
+  —2 tests— que ahora entra en el grep por montar el hook.
 - Equivalente en el módulo nuevo: `tests/conversacionProducto.test.ts` mide el
   mismo caso de caja (al comprometerse la frase la caja se vacía en el acto y
   no se repinta) y la reentrega del final (1 fila).
+
+## E2E del flujo afectado (medido 2026-10-25)
+
+- Comando: `npm run e2e -- tests/e2e/voz-escenario-dueno.spec.ts`.
+  Resultado real: **7 passed, 1 failed (4.1 m)**.
+- Falla `P7: dictado CON PAUSAS (1..25)` en `expect(filas).toHaveLength(1)`:
+  la primera fila llega fusionada (`"10 11 12 "` + la frase completa), es decir
+  el defecto de caja/segmento de la tubería LEGACY que el replay dispensado
+  documenta. Reproducible aislada (`-g "P7"`): 2 corridas, 2 fallos.
+- ATRIBUCIÓN MEDIDA: con `src/voice/hooks/useFluVoiceAssistant.js` y
+  `src/App.tsx` del commit base `2590851e` (antes de `0488a914`/`e91071e6`),
+  P7 falla IGUAL. Los cambios de este paso no alteran la rama legacy: con
+  `motorConversacionActivo()` en `false` el hook no compone el módulo y el
+  gate del escritor de App evalúa `!(false && …)` = `true`. Restaurado HEAD
+  tras la medición; `git status` limpio salvo docs/fixture.
+- P7 queda como defecto ABIERTO de la tubería vieja (muere en el corte), fuera
+  del alcance de este paso; no se toca el spec ni se rebaja.
 
 ## Paso 5 — fixture sintético (medido 2026-10-25)
 
@@ -538,7 +562,8 @@ export { crearAlmacenDexie } from '../lib/conversationFilaStore.ts'
   dueño. La tubería legacy NO se borra todavía: muere en el corte, después de
   esa validación.
 - Autoverificación 5: falla preexistente del archivo legacy declarada con
-  dispensa (sección anterior); los otros 47 archivos están verdes.
+  dispensa (sección anterior); los otros 48 archivos vitest están verdes
+  (49 con el spec Playwright, que no corre por vitest).
 - Almacén del producto: `crearAlmacenDexieProducto` sobre
   `fluDb.conversationFilas` (v25). El almacén en memoria queda solo como doble
   de pruebas; la semilla de App que lo usaba se retiró.
