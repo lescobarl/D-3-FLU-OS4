@@ -960,3 +960,146 @@ medida al lado, default `conversation.engine: legacy` y override solo dev.
 Techos medidos con `wc -l` (incluye líneas en blanco): `index` 66, `adapters`
 279, `producto` 237. La lista del mandato traía 65/262/224 para esos tres: eran
 los conteos sin líneas en blanco de la medición anterior; se anotó el medido.
+
+---
+
+## 2026-10-25 — cierre medido de los ítems 1–3: upgrade, importación y `meta`
+
+Los tres pendientes del corte anterior, cerrados con la medida al lado. El
+default sigue `legacy`; la tubería vieja sigue entera; sin push.
+
+### 1) Upgrade REAL v25 → v26 con DOS instancias de Dexie
+
+`tests/conversacionUpgradeV25V26.test.ts` (nuevo, 104 líneas). La instancia A
+declara **solo v25** y escribe en `conversationFilas` y en `conversations`; la B
+se abre sobre la MISMA base declarando v25 **y** v26, y ahí Dexie ejecuta el
+upgrade. Declarar solo v26 habría creado una base nueva y el test habría pasado
+sin migrar nada (por eso las dos instancias).
+
+Comprueba: `b.verno === 26`; `conversationFilas` fuera de `b.tables` y de
+`schemaTableNames()`; la fila escrita en v25 **sobrevive** (hubo migración, no
+creación limpia); `conversations` sigue leyendo y escribiendo con `sessionId`.
+
+```text
+npm run test:file tests/conversacionUpgradeV25V26.test.ts
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+```
+
+El esquema es dato único en `DEXIE_VERSIONS` (`src/core/db/fluDatabase.ts:510`);
+la baja vive en la entrada v26 (`:632-636`, `conversationFilas: null`) y el test
+la lee de ahí, no de una copia literal.
+
+### 2) Importación de backup por FUNCIÓN, en `legacy` y en `new`
+
+`tests/conversacionBackupImport.test.ts` (nuevo, 172 líneas). No usa file
+picker: `BackupSystem.restoreLatestBackup()` parsea el JSON real de
+`flu-backup-<id>` y restaura `conversation_state`; la persistencia del hook es la
+que lleva las N filas a `conversations`, por el escritor único.
+
+- `legacy`: N filas del JSON → N filas, **un solo `bulkPut`** con las N.
+- `new`: con una fila ya persistida e idéntica, el lote lleva **N-1**
+  (`loc-backup-1`, `loc-backup-2`); la previa conserva `revision: 1` y el total
+  sigue siendo N. La tabla va por `id`, así que lo medido es el CONTEO de
+  escrituras, no una barrera contra filas dobles (declarado en la cabecera).
+
+```text
+npm run test:file tests/conversacionBackupImport.test.ts
+ Test Files  1 passed (1)
+      Tests  2 passed (2)
+```
+
+### 3) Comparador canónico de `meta`
+
+`serializarCanonica` (`src/hooks/useConversationPersistence.ts:124`) ordena las
+claves de objeto recursivamente (los arrays conservan su orden) y lo consume
+`mismaFilaPersistida` (`:155`). Dueño único:
+`git grep -n serializarCanonica -- src` → solo ese archivo.
+
+Falsificación REAL, no razonada: se sustituyó el comparador por
+`JSON.stringify(row.meta) === JSON.stringify(entry.meta)` —sensible al orden de
+claves— y el caso del ítem 3 se puso ROJO.
+
+```text
+npm run test:grep -- "orden de claves"      (CON la mutación)
+ Test Files  1 failed | 1 passed (2)
+      Tests  1 failed | 1 passed
+ conversacionEscrituraUnica.test.ts:203  (el lote llevaba también la fila del módulo)
+```
+
+Revertido con `git checkout -- src/hooks/useConversationPersistence.ts`
+(`git diff --stat` → sin salida) y verde otra vez:
+
+```text
+npm run test:grep -- "orden de claves"      (SIN la mutación)
+ Test Files  2 passed (2)
+      Tests  2 passed
+```
+
+Conteos por archivo, medidos uno a uno (no en lote):
+
+```text
+conversacionUpgradeV25V26.test.ts    1 passed (1)
+conversacionEscrituraUnica.test.ts   3 passed (3)
+conversacionMetaRoundtrip.test.ts    1 passed (1)
+conversacionEsquemaV26.test.ts       2 passed (2)
+conversacionBackupImport.test.ts     2 passed (2)
+```
+
+### Gate del cierre
+
+```text
+npm run gate        → guards: Test Files 304 passed | 1 skipped (305)
+                              Tests 2638 passed | 7 skipped (2645)
+npm run typecheck   → TYPECHECK_OK
+npm run lint:eslint → ESLINT_OK   (eslint . --max-warnings=0)
+```
+
+### Default, tubería vieja y push
+
+```text
+src/voice/conversation/ports.ts:244   conversation: Object.freeze({ engine: 'legacy' })
+src/voice/conversation/adapters.ts:113  if (!import.meta.env.DEV) return null   (override solo dev)
+git ls-tree -r --name-only HEAD -- src/voice/lib   → 124 ficheros (sin bajas)
+git rev-parse --abbrev-ref --symbolic-full-name '@{u}'
+   → fatal: no upstream configured for branch 'feature/conversacion-modulo-nuevo'
+```
+
+**No se ejecutó push** (la rama no tiene upstream) y **no se ejecutó la suite
+completa** (§1.15): la corre el CI.
+
+### Entorno: una SEGUNDA sesión commitea en el mismo árbol
+
+Dos commits de este cierre no los hizo esta sesión: `7da631c8` (título medido
+del import, 17:36:01) y `df82d7bf` (cabecera del mismo test, 17:39:13) llevan
+`Co-Authored-By: Claude Code` y aparecieron mientras esta sesión trabajaba;
+`df82d7bf` contiene exactamente el texto de la cabecera editada aquí. Hay dos
+`goose.exe` vivos (PID 32232 del 10/23 y PID 15880 del 10/24) y una sesión de
+Claude Code sobre el mismo `D:\D-Proyectos\D-3-FLU-OS4`.
+
+Consecuencia operativa: **mismo fichero = conflicto**, y `git add -A` arrastra
+trabajo ajeno. Los commits de esta sesión se hacen con ruta explícita.
+
+### Hallazgos fuera de alcance (declarados, no tocados)
+
+- `tests/conversacionEscrituraUnica.test.ts`, `conversacionEsquemaV26.test.ts`,
+  `conversacionUpgradeV25V26.test.ts`, `conversacionBackupImport.test.ts` y
+  `conversacionMetaRoundtrip.test.ts` **no** están en
+  `scripts/guard-files.mjs`; tampoco lo estaban `conversacionAlmacenDexie`,
+  `conversacionEtapa0Congelar`, `conversacionEtapa1Tramo`,
+  `conversacionEtapa4Etiqueta`, `conversacionEtapa56CajaPlayback` ni
+  `conversacionTramoRealGuard`. Por AGENTS §6.5 un guard fuera de
+  `lint:guards` no es barrera local: hoy solo los corre la suite del CI.
+  Registrarlos suma ~30 s al pre-commit (jsdom + fake-indexeddb); decisión del
+  dueño, no se tocó.
+- El inventario de 17 archivos del plan cuenta `src/voice/conversation/`; no
+  incluye el escritor único fuera del módulo (`src/core/db/conversationRowWriter.ts`,
+  `conversationRowMapping.ts`). No es incoherencia del plan, es alcance distinto;
+  se anota para que el paso 6 no lo borre por error.
+
+### Pendiente (sin cambios, sin autorización para tocarlo)
+
+- (4) Validación en pantalla con `?conversationEngine=new`: **dueño**.
+- (5) Fixture real `N/0/0`: no existe grabación; el sintético sigue en
+  `tests/conversacionFixtures.test.ts`.
+- (6) Default a `new` y borrado de la tubería vieja: **no sin autorización**.
