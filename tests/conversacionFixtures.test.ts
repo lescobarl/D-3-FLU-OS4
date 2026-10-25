@@ -1,14 +1,14 @@
 // @vitest-environment node
 /**
- * FIXTURE SINTÃ‰TICO del mÃ³dulo CONVERSACIÃ“N.
+ * FIXTURE SINTÉTICO del módulo CONVERSACIÓN.
  *
- * No existe grabaciÃ³n del dueÃ±o: este fixture reconstruye la FORMA medida del
+ * No existe grabación del dueño: este fixture reconstruye la FORMA medida del
  * ASR (interinos que crecen, un final limpio, varios tramos) y fija el conteo
- * `N/0/0` del plan: N locuciones producen N filas, 0 pÃ©rdidas y 0 duplicados.
- * El valor N de la aceptaciÃ³n REAL sigue PENDIENTE: no se inventa.
+ * `N/0/0` del plan: N locuciones producen N filas, 0 pérdidas y 0 duplicados.
+ * El valor N de la aceptación REAL sigue PENDIENTE: no se inventa.
  *
- * Determinista: reloj fijo, ids inyectados y sin timers. El almacÃ©n es el real
- * en memoria del mÃ³dulo.
+ * Determinista: reloj fijo, ids inyectados y sin timers. El almacén es el real
+ * en memoria del módulo.
  */
 import { describe, expect, it } from 'vitest'
 import {
@@ -39,7 +39,7 @@ const FIXTURE: readonly LocucionFixture[] = [
   { interinos: ['que', 'que tal'], final: 'que tal' },
 ]
 
-/** Reloj fijo: la sesiÃ³n no depende de la hora de la mÃ¡quina. */
+/** Reloj fijo: la sesión no depende de la hora de la máquina. */
 const RELOJ = { ahora: () => 1_700_000_000_000 }
 
 /** Id determinista por tramo para que dos corridas cuenten lo mismo. */
@@ -58,12 +58,12 @@ function tramoDe(indice: number): string {
   return `00000000-0000-4000-8000-${String(indice + 100).padStart(12, '0')}`
 }
 
-/** ConfiguraciÃ³n del plan con el motor nuevo y wake declarada. */
+/** Configuración del plan con el motor nuevo y wake declarada. */
 function configNueva(): ConfiguracionConversacion {
   return { ...CONVERSACION_CONFIG, conversation: { engine: 'new' } }
 }
 
-/** Monta el motor como el producto: puertos reales y almacÃ©n en memoria. */
+/** Monta el motor como el producto: puertos reales y almacén en memoria. */
 function crearMotorDeFixture() {
   const config: ConfigPort = {
     wakeWords: () => ['ok flu'],
@@ -83,7 +83,7 @@ function crearMotorDeFixture() {
   return { api, almacen }
 }
 
-/** Ingesta una locuciÃ³n completa con su tramo y devuelve su texto final. */
+/** Ingesta una locución completa con su tramo y devuelve su texto final. */
 async function ingestarLocucion(
   api: ReturnType<typeof crearConversacion>,
   locucion: LocucionFixture,
@@ -97,7 +97,7 @@ async function ingestarLocucion(
   await api.ingestAsr({ tramoId, texto: locucion.final, final: true, idioma: 'es', tramo, turnId: `turno-${indice}` })
 }
 
-/** Conteo del plan sobre la instantÃ¡nea final. */
+/** Conteo del plan sobre la instantánea final. */
 function contar(estado: InstantaneaConversacion): { filas: number; perdidas: number; duplicados: number } {
   const ids = estado.filas.map((fila) => fila.locutionId)
   return {
@@ -107,8 +107,8 @@ function contar(estado: InstantaneaConversacion): { filas: number; perdidas: num
   }
 }
 
-describe('fixture sintÃ©tico N/0/0 del motor de conversaciÃ³n', () => {
-  it('N locuciones producen N filas, 0 pÃ©rdidas y 0 duplicados', async () => {
+describe('fixture sintético N/0/0 del motor de conversación', () => {
+  it('N locuciones producen N filas, 0 pérdidas y 0 duplicados', async () => {
     const { api, almacen } = crearMotorDeFixture()
     await api.start({ turnId: 'turno-fijo', idioma: 'es' })
 
