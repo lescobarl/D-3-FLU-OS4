@@ -93,7 +93,7 @@ export interface RegistroPort {
 
 /** Almacén de filas: un solo escritor por sesión; el borrado es lógico. */
 export interface AlmacenPort {
-  /** Inserta una fila nueva; falla si `locutionId` ya existe. */
+  /** Upsert idempotente por `locutionId`; repetir incrementa `revision`. */
   guardar(fila: FilaNueva): Promise<Fila>
   /** Actualiza una fila existente e incrementa `revision`; `null` si no existe. */
   actualizar(locutionId: string, cambios: CambiosFila): Promise<Fila | null>
