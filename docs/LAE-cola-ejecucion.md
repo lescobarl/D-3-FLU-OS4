@@ -751,6 +751,131 @@ Salida cruda: `Test Files 1 failed | 48 passed (49)` ·
   `legacy`.
 - Fixture real `N/0/0`: PENDIENTE hasta que exista la grabación del dueño; el
   sintético mide N=3/0/0 con el comando exacto ya documentado.
-- P7 del módulo nuevo: causa declarada (rotación de `tramoId` por final de
-  segmento). Corregirlo es el siguiente paso; no forma parte de este cierre.
+- P7 del módulo nuevo: SUPERADO y corregido en el cierre de abajo (2026-10-25);
+  esta línea queda como histórico del cierre anterior.
 - Borrado de la tubería vieja: después de la validación de pantalla.
+
+---
+
+## Cierre 2026-10-25 — P7 del módulo `new`: una locución = un tramo = una fila
+
+### Causa raíz corregida (HECHO)
+
+El ingestor de producto reenviaba `final: true` al motor y rotaba `tramoId` en
+CADA final de segmento de Chrome; el motor cerraba por final y cada corte
+escribía una fila (5 durante el dictado de P7). Corrección en `producto.ts`:
+
+- `producto.ts:112-120` `tramoDelSegmento()`: manda la locución abierta
+  (`locutionId`); si no hay, el tramo de audio que abrió el VAD; si tampoco, un
+  id nuevo. El id NO rota por final.
+- `producto.ts:171-174` `final: false`: el final del reconocedor es una REVISIÓN
+  del texto del mismo segmento, no el cierre de la locución.
+- `producto.ts:211-235` `cerrar()`: declara final UNA vez la locución abierta con
+  su texto ya fusionado y después detiene la sesión.
+- `producto.ts:101-105`: `locution.closed` es frontera: el texto posterior abre
+  segmento nuevo, nunca promueve la fila cerrada.
+
+### Prueba de producto (ejecuta el flujo real) y su mutación
+
+`tests/conversacionProducto.test.ts` — «cinco finales del MISMO segmento
+producen UNA fila y UN commit al cerrar»: 5 finales
+(`uno` … `uno dos tres cuatro cinco`) con el MISMO `onresult` real; durante el
+dictado `conversationFilas.count() === 0` y `setCommitted` 0 veces; al cerrar
+`stopListening({closing:true})`, 1 fila con el texto final, `provisional:false`,
+`setCommitted` 1 vez y `addConversationEntry` 1 vez.
+
+MUTACIÓN (prueba de que el test muerde; NO commiteada): reintroducir `final` tal
+cual y rotar `tramoId` por final →
+`npm run test:grep -- "cinco finales del MISMO segmento"`:
+`AssertionError: expected '' to be 'uno'` en
+`tests/conversacionProducto.test.ts:418`. Revertida la mutación, el archivo queda
+3/3 verde.
+
+### E2E re-medido (salidas crudas)
+
+- **new** (`FLU_E2E_ENGINE=new`): `8 passed (3.8m)` ·
+  `[P7] filas durante el dictado = 0 (esperado 0)` ·
+  `[P7] filas = ["voy a contar unos numeros para ver si se pierde la secuencia 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15"]`
+  (1 fila, con `15`). P7 del módulo nuevo: VERDE.
+- **legacy**: `7 passed` · `1 failed`. P7 recibe 2 filas
+  (`"10 11 12 voy a contar ... 10 11 12"` y `"voy a contar ... 13 14 15"`).
+  Dispensa escrita: la tubería vieja no instancia el módulo; no se toca.
+
+P4, 6 medidas de `final -> fila` (`--grep "P4" --repeat-each=3`):
+
+| motor | corridas | mediana |
+|---|---|---|
+| new | 961 / 700 / 1899 ms | 961 ms |
+| legacy | 901 / 778 / 946 ms | 901 ms |
+
+No es el doble: el 1599 vs 926 anterior era una sola corrida. Sin regresión de
+latencia atribuible al módulo.
+
+### Candado de producción del override
+
+`adapters.ts:107-113`: `if (!import.meta.env.DEV) return null` ANTES de leer el
+parámetro; en el bundle `motorPorOverrideRuntime` compila a
+`function yL(){return null}` y `?conversationEngine=` no enciende nada. El E2E
+siembra el modo por `addInitScript` + `history.replaceState` (dev/test), sin
+globales ni localStorage. `grep -c '"conversationEngine"' dist/assets/*.js` → 0.
+
+### `adaptersAsr` sin consumidor: borrado con cierre
+
+Borrados `src/voice/conversation/adaptersAsr.ts` (188 líneas),
+`tests/conversacionAsrAdapter.test.ts` y su entrada de `scripts/guard-files.mjs`;
+`index.ts` deja de re-exportarlo. Motivo: el hook posee la ÚNICA instancia de
+escucha (Anexo B, invariante 1); cablear `AsrPort` habría abierto una segunda.
+La traducción real vive en `producto.ts`.
+
+- `rg -n "crearAsrReconocimiento" src -g "!src/voice/conversation/adaptersAsr.ts" -g "!src/voice/conversation/index.ts"`
+  → 0 coincidencias.
+- `rg -n "adaptersAsr|crearAsrReconocimiento|FuenteAsr" src tests scripts`
+  → 0 coincidencias.
+- Consecuencia cazada por `deadExportsGuard`:
+  `src/voice/conversation/adapters.ts :: intentarRegistrando` quedó sin
+  consumidor y se eliminó; `adapters.ts` baja a 262 líneas.
+
+Nota honesta de proceso: los guards que enumeran ficheros versionados
+(`deadExportsGuard`, `hookDepsRatchet`, `localStorageGatewayGuard`) fallaron con
+`ENOENT ... src/voice/conversation/adaptersAsr.ts` mientras la baja no estaba en
+el índice. Se puso la baja en el índice (`git add`) y el gate quedó verde; no se
+modificó ningún guard.
+
+### Verificación #2 sobre la costura real (salida cruda)
+
+```
+src/voice/hooks/useFluVoiceAssistant.js:1954  motorConversacionRef.current?.audio(input, sampleRateRef.current || AUDIO_SAMPLE_RATE, meta?.sampleIndex)
+src/voice/hooks/useFluVoiceAssistant.js:2105  motorConversacionRef.current.evento(event)
+src/voice/conversation/producto.ts:168  api.ingestAsr({
+src/voice/conversation/producto.ts:197  api.ingestAudio({
+src/voice/conversation/producto.ts:221  api.ingestAsr({
+src/voice/conversation/motor.ts:222  ingestAudio: (bloque) => cola.serializar(...)
+src/voice/conversation/motor.ts:223  ingestAsr: (resultado) => cola.serializar(...)
+src/voice/conversation/ingesta.ts:86   export function ingestaAudio(
+src/voice/conversation/ingesta.ts:191  export function ingestaAsr(
+```
+
+### Techos (medidos) y gates de cierre
+
+Conteos (`Get-Content | Measure-Object -Line`): `index` 65/120 · `tipos` 233/250
+· `motor` 219/300 · `cola` 103/150 · `eco` 33/100 · `frontera` 58/100 ·
+`revision` 100/150 · `fila` 177/200 · `ports` 230/300 · `adapters` 262/300 ·
+`adaptersAlmacen` 148/300 · `producto` 224/300. Hook 4038 (sin cambios) y App
+4247 (sin cambios); `godFileSizeGuard` verde.
+
+- `npm run gate` → exit 0; guards `Test Files 304 passed | 1 skipped (305)` ·
+  `Tests 2638 passed | 7 skipped (2645)`; `tsc -b` y `eslint
+  --max-warnings=0` verdes.
+- `npm run build` → `✓ built in 1.80s`.
+
+### Hallazgo fuera de alcance (declarado, no tocado)
+
+`docs/LAE_MODULO_CONVERSACION.MD:124,135` sigue mencionando `adaptersAsr.ts`.
+Está fuera de la whitelist de este cierre: se anota, no se edita.
+
+### Queda para el dueño
+
+Encender `?conversationEngine=new` en la app real y validar en pantalla el
+dictado con pausas: 0 filas durante el dictado, 1 al cerrar, caja que se vacía,
+etiqueta del hablante. El default sigue `legacy`; el DoD de producto es del
+dueño.
