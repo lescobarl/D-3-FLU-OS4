@@ -8,9 +8,15 @@
  *
  * Regla 5: la etiqueta se resuelve por prioridad y nunca queda `?`:
  *   1. nombre CONFIRMADO (`ok flu soy XXX`)  → evidencia `nombre`
- *   2. voz medida (`Hablante N`)              → evidencia `medida`
+ *   2. medida con IDENTIDAD POSITIVA          → evidencia `medida`
  *   3. continuidad con la etiqueta anterior   → evidencia `continuidad`
- *   4. semilla de la configuración            → evidencia `semilla`
+ *   4. medida ANÓNIMA (`Hablante N`)          → evidencia `medida`
+ *   5. semilla de la configuración            → evidencia `semilla`
+ *
+ * `Hablante N` es una agrupación sin identidad (definición en
+ * `speakerCore.isAutoSpeakerLabel`): no puede pisar la continuidad de una voz
+ * ya etiquetada. Solo una medida con identidad positiva (etiqueta con nombre)
+ * adelanta a la continuidad.
  *
  * `provisional` es `true` mientras el final del mismo tramo no haya llegado; la
  * promoción reutiliza `decidirRevision` (regla 3, un solo dueño de la no-pérdida)
@@ -91,11 +97,16 @@ export type ResultadoFila = Readonly<
  * @throws Si la semilla queda vacía o la etiqueta elegida es `?`.
  */
 export function resolverEtiqueta(entrada: EntradaEtiqueta): EtiquetaResuelta {
-  const { voz, anterior, semilla } = entrada
+  const { voz, anterior, semilla, esEtiquetaAnonima } = entrada
+  const hablante = String(voz.hablante || '').trim()
+  // Una etiqueta anónima no es identidad: solo adelanta a la continuidad una
+  // medida que SÍ identifica (etiqueta con nombre propio).
+  const medidaIdentifica = hablante !== '' && !esEtiquetaAnonima(hablante)
   const candidatos: ReadonlyArray<EtiquetaResuelta> = [
     { etiqueta: voz.nombreConfirmado ? String(voz.nombre || '').trim() : '', evidencia: 'nombre' },
-    { etiqueta: String(voz.hablante || '').trim(), evidencia: 'medida' },
+    ...(medidaIdentifica ? [{ etiqueta: hablante, evidencia: 'medida' as const }] : []),
     { etiqueta: voz.continuidad ? String(anterior ?? '').trim() : '', evidencia: 'continuidad' },
+    { etiqueta: hablante, evidencia: 'medida' },
     { etiqueta: String(semilla || '').trim(), evidencia: 'semilla' },
   ]
   const elegido = candidatos.find((candidato) => candidato.etiqueta !== '')

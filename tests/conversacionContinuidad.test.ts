@@ -133,6 +133,17 @@ describe('continuidad de voz — decisión de la sesión', () => {
     expect(obs.fila.evidencia).toBe('continuidad')
   })
 
+  it('Hablante N no desplaza la continuidad sin evidencia positiva (bug 2026-10-26)', async () => {
+    // Caso del dueño: la voz venía etiquetada 'Luis'; el preflight mide pero solo
+    // produce una agrupación anónima ('Hablante 1'). Sin evidencia POSITIVA de
+    // identidad (speakerCore:98), la etiqueta no puede pisar la continuidad.
+    const probe = crearProbe('', 'Luis')
+    const obs = await correrLocucion(probe, { hablante: 'Hablante 1' }, {}, UUIDS[6]!)
+    expect(obs.continuidadApertura).toBe(true)
+    expect(obs.fila.etiqueta).toBe('Luis')
+    expect(obs.fila.evidencia).toBe('continuidad')
+  })
+
   it('P3b: otra voz (vozId distinto) NO hereda el nombre de la voz anterior', async () => {
     const probe = crearProbe('voz-a', 'Luis')
     const obs = await correrLocucion(probe, { vozId: 'voz-b' }, { vozId: 'voz-b' }, UUIDS[3]!)
