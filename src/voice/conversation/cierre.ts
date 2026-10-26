@@ -75,26 +75,37 @@ export type ReglasCierre = Readonly<{
 }>
 
 /**
+ * Resuelve la evidencia de voz de una locución con el nombre registrado, si lo hay.
+ * Es pura: la sesión aporta el mapa voz→nombre y la continuidad ya calculada.
+ * @param voz Evidencia de voz del tramo.
+ * @param continuidadVoz Continuidad calculada al abrir o al recibir la primera medida.
+ * @param nombresPorVoz Nombres confirmados por voz en la sesión.
+ * @returns La voz resuelta que consume `resolverEtiqueta`.
+ */
+export function resolverVoz(
+  voz: EvidenciaVoz,
+  continuidadVoz: boolean,
+  nombresPorVoz: ReadonlyMap<string, string>,
+): VozEtiqueta {
+  const vozId = String(voz.vozId || '').trim()
+  const registrado = vozId ? nombresPorVoz.get(vozId) : undefined
+  const nombre =
+    registrado ?? (voz.nombreConfirmado ? String(voz.nombre || '').trim() : '')
+  return {
+    nombre,
+    nombreConfirmado: Boolean(nombre),
+    hablante: String(voz.hablante || '').trim(),
+    continuidad: voz.continuidad ?? continuidadVoz,
+  }
+}
+
+/**
  * Crea las reglas de cierre sobre el estado de una sesión.
  * @param contexto Estado de sesión, emisión, almacén, config y registro.
  * @returns Apertura, revisión, cierre y promoción de filas.
  */
 export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
   const { estado, emitir, emitirCaja, contarDescarte, registro, almacen, config } = contexto
-
-  /** Resuelve la voz de una locución con el nombre registrado, si lo hay. */
-  function resolverVoz(voz: EvidenciaVoz, continuidadVoz: boolean): VozEtiqueta {
-    const vozId = String(voz.vozId || '').trim()
-    const registrado = vozId ? estado.nombresPorVoz.get(vozId) : undefined
-    const nombre =
-      registrado ?? (voz.nombreConfirmado ? String(voz.nombre || '').trim() : '')
-    return {
-      nombre,
-      nombreConfirmado: Boolean(nombre),
-      hablante: String(voz.hablante || '').trim(),
-      continuidad: voz.continuidad ?? continuidadVoz,
-    }
-  }
 
   /** Abre la única locución abierta; el llamador garantiza que no hay otra. */
   function abrirLocucion(datos: DatosApertura): void {
@@ -179,7 +190,7 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
       overlap: Boolean(locucion.voz.overlap),
       final,
       reason: motivo,
-      voz: resolverVoz(locucion.voz, locucion.continuidadVoz),
+      voz: resolverVoz(locucion.voz, locucion.continuidadVoz, estado.nombresPorVoz),
       etiquetaAnterior: estado.ultimaEtiqueta || null,
       semillaEtiqueta: config.semillaEtiqueta(),
     }
