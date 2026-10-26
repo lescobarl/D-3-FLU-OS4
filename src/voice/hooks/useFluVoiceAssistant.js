@@ -2274,7 +2274,8 @@ const lastResolvedTurnRef = useRef(0)
         }
 
         if (!isListeningRef.current && !(conversationActiveRef?.current && !isStoppingRef.current)) return
-        if (motorConversacionRef.current && conversationActiveRef?.current) cerrarMotorConversacion('system')
+        // La sesión vive mientras la conversación vive: Chrome reinicia el reconocedor cada pocos segundos y cerrar aquí partía la conversación en una sesión por reinicio (medido 2026-10-25).
+        if (motorConversacionRef.current && !conversationActiveRef?.current) cerrarMotorConversacion('system')
 
         if (!motorConversacionRef.current && conversationActiveRef?.current && !isStoppingRef.current) {
           ingressRuntimeRef.current?.pushRecognitionEndEvent({ immediate: true })

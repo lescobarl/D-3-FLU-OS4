@@ -403,6 +403,45 @@ describe('producto — engine new escribe la fila desde el reconocedor real', ()
     expect(h.ingressPush).toHaveBeenCalled();
   });
 
+  it('un reinicio del reconocedor (onend → onstart) NO reinicia la sesión del módulo', async () => {
+    fijarMotorEnUrl('new');
+    darSoporteNavegador();
+    const { result } = montar();
+    await waitFor(() => expect(result.current.isSupported).toBe(true));
+
+    await act(async () => {
+      await result.current.startListening();
+    });
+    act(() => h.recognition.onstart?.());
+    await act(async () => {
+      h.recognition.onresult?.(eventoAsr('ok flu hola', false));
+    });
+    await waitFor(() => expect(result.current.liveTranscript).toBe('ok flu hola'));
+
+    // Chrome cierra y reabre el reconocedor cada pocos segundos: es el MISMO
+    // ciclo del motor, no una conversación nueva. Medido 2026-10-25: cerrar la
+    // sesión en `onend` producía una sesión por locución, partía las frases y
+    // descartaba el texto que llegaba entre reinicios.
+    act(() => h.recognition.onend?.());
+    act(() => h.recognition.onstart?.());
+
+    // UNA sola sesión: la fábrica del motor se llamó una vez.
+    expect(h.crearMotorLlamadas).toBe(1);
+    // Y la locución abierta NO se perdió con el reinicio: sigue en la caja.
+    await waitFor(() => expect(result.current.liveTranscript).toBe('ok flu hola'));
+
+    // Cierre real de la conversación: la sesión no queda abierta fuera del test.
+    await act(async () => {
+      await result.current.stopListening({ closing: true });
+    });
+    // La frase sobrevivió al reinicio: UNA fila y UN commit, ya asentados (sin
+    // promesas sueltas que caigan en el test siguiente).
+    await waitFor(async () => {
+      expect(await fluDb.conversations.count()).toBe(1);
+    });
+    expect(h.setCommitted).toHaveBeenCalledTimes(1);
+  });
+
   it('cinco finales del MISMO segmento producen UNA fila y UN commit al cerrar', async () => {
     fijarMotorEnUrl('new');
     darSoporteNavegador();
