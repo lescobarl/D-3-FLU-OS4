@@ -21,12 +21,15 @@
  * Excepciones de frontera declaradas:
  *  - `logCaughtError` (`src/lib/caughtError.ts`): el plan (§Logs) y AGENTS §1.5 lo
  *    exigen como ÚNICO registro de hechos y errores capturados.
+ *  - `relayLog` (`src/lib/clientLogRelay.ts`): el mismo relay que usa
+ *    `logCaughtError`, aquí con nivel informativo para la decisión de motor.
  *  - `normalizeForMatch` (`src/lib/textUtils.ts`): el plegado NFD tiene un dueño
  *    único y `duplicationGuard` prohíbe reimplementarlo. El eco compara palabras
  *    normalizadas por esa función, no por una copia local.
  * Ambos se importan aquí y en ningún otro archivo del módulo.
  */
 import { logCaughtError } from '../../lib/caughtError.ts'
+import { relayLog } from '../../lib/clientLogRelay.ts'
 import { normalizeForMatch } from '../../lib/textUtils.ts'
 import { splitTranscriptAtWakeWord } from '../api/audio.ts'
 import { FLU_CONFIG } from '../api/config.ts'
@@ -128,6 +131,25 @@ function motorPorConfigProducto(): MotorConversacion | null {
 }
 
 /**
+ * Último motor que se registró en el log: solo se escribe cuando CAMBIA.
+ * Sin este estado, cada consulta de config escribiría una línea.
+ */
+let motorRegistradoEnLog: MotorConversacion | null = null
+
+/**
+ * Registra el motor resuelto cuando cambia, con la URL que lo explica: la
+ * bandera vive en la URL y se lee EN VIVO, así que una navegación que deje
+ * fuera `search` cambia el motor a mitad de sesión sin que nada lo delate.
+ * @param motor Motor resuelto en esta consulta.
+ */
+function registrarCambioDeMotor(motor: MotorConversacion): void {
+  if (motor === motorRegistradoEnLog) return
+  motorRegistradoEnLog = motor
+  const search = typeof window === 'undefined' ? '' : window.location.search
+  relayLog('INFO', 'conversationEngine', motor, { search })
+}
+
+/**
  * Configuración viva de voz leída por la fachada pública de config.
  * El motor se resuelve en orden: override de runtime → configuración del
  * producto → valor del plan (`legacy`). El default del plan no se toca.
@@ -137,8 +159,12 @@ export function crearConfigFlu(): ConfigPort {
   return {
     wakeWords: () => [...FLU_CONFIG.voiceCommands.wakeWords],
     semillaEtiqueta: () => String(FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker || ''),
-    conversationEngine: () =>
-      motorPorOverrideRuntime() ?? motorPorConfigProducto() ?? CONVERSACION_CONFIG.conversation.engine,
+    conversationEngine: () => {
+      const motor =
+        motorPorOverrideRuntime() ?? motorPorConfigProducto() ?? CONVERSACION_CONFIG.conversation.engine
+      registrarCambioDeMotor(motor)
+      return motor
+    },
   }
 }
 
