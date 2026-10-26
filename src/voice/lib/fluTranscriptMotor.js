@@ -48,10 +48,6 @@ const TRANSCRIPT_POLICY = Object.freeze({
   stutterRepeatMinCount: 2,
 })
 
-export function getAsrSegmentationCfg() {
-  return requireConfigBlock(['transcript', 'asrSegmentation'], 'fluConfig.transcript.asrSegmentation')
-}
-
 export function getFluTimingCfg() {
   return requireConfigBlock(['timing'], 'fluConfig.timing')
 }

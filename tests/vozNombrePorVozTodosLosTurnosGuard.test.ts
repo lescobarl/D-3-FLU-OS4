@@ -19,9 +19,11 @@ import { commitUserTurnRow, renameSpeakerRows } from '../src/voice/lib/conversat
 import { resolveRowSpeakerLabel } from '../src/voice/lib/conversationRow'
 import { resetVoiceDirectory } from '../src/voice/lib/speakerDirectory.js'
 import { isNameBoundToVoice, findLabelsWithSharedVoice } from '../src/voice/lib/speakerClusters.js'
+import { isAutoSpeakerLabel } from '../src/voice/lib/speakerCore.js'
 import { registerSpeakerIdentity } from '../src/voice/lib/speakerIdentityRegister.js'
+import { resolverEtiqueta } from '../src/voice/conversation/fila'
 
-const STREAM = readFileSync('src/voice/lib/conversationStreamCommit.js', 'utf8')
+const MOTOR = readFileSync('src/voice/compose/conversationMotorProducto.js', 'utf8')
 
 const VOZ_A = [1, 0, 0, 0]
 const VOZ_B = [0, 1, 0, 0]
@@ -60,7 +62,7 @@ describe('el nombre se liga a la VOZ y vale en TODOS sus turnos', () => {
         expect(isNameBoundToVoice(ligados, 'Luis')).toBe(true)
     })
 
-    it('N turnos de la MISMA voz => N filas con el nombre; 0 genericas (y la otra voz intacta)', () => {
+    it('N turnos de la MISMA voz => N filas conservan su etiqueta (el modulo la decide al cerrar)', () => {
         // La VOZ es la CLAVE de la fila (mandato 2026-10-13): se mide por FIRMA, asi que las
         // DOS etiquetas historicas de la misma voz caen en la MISMA clave de fila.
     commitUserTurnRow({ text: 'turno uno', speakerName: 'Hablante 1', evidenciaAcustica: true, signature: VOZ_A, turnId: 1 } as never)
@@ -72,25 +74,33 @@ describe('el nombre se liga a la VOZ y vale en TODOS sus turnos', () => {
         // Registro del comando: liga el nombre a la VOZ (dueno unico). NO reescribe filas.
         const result = registerSpeakerIdentity({ name: 'Luis', previousLabel: 'Hablante 1', clusters, refs: {} as never })
 
-        expect(filas(), 'todos los turnos de esa voz').toEqual(['Luis', 'Luis', 'Luis', 'Hablante 3'])
-        expect(result.rowsChanged, 'el registro CONGELA filas ya mostradas de esa voz (freeze 2026-10-17)').toBeGreaterThanOrEqual(2)
+        expect(filas(), 'ninguna fila ya escrita se reescribe').toEqual(['Hablante 1', 'Hablante 1', 'Hablante 1', 'Hablante 3'])
+        expect(result.rowsChanged, 'el registro liga el nombre a la VOZ, no a las filas').toBe(0)
     })
 
     it('el NOMBRE solo se estampa con EVIDENCIA; sin medida la fila cae a generica (P9.81)', () => {
         // Spec del dueno (2026-10-12): reuso del CLUSTER si; herencia del NOMBRE sin evidencia NO.
-        // El commit levanta el nombre con la MEDIDA (preflight) o con el DATO del mandato ("soy X");
-        // sin ninguna de las dos, el duenio de la regla (`blindSpeakerFallback`, speakerPolicy)
-        // degrada un nombre propio a etiqueta generica (evita "Luis pegado a una voz distinta").
-        expect(STREAM.includes('preflightEvidenceMeasured(preflight)'), 'la evidencia es la MEDIDA').toBe(true)
-        expect(STREAM.includes('FUENTES_CON_IDENTIDAD'), 'y el dato del mandato').toBe(true)
-        expect(STREAM.includes('blindSpeakerFallback(crudo)'), 'el nombre sin evidencia degrada').toBe(true)
+        // El compositor del motor junta las DOS evidencias (la MEDIDA del preflight y el DATO
+        // del mandato "soy X"); la etiqueta del modulo usa el nombre SOLO si viene CONFIRMADO.
+        // Sin ninguna de las dos, cae a continuidad o semilla: nunca al nombre ligado.
+        expect(MOTOR.includes('preflightEvidenceMeasured('), 'la evidencia es la MEDIDA').toBe(true)
+        expect(MOTOR.includes('resolveSpeakerNameFromUtterance('), 'y el dato del mandato').toBe(true)
+        expect(
+            resolverEtiqueta({
+                voz: { nombre: 'Luis', nombreConfirmado: false, hablante: '', continuidad: false },
+                anterior: 'Luis',
+                semilla: 'Hablante 1',
+                esEtiquetaAnonima: isAutoSpeakerLabel,
+            }),
+            'sin medida ni mandato, el nombre ligado NO se estampa',
+        ).toEqual({ etiqueta: 'Hablante 1', evidencia: 'semilla' })
         // Y NO queda el atajo que estampaba el nombre LIGADO sin evidencia del turno (P9.81).
-        expect(STREAM.includes('nombreLigado'), 'sin atajo de nombre sin evidencia').toBe(false)
+        expect(MOTOR.includes('nombreLigado'), 'sin atajo de nombre sin evidencia').toBe(false)
     })
 })
 
-describe('el NOMBRE sustituye a la PERSONA (no da de alta una identidad nueva)', () => {
-  it('las filas del PARTICIPANTE/primerio se VEN con el nombre nuevo', () => {
+describe('el NOMBRE no reescribe filas ya escritas (un solo dueno de la fila)', () => {
+  it('las filas del PARTICIPANTE/primario conservan la etiqueta que escribio el modulo', () => {
     useIntegrationStore.setState({ conversationHistory: [] })
     // Mandato del dueño 2026-10-13: la MISMA voz (misma FIRMA) del participante liga sus
     // dos filas a la misma clave; el nombre se registra por VOZ y NINGUNA fila se reescribe.
@@ -105,8 +115,8 @@ describe('el NOMBRE sustituye a la PERSONA (no da de alta una identidad nueva)',
     })
     expect(
       useIntegrationStore.getState().conversationHistory.filter((e) => e.role === 'user').map((e) => resolveRowSpeakerLabel(e)).sort(),
-      'la persona entera pasa a su nombre nuevo (sus filas se ven con el nombre)',
-    ).toEqual(['Juan', 'Juan'])
+      'ninguna fila ya escrita se reescribe con el nombre',
+    ).toEqual(['Hablante 1', 'Luis'])
   })
 })
 

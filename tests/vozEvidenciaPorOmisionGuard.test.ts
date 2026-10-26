@@ -21,16 +21,18 @@
 import { readFileSync } from 'node:fs'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { resolveRowSpeakerLabel } from '../src/voice/lib/conversationRow'
+import { isAutoSpeakerLabel } from '../src/voice/lib/speakerCore.js'
 import { useIntegrationStore } from '../src/store/integrationStore'
 import {
     commitUserTurnRow,
     updateTurnRowSpeaker,
 } from '../src/voice/lib/conversationTurnRow'
 import { preflightEvidenceMeasured } from '../src/voice/lib/turnSpeakerPreflight.js'
+import { resolverEtiqueta } from '../src/voice/conversation/fila'
 
 const TURN_ROW = readFileSync('src/voice/lib/conversationTurnRow.ts', 'utf8')
 const HOOK = readFileSync('src/voice/hooks/useFluVoiceAssistant.js', 'utf8')
-const STREAM = readFileSync('src/voice/lib/conversationStreamCommit.js', 'utf8')
+const MOTOR = readFileSync('src/voice/compose/conversationMotorProducto.js', 'utf8')
 
 function etiquetaDe(_turnId: number): string {
     const h = useIntegrationStore.getState().conversationHistory
@@ -53,9 +55,20 @@ describe('A) omitir la marca de evidencia NO es "medida" (fuente)', () => {
     })
     it('el PARTICIPANTE elegido NO estampa su nombre sin coincidencia (solo el mandato "soy X")', () => {
         // Medido 2026-10-11: tras elegir a Luis en el onboarding sus filas salian "Luis" sin decir
-        // el comando. La unica fuente de nombre por DATO es el texto del mandato.
-        expect(STREAM.includes("FUENTES_CON_IDENTIDAD = ['wake-intro']"), 'solo wake-intro es fuente por dato').toBe(true)
-        expect(STREAM.includes("'wake-intro', 'pinned'"), 'el participante NO es fuente de nombre').toBe(false)
+        // el comando. La unica fuente de nombre por DATO es el texto del mandato: el compositor del
+        // motor la toma de `resolveSpeakerNameFromUtterance` (la ruta `wake-intro` se retiro).
+        expect(MOTOR.includes('resolveSpeakerNameFromUtterance(texto)'), 'solo el mandato es fuente por dato').toBe(true)
+        expect(MOTOR.includes("'wake-intro', 'pinned'"), 'el participante NO es fuente de nombre').toBe(false)
+        // Y el nombre, sin venir CONFIRMADO, no desplaza a la etiqueta medida (regla 5 del modulo).
+        expect(
+            resolverEtiqueta({
+                voz: { nombre: 'Luis', nombreConfirmado: false, hablante: 'Hablante 1', continuidad: false },
+                anterior: null,
+                semilla: 'Hablante 1',
+                esEtiquetaAnonima: isAutoSpeakerLabel,
+            }),
+            'un nombre sin confirmar no asciende la fila',
+        ).toEqual({ etiqueta: 'Hablante 1', evidencia: 'medida' })
     })
 
     it('el resolver sincrono declara la evidencia con el dueno de la MEDIDA, no por "hay audio"', () => {

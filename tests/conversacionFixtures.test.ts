@@ -11,6 +11,7 @@
  * en memoria del módulo.
  */
 import { describe, expect, it } from 'vitest'
+import { isAutoSpeakerLabel } from '../src/voice/lib/speakerCore.js'
 import {
   CONVERSACION_CONFIG,
   crearAlmacenMemoria,
@@ -68,7 +69,8 @@ function crearMotorDeFixture() {
   const config: ConfigPort = {
     wakeWords: () => ['ok flu'],
     semillaEtiqueta: () => 'Hablante 1',
-    conversationEngine: () => 'legacy',
+    esEtiquetaAnonima: isAutoSpeakerLabel,
+    conversationEngine: () => 'new',
   }
   const almacen = crearAlmacenMemoria({ reloj: RELOJ })
   const api = crearConversacion({

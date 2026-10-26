@@ -5,8 +5,8 @@
 // El modulo (4575 lineas) se prueba por su API publica con renderHook.
 // Se sustituye SOLO la frontera: el motor de reconocimiento del navegador
 // (speechRecognitionLocal), el almacenamiento (fluStorage), la red (gemini),
-// el pipeline de audio/identidad (micCaptureBridge, turnIdentityPipeline,
-// micEventProducer), el runtime de ingress, el participante (useFluParticipant),
+// el pipeline de audio/identidad (micCaptureBridge, turnIdentityPipeline),
+// el participante (useFluParticipant),
 // la infraestructura de turno (useTurnInfrastructure), el store, el relay y el
 // modelo de embeddings (@huggingface/transformers). La logica bajo prueba
 // (transiciones de estado, guardas de arranque/parada, reset, ack, avance de
@@ -56,11 +56,9 @@ const h = vi.hoisted(() => {
     logChromeSpeechResult: vi.fn(),
     logCaughtError: vi.fn(),
     fluAsyncErrorHandler: vi.fn(() => vi.fn()),
-    createConversationIngressRuntime: vi.fn(),
     wireMicCapturePipeline: vi.fn(),
     startContinuousIdentityPipeline: vi.fn(),
     stopAllContinuousIdentityPipelines: vi.fn(),
-    convertSimEventsToMicBursts: vi.fn(() => []),
     createLocalRecognition: vi.fn(),
     shouldUseLocalFallback: vi.fn(() => false),
   isLocalRecognitionEngine: (engine: any) => typeof engine?.pushAudio === 'function',
@@ -111,17 +109,9 @@ vi.mock('../src/voice/lib/micCaptureBridge.js', () => ({
   wireMicCapturePipeline: h.wireMicCapturePipeline,
 }));
 
-vi.mock('../src/voice/lib/conversationIngressBridge.js', () => ({
-  createConversationIngressRuntime: h.createConversationIngressRuntime,
-}));
-
 vi.mock('../src/voice/lib/turnIdentityPipeline.js', () => ({
   startContinuousIdentityPipeline: h.startContinuousIdentityPipeline,
   stopAllContinuousIdentityPipelines: h.stopAllContinuousIdentityPipelines,
-}));
-
-vi.mock('../src/voice/lib/micEventProducer.js', () => ({
-  convertSimEventsToMicBursts: h.convertSimEventsToMicBursts,
 }));
 
 vi.mock('../src/voice/lib/voiceLocalFallback', () => ({
@@ -247,9 +237,6 @@ beforeEach(() => {
   h.requestFluContract.mockReset().mockResolvedValue({});
   h.relayLog.mockReset();
   h.fluEvent.mockReset();
-  h.createConversationIngressRuntime
-    .mockReset()
-    .mockReturnValue({ pushSrGapEvent: vi.fn(), drainAll: vi.fn() });
   h.wireMicCapturePipeline.mockReset().mockResolvedValue({ zeroGain: { disconnect: vi.fn() } });
   h.useFluParticipant.mockReset().mockReturnValue({
     presentation: { label: 'Participante', show: false },

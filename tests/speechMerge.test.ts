@@ -16,8 +16,9 @@ import {
     wouldShrinkLog,
     micPublishedParityOk,
     hasSpeechAnchor,
+    fraseDelEventoAsr,
+    mergeIntoOpenLine,
 } from '../src/voice/lib/speechMerge.js';
-import { collectRecognitionResultChunks } from '../src/voice/lib/transcriptIngress.js';
 
 describe('speechMerge — collapseRepeatedSpeech', () => {
     it('colapsa bloque contiguo repetido', () => {
@@ -170,61 +171,64 @@ describe('speechMerge — reempalme por re-escucha del ASR (wake word duplicado)
     });
 });
 
-describe('transcriptIngress — collectRecognitionResultChunks', () => {
-    it('separa interinos y finales respetando resultIndex', () => {
-        const event = {
-            resultIndex: 0,
-            results: {
-                length: 2,
-                0: { isFinal: false, 0: { transcript: 'hola como', confidence: 0.9 }, length: 1 },
-                1: { isFinal: true, 0: { transcript: 'hola como estas', confidence: 0.95 }, length: 1 },
-            },
-        };
-        expect(collectRecognitionResultChunks(event)).toEqual({
-            interimChunks: ['hola como'],
-            finalChunks: ['hola como estas'],
-        });
-    });
-
-    it('salta chunks previos a resultIndex', () => {
-        const event = {
+describe('fraseDelEventoAsr  trozo del evento con los resultados NUEVOS', () => {
+    it('respeta resultIndex: el final retenido delante no entra', () => {
+        const evento = {
             resultIndex: 1,
             results: {
                 length: 2,
-                0: { isFinal: false, 0: { transcript: 'hola como', confidence: 0.9 }, length: 1 },
-                1: { isFinal: true, 0: { transcript: 'hola como estas', confidence: 0.95 }, length: 1 },
+                0: { isFinal: true, 0: { transcript: 'frase del enunciado anterior', confidence: 0.9 }, length: 1 },
+                1: { isFinal: false, 0: { transcript: 'frase nueva', confidence: 0.9 }, length: 1 },
             },
         };
-        expect(collectRecognitionResultChunks(event)).toEqual({
-            interimChunks: [],
-            finalChunks: ['hola como estas'],
-        });
+        expect(fraseDelEventoAsr(evento.results, evento.resultIndex)).toBe('frase nueva');
     });
 
-    it('evento vacío → listas vacías sin pérdida de datos', () => {
-        expect(collectRecognitionResultChunks({})).toEqual({ interimChunks: [], finalChunks: [] });
-        expect(collectRecognitionResultChunks(null)).toEqual({ interimChunks: [], finalChunks: [] });
+    it('une los finales hermanos del MISMO evento sin perder palabras', () => {
+        const evento = {
+            resultIndex: 0,
+            results: [
+                { isFinal: true, 0: { transcript: 'pon la musica esto', confidence: 0.9 }, length: 1 },
+                { isFinal: true, 0: { transcript: 'pon la musica escucha', confidence: 0.9 }, length: 1 },
+            ],
+        };
+        const trozo = fraseDelEventoAsr(evento.results, evento.resultIndex);
+        expect(trozo).toContain('pon la musica');
+        expect(trozo).toContain('esto');
+        expect(trozo).toContain('escucha');
+    });
+
+    it('evento vacio o sin texto: sin trozo (no abre fila vacia)', () => {
+        expect(fraseDelEventoAsr(undefined, 0)).toBe('');
+        expect(fraseDelEventoAsr({ length: 0 }, 0)).toBe('');
     });
 });
 
-// ------------------------------------------------------------
-// PRUEBA DE DETECTOR (el detector no es decorativo): el reparto de
-// `collectRecognitionResultChunks` DEBE discriminar - un item final SIN texto no
-// puede reaparecer como chunk de contenido (abriria una fila vacia y perderia la
-// voz). Caso que lo falsifica: si el detector no discriminara, el final vacio
-// contaria como contenido.
-// ------------------------------------------------------------
-describe('collectRecognitionResultChunks - el detector no es decorativo', () => {
-    it('un final SIN texto no aporta chunk de contenido (infractor sintetico)', () => {
-        const conTexto = collectRecognitionResultChunks({
-            resultIndex: 0,
-            results: [{ isFinal: true, length: 1, 0: { transcript: 'hola como estas', confidence: 0.9 } }],
-        });
-        const sinTexto = collectRecognitionResultChunks({
-            resultIndex: 0,
-            results: [{ isFinal: true, length: 1, 0: { transcript: '', confidence: 0.9 } }],
-        });
-        expect(conTexto.finalChunks).toContain('hola como estas');
-        expect(sinTexto.finalChunks.filter(Boolean)).toEqual([]);
+describe('mergeIntoOpenLine  una hipotesis por hueco (libro)', () => {
+    it('acumula el tramo real: prefijo + cola que crece, la revision no duplica', () => {
+        let fusion = mergeIntoOpenLine('', null, 'bien');
+        expect(fusion.linea).toBe('bien');
+        fusion = mergeIntoOpenLine(fusion.linea, fusion.libro, 'bien Vamos');
+        expect(fusion.linea).toBe('bien Vamos');
+        fusion = mergeIntoOpenLine(fusion.linea, fusion.libro, 'a hacer');
+        expect(fusion.linea).toBe('bien Vamos a hacer');
+        const antes = fusion.linea;
+        fusion = mergeIntoOpenLine(antes, fusion.libro, 'a hacer algo');
+        expect(fusion.linea).toBe('bien Vamos a hacer algo');
+        expect(fusion.linea).not.toContain('a hacer a hacer');
+    });
+
+    it('un trozo ajeno se ANADE y abre hueco nuevo', () => {
+        const fusion = mergeIntoOpenLine('hola mundo', null, 'esto es una prueba');
+        expect(fusion.linea).toBe('hola mundo esto es una prueba');
+        expect(fusion.libro?.base).toBe('hola mundo');
+        expect(fusion.libro?.chunk).toBe('esto es una prueba');
+    });
+
+    it('el libro caduco se ignora: la linea la reescribio otro camino', () => {
+        const libro = { base: '', chunk: 'hola', line: 'hola' };
+        const fusion = mergeIntoOpenLine('otra cosa distinta', libro, 'nueva');
+        expect(fusion.linea).toBe('otra cosa distinta nueva');
+        expect(fusion.linea).not.toBe('hola nueva');
     });
 });

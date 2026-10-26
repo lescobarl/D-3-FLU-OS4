@@ -6,6 +6,7 @@
  * prioridad de etiqueta, UUIDv4, provisional/promoción y borrado lógico.
  */
 import { describe, expect, it } from 'vitest'
+import { isAutoSpeakerLabel } from '../src/voice/lib/speakerCore.js'
 import { crearAlmacenMemoria } from '../src/voice/conversation/adapters'
 import {
   construirFila,
@@ -36,6 +37,7 @@ const entradaEtiqueta = (
   voz: sinVoz(extra.voz),
   anterior: extra.anterior ?? null,
   semilla: extra.semilla ?? 'Hablante 1',
+  esEtiquetaAnonima: isAutoSpeakerLabel,
 })
 
 const cierre = (extra: Partial<CierreLocucion> = {}): CierreLocucion => ({
@@ -53,6 +55,7 @@ const cierre = (extra: Partial<CierreLocucion> = {}): CierreLocucion => ({
   voz: sinVoz(),
   etiquetaAnterior: null,
   semillaEtiqueta: 'Hablante 1',
+  esEtiquetaAnonima: isAutoSpeakerLabel,
   ...extra,
 })
 

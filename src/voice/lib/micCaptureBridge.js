@@ -28,6 +28,7 @@ export async function createMicCaptureWorkletNode(audioContext) {
  *   source: MediaStreamAudioSourceNode,
  *   recordSource?: AudioNode,
  *   onPcmBlock?: (samples: Float32Array, meta: { sampleIndex: number, audioStartedAtMs: number }) => void,
+ *   onRawPcmBlock?: (samples: Float32Array, meta: { sampleIndex: number }) => void, // dominio CRUDO: el piso VAD 0.02 está calibrado sin ganancia
  *   pushSttPcm?: (int16: Int16Array) => void,
  *   sampleRate?: number,
  *   sttTargetRate?: number,
@@ -39,6 +40,7 @@ export async function wireMicCapturePipeline({
   source,
   recordSource = null,
   onPcmBlock,
+  onRawPcmBlock,
   pushSttPcm,
   sampleRate = DEFAULT_SAMPLE_RATE,
   sttTargetRate = DEFAULT_TARGET_SAMPLE_RATE,
@@ -50,7 +52,22 @@ export async function wireMicCapturePipeline({
 
   let blockSeq = 0
   let sampleIndex = 0
+  let rawSampleIndex = 0
   const every = Math.max(1, Number(processEvery) || 1)
+
+  /**
+   * Entrega un bloque CRUDO (pre-ganancia): grabación de sesión y cualquier
+   * consumidor que mida niveles en el dominio del micrófono (el piso del VAD
+   * está calibrado ahí). Se entrega SIEMPRE, antes del throttle de `processEvery`,
+   * con su propio índice de muestras: el eje de tiempo es el de la grabación.
+   * @param {Float32Array} samples Bloque PCM crudo.
+   */
+  const deliverRawTap = (samples) => {
+    pushSessionAudio(samples, sampleRate)
+    if (typeof onRawPcmBlock !== 'function') return
+    onRawPcmBlock(samples, { sampleIndex: rawSampleIndex })
+    rawSampleIndex += samples.length
+  }
 
   workletNode.port.onmessage = (event) => {
     const data = event.data
@@ -63,7 +80,7 @@ export async function wireMicCapturePipeline({
     // mismo nodo que alimenta el STT (comportamiento previo). En ambos casos se
     // alimenta ANTES del throttle de `processEvery` para que el WAV no tenga
     // huecos cuando el pipeline procesa cada N bloques.
-    if (!recordSource) pushSessionAudio(samples, sampleRate)
+    if (!recordSource) deliverRawTap(samples)
 
     blockSeq += 1
     if (blockSeq % every !== 0) return
@@ -84,9 +101,9 @@ export async function wireMicCapturePipeline({
   source.connect(workletNode)
   workletNode.connect(zeroGain)
 
-  // Tap CRUDO para la grabación: worklet dedicado sobre `recordSource` (pre-ganancia),
-  // que SOLO alimenta la grabación de sesión. El STT/identidad siguen en el grafo
-  // amplificado. El processor no tiene estado: dos instancias conviven sin conflicto.
+  // Tap CRUDO para la grabación y los medidores de nivel: worklet dedicado sobre
+  // `recordSource` (pre-ganancia). El STT/identidad siguen en el grafo amplificado.
+  // El processor no tiene estado: dos instancias conviven sin conflicto.
   let recordNode = null
   if (recordSource) {
     recordNode = await createMicCaptureWorkletNode(audioContext)
@@ -94,7 +111,7 @@ export async function wireMicCapturePipeline({
       const data = event.data
       if (data?.type !== 'pcm' || !data.samples?.length) return
       const samples = data.samples instanceof Float32Array ? data.samples : new Float32Array(data.samples)
-      pushSessionAudio(samples, sampleRate)
+      deliverRawTap(samples)
     }
     recordSource.connect(recordNode)
     recordNode.connect(zeroGain)

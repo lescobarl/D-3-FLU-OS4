@@ -36,14 +36,6 @@ const ID_BACKUP = 'backup-import-prueba'
 const UPDATED_AT = '2026-10-25T12:00:00.000Z'
 const N_FILAS = 3
 
-/** Siembra el override de runtime del motor en la URL real del documento. */
-function fijarMotorEnUrl(motor: 'new' | 'legacy' | null) {
-  const url = new URL(window.location.href)
-  if (motor) url.searchParams.set('conversationEngine', motor)
-  else url.searchParams.delete('conversationEngine')
-  window.history.replaceState(null, '', url.toString())
-}
-
 /** Filas de usuario tal como viajan dentro de `conversation_state` en un JSON. */
 function entradaBackup(indice: number): ConversationEntry {
   return {
@@ -91,7 +83,7 @@ function restaurarUltimoBackup(sistema: BackupSystem): void {
   expect(resultado.restoredComponents).toEqual(['conversation_state'])
 }
 
-/** Fila ya persistida que la importación NO debe reescribir en modo `new`. */
+/** Fila ya persistida que la importación NO debe reescribir. */
 async function sembrarFilaExistente(entrada: ConversationEntry): Promise<void> {
   await putConversationRecord({
     id: entrada.id,
@@ -111,18 +103,15 @@ beforeEach(async () => {
   window.localStorage.clear()
   await fluDb.conversations.clear()
   useIntegrationStore.setState({ conversationHistory: [] })
-  fijarMotorEnUrl(null)
 })
 
 afterEach(() => {
   vi.restoreAllMocks()
   window.localStorage.clear()
-  fijarMotorEnUrl(null)
 })
 
-describe('importación de backup — N filas por función, en ambos motores', () => {
-  it('legacy: N filas del JSON → N filas en conversations en un solo bulkPut, sin duplicados', async () => {
-    fijarMotorEnUrl('legacy')
+describe('importación de backup — N filas por función', () => {
+  it('N filas del JSON → N filas en conversations en un solo bulkPut, sin duplicados', async () => {
     sembrarBackupJson()
     const sistema = new BackupSystem({ enabled: true })
     const bulkPut = vi.spyOn(fluDb.conversations, 'bulkPut')
@@ -141,8 +130,7 @@ describe('importación de backup — N filas por función, en ambos motores', ()
     expect(new Set(filas.map((fila) => fila.id)).size).toBe(N_FILAS)
   })
 
-  it('new: N filas con una ya existente → N total, sin duplicar ni reescribir la existente', async () => {
-    fijarMotorEnUrl('new')
+  it('N filas con una ya existente → N total, sin duplicar ni reescribir la existente', async () => {
     sembrarBackupJson()
     const existente = entradaBackup(0)
     await sembrarFilaExistente(existente)

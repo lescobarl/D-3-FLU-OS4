@@ -4,35 +4,39 @@
 // DEFECTO MEDIDO (2026-10-10): el registro de un nombre propio para la voz activa
 // estaba implementado DOS veces:
 //   - src/voice/hooks/useFluVoiceAssistant.js:1472 (resolucion tardia)
-//   - src/voice/lib/turnSpeakerCommit.js:217     (ruta `wake-intro` del commit)
+//   - la ruta `wake-intro` del commit (retirada)
 // y el comando `REGISTRAR_PARTICIPANTE` (producido en src/voice/lib/audioMath.js:946
 // con el nombre introducido) NO tenia consumidor: `handleNavigationCommand` no traia
 // caso para el, asi que decia "Registrado {name}." sin registrar NADA. Dos rutas para
 // el mismo responsable y la del comando muerta.
 //
 // DUENO UNICO: `registerSpeakerIdentity` (src/voice/lib/speakerIdentityRegister.js)
-// = alias de sesion + renombrado de las filas de la MISMA voz. Lo llaman las dos
-// rutas: el commit (`applyResolvedSpeakerToSessionRefs`, fuente wake-intro) y el
-// comando (`registerSpeakerIdentityFromCommand`).
+// = registro del nombre sobre la VOZ (directorio + clusters + primario). Lo llaman las
+// dos rutas VIVAS: el hook (texto del turno) y el comando
+// (`registerSpeakerIdentityFromCommand`). La ruta del commit viejo
+// (`applyResolvedSpeakerToSessionRefs`) se retiro con la tuberia el 2026-10-25.
+//
+// FILA INMUTABLE (mandato 2026-10-26): registrar el nombre NO reescribe filas ya
+// escritas. La etiqueta de cada fila la decide el modulo CONVERSACION al cerrar su
+// locucion; `rowsChanged` es 0 por contrato. Las filas ya mostradas conservan la
+// etiqueta con la que se escribieron (antes se congelaban al nombre: ruta retirada).
 //
 // PRUEBA DE DETECTOR (el detector no es decorativo): el guard EJECUTA las dos rutas
-// sobre un store sembrado (no cuenta nombres) y
-// exige el MISMO resultado: una etiqueta automatica de la MISMA voz pasa al nombre
-// propio, y la de OTRA voz no se toca.
+// sobre un store sembrado (no cuenta nombres) y exige el MISMO resultado: ninguna
+// fila cambia, y el grupo de etiquetas de la MISMA voz (por firma) no incluye a la voz
+// distinta.
 // ============================================================
 import { readFileSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { walkFiles } from './_helpers'
 import { useIntegrationStore } from '../src/store/integrationStore'
-import { renameSpeakerRows } from '../src/voice/lib/conversationTurnRow'
 import { resolveRowSpeakerLabel } from '../src/voice/lib/conversationRow'
 import { resetVoiceDirectory } from '../src/voice/lib/speakerDirectory.js'
 import {
   registerSpeakerIdentity,
   registerSpeakerIdentityFromCommand,
 } from '../src/voice/lib/speakerIdentityRegister.js'
-import { applyResolvedSpeakerToSessionRefs } from '../src/voice/lib/turnSpeakerCommit.js'
 
 /** Vector con coseno EXACTO `c` respecto a la base [1,0,0]. */
 function v(c: number): number[] {
@@ -81,7 +85,7 @@ describe('A1 - un solo dueno del registro del nombre propio', () => {
     useIntegrationStore.setState({ conversationHistory: [] })
   })
 
-  it('registrar el nombre pasa AL NOMBRE las filas de la MISMA voz y deja la voz distinta', () => {
+  it('registrar el nombre NO reescribe las filas ya escritas (fila inmutable)', () => {
     seedRows()
     const result = registerSpeakerIdentity({
       name: 'Luz',
@@ -89,10 +93,10 @@ describe('A1 - un solo dueno del registro del nombre propio', () => {
       previousLabel: 'Hablante 1',
     })
     expect(result.registered).toBe(true)
-    // El nombre se CONGELA en las filas de esa voz (freeze 2026-10-17): las de speaker_1 salen 'Luz'.
-    expect(speakerRows()).toEqual(['Luz', 'Hablante 2', 'Luz'])
-    // Mandato 2026-10-17: el registro ESCRIBE el nombre (freeze) en las filas ya mostradas de esa voz.
-    expect(result.rowsChanged).toBe(2)
+    // Mandato 2026-10-26: un solo dueno de la fila. Las filas ya mostradas conservan
+    // la etiqueta con la que se escribieron; el nombre vive en la VOZ.
+    expect(speakerRows()).toEqual(['Hablante 1', 'Hablante 2', 'Hablante 1'])
+    expect(result.rowsChanged).toBe(0)
   })
 
   it('RUTA DEL COMANDO: REGISTRAR_PARTICIPANTE registra el nombre (antes no registraba nada)', () => {
@@ -102,25 +106,21 @@ describe('A1 - un solo dueno del registro del nombre propio', () => {
       speakerName: 'Hablante 1',
     })
     expect(result.registered).toBe(true)
-    expect(speakerRows()).toEqual(['Luz', 'Hablante 2', 'Luz'])
-    // El nombre REGISTRADO pertenece a la VOZ que lo dijo: su etiqueta provisional se
-    // resuelve AL NOMBRE ya que las filas se congelan (mandato 2026-10-17). Una VOZ SIN registro
-    // se muestra con su etiqueta canonica ('Hablante N').
-    // AMEND (freeze estricto): sin firma/timbre NO se hereda del directorio (previene D3).
+    // Mandato 2026-10-26: el comando registra, pero no reescribe filas ya escritas.
+    expect(speakerRows()).toEqual(['Hablante 1', 'Hablante 2', 'Hablante 1'])
+    expect(result.rowsChanged).toBe(0)
+    // Una VOZ sin timbre medido no se resuelve por la clave: no se adivina (previene D3).
     expect(resolveRowSpeakerLabel({ speakerId: 'speaker_1' })).toBe('Hablante 1')
     expect(resolveRowSpeakerLabel({ speakerId: 'speaker_3' })).toBe('Hablante 3')
   })
 
   it('MISMA RUTA: comando y wake-intro dejan el store identico para la misma voz', () => {
     seedRows()
-    applyResolvedSpeakerToSessionRefs(
-      { speakerName: 'Luz', source: 'wake-intro', previousLabel: 'Hablante 1' } as any,
-      {
-        renameSpeakerRows,
-        speakerClustersRef: { current: CLUSTERS },
-        sessionPrimarySpeakerRef: { current: '' },
-      } as any,
-    )
+    registerSpeakerIdentity({
+      name: 'Luz',
+      previousLabel: 'Hablante 1',
+      clusters: CLUSTERS,
+    })
     const porCommit = speakerRows()
 
     seedRows()
@@ -154,8 +154,8 @@ describe('A1 - un solo dueno del registro del nombre propio', () => {
       ] as any,
     })
     registerSpeakerIdentity({ name: 'Luz', clusters: CLUSTERS, previousLabel: 'Hablante 1' })
-    // 'Hablante 2' (otra voz) y 'Hablante 9' (sin cluster) quedan como estaban.
-    expect(speakerRows()).toEqual(['Luz', 'Hablante 2', 'Luz', 'Hablante 9'])
+    // Ninguna fila cambia: ni la de la MISMA voz (fila inmutable) ni la de la otra voz.
+    expect(speakerRows()).toEqual(['Hablante 1', 'Hablante 2', 'Hablante 1', 'Hablante 9'])
   })
 })
 
@@ -190,7 +190,7 @@ function seedFilasDeLaMismaVoz() {
 }
 
 describe('A1 hueco 1 - el COMANDO recibe los clusters y cose la MISMA voz', () => {
-  it('registrar por el comando pasa al nombre las etiquetas de la MISMA voz (3 y 4)', () => {
+  it('registrar por el comando cose las etiquetas de la MISMA voz sin reescribir filas', () => {
     seedFilasDeLaMismaVoz()
     const result = registerSpeakerIdentityFromCommand({
       transcript: 'okay flu soy Luz',
@@ -198,7 +198,13 @@ describe('A1 hueco 1 - el COMANDO recibe los clusters y cose la MISMA voz', () =
       clusters: CLUSTERS_VOZ_UNICA,
     })
     expect(result.registered).toBe(true)
-    expect(speakerRows()).toEqual(['Luz', 'Luz', 'Luz', 'Hablante 2'])
+    // El valor del hueco 1 (el comando SI recibe los clusters) se mide en el GRUPO por
+    // firma que devuelve el registro; las filas ya escritas no se tocan. El grupo incluye
+    // el ancla con nombre ('Luz') y las etiquetas de la MISMA voz, nunca la voz distinta.
+    expect(result.labels).toEqual(expect.arrayContaining(['Hablante 1', 'Hablante 3', 'Hablante 4', 'Luz']))
+    expect(result.labels).not.toContain('Hablante 2')
+    expect(speakerRows()).toEqual(['Hablante 1', 'Hablante 3', 'Hablante 4', 'Hablante 2'])
+    expect(result.rowsChanged).toBe(0)
   })
 })
 
@@ -206,14 +212,12 @@ describe('A1 hueco 2 - el registro fija el PRIMARIO como presented', () => {
   it('la ruta del COMMIT fija el primario (presented manda sobre el sembrado del panel)', () => {
     seedRows()
     const sessionPrimarySpeakerRef = { current: 'Luis' } // sembrado por el participante
-    applyResolvedSpeakerToSessionRefs(
-      { speakerName: 'Luz', source: 'wake-intro', previousLabel: 'Hablante 1' } as any,
-      {
-        renameSpeakerRows,
-        speakerClustersRef: { current: CLUSTERS_VOZ_UNICA },
-        sessionPrimarySpeakerRef,
-      } as any,
-    )
+    registerSpeakerIdentity({
+      name: 'Luz',
+      previousLabel: 'Hablante 1',
+      clusters: CLUSTERS_VOZ_UNICA,
+      refs: { sessionPrimarySpeakerRef },
+    })
     expect(sessionPrimarySpeakerRef.current).toBe('Luz')
   })
 
@@ -232,14 +236,12 @@ describe('A1 hueco 2 - el registro fija el PRIMARIO como presented', () => {
   it('MISMA RUTA: comando y wake-intro dejan el MISMO estado de identidad (filas + primario)', () => {
     seedRows()
     const refCommit = { current: 'Luis' }
-    applyResolvedSpeakerToSessionRefs(
-      { speakerName: 'Luz', source: 'wake-intro', previousLabel: 'Hablante 1' } as any,
-      {
-        renameSpeakerRows,
-        speakerClustersRef: { current: CLUSTERS_VOZ_UNICA },
-        sessionPrimarySpeakerRef: refCommit,
-      } as any,
-    )
+    registerSpeakerIdentity({
+      name: 'Luz',
+      previousLabel: 'Hablante 1',
+      clusters: CLUSTERS_VOZ_UNICA,
+      refs: { sessionPrimarySpeakerRef: refCommit },
+    })
     const estadoCommit = { filas: speakerRows(), primario: refCommit.current }
 
     seedRows()

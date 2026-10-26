@@ -38,10 +38,14 @@ export const TECHOS: Record<string, number> = {
   // (segmentAudio + matchSegmentNames + voiceProfiles + distanceToLast, con sus propios
   // umbrales). La decision de hablante la toma el dueno canonico
   // (resolveSpeakerIdentityFromVector -> resolveConversationSpeaker).
-  'src/voice/hooks/useFluVoiceAssistant.js': 4383,
+  // -515 (2026-10-25): corte de la tuberia vieja de conversacion; el hook ya no monta
+  // ingress/cola/consumidor y solo conserva captura + el motor del producto.
+  'src/voice/hooks/useFluVoiceAssistant.js': 3868,
   // -66: 49 claves de config SIN lector (prometian comportamiento sin efecto) se borraron,
   // con su barrera (configConEfectoGuard).
-  'src/voice/lib/fluConfig.js': 2699,
+  // -50 al cortar la tuberia vieja de conversacion (2026-10-25): el tracer, la
+  // segmentacion ASR y las claves de la escucha retirada salieron con sus lectores.
+  'src/voice/lib/fluConfig.js': 2649,
   'src/voice/lib/gemini.js': 1848,
 }
 

@@ -60,8 +60,6 @@ export const FLU_CONFIG = {
     minuteKnowledgePromptMax: 24,
     /** Máximo de filas de conversación que entran al prompt de resumen. */
     conversationSummaryWindowMax: 80,
-    /** Filas recientes usadas para recortar interinos acumulativos de Chrome. */
-    priorRowsMax: 64,
     /** Tope del archivo interno de sesión (caracteres); evita crecimiento infinito. */
     sessionTranscriptMaxChars: 80000,
     contextHistoryMax: 12,
@@ -139,8 +137,6 @@ export const FLU_CONFIG = {
         /** Reutilización de cluster en producción (512-D real). */
         productionClusterReuseThreshold: 0.66, ...SPEAKER_ASSIGN.thresholds,
         shortUtteranceMaxMs: 1500,
-        /** Tras N ecos committed-echo consecutivos, rebuild SR (Chrome atascado). */
-        committedEchoRebuildAfter: 3,
         /** Ventana (ms) para clasificar un eco ASR real: la misma fila re-emitida DENTRO
          * de esta ventana es un loop de Chrome (atascado). Si la misma frase vuelve tras
          * una pausa real (>= esta ventana), es repetición genuina del usuario: se trata
@@ -190,12 +186,10 @@ export const FLU_CONFIG = {
         lastSpeakerSwitchMargin: 0.1,
         /** 0 = sin tope duro por salón (N personas reales → N hablantes). */
         maxAutoSpeakersInRoom: 0,
-        /** 0 = sin tope blando; anti-fantasma vía productionClusterReuseThreshold + segmentChronoSplit. */
+        /** 0 = sin tope blando; anti-fantasma vía productionClusterReuseThreshold. */
         maxAutoSpeakersSoftCap: 0,
         /** Los ticks continuos NO escriben clusters (ventanas parciales = inflado: 8/2 voces). */
         deferClusterWritesUntilCommit: true,
-        /** Desactivado: pausas no abren H2+ en la misma voz (causa H46 en monólogo/TV). */
-        segmentChronoSplit: false,
         /** No vaciar openLine al límite de turno (evita perder frase al cambiar hablante). */
         preservePreviewOnTurnBoundary: true,
         /** Con ≥N clusters: preferir re-identificación a timbre histórico vs anclar al último. */
@@ -273,7 +267,6 @@ export const FLU_CONFIG = {
     },
   },
   timing: {
-    resumeListeningMs: 50,
     resumeAfterSpeechMs: 50,
     /** Fase 7 — reanudación dinámica según longitud de respuesta (clamp [min,max]). */
     resumeAfterSpeechMinMs: 50,
@@ -292,8 +285,6 @@ export const FLU_CONFIG = {
      * turno dentro de este margen se considera re-captura/eco y NO se repite.
      */
     responseDedupWindowMs: 8000,
-    /** Throttle del log de interinos. VIVO: useFluVoiceAssistant lo lee; 0 = sin throttle. */
-    streamLogThrottleMs: 0,
     wakeWordCommandDelayMs: 3000,
     interimCommandDelayMs: 1400,
     /**
@@ -394,9 +385,6 @@ export const FLU_CONFIG = {
       /** Mínimo entre diarizaciones por audio (ms). Más bajo = más sensible. */
       diarizeIntervalMs: 120,
       maxSpeakers: 0,
-      paragraphBreakMs: 2200,
-      paragraphBreakOnPause: true,
-      autoAdvanceOnPause: false,
     },
     listeningAck: {
       phrases: LISTENING_ACK_PHRASES,
@@ -1963,19 +1951,6 @@ export const FLU_CONFIG = {
     history: 'history',
     voiceProfiles: 'voice-profiles',
   },
-  /**
-   * Traza estructurada (ring) para diagnóstico en dev.
-   * Volcar en consola: __fluDev.trace.dump() · archivo: __fluDev.trace.download()
-   */
-  trace: {
-    enabled: IS_DEV,
-    ringSize: 800,
-    /** Eventos speaker/diarize-* en ring y __fluDev.speakerMonitor */
-    mirrorConsole: false,
-    /** POST periódico a Vite → flu-voz/logs/agent-trace.json (lectura agente). */
-    agentSink: IS_DEV,
-    agentSinkMs: 1200,
-  },
   /** Grabación de sesión (audio + eventos) para diagnóstico; APAGADA por defecto.
    * Encender: __fluDev.recorder.enable() · Descargar: __fluDev.recorder.download(). */
   recorder: {
@@ -2036,14 +2011,6 @@ export const FLU_CONFIG = {
     enabled: IS_DEV,
     /** `[Flu][chrome-raw]` — evento SpeechRecognition sin procesar (solo dev). */
     chromeRawConsole: true,
-    /** Panel flotante: log ingress (texto publicado completo). */
-    micConsolePanel: false,
-    /** Log autoritativo desde transcriptIngress (misma fuente que ÚLTIMA FRASE). */
-    micIngressLog: true,
-    /** Líneas máximas en panel mic (reciente arriba). */
-    micConsoleMaxLines: 500,
-    /** Consola [Flu][mic-ingress] además del panel. */
-    micIngressConsole: true,
     consoleLog: false,
     refreshMs: 1500,
     /** Relaya fragmentos crudos de Chrome (interim/final) al servidor para diagnóstico. */
@@ -2134,19 +2101,6 @@ export const FLU_CONFIG = {
     stripPriorTurnsEscalateAfterRows: 0,
     /** En last-only: recortar como máximo los últimos N turnos del interino acumulativo. */
     stripPriorTurnsRecentMax: 6,
-    /** APAGADO (mandato del dueno 2026-10-19): partir UN final en varias filas cortaba la
-     * frase en pedazos (defecto 3/6). Unico cierre legal: cambio de participante o silencio. */
-    asrSegmentation: {
-      enabled: false,
-      /** Solo partir cuando un turno previo ya commitido aparece embebido + voz nueva. */
-      minSpeakerRuns: 2,
-      minSnapshotsPerRun: 2,
-      minWordsPerSegment: 6,
-      minCaptureWordsToSplit: 15,
-      maxSegmentsPerFinal: 2,
-      embeddedPriorMinChars: 12,
-      minCoverageRatio: 0.85,
-    },
     /** Umbrales pausa/cola ASR — único bloque numérico (docs/reglas-duras.md). 0 en *MaxWords = solo heurística. */
     pauseAndWeakAsr: {
       interimOpenLineFlushMs: 0,

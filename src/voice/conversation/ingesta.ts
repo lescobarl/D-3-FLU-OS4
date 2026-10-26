@@ -61,11 +61,24 @@ export function crearIngesta({
     pendientes,
   })
 
+  /**
+   * Tramo de un resultado que no trae id: el vigente al PROCESAR (la cola ya
+   * ingirió el audio) y, si no hay ninguno abierto, el último medido, que
+   * destina el final tardío del tramo ya cerrado.
+   */
+  function tramoVigente(): string {
+    return (
+      estado.tramoAudio?.tramoId ||
+      estado.abierta?.locutionId ||
+      estado.ultimoTramoId ||
+      ''
+    )
+  }
+
   /** Drena los resultados del `AsrPort` en orden; el tramo se fija al drenar. */
   async function drenarResultadosAsr(): Promise<void> {
     for (const crudo of bufferAsr.drenar()) {
-      const tramoId =
-        crudo.tramoId || estado.tramoAudio?.tramoId || estado.abierta?.locutionId || ''
+      const tramoId = crudo.tramoId || tramoVigente()
       await flujo.procesarResultadoAsr({ ...crudo, tramoId })
     }
   }
@@ -129,6 +142,7 @@ export function crearIngesta({
         }
         estado.silencioPendienteMs = 0
         estado.tramoAudio = nuevo
+        estado.ultimoTramoId = tramoId
         tramos.registrar(nuevo)
         if (!estado.abierta) {
           sesion.abrirLocucion({
@@ -190,10 +204,14 @@ export function crearIngesta({
   /** Ingesta un resultado del ASR por su tramo (regla 3). */
   async function ingestaAsr(entrada: AsrIngestado): Promise<InstantaneaConversacion> {
     sesion.exigirActiva()
-    const tramoId = String(entrada.tramoId || '').trim()
-    if (!tramoId) throw new Error('tramoId vacio: sin tramo no hay locucion')
     await drenarResultadosAsr()
     await cerrarPendienteAsr()
+    const tramoId = String(entrada.tramoId || '').trim() || tramoVigente()
+    if (!tramoId) {
+      // Sin audio medido no hay tramo: se cuenta, no se inventa uno.
+      sesion.contarDescarte('huerfano', null, entrada.tramo ?? null)
+      return sesion.snapshot()
+    }
     await flujo.procesarResultadoAsr({ ...entrada, tramoId })
     return sesion.snapshot()
   }

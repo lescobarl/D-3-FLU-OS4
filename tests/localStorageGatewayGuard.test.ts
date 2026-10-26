@@ -13,7 +13,7 @@
  * estar en verde midiendo otra cosa.
  */
 import { runAsync } from './_asyncExec'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
@@ -94,7 +94,11 @@ export function offenders(readSource: (f: string) => string, files: string[]): s
 const ROOT = process.cwd()
 
 async function trackedSources(): Promise<string[]> {
-  return (await runAsync('git', ['ls-files', 'src'], { cwd: ROOT })).stdout.split('\n').filter(Boolean)
+  // Solo fuentes PRESENTES en el arbol: un versionado ya borrado (el corte de la
+  // tuberia vieja deja borrados sin confirmar) no es fuente del proyecto.
+  return (await runAsync('git', ['ls-files', 'src'], { cwd: ROOT }))
+    .stdout.split('\n')
+    .filter((f) => f && existsSync(join(ROOT, f)))
 }
 
 describe('P5.9 localStorageGateway - la puerta es la unica que mira el almacen', () => {

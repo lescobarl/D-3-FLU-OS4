@@ -19,9 +19,9 @@ const ORDER = ['V9', 'V7', 'V5', 'V8', 'V1', 'V4', 'V2', 'V6', 'D5', 'D2', 'D3',
 const ORDERS = {
   V9: {
     title: 'Borrar/justificar residuo debug-dev',
-    allow: ['src/dev/**', 'src/voice/lib/fluDebug.js', 'src/voice/lib/fluTrace.js', 'src/voice/lib/listenLog.js'],
+    allow: ['src/dev/**', 'src/voice/lib/fluDebug.js', 'src/voice/lib/listenLog.js'],
     steps: [
-      'Elimina src/dev/asrLab y los archivos fluDebug/fluTrace/listenLog si no se usan en producción.',
+      'Elimina src/dev/asrLab y los archivos fluDebug/listenLog si no se usan en producción.',
       'Si son intencionales, documéntalo y añádelos a una allowlist justificada en auditoria.mjs (cambio de criterio).',
     ],
     stop: 'No borres nada que tenga import vivo: comprueba con rg antes.',

@@ -118,9 +118,10 @@ describe('B2 - la identidad es la VOZ (firma), no la etiqueta', () => {
     expect(resolveRowSpeakerName('Hablante 1')).toBe('Hablante 1')
   })
 
-  it('"soy X" registra el nombre en la VOZ (sus filas se VEN con el nombre; la otra voz no se toca)', () => {
-    // Mandato del dueño 2026-10-13: registrar el nombre NO muta ninguna fila (la conversacion
-    // es texto insertado); el nombre se guarda por VOZ y la etiqueta se resuelve AL MOSTRAR.
+  it('"soy X" registra el nombre en la VOZ y NO reescribe filas ya escritas', () => {
+    // Mandato del dueño 2026-10-26: registrar el nombre NO muta ninguna fila (la conversacion
+    // es texto insertado); el nombre se liga a la VOZ y cada fila conserva la etiqueta con la
+    // que el modulo CONVERSACION la cerro.
     commitUserTurnRow({ text: 'hola', speakerName: 'Hablante 1', evidenciaAcustica: true, turnId: 1 } as never)
     commitUserTurnRow({ text: 'que tal', speakerName: 'Hablante 3', evidenciaAcustica: true, turnId: 2 } as never)
     commitUserTurnRow({ text: 'bueno', speakerName: 'Hablante 1', evidenciaAcustica: true, turnId: 3 } as never)
@@ -140,21 +141,20 @@ describe('B2 - la identidad es la VOZ (firma), no la etiqueta', () => {
       .getState()
       .conversationHistory.filter((e) => e.role === 'user')
       .map((e) => resolveRowSpeakerLabel(e))
-    expect(filas, 'las filas de ESA voz se ven con su nombre; la otra voz no se toca').toEqual([
-      'Luis',
+    expect(filas, 'ninguna fila cambia: la etiqueta la decidio el modulo al cerrar').toEqual([
+      'Hablante 1',
       'Hablante 3',
-      'Luis',
+      'Hablante 1',
     ])
-    // AMEND (freeze 2026-10-17, mandato del dueno): el registro CONGELA el nombre en las filas
-    // YA MOSTRADAS de esa voz (antes no tocaba ninguna fila: mandato 2026-10-13, invertido).
-    expect(result.rowsChanged, 'el registro congela las filas de ESA voz (freeze)').toBe(2)
+    // Mandato 2026-10-26: el registro NO reescribe filas ya escritas (ruta retirada).
+    expect(result.rowsChanged, 'el registro no escribe filas').toBe(0)
     expect(
       useIntegrationStore
         .getState()
         .conversationHistory.filter((e) => e.role === 'user')
         .map((e) => String((e as { speakerName?: string }).speakerName || '')),
-      'cada fila guarda su etiqueta CONGELADA (la otra voz NO hereda el nombre)',
-    ).toEqual(['Luis', 'Hablante 3', 'Luis'])
+      'cada fila conserva su etiqueta escrita',
+    ).toEqual(['Hablante 1', 'Hablante 3', 'Hablante 1'])
     // El renombre va por VOZ: el CLUSTER de esa voz queda con el nombre (las filas
     // siguientes lo resuelven por firma, sin mapa de etiquetas).
     expect(setClusters).toHaveBeenCalled()
@@ -162,7 +162,7 @@ describe('B2 - la identidad es la VOZ (firma), no la etiqueta', () => {
     expect(relabeled.map((c) => c.label).sort()).toEqual(['Hablante 3', 'Luis'])
   })
 
-  it('RUTA DEL COMANDO: registra igual y deja la VOZ con el nombre', () => {
+  it('RUTA DEL COMANDO: registra igual, deja la VOZ con el nombre y no reescribe filas', () => {
     commitUserTurnRow({ text: 'hola', speakerName: 'Hablante 1', evidenciaAcustica: true, turnId: 1 } as never)
     const setClusters = vi.fn()
     const result = registerSpeakerIdentityFromCommand({
@@ -172,16 +172,14 @@ describe('B2 - la identidad es la VOZ (firma), no la etiqueta', () => {
       refs: { setClusters, sessionPrimarySpeakerRef: { current: '' } } as never,
     })
     expect(result.registered).toBe(true)
-    // La VOZ queda con el nombre y sus filas ya mostradas lo CONGELAN en la fila.
-    // AMEND (freeze 2026-10-17, mandato del dueno): antes no se tocaba fila alguna
-    // (mandato 2026-10-13: el nombre vivia en el directorio y se resolvia al MOSTRAR).
-    expect(result.rowsChanged).toBe(1)
+    // Mandato 2026-10-26: el nombre queda en la VOZ (clusters + primario), no en la fila.
+    expect(result.rowsChanged).toBe(0)
     expect(
       useIntegrationStore
         .getState()
         .conversationHistory.filter((e) => e.role === 'user')
         .map((e) => resolveRowSpeakerLabel(e)),
-    ).toEqual(['Luis'])
+    ).toEqual(['Hablante 1'])
     expect(setClusters).toHaveBeenCalled()
   })
 

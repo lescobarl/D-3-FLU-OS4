@@ -18,7 +18,7 @@
 // turno caía al texto post-wake y la fila quedaba duplicada (con y sin wake).
 // ============================================================
 import { cleanForSpeech, stripLeadingWakeEcho } from './audioMath.js'
-import { canonSinTartamudeo } from './transcriptIngress.js'
+import { canonSinTartamudeo } from './speechMerge.js'
 import { getWakeWords } from './wakeTurnCommit.js'
 import { resolveCommittablePhrase } from './garbageTranscript.js'
 import { recomposeLocution } from './turnStream.js'

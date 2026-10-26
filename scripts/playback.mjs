@@ -3,7 +3,7 @@
  *
  * Uso:
  *   npm run playback -- --session <carpeta> [--mode clean-room|restore-start]
- *                      [--sr real|mute] [--headed] [--out <carpeta>]
+ *                      [--sr real|mute|script] [--headed] [--out <carpeta>]
  *                      [--lead-in ms] [--tail ms] [--dry-run]
  *
  * No toca producto. Valida la sesión, prepara artefactos y lanza el spec de
@@ -102,7 +102,7 @@ async function main() {
     return
   }
   if (options.sr === 'local') {
-    fail('--sr local no está implementado en Fase 1; usa real o mute.')
+    fail('--sr local no está implementado en Fase 1; usa real, mute o script.')
   }
   if (options.sr === 'real' && !options.headed) {
     console.warn('[playback] --sr real sin --headed: Chrome SR puede no estar disponible en headless.')
@@ -189,6 +189,13 @@ async function main() {
         sr: result.sr,
         rows: result.rows?.length || 0,
         ui: result.ui?.length || 0,
+        script: result.script
+          ? {
+              planned: result.script.planned,
+              emitted: result.script.emitted?.length || 0,
+              errors: result.script.errors?.length || 0,
+            }
+          : null,
         events: result.artifacts?.events ? 'events.ndjson' : null,
         out,
         errors: result.errors,

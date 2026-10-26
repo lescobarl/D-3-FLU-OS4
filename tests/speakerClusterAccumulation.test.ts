@@ -18,10 +18,6 @@ import {
   finalizeTurnIdentityPipeline,
   resetTurnIdentityPipeline,
 } from '../src/voice/lib/turnIdentityPipeline.js'
-import {
-  resolveTurnSpeakerAtCommit,
-  applyResolvedSpeakerToSessionRefs,
-} from '../src/voice/lib/turnSpeakerCommit.js'
 import { flattenChunksWindow, findClusterByLabel } from '../src/voice/lib/speakerClusters.js'
 import { scheduleTurnSpeakerPreflight } from '../src/voice/lib/turnSpeakerPreflight.js'
 import { resolveConversationSpeaker } from '../src/voice/lib/speakerDiarization.js'
@@ -79,25 +75,13 @@ describe('la captura del turno impone un minimo de audio (no ventanas casi vacia
 })
 
 describe('la separacion de voces exige que el cluster se ACUMULE entre turnos', () => {
-  it('con preflight YA resuelto, el pipeline entrega el cluster y el commit lo persiste', async () => {
+  it('con preflight YA resuelto, el slot FINAL entrega el cluster medido', async () => {
     startContinuousIdentityPipeline(1, readyPreflight)
     await flush()
 
     const pre = finalizeTurnIdentityPipeline(1, readyPreflight())
     expect(pre?.ready, 'el slot debe estar listo tras un tick previo').toBe(true)
-    expect(pre?.workingClusters?.length).toBe(1)
-
-    const resolved = resolveTurnSpeakerAtCommit({
-      phrase: 'hola',
-      preflight: pre,
-      lastLogged: '',
-    })
-    expect(resolved.workingClusters?.length, 'el commit debe recibir el cluster').toBe(1)
-
-    const setSpeakerClusters = vi.fn()
-    applyResolvedSpeakerToSessionRefs(resolved, { setSpeakerClusters })
-    expect(setSpeakerClusters).toHaveBeenCalledTimes(1)
-    expect(setSpeakerClusters.mock.calls[0][0].length).toBe(1)
+    expect(pre?.workingClusters?.length, 'el cluster viaja en el slot FINAL').toBe(1)
   })
 
   it('el preflight CONTINUO no escribe clusters NI avisa (solo calienta la cache)', async () => {

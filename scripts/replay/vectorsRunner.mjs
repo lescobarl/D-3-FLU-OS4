@@ -97,9 +97,9 @@ function claveDeTexto(text = '') {
  * de audio distintos no producen el mismo vector de 512 componentes. Cuando eso pasa, la
  * grabacion guardo una REFERENCIA (la firma de un cluster o la del commit anterior: lo que
  * hacia la cadena `sticky` antes de la auditoria 2026-10-23) y NO la medida del turno. Desde
- * esa auditoria el dueno unico es `turnMeasurement` (`src/voice/lib/turnSpeakerCommit.js`):
- * la fila lleva la medida del turno o no lleva firma. Las grabaciones ANTERIORES a ese cambio
- * conservan la referencia, y por eso este criterio las sigue descartando.
+ * esa auditoria el dueno unico fue `turnMeasurement` (retirado con la tuberia vieja el
+ * 2026-10-25): la fila lleva la medida del turno o no lleva firma. Las grabaciones ANTERIORES
+ * a ese cambio conservan la referencia, y por eso este criterio las sigue descartando.
  *
  * FILA DUPLICADA NO ES REUSO: dos commits con el MISMO texto pueden ser la MISMA locucion
  * escrita dos veces, y entonces comparten legitimamente su medida. Solo se descarta cuando la

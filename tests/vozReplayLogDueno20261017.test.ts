@@ -1,15 +1,16 @@
 // ============================================================
-// vozReplayLogDueno20261017 - FREEZE del nombre por FILA (mandato del dueno 2026-10-17)
+// vozReplayLogDueno20261017 - FILA INMUTABLE y nombre por VOZ (mandato 2026-10-26)
 // ------------------------------------------------------------
 // DEFECTO MEDIDO en el log del dueno (debug.log, sesion 21:57-21:59):
 //   - turn 8  wake-intro "Luis" sobre la etiqueta 'Hablante 1' SIN timbre (refClusters:0).
 //   - turn 14/20 row-update voz=speaker_1 nombre=Luis (sin timbre de la fila).
 //   - turn 16 la MUJER diariza 'Hablante 1' -> speaker_1 SIN firma -> sus filas salian "Luis".
-// CAUSA: el nombre quedaba colgado de la CLAVE DE ETIQUETA (speaker_1) en el directorio y
-// una fila SIN firma lo heredaba AL MOSTRAR (repintado retroactivo).
-// MANDATO (freeze): el nombre se CONGELA en la fila al identificarla; NUNCA se re-resuelve
-// desde el directorio. Una fila de una voz DISTINTA que reutiliza la etiqueta NO hereda.
-// NACE ROJO.
+// CAUSA: el nombre quedaba colgado de la CLAVE DE ETIQUETA (speaker_1) y una fila SIN
+// firma lo heredaba AL MOSTRAR (repintado retroactivo).
+// REGLA VIGENTE: el nombre se liga a la VOZ (directorio por timbre); NINGUNA fila ya
+// escrita se reescribe (la etiqueta la decidio el modulo CONVERSACION al cerrar). Una
+// fila de una voz DISTINTA que reutiliza la etiqueta NO hereda. Una fila SIN firma
+// conserva la etiqueta con la que se escribio (antes se congelaba al nombre: retirado).
 // ============================================================
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { useIntegrationStore } from '../src/store/integrationStore'
@@ -39,29 +40,30 @@ beforeEach(() => {
 })
 afterEach(() => resetVoiceDirectory())
 
-describe('FREEZE: la fila congela su nombre; una etiqueta reutilizada no lo hereda', () => {
-  it('la fila ya identificada lleva el nombre; la voz DISTINTA con la MISMA etiqueta NO (la mujer no sale Luis)', () => {
-    // El dueno se identifica sobre 'Hablante 1' SIN timbre (su log: clusters=0)
+describe('FILA INMUTABLE: el nombre vive en la VOZ; una etiqueta reutilizada no lo hereda', () => {
+  it('una fila SIN firma conserva su etiqueta; la MISMA clave reutilizada tampoco hereda', () => {
+    // El dueno se identifica sobre 'Hablante 1' SIN timbre (su log: clusters=0).
     sembrar([fila('r1', 'speaker_1', { speakerName: 'Hablante 1' })])
-    registerSpeakerIdentity({ name: 'Luis', clusters: [], previousLabel: 'Hablante 1' })
-    expect(etiqueta('r1'), 'la fila identificada se congela con el nombre').toBe('Luis')
+    const result = registerSpeakerIdentity({ name: 'Luis', clusters: [], previousLabel: 'Hablante 1' })
+    // Mandato 2026-10-26: ninguna fila ya escrita se reescribe.
+    expect(etiqueta('r1'), 'la fila conserva la etiqueta con la que se cerro').toBe('Hablante 1')
+    expect(result.rowsChanged).toBe(0)
 
-    // LLEGA la mujer: MISMA etiqueta 'Hablante 1' -> speaker_1, SIN su propio timbre
+    // LLEGA la mujer: MISMA etiqueta 'Hablante 1' -> speaker_1, SIN su propio timbre.
     useIntegrationStore.getState().addConversationEntry(fila('r2', 'speaker_1', { speakerName: 'Hablante 1' }))
-    expect(etiqueta('r2'), 'una voz distinta NO hereda el nombre de la clave reutilizada').toBe('Hablante 1')
+    expect(etiqueta('r2'), 'una voz distinta NO hereda un nombre de la clave reutilizada').toBe('Hablante 1')
   })
 
   it(
-    'CAMBIO DECLARADO (2026-10-21): la fila de la MISMA clave/epoch TAMBIEN se renombra',
+    'CAMBIO DECLARADO (2026-10-26): la fila de la MISMA clave NO se reescribe',
     () => {
-      // El renombre por CLAVE (mandato 2026-10-21) escribe el nombre en TODAS las filas de
-      // la voz del epoch, tengan o no nombre escrito/firma. Antes solo se congelaba la fila
-      // que ya traia nombre, y "soy Luis" dejaba filas de la MISMA voz en "Hablante 1".
-      // La proteccion contra la HERENCIA POR DIRECTORIO sigue siendo el caso anterior: una
-      // fila de la MISMA clave creada DESPUES del renombre NO hereda el nombre.
+      // La ruta de renombre por clave/epoch se retiro (mandato 2026-10-26): "soy Luis" liga
+      // el nombre a la VOZ, no a las filas ya escritas. La fila de la misma clave conserva
+      // su etiqueta; las locuciones siguientes las etiqueta el modulo al cerrarlas.
       sembrar([fila('r9', 'speaker_1')])
-      registerSpeakerIdentity({ name: 'Luis', clusters: [], previousLabel: 'Hablante 1' })
-      expect(etiqueta('r9'), 'la voz registrada pasa TODA su participacion al nombre').toBe('Luis')
+      const result = registerSpeakerIdentity({ name: 'Luis', clusters: [], previousLabel: 'Hablante 1' })
+      expect(result.rowsChanged).toBe(0)
+      expect(etiqueta('r9'), 'la fila ya escrita no se renombra').toBe('Hablante 1')
     },
   )
 
@@ -128,7 +130,7 @@ describe('FREEZE: una voz se reconoce por TODAS sus medidas, no solo por la del 
   })
   afterEach(() => resetVoiceDirectory())
 
-  it('la fila previa de la MISMA voz se congela aunque su medida no case con la del turno', () => {
+  it('la fila previa cuya firma no case con la medida del turno conserva su etiqueta (perdida declarada)', () => {
     const firmaDelCluster = eje(0)
     // Medida del turno que dice "soy Luis": 0.70 con la firma del cluster (>= piso).
     const medidaDelTurno = hacia(0.70)
@@ -154,7 +156,12 @@ describe('FREEZE: una voz se reconoce por TODAS sus medidas, no solo por la del 
       clusters: [{ label: 'Hablante 1', signature: [...firmaDelCluster], signatureHistory: [[...firmaDelCluster]] }],
       signatureVector: medidaDelTurno,
     })
-    expect(etiqueta('r1'), 'toda la participacion de ESA voz lleva el nombre').toBe('Luis')
+    // PERDIDA DECLARADA (mandato 2026-10-26): antes el freeze alcanzaba esta fila por la
+    // firma aprendida del cluster. Ahora la fila es INMUTABLE: su firma no casa con la
+    // medida del turno, asi que el directorio no la reconoce y conserva su etiqueta de VOZ
+    // ('Hablante 9', la clave con la que se escribio), no el nombre. El nombre si queda
+    // ligado a la VOZ para las locuciones siguientes.
+    expect(etiqueta('r1'), 'la fila ya escrita no se renombra').toBe('Hablante 9')
     expect(etiqueta('r2'), 'la voz ajena conserva su etiqueta').toBe('Hablante 3')
   })
 })

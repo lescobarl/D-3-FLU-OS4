@@ -10,7 +10,7 @@ import { expect, test } from '@playwright/test';
 import { cpSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { loadSession } from '../../scripts/playback/session.mjs';
+import { buildScriptedFinals, loadSession } from '../../scripts/playback/session.mjs';
 import { autoSkipOnboarding, gotoClean, seedActiveUser, stubLocalSpeech } from './_helpers';
 import {
     enablePlaybackRecorder,
@@ -20,6 +20,7 @@ import {
     startUiObserver,
     stopUiObserver,
     stubMuteRecognition,
+    stubScriptedRecognition,
     stubWavMicrophone,
 } from './playbackHelpers';
 
@@ -91,6 +92,11 @@ test(`FLU Playback (${MODE}, SR=${SR})`, async ({ page }) => {
         await page.addInitScript(stubWavMicrophone(), WAV_URL);
     }
     if (SR === 'mute') await page.addInitScript(stubMuteRecognition());
+    if (SR === 'script') {
+        const finals = buildScriptedFinals(session);
+        await page.addInitScript(stubScriptedRecognition(), finals);
+        trace('script-installed', { finals: finals.length });
+    }
 
     await gotoClean(page);
     trace('clean');
@@ -159,6 +165,11 @@ test(`FLU Playback (${MODE}, SR=${SR})`, async ({ page }) => {
 
     const ui = await stopUiObserver(page);
     const rows = await readPlaybackRows(page);
+    const script =
+        SR === 'script'
+            ? await page.evaluate(() => (window as any).__fluScript || null)
+            : null;
+    trace('script-emitted', script ? { planned: script.planned, emitted: script.emitted?.length || 0, errors: script.errors?.length || 0 } : {});
     const playback =
         SR === 'real'
             ? {
@@ -199,6 +210,13 @@ test(`FLU Playback (${MODE}, SR=${SR})`, async ({ page }) => {
 
     const captured = NO_CAPTURE || Number(snapshot?.audio?.seconds || 0) > 0;
     const rowsOk = SR === 'real' ? rows.length > 0 : true;
+    // Invariante del HARNESS (no del producto): si el guion no se emitió completo,
+    // la corrida no mide lo que dice medir y no puede darse por válida.
+    const scriptOk =
+        SR !== 'script' ||
+        (Boolean(script) &&
+            script.planned === script.emitted.length &&
+            script.errors.length === 0);
     const result = {
         schemaVersion: 1,
         ok:
@@ -206,7 +224,8 @@ test(`FLU Playback (${MODE}, SR=${SR})`, async ({ page }) => {
             Boolean(playback?.ready) &&
             Boolean(playback?.started) &&
             captured &&
-            rowsOk,
+            rowsOk &&
+            scriptOk,
         mode: MODE,
         sr: SR,
         realWav: REAL_WAV || null,
@@ -222,6 +241,7 @@ test(`FLU Playback (${MODE}, SR=${SR})`, async ({ page }) => {
         },
         playback,
         recorder: recorderStatus,
+        script,
         rows,
         ui,
         errors,

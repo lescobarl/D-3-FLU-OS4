@@ -47,21 +47,3 @@ export function clearSessionPrimarySpeaker(ref) {
     ref.__sessionPrimaryRank = 0
     ref.current = ''
 }
-
-/**
- * ¿El primario de la sesion fue PRESENTADO por la voz ("okay flu soy X")?
- *
- * Es el unico nombre propio que una REVISION del mismo turno (`asr-revision`) puede
- * conservar sin ventana de audio: lo dijo el hablante, no se heredo por continuidad.
- * Medido en el log del dueno (2026-10-18): tras "soy Luis", el commit de la revision
- * ASR del MISMO turno degradaba el nombre a "Hablante 1" (`written=Hablante 1`) y la
- * fila reescrita perdia el nombre.
- * @param {{ current?: string, __sessionPrimaryRank?: number }|null} ref
- * @returns {boolean}
- */
-export function isSessionPrimaryPresented(ref) {
-    return (
-        (Number(ref?.__sessionPrimaryRank) || 0) >= RANK.presented &&
-        Boolean(String(ref?.current || '').trim())
-    )
-}

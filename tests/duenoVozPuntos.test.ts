@@ -13,10 +13,10 @@ import { readFileSync } from 'node:fs'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useIntegrationStore } from '../src/store/integrationStore'
 import { commitUserTurnRow, escribeFilaDeUsuario, updateTurnRowSpeaker } from '../src/voice/lib/conversationTurnRow'
-import { registerSpeakerIdentity } from '../src/voice/lib/speakerIdentityRegister.js'
+import { registerSpeakerIdentity, registerSpeakerIdentityFromCommand } from '../src/voice/lib/speakerIdentityRegister.js'
 import { FLU_CONFIG } from '../src/voice/lib/fluConfig.js'
 import { getCommandSpeech } from '../src/voice/lib/voiceCommands.js'
-import { resolveTurnSpeakerAtCommit } from '../src/voice/lib/turnSpeakerCommit'
+import { resolveSpeakerNameFromUtterance } from '../src/voice/lib/speakerPolicy.js'
 import { resolveRowSpeakerLabel } from '../src/voice/lib/conversationRow'
 import { resetVoiceDirectory, registerVoiceName, resolveVoiceName, resolveVoiceIdentity } from '../src/voice/lib/speakerDirectory.js'
 import { resolveVoiceParticipants } from '../src/voice/lib/voiceParticipantsSource'
@@ -54,41 +54,33 @@ describe('P1 - la conversacion solo se INSERTA (no se reescribe)', () => {
     })
 })
 
-describe('P5 - el nombre registrado alcanza TODOS los turnos de esa voz', () => {
-    // AMEND (freeze 2026-10-17, mandato del dueno): el registro CONGELA el nombre en las filas
-    // YA MOSTRADAS de esa voz; una fila NUEVA posterior SIN medida no lo hereda (freeze: sin
-    // firma no se consulta el directorio, o la clave reciclada pintaria a otra voz).
-    it('un turno NUEVO de la misma voz (sin medida) NO hereda; se congela al medirlo', () => {
-        // Los dos primeros turnos son MEDIDOS (etiqueta de diarizacion escrita en la fila);
-        // el tercero llega sin medida y su rotulo lo da la VOZ al mostrar (A3).
+describe('P5 - el nombre NO reescribe filas ya escritas (un solo dueno de la fila)', () => {
+    // MANDATO 2026-10-26: la etiqueta de una locucion la decide el modulo CONVERSACION al
+    // cerrarla y ninguna fila ya escrita se reescribe. El registro de "soy X" liga el nombre
+    // a la VOZ (directorio/clusters/primario); el reetiquetado retroactivo de filas era la
+    // ruta doble retirada. La continuidad de la MISMA sesion la prueba `conversacionContinuidad`.
+    it('registrar el nombre deja intactas las filas ya mostradas', () => {
         commitUserTurnRow({ text: 'uno', speakerName: 'Hablante 1', evidenciaAcustica: true, turnId: 1 } as never)
         commitUserTurnRow({ text: 'dos', speakerName: 'Hablante 1', evidenciaAcustica: true, turnId: 2 } as never)
-        registerSpeakerIdentity({ name: 'Luis', previousLabel: 'Hablante 1', clusters: [], refs: {} as never })
-        commitUserTurnRow({ text: 'tres', speakerName: 'Hablante 1', turnId: 3, evidenciaAcustica: false } as never)
-        expect(filas().map((e) => resolveRowSpeakerLabel(e)), 'las ya mostradas se congelan; la nueva sin medida, provisional').toEqual([
-            'Luis',
-            'Luis',
+        const result = registerSpeakerIdentity({ name: 'Luis', previousLabel: 'Hablante 1', clusters: [], refs: {} as never })
+        expect(result.registered).toBe(true)
+        expect(result.rowsChanged, 'el registro no escribe filas').toBe(0)
+        expect(filas().map((e) => resolveRowSpeakerLabel(e)), 'cada fila conserva su etiqueta').toEqual([
+            'Hablante 1',
             'Hablante 1',
         ])
     })
 
-    // Punto 5 del dueno: "le dije ok flu soy luis y no actualizo todos los Hablante 1 que en
-    // todos era yo". Sus filas viejas se escribieron con la etiqueta provisional; el nombre
-    // tiene que alcanzarlas TAMBIEN (no solo los turnos siguientes). FREEZE: el registro ancla
-    // en la ETIQUETA con la que esa voz venia apareciendo (su clave de voz) y congela esas filas.
-    it('el nombre alcanza las filas escritas con la etiqueta PROVISIONAL anterior', () => {
+    it('la RUTA DEL COMANDO tampoco reescribe filas ya escritas', () => {
         commitUserTurnRow({ text: 'uno', speakerName: 'Hablante 1', evidenciaAcustica: true, turnId: 1 } as never)
         commitUserTurnRow({ text: 'dos', speakerName: 'Hablante 1', evidenciaAcustica: true, turnId: 2 } as never)
-        commitUserTurnRow({ text: 'tres', speakerName: 'Hablante 1', evidenciaAcustica: true, turnId: 3 } as never)
-        // La identidad llega por AUDIO en un turno: queda registrada la etiqueta de esa voz.
-        updateTurnRowSpeaker(3, 'Luis', { evidenciaAcustica: true })
-        // El dueno DICE su nombre con la wake: el registro congela TODA su participacion.
-        registerSpeakerIdentity({ name: 'Luis', previousLabel: 'Hablante 1', clusters: [], refs: {} as never })
-        expect(filas().map((e) => resolveRowSpeakerLabel(e)), 'todas las filas de esa voz').toEqual([
-            'Luis',
-            'Luis',
-            'Luis',
-        ])
+        const result = registerSpeakerIdentityFromCommand({
+            transcript: 'okay flu soy luis',
+            speakerName: 'Hablante 1',
+        })
+        expect(result.registered).toBe(true)
+        expect(result.rowsChanged).toBe(0)
+        expect(filas().map((e) => resolveRowSpeakerLabel(e))).toEqual(['Hablante 1', 'Hablante 1'])
     })
 })
 
@@ -133,14 +125,13 @@ describe('PRUEBA DE DETECTOR (el detector no es decorativo: la marca discrimina)
 // ------------------------------------------------------------
 describe('P3 - una sola voz: el dictado no inventa hablante', () => {
     it('mencionar el cambio de hablante NO cambia la etiqueta del turno', () => {
-        const r = resolveTurnSpeakerAtCommit({
-            phrase: 'en la ultima frase no hay ni cambio de hablante ni ni silencio para que lo escriba',
-            knownSpeakerLabels: ['Hablante 1'],
-            stickyFallback: 'Hablante 1',
-            lastLogged: 'Hablante 1',
-        } as never)
-        expect(r.source, 'no es una orden').not.toBe('explicit-next')
-        expect(r.speakerName, 'la voz sigue siendo la misma').toBe('Hablante 1')
+        // DUEÑO ÚNICO del nombre: `resolveSpeakerNameFromUtterance` exige "soy <nombre>".
+        // Una frase que solo MENCIONA el cue no registra identidad (antes lo decidía el
+        // commit viejo, retirado con la tubería el 2026-10-25).
+        const frase = 'en la ultima frase no hay ni cambio de hablante ni ni silencio para que lo escriba'
+        expect(resolveSpeakerNameFromUtterance(frase), 'no es una orden').toBe('')
+        commitUserTurnRow({ text: frase, speakerName: 'Hablante 1', turnId: 2 } as never)
+        expect(filas().map((e) => resolveRowSpeakerLabel(e)), 'la voz sigue siendo la misma').toEqual(['Hablante 1'])
     })
 })
 

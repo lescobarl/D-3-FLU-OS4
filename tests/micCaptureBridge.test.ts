@@ -246,6 +246,65 @@ describe('micCaptureBridge — bloques de PCM', () => {
         expect([...pcm]).toEqual([0x7fff, -0x8000, 0, 16383]);
     });
 
+    it('el tap CRUDO sale de la fuente pre-ganancia, sin throttle y con su propio indice', async () => {
+        // El modulo CONVERSACION mide voz con el piso del VAD, calibrado en el
+        // dominio CRUDO del microfono. Si el tap se cableara del nodo amplificado,
+        // toda trama superaria el piso y la locucion no cerraria nunca (defecto
+        // medido 2026-10-26). Este test falsifica ese cableado cruzado.
+        const crudos: Array<{ indice: number; valor: number }> = [];
+        const amplificados: Float32Array[] = [];
+        const { contexto } = makeContext();
+        const fuente = makeFuente();
+        const fuenteCruda = makeFuente();
+        await wireMicCapturePipeline({
+            audioContext: contexto as unknown as AudioContext,
+            source: fuente,
+            recordSource: fuenteCruda,
+            processEvery: 2,
+            onPcmBlock: (samples: Float32Array) => {
+                amplificados.push(samples);
+            },
+            onRawPcmBlock: (samples: Float32Array, meta: { sampleIndex: number }) => {
+                crudos.push({ indice: meta.sampleIndex, valor: samples[0] });
+            },
+        });
+        const [nodoStt, nodoGrabacion] = WorkletFalso.creados;
+
+        // Cada fuente alimenta SU worklet: no hay cruce amplificado -> crudo.
+        expect((fuente as unknown as FuenteFalsa).conectados).toEqual([nodoStt]);
+        expect((fuenteCruda as unknown as FuenteFalsa).conectados).toEqual([nodoGrabacion]);
+
+        nodoStt.port.emitir({ type: 'pcm', samples: new Float32Array([0.5, 0.5]) });
+        nodoStt.port.emitir({ type: 'pcm', samples: new Float32Array([0.5, 0.5]) });
+        nodoGrabacion.port.emitir({ type: 'pcm', samples: new Float32Array([0.25]) });
+        nodoGrabacion.port.emitir({ type: 'pcm', samples: new Float32Array([0.5]) });
+
+        // processEvery 2 frena el STT (1 de 2), NUNCA el tap crudo: el VAD mide
+        // todos los bloques y el eje de muestras es el de la grabacion.
+        expect(amplificados).toHaveLength(1);
+        expect([...amplificados[0]]).toEqual([0.5, 0.5]);
+        expect(crudos).toEqual([
+            { indice: 0, valor: 0.25 },
+            { indice: 1, valor: 0.5 },
+        ]);
+    });
+
+    it('sin fuente cruda el tap crudo cae al nodo del STT pero conserva TODOS los bloques', async () => {
+        const indices: number[] = [];
+        const { puerta } = await conPuente({
+            processEvery: 2,
+            onRawPcmBlock: (_samples: Float32Array, meta: { sampleIndex: number }) => {
+                indices.push(meta.sampleIndex);
+            },
+        });
+
+        for (let i = 0; i < 4; i += 1) {
+            puerta.emitir({ type: 'pcm', samples: new Float32Array([1]) });
+        }
+
+        expect(indices).toEqual([0, 1, 2, 3]);
+    });
+
     it('a 48 kHz el bloque baja a 16 kHz: un tercio de muestras', async () => {
         const pushSttPcm = vi.fn();
         const { puerta } = await conPuente({ pushSttPcm, sampleRate: DEFAULT_SAMPLE_RATE });

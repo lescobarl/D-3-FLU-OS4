@@ -58,15 +58,11 @@ vi.mock('../src/voice/lib/speechRecognitionLocal', () => ({
   stopSpeechRecognition: vi.fn(),
 }))
 vi.mock('../src/voice/lib/micCaptureBridge.js', () => ({ wireMicCapturePipeline: vi.fn(async () => ({ zeroGain: { disconnect: vi.fn() } })) }))
-vi.mock('../src/voice/lib/conversationIngressBridge.js', () => ({
-  createConversationIngressRuntime: vi.fn(() => ({ pushSrGapEvent: vi.fn(), drainAll: vi.fn() })),
-}))
 vi.mock('../src/voice/lib/turnIdentityPipeline.js', () => ({
   startContinuousIdentityPipeline: vi.fn(),
   stopAllContinuousIdentityPipelines: vi.fn(),
   primeTurnSpeakerPreflight: vi.fn(async () => {}),
 }))
-vi.mock('../src/voice/lib/micEventProducer.js', () => ({ convertSimEventsToMicBursts: vi.fn(() => []) }))
 vi.mock('../src/voice/lib/voiceLocalFallback', () => ({
   createLocalRecognition: vi.fn(),
   shouldUseLocalFallback: vi.fn(() => false),

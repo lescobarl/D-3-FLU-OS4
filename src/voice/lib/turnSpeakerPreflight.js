@@ -16,7 +16,6 @@ import { DEFAULT_SAMPLE_RATE } from './audioConstants.js'
 import { relayLog } from '../../lib/clientLogRelay'
 import { SPEAKER_ASSIGN } from './speakerAssignDefaults.js'
 import { classifyVoiceAgainstClusters } from './speakerDiarization.js'
-import { resolvePendingSpeakerRows } from './conversationTurnRow'
 
 const preflightByTurn = new Map()
 
@@ -188,8 +187,8 @@ export function scheduleTurnSpeakerPreflight(turnId, run, { onClusters, onResolv
       thresholds: FLU_CONFIG.voiceIdentity?.capture?.conversationSpeakerThresholds,
     })
     if (verdict.verdict !== 'known') return
-    // El LEDGER es la fuente de la medida: resuelve tambien las filas que nacieron SIN firma.
-    resolvePendingSpeakerRows(result.workingClusters, { snapshots: getSessionSpeakerSnapshots() })
+    // El preflight MIDE y publica el slot; NO reescribe filas (mandato 2026-10-26). Las
+    // filas las escribe el modulo CONVERSACION con la etiqueta que resolvio al cerrar.
   }
 
   const prior = preflightByTurn.get(id)

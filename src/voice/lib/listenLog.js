@@ -1,6 +1,5 @@
 /**
  * Traza consola (dev) + ring opcional (__FLU_LISTEN_DEBUG).
- * Panel mic: solo vía micIngressLog.js (texto publicado en ingress).
  * Consola chrome-raw: opcional, no alimenta el panel.
  */
 import { fluAsyncErrorHandler } from './fluAsyncError.js'

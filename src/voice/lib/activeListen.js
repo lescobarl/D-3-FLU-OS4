@@ -4,9 +4,9 @@ import { equalsTrimmed, pickLabel } from '../../lib/textUtils.ts';
  */
 import { cleanForSpeech, detectWakeIntroducedName, normalizeSpokenCommand, stripDiacritics } from './audioMath.js'
 import { FLU_CONFIG, getActiveListenConfig } from './fluConfig.js'
+import { readStreamDisplay, utterancesRelate, utterancesSameRevision } from './conversationStream.js'
 import { isProperSpeakerName, nextAvailableSpeakerLabel } from './voiceIdentity.js'
 import { requiresWakeWordForSpeakerName } from './speakerPolicy.js'
-import { integrateMicPacket, mergeMicChunks, readStreamDisplay, resolveCommitCapture, utterancesRelate, utterancesSameRevision } from './conversationStream.js'
 
 export {
   advancePublishedDisplay,
@@ -70,20 +70,8 @@ export function resetActiveListenState(state) {
   state.openLineBook = null
 }
 
-function resolveActiveSpeaker(state, utterance = '') {
-  const wakeWords = FLU_CONFIG.voiceCommands?.wakeWords || []
-  const introduced = detectWakeIntroducedName(utterance, wakeWords)
-  if (introduced) return introduced
-  return getSpeakerLabel(state)
-}
-
 export function readCommandText(state) {
   return readStreamDisplay(state)
-}
-
-/** Un final por onresult: fusiona varios fragmentos acumulativos o secuenciales. */
-export function pickLongestFinal(chunks = []) {
-  return mergeMicChunks(chunks)
 }
 
 /**
@@ -187,87 +175,6 @@ export function getSpeakerLabel(state) {
   return formatListenSpeakerLabel(Number.isFinite(index) && index >= 1 ? index : 1, speakers)
 }
 
-function shouldOpenNewParagraph(state, nowMs = Date.now()) {
-  const { speakers } = getActiveListenConfig()
-  const breakOnPause = speakers.paragraphBreakOnPause !== false
-  if (!breakOnPause) return false
-  if (!state.lastFinalAtMs || !cleanForSpeech(state.openLine)) return false
-  return nowMs - state.lastFinalAtMs >= speakers.paragraphBreakMs
-}
-
-/**
- * ¿La linea abierta es una captura CONFIRMADA (un FINAL ya integrado y sin interino
- * posterior) o solo un INTERINO en vuelo?
- *
- * El dueño del estado marca los dos hechos: `confirmFinal` estampa `lastFinalAtMs` al
- * integrar un FINAL, y cada interino toca `openLineLastTouchMs`
- * (`markInterimOpenLineActivity`). Con un interino POSTERIOR al final la linea ya no es
- * fiable (Chrome congela a mitad de frase y entrega una palabra truncada); con el FINAL
- * como ultimo escritor, la linea es texto que el usuario YA dijo y NO se puede descartar
- * sin fila (defecto medido P9.60: el rebuild del watchdog la descartaba y la locucion se
- * perdia).
- */
-export function hasConfirmedOpenLine(state) {
-  // LOCUCION CONFIRMADA SIN FILA: la marca el ingress (`pendingFinal`) al confirmar un
-  // FINAL de segmento que NO cierra el turno. Los interinos POSTERIORES tocan la linea
-  // viva (`openLineLastTouchMs > lastFinalAtMs`) y hacian que este test dijera "no
-  // confirmada" -> el rebuild por stall la descartaba y la locucion se perdia ENTERA
-  // (medido en el log del dueno 2026-10-10 19:24: `filas=[]` con el texto en la linea).
-  if (cleanForSpeech(state?.pendingFinal)) return true
-  if (!cleanForSpeech(state?.openLine)) return false
-  const finalAt = Number(state?.lastFinalAtMs) || 0
-  if (finalAt <= 0) return false
-  return finalAt >= (Number(state?.openLineLastTouchMs) || 0)
-}
-
-export function confirmFinal(state, finalText = '', nowMs = Date.now()) {
-  const utterance = resolveCommitCapture({
-    final: finalText,
-    interim: state.pendingInterim,
-    state,
-    published: readStreamDisplay(state),
-  })
-  state.pendingInterim = ''
-
-  const newParagraph = shouldOpenNewParagraph(state, nowMs)
-  if (newParagraph) {
-    const { speakers } = getActiveListenConfig()
-    if (speakers.autoAdvanceOnPause) {
-      advanceSpeaker(state)
-    }
-  }
-
-  if (utterance) {
-    integrateMicPacket(state, { final: utterance })
-  }
-
-  if (newParagraph) {
-    state.openLine = ''
-    state.pendingInterim = ''
-  }
-
-  if (utterance && detectNextSpeakerPhrase(utterance)) {
-    advanceSpeaker(state)
-  }
-
-  state.lastFinalAtMs = nowMs
-
-  const speaker = resolveActiveSpeaker(state, utterance)
-
-  return {
-    transcript: state.transcript,
-    openLine: state.openLine,
-    newParagraph,
-    speaker,
-  }
-}
-
-export function sealPendingInterim(state, nowMs = Date.now()) {
-  const pending = cleanForSpeech(state?.pendingInterim || '')
-  if (!pending) return confirmFinal(state, '', nowMs)
-  return confirmFinal(state, pending, nowMs)
-}
-
 /**
  * DUENO UNICO del BORRADO de la locucion CONFIRMADA sin fila (`pendingFinal`).
  *
@@ -324,16 +231,6 @@ export function resolveRecognitionLocale(language = defaultLanguage(), detected 
 
 function normalizePhrase(text = '') {
   return stripDiacritics(cleanForSpeech(text)).toLowerCase()
-}
-
-export function matchesListeningAck(phrase = '') {
-  const norm = normalizePhrase(phrase)
-  if (!norm) return false
-  const { listeningAck } = getActiveListenConfig()
-  return listeningAck.phrases.some((sample) => {
-    const key = normalizePhrase(sample)
-    return key && (norm === key || norm.includes(key) || key.includes(norm))
-  })
 }
 
 /**

@@ -2,11 +2,8 @@
  * devFlags.js — DUENO ÚNICO del flag de depuración con override global de ventana.
  *
  * Estaba copiado con la misma forma (IS_DEV + override en `window` + default de
- * FLU_CONFIG.debug) en fluDevConsole.js y en listenLog.js (dos veces): P9.27.
+ * FLU_CONFIG.debug) en el panel de depuración y en listenLog.js (dos veces): P9.27.
  * El override de `window` MANDA sobre la config, y `false` gana sobre `true`.
- *
- * NO es el mismo patrón `isMicIngressLogEnabled` (micIngressLog.js): ese NO se apaga
- * fuera de dev, así que se declara aparte y no usa este helper.
  */
 import { FLU_CONFIG } from './fluConfig.js'
 

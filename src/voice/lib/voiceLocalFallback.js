@@ -10,8 +10,9 @@
  * El motor local en sí (`createWhisperRecognitionEngine`) lo instancia el hook
  * `useFluVoiceAssistant` — único punto con acceso al búfer PCM de
  * `micCaptureBridge` y al cableado de eventos del pipeline — de modo que la
- * transcripción siga teniendo UNA sola salida (parciales/finales caen en el
- * mismo `resolveIngressCaptureText`/`commitAndResolveTurn`). Aquí no se crea
+ * transcripción siga teniendo UNA sola salida: los parciales y finales del motor
+ * local caen en el mismo `onresult` del hook que alimenta al módulo de
+ * conversación (y a la caja de la frase en modo pasivo). Aquí no se crea
  * ni se duplica ningún motor: solo se decide CUÁNDO degradar.
  */
 import { FLU_CONFIG } from './fluConfig.js'

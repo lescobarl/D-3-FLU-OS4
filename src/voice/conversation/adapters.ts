@@ -22,19 +22,20 @@
  *  - `logCaughtError` (`src/lib/caughtError.ts`): el plan (§Logs) y AGENTS §1.5 lo
  *    exigen como ÚNICO registro de hechos y errores capturados.
  *  - `relayLog` (`src/lib/clientLogRelay.ts`): el mismo relay que usa
- *    `logCaughtError`, aquí con nivel informativo para la decisión de motor.
+ *    `logCaughtError`, aquí con nivel informativo del motor resuelto.
  *  - `normalizeForMatch` (`src/lib/textUtils.ts`): el plegado NFD tiene un dueño
  *    único y `duplicationGuard` prohíbe reimplementarlo. El eco compara palabras
  *    normalizadas por esa función, no por una copia local.
  * Ambos se importan aquí y en ningún otro archivo del módulo.
  */
 import { logCaughtError } from '../../lib/caughtError.ts'
-import { relayLog } from '../../lib/clientLogRelay.ts'
 import { normalizeForMatch } from '../../lib/textUtils.ts'
 import { splitTranscriptAtWakeWord } from '../api/audio.ts'
 import { FLU_CONFIG } from '../api/config.ts'
 import { getVadFrameMs } from '../lib/asr/asrConfig.js'
 import { labelToSpeakerId } from '../lib/conversationRow.js'
+import { isAutoSpeakerLabel } from '../lib/speakerCore.js'
+import { fraseDelEventoAsr, mergeIntoOpenLine } from '../lib/speechMerge.js'
 import { frameSamplesFor, isVoicedFrame } from '../lib/voicedActivity.js'
 import {
   escribirRegistroConversacion,
@@ -44,7 +45,7 @@ import {
 import { buildSyncTuple } from '../../core/db/syncTuple.ts'
 import { crearAlmacenDexie } from './adaptersAlmacen.ts'
 import type { DbLike } from './adaptersAlmacen.ts'
-import { CONVERSACION_CONFIG, esMotorConversacion } from './ports.ts'
+import { CONVERSACION_CONFIG } from './ports.ts'
 import type {
   AlmacenPort,
   CambiosFila,
@@ -53,7 +54,6 @@ import type {
   FilaNueva,
   IdPort,
   MedidaVad,
-  MotorConversacion,
   PartidorPort,
   RegistroPort,
   RelojPort,
@@ -98,73 +98,60 @@ export function registrarFallo(contexto: string, promesa: Promise<unknown>): Pro
     .then(() => undefined)
 }
 
-/** Parámetro de URL del override de runtime (lo siembra el E2E antes del goto). */
-const PARAM_MOTOR_CONVERSACION = 'conversationEngine'
-
 /**
- * Override de runtime del motor: solo un valor declarado cuenta; el resto se ignora
- * (un parámetro ausente o inventado no enciende nada). Es la vía del E2E, no una
- * segunda configuración: no escribe estado ni se persiste.
+ * Ejecuta una tarea y registra su fallo, sin propagarlo.
  *
- * CANDADO DE PRODUCCIÓN: la rama vive tras `import.meta.env.DEV`, que el build
- * sustituye por `false`; en un build de producción `?conversationEngine=` no
- * enciende NADA (ni siquiera se lee el parámetro). Sin el candado, cualquier
- * usuario podía activar un motor sin terminar desde la URL.
- * @returns El motor pedido por la URL, o `null` si no hay override válido.
+ * El registro central (`logCaughtError`) se llama AQUÍ, en la frontera: es el único
+ * archivo del módulo que puede importarlo, y un `catch` que no registre con la
+ * excepción es un trago silencioso (AGENTS §1.5).
+ * @param contexto Contexto del fallo.
+ * @param tarea Operación en curso (síncrona o promesa).
  */
-function motorPorOverrideRuntime(): MotorConversacion | null {
-  if (!import.meta.env.DEV) return null
-  if (typeof window === 'undefined') return null
-  const valor = new URLSearchParams(window.location.search).get(PARAM_MOTOR_CONVERSACION)
-  return esMotorConversacion(valor) ? valor : null
+export async function ejecutarRegistrando(
+  contexto: string,
+  tarea: () => Promise<unknown> | unknown,
+): Promise<void> {
+  try {
+    await tarea()
+  } catch (error) {
+    logCaughtError(contexto, error)
+  }
 }
 
 /**
- * Motor declarado en la configuración del producto, si esa clave existe hoy.
- * `FLU_CONFIG` no publica `conversation`: el producto cae al valor del plan.
- * @returns El motor del producto, o `null` si la clave no está declarada.
+ * Compone el TROZO de un evento del ASR con sus resultados NUEVOS.
+ *
+ * El reconocedor entrega fragmentos, no frases acumuladas: re-emite delante el final
+ * retenido del enunciado anterior (patrón `10` con `resultIndex=1`), manda prefijo
+ * re-plegado + cola creciente y puede re-escuchar el mismo tramo dos veces. El dueño
+ * de esa composición es `speechMerge.fraseDelEventoAsr`; se expone aquí porque el
+ * límite del módulo vive en este archivo.
  */
-function motorPorConfigProducto(): MotorConversacion | null {
-  const producto = FLU_CONFIG as { conversation?: { engine?: unknown } }
-  const valor = producto.conversation?.engine
-  return esMotorConversacion(valor) ? valor : null
-}
+export const componerFraseDelEvento = fraseDelEventoAsr
 
 /**
- * Último motor que se registró en el log: solo se escribe cuando CAMBIA.
- * Sin este estado, cada consulta de config escribiría una línea.
+ * Integra un trozo en la línea abierta con el libro de su último hueco.
+ *
+ * Dueño único de la regla: `speechMerge.mergeIntoOpenLine` (el turno vivo de
+ * `conversationStream` delega en la misma función). Devuelve la línea siguiente y el
+ * libro actualizado; no escribe estado.
  */
-let motorRegistradoEnLog: MotorConversacion | null = null
-
-/**
- * Registra el motor resuelto cuando cambia, con la URL que lo explica: la
- * bandera vive en la URL y se lee EN VIVO, así que una navegación que deje
- * fuera `search` cambia el motor a mitad de sesión sin que nada lo delate.
- * @param motor Motor resuelto en esta consulta.
- */
-function registrarCambioDeMotor(motor: MotorConversacion): void {
-  if (motor === motorRegistradoEnLog) return
-  motorRegistradoEnLog = motor
-  const search = typeof window === 'undefined' ? '' : window.location.search
-  relayLog('INFO', 'conversationEngine', motor, { search })
-}
+export const fusionarEnLineaAbierta = mergeIntoOpenLine
 
 /**
  * Configuración viva de voz leída por la fachada pública de config.
- * El motor se resuelve en orden: override de runtime → configuración del
- * producto → valor del plan (`legacy`). El default del plan no se toca.
- * @returns Puerto de configuración que consume el hook (y App para su compuerta).
+ * El motor es el del plan (`new`): `legacy` dejó de ser opción de producto y no
+ * existe override de runtime, así que una navegación no puede cambiar el motor
+ * a mitad de sesión.
+ * @returns Puerto de configuración que consume el hook.
  */
 export function crearConfigFlu(): ConfigPort {
   return {
     wakeWords: () => [...FLU_CONFIG.voiceCommands.wakeWords],
     semillaEtiqueta: () => String(FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker || ''),
-    conversationEngine: () => {
-      const motor =
-        motorPorOverrideRuntime() ?? motorPorConfigProducto() ?? CONVERSACION_CONFIG.conversation.engine
-      registrarCambioDeMotor(motor)
-      return motor
-    },
+    // Delegado, no reimplementado: la definición de etiqueta anónima vive en su dueño.
+    esEtiquetaAnonima: (etiqueta) => isAutoSpeakerLabel(etiqueta),
+    conversationEngine: () => CONVERSACION_CONFIG.conversation.engine,
   }
 }
 
@@ -203,12 +190,20 @@ export function crearPartidorWake(config: ConfigPort): PartidorPort {
 }
 
 /**
- * VAD del producto: mide voz y silencio ACUMULADO de cola con el dueño único
- * de umbral y trama (`voicedActivity`). No decide cierres: eso es la frontera.
- * @returns Puerto VAD con el silencio que arrastra el bloque actual.
+ * VAD del producto: mide voz y silencio de COLA con el dueño único de umbral y
+ * trama (`voicedActivity`). No decide cierres: eso es la frontera.
+ *
+ * El silencio es el de la COLA del bloque (lo que sigue a la última trama con
+ * voz), no un acumulado histórico: cuando el bloque trae voz se descarta el
+ * silencio anterior y solo cuenta lo que queda tras la voz. Antes se sumaba
+ * siempre, así que tras el primer silencio la medida ya no bajaba nunca y el
+ * tramo no se cortaba en el siguiente hueco (congelación medida en el playback
+ * del 2026-10-25: filas de 119–152 s).
+ *
+ * @returns Puerto VAD con el silencio de cola del bloque.
  */
 export function crearVadProducto(): VadPort {
-  let silencioAcumuladoMs = 0
+  let silencioColaMs = 0
   return {
     medir: (muestras, sampleRate): MedidaVad => {
       const tasa = Number(sampleRate)
@@ -221,8 +216,13 @@ export function crearVadProducto(): VadPort {
         const fin = Math.min(inicio + trama, muestras.length)
         if (isVoicedFrame(muestras, inicio, fin)) finVoz = fin
       }
-      silencioAcumuladoMs += ((muestras.length - Math.max(0, finVoz)) / tasa) * 1000
-      return { hayVoz: finVoz >= 0, silencioMs: silencioAcumuladoMs }
+      if (finVoz >= 0) {
+        // La voz corta la racha: solo queda el silencio posterior a ella.
+        silencioColaMs = ((muestras.length - finVoz) / tasa) * 1000
+        return { hayVoz: true, silencioMs: silencioColaMs }
+      }
+      silencioColaMs += (muestras.length / tasa) * 1000
+      return { hayVoz: false, silencioMs: silencioColaMs }
     },
   }
 }

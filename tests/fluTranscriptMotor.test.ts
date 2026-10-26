@@ -15,7 +15,6 @@ import {
     getSpeakerThresholdsCfg,
     getIngressGuardsCfg,
     getSpeechMergeCfg,
-    getAsrSegmentationCfg,
     getFluTimingCfg,
     getShortFinalKeywordSet,
 } from '../src/voice/lib/fluTranscriptMotor.js';
@@ -29,7 +28,6 @@ const CONFIG = {
     transcript: {
         ingressGuards: { maxChars: 500 },
         speechMerge: { shortFinalKeywords: [' Si ', 'Pan', ''] },
-        asrSegmentation: { silencioMs: 400 },
     },
     timing: { turnoMs: 1000 },
 };
@@ -78,11 +76,6 @@ const LECTORES: Lector[] = [
         mensaje: 'fluConfig.transcript.speechMerge es obligatorio',
     },
     {
-        leer: () => getAsrSegmentationCfg(),
-        path: ['transcript', 'asrSegmentation'],
-        mensaje: 'fluConfig.transcript.asrSegmentation es obligatorio',
-    },
-    {
         leer: () => getFluTimingCfg(),
         path: ['timing'],
         mensaje: 'fluConfig.timing es obligatorio',
@@ -105,10 +98,6 @@ describe('fluTranscriptMotor - lectores devuelven la config', () => {
 
     it('getSpeechMergeCfg devuelve la config de merge de voz', () => {
         expect(getSpeechMergeCfg()).toBe(leer(['transcript', 'speechMerge']));
-    });
-
-    it('getAsrSegmentationCfg devuelve la segmentacion ASR', () => {
-        expect(getAsrSegmentationCfg()).toBe(leer(['transcript', 'asrSegmentation']));
     });
 
     it('getFluTimingCfg devuelve la config de tiempos', () => {

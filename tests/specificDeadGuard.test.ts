@@ -29,8 +29,6 @@ const DEAD_SYMBOLS = [
   // apareciendo como etiqueta de diagnostico y como ruta de import, asi que el detector
   // por nombre daria falso positivo. Se vigila con la asercion de API ('listenLog' in m).
 
-  // src/voice/lib/micIngressLog.js — stub sin consumidor.
-  'logMicIngress',
   // src/voice/lib/activeListen.js — deprecados/lectores sin consumidor.
   'appendNewHeard',
   'readSessionTranscript',
@@ -123,10 +121,6 @@ describe('specificDeadGuard — sin código muerto ni basura específicos', () =
     expect('logStreamPublish' in listen).toBe(false)
     expect('printListenSummary' in listen).toBe(false)
     expect('isMicRawConsoleEnabled' in listen).toBe(false)
-
-    const ingress = await import('../src/voice/lib/micIngressLog.js')
-    expect(typeof ingress.logMicProducerRaw).toBe('function')
-    expect('logMicIngress' in ingress).toBe(false)
 
     const commands = await import('../src/voice/lib/voiceCommands.js')
     expect(typeof commands.getCommandSpeech).toBe('function')

@@ -66,7 +66,12 @@ export type EvidenciaVoz = Readonly<{
 
 /** Resultado del ASR con la identidad de su tramo. */
 export type AsrIngestado = Readonly<{
-  /** `tramoId` emitido por el ingestor: el ÚNICO id de la locución. */
+  /**
+   * `tramoId` emitido por el ingestor: el ÚNICO id de la locución.
+   * Vacío = lo resuelve el módulo al PROCESAR (dentro de su cola): tramo de
+   * audio vigente o, si ya cerró, el último medido. Sin ninguno se cuenta como
+   * huérfano; nunca se inventa un tramo.
+   */
   tramoId: string
   /** Texto reconocido (puede revisarse o extenderse). */
   texto: string

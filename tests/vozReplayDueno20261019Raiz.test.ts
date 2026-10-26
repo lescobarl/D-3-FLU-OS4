@@ -212,7 +212,9 @@ describe('raiz C · reconocer una identidad NO envenena la base ni a otra voz (d
     })
 
     expect(resultado.registered).toBe(true)
-    expect(resultado.rowsChanged, 'solo las filas del dueno se congelan').toBe(2)
+    expect(resultado.rowsChanged, 'reconocer NO reescribe filas ya escritas').toBe(0)
+    // La etiqueta MOSTRADA puede resolverse por el directorio de la voz; la fila
+    // escrita no se toca y la mujer conserva su etiqueta.
     expect(etiquetasMostradas(), 'la mujer NO hereda el nombre').toEqual([
       'Luis',
       'Luis',
@@ -240,7 +242,7 @@ describe('raiz C · reconocer una identidad NO envenena la base ni a otra voz (d
     expect(userRows().map((row) => String(row.speakerId))).toEqual(['speaker_1', 'speaker_1'])
 
     const resultado = applyKnownVoiceName({ name: 'Luis', previousLabel: 'Hablante 1', anchorVector: VOZ_LUIS })
-    expect(resultado.rowsChanged, 'solo la fila cuyo TIMBRE es el ancla').toBe(1)
+    expect(resultado.rowsChanged, 'reconocer NO reescribe filas ya escritas').toBe(0)
     expect(etiquetasMostradas(), 'la fila a 0.741 no se afirma como Luis').toEqual(['Luis', 'Hablante 1'])
   })
 

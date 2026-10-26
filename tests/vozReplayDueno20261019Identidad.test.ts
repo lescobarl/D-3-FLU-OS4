@@ -26,8 +26,9 @@
 // QUE SE FIJA:
 //   A. La identidad se ancla a la VOZ MEDIDA del turno, no a `previousLabel` (la voz
 //      anterior puede ser la TV o la mujer).
-//   B. El freeze alcanza TODAS las etiquetas de ESA voz (la partida en Hablante 1 y
-//      Hablante 3), y jamas la voz distinta.
+//   B. El registro liga el nombre a TODAS las etiquetas de ESA voz (la partida en
+//      Hablante 1 y Hablante 3) en la VOZ, y jamas a la voz distinta. Las filas ya
+//      escritas NO se reescriben (mandato 2026-10-26).
 //   C. SIN vector medido no se escribe ni el DIRECTORIO ni la BASE (el `baseVector:512`
 //      del log era exactamente el defecto).
 // ============================================================
@@ -95,7 +96,7 @@ describe('replay 2026-10-19 · defecto 4: la misma voz partida en dos etiquetas'
     expect(labels).not.toContain('Hablante 2')
   })
 
-  it('"soy Luis" con la voz MEDIDA renombra TODA la participacion partida y NO toca a la mujer', () => {
+  it('"soy Luis" con la voz MEDIDA liga el nombre a TODA la voz partida sin reescribir filas', () => {
     sembrarFilasDelLog()
     const { refs, registerParticipant, setClusters } = refsDeSesion()
 
@@ -107,15 +108,16 @@ describe('replay 2026-10-19 · defecto 4: la misma voz partida en dos etiquetas'
       refs,
     })
 
-    // TODA la participacion del dueno (las DOS etiquetas) lleva su nombre.
+    // Mandato 2026-10-26: las filas ya escritas conservan su etiqueta; el nombre queda
+    // en la VOZ (clusters unidos + directorio) para las locuciones que el modulo cierre.
     expect(etiquetasMostradas()).toEqual([
-      'Luis', // Hablante 1
-      'Luis', // Hablante 1
+      'Hablante 1',
+      'Hablante 1',
       'Hablante 2', // la mujer NO hereda
-      'Luis', // Hablante 3 (misma voz, otra etiqueta)
+      'Hablante 3',
       'Hablante 2',
     ])
-    expect(resultado.rowsChanged).toBe(3)
+    expect(resultado.rowsChanged).toBe(0)
 
     // Los clusters de la misma voz quedan UNIDOS; el de la mujer sigue intacto.
     const publicados = setClusters.mock.calls.at(-1)?.[0] || []
@@ -151,11 +153,11 @@ describe('replay 2026-10-19 · defecto 3: el nombre se pega a la VOZ, no al ulti
       refs,
     })
 
-    expect(etiquetasMostradas(), 'la mujer conserva su etiqueta').toEqual([
-      'Luis',
-      'Luis',
+    expect(etiquetasMostradas(), 'ninguna fila ya escrita se reescribe').toEqual([
+      'Hablante 1',
+      'Hablante 1',
       'Hablante 2',
-      'Luis',
+      'Hablante 3',
       'Hablante 2',
     ])
     expect(resultado.labels).not.toContain('Hablante 2')
@@ -186,16 +188,17 @@ describe('replay 2026-10-19 · el baseVector:512 del log no puede volver', () =>
       refs,
     })
 
-    // La continuidad de la etiqueta automatica SI congela las filas de ESA voz: el
-    // grupo por FIRMA (Hablante 1 + Hablante 3) es la misma voz re-clusterizada. Lo
-    // que NO se hace sin medida es afirmar la IDENTIDAD en la base ni en el directorio.
+    // El grupo por FIRMA (Hablante 1 + Hablante 3) es la misma voz re-clusterizada: el
+    // registro lo devuelve en `labels`. Lo que NO se hace sin medida es afirmar la
+    // IDENTIDAD en la base ni en el directorio, NI reescribir las filas ya escritas.
     expect(etiquetasMostradas()).toEqual([
-      'Luis',
-      'Luis',
+      'Hablante 1',
+      'Hablante 1',
       'Hablante 2',
-      'Luis', // Hablante 3: misma voz por firma (reconocer filas, no afirmar identidad)
+      'Hablante 3',
       'Hablante 2',
     ])
+    expect(resultado.rowsChanged).toBe(0)
     expect(resultado.labels).toEqual(['Hablante 1', 'Hablante 3'])
 
     // LO QUE EL LOG MEDIA MAL: `baseVector:512` y `registeredInBase:true`.

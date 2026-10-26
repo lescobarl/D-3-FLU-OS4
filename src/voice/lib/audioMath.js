@@ -3,7 +3,6 @@ import { FLU_CONFIG } from './fluConfig.js'
 import { echoChunkCovers, echoCoverageFloor, resolveEchoSources } from './echoPolicy.js'
 import { detectParticipantFloorCommand } from './participantFloor.js'
 import { compareCosineSignatures, normalizeEmbeddingVector } from './speakerCore.js'
-import { looksLikeTrailingFragment, mergeTranscriptText } from './transcriptDelta.js'
 import { buildWakeWordPattern } from './wakeWord.js'
 import { cleanForSpeech, normalizeSpaces, stripDiacriticsLower as stripDiacritics } from '../../lib/textUtils.ts'
 import { SPEECH_LOCALES, normalizeLang } from '../../core/config/localeConfig.ts'
@@ -652,37 +651,6 @@ export function splitTranscriptAtWakeWord(text = '', wakeWords = []) {
   }
 }
 
-function voiceCommandCapturesRelate(richer = '', trigger = '') {
-  const left = normalizeVoiceCommandText(richer)
-  const right = normalizeVoiceCommandText(trigger)
-  if (!left || !right) return false
-  if (left === right) return true
-  if (left.includes(right) || right.includes(left)) return true
-  const leftWords = left.split(/\s+/).filter(Boolean)
-  const rightWords = right.split(/\s+/).filter(Boolean)
-  if (!rightWords.length) return false
-  return rightWords.every((word) => leftWords.includes(word))
-}
-
-/** Elige la captura más completa del turno que sigue conteniendo el disparador del comando. */
-export function pickRichestVoiceCommandCapture(
-  triggerPhrase = '',
-  { publishedLive = '', lastEmitted = '', streamDisplay = '' } = {},
-) {
-  const trigger = cleanForSpeech(triggerPhrase)
-  const candidates = [publishedLive, streamDisplay, lastEmitted, trigger]
-    .map(cleanForSpeech)
-    .filter(Boolean)
-  if (!candidates.length) return ''
-  const unique = [...new Set(candidates)]
-  unique.sort((a, b) => b.length - a.length)
-  if (!trigger) return unique[0]
-  for (const candidate of unique) {
-    if (voiceCommandCapturesRelate(candidate, trigger)) return candidate
-  }
-  return unique[0]
-}
-
 /** Segmento de comando para log (sin prefijo pasivo ya registrado; conserva wake word). */
 export function resolveCommandConversationLogText(phrase = '', _split = {}, passivePrefix = '') {
   const cleaned = cleanForSpeech(phrase)
@@ -1227,62 +1195,6 @@ export function getRecognitionRetryDelay(error = '') {
 export function getRecognitionErrorMessage(error = '', messages = {}) {
   const code = String(error || '').trim()
   return messages[code] || `Error de reconocimiento: ${code}`
-}
-
-export function buildCurrentPhraseFromResults(results = [], fromIndex = 0) {
-  if (!Array.isArray(results) || !results.length) return ''
-
-  const startIndex = Math.max(0, Math.min(fromIndex, results.length))
-  let phrase = ''
-  const trailingFragments = []
-
-  for (let index = startIndex; index < results.length; index += 1) {
-    const alternatives = Array.from(results[index] || [])
-      .map((alternative) => ({
-        transcript: cleanForSpeech(alternative?.transcript || ''),
-        confidence: Number(alternative?.confidence || 0),
-      }))
-      .filter((alternative) => Boolean(alternative.transcript))
-
-    if (!alternatives.length) continue
-
-    const bestAlternative = alternatives.reduce((best, current) => {
-      const bestRank = scoreRecognitionAlternative(best.transcript, best.confidence)
-      const currentRank = scoreRecognitionAlternative(current.transcript, current.confidence)
-      if (currentRank === bestRank) {
-        return compareRecognitionAlternatives(current.transcript, best.transcript) > 0
-          ? current
-          : best
-      }
-      if (compareRecognitionAlternatives(current.transcript, best.transcript) > 0 && currentRank >= bestRank - 10) {
-        return current
-      }
-      return currentRank > bestRank ? current : best
-    })
-
-    if (!looksLikeTrailingFragment(bestAlternative.transcript)) {
-      for (const alternative of alternatives) {
-        if (looksLikeTrailingFragment(alternative.transcript)) {
-          const value = alternative.transcript
-          if (value && trailingFragments.at(-1) !== value) {
-            trailingFragments.push(value)
-          }
-        }
-      }
-    }
-
-    phrase = phrase ? mergeTranscriptText(phrase, bestAlternative.transcript) : bestAlternative.transcript
-  }
-
-  const uniqueTrailingFragments = trailingFragments.filter(
-    (fragment, index, list) => list.indexOf(fragment) === index,
-  )
-
-  const combined = uniqueTrailingFragments.length
-    ? [phrase, ...uniqueTrailingFragments].filter(Boolean).join(' ')
-    : phrase
-
-  return cleanForSpeech(normalizeSpaces(combined))
 }
 
 export function pickBestRecognitionTranscript(result = []) {

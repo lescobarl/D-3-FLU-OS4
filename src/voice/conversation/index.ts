@@ -52,7 +52,7 @@ export type {
   ResultadoFila,
   VozEtiqueta,
 } from './fila.ts'
-export { CONVERSACION_CONFIG, motorConversacionActivo } from './ports.ts'
+export { CONVERSACION_CONFIG } from './ports.ts'
 export {
   crearAlmacenDexieProducto,
   crearAlmacenMemoria,

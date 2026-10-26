@@ -121,13 +121,6 @@ export function anchorResolvedToLastLogged(
   return resolved
 }
 
-/** Interinos en límite de turno: no diarizar en sala solo (evita H2 fantasma). */
-export function shouldDiarizeInterimAtTurnBoundary({ turnBoundary = false, forceWakeDiarize = false } = {}) {
-  if (!turnBoundary) return false
-  if (forceWakeDiarize) return true
-  return !isSoloRoomSticky()
-}
-
 /** Preview en límite de turno: nunca diarizar en vivo (solo commit en background). */
 export function shouldSkipPreviewDiarize({
   forceWakeDiarize = false,

@@ -125,6 +125,12 @@ export interface ConfigPort {
   wakeWords(): readonly string[]
   /** Etiqueta de la primera locución sin medida ni continuidad. */
   semillaEtiqueta(): string
+  /**
+   * `true` si la etiqueta es una agrupación ANÓNIMA (`Hablante N` o pendiente),
+   * no una identidad: no puede afirmar ni heredar un nombre propio. Definición
+   * única en `speakerCore.isAutoSpeakerLabel`; el adaptador solo la delega.
+   */
+  esEtiquetaAnonima(etiqueta: string): boolean
   /** Motor de conversación resuelto: override de runtime → producto → plan. */
   conversationEngine(): MotorConversacion
 }
@@ -209,8 +215,11 @@ export interface AsrPort {
   abortar(): void
 }
 
-/** Motor de conversación activo: `legacy` hasta validar la pantalla. */
-export type MotorConversacion = 'legacy' | 'new'
+/**
+ * Motor de conversación del producto. `legacy` quedó retirado como opción: la
+ * tubería vieja ya no escribe filas y la única ruta es la del módulo.
+ */
+export type MotorConversacion = 'new'
 
 /** Preferencia de ASR en configuración: `auto` elige al abrir. */
 export type MotorAsrPreferido = 'auto' | MotorAsr
@@ -241,19 +250,10 @@ export const CONVERSACION_CONFIG: ConfiguracionConversacion = Object.freeze({
   asr: Object.freeze({ engine: 'auto', lang: 'es' }),
   maxRetentionMin: 120,
   overlapMargin: null,
-  conversation: Object.freeze({ engine: 'legacy' }),
+  conversation: Object.freeze({ engine: 'new' }),
 })
 
-/** ¿El valor es un motor declarado? Evita re-enumerar `'legacy' | 'new'` fuera. */
+/** ¿El valor es el motor declarado? Evita re-enumerar `'new'` fuera. */
 export function esMotorConversacion(valor: unknown): valor is MotorConversacion {
-  return valor === 'legacy' || valor === 'new'
-}
-
-/**
- * ¿Arranca el motor nuevo? Solo si el puerto resuelve `'new'`.
- * @param config Puerto de configuración que aporta el producto.
- * @returns `true` si el motor nuevo debe escribir filas.
- */
-export function motorConversacionActivo(config: ConfigPort): boolean {
-  return config.conversationEngine() === 'new'
+  return valor === 'new'
 }

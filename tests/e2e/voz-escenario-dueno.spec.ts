@@ -30,12 +30,6 @@ import {
 
 type Page = Parameters<typeof readHistoryRows>[0];
 
-/**
- * Override de runtime del motor CONVERSACION: `new` se siembra en la URL antes
- * del goto (la vía real de `crearConfigFlu`). Sin la variable, corre `legacy`.
- */
-const MOTOR_E2E = process.env.FLU_E2E_ENGINE === 'new' ? 'new' : null;
-
 const esperarListo = async (page: Page) => {
     await page.waitForFunction(
         () => (window as any).__fluStore?.getState?.().conversationState === 'LISTENING',
@@ -68,13 +62,6 @@ test.describe('voz - escenario reportado por el dueño (simulacion REAL)', () =>
         await autoSkipOnboarding(page);
         await stubLocalSpeech(page);
         await stubSpeechRecognition(page);
-        if (MOTOR_E2E) {
-            await page.addInitScript((motor) => {
-                const url = new URL(window.location.href);
-                url.searchParams.set('conversationEngine', motor);
-                window.history.replaceState(null, '', url.toString());
-            }, MOTOR_E2E);
-        }
         await gotoClean(page);
     });
 
@@ -160,8 +147,8 @@ test.describe('voz - escenario reportado por el dueño (simulacion REAL)', () =>
         // (log: commit {"name":"Luis"} y la fila acaba en "Hablante 1"). La causa
         // medida es que la decision "aplicar el hablante resuelto a la sesion" esta
         // escrita DOS veces con reglas distintas (useFluVoiceAssistant.js:1469-1471
-        // sin la etiqueta que el hablante VENIA usando, y turnSpeakerCommit.js:200-208
-        // con ella). test.fail() = se ejecuta y mide; si algun dia PASA, este spec se
+        // sin la etiqueta que el hablante VENIA usando, y la ruta del commit viejo
+        // (retirada) con ella). test.fail() = se ejecuta y mide; si algun dia PASA, este spec se
         // pone en ROJO y obliga a actualizar el instrumento (la reversa del defecto).
         // El dueño lo dice con la voz: no hay etiqueta previa. La ruta del texto
         // (P9.11) debe registrar el participante y firmar sus filas con el nombre.

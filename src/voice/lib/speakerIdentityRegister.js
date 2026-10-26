@@ -2,20 +2,21 @@
  * DUENO UNICO del REGISTRO de un nombre propio para la VOZ activa (A1).
  *
  * QUE ES "REGISTRAR EL NOMBRE": cuando una voz dice su nombre ("okay flu soy Luz"),
- * el nombre debe quedar pegado a ESA voz: (a) las filas que esa voz ya venia
- * escribiendo con su etiqueta automatica ('Hablante N') pasan a llevar el nombre, y
- * (b) la etiqueta queda registrada como alias de sesion, para las filas siguientes.
+ * el nombre queda pegado a ESA VOZ en el directorio de la sesion. NO reescribe
+ * filas ya escritas: la etiqueta de cada fila la resuelve el modulo CONVERSACION
+ * al cerrar su locucion (mandato 2026-10-26, un solo dueno de la fila).
  *
  * RUTA DOBLE MEDIDA (2026-10-10): el registro estaba implementado DOS veces
  *   - src/voice/hooks/useFluVoiceAssistant.js (resolucion tardia del hablante)
- *   - src/voice/lib/turnSpeakerCommit.js     (ruta `wake-intro` del commit)
+ *   - la ruta `wake-intro` del commit (RETIRADA al cortar la tuberia vieja de
+ *     conversacion, 2026-10-25)
  * y el comando `REGISTRAR_PARTICIPANTE` -producido en audioMath.js con el nombre
  * introducido- NO tenia consumidor: `handleNavigationCommand` no traia caso para el,
  * asi que decia "Registrado {name}." SIN registrar nada. Tres caminos, dos copias y
  * la del comando muerta.
  *
- * AHORA: las tres vias llaman AQUI. El commit y el comando aportan la evidencia que
- * tienen (el commit, ademas, los clusters para unir etiquetas de la MISMA voz); el
+ * AHORA: las dos vias vivas (el hook y el comando) llaman AQUI. Aportan la evidencia
+ * que tienen (el hook, ademas, los clusters para unir etiquetas de la MISMA voz); el
  * dueño decide una sola vez. El detector del nombre tambien es unico
  * (`resolveSpeakerNameFromUtterance`, que exige wake segun config): el comando no
  * reimplementa "soy <nombre>".
@@ -33,11 +34,10 @@
 import { resolveSpeakerNameFromUtterance } from './speakerPolicy.js'
 import { isProperSpeakerName, normalizeSpeakerLabel } from './voiceIdentity.js'
 import { canonicalSpeakerName } from './speakerLabels.js'
-import { findClusterByLabel, findLabelsWithSharedVoice, findNearestCluster, mergeSpeakerClustersOnRename, registeredVoiceFloor, sameVoiceFloor, verifiedAnchorFloor } from "./speakerClusters.js"
+import { findClusterByLabel, findLabelsWithSharedVoice, findNearestCluster, mergeSpeakerClustersOnRename, sameVoiceFloor } from "./speakerClusters.js"
 import { registerVoiceName, voiceKeyFor } from './speakerDirectory.js'
 import { labelToSpeakerId } from './conversationRow.js'
 import { compareCosineSignatures, hasVoiceMeasurement, isAutoSpeakerLabel, normalizeEmbeddingVector } from './speakerCore.js'
-import { freezeVoiceName, renameVoiceRowsByKey } from './conversationTurnRow'
 import { setSessionPrimarySpeaker } from './sessionPrimarySpeaker.js'
 import { voiceProbe } from './voiceProbe'
 import { getLastCompletedSpeechAt } from './fluSpeech.js'
@@ -153,36 +153,10 @@ export function registerSpeakerIdentity({
       ...(Array.isArray(cluster?.signatureHistory) ? cluster.signatureHistory : []),
     ]),
   ].filter((sig) => Array.isArray(sig) && sig.length && hasVoiceMeasurement(sig))
-  let rowsChanged = 0
-  if (voiceId) {
-    // CLAVE PRIMARIA: renombre por CLAVE, SIN piso de firma (mandato 2026-10-21). La clave
-    // ES la voz de la sesion: sus filas del epoch van con el nombre aunque no tengan medida
-    // suficiente o no tengan ninguna. Antes solo se renombraban las que pasaban el piso y
-    // "soy Luis" sobre `speaker_1` dejaba filas en "Hablante 1".
-    rowsChanged += renameVoiceRowsByKey(voiceId, clean, { signatures: voiceSignatures })
-    // FREEZE por FIRMA (dueno 2026-10-17): alcanza las filas de esa MISMA voz que llevan
-    // OTRA clave (la diarizacion partio la voz). El renombre por clave no las ve porque su
-    // `speakerId` difiere. Una voz partida queda, por tanto, con TODAS sus filas al nombre.
-    const clavesDeLaVoz = new Set([voiceId])
-    if (evidenciaDeEtiqueta) {
-      for (const label of etiquetasDeLaVoz) {
-        clavesDeLaVoz.add(voiceKeyFor({ voiceId: labelToSpeakerId(label), signature: null }))
-      }
-    }
-    const hayMedidasDeLaVoz = voiceSignatures.length > 0
-    for (const clave of clavesDeLaVoz) {
-      // Sin MEDIDAS, el freeze por la clave primaria no aporta: manda el renombre por clave
-      // (que respeta el write-once). El freeze se reserva para alcanzar filas de OTRA clave
-      // con FIRMA, y para eso necesita medidas de la voz.
-      if (clave === voiceId && !hayMedidasDeLaVoz) continue
-      // PISO VERIFICADO (0.62) en la via "soy X": la identidad la afirma el titular con su
-      // medida fresca y la MISMA voz mide 0.629–0.714 contra su ancla de la base; con el
-      // piso por defecto (0.66) sus filas entre 0.629 y 0.66 quedaban sin renombrar
-      // (defecto 5 del dueno 2026-10-19). La banda de una voz AJENA normal (0.29–0.58)
-      // sigue debajo del piso y no se toca.
-      rowsChanged += freezeVoiceName(clave, clean, { vector: vectorDeLaVoz, signatures: voiceSignatures, floor: verifiedAnchorFloor() })
-    }
-  }
+  // NINGUNA fila se reescribe aqui (mandato 2026-10-26). El nombre se liga a la VOZ en
+  // el DIRECTORIO y la etiqueta de cada fila la resuelve el modulo CONVERSACION al
+  // cerrar su locucion. Renombrar filas ya escritas era la ruta doble retirada.
+  const rowsChanged = 0
   // El nombre queda tambien en el CLUSTER de ESA voz (dato de la voz) para el cosido de los
   // turnos siguientes por firma. Copia: la publica el escritor unico de clusters.
   let clustersRenombrados = clusters.map((c) => ({ ...c }))
@@ -251,7 +225,7 @@ export function registerSpeakerIdentity({
  *
  * Cuando el vector medido del turno casa con una identidad CONOCIDA (directorio de la
  * sesion o base de participantes), la voz YA es esa persona: el nombre se aplica al
- * directorio y a sus filas (freeze). NO se afirma nada nuevo:
+ * directorio (no a las filas ya escritas). NO se afirma nada nuevo:
  *   - la BASE no se escribe (la identidad ya estaba alli);
  *   - el DIRECTORIO no se re-ancla con el vector del TURNO: el ancla es el vector
  *     CONOCIDO que hizo el match (una ventana contaminada no puede envenenar la identidad);
@@ -287,11 +261,9 @@ export function applyKnownVoiceName({
   const voiceId = voiceKeyFor({ voiceId: labelToSpeakerId(label || clean), signature: ancla })
   if (!voiceId) return { registered: false, name: '', voiceId: '', rowsChanged: 0 }
   registerVoiceName(voiceId, clean, { vector: ancla })
-  // Solo la voz y su ancla: sin firmas de cluster (esa agrupacion no es evidencia de identidad).
-  // PISO DE IDENTIDAD REGISTRADA: reconocer a alguien exige lo mismo que lo acepto (0.76). Con
-  // el piso de "misma voz" (0.66) la fila de la mujer (0.741 al ancla de Luis) se renombro
-  // "Luis" (medido 2026-10-19 21:22:52, `rows:1`); el reconocimiento no confirma con menos.
-  const rowsChanged = freezeVoiceName(voiceId, clean, { vector: ancla, floor: registeredVoiceFloor() })
+  // Reconocer NO reescribe filas ya escritas: el nombre queda en el directorio de la VOZ
+  // y el modulo CONVERSACION etiqueta las locuciones siguientes (mandato 2026-10-26).
+  const rowsChanged = 0
   voiceProbe('identity-recognized', {
     name: clean,
     label,

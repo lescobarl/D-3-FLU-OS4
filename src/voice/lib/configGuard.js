@@ -12,7 +12,7 @@ import { FLU_CONFIG } from './fluConfig.js'
  * Bloque OPCIONAL de config en `path`, o `{}` si no hay objeto.
  *
  * DUENO UNICO de la forma `config.a?.b?.c || {}` que estaba copiada en 6 getters
- * (embeddingConfig, micCapture x2, speakerPolicy, asrTurnSegmentation, wakePolicy): P9.41.
+ * (embeddingConfig, micCapture x2, speakerPolicy, wakePolicy): P9.41.
  * Su tipo publico lo declara cada getter con `@returns` (aqui devuelve el mapa crudo).
  * @param {Record<string, unknown>} config base (FLU_CONFIG o uno inyectado)
  * @param {string[]} path claves desde la raiz

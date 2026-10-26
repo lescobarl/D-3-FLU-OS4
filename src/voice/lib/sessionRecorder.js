@@ -4,8 +4,8 @@
  * QUÉ GRABA (solo con la bandera encendida):
  *   • El PCM real del micrófono, capturado en `micCaptureBridge` ANTES del
  *     throttle de `processEvery` (si se grabara después, el WAV tendría huecos).
- *   • Los eventos que ya recorren el sistema: ASR crudo (`listenLog.pushRing`),
- *     trazas estructuradas (`fluTrace`) y logs relayados (`relayLog`).
+ *   • Los eventos que ya recorren el sistema: ASR crudo (`listenLog.pushRing`)
+ *     y logs relayados (`relayLog`).
  *
  * BANDERA (igual que los logs: config + override + API de consola):
  *   • `FLU_CONFIG.recorder.enabled` — default APAGADO (el audio es sensible).

@@ -141,6 +141,107 @@ export function stubMuteRecognition() {
 }
 
 /**
+ * SR guionizado para `--sr script`: reemite por `onresult` los textos GRABADOS en
+ * la sesión real (`turns.ndjson`) en su línea de tiempo, mientras el VAD y el motor
+ * de conversación corren sobre el PCM real del WAV.
+ *
+ * Motivo (medido 2026-10-26): la Web Speech API de Chrome no consume el dispositivo
+ * falso (`--use-file-for-fake-audio-capture`): `audiostart` → `audioend` a los ~8 s →
+ * `error:no-speech`, con el WAV de la sesión y con x8 de ganancia. Sin texto no hay
+ * filas que medir. Este modo sustituye SOLO al reconocedor; audio, VAD, tramos,
+ * cierre y filas son los del producto.
+ *
+ * La línea de tiempo se ancla a `__fluPlayback.startedAt` (WAV t=0), no al arranque
+ * de cada instancia: el hook reconstruye el SR durante la corrida y el guion debe
+ * seguir donde va el audio. Cada final llega como sesión de reconocimiento de UN
+ * resultado (`resultIndex: 0`, `results[0].isFinal === true`), la forma legítima
+ * que Chrome usa al inicio de una sesión.
+ *
+ * @param events Guion `{ atMs, text }` (ms desde WAV t=0), ordenado por el helper.
+ */
+export function stubScriptedRecognition() {
+    return (events: Array<{ atMs: number; text: string }>) => {
+        const w = window as any;
+        const pending = [...(events || [])]
+            .map((event) => ({
+                atMs: Math.max(0, Number(event?.atMs) || 0),
+                text: String(event?.text || '').trim(),
+                emitted: false,
+            }))
+            .filter((event) => event.text)
+            .sort((a, b) => a.atMs - b.atMs);
+        const state: { planned: number; emitted: Array<{ t: number; text: string }>; errors: string[] } = {
+            planned: pending.length,
+            emitted: [],
+            errors: [],
+        };
+        w.__fluScript = state;
+        let active: any = null;
+
+        const deliverDue = () => {
+            const playback = w.__fluPlayback;
+            if (!playback?.started || !playback?.startedAt || !active) return;
+            const elapsed = performance.now() - Number(playback.startedAt);
+            for (const item of pending) {
+                if (item.emitted || item.atMs > elapsed) continue;
+                item.emitted = true;
+                state.emitted.push({ t: Math.round(elapsed), text: item.text });
+                try {
+                    active.dispatchFinal(item.text);
+                } catch (error) {
+                    state.errors.push(String(error));
+                }
+            }
+        };
+        window.setInterval(deliverDue, 100);
+
+        class ScriptedRecognition {
+            lang = '';
+            interimResults = true;
+            continuous = true;
+            maxAlternatives = 1;
+            onstart: any = null;
+            onresult: any = null;
+            onerror: any = null;
+            onend: any = null;
+            started = false;
+            start() {
+                if (this.started) {
+                    throw new DOMException('recognition has already started', 'InvalidStateError');
+                }
+                this.started = true;
+                active = this;
+                setTimeout(() => {
+                    if (!this.started) return;
+                    if (typeof this.onstart === 'function') this.onstart({ type: 'start' });
+                }, 0);
+            }
+            dispatchFinal(text: string) {
+                if (!this.started || typeof this.onresult !== 'function') return;
+                const alternative: any = { transcript: text, confidence: 0.9 };
+                const result: any = [alternative];
+                result.isFinal = true;
+                this.onresult({ type: 'result', resultIndex: 0, results: [result] });
+            }
+            stop() {
+                if (!this.started) return;
+                this.started = false;
+                if (active === this) active = null;
+                setTimeout(() => {
+                    if (this.started) return;
+                    if (typeof this.onend === 'function') this.onend({ type: 'end' });
+                }, 0);
+            }
+            abort() {
+                this.stop();
+            }
+        }
+        (window as any).SpeechRecognition = ScriptedRecognition;
+        (window as any).webkitSpeechRecognition = ScriptedRecognition;
+    };
+}
+
+/**
  * Observa `currentTranscript` (la caja de última frase) sin tocar la UI.
  * Registra solo cambios, con tiempo relativo, para poder ver congelaciones.
  */

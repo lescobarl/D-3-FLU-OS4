@@ -17,7 +17,6 @@ import {
     bulkPutConversationRecords,
     softDeleteConversationRows,
 } from '../core/db/conversationRowWriter';
-import { crearConfigFlu, motorConversacionActivo } from '../voice/conversation/index';
 import { useIntegrationStore } from '../store/integrationStore';
 import type { ConversationEntry } from '../types/bridge';
 import { logCaughtError } from '../lib/caughtError';
@@ -284,24 +283,20 @@ export function useConversationPersistence(participantId?: string) {
             if (!cambiadas.length) return;
             cambiadas.forEach((e) => persistidas.set(String(e.id), e));
             const persistir = async () => {
-                // Con `engine: new` la fila de usuario ya la escribió el módulo (por el
-                // MISMO escritor). Solo se persiste si falta (import/backup) o si la
-                // entrada cambió de verdad (renombre de voz). Con `engine: legacy` no
-                // hay módulo: el usuario se persiste siempre, o sus filas desaparecen.
-                const motorNuevo = motorConversacionActivo(crearConfigFlu());
+                // La fila de usuario la escribe el módulo de conversación por el
+                // MISMO escritor. Solo se persiste si falta (import/backup) o si la
+                // entrada cambió de verdad (renombre de voz).
+                const ids = cambiadas.map((entry) => String(entry.id));
                 const existentes = new Map<string, ConversationRow>();
-                if (motorNuevo) {
-                    const ids = cambiadas.map((entry) => String(entry.id));
-                    const filas = await fluDb.conversations.bulkGet(ids);
-                    filas.forEach((fila, indice) => {
-                        if (fila) existentes.set(ids[indice], fila);
-                    });
-                }
+                const filasGuardadas = await fluDb.conversations.bulkGet(ids);
+                filasGuardadas.forEach((fila, indice) => {
+                    if (fila) existentes.set(ids[indice], fila);
+                });
                 const filas: ConversationRow[] = [];
                 for (const entry of cambiadas) {
                     const id = String(entry.id);
                     const existente = existentes.get(id) || null;
-                    if (motorNuevo && entry.role === 'user' && existente && mismaFilaPersistida(entry, existente)) {
+                    if (entry.role === 'user' && existente && mismaFilaPersistida(entry, existente)) {
                         continue;
                     }
                     const previa = syncPorFila.get(id) || existente?.sync || null;

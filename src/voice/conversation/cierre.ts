@@ -78,7 +78,7 @@ export type ReglasCierre = Readonly<{
  * Resuelve la evidencia de voz de una locución con el nombre registrado, si lo hay.
  * Es pura: la sesión aporta el mapa voz→nombre y la continuidad ya calculada.
  * @param voz Evidencia de voz del tramo.
- * @param continuidadVoz Continuidad calculada al abrir o al recibir la primera medida.
+ * @param continuidadVoz Continuidad calculada por el módulo al abrir o al recibir la primera medida.
  * @param nombresPorVoz Nombres confirmados por voz en la sesión.
  * @returns La voz resuelta que consume `resolverEtiqueta`.
  */
@@ -95,7 +95,9 @@ export function resolverVoz(
     nombre,
     nombreConfirmado: Boolean(nombre),
     hablante: String(voz.hablante || '').trim(),
-    continuidad: voz.continuidad ?? continuidadVoz,
+    // La continuidad la decide el MÓDULO (`abrirLocucion`/`aplicarRevision`):
+    // la evidencia entrante no puede afirmar que otra voz continúa la anterior.
+    continuidad: continuidadVoz,
   }
 }
 
@@ -193,6 +195,7 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
       voz: resolverVoz(locucion.voz, locucion.continuidadVoz, estado.nombresPorVoz),
       etiquetaAnterior: estado.ultimaEtiqueta || null,
       semillaEtiqueta: config.semillaEtiqueta(),
+      esEtiquetaAnonima: config.esEtiquetaAnonima,
     }
     estado.abierta = null
     emitirCaja()

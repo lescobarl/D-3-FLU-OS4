@@ -514,11 +514,12 @@ describe('D15 - el despacho asincrono no se decide convirtiendo la Promise en bo
             offenders,
             `Gates booleanos sobre el despacho asincrono (N=${offenders.length}):\n  ${offenders.join('\n  ')}`,
         ).toEqual([]);
-        // Anti-vacuidad: el bridge EXISTE, de verdad despacha y registra el rechazo.
-        const bridge = read('src/voice/lib/conversationIngressBridge.js');
-        expect(/bindings\.tryDispatchConversationAction\?\.\(/.test(bridge)).toBe(true);
-        expect(/Promise\.resolve\(pending\)\.catch/.test(bridge)).toBe(true);
-        expect(/logCaughtError\('conversationIngressBridge\.tryDispatch'/.test(bridge)).toBe(true);
+        // Anti-vacuidad: el despacho EXISTE, es asincrono y su rechazo se registra
+        // (el unico llamador que lo ignora es `onFraseCanonica` del motor).
+        const hook = read('src/voice/hooks/useFluVoiceAssistant.js');
+        expect(/const tryDispatchConversationAction = useCallback\(/.test(hook)).toBe(true);
+        expect(/Promise\.resolve\(pending\)\.catch\(/.test(hook)).toBe(true);
+        expect(/logCaughtError\('useFluVoiceAssistant\.tryDispatchConversationAction'/.test(hook)).toBe(true);
     });
 
     it('el detector no es decorativo: marca el gate booleano y perdona la llamada directa y el await', () => {

@@ -25,25 +25,28 @@ function lineAt(source: string, index: number): number {
 export function findCommitDerivationViolations(source: string): Violation[] {
     const violations: Violation[] = [];
     const callRe = /commitTurnPhrase\(/g;
-    const assignRe = /(?:const|let|var)\s+([A-Za-z0-9_$]+)\s*=\s*commitTurnPhrase\(/;
+    // La asignacion canonica puede abarcar VARIAS lineas: en conversacion el valor es
+    // `conversationActive ? cleanForSpeech(capture) : commitTurnPhrase(capture)`. Se
+    // busca hacia atras hasta el fin de la sentencia anterior (`;`) y se toma la ULTIMA
+    // declaracion (la mas cercana al commit), no la primera del bloque.
+    const assignRe = /(?:const|let|var)\s+([A-Za-z0-9_$]+)\s*=/g;
     let match: RegExpExecArray | null;
     while ((match = callRe.exec(source))) {
         const at = match.index;
         const line = lineAt(source, at);
-        const lineStart = source.lastIndexOf('\n', at) + 1;
-        const lineEnd = source.indexOf('\n', at);
-        const lineText = source.slice(lineStart, lineEnd === -1 ? source.length : lineEnd);
-
-        // 1) El retorno del commit debe capturarse en una variable canónica.
-        const assign = assignRe.exec(lineText);
-        if (!assign) {
+        const desde = source.lastIndexOf(';', at) + 1;
+        const antes = source.slice(desde, at);
+        let canonical: string | null = null;
+        let declaracion: RegExpExecArray | null;
+        assignRe.lastIndex = 0;
+        while ((declaracion = assignRe.exec(antes))) canonical = declaracion[1];
+        if (!canonical) {
             violations.push({
                 line,
                 reason: 'retorno DESCARTADO: la fila no puede usar el valor commiteado',
             });
             continue;
         }
-        const canonical = assign[1];
 
         // 2) En la misma rama (hasta el próximo commit o 4000 chars) la fila
         //    debe usar ESA variable como `transcript`.
@@ -69,5 +72,20 @@ describe('§9 — la fila usa el valor commiteado (derivación única)', () => {
         expect(violations, `\nRutas con display != fila (${violations.length}):\n${detail}`).toEqual(
             [],
         );
+    });
+
+    it('PRUEBA DE DETECTOR: marca el retorno descartado y la fila con otra expresión', () => {
+        const descartado = 'commitTurnPhrase(capture)\nonContractResolved({ transcript: capture })';
+        expect(findCommitDerivationViolations(descartado).map((v) => v.reason)).toEqual([
+            'retorno DESCARTADO: la fila no puede usar el valor commiteado',
+        ]);
+        const otra = 'const canonica = commitTurnPhrase(capture)\nonContractResolved({ transcript: capture })';
+        expect(findCommitDerivationViolations(otra).map((v) => v.reason)).toEqual([
+            'la fila NO usa "canonica" (display != fila)',
+        ]);
+        // La forma REAL del hook (ternario en varias líneas) es válida.
+        const ternario =
+            'const canonicalPhrase = conversationActiveRef?.current\n  ? cleanForSpeech(capture)\n  : commitTurnPhrase(capture)\nonContractResolved({ transcript: canonicalPhrase })';
+        expect(findCommitDerivationViolations(ternario)).toEqual([]);
     });
 });

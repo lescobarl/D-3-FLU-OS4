@@ -1,11 +1,11 @@
 /**
  * P6.2 - los defaults de diagnostico no viajan a produccion.
  *
- * `FLU_CONFIG.debug.enabled`, `debug.relayToServer`, `trace.enabled` y
- * `trace.agentSink` estaban fijados a true en el codigo: la build de produccion
- * salia con la consola de diagnostico encendida, con POST periodico de traza y
+ * `FLU_CONFIG.debug.enabled` y `debug.relayToServer` estaban fijados a true en el
+ * codigo: la build de produccion salia con la consola de diagnostico encendida y
  * reenviando logs del cliente al servidor. Deben depender de IS_DEV, no de una
- * constante literal; el usuario puede seguir encendiendolos en runtime.
+ * constante literal; el usuario puede seguir encendiendolos en runtime. El tracer
+ * (`trace.*`) se retiro con la tuberia vieja el 2026-10-25.
  */
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -16,8 +16,6 @@ export const CONFIG_OWNER = 'src/voice/lib/fluConfig.js';
 export const GATED_KEYS: ReadonlyArray<readonly [string, string]> = [
   ['debug', 'enabled'],
   ['debug', 'relayToServer'],
-  ['trace', 'enabled'],
-  ['trace', 'agentSink'],
 ];
 function read(rel: string): string {
   return readFileSync(join(ROOT, rel), 'utf8');
@@ -60,8 +58,7 @@ export function prodDefaultsOffenders(src: string, fileName: string): string[] {
 const OK = [
   'X = {',
   '  games: { enabled: true },',
-  '  debug: { enabled: IS_DEV, relayToServer: IS_DEV, micConsolePanel: false },',
-  '  trace: { enabled: IS_DEV, agentSink: IS_DEV, ringSize: 800 },',
+  '  debug: { enabled: IS_DEV, relayToServer: IS_DEV },',
   '}',
 ].join('\n');
 describe('P6.2 - defaults de produccion', () => {
@@ -78,18 +75,18 @@ describe('P6.2 - defaults de produccion', () => {
   });
 });
 describe('P6.2 - el detector no es decorativo', () => {
-  it('marca los literales true y distingue debug de trace', () => {
+  it('marca los literales true y distingue bloque gateado de otro bloque', () => {
     expect(prodDefaultsOffenders(OK, CONFIG_OWNER)).toEqual([]);
     const debugMalo = OK.replace('debug: { enabled: IS_DEV, relayToServer: IS_DEV', 'debug: { enabled: true, relayToServer: true');
     expect(prodDefaultsOffenders(debugMalo, CONFIG_OWNER).length).toBeGreaterThanOrEqual(2);
-    const traceMalo = OK.replace('trace: { enabled: IS_DEV, agentSink: IS_DEV', 'trace: { enabled: true, agentSink: true');
-    const t = prodDefaultsOffenders(traceMalo, CONFIG_OWNER);
-    expect(t.length).toBeGreaterThanOrEqual(2);
-    expect(t.join(' ')).toContain('trace');
+    const debugSinGate = OK.replace('debug: { enabled: IS_DEV, relayToServer: IS_DEV', 'debug: { enabled: false, relayToServer: IS_DEV');
+    const t = prodDefaultsOffenders(debugSinGate, CONFIG_OWNER);
+    expect(t.length).toBeGreaterThanOrEqual(1);
+    expect(t.join(' ')).toContain('debug');
   });
   it('marca un bloque ausente en vez de darlo por bueno', () => {
-    const sinTrace = OK.split('\n').filter((l) => !l.includes('trace:')).join('\n');
-    expect(prodDefaultsOffenders(sinTrace, CONFIG_OWNER).join(' ')).toContain('falta el bloque trace');
+    const sinDebug = OK.split('\n').filter((l) => !l.includes('debug:')).join('\n');
+    expect(prodDefaultsOffenders(sinDebug, CONFIG_OWNER).join(' ')).toContain('falta el bloque debug');
   });
   it('no se pronuncia sobre otros archivos', () => {
     expect(prodDefaultsOffenders('debug: { enabled: true }', 'src/otro.ts')).toEqual([]);
@@ -97,7 +94,7 @@ describe('P6.2 - el detector no es decorativo', () => {
   it('recorta solo el bloque pedido, no las claves homonimas de otros bloques', () => {
     expect(configBlock(OK, 'debug')).toContain('relayToServer');
     expect(configBlock(OK, 'debug')).not.toContain('games');
-    expect(configBlock(OK, 'trace')).not.toContain('relayToServer');
+    expect(configBlock(OK, 'games')).not.toContain('relayToServer');
     expect(configBlock(OK, 'inexistente')).toBe('');
   });
 });

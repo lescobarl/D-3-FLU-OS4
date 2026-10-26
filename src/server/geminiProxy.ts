@@ -819,7 +819,7 @@ export function createGeminiMiddleware({ env = {} }: { env?: Record<string, stri
                     sendJson(res, 500, { error: 'internal_error', detail: errorField(err, 'message') || 'Unknown error' });
                 }
             });
-            // POST /__flu_agent_trace — OS2's fluTrace.js agent sink (accepted, logged)
+            // POST /__flu_agent_trace — sink de trazas del agente OS2 (aceptado y registrado)
             server.middlewares.use('/__flu_agent_trace', async (req: IncomingMessage, res: ServerResponse, next: () => void) => {
                 if (req.method !== 'POST') return next();
                 try {

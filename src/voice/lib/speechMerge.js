@@ -1,7 +1,14 @@
 /**
  * Fusión de texto ASR (interinos acumulativos y finales).
  */
-import { cleanForSpeech, novelWords, sliceWordsLower, speechWords } from './audioMath.js';
+import {
+  cleanForSpeech,
+  novelWords,
+  pickBestRecognitionTranscript,
+  sliceWordsLower,
+  speechWords,
+  stripDiacritics,
+} from './audioMath.js';
 import { getTranscriptPauseCfg } from './fluTranscriptPause.js'
 import { getShortFinalKeywordSet, getSpeechMergeCfg, getTranscriptPolicyCfg } from './fluTranscriptMotor.js'
 import { getTranscriptDelta, mergeTranscriptText } from './transcriptDelta.js'
@@ -122,6 +129,24 @@ export function collapseAdjacentWordRepeat(palabras = [], opciones = {}) {
     unicas.push(cruda)
   }
   return unicas
+}
+
+/**
+ * Canon de una frase SIN el tartamudeo de UNA palabra contigua (dueño de la regla:
+ * `collapseAdjacentWordRepeat`, arriba en este módulo). Medido d4c1c8f3: Chrome emite
+ * variantes donde una repite una palabra seguida ("puso Cloud" + "puso Cloud Cloud";
+ * "…tanto porque" + "…tanto tanto porque") y "la mas completa gana" se quedaba con la
+ * tartamudeada. Preserva mayusculas (compara case-insensitive): sirve para COMPARAR
+ * variantes y para fijar el texto que se commitea en la fila (pasivo) y el que adopta
+ * la caja de la frase viva.
+ * @param {string} value
+ * @returns {string}
+ */
+export function canonSinTartamudeo(value = '') {
+  return collapseAdjacentWordRepeat(
+    String(value || '').replace(/\s+/g, ' ').trim().split(/\s+/).filter(Boolean),
+    { datosNumericos: true, longitudMinima: 4 },
+  ).join(' ')
 }
 
 /**
@@ -265,6 +290,127 @@ export function pickBestMicInterim(chunks = []) {
   return normalizeMicText(list.reduce((acc, cur) => resolveMicFragmentMerge(acc, cur), ''))
 }
 
+/** Palabras de un texto tal cual se dijeron (con su grafia), para no perder mayusculas. */
+function palabrasCrudas(texto = '') {
+  return String(texto || '').trim().split(/\s+/).filter(Boolean)
+}
+
+/** Clave comparable de una palabra: sin acentos, minusculas, sin signos. */
+function claveDePalabra(texto = '') {
+  return stripDiacritics(String(texto || '')).toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '')
+}
+
+/**
+ * UNE dos VARIANTES DEL MISMO TRAMO conservando TODAS las palabras (decision del dueno
+ * 2026-10-23): alineacion por subsecuencia comun, sin elegir una variante que pierda un
+ * token y sin repetir una palabra que ya esta.
+ *
+ * El motor emite, para UN mismo tramo de audio, varias hipotesis del mismo enunciado
+ * (medido 8f3112c2, evento t=1792789332116: una trae "esto", otra la cola "escucha").
+ * Quedarse con la mas larga pesaba mas que conservar el habla: la fila perdia "esto".
+ *
+ * El tramo lo garantiza el LLAMADOR: solo se unen los finales del MISMO evento del motor
+ * (`fraseDelEventoAsr`). Si la variante anade MUCHO al final (>3 palabras) no es una
+ * variante del mismo tramo sino otra locucion pegada: NO se une (esa frontera la decide
+ * el tramo, no este merge).
+ *
+ * @param {string} elegido variante vigente
+ * @param {string} candidata variante hermana del mismo tramo
+ * @returns {string} union alineada (o la variante mas completa si no se puede unir)
+ */
+export function unirVariantesDelMismoTramo(elegido = '', candidata = '') {
+  const a = palabrasCrudas(elegido)
+  const b = palabrasCrudas(candidata)
+  if (!a.length) return String(candidata || '')
+  if (!b.length) return String(elegido || '')
+  const ka = a.map(claveDePalabra)
+  const kb = b.map(claveDePalabra)
+  // Subsecuencia comun mas larga por CLAVE (tolera acentos y mayusculas).
+  const tabla = Array.from({ length: ka.length + 1 }, () => new Array(kb.length + 1).fill(0))
+  for (let i = ka.length - 1; i >= 0; i -= 1) {
+    for (let j = kb.length - 1; j >= 0; j -= 1) {
+      tabla[i][j] = ka[i] === kb[j] ? tabla[i + 1][j + 1] + 1 : Math.max(tabla[i + 1][j], tabla[i][j + 1])
+    }
+  }
+  const salida = []
+  const yaEsta = (clave) => salida.some((palabra) => claveDePalabra(palabra) === clave)
+  let i = 0
+  let j = 0
+  let anadidasAlFinal = 0
+  while (i < a.length && j < b.length) {
+    if (ka[i] === kb[j]) {
+      salida.push(a[i])
+      i += 1
+      j += 1
+      continue
+    }
+    // Palabra que solo trae la candidata: se ANADE en su posicion alineada.
+    if (tabla[i][j + 1] >= tabla[i + 1][j]) {
+      if (!yaEsta(kb[j])) salida.push(b[j])
+      j += 1
+      continue
+    }
+    salida.push(a[i])
+    i += 1
+  }
+  while (i < a.length) {
+    salida.push(a[i])
+    i += 1
+  }
+  while (j < b.length) {
+    if (!yaEsta(kb[j])) {
+      salida.push(b[j])
+      anadidasAlFinal += 1
+    }
+    j += 1
+  }
+  // Cola grande y ajena: es otra locucion pegada. No se une (lo decide el tramo).
+  if (anadidasAlFinal > 3) return elegido.length >= candidata.length ? String(elegido) : String(candidata)
+  return salida.join(' ')
+}
+
+/**
+ * Compone el TROZO de UN evento del ASR con los resultados NUEVOS (`resultIndex..`).
+ *
+ * Chrome re-emite DELANTE el final retenido del enunciado anterior (medido 8f3112c2:
+ * patrones `10` con `resultIndex=1`), y tambien emite el mismo tramo con prefijo
+ * re-plegado + cola que crece (`"bien"` + `" vamos"`, `"bien vamos"` + `" a hacer"`).
+ * Por eso solo se miran los resultados nuevos y, cuando un evento trae VARIOS finales,
+ * se UNEN como variantes del mismo tramo en vez de quedarse con uno.
+ *
+ * @param {ArrayLike<object>|null} [resultados] lista de resultados del evento
+ * @param {number} [desde] indice del primer resultado nuevo (`resultIndex`)
+ * @returns {string} trozo del evento (vacio si no hay texto)
+ */
+export function fraseDelEventoAsr(resultados, desde = 0) {
+  if (!resultados || !resultados.length) return ''
+  const inicio = Math.max(0, Number(desde) || 0)
+  const interinos = []
+  const finales = []
+  for (let indice = inicio; indice < resultados.length; indice += 1) {
+    const resultado = resultados[indice]
+    const texto = pickBestRecognitionTranscript(resultado)
+    if (!texto) continue
+    if (resultado?.isFinal === true) finales.push(String(texto))
+    else interinos.push(String(texto))
+  }
+  const finalUnido = finales
+    .map((texto) => cleanForSpeech(texto))
+    .filter(Boolean)
+    .reduce(unirVariantesDelMismoTramo, '')
+  const interino = pickBestMicInterim(interinos)
+  if (!finalUnido) return interino
+  if (!interino) return normalizeMicText(finalUnido)
+  // Final + interino del MISMO evento: el final es la re-escucha del mismo
+  // enunciado; el interino solo gana si es MAS LARGO y lo contiene entero.
+  const finalTexto = normalizeMicText(finalUnido)
+  const interinoTexto = normalizeMicText(interino)
+  const interinoGana =
+    interinoTexto.length > finalTexto.length &&
+    interinoTexto.toLowerCase().startsWith(finalTexto.toLowerCase())
+  return interinoGana ? interinoTexto : finalTexto
+}
+
 /**
  * Quita eco ASR: frase final repetida que ya apareció antes en el mismo turno.
  * «maté a esas personas … maté a esas personas» → una sola ocurrencia al cierre.
@@ -332,6 +478,52 @@ export function isSameFragmentRevision(prev = '', next = '') {
   // Un trozo LARGO con palabras distintas es habla nueva, no una revision.
   if (corto.length > 3) return false
   return corto.every((word, i) => fuzzyAsrWordEqual(word, largo[i] || ''))
+}
+
+/**
+ * Integra un TROZO en la linea abierta con el LIBRO del ultimo hueco pegado.
+ *
+ * Dueno UNICO de la regla (antes privada en `conversationStream.integrateOpenLine`,
+ * que ahora delega aqui): el reconocedor reemite el MISMO hueco de audio con otra
+ * grafia o con la cola re-plegada (`"bien"` + `" vamos"`; luego `"bien vamos"` + `" a"`),
+ * y pegar cada emision detras mezclaba dos hipotesis del mismo hueco. Por eso se
+ * recuerda `{ base, chunk, line }`: si el trozo entrante es una REVISION del ultimo
+ * pegado, reescribe ese hueco sobre la BASE en vez de concatenarse.
+ *
+ * El libro solo vale si `libro.line` sigue siendo la linea vigente: si otro camino
+ * la reescribio, se ignora (una hipotesis por hueco, sin confiar en un libro caduco).
+ *
+ * @param {string} [linea] linea abierta vigente
+ * @param {{ base: string, chunk: string, line: string }|null} [libro] libro vigente
+ * @param {string} [trozo] trozo nuevo del evento del ASR
+ * @returns {{ linea: string, libro: { base: string, chunk: string, line: string }|null }}
+ */
+export function mergeIntoOpenLine(linea = '', libro = null, trozo = '') {
+  const vigente = normalizeMicText(linea)
+  const trozoNuevo = cleanForSpeech(trozo)
+  if (!trozoNuevo) return { linea: vigente, libro }
+  const libroVigente = libro && libro.line === vigente ? libro : null
+  // REVISION DEL MISMO HUECO: el trozo entrante reescribe el ultimo pegado sobre la base.
+  if (
+    libroVigente &&
+    libroVigente.chunk &&
+    libroVigente.chunk !== trozoNuevo &&
+    isSameFragmentRevision(libroVigente.chunk, trozoNuevo)
+  ) {
+    const merged = normalizeMicText(resolveMicFragmentMerge(libroVigente.base, trozoNuevo))
+    return { linea: merged, libro: { base: libroVigente.base, chunk: trozoNuevo, line: merged } }
+  }
+  const merged = normalizeMicText(resolveMicFragmentMerge(vigente, trozoNuevo))
+  if (merged === vigente) return { linea: merged, libro: libroVigente }
+  // Si la fusion solo ANADIO el trozo, se abre un hueco nuevo sobre la linea anterior;
+  // si la linea crecio absorbiendolo (emision acumulativa), no hay delta pendiente.
+  const appendeado = Boolean(vigente) && merged === normalizeMicText(`${vigente} ${trozoNuevo}`)
+  return {
+    linea: merged,
+    libro: appendeado
+      ? { base: vigente, chunk: trozoNuevo, line: merged }
+      : { base: merged, chunk: '', line: merged },
+  }
 }
 
 export function mergeSpeechText(base = '', incoming = '', { keepAll = false } = {}) {

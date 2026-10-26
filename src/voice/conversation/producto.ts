@@ -6,14 +6,30 @@
  * ASR no se usa en esta composición: el hook ya posee LA instancia de escucha y
  * entrega sus resultados por `evento()` (AGENTS, Anexo B invariante 1).
  *
- * IDENTIDAD DEL SEGMENTO (dueño único: este ingestor). Un segmento de voz tiene
- * UN `tramoId`; todos los finales de SEGMENTO que Chrome entrega durante el
- * dictado reutilizan ese id y entran como REVISIÓN de texto. Un `final` del
- * reconocedor no es el cierre de la locución: el cierre real es la frontera VAD
- * (silencio) o el fin de la sesión (`cerrar`). Así una locución = un tramo =
- * una fila, y no se escribe una fila por cada corte de Chrome.
+ * IDENTIDAD DEL SEGMENTO (dueño único: el VAD del módulo). El tramo de audio que
+ * abre `ingestaAudio` es el id de la locución; el texto del reconocedor NO trae
+ * tramo y lo resuelve el módulo DENTRO de su cola, cuando el audio ya está
+ * procesado. Atribuirlo aquí con una foto del estado podía ir un bloque por
+ * detrás y pegaba el texto a la locución anterior (defecto medido en el
+ * playback del 2026-10-25: tramos fabricados `[0, cursor]` y filas de 119–152 s).
+ *
+ * Un `final` del reconocedor no es el cierre de la locución: el cierre real es
+ * la frontera VAD (silencio + texto del tramo siguiente) o el fin de la sesión
+ * (`cerrar`). Así una locución = un tramo = una fila, y no se escribe una fila
+ * por cada corte de Chrome.
+ *
+ * TEXTO ACUMULADO DEL TRAMO. El módulo recibe el texto de la locución COMPLETO en
+ * cada ingesta (`revision.ts` decide crecer/revisar/mantener), pero el reconocedor
+ * entrega FRAGMENTOS: re-emite delante el final retenido del enunciado anterior,
+ * manda prefijo re-plegado + cola que crece y puede re-escuchar el mismo tramo dos
+ * veces (medido 8f3112c2: patrones `10`/`11` y `"bien"` + `" vamos"`). Este límite
+ * compone el trozo de cada evento (`componerFraseDelEvento`) y lo integra en la
+ * línea con el libro de su último hueco (`fusionarEnLineaAbierta`, dueño único en
+ * `speechMerge`), en UNA cadena serializada: cada evento se compone sobre la
+ * instantánea que ya incluye el audio anterior, nunca sobre una foto atrasada.
  */
 import {
+  componerFraseDelEvento,
   crearAlmacenDexieProducto,
   crearConfigFlu,
   crearIdUuid,
@@ -21,12 +37,15 @@ import {
   crearRegistroCaughtError,
   crearRelojSistema,
   crearVadProducto,
+  ejecutarRegistrando,
+  fusionarEnLineaAbierta,
   registrarFallo,
 } from './adapters.ts'
 import { crearConversacion } from './motor.ts'
 import type { IdiomaLocucion, MotivoCierre } from './ports.ts'
 import type {
   ConversacionApi,
+  EvidenciaVoz,
   EventoConversacion,
   InstantaneaConversacion,
 } from './tipos.ts'
@@ -43,6 +62,12 @@ export type EventoProducto = Readonly<{
   results?: ArrayLike<ResultadoProducto>
   resultIndex?: number
 }>
+
+/** Libro del último trozo pegado a la línea abierta (regla: `speechMerge`). */
+type LibroDeLinea = Readonly<{ base: string; chunk: string; line: string }>
+
+/** Ciclo del motor: `cerrando` solo mientras la cadena ejecuta el cierre. */
+type EstadoMotorProducto = 'inactiva' | 'activa' | 'cerrando'
 
 /** Controlador que el producto usa en el ciclo real de escucha. */
 export type MotorConversacionProducto = Readonly<{
@@ -64,147 +89,147 @@ export type MotorConversacionProducto = Readonly<{
  * Compone el motor NUEVO para el producto con los adaptadores REALES.
  * Es el único punto que crea la sesión desde el hook: almacén Dexie, reloj,
  * ids y la configuración del plan; el eco se delega a `ultimoTextoDicho`.
- * @param opciones Idioma activo, frecuencia de captura, último texto de FLU y
- *   participante dueño de las filas.
+ * @param opciones Idioma activo, último texto de FLU, participante dueño de
+ *   las filas y evidencia de voz del turno.
  * @returns Controlador de apertura, ingesta y cierre.
  */
 export function crearMotorConversacionProducto({
   idioma,
-  sampleRate,
   ultimoTextoDicho,
   participantId,
+  evidenciaVoz,
 }: {
   idioma: IdiomaLocucion
-  sampleRate: number
   ultimoTextoDicho: () => string
   /** Participante activo: aísla las filas del motor por usuario. */
   participantId?: string
+  /**
+   * Evidencia de voz del turno en curso. El hook la toma del preflight de
+   * identidad (medida acústica) y del nombre dicho por el propio hablante. Sin
+   * este puerto el módulo no afirma identidad: solo continuidad o semilla.
+   */
+  evidenciaVoz?: (texto: string) => EvidenciaVoz
 }): MotorConversacionProducto {
   const reloj = crearRelojSistema()
   const id = crearIdUuid()
   const config = crearConfigFlu()
+  const registro = crearRegistroCaughtError()
   const api: ConversacionApi = crearConversacion({
     reloj,
     id,
-    registro: crearRegistroCaughtError(),
+    registro,
     almacen: crearAlmacenDexieProducto({ reloj, participantId }),
     config,
     partidor: crearPartidorWake(config),
     vad: crearVadProducto(),
     ultimoTextoDicho,
   })
-  let activa = false
+  let estadoMotor: EstadoMotorProducto = 'inactiva'
   let turnId: string | null = null
-  let tramoId: string | null = null
   let cursorMuestras = 0
-  let inicioMuestra = 0
-  let ultimoMs = 0
-  /** Último FINAL ya ingerido en esta sesión del reconocedor (índice + texto). */
-  let ultimoFinal: Readonly<{ indice: number; texto: string }> | null = null
-
-  // Una locución cerrada es una frontera: el texto que llegue después abre un
-  // segmento NUEVO, nunca promueve la fila ya cerrada.
-  api.subscribe((evento) => {
-    if (evento.tipo === 'locution.closed') tramoId = null
-  })
+  /** Libro del último hueco pegado a la línea abierta (dueño de la regla: speechMerge). */
+  let libroDeLinea: LibroDeLinea | null = null
+  /** Locución DUEÑA del libro: si el tramo cambia, el libro no describe su texto. */
+  let locucionDelLibro = ''
+  /**
+   * Cadena del límite: cada paso lee la instantánea DESPUÉS de que el paso anterior
+   * terminó. Sin ella, un evento compuesto antes de que el módulo procesara el audio
+   * pendiente pegaba su texto a la locución anterior (medido en el playback del
+   * 2026-10-25: tramos fabricados y filas de 119–152 s).
+   */
+  let cadena: Promise<void> = Promise.resolve()
 
   /**
-   * Id del segmento vigente. La locución abierta manda; si no hay ninguna, el
-   * tramo de audio que abrió el VAD (frontera nueva); si tampoco, un id nuevo.
-   * @returns El `tramoId` que identifica la locución en curso.
+   * Encola un paso del límite y registra su fallo sin romper la cadena.
+   * @param tarea Paso que lee y escribe el estado del límite.
+   * @returns Promesa del paso (resuelve siempre).
    */
-  function tramoDelSegmento(): string {
-    const retrato = api.snapshot()
-    const abierta = retrato.locucionAbierta
-    if (abierta) return abierta.locutionId
-    const audio = retrato.tramoAudio?.tramoId
-    if (audio) return audio
-    if (!tramoId) tramoId = id.uuid()
-    return tramoId
+  function encadenar(tarea: () => Promise<unknown> | unknown): Promise<void> {
+    const correr = (): Promise<void> =>
+      ejecutarRegistrando('conversacion.producto.cadena.error', tarea)
+    const siguiente = cadena.then(correr, correr)
+    cadena = siguiente
+    return siguiente
   }
 
   return {
     abrir: () => {
-      // Cada `onstart` del reconocedor abre una sesión de resultados NUEVA:
-      // los índices de Chrome vuelven a empezar, así que la identidad del
-      // último final no cruza de una sesión a otra (si no, una frase legítima
-      // idéntica se perdería; AGENTS, invariante 14).
-      ultimoFinal = null
-      if (activa) return
-      activa = true
-      turnId = id.uuid()
-      tramoId = null
+      // Cada `onstart` abre una sesión de resultados NUEVA del reconocedor: los
+      // índices de Chrome vuelven a empezar y sus trozos no son los del libro
+      // anterior, así que el libro se descarta. Si la locución sigue abierta, el
+      // módulo conserva su texto y la siguiente fusión parte de él.
+      libroDeLinea = null
+      locucionDelLibro = ''
+      if (estadoMotor !== 'inactiva') return
+      estadoMotor = 'activa'
+      const turno = id.uuid()
+      turnId = turno
       cursorMuestras = 0
-      inicioMuestra = 0
-      ultimoMs = reloj.ahora()
-      registrarFallo('conversacion.producto.start.error', api.start({ turnId, idioma }))
+      void encadenar(() =>
+        registrarFallo('conversacion.producto.start.error', api.start({ turnId: turno, idioma })),
+      )
     },
 
-    evento: (evento) => {
-      if (!activa || !turnId) return Promise.resolve()
-      const resultados = evento.results
-      if (!resultados || resultados.length === 0) return Promise.resolve()
-      const ingestas: Promise<void>[] = []
-      const ahora = reloj.ahora()
-      const porReloj = Math.max(1, Math.round(((ahora - ultimoMs) * sampleRate) / 1000))
-      const primero = evento.resultIndex ?? 0
-      // Un solo segmento por lote de resultados: la identidad no rota entre
-      // finales del MISMO tramo (Chrome corta segmentos mientras se sigue
-      // hablando; ese corte no es una locución nueva).
-      const segmento = tramoDelSegmento()
-      for (let indice = primero; indice < resultados.length; indice += 1) {
-        const resultado = resultados[indice]
-        const texto = String(resultado?.[0]?.transcript || '').trim()
-        if (!texto) continue
-        const final = resultado?.isFinal === true
-        // Reentrega del MISMO final (Chrome repite el evento): no es una
-        // locución nueva. Se compara la identidad del resultado (índice +
-        // texto), nunca el texto suelto; una frase legítima idéntica llega con
-        // índice nuevo o tras reiniciar la sesión.
-        if (final && ultimoFinal && indice === ultimoFinal.indice && texto === ultimoFinal.texto) {
-          continue
+    evento: (evento) =>
+      encadenar(async () => {
+        if (estadoMotor !== 'activa' || !turnId) return
+        const turno = turnId
+        const instantanea = api.snapshot()
+        const abierta = instantanea.locucionAbierta
+        const tramoVigente = instantanea.tramoAudio?.tramoId ?? ''
+        // El texto sin tramo lo atribuye el MÓDULO dentro de su cola: va al tramo de
+        // audio si existe y, si no, a la locución abierta. Solo hay continuidad
+        // cuando no los separa un tramo nuevo; con tramo nuevo el texto empieza de
+        // cero (esa frontera la decide el módulo).
+        const continua = Boolean(abierta) && (!tramoVigente || tramoVigente === abierta?.locutionId)
+        const clave = continua && abierta ? abierta.locutionId : ''
+        if (clave !== locucionDelLibro) {
+          libroDeLinea = null
+          locucionDelLibro = clave
         }
-        const inicio = inicioMuestra
-        const fin = Math.max(inicio + porReloj, cursorMuestras)
-        ingestas.push(
-          registrarFallo(
-            'conversacion.producto.ingest.error',
-            api.ingestAsr({
-              tramoId: segmento,
-              texto,
-              // El final del reconocedor NO cierra la locución: solo declara
-              // el corte de SU segmento. El cierre lo decide la frontera VAD o
-              // `cerrar()` (una fila por segmento, no una por corte de Chrome).
-              final: false,
-              idioma,
-              tramo: { inicio, fin, sampleRate },
-              turnId,
-            }),
-          ),
+        const trozo = componerFraseDelEvento(evento.results, evento.resultIndex)
+        if (!trozo) return
+        const lineaPrevia = continua && abierta ? abierta.texto : ''
+        const fusion = fusionarEnLineaAbierta(lineaPrevia, libroDeLinea, trozo)
+        libroDeLinea = fusion.libro
+        // Misma línea = síntoma de reentrega del MISMO tramo (Chrome repite el
+        // evento): no se reingiere. No se compara por índice: una frase legítima
+        // idéntica llega con un tramo NUEVO, donde `lineaPrevia` es ''.
+        if (!fusion.linea || fusion.linea === lineaPrevia) return
+        await registrarFallo(
+          'conversacion.producto.ingest.error',
+          api.ingestAsr({
+            // El tramo lo resuelve el módulo dentro de su cola, con el audio ya
+            // procesado. Aquí no se fabrica un `[0, cursor]`: esa foto podía ir un
+            // bloque por detrás y atribuía el texto a la locución anterior.
+            tramoId: '',
+            texto: fusion.linea,
+            // El final del reconocedor NO cierra la locución: solo declara el corte
+            // de SU segmento. El cierre lo decide la frontera VAD o `cerrar()`.
+            final: false,
+            idioma,
+            turnId: turno,
+            voz: evidenciaVoz?.(fusion.linea) ?? {},
+          }),
         )
-        if (final) ultimoFinal = { indice, texto }
-      }
-      ultimoMs = ahora
-      return Promise.all(ingestas).then(() => undefined)
-    },
+      }),
 
     audio: (muestras, frecuencia, inicioMuestras) => {
-      if (!activa || !turnId || !muestras || muestras.length === 0) return
+      if (estadoMotor !== 'activa' || !turnId || !muestras || muestras.length === 0) return
+      const turno = turnId
       const inicio =
         Number.isFinite(Number(inicioMuestras)) && Number(inicioMuestras) >= 0
           ? Number(inicioMuestras)
           : cursorMuestras
       const fin = inicio + muestras.length
       cursorMuestras = Math.max(cursorMuestras, fin)
-      registrarFallo(
-        'conversacion.producto.audio.error',
-        api.ingestAudio({
-          muestras,
-          sampleRate: frecuencia,
-          inicio,
-          fin,
-          turnId,
-        }),
+      // El audio entra en la MISMA cadena que el texto: así el evento siguiente
+      // compone sobre una instantánea que ya incluye estos bloques.
+      void encadenar(() =>
+        registrarFallo(
+          'conversacion.producto.audio.error',
+          api.ingestAudio({ muestras, sampleRate: frecuencia, inicio, fin, turnId: turno }),
+        ),
       )
     },
 
@@ -213,29 +238,36 @@ export function crearMotorConversacionProducto({
     instantanea: () => api.snapshot(),
 
     cerrar: (motivo) => {
-      if (!activa) return
-      activa = false
-      // Cierre REAL: la locución abierta se declara final con SU texto ya
-      // fusionado (nunca con la última reentrega, que puede ser solo la cola)
-      // y recién entonces se detiene la sesión. Una sola fila por segmento.
-      const abierta = api.snapshot().locucionAbierta
-      if (abierta && String(abierta.texto || '').trim()) {
-        registrarFallo(
-          'conversacion.producto.final.error',
-          api.ingestAsr({
-            tramoId: abierta.locutionId,
-            texto: abierta.texto,
-            final: true,
-            idioma,
-            tramo: abierta.tramo,
-            ...(turnId ? { turnId } : {}),
-          }),
-        )
-      }
-      registrarFallo('conversacion.producto.stop.error', api.stop(motivo))
-      turnId = null
-      tramoId = null
-      ultimoFinal = null
+      void encadenar(async () => {
+        if (estadoMotor !== 'activa') return
+        estadoMotor = 'cerrando'
+        try {
+          // Cierre REAL: la locución abierta se declara final con SU texto ya
+          // compuesto (nunca con la última reentrega, que puede ser solo la cola)
+          // y recién entonces se detiene la sesión. Una sola fila por segmento.
+          const abierta = api.snapshot().locucionAbierta
+          if (abierta && String(abierta.texto || '').trim()) {
+            await registrarFallo(
+              'conversacion.producto.final.error',
+              api.ingestAsr({
+                tramoId: abierta.locutionId,
+                texto: abierta.texto,
+                final: true,
+                idioma,
+                tramo: abierta.tramo,
+                ...(turnId ? { turnId } : {}),
+                voz: evidenciaVoz?.(abierta.texto) ?? {},
+              }),
+            )
+          }
+          await registrarFallo('conversacion.producto.stop.error', api.stop(motivo))
+        } finally {
+          estadoMotor = 'inactiva'
+          turnId = null
+          libroDeLinea = null
+          locucionDelLibro = ''
+        }
+      })
     },
   }
 }

@@ -124,12 +124,9 @@ describe('el hablante primario de la sesion conserva su nombre', () => {
     });
 
     it('GUARD: no queda ningun escritor DIRECTO del ref en src (dueno unico)', () => {
+        // La ruta del commit viejo se retiro con la tuberia
+        // el 2026-10-25; el hook es el unico consumidor que podria escribir el ref.
         expect(directSessionPrimaryWrites(hookSource())).toBe(0);
-        expect(
-            directSessionPrimaryWrites(
-                readFileSync(join(process.cwd(), 'src', 'voice', 'lib', 'turnSpeakerCommit.js'), 'utf8'),
-            ),
-        ).toBe(0);
     });
 });
 

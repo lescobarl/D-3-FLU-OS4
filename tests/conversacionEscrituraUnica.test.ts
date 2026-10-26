@@ -86,14 +86,6 @@ function entradaImportada(): ConversationEntry {
   }
 }
 
-/** Siembra el override de runtime del motor en la URL real del documento. */
-function fijarMotorEnUrl(motor: 'new' | 'legacy' | null) {
-  const url = new URL(window.location.href)
-  if (motor) url.searchParams.set('conversationEngine', motor)
-  else url.searchParams.delete('conversationEngine')
-  window.history.replaceState(null, '', url.toString())
-}
-
 /** Copia un valor con las claves de objeto en orden inverso (mismo contenido). */
 function invertirClaves<T>(valor: T): T {
   if (Array.isArray(valor)) return valor.map(invertirClaves) as T
@@ -109,17 +101,14 @@ function invertirClaves<T>(valor: T): T {
 beforeEach(async () => {
   await fluDb.conversations.clear()
   useIntegrationStore.setState({ conversationHistory: [] })
-  fijarMotorEnUrl(null)
 })
 
 afterEach(() => {
   vi.restoreAllMocks()
-  fijarMotorEnUrl(null)
 })
 
-describe('conteo de escrituras — legacy y new', () => {
-  it('legacy: una frase de usuario → exactamente UNA escritura y UNA fila', async () => {
-    fijarMotorEnUrl('legacy')
+describe('conteo de escrituras — el módulo es el único escritor de la conversación', () => {
+  it('fila de usuario ausente en la base → exactamente UNA escritura y UNA fila', async () => {
     const bulkPut = vi.spyOn(fluDb.conversations, 'bulkPut')
     useIntegrationStore.setState({ conversationHistory: [entradaModulo()] })
 
@@ -141,7 +130,6 @@ describe('conteo de escrituras — legacy y new', () => {
   })
 
   it('new: la fila del módulo NO se reescribe y la importada que falta se escribe UNA vez', async () => {
-    fijarMotorEnUrl('new')
     await escribirRegistroConversacion(REGISTRO_MODULO, {
       participantId: 'user-a',
       speakerId: labelToSpeakerId(REGISTRO_MODULO.etiqueta),
@@ -174,7 +162,6 @@ describe('conteo de escrituras — legacy y new', () => {
   })
 
   it('new: el mismo meta con distinto orden de claves no repite la escritura', async () => {
-    fijarMotorEnUrl('new')
     await escribirRegistroConversacion(REGISTRO_MODULO, {
       participantId: 'user-a',
       speakerId: labelToSpeakerId(REGISTRO_MODULO.etiqueta),

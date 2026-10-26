@@ -145,7 +145,6 @@ const UTILS_INTERNAL = ['compareAudioSignatures', 'countSpeechWords', 'getTransc
 const DEBUG_ALLOWLIST = new Set([
   'src/dev/asrLab/AsrLab.tsx',  // import dinamico en src/main.tsx gated por isAsrLab (env)
   'src/voice/lib/fluDebug.js',  // usado por useFluVoiceAssistant.js y conversationStreamCommit.js
-  'src/voice/lib/fluTrace.js',  // sink de trazas referenciado por server/geminiProxy.ts
   'src/voice/lib/listenLog.js', // usado por useFluVoiceAssistant.js
 ])
 

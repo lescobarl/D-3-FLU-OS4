@@ -1,148 +1,28 @@
 // ============================================================
-// vozNombreFraseUnDuenoGuard - un dato, un dueno (nombre de la fila, frase viva,
-// locucion confirmada, tope de hablantes y silencio de cierre).
+// vozNombreFraseUnDuenoGuard - un dato, un dueno.
 // ------------------------------------------------------------
 // MEDIDO ANTES DE TOCAR (log del dueno, sesion 02:20-02:42):
 //   * 41/41 (y 80/80 medidos) commits con `preReady:false` y `written:""`: el gate
 //     `preflight?.ready ? speakerName : ''` tiraba la etiqueta del resolver y la fila
-//     quedaba a merced de una SEGUNDA resolucion por TEXTO (`resolveSpeakerByText`
-//     dentro de `emitConversationLog`): dos duenos del nombre.
+//     quedaba a merced de una SEGUNDA resolucion por TEXTO: dos duenos del nombre.
 //   * al cerrar el turno se borraba lo PUBLICADO ("ultima frase") y la zona quedaba en
-//     blanco mientras el dueno seguia hablando (cierre 02:20:15.94 -> siguiente
-//     asrRaw 02:20:19.07): flicker.
+//     blanco mientras el dueno seguia hablando: flicker.
 //   * `pendingFinal` (locucion CONFIRMADA sin fila) se borraba desde TRES sitios por su
 //     cuenta: tres duenos del mismo dato.
 //   * `conversationMaxAutoSpeakers: 6`: el tope forzaba FUSIONES FALSAS (se pierden
 //     voces reales). `srGapCommitMs: 10000`: 10 s de silencio para cerrar.
+//
+// Corte de la tuberia vieja (2026-10-25): los casos que montaban
+// `handleConversationStreamSync` (gate del nombre en el commit y flicker del stream)
+// se retiraron con ese flujo. El nombre de la fila del producto lo escribe ahora
+// `commitUserTurnRow` y su propiedad "nunca vacia" se mide en
+// `vozFilaSiempreConHablanteGuard`. Aqui quedan las reglas que siguen vivas.
 // ============================================================
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { handleConversationStreamSync } from '../src/voice/lib/conversationStreamCommit.js';
 import { clearPendingFinal, createActiveListenState } from '../src/voice/lib/activeListen.js';
-import { resetTurnSpeakerPreflights } from '../src/voice/lib/turnSpeakerPreflight.js';
 import { FLU_CONFIG } from '../src/voice/lib/fluConfig.js';
-
-type EmitOptions = { speakerName?: string; evidenciaAcustica?: boolean };
-
-/** Arnes minimo: refs reales (objetos con .current) y espias grabados. */
-function makeDeps(over: Record<string, unknown> = {}) {
-  const deps = {
-    conversationActiveRef: { current: true },
-    publishedLiveRef: { current: '' },
-    listenStateRef: { current: createActiveListenState() },
-    openPreviewTurnRef: { current: false },
-    setLiveTranscript: vi.fn<(value: string) => void>(),
-    scheduleLiveTranscriptUpdate: vi.fn<(capture: string) => void>(),
-    applyConversationSpeaker: vi.fn<(phrase: string, fallback: string, options?: object) => void>(),
-    flushPendingStreamLog: vi.fn<() => void>(),
-    logRowsTextRef: { current: [] as string[] },
-    activeTurnIdRef: { current: 0 },
-    flushPcmAfterTurnCommit: vi.fn<() => void>(),
-    lastCommitAtRef: { current: 0 },
-    lastOnresultAtRef: { current: 0 },
-    turnAudioStartSampleRef: { current: 0 },
-    chunkTotalSamplesRef: { current: 0 },
-    preflightScheduledForTurnRef: { current: false },
-    srGapFiredForOpenLineRef: { current: false },
-    processConversationFluQueryRef: { current: vi.fn<(capture: string, action: object) => void>() },
-    lastEmittedTranscriptRef: { current: '' },
-    emitConversationLog: vi.fn<(capture: string, options?: object) => boolean>(() => true),
-    createSpeakerAudioResolver: vi.fn<(options?: object) => object>(() =>
-      () => Promise.resolve({ speakerName: 'Hablante 1' }),
-    ),
-    sessionPrimarySpeakerRef: { current: '' },
-    lastLoggedSpeakerRef: { current: '' },
-    logRowSpeakersRef: { current: [] as string[] },
-    speakerClustersRef: { current: [] as object[] },
-    setSpeakerClusters: vi.fn<(clusters: object[]) => void>(),
-    lastSpeakerRef: { current: '' },
-    lastTurnSignatureRef: { current: null as number[] | null },
-    lastLogLineTextRef: { current: '' },
-    commitTurnToSessionRows: vi.fn<(capture: string, speakerName: string, options?: object) => void>(),
-    fluParticipantRef: { current: { onTurnCommitted: vi.fn<() => void>() } },
-  };
-  Object.assign(deps, over);
-  return deps;
-}
-
-const requireWakeAlwaysBefore = FLU_CONFIG.voiceCommands.requireWakeAlways;
-beforeEach(() => {
-  FLU_CONFIG.voiceCommands.requireWakeAlways = false;
-  resetTurnSpeakerPreflights();
-});
-afterEach(() => {
-  FLU_CONFIG.voiceCommands.requireWakeAlways = requireWakeAlwaysBefore;
-  resetTurnSpeakerPreflights();
-});
-
-describe('EL GATE - el commit SIEMPRE escribe la etiqueta del resolver', () => {
-  it('sin evidencia (preflight no listo) la fila lleva la etiqueta; la evidencia decide el ASCENSO', () => {
-    const deps = makeDeps({
-      lastLoggedSpeakerRef: { current: 'Hablante 2' },
-      lastSpeakerRef: { current: 'Hablante 2' },
-      logRowSpeakersRef: { current: ['Hablante 2'] },
-      logRowsTextRef: { current: ['habia una vez una mesa'] },
-    });
-
-    handleConversationStreamSync(deps, {
-      capture: 'una mesa larga de madera',
-      turnCommit: true,
-      settlesTurn: true,
-    });
-
-    const emitOpts = deps.emitConversationLog.mock.calls[0][1] as EmitOptions;
-    const [, rowSpeaker] = deps.commitTurnToSessionRows.mock.calls[0];
-    // La etiqueta viaja SIEMPRE (antes era '' y la fila la resolvia otro modulo POR TEXTO).
-    expect(emitOpts.speakerName).toBe('Hablante 2');
-    expect(rowSpeaker).toBe('Hablante 2');
-    // Sin ventana de audio medida: la evidencia acustica es FALSE -> el nombre propio NO
-    // asciende (solo se escribe la etiqueta de diarizacion).
-    expect(emitOpts.evidenciaAcustica).toBe(false);
-  });
-
-  it('el detector no es decorativo: el gate viejo (`preflight.ready ? etiqueta : ""`) deja la fila sin hablante', () => {
-    // El mutante del gate ORIGINAL, aislado, para probar que el oraculo discrimina:
-    // con `preflight.ready` false la etiqueta `''` NO es lo que la fila debe llevar.
-    const gateViejo = (etiqueta: string, ready: boolean): string => (ready ? etiqueta : '');
-    expect(gateViejo('Hablante 2', false)).toBe('');
-    // Y lo que el guard exige del modulo real es la etiqueta, no ''.
-    const deps = makeDeps({ lastLoggedSpeakerRef: { current: 'Hablante 2' } });
-    handleConversationStreamSync(deps, { capture: 'hola de nuevo', turnCommit: true, settlesTurn: true });
-    const emitOpts = deps.emitConversationLog.mock.calls[0][1] as EmitOptions;
-    expect(emitOpts.speakerName).not.toBe('');
-    expect(emitOpts.speakerName).toBe('Hablante 2');
-  });
-});
-
-describe('flicker de "ultima frase" - el commit NO borra lo publicado', () => {
-  it('al cerrar el turno NO se limpia la zona NI su memoria', () => {
-    const deps = makeDeps({ publishedLiveRef: { current: 'estoy hablando y esto se ve' } });
-
-    handleConversationStreamSync(deps, {
-      capture: 'estoy hablando y esto se ve',
-      turnCommit: true,
-      settlesTurn: true,
-    });
-
-    // RACIONAL DEL DUENO (2026-10-11): la locucion YA se vacio a la CONVERSACION, asi que la
-    // ultima frase arranca de CERO (nueva iteracion = nueva ultima frase). NO es un flicker:
-    // el texto ya esta en su fila; sin este reset el dictado nuevo se quedaba congelado por
-    // ser mas corto que el anterior (medido: 543 bloqueos con previo=382). El vaciado ocurre
-    // SOLO en el cierre real (settlesTurn): con el turno abierto la caja jamas se acorta.
-    expect(deps.publishedLiveRef.current, 'la memoria arranca de cero').toBe('');
-    expect(deps.setLiveTranscript).toHaveBeenCalledWith('');
-  });
-
-  it('el detector no es decorativo: borrar lo publicado en el cierre hace caer el caso', () => {
-    // Mutante del defecto medido: el cierre limpiaba la frase viva.
-    const cierreViejo = (setLive: (v: string) => void) => setLive('');
-    const setLive = vi.fn<(v: string) => void>();
-    cierreViejo(setLive);
-    expect(setLive).toHaveBeenCalledWith('');
-    // El modulo real ya no lo hace (caso de arriba).
-  });
-});
 
 describe('un dueno del borrado de `pendingFinal` (locucion confirmada sin fila)', () => {
   const SRC = join(process.cwd(), 'src');

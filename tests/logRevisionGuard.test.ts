@@ -25,7 +25,8 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const CFG = readFileSync('src/voice/lib/fluConfig.js', 'utf8')
-const STREAM = readFileSync('src/voice/lib/conversationStreamCommit.js', 'utf8')
+const REVISION = readFileSync('src/voice/conversation/revision.ts', 'utf8')
+const MOTOR = readFileSync('src/voice/compose/conversationMotorProducto.js', 'utf8')
 const TURN_ROW = readFileSync('src/voice/lib/conversationTurnRow.ts', 'utf8')
 
 const json = (l: string): Record<string, unknown> => {
@@ -144,16 +145,20 @@ describe('rutina de revision - la traza de UNA corrida cumple los invariantes', 
   })
 
   it('el CODIGO tiene UN dueno por regla (fuente)', () => {
-    // Caja: UNA sola condicion de bloqueo, y es el ACORTAMIENTO (solo acumula). Antes
-    expect(STREAM.includes('revisionMasCorta'), 'sin revision-mas-corta').toBe(false)
-    expect(/capture\.length < previoLive\.length/.test(STREAM), 'el bloqueo es cualquier emision mas corta (solo acumula)').toBe(true)
-    // Nombre: UNA via (wake + comando). La voz no lo introduce.
-    expect(STREAM.includes("FUENTES_CON_IDENTIDAD = ['wake-intro']"), 'solo wake-intro').toBe(true)
+    // Caja: UNA sola regla de no-perdida y se mide en PALABRAS (revision.ts). El
+    // criterio viejo por longitud de caracteres se retiro con la tuberia (2026-10-25).
+    expect(REVISION.includes('revisionMasCorta'), 'sin revision-mas-corta').toBe(false)
+    expect(REVISION.includes('palabrasNuevas > palabrasAnteriores'), 'crece solo con MAS palabras').toBe(true)
+    expect(REVISION.includes('pintar: false'), 'perder palabras no se pinta').toBe(true)
+    // Nombre: UNA via por DATO (el mandato "soy X") + la MEDIDA del preflight. El
+    // compositor del motor es el dueno de juntarlas; la fila no asciende por voz.
+    expect(MOTOR.includes('preflightEvidenceMeasured('), 'la evidencia es la MEDIDA').toBe(true)
+    expect(MOTOR.includes('resolveSpeakerNameFromUtterance('), 'el dato es el mandato').toBe(true)
     expect(TURN_ROW.includes('resolveRegisteredSpeakerName'), 'la fila no asciende por voz').toBe(false)
     // Sin defaults que mientan: `evidenciaAcustica` no puede venir en true por defecto.
     expect(/evidenciaAcustica = true/.test(TURN_ROW), 'ningun default en true').toBe(false)
     // Config sin efecto: la clave del cierre existe y es un numero.
-    expect(/srGapCommitMs:\s*\d+/.test(CFG)).toBe(true)
+    expect(/srGapCommitMs:\s*\d+/.test(CFG), 'la clave del cierre sigue declarada').toBe(true)
   })
 
   // D6: la traza real se revisa sobre el log ACTUAL del dueno (%TEMP%\flu-debug-owner-*),

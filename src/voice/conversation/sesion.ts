@@ -40,6 +40,8 @@ export type EstadoSesion = {
   tramoAudio: TramoAudio | null
   ultimaMedida: MedidaVad
   silencioPendienteMs: number
+  /** Último tramo de audio medido: destina el final que llega tras el cierre. */
+  ultimoTramoId: string
   ultimaEtiqueta: string
   ultimaVozId: string
   cierreAsrPendiente: MotivoCierre | null
@@ -92,6 +94,7 @@ export function crearEstadoSesion(idiomaInicial: IdiomaLocucion): EstadoSesion {
     tramoAudio: null,
     ultimaMedida: { hayVoz: false, silencioMs: 0 },
     silencioPendienteMs: 0,
+    ultimoTramoId: '',
     ultimaEtiqueta: '',
     ultimaVozId: '',
     cierreAsrPendiente: null,
@@ -224,6 +227,7 @@ export function crearSesion(
     estado.tramoAudio = null
     estado.ultimaMedida = { hayVoz: false, silencioMs: 0 }
     estado.silencioPendienteMs = 0
+    estado.ultimoTramoId = ''
     estado.ultimaEtiqueta = ''
     estado.ultimaVozId = ''
     estado.cierreAsrPendiente = null

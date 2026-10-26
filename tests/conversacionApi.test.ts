@@ -8,6 +8,7 @@
  * huérfanos contados, promoción del provisional y una sola fila por tramo.
  */
 import { describe, expect, it } from 'vitest'
+import { isAutoSpeakerLabel } from '../src/voice/lib/speakerCore.js'
 import {
   crearConversacion,
   esEcoDeTts,
@@ -62,7 +63,8 @@ const crearRegistro = () => {
 const configDePrueba = (): ConfigPort => ({
   wakeWords: () => ['ok flu'],
   semillaEtiqueta: () => 'Hablante 1',
-  conversationEngine: () => 'legacy',
+  esEtiquetaAnonima: isAutoSpeakerLabel,
+  conversationEngine: () => 'new',
 })
 
 function crearEscenario(extra: Partial<DependenciasConversacion> = {}) {

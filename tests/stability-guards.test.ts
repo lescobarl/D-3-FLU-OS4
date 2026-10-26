@@ -34,6 +34,16 @@ const VOICE_SRC = readFileSync('./src/voice/hooks/useFluVoiceAssistant.js', 'utf
 const AUTONOMY_SRC = readFileSync('./src/core/autonomy/useAutonomyIntegration.ts', 'utf-8');
 const PROXY_SRC = readFileSync('./src/server/geminiProxy.ts', 'utf-8');
 
+/**
+ * ¿El bloque del rebuild del reconocedor TOCA la locución viva? Un rebuild solo puede
+ * rearmar la medida de identidad: commitear el parcial, resetear la línea/preview o
+ * cerrar la locución son el defecto medido (P9.60/Bug D) o la ruta retirada.
+ * @param block Cuerpo de `flushListenStateBeforeRebuild`.
+ */
+export function rebuildTocaLaLocucion(block: string): boolean {
+    return /syncConversationStream|turnCommit|listenStateRef\.current\.(?:openLine|pendingInterim)|openPreviewTurnRef|lastStreamPreviewRef|setLiveTranscript\(''\)|motorConversacionRef\.current\.cerrar|cerrarMotorConversacion/.test(block);
+}
+
 // ============================================================
 // Bug A — ReferenceError: resolvedSpeakerName is not defined
 // ============================================================
@@ -195,39 +205,27 @@ describe('🧪 Guard de estabilidad — Bug D: flushListenStateBeforeRebuild no 
         expect(VOICE_SRC).toContain('const flushListenStateBeforeRebuild = useCallback');
     });
 
-    it('NO commitea el interino parcial como turno final (sin syncConversationStream con turnCommit)', () => {
+    it('rearma el preflight y NO cierra ni vacía la locución viva (el módulo es su dueño)', () => {
         const block = flushBlock();
-        // El commit de un turno final se hace vía syncConversationStream({ turnCommit: true }).
-        // En un rebuild NO debe existir esa llamada dentro del bloque.
-        expect(block, 'flushListenStateBeforeRebuild no debe llamar syncConversationStream').not.toContain(
-            'syncConversationStream'
-        );
-        expect(block, 'no debe haber turnCommit dentro del bloque').not.toContain('turnCommit');
-    });
-
-    it('resetea la línea abierta y el estado de preview (sin tocar transcript ni hablante)', () => {
-        const block = flushBlock();
-        // Reset de la línea abierta (espejo de finalizeTurnCommit pero sin commitear fila).
-        expect(block, 'debe limpiar openLine').toContain("listenStateRef.current.openLine = ''");
-        expect(block, 'debe limpiar pendingInterim').toContain("listenStateRef.current.pendingInterim = ''");
+        // Contrato nuevo (corte 2026-10-25): la locución viva y su cierre son del módulo
+        // CONVERSACIÓN (VAD), que SOBREVIVE al rebuild con su locución abierta (edb4a2b6).
+        // El hook solo rearma la medida de identidad del turno.
+        expect(block, 'rearma el preflight').toContain('preflightScheduledForTurnRef.current = false');
+        // Y no toca nada de la locución: ni la línea, ni el preview, ni la caja, ni cierra.
+        expect(rebuildTocaLaLocucion(block), 'el rebuild no toca la locución viva').toBe(false);
         // La "ultima frase" NO se vacia en el rebuild (spec del dueno 2026-10-11): antes la
         // borraba a mitad de frase y producia el borra-y-reaparece. Su dueno es el reset de sesion/voz.
         expect(block, 'NO debe borrar la memoria de la frase viva').not.toContain("publishedLiveRef.current = ''");
-        expect(block, 'debe cerrar openPreviewTurnRef').toContain('openPreviewTurnRef.current = false');
-        expect(block, 'debe limpiar lastStreamPreviewRef').toContain("lastStreamPreviewRef.current = ''");
-        expect(block, 'debe limpiar preflightScheduledForTurnRef').toContain(
-            'preflightScheduledForTurnRef.current = false'
-        );
-        expect(block, 'debe limpiar srGapFiredForOpenLineRef').toContain(
-            'srGapFiredForOpenLineRef.current = false'
-        );
-        expect(block, 'NO debe vaciar la zona en el rebuild').not.toContain("setLiveTranscript('')");
     });
 
-    it('lee el parcial solo para diagnóstico (no para commitearlo)', () => {
-        const block = flushBlock();
-        // El parcial se lee únicamente para el log de depuración DEV, no para commitear.
-        expect(block, 'debe leer el parcial con cleanForSpeech').toContain('cleanForSpeech(');
-        expect(block, 'debe leer el display del stream').toContain('readStreamDisplay(');
+    it('PRUEBA DE DETECTOR: el bloque que SÍ toca la locución viva se marca', () => {
+        const infractor =
+            'const flushListenStateBeforeRebuild = useCallback(() => {' +
+            "  listenStateRef.current.openLine = ''" +
+            '  syncConversationStream({ turnCommit: true })' +
+            '}, [])';
+        expect(rebuildTocaLaLocucion(infractor), 'el defecto medido (commit del parcial)').toBe(true);
+        const conCierre = 'const x = useCallback(() => { motorConversacionRef.current.cerrar("system") }, [])';
+        expect(rebuildTocaLaLocucion(conCierre), 'cerrar la locución en el rebuild').toBe(true);
     });
 });

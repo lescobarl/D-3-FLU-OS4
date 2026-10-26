@@ -8,7 +8,6 @@ import { phrasesEquivalent, wouldShrinkListenLog } from './activeListen.js'
 import {
   processListenPacket,
   readTurnLive,
-  resolveLogRowAction,
 } from './conversationStream.js'
 import { wouldShrinkLog } from './speechMerge.js'
 
@@ -165,28 +164,6 @@ export function reconcileCommitText(capture = '', shown = '') {
   // B4: fila y ultima frase son la locucion COMPLETA, tambien cuando el ASR corta el turno
   // en un trozo del medio ("a comer del" -> "vamos a comer del plato").
   return recomposeLocution(reconciliado, shown)
-}
-
-export function resolveMicCommitAction(
-  turn,
-  {
-    capture = '',
-    newParagraph = false,
-    turnBoundary = false,
-    lastCommitted = '',
-    logRowContext = {},
-  } = {},
-) {
-  return resolveLogRowAction({
-    activeLogStream: false,
-    newParagraph,
-    turnBoundary,
-    turnCommit: true,
-    lastEmitted: turn.lastEmitted,
-    lastCommitted,
-    capture,
-    logRowContext,
-  })
 }
 
 /**

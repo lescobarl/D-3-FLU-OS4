@@ -213,6 +213,46 @@ export function loadSession(input) {
 }
 
 /**
+ * GUIÓN DE FINALES para `--sr script`: reconstruye, desde los commits REALES de la
+ * sesión (`turns.ndjson`), qué frase produjo el ASR y en qué momento del audio.
+ *
+ * El commit del recorder ocurre DESPUÉS del habla (Chrome entrega su final con
+ * latencia); `lagMs` desplaza el final hacia el habla que lo produjo, para que caiga
+ * dentro del tramo de audio correcto. Las filas consecutivas con el MISMO texto son
+ * PROMOCIONES de la tubería que grabó la sesión, no locuciones distintas: se emite
+ * una vez cada texto (re-emitirlas fabricaría una repetición que el origen no dijo).
+ *
+ * @param {any} session sesión cargada por `loadSession`
+ * @param {{ lagMs?: number, minAtMs?: number }} [options]
+ * @returns {Array<{ atMs: number, text: string, sourceAtMs: number }>}
+ */
+export function buildScriptedFinals(session, { lagMs = 4000, minAtMs = 500 } = {}) {
+  const origin = Date.parse(session?.meta?.startedAt || '')
+  if (!Number.isFinite(origin)) {
+    throw new Error('Sesion sin meta.startedAt: no se puede guionizar el reconocedor')
+  }
+  const limitMs = Number(session?.audio?.seconds || 0) * 1000
+  const finals = []
+  let ultimo = ''
+  for (const turn of session.turns || []) {
+    if (turn?.kind !== 'commit' || typeof turn.text !== 'string') continue
+    const text = String(turn.text).trim()
+    if (!text || text === ultimo) continue
+    ultimo = text
+    const t = Number(turn.t ?? turn.timestamp)
+    if (!Number.isFinite(t)) continue
+    const sourceAtMs = t - origin
+    if (sourceAtMs > limitMs) continue
+    finals.push({
+      atMs: Math.max(minAtMs, Math.round(sourceAtMs - lagMs)),
+      text,
+      sourceAtMs: Math.round(sourceAtMs),
+    })
+  }
+  return finals
+}
+
+/**
  * @param {string[]} argv
  * @returns {any}
  */
@@ -286,8 +326,8 @@ export function parseArgs(argv) {
   if (!['clean-room', 'restore-start'].includes(options.mode)) {
     throw new Error(`--mode invalido: ${options.mode} (clean-room|restore-start)`)
   }
-  if (!['real', 'mute', 'local'].includes(options.sr)) {
-    throw new Error(`--sr invalido: ${options.sr} (real|mute|local)`)
+  if (!['real', 'mute', 'script', 'local'].includes(options.sr)) {
+    throw new Error(`--sr invalido: ${options.sr} (real|mute|script|local)`)
   }
   if (!Number.isFinite(options.leadIn) || options.leadIn < 0) throw new Error('--lead-in invalido')
   if (!Number.isFinite(options.tail) || options.tail < 0) throw new Error('--tail invalido')
@@ -304,7 +344,7 @@ export function usage() {
     '',
     'Opciones:',
     '  --mode clean-room|restore-start  Estado inicial (default: clean-room)',
-    '  --sr real|mute|local              Reconocimiento (default: mute)',
+    '  --sr real|mute|script            Reconocimiento (default: mute)',
     '  --lead-in <ms>                    Espera extra tras LISTENING (default: 0)',
     '  --tail <ms>                       Margen tras el audio (default: 5000)',
     '  --out <carpeta>                   Artefactos (default: playbacks/<stamp>-<id>)',

@@ -43,6 +43,8 @@ export type EntradaEtiqueta = Readonly<{
   voz: VozEtiqueta
   anterior: string | null
   semilla: string
+  /** Predicado de etiqueta anónima (`Hablante N`/pendiente): no es identidad. */
+  esEtiquetaAnonima: (etiqueta: string) => boolean
 }>
 
 /** Etiqueta resuelta con la evidencia que la sostiene. */
@@ -68,6 +70,8 @@ export type CierreLocucion = Readonly<{
   voz: VozEtiqueta
   etiquetaAnterior: string | null
   semillaEtiqueta: string
+  /** Predicado de etiqueta anónima (`Hablante N`/pendiente): no es identidad. */
+  esEtiquetaAnonima: (etiqueta: string) => boolean
 }>
 
 /** Motivo del descarte cuando no hay fila (se cuenta, no se silencia). */
@@ -132,6 +136,7 @@ export function construirFila(entrada: CierreLocucion): ResultadoFila {
     voz: entrada.voz,
     anterior: entrada.etiquetaAnterior,
     semilla: entrada.semillaEtiqueta,
+    esEtiquetaAnonima: entrada.esEtiquetaAnonima,
   })
 
   return {

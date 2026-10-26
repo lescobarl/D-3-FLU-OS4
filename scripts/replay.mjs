@@ -1,44 +1,36 @@
 #!/usr/bin/env node
 /**
- * `npm run replay -- --session <carpeta> --mode events --expected <archivo> [--report <archivo>]`
  * `npm run replay -- --session <carpeta> --mode vectors [--report <archivo>]`
  *
- * Runner GENERICO de replay con expectativas. Dos modos: `events` (filas y caja) y
- * `vectors` (hablantes: re-ejecuta el resolutor REAL sobre el estado previo reconstruido).
+ * Replay de HABLANTES: re-ejecuta el resolutor REAL sobre el estado previo
+ * reconstruido. Los modos `events` y `playback` (filas y caja por el ingress)
+ * se retiraron con la tuberia vieja de conversacion (corte 2026-10-25): el
+ * producto mide ahora con `npm run playback` y los tests del modulo.
  *
  * Piezas (una de cada, sin rutas dobles):
  *   loader     -> scripts/replay/loadSession.mjs      (manifiesto + NDJSON, sesion completa)
- *   runner     -> scripts/replay/eventsRunner.mjs     (reinyecta por el ingress REAL)
  *   runner     -> scripts/replay/vectorsRunner.mjs    (hablantes: resolutor real + estado previo)
- *   comparador -> scripts/replay/compareExpected.mjs  (filas + CAJA: perdida, duplicacion, congelacion)
+ *   comparador -> scripts/replay/compareExpected.mjs  (hablantes)
  *   reporte    -> scripts/replay/report.mjs           (report.json + tabla)
  *
- * Exit codes: 0 = coincide · 1 = hay diferencias · 2 = sesion/expected invalidos, expected
- * NO aprobado, sesion SIN FIDELIDAD para validar, o TIMEOUT.
+ * Exit codes: 0 = coincide · 1 = hay diferencias · 2 = sesion invalida, cobertura
+ * parcial o TIMEOUT.
  *
  * Flags manuales (nunca automaticos):
- *   --draft-expected <archivo>  escribe un BORRADOR (approved:false) en un fichero NUEVO
  *   --stamp-manifest            marca un manifiesto antiguo con schemaVersion/fidelidad
  */
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { loadSession, manifestFidelity, SessionError, SUPPORTED_MANIFEST_VERSIONS } from './replay/loadSession.mjs'
-import { installDeterministicEnv } from './replay/deterministicEnv.mjs'
-import { compararSpeakers, compareExpected, growingPrefixRun, duplicatedBlock, locucionesConEtiquetasDistintas } from './replay/compareExpected.mjs'
+import { compararSpeakers, locucionesConEtiquetasDistintas } from './replay/compareExpected.mjs'
 import { buildReport, printReport, writeReport } from './replay/report.mjs'
 
-const MODES = ['events', 'vectors', 'playback']
+const MODES = ['vectors']
 /** Tope de pared por defecto del replay (ms). Se cambia con `--timeout`. */
 const DEFAULT_TIMEOUT_MS = 120000
-/** Prefijo minimo (palabras) para considerar dos textos "el mismo tramo" con otra grafia. */
-const DEFAULT_VARIANT_WORDS = 2
-/** Bloque minimo (palabras) para considerar que la caja repite un tramo. */
-const DEFAULT_DUP_BLOCK_WORDS = 4
-/** Similitud minima de grafia para justificar una fila EXTRA (misma locucion, otro ASR). */
-const DEFAULT_LOCUCION_SIMILITUD = 0.7
 
 function parseArgs(argv = []) {
-  const args = { mode: 'events', inferMarks: true, timeoutMs: DEFAULT_TIMEOUT_MS, dupBlockWords: DEFAULT_DUP_BLOCK_WORDS, variantWords: DEFAULT_VARIANT_WORDS, locucionSimilitud: DEFAULT_LOCUCION_SIMILITUD }
+  const args = { mode: 'vectors', timeoutMs: DEFAULT_TIMEOUT_MS }
   for (let i = 0; i < argv.length; i += 1) {
     const key = argv[i]
     const next = () => argv[++i]
@@ -48,14 +40,7 @@ function parseArgs(argv = []) {
     else if (key === '--report') args.report = next()
     else if (key === '--draft-expected') args.draftExpected = next()
     else if (key === '--stamp-manifest') args.stampManifest = true
-    else if (key === '--allow-draft') args.allowDraft = true
     else if (key === '--timeout') args.timeoutMs = Number(next())
-    else if (key === '--box-stall-ms') args.boxStallMs = Number(next())
-    else if (key === '--dup-block-words') args.dupBlockWords = Number(next())
-    else if (key === '--variant-words') args.variantWords = Number(next())
-    else if (key === '--locucion-similitud') args.locucionSimilitud = Number(next())
-    else if (key === '--no-infer-marks') args.inferMarks = false
-    else if (key === '--infer-marks') args.inferMarks = true
     else if (key === '--help' || key === '-h') args.help = true
   }
   return args
@@ -63,22 +48,13 @@ function parseArgs(argv = []) {
 
 function usage() {
   return [
-    'uso: npm run replay -- --session <carpeta> --mode events|vectors|playback [--expected <archivo>] [--report <archivo>]',
+    'uso: npm run replay -- --session <carpeta> --mode vectors [--report <archivo>]',
     '',
-    '  --session <carpeta>        carpeta de la grabacion (manifest.json + NDJSON del modo)',
-    '  --mode events              filas y caja (exige events.ndjson)',
-    '  --mode playback            filas y caja desde el AUDIO (VAD real) + ASR stub',
+    '  --session <carpeta>        carpeta de la grabacion (manifest.json + turns.ndjson)',
     '  --mode vectors             hablantes: reconstruye el estado previo y llama al resolutor real',
-    '  --expected <archivo>       expected.json APROBADO (separado de la grabacion)',
     '  --report <archivo>         escribe el reporte JSON',
-    '  --draft-expected <archivo> genera un BORRADOR (approved:false) en un fichero nuevo',
     '  --stamp-manifest           marca un manifiesto antiguo con schemaVersion y fidelidad',
     '  --timeout <ms>             tope de pared del replay (por defecto 120000)',
-    '  --box-stall-ms <ms>        tope de congelacion de la caja (por defecto: srGapCommitMs)',
-    '  --dup-block-words <n>      palabras del bloque repetido (por defecto 4)',
-    '  --variant-words <n>        prefijo minimo para emparejar textos como variante (por defecto 2)',
-    '  --locucion-similitud <0..1> similitud de grafia para justificar un EXTRA como repetido (por defecto 0.7)',
-    '  --no-infer-marks           no infiere sr-gap/onend de los timestamps',
   ].join('\n')
 }
 
@@ -114,36 +90,6 @@ function stampManifest(dir) {
   }
   writeFileSync(file, JSON.stringify(stamped, null, 2), 'utf8')
   return { file, schemaVersion: stamped.schemaVersion }
-}
-
-/** Borrador de expected: NUNCA sobrescribe sin pedirlo explicitamente. */
-function writeDraft(file, { scenario, mode, observed, dupBlockWords }) {
-  const target = resolve(file)
-  if (existsSync(target)) {
-    throw new SessionError('draft-exists', `el borrador ya existe y NO se sobrescribe: ${target}`)
-  }
-  // El BORRADOR declara lo que la corrida CUMPLE hoy; si un invariante falla, lo dice.
-  const prefijoCaja = (observed.boxTrace || []).some((entry) => growingPrefixRun(entry.text).hit)
-  const bloqueCaja = (observed.boxTrace || []).some((entry) => duplicatedBlock(entry.text, dupBlockWords).hit)
-  const draft = {
-    schemaVersion: 1,
-    scenario,
-    mode,
-    approved: false,
-    generatedAt: new Date().toISOString(),
-    expect: {
-      rows: observed.rows,
-      rowCount: observed.rows.length,
-      noPrefixDuplication: !observed.rows.some((row) => growingPrefixRun(row.text).hit),
-      noLostLongBlock: true,
-      // La caja de ESTA corrida: si viene duplicada, el borrador lo declara (no lo esconde).
-      boxDuplicated: prefijoCaja || bloqueCaja ? undefined : 0,
-      speakers: observed.speakers,
-      box: observed.boxAtCommit || [],
-    },
-  }
-  writeFileSync(target, JSON.stringify(draft, null, 2), 'utf8')
-  return target
 }
 
 /**
@@ -188,14 +134,10 @@ async function main() {
     console.error(`replay: modo no soportado "${args.mode}" (soportados: ${MODES.join(', ')})`)
     return 2
   }
-  // El borrador de expected es de FILAS/CAJA: en `vectors` no hay golden que redactar (la
-  // fuente es el esperado). Se rechaza en vez de ignorar el flag en silencio.
-  if (args.mode === 'vectors' && args.draftExpected) {
-    console.error('replay: --draft-expected solo aplica a --mode events (en vectors el esperado es la fuente)')
-    return 2
-  }
-  if (args.mode === 'vectors' && args.expected) {
-    console.error('replay: --expected no aplica a --mode vectors (el esperado es el `speaker` de la fuente)')
+  // `--expected`/`--draft-expected` eran del modo `events` (filas/caja), retirado con la
+  // tuberia vieja. Se rechazan en vez de ignorarlos: el producto mide con `npm run playback`.
+  if (args.expected || args.draftExpected) {
+    console.error('replay: --expected/--draft-expected pertenecen al modo retirado `events`; el producto mide con `npm run playback`')
     return 2
   }
 
@@ -279,7 +221,7 @@ async function main() {
       notCovered: comparison.notCovered,
       vectors,
       boxStallMs: 0,
-      dupBlockWords: args.dupBlockWords,
+      dupBlockWords: 0,
       timeoutMs: args.timeoutMs,
       startedAt,
       durationMs: Date.now() - t0,
@@ -289,120 +231,6 @@ async function main() {
     return exitCode
   }
 
-  // Reloj virtual: se capturan ANTES los timers REALES para el tope de pared.
-  const setTimeoutReal = globalThis.setTimeout.bind(globalThis)
-  const clearTimeoutReal = globalThis.clearTimeout.bind(globalThis)
-  const clock = installDeterministicEnv({ startMs: Number(session.events[0]?.t) || 0, seed: 1 })
-  let observed
-  try {
-    // El runner se carga DESPUES del reloj virtual (ver cabecera: import estatico roto).
-    // Mismo arnes, mismo comparador: solo cambia quien alimenta el audio.
-    const runner =
-      args.mode === 'playback'
-        ? (await import('./replay/playbackRunner.mjs')).runPlaybackSession
-        : (await import('./replay/eventsRunner.mjs')).runEventsSession
-    observed = await conTimeout(
-      runner({ session, clock, inferMarks: args.inferMarks }),
-      args.timeoutMs,
-      setTimeoutReal,
-      clearTimeoutReal,
-    )
-  } catch (error) {
-    clock.restore()
-    if (error instanceof SessionError) {
-      console.error(`replay: ${error.message}`)
-      return 2
-    }
-    throw error
-  }
-  clock.restore()
-
-  const boxStallMs = Number(args.boxStallMs) > 0 ? Number(args.boxStallMs) : Number(observed?.config?.srGapCommitMs) || 0
-
-  if (args.draftExpected) {
-    const file = writeDraft(args.draftExpected, { scenario, mode: args.mode, observed, dupBlockWords: args.dupBlockWords })
-    console.log(`replay: borrador escrito en ${file} (approved:false; revisalo antes de usarlo)`)
-    return 0
-  }
-
-  // MODO OBSERVACION (sin `--expected`): no valida ningun golden, pero SI mide los
-  // invariantes de la caja (perdida, duplicacion, congelacion) sobre la grabacion.
-  const observacion = !args.expected
-  const INVARIANTES = { noPrefixDuplication: true, noLostLongBlock: true, boxDuplicated: 0 }
-  const expectedPath = args.expected ? resolve(args.expected) : ''
-  if (args.expected && !existsSync(expectedPath)) {
-    console.error(`replay: no existe el expected: ${expectedPath}`)
-    return 2
-  }
-  const expected = observacion
-    ? { schemaVersion: 1, scenario, mode: args.mode, approved: false, observation: true, expect: INVARIANTES }
-    : JSON.parse(readFileSync(expectedPath, 'utf8'))
-  if (Number(expected?.schemaVersion) !== 1) {
-    console.error(`replay: expected con schemaVersion no soportada: ${expected?.schemaVersion}`)
-    return 2
-  }
-  if (expected.mode !== args.mode) {
-    console.error(`replay: el expected es de modo "${expected.mode}" y se pidio "${args.mode}"`)
-    return 2
-  }
-  // VALIDAR exige fidelidad: un golden aprobado sobre una sesion sin commit/config/modelos
-  // no se puede comparar con otra grabacion.
-  if (expected.approved === true && args.allowDraft !== true && fidelityWarnings.length) {
-    console.error('replay: el expected esta aprobado pero la sesion NO tiene fidelidad completa; no se valida.')
-    return 2
-  }
-
-  // FILAS FUENTE: `turns.ndjson` con `kind === "commit"` (las `base`/`resolved` no son filas).
-  const sourceRows = (session.turns || []).filter((row) => String(row?.kind || '') === 'commit')
-  // DIGESTO del ASR (mandato 2026-10-23): con el se CLASIFICA cada missing/extra del triage.
-  // `finales` = lo que el motor cerro como final; `todos` = todo texto que el motor emitio.
-  const asrDigest = (() => {
-    const finales = []
-    const todos = []
-    for (const row of session.events || []) {
-      const texto = row?.data?.text
-      if (!texto) continue
-      todos.push(String(texto))
-      if (String(row?.data?.kind || '') === 'final') finales.push(String(texto))
-    }
-    return { finales, todos }
-  })()
-  const comparison = compareExpected({
-    observed,
-    expected,
-    options: { boxStallMs, dupBlockWords: args.dupBlockWords, sourceRows, variantWords: args.variantWords, locucionSimilitud: args.locucionSimilitud, asrDigest },
-  })
-  const approved = expected.approved === true
-  const blocked = !observacion && comparison.status === 'ok' && !approved && args.allowDraft !== true
-  const exitCode = comparison.status === 'ok' ? (blocked ? 2 : 0) : observacion ? 1 : 1
-  const report = buildReport({
-    scenario: String(expected.scenario || scenario),
-    mode: args.mode,
-    session,
-    expectedPath,
-    expected,
-    observed,
-    comparison,
-    status: blocked ? 'not-approved' : observacion ? 'observed' : comparison.status,
-    exitCode,
-    fidelity,
-    fidelityWarnings,
-    // En `events` los HABLANTES no se cubren (sin audio ni vectores): se declara siempre.
-    notCovered: Array.from(new Set([...(comparison.notCovered || []), 'speakers'])),
-    boxStallMs,
-    dupBlockWords: args.dupBlockWords,
-    variantWords: args.variantWords,
-    locucionSimilitud: args.locucionSimilitud,
-    timeoutMs: args.timeoutMs,
-    startedAt,
-    durationMs: Date.now() - t0,
-  })
-  if (args.report) writeReport(resolve(args.report), report)
-  printReport(report)
-  if (blocked) {
-    console.error('replay: el expected NO esta aprobado (approved:false). Revisa el resultado y marcalo a mano.')
-  }
-  return exitCode
 }
 
 // TOP-LEVEL AWAIT (obligatorio con `vite-node`): el runner espera a que `main` termine

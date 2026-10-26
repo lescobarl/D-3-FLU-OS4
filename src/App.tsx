@@ -73,7 +73,6 @@ import { buildFluSpeechAuditRows, commitUserTurnRow, createConversationModeContr
 import { applyKnownVoiceName, forgetVoiceName, isAutoSpeakerLabel, participantVoiceAnchorsForDiarization, resolveVoiceIdentity, resolveVoiceParticipants } from './voice/api/identity'
 import { resolveGeminiErrorPresentation } from './voice/api/media'
 import { cancelSpeech, isSpeechBusy, speakResponse, waitForSpeechIdle } from './voice/api/speech'
-import { crearConfigFlu, motorConversacionActivo } from './voice/conversation/index'
 import { deleteAuditLogsBySpeaker, deleteVoiceProfile, findVoiceProfileByLabel } from './voice/api/storage'
 import { formatStreamSttUiStatus, getFluParticipantConfig, isFluParticipantEnabled, setFluParticipantOverrides } from './voice/api/uiConfig';
 import { createMediaRequestGate } from './core/media/mediaRequestGate';
@@ -968,12 +967,6 @@ function App() {
         if (profile.name.trim().toLowerCase() === anonymousName) return undefined;
         return profile.name;
     }, [activeParticipantId, participants.participants]);
-    // P8.40: etiqueta de diarizacion registrada del participante activo (A3).
-    const activeParticipantSpeakerLabelForVoice = useMemo(() => {
-        if (!activeParticipantId || activeParticipantId === DEFAULT_ONBOARDING_USER) return "";
-        const profile = participants.participants.find((p) => p.id === activeParticipantId);
-        return String(profile?.speakerLabel || "").trim();
-    }, [activeParticipantId, participants.participants]);
     // VOZ CONOCIDA EN LA BASE = NOMBRE INMEDIATO (mandato del dueño 2026-10-18): anclas medidas que la sesión siembra.
     const participantVoiceAnchorsForVoice = useMemo(() => participantVoiceAnchorsForDiarization(participants.participants), [participants.participants]);
 
@@ -1173,10 +1166,11 @@ function App() {
             // §9 — UNICO escritor de la fila del usuario (`commitUserTurnRow`). Un
             // SERVICIO (`effectOnly`) aplica su efecto y no escribe la conversacion.
             if (rawOnly && transcript && !cleanForSpeech(transcript)) return;
-            // Con `engine: new` la fila de la CONVERSACIÓN la escribe el módulo
-            // (`row.committed`): el escritor legacy queda inerte en ese dominio.
-            if (escribeFilaDeUsuario(resolved, { hayTexto: Boolean(transcript), hablable: Boolean(cleanForSpeech(transcript)) }) &&
-                !(motorConversacionActivo(crearConfigFlu()) && conversationActiveRef.current)) {
+            // La fila del USUARIO en conversación la escribe SOLO el módulo
+            // (`row.committed`); este escritor atiende el modo PASIVO (wake sin
+            // conversación activa). No hay compuerta por motor: `legacy` ya no existe.
+            if (!conversationActiveRef.current &&
+                escribeFilaDeUsuario(resolved, { hayTexto: Boolean(transcript), hablable: Boolean(cleanForSpeech(transcript)) })) {
                 // P8.40: la etiqueta de diarizacion se escribe TAL CUAL: el vinculo con un
                 // participante registrado NO la asciende (una sola via del nombre: el mandato).
                 // El dueno de esa decision es `resolveRowSpeakerName`. 
@@ -2258,7 +2252,6 @@ function App() {
         // Fase E: nombre del participante activo (Juan/Luis) para sembrar
         // sessionPrimary en la diarización (config-gated en el hook).
         activeParticipantName: activeParticipantNameForVoice,
-        activeParticipantSpeakerLabel: activeParticipantSpeakerLabelForVoice,
         participantVoiceAnchors: participantVoiceAnchorsForVoice,
         identitySession: identitySessionRef,    });
 

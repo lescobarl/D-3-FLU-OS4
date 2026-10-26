@@ -1,6 +1,6 @@
 // ============================================================
-// vozFilaConHablanteGuard - A5 (corregida): la fila escribe la ETIQUETA DEL RESOLVER, y
-// el renombre de "soy <nombre>" SUSTITUYE las filas de esa voz.
+// vozFilaConHablanteGuard - A5 (corregida): la fila escribe la ETIQUETA DEL RESOLVER y
+// las filas ya escritas NO se reescriben (fila inmutable, mandato 2026-10-26).
 // ------------------------------------------------------------
 // LO QUE MIDIO MAL LA PRIMERA VERSION (medido en la sesion del dueno 14:00-14:08):
 // el guard solo exigia "la fila nunca queda vacia", asi que paso en verde mientras la
@@ -13,11 +13,11 @@
 // El respaldo se usa SOLO cuando no hay etiqueta.
 // ============================================================
 import { beforeEach, describe, expect, it } from 'vitest'
-import { commitUserTurnRow, renameSpeakerRows, resolveRowSpeakerName, updateTurnRowSpeaker } from '../src/voice/lib/conversationTurnRow'
+import { commitUserTurnRow, resolveRowSpeakerName, updateTurnRowSpeaker } from '../src/voice/lib/conversationTurnRow'
 import { resolveRowSpeakerLabel } from '../src/voice/lib/conversationRow'
 import { resetVoiceDirectory } from '../src/voice/lib/speakerDirectory.js'
 import { useIntegrationStore } from '../src/store/integrationStore'
-import { applyResolvedSpeakerToSessionRefs } from '../src/voice/lib/turnSpeakerCommit.js'
+import { registerSpeakerIdentity } from '../src/voice/lib/speakerIdentityRegister.js'
 import { FLU_CONFIG } from '../src/voice/lib/fluConfig.js'
 
 const RESPALDO = String((FLU_CONFIG as any).voiceIdentity?.labels?.fallbackSpeaker || '')
@@ -35,7 +35,7 @@ function filaDe(turnId: number): string {
   return entry ? resolveRowSpeakerLabel(entry) : filas()[0]
 }
 
-describe('A5 corregida - la etiqueta del resolver se escribe y el renombre sustituye', () => {
+describe('A5 corregida - la etiqueta del resolver se escribe y la fila es inmutable', () => {
   beforeEach(() => {
     useIntegrationStore.setState({ conversationHistory: [], activePersonId: undefined })
     // Aislamiento de sesion (mandato 2026-10-13): el nombre vive en el DIRECTORIO por VOZ,
@@ -55,20 +55,18 @@ expect(resolveRowSpeakerName('Hablante 3')).toBe('Hablante 3')
 expect(resolveRowSpeakerName('luis'), 'etiqueta no-propia del resolver').toBe('luis')
   })
 
-  it('(util) tras "soy <nombre>" el renombre SUSTITUYE las filas de esa voz', () => {
+  it('(util) tras "soy <nombre>" las filas ya escritas NO se reescriben', () => {
     commitUserTurnRow({ text: 'vamos a poner a la mujer', speakerName: 'Hablante 2', evidenciaAcustica: true, turnId: 11 } as never)
     commitUserTurnRow({ text: 'también venden peperos', speakerName: 'Hablante 2', evidenciaAcustica: true, turnId: 12 } as never)
     expect(filas()).toEqual(['Hablante 2', 'Hablante 2'])
 
-    applyResolvedSpeakerToSessionRefs(
-      { speakerName: 'Luis', source: 'wake-intro', previousLabel: 'Hablante 2' } as never,
-      {
-        renameSpeakerRows,
-        speakerClustersRef: { current: [{ label: 'Hablante 2', signature: [1, 0, 0] }] },
-        sessionPrimarySpeakerRef: { current: '' },
-      } as never,
-    )
-    expect(filas(), 'las filas de la voz identificada cambian a su nombre').toEqual(['Luis', 'Luis'])
+    const result = registerSpeakerIdentity({
+      name: 'Luis',
+      previousLabel: 'Hablante 2',
+      clusters: [{ label: 'Hablante 2', signature: [1, 0, 0] }],
+    })
+    expect(result.rowsChanged, 'el registro no escribe filas').toBe(0)
+    expect(filas(), 'la etiqueta ya escrita se conserva (un solo dueno de la fila)').toEqual(['Hablante 2', 'Hablante 2'])
   })
 
   it('(util) el nombre propio NO asciende sin evidencia (Luis no cae en la voz de la mujer)', () => {

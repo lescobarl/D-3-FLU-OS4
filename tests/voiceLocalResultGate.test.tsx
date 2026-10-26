@@ -116,7 +116,6 @@ vi.mock('../src/hooks/useFluParticipant', () => ({
   useFluParticipant: vi.fn(() => ({ presentation: { label: 'Participante', show: false } })),
 }))
 vi.mock('../src/lib/clientLogRelay', () => ({ relayLog: vi.fn() }))
-vi.mock('../src/voice/lib/fluTrace.js', () => ({ fluTrace: vi.fn() }))
 vi.mock('../src/lib/caughtError', () => ({ logCaughtError: vi.fn() }))
 vi.mock('../src/voice/lib/fluAsyncError.js', () => ({ fluAsyncErrorHandler: vi.fn(() => vi.fn()) }))
 vi.mock('../src/voice/lib/listenLog', () => ({
@@ -131,11 +130,6 @@ vi.mock('../src/voice/lib/fluDebug', async (original) => ({
   fluDebugHot: vi.fn(),
   getFluDebugApi: vi.fn(() => ({})),
 }))
-vi.mock('../src/voice/lib/micEventProducer.js', async (original) => ({
-  ...((await original()) as object),
-  convertSimEventsToMicBursts: vi.fn(() => []),
-}))
-
 import { useFluVoiceAssistant } from '../src/voice/hooks/useFluVoiceAssistant'
 import { FLU_CONFIG } from '../src/voice/lib/fluConfig.js'
 import { relayLog } from '../src/lib/clientLogRelay'

@@ -11,14 +11,14 @@
 // etiqueta que trae el resolver (la evidencia acustica solo decide el ASCENSO a nombre
 // propio). El relleno tardio COMPLETA; no es la unica via.
 //
-// ESTE GUARD mide la PROPIEDAD en las TRES vias de escritura reales.
+// ESTE GUARD mide la PROPIEDAD en las vias de escritura reales que quedan tras el
+// corte de la tuberia vieja (2026-10-25): el commit del modulo nuevo
+// (`commitUserTurnRow`: nueva, reutilizada y reemplazada) y el relleno tardio.
 // ============================================================
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { resolveRowSpeakerLabel } from '../src/voice/lib/conversationRow'
 import { useIntegrationStore } from '../src/store/integrationStore'
 import { commitUserTurnRow, updateTurnRowSpeaker } from '../src/voice/lib/conversationTurnRow'
-import { createActiveListenState } from '../src/voice/lib/activeListen.js'
-import { handleConversationStreamSync } from '../src/voice/lib/conversationStreamCommit.js'
 import { resetTurnSpeakerPreflights } from '../src/voice/lib/turnSpeakerPreflight.js'
 import { FLU_CONFIG } from '../src/voice/lib/fluConfig.js'
 
@@ -64,58 +64,6 @@ describe('P9.65 - la fila de usuario SIEMPRE lleva hablante', () => {
     updateTurnRowSpeaker(5, '' as never)
     const fila = useIntegrationStore.getState().conversationHistory.find((e) => e.id === id)
     expect(String(resolveRowSpeakerLabel(fila) || '')).toBe(RESPALDO)
-  })
-
-  it('TUBERIA REAL: el commit del stream escribe hablante aunque el preflight no este listo', () => {
-    FLU_CONFIG.voiceCommands.requireWakeAlways = false
-    const filas: string[] = []
-    const deps = {
-      conversationActiveRef: { current: true },
-      publishedLiveRef: { current: '' },
-      listenStateRef: { current: createActiveListenState() },
-      openPreviewTurnRef: { current: false },
-      setLiveTranscript: vi.fn(),
-      scheduleLiveTranscriptUpdate: vi.fn(),
-      applyConversationSpeaker: vi.fn(),
-      flushPendingStreamLog: vi.fn(),
-      logRowsTextRef: { current: [] as string[] },
-      activeTurnIdRef: { current: 0 },
-      flushPcmAfterTurnCommit: vi.fn(),
-      lastCommitAtRef: { current: 0 },
-      lastOnresultAtRef: { current: 0 },
-      turnAudioStartSampleRef: { current: 0 },
-      chunkTotalSamplesRef: { current: 0 },
-      preflightScheduledForTurnRef: { current: true },
-      srGapFiredForOpenLineRef: { current: true },
-      processConversationFluQueryRef: { current: vi.fn() },
-      lastEmittedTranscriptRef: { current: '' },
-      emitConversationLog: (text: string, options?: object) => {
-        const o = (options || {}) as { speakerName?: string }
-        filas.push(String(o.speakerName || ''))
-        commitUserTurnRow({ text, speakerName: o.speakerName, turnId: deps.activeTurnIdRef.current } as never)
-        return true
-      },
-      createSpeakerAudioResolver: vi.fn(() => () => Promise.resolve({ speakerName: 'Hablante 1' })),
-      sessionPrimarySpeakerRef: { current: '' },
-      lastLoggedSpeakerRef: { current: 'Hablante 2' },
-      logRowSpeakersRef: { current: ['Hablante 2'] },
-      speakerClustersRef: { current: [] as object[] },
-      setSpeakerClusters: vi.fn(),
-      lastSpeakerRef: { current: 'Hablante 2' },
-      lastTurnSignatureRef: { current: null as number[] | null },
-      lastLogLineTextRef: { current: '' },
-      commitTurnToSessionRows: vi.fn(),
-      lastRequestRef: { current: { text: '', at: 0 } },
-      fluParticipantRef: { current: { onTurnCommitted: vi.fn() } },
-    }
-    handleConversationStreamSync(deps as never, {
-      capture: 'una locucion de prueba del turno',
-      turnCommit: true,
-      settlesTurn: true,
-    })
-    // Lo que el dueno midio como `written:""` (80/80) tiene que ser NO-VACIO.
-    expect(filas, 'la etiqueta que el commit escribe (written)').toEqual(['Hablante 2'])
-    expect(hablantes(), 'la fila lleva hablante').toEqual(['Hablante 2'])
   })
 
   it('control NEGATIVO (el detector no es decorativo): el gate VIEJO dejaba `written` vacio', () => {

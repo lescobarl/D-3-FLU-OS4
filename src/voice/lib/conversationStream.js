@@ -1,7 +1,7 @@
 /**
  * Motor único: mic → turno vivo (openLine) → UI/log. Archivo (session) solo al cerrar turno.
  */
-import { cleanForSpeech, sliceWordsLower, speechWords } from './audioMath.js';
+import { cleanForSpeech, speechWords } from './audioMath.js';
 // PREDICADO DE LOCUCION: una sola definicion en core/locucion.js. Este modulo lo USA (13
 // sitios) y lo RE-EXPORTA para sus consumidores historicos (import + export, no solo uno).
 import { countSharedSpeechWords, estadoDeLocucion, utterancesSameRevision } from '../core/locucion.js'
@@ -10,12 +10,12 @@ import { FLU_CONFIG } from './fluConfig.js'
 import {
   collapseRepeatedSpeech,
   mergeSpeechText,
+  mergeIntoOpenLine,
   resolveMicFragmentMerge,
   normalizeMicText,
   hasSpeechAnchor,
   preferNewRowForShortFinal,
   utterancesRelate,
-  isSameFragmentRevision,
 } from './speechMerge.js'
 import { shouldForceNewLogRowOnCommit } from './ingressGuards.js'
 import { getTranscriptPauseCfg, countSpeechWords as countWordsFromPauseCfg, srGapSilenceReached } from './fluTranscriptPause.js'
@@ -73,8 +73,9 @@ export function utterancesAsrProgress(previous = '', next = '') {
  * produciría residuos como "tas de cafe" a partir de "busca en la web rece" +
  * "busca en la web recetas de cafe").
  *
- * Fuente ÚNICA del criterio: la usan por igual el camino de FINALES y el de
- * INTERIMS de transcriptIngress.js, para que no puedan divergir.
+ * Comparador de revisión ASR distinto a propósito de `spokenUtteranceRevision`
+ * (Anexo B, invariante 14): este EXIGE crecimiento; aquel pela la wake. No se
+ * unifican.
  */
 export function isProgressiveExtension(capture = '', lastCommitted = '') {
   const next = cleanForSpeech(capture)
@@ -84,30 +85,6 @@ export function isProgressiveExtension(capture = '', lastCommitted = '') {
     next.toLowerCase().startsWith(prior.toLowerCase()) ||
     utterancesAsrProgress(prior, next)
   )
-}
-
-/**
- * §9 ÚNICA FUENTE DE VERDAD del texto de un turno en ingress.
- *
- * Decide, en UN SOLO lugar, qué texto corresponde al turno actual frente a la
- * última fila commiteada: conserva la emisión que crece, pela el prefijo ya
- * commiteado cuando corresponde y no inventa residuos. La usan por igual el
- * camino de FINALES y el de INTERIMS; antes cada uno tenía su propia lógica y
- * podían divergir (residuo "tas de cafe" del log).
- *
- * @param {string} raw Texto entrante (final o interim).
- * @param {string} lastCommitted Última fila commiteada.
- * @param {{ atFreshVoice?: boolean }} [options] `atFreshVoice` conserva el texto
- *   cuando no continúa la fila (voz nueva), en vez de pelar.
- */
-export function resolveIngressCaptureText(raw = '', lastCommitted = '', { atFreshVoice = false } = {}) {
-  const current = cleanForSpeech(raw)
-  const prior = cleanForSpeech(lastCommitted)
-  if (!current || !prior) return current
-  if (isProgressiveExtension(current, prior)) return current
-  if (atFreshVoice) return current
-  const peeled = cleanForSpeech(peelCommittedPrefixFromInterim(current, prior))
-  return peeled || current
 }
 
 // speechWords: dueno unico en audioMath.js (V18). Antes habia una copia local
@@ -373,19 +350,6 @@ export function isAssistantSpeechEcho(event = null, assistantText = '') {
   return Boolean(heard) && isAssistantVoiceEcho(heard, assistantText)
 }
 
-/** Separa texto nuevo cuando Chrome prependea el turno ya cerrado. */
-function peelCommittedPrefixFromInterim(interim = '', lastCommitted = '') {
-  const chunk = cleanForSpeech(interim)
-  const prior = cleanForSpeech(lastCommitted)
-  if (!chunk || !prior) return chunk
-  if (isCommittedInterimEcho(chunk, prior)) return ''
-  if (chunk.toLowerCase().startsWith(prior.toLowerCase())) {
-    const tail = cleanForSpeech(chunk.slice(prior.length))
-    return tail || chunk
-  }
-  return chunk
-}
-
 function clearStaleCommittedEchoFromState(state, lastCommitted = '') {
   const prior = cleanForSpeech(lastCommitted)
   if (!prior || !state) return
@@ -635,30 +599,12 @@ export function readPublishedText(state) {
 
 function integrateOpenLine(state, chunk) {
   if (!chunk) return
-  const line = readOpenLine(state)
-  // LIBRO del ultimo trozo pegado: `{ base, chunk, line }`. Solo vale si la linea sigue
-  // siendo la que dejo la ultima fusion (si otro camino la reescribio, se ignora).
-  const libro = state.openLineBook && state.openLineBook.line === line ? state.openLineBook : null
-  // REVISION DEL MISMO HUECO DE AUDIO: el trozo entrante reescribe el ultimo delta pegado
-  // (otro motor, o el ASR reemitiendo su delta). Se REEMPLAZA sobre la base; antes se volvia
-  // a pegar y la linea mezclaba las dos hipotesis ("... de debido debió de poner debió",
-  // medido en d4c1c8f3). No es dedupe: es "una hipotesis por hueco".
-  if (libro && libro.chunk && libro.chunk !== chunk && isSameFragmentRevision(libro.chunk, chunk)) {
-    const merged = normalizeMicText(resolveMicFragmentMerge(libro.base, chunk))
-    state.openLine = merged
-    state.openLineBook = { base: libro.base, chunk, line: merged }
-    return
-  }
-  const merged = normalizeMicText(resolveMicFragmentMerge(line, chunk))
-  if (merged === line) return
-  // Si la fusion solo ANADIO el trozo, se abre un hueco nuevo sobre la linea anterior; si
-  // la linea crecio absorbiendolo (emision acumulativa del otro motor), no hay delta
-  // pendiente y la base pasa a ser la linea entera.
-  const appendeado = Boolean(line) && merged === normalizeMicText(`${line} ${chunk}`)
-  state.openLine = merged
-  state.openLineBook = appendeado
-    ? { base: line, chunk, line: merged }
-    : { base: merged, chunk: '', line: merged }
+  // Dueño ÚNICO de la regla del libro: `mergeIntoOpenLine` (speechMerge). Aquí solo
+  // se proyecta sobre el estado del turno vivo; la composición del producto usa la
+  // MISMA función, sin una segunda copia de la regla.
+  const fusion = mergeIntoOpenLine(readOpenLine(state), state.openLineBook || null, chunk)
+  state.openLine = fusion.linea
+  state.openLineBook = fusion.libro
 }
 
 /** Filas recientes para stripPriorTurnsFromInterim (incluye fila viva aún no cerrada). */
@@ -743,161 +689,6 @@ function previewRelatesToFinal(preview = '', fin = '') {
   if (!pub || !f) return false
   if (pub.startsWith(f) || f.startsWith(pub) || pub.endsWith(f) || pub.includes(` ${f}`)) return true
   return utterancesRelate(pub, f) || utterancesAsrProgress(pub, f)
-}
-
-const NEW_UTTERANCE_BRIDGE_RE =
-  /^(el momento|en el momento|y |pero |aunque |cuando |porque |entonces |ahora )/i
-
-/**
- * Separa final ASR vs cola de preview que pertenece al siguiente turno/hablante.
- */
-function splitFinalAndBridgeTail(finalText = '', previewText = '') {
-  const fin = cleanForSpeech(finalText)
-  const preview = cleanForSpeech(previewText)
-  if (!fin) return { commit: preview || '', bridge: '' }
-  if (!preview || preview.length <= fin.length + 2) {
-    return { commit: fin, bridge: '' }
-  }
-
-  if (preview.toLowerCase().startsWith(fin.toLowerCase())) {
-    const tail = cleanForSpeech(preview.slice(fin.length))
-    if (!tail) return { commit: fin, bridge: '' }
-    if (utterancesSameRevision(fin, preview) && !NEW_UTTERANCE_BRIDGE_RE.test(tail)) {
-      return { commit: preview, bridge: '' }
-    }
-    if (NEW_UTTERANCE_BRIDGE_RE.test(tail) || countWordsFromPauseCfg(tail) >= 4) {
-      return { commit: fin, bridge: tail }
-    }
-    return { commit: preview, bridge: '' }
-  }
-
-  if (previewRelatesToFinal(preview, fin)) {
-    return { commit: preview.length >= fin.length ? preview : fin, bridge: '' }
-  }
-  return { commit: fin, bridge: '' }
-}
-
-export function mergePreviewIntoFinalCapture(finalText = '', previewText = '') {
-  const finClean = cleanForSpeech(finalText)
-  const { commit, bridge } = splitFinalAndBridgeTail(finalText, previewText)
-  let commitText = normalizeMicText(commit)
-  if (
-    finClean &&
-    finClean.length > commitText.length &&
-    (finClean.startsWith(commitText) || utterancesSameRevision(commitText, finClean))
-  ) {
-    commitText = finClean
-  }
-  return { commit: commitText, bridge: normalizeMicText(bridge) }
-}
-
-export function mergeTurnBridgeWithInterim(bridge = '', interim = '') {
-  const b = cleanForSpeech(bridge)
-  const i = cleanForSpeech(interim)
-  if (!b) return i
-  if (!i) return b
-  const bLower = b.toLowerCase()
-  const iLower = i.toLowerCase()
-  if (iLower.startsWith(bLower)) return i
-  if (bLower.startsWith(iLower)) return b
-
-  const wordsB = bLower.split(/\s+/).filter(Boolean)
-  const wordsI = iLower.split(/\s+/).filter(Boolean)
-  const maxOverlap = Math.min(wordsB.length, wordsI.length)
-  for (let overlap = maxOverlap; overlap >= 1; overlap -= 1) {
-    const suffix = wordsB.slice(-overlap).join(' ')
-    if (iLower.startsWith(suffix)) {
-      const rest = i.slice(iLower.indexOf(suffix) + suffix.length).trim()
-      return normalizeMicText(rest ? `${b} ${rest}` : b)
-    }
-  }
-  return normalizeMicText(`${b} ${i}`)
-}
-
-function trimPartialAsrTailFromLive(live = '', finalText = '') {
-  const liveWords = live.split(/\s+/).filter(Boolean)
-  const finLower = cleanForSpeech(finalText).toLowerCase()
-  const finFirst = finLower.split(/\s+/).filter(Boolean)[0] || ''
-  while (liveWords.length > 1) {
-    const tail = liveWords[liveWords.length - 1].toLowerCase()
-    if (!tail || tail.length < 3) break
-    if (finLower.includes(` ${tail}`) || finLower.endsWith(tail)) break
-    if (finFirst && (finFirst.startsWith(tail) || tail.startsWith(finFirst.slice(0, Math.min(4, finFirst.length))))) {
-      liveWords.pop()
-      continue
-    }
-    break
-  }
-  return liveWords.join(' ')
-}
-
-/** Fusiona preview en vivo con final ASR sin arrastrar sílabas parciales (ej. «porcenta»). */
-export function mergeLivePreviewIntoFinalCommit(livePreview = '', finalText = '') {
-  const live = cleanForSpeech(trimPartialAsrTailFromLive(livePreview, finalText))
-  const fin = cleanForSpeech(finalText)
-  if (!live || !fin) return fin || live || ''
-  const liveLower = live.toLowerCase()
-  const finLower = fin.toLowerCase()
-  if (liveLower.startsWith(finLower)) return live
-  if (finLower.startsWith(liveLower)) return fin
-
-  const liveWords = live.split(/\s+/).filter(Boolean)
-  const finWords = fin.split(/\s+/).filter(Boolean)
-  const maxOverlap = Math.min(liveWords.length, finWords.length)
-  for (let overlap = maxOverlap; overlap >= 1; overlap -= 1) {
-    const suffix = sliceWordsLower(liveWords, -overlap)
-    const prefix = sliceWordsLower(finWords, 0, overlap)
-    if (suffix === prefix) {
-      const head = liveWords.slice(0, liveWords.length - overlap).join(' ')
-      return normalizeMicText(head ? `${head} ${fin}` : fin)
-    }
-  }
-  return mergeTurnBridgeWithInterim(live, fin)
-}
-
-export function shouldMergeLivePreviewIntoFinal({
-  livePreview = '',
-  finalText = '',
-  lastCommitted = '',
-} = {}) {
-  const live = cleanForSpeech(livePreview)
-  const fin = cleanForSpeech(finalText)
-  const prior = cleanForSpeech(lastCommitted)
-  if (!live || !fin) return false
-  if (live === fin) return false
-  if (prior) {
-    const liveLower = live.toLowerCase()
-    const priorLower = prior.toLowerCase()
-    if (liveLower.startsWith(priorLower) || priorLower.startsWith(liveLower)) return false
-    if (utterancesRelate(prior, live) && live.length > prior.length + 20) return false
-  }
-
-  const liveTrimmed = cleanForSpeech(trimPartialAsrTailFromLive(live, fin))
-  const liveWords = liveTrimmed.split(/\s+/).filter(Boolean)
-  const finWords = fin.split(/\s+/).filter(Boolean)
-  const maxOverlap = Math.min(liveWords.length, finWords.length)
-  let wordOverlap = 0
-  for (let overlap = maxOverlap; overlap >= 1; overlap -= 1) {
-    const suffix = sliceWordsLower(liveWords, -overlap)
-    const prefix = sliceWordsLower(finWords, 0, overlap)
-    if (suffix === prefix) {
-      wordOverlap = overlap
-      break
-    }
-  }
-  const related =
-    wordOverlap > 0 ||
-    fin.toLowerCase().startsWith(liveTrimmed.toLowerCase()) ||
-    liveTrimmed.toLowerCase().startsWith(fin.toLowerCase()) ||
-    utterancesRelate(liveTrimmed, fin)
-  if (!related) return false
-
-  const merged = mergeLivePreviewIntoFinalCommit(live, fin)
-  if (merged.length <= fin.length + 8) return false
-  if (prior && merged.toLowerCase().startsWith(prior.toLowerCase()) && fin.length < prior.length) {
-    return false
-  }
-  return true
 }
 
 function mergeSameEventFragments(inter = '', fin = '') {

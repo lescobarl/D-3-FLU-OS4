@@ -16,7 +16,7 @@
  * `eslint-disable` mudo.
  */
 import { runAsync } from './_asyncExec'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { ESLint } from 'eslint'
 import { describe, expect, it } from 'vitest'
@@ -76,9 +76,12 @@ const ROOT = process.cwd()
  * fuera y ademas ata el trinquete a lo que de verdad se mantiene.
  */
 export async function ficherosVersionados(cwd = process.cwd()): Promise<string[]> {
+  // Ademas de versionado, debe EXISTIR: el corte de la tuberia vieja deja borrados
+  // sin confirmar en el arbol, y un fichero borrado no es fuente que medir.
   return (await runAsync('git', ['ls-files', 'src'], { cwd })).stdout
     .split('\n')
     .filter((f) => /\.(ts|tsx|js|jsx|mjs)$/.test(f))
+    .filter((f) => existsSync(join(cwd, f)))
 }
 
 let cacheo: ReturnType<typeof porFichero> | null = null

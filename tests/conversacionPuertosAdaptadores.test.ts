@@ -11,6 +11,7 @@
  * embeddings y escritura Dexie. Esos quedan declarados PENDIENTES.
  */
 import { describe, expect, it } from 'vitest'
+import { isAutoSpeakerLabel } from '../src/voice/lib/speakerCore.js'
 import {
   crearAlmacenMemoria,
   crearConfigFlu,
@@ -18,17 +19,18 @@ import {
   crearPartidorWake,
   crearRegistroCaughtError,
   crearRelojSistema,
+  crearVadProducto,
 } from '../src/voice/conversation/adapters'
+import { getVadEnergyThreshold } from '../src/voice/lib/asr/asrConfig'
 import {
   CONVERSACION_CONFIG,
-  motorConversacionActivo,
+  esMotorConversacion,
 } from '../src/voice/conversation/ports'
 import type {
   AsrPort,
   ConfigPort,
   EmbebedorPort,
   FilaNueva,
-  MotorConversacion,
   RelojPort,
   VadPort,
 } from '../src/voice/conversation/ports'
@@ -51,10 +53,11 @@ const filaNueva = (locutionId: string, overrides: Partial<FilaNueva> = {}): Fila
   ...overrides,
 })
 
-const configDePrueba = (motor: MotorConversacion = 'legacy'): ConfigPort => ({
+const configDePrueba = (): ConfigPort => ({
   wakeWords: () => ['ok flu'],
   semillaEtiqueta: () => 'Hablante 1',
-  conversationEngine: () => motor,
+  esEtiquetaAnonima: isAutoSpeakerLabel,
+  conversationEngine: () => 'new',
 })
 
 describe('configuración del plan — una sola fuente', () => {
@@ -66,7 +69,7 @@ describe('configuración del plan — una sola fuente', () => {
       asr: { engine: 'auto', lang: 'es' },
       maxRetentionMin: 120,
       overlapMargin: null,
-      conversation: { engine: 'legacy' },
+      conversation: { engine: 'new' },
     })
   })
 
@@ -76,11 +79,12 @@ describe('configuración del plan — una sola fuente', () => {
     expect(Object.isFrozen(CONVERSACION_CONFIG.conversation)).toBe(true)
   })
 
-  it('el plan mantiene legacy; el puerto decide el motor', () => {
-    expect(CONVERSACION_CONFIG.conversation.engine).toBe('legacy')
-    expect(motorConversacionActivo(configDePrueba())).toBe(false)
-    expect(motorConversacionActivo(configDePrueba('new'))).toBe(true)
-    expect(motorConversacionActivo(configDePrueba('legacy'))).toBe(false)
+  it('el plan declara `new`; `legacy` ya no es un motor válido', () => {
+    expect(CONVERSACION_CONFIG.conversation.engine).toBe('new')
+    // El adaptador del producto resuelve el MISMO valor declarado.
+    expect(crearConfigFlu().conversationEngine()).toBe('new')
+    expect(esMotorConversacion('legacy')).toBe(false)
+    expect(esMotorConversacion('new')).toBe(true)
   })
 })
 
@@ -165,6 +169,70 @@ describe('config viva — sale de FLU_CONFIG, no inventa wake', () => {
     expect(config.wakeWords().length).toBeGreaterThan(0)
     expect(config.semillaEtiqueta()).not.toBe('')
     expect('localFallbackHabilitado' in config).toBe(false)
+  })
+})
+
+const SR_VAD = 16000
+
+/** Tono de 220 Hz con RMS cuatro veces sobre el piso REAL del VAD. */
+const tono = (ms: number): Float32Array => {
+  const n = Math.round((SR_VAD * ms) / 1000)
+  const muestras = new Float32Array(n)
+  const amplitud = Math.sqrt(2) * getVadEnergyThreshold() * 4
+  for (let i = 0; i < n; i += 1) {
+    muestras[i] = Math.sin((2 * Math.PI * 220 * i) / SR_VAD) * amplitud
+  }
+  return muestras
+}
+
+/** Silencio digital de `ms` a 16 kHz. */
+const silencio = (ms: number): Float32Array =>
+  new Float32Array(Math.round((SR_VAD * ms) / 1000))
+
+/** Bloques de 210 ms (múltiplo exacto de la trama de 30 ms). */
+const encadenar = (...partes: Float32Array[]): Float32Array => {
+  const total = partes.reduce((suma, parte) => suma + parte.length, 0)
+  const salida = new Float32Array(total)
+  let offset = 0
+  for (const parte of partes) {
+    salida.set(parte, offset)
+    offset += parte.length
+  }
+  return salida
+}
+
+describe('VAD del producto — el silencio es de COLA, no acumulado histórico', () => {
+  it('sin voz, el silencio se acumula bloque a bloque', () => {
+    const vad = crearVadProducto()
+    const primero = vad.medir(silencio(210), SR_VAD)
+    expect(primero.hayVoz).toBe(false)
+    expect(primero.silencioMs).toBeCloseTo(210, 6)
+    const segundo = vad.medir(silencio(210), SR_VAD)
+    expect(segundo.hayVoz).toBe(false)
+    expect(segundo.silencioMs).toBeCloseTo(420, 6)
+  })
+
+  it('la voz corta la racha: el silencio vuelve a la cola del bloque', () => {
+    const vad = crearVadProducto()
+    vad.medir(silencio(300), SR_VAD)
+    const conVoz = vad.medir(tono(300), SR_VAD)
+    expect(conVoz).toMatchObject({ hayVoz: true })
+    expect(conVoz.silencioMs).toBeCloseTo(0, 6)
+    // MUTACIÓN: con el acumulador histórico (defecto medido) aquí daría 600
+    // y el tramo no se cortaría en el siguiente hueco.
+    const despues = vad.medir(silencio(300), SR_VAD)
+    expect(despues.hayVoz).toBe(false)
+    expect(despues.silencioMs).toBeCloseTo(300, 6)
+  })
+
+  it('de un bloque que acaba en silencio solo cuenta la cola posterior a la voz', () => {
+    const vad = crearVadProducto()
+    const bloque = encadenar(tono(210), silencio(210))
+    const medida = vad.medir(bloque, SR_VAD)
+    expect(medida.hayVoz).toBe(true)
+    expect(medida.silencioMs).toBeCloseTo(210, 6)
+    // La voz al FINAL del bloque deja cola cero (no arrastra el silencio previo).
+    expect(vad.medir(encadenar(silencio(210), tono(210)), SR_VAD).silencioMs).toBeCloseTo(0, 6)
   })
 })
 

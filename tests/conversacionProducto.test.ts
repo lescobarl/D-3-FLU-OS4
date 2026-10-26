@@ -8,16 +8,18 @@
  * disparan `onstart`/`onresult` reales. La fila se lee de Dexie con
  * `fake-indexeddb` (la MISMA tabla `conversations` v26 del producto).
  *
- * Dos banderas, un solo escritor:
- *  - `new`     el módulo se compone (1 vez), la fila sale de Dexie y el ingress
- *              legacy NO recibe el resultado;
- *  - `legacy`  el módulo NO se instancia y el ingress legacy SÍ recibe el
- *              resultado; no hay fila en Dexie.
+ * PCM REAL: el módulo deriva la identidad de la locución del tramo de audio
+ * (`ingestaAudio`), así que el arnés entrega bloques PCM con voz por el MISMO
+ * callback del capture (`onRawPcmBlock`, dominio CRUDO pre-ganancia: el piso
+ * del VAD está calibrado ahí) que usa el producto. Sin audio, el texto
+ * es huérfano y NO hay fila: eso es el contrato, no un detalle del test.
  *
- * La bandera NO se sustituye: se siembra el override de runtime en la URL
- * (`?conversationEngine=new`), que es la vía real de `crearConfigFlu`. El motor,
- * el almacén Dexie y el adaptador de ASR son los reales del módulo; solo se
- * envuelve la fábrica para contar instancias.
+ * Un solo motor, un solo escritor: el módulo se compone (1 vez), la fila sale
+ * de Dexie y el ingress legacy SOLO recibe los finales para comandos; sus filas
+ * ya no se publican (el emisor legacy de conversación está cortado).
+ *
+ * El motor, el almacén Dexie y el adaptador de ASR son los reales del módulo;
+ * solo se envuelve la fábrica para contar instancias.
  */
 import 'fake-indexeddb/auto'
 import { act, renderHook, waitFor } from '@testing-library/react'
@@ -45,8 +47,8 @@ const h = vi.hoisted(() => {
     integration,
     recognition,
     crearMotorLlamadas: 0,
+    pcm: null as null | ((input: Float32Array, meta?: { sampleIndex?: number }) => void),
     setCommitted: vi.fn(),
-    ingressPush: vi.fn(),
     acquireSpeechRecognition: vi.fn(),
     startSpeechRecognition: vi.fn(),
     stopSpeechRecognition: vi.fn(),
@@ -62,11 +64,9 @@ const h = vi.hoisted(() => {
     logChromeSpeechResult: vi.fn(),
     logCaughtError: vi.fn(),
     fluAsyncErrorHandler: vi.fn(() => vi.fn()),
-    createConversationIngressRuntime: vi.fn(),
     wireMicCapturePipeline: vi.fn(),
     startContinuousIdentityPipeline: vi.fn(),
     stopAllContinuousIdentityPipelines: vi.fn(),
-    convertSimEventsToMicBursts: vi.fn(() => []),
     createLocalRecognition: vi.fn(),
     shouldUseLocalFallback: vi.fn(() => false),
     createTurnSpeakerAudioResolver: vi.fn(() => ({})),
@@ -129,17 +129,9 @@ vi.mock('../src/voice/lib/micCaptureBridge.js', () => ({
   wireMicCapturePipeline: h.wireMicCapturePipeline,
 }));
 
-vi.mock('../src/voice/lib/conversationIngressBridge.js', () => ({
-  createConversationIngressRuntime: h.createConversationIngressRuntime,
-}));
-
 vi.mock('../src/voice/lib/turnIdentityPipeline.js', () => ({
   startContinuousIdentityPipeline: h.startContinuousIdentityPipeline,
   stopAllContinuousIdentityPipelines: h.stopAllContinuousIdentityPipelines,
-}));
-
-vi.mock('../src/voice/lib/micEventProducer.js', () => ({
-  convertSimEventsToMicBursts: h.convertSimEventsToMicBursts,
 }));
 
 vi.mock('../src/voice/lib/voiceLocalFallback', () => ({
@@ -197,16 +189,37 @@ vi.mock('../src/voice/lib/fluDebug', () => ({
 import { useFluVoiceAssistant } from '../src/voice/hooks/useFluVoiceAssistant';
 import { fluDb } from '../src/core/db/fluDatabase';
 import { FLU_CONFIG } from '../src/voice/api/config';
+import { getVadEnergyThreshold } from '../src/voice/lib/asr/asrConfig';
 
 /** Declara las APIs de navegador que el hook considera "soporte". */
 function darSoporteNavegador() {
   (window as unknown as Record<string, unknown>).SpeechRecognition = function SpeechRecognition() {};
+  // AudioContext falso con lo que el hook usa al cablear la captura pasiva.
   (window as unknown as Record<string, unknown>).AudioContext = function AudioContext() {
-    return { sampleRate: 48000 };
+    return {
+      sampleRate: 48000,
+      resume: vi.fn(async () => undefined),
+      close: vi.fn(async () => undefined),
+      createMediaStreamSource: vi.fn(() => ({
+        connect: vi.fn(),
+        disconnect: vi.fn(),
+      })),
+      createGain: vi.fn(() => ({
+        gain: { value: 1 },
+        connect: vi.fn(),
+        disconnect: vi.fn(),
+      })),
+      createAnalyser: vi.fn(() => ({
+        fftSize: 0,
+        smoothingTimeConstant: 0,
+        connect: vi.fn(),
+        disconnect: vi.fn(),
+      })),
+    };
   };
   Object.defineProperty(navigator, 'mediaDevices', {
     configurable: true,
-    value: { getUserMedia: vi.fn(() => Promise.reject(new Error('sin micro en test'))) },
+    value: { getUserMedia: vi.fn(async () => ({ getTracks: () => [] })) },
   });
 }
 
@@ -219,22 +232,37 @@ function quitarSoporteNavegador() {
   delete (navigator as unknown as Record<string, unknown>).mediaDevices;
 }
 
-/**
- * Siembra el override de runtime del motor en la URL real del documento.
- * Es la vía del E2E: sin localStorage, sin globales y sin tocar el default.
- * @param motor Motor pedido, o `null` para dejar la URL sin override.
- */
-function fijarMotorEnUrl(motor: 'new' | 'legacy' | null) {
-  const url = new URL(window.location.href)
-  if (motor) url.searchParams.set('conversationEngine', motor)
-  else url.searchParams.delete('conversationEngine')
-  window.history.replaceState(null, '', url.toString())
-}
-
 /** Evento de resultado con la forma que entregan Chrome y el motor local. */
 function eventoAsr(texto: string, final: boolean): unknown {
   const resultado = { 0: { transcript: texto }, isFinal: final, length: 1 };
   return { resultIndex: 0, results: [resultado] };
+}
+
+const SR_PCM = 48000
+let pcmIndex = 0
+
+/** Bloque con VOZ: RMS cuatro veces por encima del piso REAL del VAD. */
+function bloqueVoz(ms: number): Float32Array {
+  const n = Math.round((SR_PCM * ms) / 1000);
+  const muestras = new Float32Array(n);
+  const amplitud = Math.sqrt(2) * getVadEnergyThreshold() * 4;
+  for (let i = 0; i < n; i += 1) {
+    muestras[i] = Math.sin((2 * Math.PI * 220 * i) / SR_PCM) * amplitud;
+  }
+  return muestras;
+}
+
+/**
+ * Entrega PCM con voz por el MISMO callback del capture que usa el producto.
+ * El tramo de audio es la identidad de la locución: sin este bloque el texto
+ * del reconocedor queda huérfano y no puede nacer una fila.
+ */
+async function alimentarVoz(ms = 300): Promise<void> {
+  await waitFor(() => expect(h.pcm).not.toBeNull());
+  await act(async () => {
+    h.pcm?.(bloqueVoz(ms), { sampleIndex: pcmIndex });
+    pcmIndex += Math.round((SR_PCM * ms) / 1000);
+  });
 }
 
 /** Monta el hook con el dueño de conversación activo (lo fija App en vivo). */
@@ -253,8 +281,9 @@ function montar() {
 beforeEach(async () => {
   vi.clearAllMocks();
   await fluDb.conversations.clear();
-  fijarMotorEnUrl(null);
   h.crearMotorLlamadas = 0;
+  h.pcm = null;
+  pcmIndex = 0;
   h.integration.lastCommittedTranscript = '';
   h.integration.conversationHistory = [];
   h.integration.speakerHighWater = 0;
@@ -263,7 +292,6 @@ beforeEach(async () => {
   });
   (h.integration as unknown as Record<string, unknown>).setLastCommittedTranscript = h.setCommitted;
   (h.integration as unknown as Record<string, unknown>).addConversationEntry = vi.fn();
-  h.ingressPush.mockReset();
 
   Object.assign(h.recognition, {
     lang: '',
@@ -286,16 +314,12 @@ beforeEach(async () => {
   h.requestFluContract.mockReset().mockResolvedValue({});
   h.relayLog.mockReset();
   h.fluEvent.mockReset();
-  h.createConversationIngressRuntime
-    .mockReset()
-    .mockReturnValue({
-      pushSrGapEvent: vi.fn(),
-      drainAll: vi.fn(),
-      pushMicRecognitionEvent: h.ingressPush,
-      pushRecognitionEndEvent: vi.fn(),
-      reset: vi.fn(),
-    });
-  h.wireMicCapturePipeline.mockReset().mockResolvedValue({ zeroGain: { disconnect: vi.fn() } });
+  h.wireMicCapturePipeline.mockReset().mockImplementation(
+    async (opciones: { onRawPcmBlock?: typeof h.pcm }) => {
+      h.pcm = opciones.onRawPcmBlock ?? null;
+      return { zeroGain: { disconnect: vi.fn() } };
+    },
+  );
   h.useFluParticipant.mockReset().mockReturnValue({
     presentation: { label: 'Participante', show: false },
   });
@@ -315,7 +339,6 @@ afterEach(() => {
 
 describe('producto — engine new escribe la fila desde el reconocedor real', () => {
   it('un final del SpeechRecognition produce UNA fila en Dexie, su commit y la caja', async () => {
-    fijarMotorEnUrl('new');
     darSoporteNavegador();
     const put = vi.spyOn(fluDb.conversations, 'put');
     const { result } = montar();
@@ -326,6 +349,7 @@ describe('producto — engine new escribe la fila desde el reconocedor real', ()
     });
     act(() => h.recognition.onstart?.());
 
+    await alimentarVoz();
     await act(async () => {
       h.recognition.onresult?.(eventoAsr('ok flu hola mundo', false));
     });
@@ -397,14 +421,11 @@ describe('producto — engine new escribe la fila desde el reconocedor real', ()
         meta: expect.objectContaining({ origin: 'conversation-module' }),
       }),
     );
-    // Solo los finales alimentan el ingress (comandos); la fila es una sola y la
-    // escribe el módulo, así que no hay dos escritores. La reentrega del mismo
-    // final la deduplica el ingress, no este handler.
-    expect(h.ingressPush).toHaveBeenCalled();
+    // La fila es una sola y la escribe el módulo (`row.committed`): no hay dos
+    // escritores. La reentrega del mismo final la resuelve la cola del módulo.
   });
 
   it('un reinicio del reconocedor (onend → onstart) NO reinicia la sesión del módulo', async () => {
-    fijarMotorEnUrl('new');
     darSoporteNavegador();
     const { result } = montar();
     await waitFor(() => expect(result.current.isSupported).toBe(true));
@@ -413,6 +434,7 @@ describe('producto — engine new escribe la fila desde el reconocedor real', ()
       await result.current.startListening();
     });
     act(() => h.recognition.onstart?.());
+    await alimentarVoz();
     await act(async () => {
       h.recognition.onresult?.(eventoAsr('ok flu hola', false));
     });
@@ -443,7 +465,6 @@ describe('producto — engine new escribe la fila desde el reconocedor real', ()
   });
 
   it('cinco finales del MISMO segmento producen UNA fila y UN commit al cerrar', async () => {
-    fijarMotorEnUrl('new');
     darSoporteNavegador();
     const { result } = montar();
     await waitFor(() => expect(result.current.isSupported).toBe(true));
@@ -453,6 +474,7 @@ describe('producto — engine new escribe la fila desde el reconocedor real', ()
     });
     act(() => h.recognition.onstart?.());
 
+    await alimentarVoz();
     const finales = [
       'uno',
       'uno dos',
@@ -491,27 +513,5 @@ describe('producto — engine new escribe la fila desde el reconocedor real', ()
       (h.integration as unknown as { addConversationEntry: ReturnType<typeof vi.fn> })
         .addConversationEntry,
     ).toHaveBeenCalledTimes(1);
-  });
-});
-
-describe('producto — engine legacy no instancia el módulo', () => {
-  it('el resultado va al ingress legacy y Dexie queda vacía', async () => {
-    fijarMotorEnUrl('legacy');
-    darSoporteNavegador();
-    const { result } = montar();
-    await waitFor(() => expect(result.current.isSupported).toBe(true));
-
-    await act(async () => {
-      await result.current.startListening();
-    });
-    act(() => h.recognition.onstart?.());
-    await act(async () => {
-      h.recognition.onresult?.(eventoAsr('ok flu hola mundo', true));
-    });
-
-    expect(h.crearMotorLlamadas).toBe(0);
-    expect(h.ingressPush).toHaveBeenCalledTimes(1);
-    expect(h.setCommitted).not.toHaveBeenCalled();
-    expect(await fluDb.conversations.count()).toBe(0);
   });
 });

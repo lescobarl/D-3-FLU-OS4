@@ -3,8 +3,8 @@
  *
  * POR QUE ESTE TEST: `src/voice/lib/voiceIdentityQueue.js` es la cola que hace
  * viable la identidad en tiempo real: UN job en vuelo y un `pending` REEMPLAZABLE.
- * De su politica depende que el troceo por hablante (asrTurnSegmentation) reciba
- * snapshots frescos y no trabajo viejo. Estaba al 0%: nadie ejecutaba los descartes
+ * De su politica depende que la identidad en tiempo real reciba snapshots frescos
+ * y no trabajo viejo. Estaba al 0%: nadie ejecutaba los descartes
  * ni los caminos de fallo.
  *
  * SEMANTICA REAL (medida, no supuesta): al encolar, el job pasa directo a EN VUELO

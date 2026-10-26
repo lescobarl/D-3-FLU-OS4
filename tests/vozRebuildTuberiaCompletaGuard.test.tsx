@@ -1,25 +1,24 @@
 // @vitest-environment jsdom
 // ============================================================
-// vozRebuildTuberiaCompletaGuard - TUBERIA COMPLETA del defecto P9.60
+// vozRebuildTuberiaCompletaGuard - TUBERIA COMPLETA: el rebuild del watchdog
+// no puede perder la locución viva.
 // ------------------------------------------------------------
-// El cierre de P9.60 declaro NO CUBIERTO este nivel: montar el HOOK real y disparar
-// el WATCHDOG por temporizador (en vez de leer el hook como texto o de inyectar en
-// el ingress a mano). Aqui se cierra ese hueco.
+// Monta el HOOK real, dispara el WATCHDOG por temporizador y alimenta el PCM que
+// entregaría el micrófono: el VAD, el motor CONVERSACIÓN y su cierre son los
+// REALES (Dexie con fake-indexeddb). Solo se sustituye la FRONTERA del navegador
+// (reconocedor, Web Audio, getUserMedia, red y almacenamiento de sesión).
 //
-// Solo se sustituye la FRONTERA: el motor de reconocimiento del navegador
-// (speechRecognitionLocal), el almacenamiento, la red, la captura de audio y el
-// pipeline de identidad. El INGRESS, el COMMIT y el WATCHDOG son los REALES.
-//
-// DEFECTO (medido en el log del dueno): un FINAL de 169 chars se commitea sin cierre
-// -> NO escribe fila. A los ~4,2 s sin texto nuevo el watchdog hace REBUILD del
-// reconocedor y `flushListenStateBeforeRebuild` descartaba la linea viva suponiendo
-// que era un interino en vuelo -> la locucion se perdia (la fila posterior llevaba
-// solo el texto nuevo).
-//
-// MEDIDO: con la version de base (commit 43a7a96) el caso 1 da `filasDelTurno=[]`
-// (la locucion NO llega: el defecto, en la tuberia completa). Con el arreglo llega.
+// CONTRATO NUEVO (corte 2026-10-25): la locución viva pertenece al módulo, que
+// SOBREVIVE al reinicio del reconocedor con su locución abierta (edb4a2b6). Un
+// final de Chrome NO cierra la locución: el cierre es la frontera VAD, y la fila
+// se escribe al cerrar. Este guard mide:
+//   1. FINAL de Chrome + rebuild por temporizador -> la locución sigue en la caja
+//      y NO se escribe fila (el final no es cierre);
+//   2. silencio ≥ silenceCloseMs -> la locución CIERRA y llega a Dexie con la
+//      frase completa (una locución = un tramo = una fila).
 // ============================================================
-import { act, renderHook } from '@testing-library/react';
+import 'fake-indexeddb/auto'
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const h = vi.hoisted(() => {
@@ -27,6 +26,8 @@ const h = vi.hoisted(() => {
     lastCommittedTranscript: '',
     conversationHistory: [] as unknown[],
     conversationState: 'IDLE',
+    conversationEpoch: 1,
+    activePersonId: '',
   };
   const recognition = {
     lang: '',
@@ -38,7 +39,8 @@ const h = vi.hoisted(() => {
     start: vi.fn(),
     abort: vi.fn(),
   };
-  return { integration, recognition };
+  const mic = { onRawPcmBlock: null as null | ((input: Float32Array, meta?: { sampleIndex?: number }) => void) };
+  return { integration, recognition, mic };
 });
 
 vi.mock('@huggingface/transformers', () => ({
@@ -73,8 +75,15 @@ vi.mock('../src/voice/lib/speechRecognitionLocal', () => ({
   stopSpeechRecognition: vi.fn(),
 }));
 
+// El PCM del micrófono se captura para inyectarlo desde el test: el VAD y el
+// motor son los reales, solo se sustituye la fuente de audio del navegador. El
+// módulo se alimenta del tap CRUDO (`onRawPcmBlock`, pre-ganancia): ahí está
+// calibrado el piso del VAD.
 vi.mock('../src/voice/lib/micCaptureBridge.js', () => ({
-  wireMicCapturePipeline: vi.fn(async () => ({ zeroGain: { disconnect: vi.fn() } })),
+  wireMicCapturePipeline: vi.fn(async (opciones: { onRawPcmBlock: (input: Float32Array, meta?: { sampleIndex?: number }) => void }) => {
+    h.mic.onRawPcmBlock = opciones.onRawPcmBlock;
+    return { zeroGain: { disconnect: vi.fn() } };
+  }),
 }));
 
 vi.mock('../src/voice/lib/turnIdentityPipeline.js', async (original) => ({
@@ -117,9 +126,6 @@ vi.mock('../src/hooks/useFluParticipant', () => ({
 // useTurnInfrastructure NO se mockea: el ciclo de vida REAL (createTurnLifecycle) es
 // el que usa el commit; el store ya esta neutralizado arriba.
 vi.mock('../src/lib/clientLogRelay', () => ({ relayLog: vi.fn() }));
-// Sonda de trazas: fuera de navegador intenta un fetch a /__flu_agent_trace y ensucia
-// la salida del test. Es diagnostico, no comportamiento.
-vi.mock('../src/voice/lib/fluTrace.js', () => ({ fluTrace: vi.fn() }));
 vi.mock('../src/lib/caughtError', () => ({ logCaughtError: vi.fn() }));
 vi.mock('../src/voice/lib/fluAsyncError.js', () => ({ fluAsyncErrorHandler: vi.fn(() => vi.fn()) }));
 vi.mock('../src/voice/lib/listenLog', () => ({
@@ -135,14 +141,15 @@ vi.mock('../src/voice/lib/fluDebug', async (original) => ({
   getFluDebugApi: vi.fn(() => ({})),
 }));
 // Solo se neutraliza lo que no aporta (los bursts simulados); el resto del modulo real.
-vi.mock('../src/voice/lib/micEventProducer.js', async (original) => ({
-  ...((await original()) as object),
-  convertSimEventsToMicBursts: vi.fn(() => []),
-}));
 
 import { FLU_CONFIG } from '../src/voice/lib/fluConfig';
 import { useFluVoiceAssistant } from '../src/voice/hooks/useFluVoiceAssistant';
 import { acquireSpeechRecognition } from '../src/voice/lib/speechRecognitionLocal';
+import { fluDb } from '../src/core/db/fluDatabase';
+import { getVadEnergyThreshold } from '../src/voice/lib/asr/asrConfig.js';
+
+const SR = 48000
+const BLOQUE_MS = 100
 
 /** Evento con forma de SpeechRecognitionEvent de Chrome. */
 function chromeEvent(specs: Array<{ isFinal?: boolean; transcript: string }>, resultIndex = 0) {
@@ -154,29 +161,23 @@ function chromeEvent(specs: Array<{ isFinal?: boolean; transcript: string }>, re
   return { resultIndex, results };
 }
 
-/**
- * FILAS DE TURNO del contrato: el payload de fila del log lleva `rawOnly` y NO es una
- * emision de stream (`streamUpdate:false`). Asi no se confunde con el preview.
- */
-function filasDelTurno(onContract: { mock: { calls: unknown[][] } }): string[] {
-  return onContract.mock.calls
-    .map((c) => (c[0] || {}) as Record<string, unknown>)
-    .filter((p) => p.rawOnly === true && p.streamUpdate === false)
-    .map((p) => String(p.transcript || ''))
-    .filter(Boolean);
-}
-
 const LARGA =
   'voy a hacer una prueba para identificar el comportamiento de la transcripcion y de la avisacion soy luis no digo el comando y hago una pausa';
 
 function darSoporteNavegador() {
   (window as unknown as Record<string, unknown>).SpeechRecognition = function SpeechRecognition() {};
   (window as unknown as Record<string, unknown>).AudioContext = function AudioContext() {
-    return { sampleRate: 48000 };
+    return {
+      sampleRate: SR,
+      resume: async () => {},
+      createMediaStreamSource: () => ({ connect: vi.fn(), disconnect: vi.fn() }),
+      createGain: () => ({ gain: { value: 1 }, connect: vi.fn(), disconnect: vi.fn() }),
+      createAnalyser: () => ({ fftSize: 0, smoothingTimeConstant: 0, connect: vi.fn(), disconnect: vi.fn() }),
+    };
   };
   Object.defineProperty(navigator, 'mediaDevices', {
     configurable: true,
-    value: { getUserMedia: vi.fn(() => Promise.reject(new Error('sin micro en test'))) },
+    value: { getUserMedia: vi.fn(() => Promise.resolve({})) },
   });
 }
 
@@ -205,11 +206,41 @@ function vecesCreadoElReconocedor(): number {
   return (acquireSpeechRecognition as unknown as { mock: { calls: unknown[][] } }).mock.calls.length;
 }
 
+/** Tono con RMS cuatro veces por encima del piso REAL del VAD. */
+function tono(ms: number): Float32Array {
+  const n = Math.round((SR * ms) / 1000)
+  const muestras = new Float32Array(n)
+  const amplitud = Math.sqrt(2) * getVadEnergyThreshold() * 4
+  for (let i = 0; i < n; i += 1) muestras[i] = Math.sin((2 * Math.PI * 220 * i) / SR) * amplitud
+  return muestras
+}
+
+/** Silencio digital del mismo tamaño. */
+function silencio(ms: number): Float32Array {
+  return new Float32Array(Math.round((SR * ms) / 1000))
+}
+
+let cursorMuestras = 0
+
+/** Entrega un bloque de PCM al pipeline REAL del hook como lo haría el micrófono. */
+function empujarAudio(muestras: Float32Array) {
+  expect(h.mic.onRawPcmBlock, 'el pipeline del micrófono se cableó').toBeTypeOf('function')
+  h.mic.onRawPcmBlock?.(muestras, { sampleIndex: cursorMuestras })
+  cursorMuestras += muestras.length
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
-  h.integration.lastCommittedTranscript = '';
   h.integration.conversationHistory = [];
-  (h.integration as unknown as Record<string, unknown>).setLastCommittedTranscript = () => {};
+  Object.assign(h.integration, {
+    lastCommittedTranscript: '',
+    conversationEpoch: 1,
+    activePersonId: '',
+    setLastCommittedTranscript: vi.fn(),
+    addConversationEntry: vi.fn(),
+  });
+  h.mic.onRawPcmBlock = null;
+  cursorMuestras = 0;
   Object.assign(h.recognition, { lang: '', onstart: null, onresult: null, onerror: null, onend: null });
   h.recognition.stop.mockReset();
   h.recognition.start.mockReset();
@@ -222,59 +253,81 @@ afterEach(() => {
 });
 
 describe('P9.60 - tuberia completa: el rebuild del watchdog no puede perder la locucion', () => {
-  it('FINAL sin fila + rebuild por temporizador -> la locucion llega a la fila', async () => {
-    vi.useFakeTimers();
+  it('FINAL sin cierre + rebuild por temporizador -> la locucion sigue viva (y no hay fila)', async () => {
     const onContract = vi.fn();
-    await arrancarEscucha(onContract);
+    await fluDb.conversations.clear();
+    // Se falsean SOLO los temporizadores del watchdog: `setImmediate` queda REAL
+    // porque es el planificador de Dexie/fake-indexeddb, y falsearlo cuelga la DB.
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'] });
+    const vista = await arrancarEscucha(onContract);
 
-    // FINAL de Chrome: commit de SEGMENTO (sin cierre) -> todavia NO escribe fila.
+    // PCM real del micrófono: 1 s de silencio y 1 s de voz abre el tramo del enunciado.
+    for (let i = 0; i < 10; i += 1) empujarAudio(silencio(BLOQUE_MS));
+    for (let i = 0; i < 10; i += 1) empujarAudio(tono(BLOQUE_MS));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1);
+    });
+
+    // FINAL de Chrome: NO cierra la locución (el cierre es la frontera VAD).
+    await act(async () => {
+      h.recognition.onresult?.(chromeEvent([{ isFinal: true, transcript: LARGA }], 0));
+      await vi.advanceTimersByTimeAsync(1);
+    });
+    expect(vista.result.current.liveTranscript, 'la caja del módulo publica la frase').toContain(
+      'voy a hacer una prueba',
+    );
+
+    // El watchdog de conversacion cumple su ventana sin texto nuevo y hace REBUILD
+    // del reconocedor. Con el defecto, aquí se descartaba la locución.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(6000);
+    });
+    expect(vecesCreadoElReconocedor(), 'el watchdog no llegó a reconstruir').toBeGreaterThanOrEqual(2);
+    expect(
+      vista.result.current.liveTranscript,
+      'el rebuild del watchdog NO puede descartar la locución viva',
+    ).toContain('voy a hacer una prueba');
+    vi.useRealTimers();
+    expect(await fluDb.conversations.count(), 'un final no cierra: todavía no hay fila').toBe(0);
+
+    // Cierre determinista de la sesion: el desmontaje limpia timers y reconocedor.
+    await act(async () => {
+      vista.unmount();
+    });
+  });
+
+  it('silencio ≥ silenceCloseMs -> la locución CIERRA y la fila lleva la frase completa', async () => {
+    const onContract = vi.fn();
+    const vista = await arrancarEscucha(onContract);
+    await fluDb.conversations.clear();
+
+    for (let i = 0; i < 10; i += 1) empujarAudio(silencio(BLOQUE_MS));
+    for (let i = 0; i < 10; i += 1) empujarAudio(tono(BLOQUE_MS));
+    await act(async () => {
+      await Promise.resolve();
+    });
     await act(async () => {
       h.recognition.onresult?.(chromeEvent([{ isFinal: true, transcript: LARGA }], 0));
       await Promise.resolve();
     });
-    expect(filasDelTurno(onContract), 'antes del rebuild: ' + JSON.stringify(filasDelTurno(onContract))).toHaveLength(0);
 
-    // El watchdog de conversacion (stallCheckMs ~350) cumple 4,2 s sin texto nuevo y
-    // hace REBUILD del reconocedor. Con el defecto, aqui se descartaba la locucion.
+    // Silencio sostenido por encima del umbral del plan: el VAD cierra la locución.
+    const bloques = Math.ceil(FLU_CONFIG.transcript.pauseAndWeakAsr.srGapCommitMs / BLOQUE_MS) + 200;
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(6000);
+      for (let i = 0; i < bloques; i += 1) empujarAudio(silencio(BLOQUE_MS));
+      await Promise.resolve();
     });
 
-    // ANTI-VACUIDAD: el rebuild ocurrio de verdad (se creo el reconocedor 2+ veces).
-    expect(vecesCreadoElReconocedor(), 'el watchdog no llego a reconstruir').toBeGreaterThanOrEqual(2);
-    expect(
-      filasDelTurno(onContract).join(' | '),
-      'filas=' + JSON.stringify(filasDelTurno(onContract)),
-    ).toContain('voy a hacer una prueba');
-  });
+    await waitFor(async () => {
+      expect(await fluDb.conversations.count(), 'la locución cerrada escribe UNA fila').toBe(1);
+    });
+    const filas = await fluDb.conversations.toArray();
+    expect(filas[0].text, 'la fila lleva la frase completa, no la cola').toContain('voy a hacer una prueba');
+    expect(filas[0].text).toContain('hago una pausa');
 
-  it('el detector no es decorativo: un INTERINO en vuelo NO se cierra en el rebuild (sigue descartandose)', async () => {
-    vi.useFakeTimers();
-    // AISLAMIENTO del camino REBUILD: con el cierre por SILENCIO en ~3,5 s (spec del dueno,
-    // 2026-10-10) el srGap sellaria el interino ANTES de que el watchdog reconstruya
-    // (conversationStallMs 4200 > 3500). Aqui se apaga el srGap para medir SOLO que el
-    // rebuild no sella un interino NO confirmado.
-    const srGapAntes = FLU_CONFIG.transcript.pauseAndWeakAsr.srGapCommitMs;
-    FLU_CONFIG.transcript.pauseAndWeakAsr.srGapCommitMs = 0;
-    try {
-      const onContract = vi.fn();
-      await arrancarEscucha(onContract);
-
-      await act(async () => {
-        h.recognition.onresult?.(chromeEvent([{ isFinal: false, transcript: 'la transcripcion desde' }], 0));
-        await Promise.resolve();
-      });
-      await act(async () => {
-        await vi.advanceTimersByTimeAsync(6000);
-      });
-
-      expect(vecesCreadoElReconocedor(), 'el watchdog no llego a reconstruir').toBeGreaterThanOrEqual(2);
-      expect(
-        filasDelTurno(onContract).join(' | '),
-        'filas=' + JSON.stringify(filasDelTurno(onContract)),
-      ).not.toContain('la transcripcion desde');
-    } finally {
-      FLU_CONFIG.transcript.pauseAndWeakAsr.srGapCommitMs = srGapAntes;
-    }
+    await act(async () => {
+      vista.unmount();
+      await Promise.resolve();
+    });
   });
 });
