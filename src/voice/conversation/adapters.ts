@@ -319,6 +319,7 @@ export function crearAlmacenMemoria({ reloj }: { reloj: RelojPort }): AlmacenPor
         texto: cambios.texto ?? previa.texto,
         provisional: cambios.provisional ?? previa.provisional,
         reason: cambios.reason ?? previa.reason,
+        tramo: cambios.tramo ? { ...cambios.tramo } : previa.tramo,
         deleted: cambios.deleted ?? previa.deleted,
         revision: previa.revision + 1,
         updated_at: reloj.ahora(),

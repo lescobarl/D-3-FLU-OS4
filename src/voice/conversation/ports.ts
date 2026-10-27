@@ -41,7 +41,7 @@ export type Fila = Readonly<{
   locutionId: string
   /** Sesión a la que pertenece la fila. */
   sessionId: string
-  /** Turno que agrupa varias locuciones. */
+  /** Turno de la fila (Caso 8: un turnId => UNA fila; reemisión consolida). */
   turnId: string
   /** Texto commiteado de la locución. */
   texto: string
@@ -70,8 +70,8 @@ export type Fila = Readonly<{
 /** Fila lista para insertar: el almacén completa `[revision, updated_at, deleted]`. */
 export type FilaNueva = Omit<Fila, 'revision' | 'updated_at' | 'deleted'>
 
-/** Campos que el almacén puede actualizar (promoción y borrado lógico). */
-export type CambiosFila = Partial<Pick<Fila, 'texto' | 'provisional' | 'reason' | 'deleted'>>
+/** Campos que el almacén puede actualizar (promoción, consolidación y borrado lógico). */
+export type CambiosFila = Partial<Pick<Fila, 'texto' | 'provisional' | 'reason' | 'deleted' | 'tramo'>>
 
 /** Reloj inyectado: dentro del módulo no se llama `Date.now()`. */
 export interface RelojPort {

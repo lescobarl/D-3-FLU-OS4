@@ -140,6 +140,7 @@ export function crearAlmacenDexie({
             texto: cambios.texto ?? anterior.texto,
             provisional: cambios.provisional ?? anterior.provisional,
             reason: cambios.reason ?? anterior.reason,
+            tramo: cambios.tramo ?? anterior.tramo,
           },
           cambios.deleted === undefined ? sincronizada : { ...sincronizada, deleted: cambios.deleted },
         )

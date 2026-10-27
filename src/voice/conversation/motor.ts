@@ -89,7 +89,9 @@ export function crearConversacion(dependencias: DependenciasConversacion): Conve
   async function iniciar(opciones?: OpcionesInicio): Promise<InstantaneaConversacion> {
     if (estado.activa) throw new Error('conversacion ya iniciada: stop antes de start')
     const sessionId = id.uuid()
-    const turno = opciones?.turnId ? String(opciones.turnId).trim() : id.uuid()
+    // Caso 8: sin proveedor de turno NO hay turno de sesión (''): cada locución
+    // acuña el suyo al abrir, así un turnId agrupa solo lo que ES un turno.
+    const turno = opciones?.turnId ? String(opciones.turnId).trim() : ''
     const idioma = opciones?.idioma ?? configuracion.asr.lang
     sesion.reiniciar(sessionId, turno, idioma)
     tramos.limpiar()

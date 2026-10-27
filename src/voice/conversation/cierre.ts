@@ -5,7 +5,7 @@
  * (regla 3), `construirFila` (reglas 4–5) y `promoverFila`; nunca borra, nunca
  * muta la entrada. El estado lo posee la sesión, que lo entrega como contexto.
  */
-import { construirFila, fusionarVoz, promoverFila } from './fila.ts'
+import { construirFila, consolidarFilaDelTurno, fusionarVoz, promoverFila } from './fila.ts'
 import type { CierreLocucion, VozEtiqueta } from './fila.ts'
 import { decidirRevision } from './revision.ts'
 import { decidirIdentidad } from './identidad.ts'
@@ -130,13 +130,16 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
       : Boolean(estado.ultimaEtiqueta)
     if (vozId) estado.ultimaVozId = vozId
     estado.muestrasAbierta = []
+    // Caso 8: sin proveedor de turno, cada locución ES su turno (uuid propio);
+    // un turnId solo agrupa lo que vino con el MISMO turno del llamador.
+    const turno = String(datos.turnId || '').trim() || id.uuid()
     estado.abierta = {
       locutionId: datos.tramoId,
       texto: datos.texto,
       inicio: datos.tramo.inicio,
       fin: datos.tramo.fin,
       sampleRate: datos.tramo.sampleRate,
-      turnId: datos.turnId,
+      turnId: turno,
       idioma: datos.idioma,
       voz: datos.voz,
       final: false,
@@ -227,6 +230,57 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
     }
   }
 
+  /** Fila commiteada del MISMO turno en la sesión (Caso 8: un turnId => una fila). */
+  function filaDelTurno(turno: string): Fila | null {
+    const id = String(turno || '').trim()
+    if (!id) return null
+    for (const fila of estado.filas.values()) {
+      if (fila.sessionId !== estado.sessionId) continue
+      if (fila.deleted) continue
+      if (String(fila.turnId || '').trim() === id) return fila
+    }
+    return null
+  }
+
+  /**
+   * Consolida la locución que cierra en la fila commiteada de SU turno (Caso 8).
+   * Los cambios los decide `consolidarFilaDelTurno`; la fila se promueve por el
+   * almacén y el turno NUNCA queda con dos filas.
+   */
+  async function consolidarEnLaFilaDelTurno(
+    previa: Fila,
+    cierre: CierreLocucion,
+    motivo: MotivoCierre,
+    causa: CausaCierre,
+    tramo: TramoMuestreado,
+  ): Promise<boolean> {
+    const cambios = consolidarFilaDelTurno(previa, cierre)
+    emitir({
+      tipo: 'locution.closed',
+      sessionId: cierre.sessionId,
+      locutionId: cierre.locutionId,
+      tramo,
+      motivo,
+      causa,
+    })
+    const consolidada = cambios
+      ? await almacen.actualizar(previa.locutionId, cambios)
+      : previa
+    if (!consolidada) return false
+    estado.filas.set(consolidada.locutionId, consolidada)
+    estado.ultimaEtiqueta = consolidada.etiqueta
+    emitir({ tipo: 'row.committed', sessionId: cierre.sessionId, fila: consolidada })
+    registro.registrar('conversacion.turno.consolidado', {
+      sessionId: cierre.sessionId,
+      turnId: cierre.turnId,
+      locutionId: previa.locutionId,
+      origen: cierre.locutionId,
+      texto: consolidada.texto,
+      provisional: consolidada.provisional,
+    })
+    return true
+  }
+
   /** Cierra la locución abierta: una fila o un descarte contado (regla 4). */
   async function cerrarLocucion(
     locucion: LocucionAbierta,
@@ -285,6 +339,14 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
         descarte: resultado.descarte,
       })
       return
+    }
+
+    // Caso 8: un turnId => UNA fila por sesión. Si el turno ya commiteó, esta
+    // locución consolida la fila existente (reemisión o continuación); nunca se
+    // inserta una segunda fila con el mismo turnId.
+    const previaDelTurno = filaDelTurno(cierre.turnId)
+    if (previaDelTurno) {
+      if (await consolidarEnLaFilaDelTurno(previaDelTurno, cierre, motivo, causa, tramo)) return
     }
 
     const fila = await almacen.guardar(resultado.fila)

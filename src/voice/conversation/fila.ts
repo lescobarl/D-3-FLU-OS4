@@ -190,6 +190,59 @@ export function promoverFila(fila: Fila, textoFinal: string): CambiosFila | null
 }
 
 /**
+ * Cambios que consolidan una locución que cierra en la fila YA commiteada del
+ * MISMO turno (Caso 8: un turnId => UNA fila por sesión).
+ *
+ *  - Ventana solapada (mismo origen de audio) o texto emparentado: REEMISIÓN
+ *    del mismo contenido — la revisión decide el texto y la fila nunca pierde
+ *    palabras.
+ *  - Ventana disjunta y texto no emparentado: CONTINUACIÓN del turno — la fila
+ *    crece con el texto nuevo (el usuario siguió hablando tras la pausa).
+ *
+ * `final` completa la fila. El tramo solo se extiende con contenido nuevo
+ * (mismo origen de audio o texto que creció): un re-delivery idéntico con
+ * ventana disjunta NO toca la fila.
+ * @param previa Fila ya commiteada del turno.
+ * @param nueva Locución que cierra con el MISMO `turnId`.
+ * @returns Cambios a aplicar, o `null` si no hay nada que escribir.
+ */
+export function consolidarFilaDelTurno(previa: Fila, nueva: CierreLocucion): CambiosFila | null {
+  if (previa.deleted) return null
+  const siguiente = String(nueva.texto || '').trim()
+  const mismoOrigen =
+    nueva.sampleRate === previa.tramo.sampleRate && nueva.inicio < previa.tramo.fin
+  const emparentado =
+    siguiente !== '' &&
+    (siguiente === previa.texto ||
+      siguiente.startsWith(previa.texto) ||
+      previa.texto.startsWith(siguiente))
+  let texto: string | undefined
+  if (siguiente && (mismoOrigen || emparentado)) {
+    const decision = decidirRevision({
+      tramoAbierto: { id: previa.locutionId, texto: previa.texto },
+      tramoId: previa.locutionId,
+      texto: siguiente,
+      final: true,
+    })
+    if (decision.texto !== previa.texto) texto = decision.texto
+  } else if (siguiente) {
+    texto = `${previa.texto} ${siguiente}`.trim()
+  }
+  const finExtendido =
+    (mismoOrigen || texto !== undefined) &&
+    nueva.sampleRate === previa.tramo.sampleRate &&
+    Number(nueva.fin) > previa.tramo.fin
+      ? Number(nueva.fin)
+      : undefined
+  const cambios: CambiosFila = {
+    ...(texto !== undefined ? { texto } : {}),
+    ...(nueva.final && previa.provisional ? { provisional: false } : {}),
+    ...(finExtendido !== undefined ? { tramo: { ...previa.tramo, fin: finExtendido } } : {}),
+  }
+  return Object.keys(cambios).length > 0 ? cambios : null
+}
+
+/**
  * Fusiona evidencia de voz sin borrar lo ya medido con campos ausentes.
  * @param base Evidencia previa de la locución.
  * @param nueva Evidencia del resultado entrante, si la trae.
