@@ -47,8 +47,8 @@ import { FLU_CONFIG } from './fluConfig.js'
  * Ventana (ms) del eco ASR ya commiteado: la MISMA frase re-emitida DENTRO de esta ventana es
  * el MISMO evento (doble final / loop de Chrome), NO habla nueva; pasada la ventana, la
  * repeticion es genuina. DUENO UNICO del criterio (antes eran 3 copias del mismo literal).
- * Vive aqui por ser su unico consumidor (el eco de identidad), tras la retirada de
- * activeListen.js (tuberia vieja de conversacion).
+ * Vive aqui por ser su unico consumidor (el eco de identidad); el motor de
+ * conversacion actual no reimplementa este criterio.
  *
  * @returns {number} ms
  */

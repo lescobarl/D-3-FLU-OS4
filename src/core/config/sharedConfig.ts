@@ -373,7 +373,7 @@ export const AUTONOMY_THRESHOLD_DEFAULTS = {
 
 /**
  * Umbrales de VOZ (diarización) — fuente única (C38). Reemplazan los literales
- * de respaldo inline en speakerDiarization.js.
+ * inline que tenía el resolutor de diarización retirado; los consumidores los leen aquí.
  */
 export const VOICE_DIARIZATION_DEFAULTS = {
     cosineContinuity: 0.80,

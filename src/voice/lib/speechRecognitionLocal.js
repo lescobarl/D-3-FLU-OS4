@@ -15,7 +15,7 @@ export function isSpeechRecognitionSupported() {
 /**
  * Trio del LOCALE del reconocedor. DUENO UNICO: este modulo es la unica puerta del
  * motor SR (fabrica y lock), asi que el idioma de la instancia vive aqui (antes en
- * activeListen.js, retirado con la tuberia vieja de conversacion).
+ * el reconocedor de la tuberia vieja, retirado con el corte de conversacion).
  */
 
 /** Locale BCP-47 del motor SR segun el modo UI (con locale activo explícito, manda este). */

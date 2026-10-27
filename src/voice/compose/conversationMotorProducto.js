@@ -16,9 +16,8 @@
  * entrega evidencia externa: el módulo resuelve su propia medida.
  *
  * Frontera declarada (mandato 2026-10-26): solo utilidades puras del despacho.
- * Prohibido importar `commitUserTurnRow`, `renameVoiceRowsByKey`,
- * `conversationStreamCommit`, `transcriptIngress`, `activeListen`,
- * `turnStream`, `turnSpeakerPreflight` o `speakerDiarization` desde esta capa.
+ * Prohibido reimplementar aquí la escritura de filas, la identidad o los dueños
+ * `commitUserTurnRow`/`renameVoiceRowsByKey`; viven en `../conversation`.
  */
 import { metaDeFilaConversacion } from '../../core/db/conversationRowMapping'
 import { logCaughtError } from '../../lib/caughtError.ts'

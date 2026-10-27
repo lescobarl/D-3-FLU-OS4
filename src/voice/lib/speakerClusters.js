@@ -1,7 +1,8 @@
 /**
  * Clusters de hablante + ventana de audio para firma (512-D): actualización,
  * búsqueda por vecino más cercano, match histórico de frase corta y fusión.
- * Única fuente de estas operaciones; el resolver (speakerDiarization.js) las consume.
+ * Única fuente de estas operaciones; la consumen el directorio de voces, el
+ * registro de identidad y la sesión de hablantes.
  */
 import { blendEmbeddingVectors, normalizeSpaces } from './audioMath.js'
 import { compareCosineSignatures, hasVoiceMeasurement, isAutoSpeakerLabel, normalizeEmbeddingVector, parseSpeakerIndex } from './speakerCore.js'
@@ -48,8 +49,8 @@ export function sameVoiceFloor(thresholds = null) {
  * POR QUE ES OTRO PISO (medido 2026-10-13, debug.log del dueno): dentro de una reunion la
  * MISMA voz mide 0.69-0.74 (por eso la sesion reutiliza con 0.66) y una voz DISTINTA 0.58;
  * entre reuniones el vector se mide con otra ventana/tono, asi que la BASE exige el piso de
- * identidad registrada cosineRegisteredMatchThreshold (0.76), el MISMO valor con el que la
- * diarizacion compara su ancla registrada (speakerDiarization.js, REGISTERED_MATCH). Con el
+ * identidad registrada cosineRegisteredMatchThreshold (0.76), el MISMO valor con el que
+ * el directorio de voces compara su ancla registrada. Con el
  * piso de sesion en la base, un 0.70 ajeno se daba por "es Luis" (defecto medido en vivo).
  *
  * @param {object|null} [thresholds] bloque conversationSpeakerThresholds (o se lee de config)

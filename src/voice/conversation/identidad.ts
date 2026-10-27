@@ -7,9 +7,8 @@
  * continuidad contra el ÚLTIMO vector → misma voz; si no, voz nueva, que acuña
  * su identidad (`IdPort.uuid()`, regla UUIDv4) y su etiqueta anónima.
  *
- * Sustituye en el corte (Paso 3) a la decisión que vivía en
- * `voiceIdentityResolve.js` + `speakerDiarization.js`; mientras conviven, la
- * autoridad del módulo es ESTA regla.
+ * Sustituyó en el corte (Paso 3) a la decisión del resolutor de voz retirado;
+ * desde el corte esta regla es la ÚNICA autoridad del módulo.
  */
 
 /** Entrada de la regla de identidad: medida, memoria de la sesión y servicios. */
