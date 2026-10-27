@@ -15,6 +15,7 @@ import { decidirIdentidad } from './identidad.ts'
 import { concatenarMuestras, retenerCola } from './muestras.ts'
 import { fusionarVoz } from './fila.ts'
 import { asrEmpujaAudio } from './ports.ts'
+import { logCaughtError } from '../../lib/caughtError.ts'
 import type { ConfiguracionConversacion, MotivoCierre } from './ports.ts'
 import type {
   AsrIngestado,
@@ -240,7 +241,10 @@ export function crearIngesta({
       sesion.contarDescarte('huerfano', null, entrada.tramo ?? null)
       return sesion.snapshot()
     }
-    await flujo.procesarResultadoAsr({ ...entrada, tramoId })
+    // Caso 1+3: antes de atribuir el texto, ¿cambió la voz DENTRO del tramo
+    // abierto? Si partió, el texto es de la voz nueva y va a SU tramo.
+    const tramoDestino = (await verificarCambioVoz(tramoId)) ?? tramoId
+    await flujo.procesarResultadoAsr({ ...entrada, tramoId: tramoDestino })
     return sesion.snapshot()
   }
 
@@ -265,6 +269,9 @@ export function crearIngesta({
     }
     const locutionId = locucion.locutionId
     estado.medidaVozEnCurso = true
+    // La medida cubre TODO el audio retenido: el contador del cambio de voz
+    // (Caso 1+3) arranca en el fin cubierto por esta medida.
+    estado.medidoHastaFin = Math.max(estado.medidoHastaFin, locucion.fin)
     embebedor.medir(concatenarMuestras(estado.muestrasAbierta), sampleRate).then(
       (vector) => encolar(() => Promise.resolve().then(() => aplicarMedidaVoz(locutionId, vector))),
       (error) =>
@@ -311,6 +318,145 @@ export function crearIngesta({
       }),
       continuidadVoz: identidad.continuidad,
     }
+  }
+
+  /**
+   * CASO 1+3 (ETIQUETAS Y MEZCLA) — cambio de voz dentro del tramo abierto.
+   *
+   * Con la locución abierta YA medida (vozId), un resultado del ASR sobre su
+   * MISMO tramo comprueba si la voz cambió sin pausa: mide la VENTANA DE COLA
+   * (los últimos `minSegundosVozMedida` del PCM retenido) y la compara contra el
+   * último vector de la SESIÓN (DECISIÓN B: nada persiste entre sesiones). Si no
+   * casa, parte el tramo en dos locuciones, cada una con su fila y su etiqueta.
+   * Síncrono y en la cola ÚNICA: el texto del evento se atribuye a la voz nueva.
+   *
+   * @param tramoId Tramo que destina el resultado (resuelto por el módulo).
+   * @returns El tramo de la voz nueva si hubo partición; null si no cambió.
+   */
+  async function verificarCambioVoz(tramoId: string): Promise<string | null> {
+    const embebedor = dependencias.embebedor
+    const abierta = estado.abierta
+    if (!embebedor || !abierta || abierta.locutionId !== tramoId) return null
+    // Sin medida aplicada no hay qué comparar (la medida temprana sigue su curso).
+    if (!String(abierta.voz.vozId || '').trim()) return null
+    if (!estado.ultimoVectorVoz || estado.ultimoVectorVoz.length === 0) return null
+    const ventana = Math.round(configuracion.minSegundosVozMedida * abierta.sampleRate)
+    if (ventana <= 0 || abierta.fin - estado.medidoHastaFin < ventana) return null
+    const retenidas = concatenarMuestras(estado.muestrasAbierta)
+    if (retenidas.length < ventana) return null
+    const cola = retenidas.slice(Math.max(0, retenidas.length - ventana))
+    const finAlMedir = abierta.fin
+    let vector: readonly number[] | null = null
+    try {
+      vector = await embebedor.medir(cola, abierta.sampleRate)
+    } catch (error) {
+      logCaughtError('conversacion.voz.cambio.fallo', error, {
+        sessionId: estado.sessionId ?? '',
+        locutionId: abierta.locutionId,
+      })
+      return null
+    }
+    const vigente = estado.abierta
+    if (!vector || !vigente || vigente.locutionId !== tramoId) return null
+    const previo = estado.ultimoVectorVoz
+    const mismaVoz =
+      vector.length === previo.length &&
+      embebedor.comparar(vector, previo) >= dependencias.config.umbralContinuidadVoz()
+    if (mismaVoz) {
+      // Misma voz: la etiqueta se conserva y el tramo continuo NO cambia
+      // de etiqueta; el contador avanza hasta el fin medido.
+      estado.medidoHastaFin = Math.max(estado.medidoHastaFin, finAlMedir)
+      return null
+    }
+    return partirLocucionPorVoz(cola, vector, finAlMedir)
+  }
+
+  /**
+   * Parte la locución abierta por cambio de voz (Caso 1+3): la actual cierra en
+   * el inicio de la ventana de cola medida (causa 'voz') y abre una locución
+   * nueva con ESA ventana, ya medida contra el último vector de la sesión.
+   * Dos voces sin pausa son DOS filas: el gate de consolidación no mezcla
+   * voces distintas (cierre.ts) y esta partición es su ÚNICO dueño.
+   *
+   * @param ventana Ventana de cola medida (el audio de la voz nueva).
+   * @param vector Vector de la ventana (voz nueva).
+   * @param finAlMedir Fin del tramo al medir la ventana.
+   * @returns El tramo nuevo si partió; null si la ventana no cabe en el tramo.
+   */
+  async function partirLocucionPorVoz(
+    ventana: Float32Array,
+    vector: readonly number[],
+    finAlMedir: number,
+  ): Promise<string | null> {
+    const abierta = estado.abierta
+    if (!abierta) return null
+    const limite = finAlMedir - ventana.length
+    if (limite <= abierta.inicio || limite >= abierta.fin) return null
+    const sampleRate = abierta.sampleRate
+    const turno = abierta.turnId
+    const idioma = abierta.idioma
+    const finalAnterior = abierta.final
+    // 1. La locución de la voz anterior cierra en el límite de la ventana medida.
+    estado.abierta = { ...abierta, fin: limite }
+    await sesion.cerrarLocucion(estado.abierta, 'system', 'voz', finalAnterior)
+    // 2. La voz nueva abre su locución sobre la MISMA ventana de audio.
+    const tramoId = dependencias.id.uuid()
+    const nuevo: TramoAudio = {
+      tramoId,
+      inicio: limite,
+      fin: finAlMedir,
+      sampleRate,
+      turnId: turno,
+      silencioPrevioMs: 0,
+    }
+    estado.tramoAudio = nuevo
+    estado.ultimoTramoId = tramoId
+    tramos.registrar(nuevo)
+    sesion.abrirLocucion({
+      tramoId,
+      texto: '',
+      tramo: { inicio: limite, fin: finAlMedir, sampleRate },
+      turnId: turno,
+      idioma,
+      voz: {},
+    })
+    // 3. Identidad de la voz nueva con el MISMO vector (etiqueta perezosa, Caso 10).
+    const embebedor = dependencias.embebedor
+    const recien = estado.abierta
+    if (!embebedor || !recien) return null
+    const identidad = decidirIdentidad({
+      vector,
+      ultimoVozId: estado.ultimaVozId,
+      ultimoVector: estado.ultimoVectorVoz,
+      umbral: dependencias.config.umbralContinuidadVoz(),
+      etiquetaNueva: () => dependencias.config.etiquetaAnonima(estado.contadorVoces + 1),
+      comparar: embebedor.comparar,
+      id: dependencias.id.uuid,
+    })
+    if (!identidad.continuidad) estado.contadorVoces += 1
+    estado.ultimaVozId = identidad.vozId
+    estado.ultimoVectorVoz = [...vector]
+    estado.abierta = {
+      ...recien,
+      voz: fusionarVoz(recien.voz, {
+        vozId: identidad.vozId,
+        hablante: identidad.hablante,
+        continuidad: identidad.continuidad,
+      }),
+      continuidadVoz: identidad.continuidad,
+    }
+    // 4. La ventana medida ES el audio de la voz nueva (la anterior se descartó
+    //    con su cierre); el contador del cambio arranca al fin medido.
+    estado.muestrasAbierta = [ventana]
+    estado.medidoHastaFin = Math.max(estado.medidoHastaFin, finAlMedir)
+    dependencias.registro.registrar('conversacion.locucion.partida', {
+      sessionId: estado.sessionId ?? '',
+      locutionId: tramoId,
+      anterior: abierta.locutionId,
+      limite,
+      turnId: turno,
+    })
+    return tramoId
   }
 
   return {

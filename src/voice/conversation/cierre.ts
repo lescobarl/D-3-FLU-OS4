@@ -273,16 +273,24 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
     }
   }
 
-  /** Fila commiteada del MISMO turno en la sesión (Caso 8: un turnId => una fila). */
-  function filaDelTurno(turno: string): Fila | null {
+  /**
+   * Fila commiteada del MISMO turno en la sesión (Caso 8: un turnId => una fila).
+   * Si el turno se partió por cambio de voz (Caso 1+3), la voz que cierra
+   * consolida SU fila: la de su etiqueta o, sin casar, la más reciente del
+   * turno (la última voz que habló); nunca la fila de otra voz.
+   */
+  function filaDelTurno(turno: string, etiqueta?: string): Fila | null {
     const id = String(turno || '').trim()
     if (!id) return null
+    let reciente: Fila | null = null
     for (const fila of estado.filas.values()) {
       if (fila.sessionId !== estado.sessionId) continue
       if (fila.deleted) continue
-      if (String(fila.turnId || '').trim() === id) return fila
+      if (String(fila.turnId || '').trim() !== id) continue
+      reciente = fila
+      if (etiqueta && fila.etiqueta === etiqueta) return fila
     }
-    return null
+    return reciente
   }
 
   /**
@@ -398,8 +406,10 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
     // Caso 8: un turnId => UNA fila por sesión. Si el turno ya commiteó, esta
     // locución consolida la fila existente (reemisión o continuación); nunca se
     // inserta una segunda fila con el mismo turnId.
-    const previaDelTurno = filaDelTurno(cierre.turnId)
-    if (previaDelTurno) {
+    // Caso 1+3: una voz DISTINTA medida (continuidad false) NUNCA consolida en
+    // la fila de otra voz del turno — dos voces sin pausa son DOS filas.
+    const previaDelTurno = filaDelTurno(cierre.turnId, resultado.fila.etiqueta)
+    if (previaDelTurno && cierre.voz.continuidad) {
       if (await consolidarEnLaFilaDelTurno(previaDelTurno, cierre, motivo, causa, tramo, medida)) {
         return
       }

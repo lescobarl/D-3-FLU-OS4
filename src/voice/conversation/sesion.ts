@@ -59,6 +59,8 @@ export type EstadoSesion = {
   contadorVoces: number
   /** ¿Hay una medida de voz en curso para la locución abierta? */
   medidaVozEnCurso: boolean
+  /** Fin del tramo cubierto por la última medida de voz (partición Caso 1+3). */
+  medidoHastaFin: number
   oyentes: Set<(evento: EventoConversacion) => void>
 }
 
@@ -118,6 +120,7 @@ export function crearEstadoSesion(idiomaInicial: IdiomaLocucion): EstadoSesion {
     ultimoVectorVoz: null,
     contadorVoces: 0,
     medidaVozEnCurso: false,
+    medidoHastaFin: 0,
     oyentes: new Set(),
   }
 }
@@ -261,6 +264,7 @@ export function crearSesion(
     estado.ultimoVectorVoz = null
     estado.contadorVoces = 0
     estado.medidaVozEnCurso = false
+    estado.medidoHastaFin = 0
   }
 
   return {

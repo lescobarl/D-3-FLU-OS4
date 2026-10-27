@@ -116,7 +116,7 @@ export type DescarteConversacion = Readonly<{
 }>
 
 /** Causa declarada del cierre (el motivo de fila es `reason`). */
-export type CausaCierre = 'final' | 'frontera' | 'silencio' | 'stop' | 'asr'
+export type CausaCierre = 'final' | 'frontera' | 'silencio' | 'stop' | 'asr' | 'voz'
 
 /** Evento público del módulo (6 tipos del plan). */
 export type EventoConversacion =
