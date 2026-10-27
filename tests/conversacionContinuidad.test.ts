@@ -68,7 +68,6 @@ function crearProbe(ultimaVozId = '', ultimaEtiqueta = ''): Probe {
       wakeWords: () => ['ok flu'],
       semillaEtiqueta: () => SEMILLA,
       esEtiquetaAnonima: isAutoSpeakerLabel,
-      conversationEngine: () => 'new',
       umbralContinuidadVoz: () => 0.8,
       etiquetaAnonima: (indice) => `Hablante ${indice}`,
       echoMinPalabrasCola: () => 4,

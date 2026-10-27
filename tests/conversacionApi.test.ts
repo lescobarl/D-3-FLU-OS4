@@ -64,7 +64,6 @@ const configDePrueba = (): ConfigPort => ({
   wakeWords: () => ['ok flu'],
   semillaEtiqueta: () => 'Hablante 1',
   esEtiquetaAnonima: isAutoSpeakerLabel,
-  conversationEngine: () => 'new',
   umbralContinuidadVoz: () => 0.8,
   etiquetaAnonima: (indice) => `Hablante ${indice}`,
   echoMinPalabrasCola: () => 4,

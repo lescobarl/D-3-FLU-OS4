@@ -67,7 +67,6 @@ import {
 import { buildSyncTuple } from '../../core/db/syncTuple.ts'
 import { crearAlmacenDexie } from './adaptersAlmacen.ts'
 import type { DbLike } from './adaptersAlmacen.ts'
-import { CONVERSACION_CONFIG } from './ports.ts'
 import type {
   AlmacenPort,
   CambiosFila,
@@ -180,7 +179,6 @@ export function crearConfigFlu(): ConfigPort {
     semillaEtiqueta: () => String(FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker || ''),
     // Delegado, no reimplementado: la definición de etiqueta anónima vive en su dueño.
     esEtiquetaAnonima: (etiqueta) => isAutoSpeakerLabel(etiqueta),
-    conversationEngine: () => CONVERSACION_CONFIG.conversation.engine,
     umbralContinuidadVoz: () => {
       const umbrales = FLU_CONFIG.voiceIdentity?.capture?.conversationSpeakerThresholds
       const valor = umbrales ? Number(umbrales.cosineContinuityThreshold) : Number.NaN

@@ -3,7 +3,7 @@
  * PUERTOS Y ADAPTADORES del módulo CONVERSACIÓN.
  *
  * Mide los contratos y los adaptadores REALES que hoy pueden construirse dentro
- * de la frontera del módulo: tabla de config, bandera de motor, ids, reloj,
+ * de la frontera del módulo: tabla de config, ids, reloj,
  * almacén en memoria con tupla de sync, splitter de wake y ASR.
  *
  * No mide las reglas de frontera/revisión/fila (tienen sus propios guards) ni
@@ -24,7 +24,6 @@ import {
 import { getVadEnergyThreshold } from '../src/voice/lib/asr/asrConfig'
 import {
   CONVERSACION_CONFIG,
-  esMotorConversacion,
 } from '../src/voice/conversation/ports'
 import type {
   AsrPort,
@@ -57,7 +56,6 @@ const configDePrueba = (): ConfigPort => ({
   wakeWords: () => ['ok flu'],
   semillaEtiqueta: () => 'Hablante 1',
   esEtiquetaAnonima: isAutoSpeakerLabel,
-  conversationEngine: () => 'new',
   umbralContinuidadVoz: () => 0.8,
   etiquetaAnonima: (indice) => `Hablante ${indice}`,
   echoMinPalabrasCola: () => 4,
@@ -74,22 +72,12 @@ describe('configuración del plan — una sola fuente', () => {
       minSegundosVozMedida: 1.5,
       maxSegundosVozRetenida: 60,
       overlapMargin: null,
-      conversation: { engine: 'new' },
     })
   })
 
   it('la tabla está congelada: nadie la cambia en caliente', () => {
     expect(Object.isFrozen(CONVERSACION_CONFIG)).toBe(true)
     expect(Object.isFrozen(CONVERSACION_CONFIG.asr)).toBe(true)
-    expect(Object.isFrozen(CONVERSACION_CONFIG.conversation)).toBe(true)
-  })
-
-  it('el plan declara `new`; `legacy` ya no es un motor válido', () => {
-    expect(CONVERSACION_CONFIG.conversation.engine).toBe('new')
-    // El adaptador del producto resuelve el MISMO valor declarado.
-    expect(crearConfigFlu().conversationEngine()).toBe('new')
-    expect(esMotorConversacion('legacy')).toBe(false)
-    expect(esMotorConversacion('new')).toBe(true)
   })
 })
 

@@ -137,8 +137,6 @@ export interface ConfigPort {
    * única en `speakerCore.isAutoSpeakerLabel`; el adaptador solo la delega.
    */
   esEtiquetaAnonima(etiqueta: string): boolean
-  /** Motor de conversación resuelto: override de runtime → producto → plan. */
-  conversationEngine(): MotorConversacion
   /** Umbral de continuidad de voz (coseno) de la config viva; 0..1. */
   umbralContinuidadVoz(): number
   /** Etiqueta anónima de la voz nueva nº `indice` (`Hablante N`). */
@@ -231,12 +229,6 @@ export interface AsrPort {
   abortar(): void
 }
 
-/**
- * Motor de conversación del producto. `legacy` quedó retirado como opción: la
- * tubería vieja ya no escribe filas y la única ruta es la del módulo.
- */
-export type MotorConversacion = 'new'
-
 /** Preferencia de ASR en configuración: `auto` elige al abrir. */
 export type MotorAsrPreferido = 'auto' | MotorAsr
 
@@ -258,8 +250,6 @@ export interface ConfiguracionConversacion {
   readonly maxSegundosVozRetenida: number
   /** Margen de solape medido en Etapa 0; `null` = sin medida → continuidad. */
   readonly overlapMargin: number | null
-  /** Bandera de arranque del motor nuevo. */
-  readonly conversation: Readonly<{ engine: MotorConversacion }>
 }
 
 /** Defaults del plan. Es la ÚNICA fuente de estos números dentro del módulo. */
@@ -272,13 +262,7 @@ export const CONVERSACION_CONFIG: ConfiguracionConversacion = Object.freeze({
   minSegundosVozMedida: 1.5,
   maxSegundosVozRetenida: 60,
   overlapMargin: null,
-  conversation: Object.freeze({ engine: 'new' }),
 })
-
-/** ¿El valor es el motor declarado? Evita re-enumerar `'new'` fuera. */
-export function esMotorConversacion(valor: unknown): valor is MotorConversacion {
-  return valor === 'new'
-}
 
 // ---------------------------------------------------------------------------
 // SUPERFICIE PASIVA del módulo (modo wake sin conversación activa).

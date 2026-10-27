@@ -21,7 +21,6 @@ import {
 import type { InstantaneaConversacion } from '../src/voice/conversation/index'
 import type {
   ConfigPort,
-  ConfiguracionConversacion,
   IdPort,
 } from '../src/voice/conversation/ports'
 
@@ -59,18 +58,12 @@ function tramoDe(indice: number): string {
   return `00000000-0000-4000-8000-${String(indice + 100).padStart(12, '0')}`
 }
 
-/** Configuración del plan con el motor nuevo y wake declarada. */
-function configNueva(): ConfiguracionConversacion {
-  return { ...CONVERSACION_CONFIG, conversation: { engine: 'new' } }
-}
-
 /** Monta el motor como el producto: puertos reales y almacén en memoria. */
 function crearMotorDeFixture() {
   const config: ConfigPort = {
     wakeWords: () => ['ok flu'],
     semillaEtiqueta: () => 'Hablante 1',
     esEtiquetaAnonima: isAutoSpeakerLabel,
-    conversationEngine: () => 'new',
     umbralContinuidadVoz: () => 0.8,
     etiquetaAnonima: (indice) => `Hablante ${indice}`,
     echoMinPalabrasCola: () => 4,
@@ -83,7 +76,7 @@ function crearMotorDeFixture() {
     almacen,
     config,
     partidor: crearPartidorWake(config),
-    configuracion: configNueva(),
+    configuracion: CONVERSACION_CONFIG,
     ultimoTextoDicho: () => '',
   })
   return { api, almacen }
