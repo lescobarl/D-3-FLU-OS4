@@ -122,6 +122,7 @@ export function crearMotorConversacionProducto({
   ultimoTextoDicho,
   participantId,
   turnId: proveedorDeTurno,
+  recordingId,
 }: {
   idioma: IdiomaLocucion
   ultimoTextoDicho: () => string
@@ -134,6 +135,12 @@ export function crearMotorConversacionProducto({
    * con valor vacío, rige el uuid propio de la sesión.
    */
   turnId?: () => number | string | null
+  /**
+   * Id de la grabación activa (recorder, Caso 11), leído al ABRIR: la sesión
+   * ADOPTA ese id y todos sus commits/eventos lo llevan (nunca dos). Vacío o
+   * sin proveedor => el módulo acuña el propio (N/A sin recorder al iniciar).
+   */
+  recordingId?: () => string | null
 }): MotorConversacionProducto {
   const reloj = crearRelojSistema()
   const id = crearIdUuid()
@@ -201,8 +208,18 @@ export function crearMotorConversacionProducto({
       const turno = leerTurno() || id.uuid()
       turnoDeSesion = turno
       cursorMuestras = 0
+      // Caso 11: la conversación ADOPTA el id de la grabación activa al abrir la
+      // sesión; sin grabación (proveedor vacío) el módulo acuña el propio (N/A).
+      const grabacion = String(recordingId?.() ?? '').trim()
       void encadenar(() =>
-        registrarFallo('conversacion.producto.start.error', api.start({ turnId: turno, idioma })),
+        registrarFallo(
+          'conversacion.producto.start.error',
+          api.start({
+            turnId: turno,
+            idioma,
+            ...(grabacion ? { sessionId: grabacion } : {}),
+          }),
+        ),
       )
     },
 

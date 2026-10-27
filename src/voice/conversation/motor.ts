@@ -94,7 +94,9 @@ export function crearConversacion(dependencias: DependenciasConversacion): Conve
   /** Abre la sesión y, si hay ASR, lo arranca con un solo motor. */
   async function iniciar(opciones?: OpcionesInicio): Promise<InstantaneaConversacion> {
     if (estado.activa) throw new Error('conversacion ya iniciada: stop antes de start')
-    const sessionId = id.uuid()
+    // Caso 11: la grabación activa (recorder) presta SU id a la sesión — un id
+    // por grabación, nunca dos. Sin grabación el módulo acuña el propio (N/A).
+    const sessionId = String(opciones?.sessionId ?? '').trim() || id.uuid()
     // Caso 8: sin proveedor de turno NO hay turno de sesión (''): cada locución
     // acuña el suyo al abrir, así un turnId agrupa solo lo que ES un turno.
     const turno = opciones?.turnId ? String(opciones.turnId).trim() : ''

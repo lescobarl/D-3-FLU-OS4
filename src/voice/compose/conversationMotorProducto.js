@@ -26,6 +26,7 @@ import { crearMotorConversacionProducto, traeFinal } from '../conversation/index
 import { resolveEchoContext } from '../lib/conversationDialogue.js'
 import { labelToSpeakerId } from '../lib/conversationRow.js'
 import { getLastCompletedSpeechAt } from '../lib/fluSpeech.js'
+import { getSessionRecordingStatus } from '../lib/sessionRecorder.js'
 
 /**
  * Compone el motor de conversación del producto con la vista del hook.
@@ -55,6 +56,10 @@ export function crearMotorConversacionHook({
         useIntegrationStore.getState().conversationHistory,
         getLastCompletedSpeechAt(),
       ).lastAssistantText,
+    // Caso 11: un id por grabación — la conversación ADOPTA el sessionId del
+    // recorder (encendido antes de la escucha). Sin recorder activo el
+    // proveedor devuelve '' y el módulo acuña el propio (N/A).
+    recordingId: () => getSessionRecordingStatus().sessionId || '',
   })
   /** Última frase canónica despachada: el planificador decide dedup; esto evita repetir el mismo texto. */
   let ultimaDespachada = ''

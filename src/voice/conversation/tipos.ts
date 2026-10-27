@@ -34,6 +34,13 @@ export type OpcionesInicio = Readonly<{
   idioma?: IdiomaLocucion
   /** Turno inicial; si falta, se acuña un UUIDv4. */
   turnId?: string
+  /**
+   * Id de la grabación a ADOPTAR (recorder, Caso 11): la sesión se abre con el
+   * MISMO id de la grabación activa, así todos los commits y eventos de una
+   * grabación llevan un único recordingId. Vacío o ausente => el módulo acuña
+   * el propio (N/A sin recorder activo al iniciar).
+   */
+  sessionId?: string
 }>
 
 /** Bloque de audio con su índice de muestra (`sampleRate` incluido, regla 1). */
