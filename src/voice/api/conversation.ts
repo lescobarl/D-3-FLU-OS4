@@ -7,7 +7,7 @@
 export { buildFluSpeechAuditRows, deriveUserLastText, selectVisiblePhrase } from '../lib/conversationDialogue.js'
 export { createConversationModeController } from '../lib/conversationMode.ts'
 export { normalizeRowSignature, resolveRowSpeakerLabel, speakerIdToDefaultName } from '../lib/conversationRow.js'
-export { commitUserTurnRow, escribeFilaDeUsuario, renameRowSpeakerName } from '../lib/conversationTurnRow.ts'
+export { commitUserTurnRow, escribeFilaDeUsuario, renameRowSpeakerName } from '../conversation/index.ts'
 export { logFluReply } from '../lib/fluConversationLog.ts'
 export { evaluateListenParity } from '../lib/listenParity.js'
 export { setNavSettlePending } from '../lib/navSettleFlag.js'

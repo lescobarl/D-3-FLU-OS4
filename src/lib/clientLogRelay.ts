@@ -11,6 +11,7 @@
 
 import { FLU_CONFIG } from '../voice/api/config.ts'
 import { recordSessionEvent } from '../voice/api/sessionLog.ts';
+import { registrarReceptorCaughtError } from './caughtError.ts';
 
 type LogLevel = 'LOG' | 'INFO' | 'WARN' | 'ERROR';
 
@@ -80,6 +81,13 @@ export function relayLog(level: LogLevel, tag: string, message: string, data?: u
     pending.push({ level, tag, message, data });
     scheduleFlush();
 }
+
+// Inversión de dependencia (corte 2026-10-26): `caughtError` es HOJA y no puede
+// importar este módulo — importarlo desde los workers cerraba ciclos de imports
+// entre workers (whisperAsr.worker <-> voiceId.worker). Al cargar en el hilo
+// principal, este módulo se registra como receptor de las capturas: la entrada
+// del relay queda idéntica (`relayLog('ERROR', 'catch', message, { detail })`).
+registrarReceptorCaughtError((nivel, tag, message, data) => relayLog(nivel, tag, message, data));
 
 /**
  * Activar/desactivar el relay de logs.

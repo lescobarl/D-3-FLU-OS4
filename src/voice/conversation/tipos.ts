@@ -9,6 +9,7 @@ import type {
   AsrPort,
   ConfigPort,
   ConfiguracionConversacion,
+  EmbebedorPort,
   EstadoAsr,
   EvidenciaEtiqueta,
   Fila,
@@ -186,6 +187,12 @@ export type DependenciasConversacion = Readonly<{
   configuracion?: ConfiguracionConversacion
   vad?: VadPort
   asr?: AsrPort
+  /**
+   * Embeddings de voz (`adapters.crearEmbebedorProducto`): con el puerto, el
+   * módulo mide la identidad por sí mismo (decisión del dueño, Paso 5-A). Sin
+   * él, las locuciones cierran con continuidad/semilla, sin medida.
+   */
+  embebedor?: EmbebedorPort
 }>
 
 /** Las 7 llamadas del plan. */

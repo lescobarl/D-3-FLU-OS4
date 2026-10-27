@@ -48,6 +48,14 @@ export type EstadoSesion = {
   descartes: DescarteConversacion[]
   filas: Map<string, Fila>
   nombresPorVoz: Map<string, string>
+  /** PCM retenido de la locución abierta (tope en `configuracion`), para medir. */
+  muestrasAbierta: Float32Array[]
+  /** Vector de la última voz medida (continuidad entre locuciones). */
+  ultimoVectorVoz: number[] | null
+  /** Voces nuevas contadas en la sesión (`Hablante N`). */
+  contadorVoces: number
+  /** ¿Hay una medida de voz en curso para la locución abierta? */
+  medidaVozEnCurso: boolean
   oyentes: Set<(evento: EventoConversacion) => void>
 }
 
@@ -101,6 +109,10 @@ export function crearEstadoSesion(idiomaInicial: IdiomaLocucion): EstadoSesion {
     descartes: [],
     filas: new Map(),
     nombresPorVoz: new Map(),
+    muestrasAbierta: [],
+    ultimoVectorVoz: null,
+    contadorVoces: 0,
+    medidaVozEnCurso: false,
     oyentes: new Set(),
   }
 }
@@ -115,12 +127,12 @@ export function crearEstadoSesion(idiomaInicial: IdiomaLocucion): EstadoSesion {
 export function crearSesion(
   dependencias: Pick<
     DependenciasConversacion,
-    'reloj' | 'almacen' | 'config' | 'partidor' | 'registro'
+    'reloj' | 'id' | 'almacen' | 'config' | 'partidor' | 'registro' | 'embebedor'
   >,
   estado: EstadoSesion,
   configuracion: ConfiguracionConversacion,
 ): Sesion {
-  const { reloj, almacen, config, partidor, registro } = dependencias
+  const { reloj, id, almacen, config, partidor, registro, embebedor } = dependencias
 
   /** Emite un evento a los oyentes actuales (una copia, por si se dan de baja). */
   function emitir(evento: EventoConversacion): void {
@@ -216,6 +228,8 @@ export function crearSesion(
     registro,
     almacen,
     config,
+    id,
+    embebedor,
   })
 
   /** Resetea el estado de una sesión nueva sin perder filas ni oyentes. */
@@ -235,6 +249,10 @@ export function crearSesion(
     estado.estadoAsr = 'idle'
     estado.motorAsr = null
     estado.nombresPorVoz.clear()
+    estado.muestrasAbierta = []
+    estado.ultimoVectorVoz = null
+    estado.contadorVoces = 0
+    estado.medidaVozEnCurso = false
   }
 
   return {

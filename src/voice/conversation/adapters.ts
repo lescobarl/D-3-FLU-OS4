@@ -14,7 +14,10 @@
  *    una segunda escucha ni importa esas fachadas (su grafo arrastraría
  *    `lib/speechRecognitionLocal.js`, con imports sin extensión, y rompería el
  *    `viteConfigNativenessGuard`).
- *  - nada de: captura de micrófono ni extracción de embeddings (puertos inyectables).
+ *  - nada de: captura de micrófono. Los embeddings se MIDEN por el worker único
+ *    (`voiceIdWorkerClient.embedAudioForDiarization`) y se COMPARAN con el coseno
+ *    del dueño único (`speakerCore.compareCosineSignatures`), ambos detrás del
+ *    `EmbebedorPort` (puerto inyectable).
  *    La fila SÍ se persiste, por el escritor ÚNICO de `core/db`; el cableado de
  *    producto restante se declara PENDIENTE en `docs/LAE-cola-ejecucion.md`.
  *
@@ -27,16 +30,35 @@
  *    único y `duplicationGuard` prohíbe reimplementarlo. El eco compara palabras
  *    normalizadas por esa función, no por una copia local.
  * Ambos se importan aquí y en ningún otro archivo del módulo.
+ *
+ * La SUPERFICIE PASIVA (fila del usuario sin conversación activa) añade a este
+ * archivo frontera: `useIntegrationStore` (la VISTA del producto, la misma que
+ * usaba el escritor retirado) y las primitivas delegadas de los dueños vivos
+ * (`speakerCore`, `speakerLabels`, `speakerDirectory`, `conversationRow`,
+ * `audioMath`, `cleanForSpeech`). La etiqueta y la regla «es fragmento» las
+ * decide el módulo (`resolverEtiqueta` / `pasivo.ts`); nada se reimplementa.
  */
 import { logCaughtError } from '../../lib/caughtError.ts'
-import { normalizeForMatch } from '../../lib/textUtils.ts'
+import { cleanForSpeech, normalizeForMatch } from '../../lib/textUtils.ts'
 import { splitTranscriptAtWakeWord } from '../api/audio.ts'
 import { FLU_CONFIG } from '../api/config.ts'
+import { speechWords, stripDiacritics } from '../lib/audioMath.js'
 import { getVadFrameMs } from '../lib/asr/asrConfig.js'
-import { labelToSpeakerId } from '../lib/conversationRow.js'
-import { isAutoSpeakerLabel } from '../lib/speakerCore.js'
+import { labelToSpeakerId, normalizeRowSignature } from '../lib/conversationRow.js'
+import {
+  autoSpeakerIndexFromKey,
+  autoSpeakerLabel,
+  compareCosineSignatures,
+  getFallbackSpeaker,
+  isAutoSpeakerLabel,
+} from '../lib/speakerCore.js'
+import { canonicalSpeakerName, isProperSpeakerName, pendingSpeakerLabel } from '../lib/speakerLabels.js'
+import { voiceKeyFor } from '../lib/speakerDirectory.js'
+import { embedAudioForDiarization } from '../lib/voiceIdWorkerClient.js'
+import { useIntegrationStore } from '../../store/integrationStore.ts'
+import { VOICE_DIARIZATION_DEFAULTS } from '../../core/config/sharedConfig.ts'
 import { fraseDelEventoAsr, mergeIntoOpenLine } from '../lib/speechMerge.js'
-import { frameSamplesFor, isVoicedFrame } from '../lib/voicedActivity.js'
+import { frameSamplesFor, isVoicedFrame, selectVoicedWindow } from '../lib/voicedActivity.js'
 import {
   escribirRegistroConversacion,
   leerRegistroConversacion,
@@ -50,15 +72,22 @@ import type {
   AlmacenPort,
   CambiosFila,
   ConfigPort,
+  EmbebedorPort,
+  EntradaCompromisoUsuario,
   Fila,
   FilaNueva,
   IdPort,
   MedidaVad,
   PartidorPort,
+  PuertoVistaFilas,
   RegistroPort,
   RelojPort,
+  ResultadoCompromisoUsuario,
+  UtilidadesFila,
   VadPort,
 } from './ports.ts'
+import { crearEscritorFilaUsuario, crearResolucionPasiva } from './pasivo.ts'
+import type { EscritorFilaUsuario, ResolucionPasivaHablante } from './pasivo.ts'
 
 /** Reloj del sistema: la ÚNICA llamada a `Date.now()` del módulo, inyectada. */
 export function crearRelojSistema(): RelojPort {
@@ -152,6 +181,38 @@ export function crearConfigFlu(): ConfigPort {
     // Delegado, no reimplementado: la definición de etiqueta anónima vive en su dueño.
     esEtiquetaAnonima: (etiqueta) => isAutoSpeakerLabel(etiqueta),
     conversationEngine: () => CONVERSACION_CONFIG.conversation.engine,
+    umbralContinuidadVoz: () => {
+      const umbrales = FLU_CONFIG.voiceIdentity?.capture?.conversationSpeakerThresholds
+      const valor = umbrales ? Number(umbrales.cosineContinuityThreshold) : Number.NaN
+      return Number.isFinite(valor) && valor > 0
+        ? valor
+        : VOICE_DIARIZATION_DEFAULTS.cosineContinuity
+    },
+    etiquetaAnonima: (indice) => autoSpeakerLabel(indice),
+    // Regla 2 del eco: el mínimo de palabras de la cola que abre el fragmento.
+    // Fuente única: assistantEchoMinWords (+1: repetir solo las 3 últimas
+    // palabras de FLU no es eco, es conversación — medido 18:12:34).
+    echoMinPalabrasCola: () => VOICE_DIARIZATION_DEFAULTS.assistantEchoMinWords + 1,
+  }
+}
+
+/**
+ * Embeddings de voz del PRODUCTO: mide en el worker único del proyecto y
+ * compara con el coseno de su dueño único. El módulo SOLO decide (`identidad.ts`).
+ * @returns Puerto de embeddings: vector (o `null`) y comparador de medidas.
+ */
+export function crearEmbebedorProducto(): EmbebedorPort {
+  return {
+    medir: async (muestras, sampleRate) => {
+      // La ventana del turno llega con cola de silencio del ASR (y a veces con
+      // audio ajeno en los bordes): se embebe SOLO el tramo con voz. El recorte
+      // tiene UN dueño (`voicedActivity.selectVoicedWindow`), el mismo que usaba
+      // la diarización vieja.
+      const ventanaVoz = selectVoicedWindow(muestras, { sampleRate })
+      const vector = await embedAudioForDiarization(ventanaVoz, sampleRate)
+      return vector.length > 0 ? vector : null
+    },
+    comparar: (a, b) => compareCosineSignatures([...a], [...b]),
   }
 }
 
@@ -297,3 +358,115 @@ export function crearAlmacenDexieProducto({
   }
   return crearAlmacenDexie({ db, reloj, sincronizar: buildSyncTuple })
 }
+
+// ---------------------------------------------------------------------------
+// SUPERFICIE PASIVA — la fila del usuario en modo wake (sin conversación
+// activa) la escribe el MISMO módulo. El escritor de App (`conversationTurnRow`,
+// retirado) era un segundo dueño de esa decisión y quedó sustituido por
+// `pasivo.ts`; aquí solo se CABLES el producto: la vista (`useIntegrationStore`)
+// y las primitivas de los dueños vivos.
+// ---------------------------------------------------------------------------
+
+/**
+ * Vista del producto por puerto: el historial de conversación del store.
+ * El acceso es perezoso (`getState()` por llamada): la vista se lee en el
+ * momento del compromiso, no al cargar el módulo.
+ * @returns Puerto de la vista de filas sobre `useIntegrationStore`.
+ */
+export function crearPuertoVistaFilasProducto(): PuertoVistaFilas {
+  const vista = () => useIntegrationStore.getState()
+  return {
+    leerHistorial: () => vista().conversationHistory,
+    agregarEntrada: (entrada) => vista().addConversationEntry(entrada),
+    completarFragmento: (id, texto) => vista().completeEntryFragment(id, texto),
+    fijarAltavoz: (id, vozId, opciones) =>
+      vista().setEntrySpeaker(id, vozId, {
+        signature: opciones?.firma ? [...opciones.firma] : null,
+      }),
+    fijarNombre: (id, nombre, opciones) =>
+      vista().setEntrySpeakerName(id, nombre, opciones ? { resolved: opciones.resuelta } : undefined),
+    anotarHighWater: (indice) => vista().noteSpeakerHighWater(indice),
+    epoch: () => vista().conversationEpoch,
+  }
+}
+
+/**
+ * Utilidades de fila del producto: delegan en los dueños vivos del proyecto.
+ * Ninguna regla se reimplementa en el módulo (una etiqueta, un sitio).
+ * @returns Utilidades que consume el escritor pasivo.
+ */
+export function crearUtilidadesFilaProducto(): UtilidadesFila {
+  return {
+    normalizar: (texto) => cleanForSpeech(texto),
+    nombrePropio: (nombre) => isProperSpeakerName(nombre),
+    canonica: (nombre) => canonicalSpeakerName(nombre),
+    etiquetaPendiente: () => pendingSpeakerLabel(),
+    respaldoEtiqueta: () => getFallbackSpeaker(),
+    claveDeEtiqueta: (etiqueta) => labelToSpeakerId(etiqueta),
+    claveVoz: (datos) => voiceKeyFor({ voiceId: datos.voiceId, signature: datos.signature ? [...datos.signature] : null }),
+    indiceAltoDeClave: (clave) => autoSpeakerIndexFromKey(clave) ?? 0,
+    normalizarFirma: (firma) => normalizeRowSignature(firma ? [...firma] : null),
+    palabras: (texto) => speechWords(texto),
+    compactar: (texto) => stripDiacritics(cleanForSpeech(texto)).replace(/[^a-z0-9]+/g, ''),
+  }
+}
+
+/** Escritor único de la fila del usuario en modo pasivo (se crea perezosamente). */
+let escritorFilaUsuario: EscritorFilaUsuario | null = null
+
+/**
+ * Escritor de la fila del usuario del PRODUCTO (modo pasivo): UNA instancia
+ * por proceso, con el estado de turno del factory (como el escritor retirado).
+ * @returns El escritor único con `commitUserTurnRow` y `renameRowSpeakerName`.
+ */
+export function crearEscritorFilaUsuarioProducto(): EscritorFilaUsuario {
+  if (!escritorFilaUsuario) {
+    escritorFilaUsuario = crearEscritorFilaUsuario({
+      vista: crearPuertoVistaFilasProducto(),
+      utilidades: crearUtilidadesFilaProducto(),
+      config: crearConfigFlu(),
+      id: crearIdUuid(),
+      reloj: crearRelojSistema(),
+      registro: crearRegistroCaughtError(),
+    })
+  }
+  return escritorFilaUsuario
+}
+
+/**
+ * Compromete la fila del usuario del turno (modo pasivo) por el escritor único
+ * del módulo. Es la MISMA puerta que la fachada publica: App la consume sin
+ * saber dónde vive la decisión.
+ * @param entrada Entrada del compromiso (texto, hablante, turno, evidencia).
+ * @returns Id de la fila y la acción realizada.
+ */
+export function commitUserTurnRow(entrada: EntradaCompromisoUsuario): ResultadoCompromisoUsuario {
+  return crearEscritorFilaUsuarioProducto().commitUserTurnRow(entrada)
+}
+
+/**
+ * Corrige el nombre de UNA fila concreta de usuario por su id (migración).
+ * @param rowId Id de la fila en la vista.
+ * @param speakerName Nombre canónico que se fija.
+ * @returns `true` si la fila existe y el nombre se fijó.
+ */
+export function renameRowSpeakerName(rowId: string, speakerName: string): boolean {
+  return crearEscritorFilaUsuarioProducto().renameRowSpeakerName(rowId, speakerName)
+}
+
+/**
+ * Resolutor del hablante del PRODUCTO (modo pasivo): la medida real
+ * (`crearEmbebedorProducto`, con el recorte de `selectVoicedWindow`) y la regla
+ * de identidad del módulo. UNA instancia por proceso.
+ * @returns El resolutor `resolverHablante` con la evidencia de medida.
+ */
+export function crearResolucionPasivaProducto(): ResolucionPasivaHablante {
+  return crearResolucionPasiva({
+    embebedor: crearEmbebedorProducto(),
+    config: crearConfigFlu(),
+    id: crearIdUuid(),
+    registro: crearRegistroCaughtError(),
+  })
+}
+
+export { escribeFilaDeUsuario } from './pasivo.ts'

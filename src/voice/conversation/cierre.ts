@@ -8,6 +8,9 @@
 import { construirFila, fusionarVoz, promoverFila } from './fila.ts'
 import type { CierreLocucion, VozEtiqueta } from './fila.ts'
 import { decidirRevision } from './revision.ts'
+import { decidirIdentidad } from './identidad.ts'
+import { concatenarMuestras } from './muestras.ts'
+import { logCaughtError } from '../../lib/caughtError.ts'
 import type {
   CausaCierre,
   ContarDescarte,
@@ -18,8 +21,10 @@ import type {
 import type {
   AlmacenPort,
   ConfigPort,
+  EmbebedorPort,
   Fila,
   IdiomaLocucion,
+  IdPort,
   MotivoCierre,
   RegistroPort,
   TramoMuestreado,
@@ -33,6 +38,9 @@ export type EstadoCierre = {
   ultimaVozId: string
   filas: Map<string, Fila>
   nombresPorVoz: Map<string, string>
+  muestrasAbierta: Float32Array[]
+  ultimoVectorVoz: number[] | null
+  contadorVoces: number
 }
 
 /** Servicios que la sesión entrega a las reglas de cierre. */
@@ -44,6 +52,10 @@ export type ContextoCierre = Readonly<{
   registro: RegistroPort
   almacen: AlmacenPort
   config: ConfigPort
+  /** Generador UUIDv4: la voz nueva acuña su identidad (medida de respaldo). */
+  id: IdPort
+  /** Embeddings inyectados; sin puerto no hay medida (solo continuidad/semilla). */
+  embebedor?: EmbebedorPort
 }>
 
 /** Datos de apertura de la única locución abierta. */
@@ -107,7 +119,8 @@ export function resolverVoz(
  * @returns Apertura, revisión, cierre y promoción de filas.
  */
 export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
-  const { estado, emitir, emitirCaja, contarDescarte, registro, almacen, config } = contexto
+  const { estado, emitir, emitirCaja, contarDescarte, registro, almacen, config, id, embebedor } =
+    contexto
 
   /** Abre la única locución abierta; el llamador garantiza que no hay otra. */
   function abrirLocucion(datos: DatosApertura): void {
@@ -116,6 +129,7 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
       ? vozId === estado.ultimaVozId
       : Boolean(estado.ultimaEtiqueta)
     if (vozId) estado.ultimaVozId = vozId
+    estado.muestrasAbierta = []
     estado.abierta = {
       locutionId: datos.tramoId,
       texto: datos.texto,
@@ -167,6 +181,51 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
     return siguiente.final
   }
 
+  /**
+   * Medida de respaldo al cerrar: una locución que se midió en el habla (ingesta)
+   * ya trae `vozId` y no entra aquí. Sin medida temprana, se embebe el PCM retenido
+   * y se decide la identidad ANTES de construir la fila; un fallo de la medida se
+   * registra y la locución cierra con la evidencia que tenía.
+   */
+  async function medirVozAlCerrar(locucion: LocucionAbierta): Promise<EvidenciaVoz> {
+    if (
+      !embebedor ||
+      String(locucion.voz.vozId || '').trim() ||
+      estado.muestrasAbierta.length === 0
+    ) {
+      return locucion.voz
+    }
+    const muestras = concatenarMuestras(estado.muestrasAbierta)
+    let vector: readonly number[] | null = null
+    try {
+      vector = await embebedor.medir(muestras, locucion.sampleRate)
+    } catch (error) {
+      // AGENTS §1.5: el catch registra por logCaughtError con la excepción.
+      logCaughtError('conversacion.voz.medida.fallo', error, {
+        sessionId: estado.sessionId,
+        locutionId: locucion.locutionId,
+      })
+    }
+    if (!vector) return locucion.voz
+    const identidad = decidirIdentidad({
+      vector,
+      ultimoVozId: estado.ultimaVozId,
+      ultimoVector: estado.ultimoVectorVoz,
+      umbral: config.umbralContinuidadVoz(),
+      etiquetaNueva: config.etiquetaAnonima(estado.contadorVoces + 1),
+      comparar: embebedor.comparar,
+      id: id.uuid,
+    })
+    if (!identidad.continuidad) estado.contadorVoces += 1
+    estado.ultimaVozId = identidad.vozId
+    estado.ultimoVectorVoz = [...vector]
+    return {
+      vozId: identidad.vozId,
+      hablante: identidad.hablante,
+      continuidad: identidad.continuidad,
+    }
+  }
+
   /** Cierra la locución abierta: una fila o un descarte contado (regla 4). */
   async function cerrarLocucion(
     locucion: LocucionAbierta,
@@ -180,6 +239,10 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
       fin: locucion.fin,
       sampleRate: locucion.sampleRate,
     }
+    const vozMedida = await medirVozAlCerrar(locucion)
+    const vozCerrada = vozMedida === locucion.voz ? locucion.voz : fusionarVoz(locucion.voz, vozMedida)
+    const continuidadVoz =
+      vozMedida === locucion.voz ? locucion.continuidadVoz : Boolean(vozMedida.continuidad)
     const cierre: CierreLocucion = {
       locutionId: locucion.locutionId,
       sessionId: sesion,
@@ -192,12 +255,13 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
       overlap: Boolean(locucion.voz.overlap),
       final,
       reason: motivo,
-      voz: resolverVoz(locucion.voz, locucion.continuidadVoz, estado.nombresPorVoz),
+      voz: resolverVoz(vozCerrada, continuidadVoz, estado.nombresPorVoz),
       etiquetaAnterior: estado.ultimaEtiqueta || null,
       semillaEtiqueta: config.semillaEtiqueta(),
       esEtiquetaAnonima: config.esEtiquetaAnonima,
     }
     estado.abierta = null
+    estado.muestrasAbierta = []
     emitirCaja()
 
     const resultado = construirFila(cierre)

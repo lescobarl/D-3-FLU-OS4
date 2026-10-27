@@ -27,10 +27,6 @@ export function getPassiveBufferMs(config = FLU_CONFIG) {
   return Number(capture.passiveBufferMs)
 }
 
-export function getTurnAudioOverlapMs(config = FLU_CONFIG) {
-  return Number(config.transcript?.turnAudioOverlapMs)
-}
-
 export function getConversationSpeakerTailMs(config = FLU_CONFIG, { atTurnBoundary = false } = {}) {
   const capture = getVoiceIdentityCaptureConfig(config)
   const tailMs = Number(capture.conversationSpeakerTailMs)
@@ -49,10 +45,6 @@ export function getConversationMinVoicedSamples(sampleRate, config = FLU_CONFIG)
 export function getConversationMinVoicedForNewSamples(sampleRate, config = FLU_CONFIG) {
   const ms = Number(getVoiceIdentityCaptureConfig(config).conversationMinVoicedForNewMs)
   return Math.floor(sampleRate * (ms / 1000))
-}
-
-export function getDiarizeIntervalMs(config = FLU_CONFIG) {
-  return Number(config.activeListen?.speakers?.diarizeIntervalMs)
 }
 
 /**

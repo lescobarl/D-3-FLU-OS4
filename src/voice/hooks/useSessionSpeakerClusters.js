@@ -15,7 +15,7 @@
  *     re-siembra por el mismo punto de escritura, sin tocar nombres resueltos.
  */
 import { useCallback, useEffect, useRef } from 'react'
-import { seedRegisteredAnchors, setSessionClustersProvider } from '../lib/speakerClusters.js'
+import { seedRegisteredAnchors } from '../lib/speakerClusters.js'
 import { voiceVectorModel } from '../lib/speakerDirectory.js'
 import { voiceProbe } from '../lib/voiceProbe'
 
@@ -43,13 +43,6 @@ export function useSessionSpeakerClusters(ref, participantVoiceAnchors) {
     const seeded = seedRegisteredAnchors(raw, participantAnchorsRef.current, { model: voiceVectorModel() })
     ref.current = seeded || raw
     voiceProbe('clusters', { write: ref.current?.length ?? 0, labels: (ref.current || []).map((c) => c?.label), seeded: Boolean(seeded) }) // BANDERA DE DIAGNOSTICO
-  }, [ref])
-
-  useEffect(() => {
-    // LECTURA de los clusters vivos para los consumidores que deciden la etiqueta de una
-    // fila cerrada sin recibir el ref (auditoria 2026-10-23). Este hook es su dueno.
-    setSessionClustersProvider(() => ref.current || [])
-    return () => setSessionClustersProvider(null)
   }, [ref])
 
   useEffect(() => {

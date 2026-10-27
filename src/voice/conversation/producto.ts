@@ -32,6 +32,7 @@ import {
   componerFraseDelEvento,
   crearAlmacenDexieProducto,
   crearConfigFlu,
+  crearEmbebedorProducto,
   crearIdUuid,
   crearPartidorWake,
   crearRegistroCaughtError,
@@ -45,7 +46,6 @@ import { crearConversacion } from './motor.ts'
 import type { IdiomaLocucion, MotivoCierre } from './ports.ts'
 import type {
   ConversacionApi,
-  EvidenciaVoz,
   EventoConversacion,
   InstantaneaConversacion,
 } from './tipos.ts'
@@ -88,27 +88,31 @@ export type MotorConversacionProducto = Readonly<{
 /**
  * Compone el motor NUEVO para el producto con los adaptadores REALES.
  * Es el único punto que crea la sesión desde el hook: almacén Dexie, reloj,
- * ids y la configuración del plan; el eco se delega a `ultimoTextoDicho`.
+ * ids, embeddings (worker único) y la configuración del plan; el eco se delega
+ * a `ultimoTextoDicho`. La IDENTIDAD la mide el módulo por sí mismo
+ * (`EmbebedorPort`, decisión del dueño Paso 5-A): el producto no recibe
+ * evidencia de voz externa.
  * @param opciones Idioma activo, último texto de FLU, participante dueño de
- *   las filas y evidencia de voz del turno.
+ *   las filas y proveedor de turno del hook (leído por evento).
  * @returns Controlador de apertura, ingesta y cierre.
  */
 export function crearMotorConversacionProducto({
   idioma,
   ultimoTextoDicho,
   participantId,
-  evidenciaVoz,
+  turnId: proveedorDeTurno,
 }: {
   idioma: IdiomaLocucion
   ultimoTextoDicho: () => string
   /** Participante activo: aísla las filas del motor por usuario. */
   participantId?: string
   /**
-   * Evidencia de voz del turno en curso. El hook la toma del preflight de
-   * identidad (medida acústica) y del nombre dicho por el propio hablante. Sin
-   * este puerto el módulo no afirma identidad: solo continuidad o semilla.
+   * Turno del hook, leído POR EVENTO: el motor queda abierto entre locuciones
+   * (modo pasivo) y el número de turno avanza con cada commit, así que un valor
+   * capturado en `abrir` pegaría el turno 1 a todas las filas. Sin proveedor, o
+   * con valor vacío, rige el uuid propio de la sesión.
    */
-  evidenciaVoz?: (texto: string) => EvidenciaVoz
+  turnId?: () => number | string | null
 }): MotorConversacionProducto {
   const reloj = crearRelojSistema()
   const id = crearIdUuid()
@@ -123,10 +127,20 @@ export function crearMotorConversacionProducto({
     partidor: crearPartidorWake(config),
     vad: crearVadProducto(),
     ultimoTextoDicho,
+    embebedor: crearEmbebedorProducto(),
   })
   let estadoMotor: EstadoMotorProducto = 'inactiva'
-  let turnId: string | null = null
+  /** Uuid propio de la sesión (abrir); el proveedor lo pisa por evento si existe. */
+  let turnoDeSesion: string | null = null
   let cursorMuestras = 0
+  /**
+   * Turno vigente del evento: el proveedor manda si aporta valor; si no, el uuid
+   * de la sesión. Un solo dueño de la pregunta "¿qué turno es este?" por evento.
+   */
+  const leerTurno = (): string => {
+    const aportado = String(proveedorDeTurno?.() ?? '').trim()
+    return aportado || turnoDeSesion || ''
+  }
   /** Libro del último hueco pegado a la línea abierta (dueño de la regla: speechMerge). */
   let libroDeLinea: LibroDeLinea | null = null
   /** Locución DUEÑA del libro: si el tramo cambia, el libro no describe su texto. */
@@ -162,8 +176,8 @@ export function crearMotorConversacionProducto({
       locucionDelLibro = ''
       if (estadoMotor !== 'inactiva') return
       estadoMotor = 'activa'
-      const turno = id.uuid()
-      turnId = turno
+      const turno = leerTurno() || id.uuid()
+      turnoDeSesion = turno
       cursorMuestras = 0
       void encadenar(() =>
         registrarFallo('conversacion.producto.start.error', api.start({ turnId: turno, idioma })),
@@ -172,8 +186,11 @@ export function crearMotorConversacionProducto({
 
     evento: (evento) =>
       encadenar(async () => {
-        if (estadoMotor !== 'activa' || !turnId) return
-        const turno = turnId
+        if (estadoMotor !== 'activa') return
+        // Se relee POR EVENTO: el commit del hook avanza el número de turno con la
+        // locución ABIERTA todavía, y esta ingesta pertenece al turno nuevo.
+        const turno = leerTurno()
+        if (!turno) return
         const instantanea = api.snapshot()
         const abierta = instantanea.locucionAbierta
         const tramoVigente = instantanea.tramoAudio?.tramoId ?? ''
@@ -209,14 +226,14 @@ export function crearMotorConversacionProducto({
             final: false,
             idioma,
             turnId: turno,
-            voz: evidenciaVoz?.(fusion.linea) ?? {},
           }),
         )
       }),
 
     audio: (muestras, frecuencia, inicioMuestras) => {
-      if (estadoMotor !== 'activa' || !turnId || !muestras || muestras.length === 0) return
-      const turno = turnId
+      if (estadoMotor !== 'activa' || !muestras || muestras.length === 0) return
+      const turno = leerTurno()
+      if (!turno) return
       const inicio =
         Number.isFinite(Number(inicioMuestras)) && Number(inicioMuestras) >= 0
           ? Number(inicioMuestras)
@@ -247,6 +264,7 @@ export function crearMotorConversacionProducto({
           // y recién entonces se detiene la sesión. Una sola fila por segmento.
           const abierta = api.snapshot().locucionAbierta
           if (abierta && String(abierta.texto || '').trim()) {
+            const turno = leerTurno()
             await registrarFallo(
               'conversacion.producto.final.error',
               api.ingestAsr({
@@ -255,15 +273,14 @@ export function crearMotorConversacionProducto({
                 final: true,
                 idioma,
                 tramo: abierta.tramo,
-                ...(turnId ? { turnId } : {}),
-                voz: evidenciaVoz?.(abierta.texto) ?? {},
+                ...(turno ? { turnId: turno } : {}),
               }),
             )
           }
           await registrarFallo('conversacion.producto.stop.error', api.stop(motivo))
         } finally {
           estadoMotor = 'inactiva'
-          turnId = null
+          turnoDeSesion = null
           libroDeLinea = null
           locucionDelLibro = ''
         }

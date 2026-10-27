@@ -8,10 +8,33 @@
  * - Dev encendido: solo contadores + comprobaciones ligeras; ring solo en violaciones.
  */
 import { FLU_CONFIG } from './fluConfig.js'
-import { rowDuplicatesPrior, utterancesRelate, validateLogRowsNoPrefixDup } from './conversationStream.js'
+import { cleanForSpeech } from './audioMath.js'
+import { utterancesRelate } from './speechMerge.js'
 import { sortSessionSpeakers } from './voiceIdentity.js'
 import { logCaughtError } from '../../lib/caughtError';
 import { parseSpeakerIndex } from './speakerCore.js';
+
+/**
+ * ABSORBIDOS del módulo retirado `conversationStream.js` (tubería vieja): este
+ * archivo era su ÚNICO consumidor vivo y no justifica mantener el import a un
+ * god-file que quedó roto al retirar `ingressGuards`. Un solo dueño: fluDebug.
+ */
+/** Nueva fila no debe empezar con el texto completo de la fila anterior. */
+function rowDuplicatesPrior(prior = '', next = '') {
+  const p = cleanForSpeech(prior)
+  const n = cleanForSpeech(next)
+  if (!p || !n || p === n) return false
+  return n.startsWith(p)
+}
+
+function validateLogRowsNoPrefixDup(rows = []) {
+  for (let i = 1; i < rows.length; i += 1) {
+    const prev = cleanForSpeech(rows[i - 1])
+    const cur = cleanForSpeech(rows[i])
+    if (prev && cur && rowDuplicatesPrior(prev, cur)) return false
+  }
+  return true
+}
 
 const IS_DEV = Boolean(import.meta.env?.DEV)
 const VIOLATION_RING = 40

@@ -57,10 +57,36 @@ export {
   crearAlmacenDexieProducto,
   crearAlmacenMemoria,
   crearConfigFlu,
+  crearEmbebedorProducto,
+  crearEscritorFilaUsuarioProducto,
   crearIdUuid,
   crearPartidorWake,
+  crearPuertoVistaFilasProducto,
   crearRegistroCaughtError,
   crearRelojSistema,
+  crearResolucionPasivaProducto,
+  crearUtilidadesFilaProducto,
+  commitUserTurnRow,
+  renameRowSpeakerName,
 } from './adapters.ts'
 export { crearMotorConversacionProducto } from './producto.ts'
 export type { EventoProducto, MotorConversacionProducto } from './producto.ts'
+export { crearEscritorFilaUsuario, crearResolucionPasiva, escribeFilaDeUsuario } from './pasivo.ts'
+export type {
+  DependenciasEscritorFila,
+  DependenciasResolucionPasiva,
+  EntradaResolucionPasiva,
+  EscritorFilaUsuario,
+  ResolucionPasiva,
+  ResolucionPasivaHablante,
+} from './pasivo.ts'
+export type {
+  AccionCompromisoUsuario,
+  EntradaCompromisoUsuario,
+  FilaVistaUsuario,
+  NuevaEntradaVista,
+  PuertoVistaFilas,
+  ResultadoCompromisoUsuario,
+  SentimientoLocucion,
+  UtilidadesFila,
+} from './ports.ts'

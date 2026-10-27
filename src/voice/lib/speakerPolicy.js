@@ -7,15 +7,12 @@
  * - Otra persona con timbre distinto → Hablante 2, 3… (INV-SPK-01, multi-speakers).
  * - lastLogged manda sobre sessionPrimary (no reabsorber Montse→H1 tras Luis).
  * - «otro hablante» / «ok flu soy …» → cambio o nombre registrado.
- * - Interinos no diarizan en límite de turno (solo el final asigna por audio).
  */
 import { FLU_CONFIG } from './fluConfig.js'
 import { detectIntroducedName, detectWakeIntroducedName } from './audioMath.js'
-import { isAutoSpeakerLabel, normalizeSpeakerLabel } from './voiceIdentity.js'
+import { normalizeSpeakerLabel } from './voiceIdentity.js'
 import { anonymousSpeakerLabel } from './speakerLabels.js'
-import { isPhraseShortForSpeakerHeuristics } from './fluTranscriptPause.js'
 import { optionalConfigBlock } from './configGuard.js'
-import { parseSpeakerIndex } from './speakerCore.js';
 
 /**
  * Bloque de captura de sala (o `{}`).
@@ -44,91 +41,6 @@ export function resolveSpeakerNameFromUtterance(
   // `requireWakeWordForSpeakerName: false` no tenia ningun efecto (auditoria 2026-10-22).
   if (requiresWakeWordForSpeakerName(roomCfg)) return ''
   return detectIntroducedName(text)
-}
-
-export function isSoloRoomSticky() {
-  return getRoomCaptureCfg().soloSpeakerSticky !== false
-}
-
-/** Índice numérico de «Hablante N» (0 si no aplica). */
-export function parseAutoSpeakerIndex(label = '') {
-  return parseSpeakerIndex(label) ?? 0
-}
-
-/**
- * Tras diarización: ancla al lastLogged si el salto de etiqueta es fantasma (H1→H3)
- * o el ASR es débil (eco TV / stutter).
- */
-export function anchorResolvedToLastLogged(
-  resolvedName = '',
-  stickyFallback = '',
-  {
-    explicitNextSpeaker = false,
-    weakAsrEvidence = false,
-    wakeIntro = false,
-    sessionPrimary = '',
-    phrase = '',
-    preflightReady = false,
-    preflightSpeaker = '',
-    soloSession = false,
-  } = {},
-) {
-  const resolved = normalizeSpeakerLabel(resolvedName)
-  const sticky = normalizeSpeakerLabel(stickyFallback)
-  const primary = normalizeSpeakerLabel(sessionPrimary)
-  if (!sticky || !resolved || resolved === sticky) return resolved
-  if (explicitNextSpeaker || wakeIntro) return resolved
-  if (weakAsrEvidence) {
-    // El PRIMARIO (participante activo) NO se estampa sin medida: solo si el audio de
-    // ESTE turno lo midio como su voz (preflightSpeaker === primary).
-    if (primary && normalizeSpeakerLabel(preflightSpeaker) === primary && isPhraseShortForSpeakerHeuristics(phrase)) return primary
-    // CORROBORACION DEL PREFLIGHT (defecto 6 del dueno 2026-10-19): con ASR debil el
-    // sticky es el ultimo logueado (= el dueno) y el salto de etiqueta se devolvia a el:
-    // la mujer quedaba MEZCLADA en sus filas. Si el preflight de ESTE turno (la MEDIDA
-    // del audio) coincide con la etiqueta RESUELTA (una automatica, p. ej. su propio
-    // «Hablante 2»), el salto NO es un fantasma: es una voz distinta real y se conserva.
-    // Solo con preflight listo; sin el, manda el sticky (comportamiento anterior).
-    if (preflightReady && isAutoSpeakerLabel(resolved) && normalizeSpeakerLabel(preflightSpeaker) === resolved) return resolved
-    return sticky
-  }
-  if (
-    preflightReady &&
-    primary &&
-    isPhraseShortForSpeakerHeuristics(phrase) &&
-    normalizeSpeakerLabel(preflightSpeaker) === primary
-  ) {
-    return primary
-  }
-  if (!isAutoSpeakerLabel(sticky) || !isAutoSpeakerLabel(resolved)) return resolved
-
-  // Sesión solitaria + el veredicto de audio (preflight) coincide con el hablante anclado:
-  // el salto H1→H2 es un fantasma (split cronológico de segmento) → coalesce a sticky.
-  // Si el preflight abrió un H2 genuino, preflightSpeaker === H2 !== sticky → se preserva.
-  if (soloSession && normalizeSpeakerLabel(preflightSpeaker) === sticky) return sticky
-
-  const stickyIdx = parseAutoSpeakerIndex(sticky)
-  const resolvedIdx = parseAutoSpeakerIndex(resolved)
-  if (stickyIdx > 0 && resolvedIdx > stickyIdx + 1) return sticky
-  if (
-    primary &&
-    normalizeSpeakerLabel(preflightSpeaker) === primary &&
-    stickyIdx > parseAutoSpeakerIndex(primary) &&
-    resolvedIdx > parseAutoSpeakerIndex(primary) &&
-    isPhraseShortForSpeakerHeuristics(phrase)
-  ) {
-    return primary
-  }
-  return resolved
-}
-
-/** Preview en límite de turno: nunca diarizar en vivo (solo commit en background). */
-export function shouldSkipPreviewDiarize({
-  forceWakeDiarize = false,
-  conversationActive = false,
-} = {}) {
-  if (forceWakeDiarize) return false
-  if (conversationActive) return true
-  return isSoloRoomSticky()
 }
 
 export { isWeakAsrSpeakerEvidence, listConfiguredTranscriptHardRules } from './fluTranscriptPause.js'

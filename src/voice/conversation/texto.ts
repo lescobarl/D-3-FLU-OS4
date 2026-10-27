@@ -31,7 +31,7 @@ export function crearFlujoTexto({
   tramos,
   pendientes,
 }: {
-  dependencias: Pick<DependenciasConversacion, 'reloj' | 'ultimoTextoDicho'>
+  dependencias: Pick<DependenciasConversacion, 'reloj' | 'ultimoTextoDicho' | 'config'>
   sesion: Sesion
   tramos: RegistroTramos
   pendientes: Pendientes
@@ -124,7 +124,7 @@ export function crearFlujoTexto({
 
     const dicho = String(dependencias.ultimoTextoDicho() || '').trim()
     if (dicho) {
-      if (esEcoDeTts(texto, dicho)) {
+      if (esEcoDeTts(texto, dicho, dependencias.config.echoMinPalabrasCola())) {
         sesion.contarDescarte('eco', tramoId, null)
         return
       }

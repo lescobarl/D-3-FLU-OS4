@@ -1,5 +1,5 @@
 import { cleanForSpeech } from './audioMath.js'
-import { utterancesRelate } from './conversationStream.js'
+import { utterancesRelate } from './speechMerge.js'
 
 /**
  * Paridad Última frase ↔ última fila del log (sin pérdida visible).

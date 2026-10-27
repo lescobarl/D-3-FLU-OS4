@@ -60,8 +60,6 @@ export const FLU_CONFIG = {
     minuteKnowledgePromptMax: 24,
     /** Máximo de filas de conversación que entran al prompt de resumen. */
     conversationSummaryWindowMax: 80,
-    /** Tope del archivo interno de sesión (caracteres); evita crecimiento infinito. */
-    sessionTranscriptMaxChars: 80000,
     contextHistoryMax: 12,
     /** Límites del análisis de documentos (F1). Centralizados aquí (Rule #1: NO HARDCODE). */
     documentAnalysis: {
@@ -126,8 +124,6 @@ export const FLU_CONFIG = {
         roomRematchThreshold: VOICE_DIARIZATION_DEFAULTS.roomRematch,
         cosineContinuityThreshold: VOICE_DIARIZATION_DEFAULTS.cosineContinuity,
         cosineNewVoiceThreshold: VOICE_DIARIZATION_DEFAULTS.cosineNewVoice, // medido 2026-10-07: MISMA voz 0.69-0.74, DISTINTA 0.58; con 0.70 (dentro de la misma voz) cada turno abria un 'Hablante N'
-        /** Caída de similitud coseno que indica cambio abrupto de voz en ingress. */
-        abruptSimilarityDrop: 0.08,
         cosineRegisteredMatchThreshold: VOICE_DIARIZATION_DEFAULTS.cosineRegisteredMatch,
         /** Piso de match contra un ANCLA VERIFICADA (participantes). Medido 2026-10-19
          * (sesion 18f3888c): misma voz 0.629-0.714, distinta 0.29-0.58. */
@@ -158,58 +154,26 @@ export const FLU_CONFIG = {
       },
       roomCapture: {
         pruneGhostClusters: false, // borraba el cluster recien escrito -> inClusters=0
-        stickySpeaker: true,
           pinRegisteredSpeaker: true,
         /**
          * Nombre propio solo vía wake + comando (REGISTRAR_PARTICIPANTE).
          * Sin wake: diarización genérica (Hablante N); no inferir «Luis» del texto pasivo.
          */
         requireWakeWordForSpeakerName: true,
-        /** Misma voz no salta H1->H2 por ruido/TV; timbre distinto si abre H2, H3 (reuniones). */
-        soloSpeakerSticky: false,
-        strictCosineDiarization: true,
-        /** En límite de turno: nueva voz acústica abre cluster (Hablante 2+). */
-        turnBoundaryAllowNewCluster: true,
-        /** Relaja match al mismo timbre entre frases cortas (a ver / qué pasa). */
-        turnBoundaryMatchRelax: 2.35,
-        /** En pausa/final exige más distancia para «otra voz» (TV no abre H2; sala sí). */
-        turnBoundaryDistinctFactor: 1.18,
-        /** Con ≥2 hablantes en sesión: match más estricto (mic real no colapsa a H1). */
-        turnBoundaryMatchRelaxMulti: 1.12,
-        /** Margen para no reabsorber cluster antiguo si voz distinta del turno actual. */
         turnBoundaryClusterReabsorbMargin: 0.035,
         /** Con varios hablantes: umbral «nueva voz» más bajo (mic laptop). */
         turnBoundaryNewVoiceMultiFactor: 0.72,
         /** Cambio de voz vs turno anterior (mic débil, misma sala). */
         turnBoundaryLastTurnFactor: 0.48,
-        /** Margen coseno mínimo para saltar de lastSpeaker a otro cluster (evita H1→H3 por TV). */
-        lastSpeakerSwitchMargin: 0.1,
-        /** 0 = sin tope duro por salón (N personas reales → N hablantes). */
-        maxAutoSpeakersInRoom: 0,
-        /** 0 = sin tope blando; anti-fantasma vía productionClusterReuseThreshold. */
-        maxAutoSpeakersSoftCap: 0,
-        /** Los ticks continuos NO escriben clusters (ventanas parciales = inflado: 8/2 voces). */
-        deferClusterWritesUntilCommit: true,
         /** No vaciar openLine al límite de turno (evita perder frase al cambiar hablante). */
         preservePreviewOnTurnBoundary: true,
-        /** Con ≥N clusters: preferir re-identificación a timbre histórico vs anclar al último. */
-        preferHistoricalClusterInMultiSpeakerRoom: true,
-        multiSpeakerRoomClusterMin: 3,
-        /**
-         * Sala de clase: varios hablantes reales (relaja anclaje H1, alarga ventana al commit).
-         * No desactiva captura total ni filtros TV; solo ajusta umbrales de diarización.
-         */
-        classroomMultiSpeaker: true,
         classroomLastSpeakerSwitchMargin: 0.06,
-        classroomMultiSpeakerRoomClusterMin: 2,
         classroomReuseRelax: 0,
         classroomNewVoiceRelax: 0.04,
         /** Factor de relajación de "solo". 1.0 = sin relajación: una voz claramente
          *  distinta separa aunque solo haya hablado 1 persona (hombre/mujer/niño).
          *  La protección anti "hola hola" la aporta el coalesce de frase corta. */
         soloNewVoiceFactor: 1.0,
-        /** Tras ≥N clusters auto: no forzar production-primary-rematch si otro cluster encaja mejor. */
-        classroomPrimaryRematchMaxClusters: 1,
         /**
          * Vincular la voz del participante activo (perfil creado: Juan/Luis) a su nombre.
          * Cuando hay un participante real con nombre propio activo, se siembra como
@@ -241,14 +205,9 @@ export const FLU_CONFIG = {
       maxSensitivity: true,
       conversationUsePassiveAudio: true,
       conversationAutoDiarize: true,
-      conversationTurnAlignedDiarize: true, ...SPEAKER_ASSIGN.turnWindow,
       captureRoomAudio: true,
       conversationPassiveAudioDelayMs: 0,
-      /** Snapshots de identidad durante interinos (ms). */
       identityPipeline: {
-        snapshotIntervalMs: 800,
-        /** Espera MAXIMA (ms) del commit a la instantanea final de identidad (preflight); si vence, la fila escribe igual y la resolucion tardia completa. */
-        commitPreflightTimeoutMs: 1500,
         /** Pausa mínima (ms) tras commit para forzar nuevo hablante por segmento. */
         segmentSilenceGapMs: 1200,
       },
@@ -275,18 +234,12 @@ export const FLU_CONFIG = {
     resumeAfterSpeechPerCharMs: 0.5,
     recognitionStopMs: 250,
     recognitionFinalizeMs: 200,
-    transcriptSettleStepMs: 40,
-    transcriptSettleStableMs: 120,
-    transcriptSettleMaxMs: 200,
-    /** Agrupa refrescos de «última frase» (menos re-renders React). */
-    liveTranscriptDebounceMs: 32,
     /**
      * Ventana de idempotencia de la RESPUESTA: la misma respuesta para el mismo
      * turno dentro de este margen se considera re-captura/eco y NO se repite.
      */
     responseDedupWindowMs: 8000,
     wakeWordCommandDelayMs: 3000,
-    interimCommandDelayMs: 1400,
     /**
      * Espera antes de abrir la escucha al COMPLETAR el onboarding (el TTS de
      * cierre y el cierre del overlay tienen que asentarse). Config-driven:
@@ -299,29 +252,6 @@ export const FLU_CONFIG = {
      * la búsqueda se ejecuta cuando el turno se asienta (la última revisión gana).
      */
     searchCommandSettleMs: 2800,
-    /**
-     * Estabilización de fragmentos (Bug #3/#4): si el turno quedó en un comando
-     * incompleto que espera contenido ("busca en la web", "navega", "crea un
-     * video"…) se espera este margen desde el último fragmento final antes de
-     * ejecutar, para dar tiempo a que el ASR entregue la continuación en un
-     * fragmento posterior sin disparar consultas vacías.
-     */
-    incompleteCommandWaitMs: 6000,
-    /**
-     * Dictado: cuanto más larga es la frase en curso, más margen se da antes de
-     * auto-procesar. Evita cortar al usuario que dicta una lista pensando y
-     * hablando entre ítems ("estoy pensando y hablando, lleva tiempo… no puedes
-     * cortarlo"). Los comandos cortos siguen disparando rápido.
-     */
-    dictationGraceWords: 2,
-    dictationGraceBaseMs: 800,
-    dictationGracePerWordMs: 120,
-    dictationGraceMaxMs: 4000,
-    interimFinalizeGraceMs: 250,
-    /** Retraso antes de auto-stop en modo pasivo (ms). */
-    scheduleAutoProcessDelayMs: 150,
-    /** Reintento mientras hay commit en curso (ms). */
-    scheduleAutoProcessWhileCommittingMs: 15,
     /** Retraso por defecto al reiniciar SpeechRecognition (ms). */
     recognitionRestartDefaultDelayMs: 120,
     /** Duración del banner de error recuperable en conversación (ms). */
@@ -382,8 +312,6 @@ export const FLU_CONFIG = {
       deadRecognitionMs: 2500,
     },
     speakers: {
-      /** Mínimo entre diarizaciones por audio (ms). Más bajo = más sensible. */
-      diarizeIntervalMs: 120,
       maxSpeakers: 0,
     },
     listeningAck: {
@@ -2094,13 +2022,6 @@ export const FLU_CONFIG = {
       finalMinSpeechLikeMs: LOCAL_FALLBACK_DEFAULTS.finalMinSpeechLikeMs,
       partialMinSpeechLikeMs: LOCAL_FALLBACK_DEFAULTS.partialMinSpeechLikeMs,
     },
-    /** all | last-only | off — con 3+ filas en log escala a all (Chrome acumulativo). */
-    stripPriorTurnsOnInterim: true,
-    stripPriorTurnsMode: 'last-only',
-    /** 0 = nunca escalar a strip-all (evita vaciar interinos en sesiones largas / TV). */
-    stripPriorTurnsEscalateAfterRows: 0,
-    /** En last-only: recortar como máximo los últimos N turnos del interino acumulativo. */
-    stripPriorTurnsRecentMax: 6,
     /** Umbrales pausa/cola ASR — único bloque numérico (docs/reglas-duras.md). 0 en *MaxWords = solo heurística. */
     pauseAndWeakAsr: {
       interimOpenLineFlushMs: 0,
@@ -2128,13 +2049,9 @@ export const FLU_CONFIG = {
       skipDiarizeOnStaleFlush: true,
       treatEmptyPhraseAsWeak: true, committedReplayMaxDroppedWords: 1, // palabras que el ASR puede perder al reentregar una locucion ya commiteada (misma locucion)
     },
-    /** Guardas de filas nuevas en ingress (docs/reglas-duras.md). */
-    ingressGuards: {
-      forceNewRowShortFinalMaxWords: 6,
-      novelWordMinCount: 2,
-      novelWordMinTextLength: 10,
-      alternateNewRowMinLength: 8,
-    },
+    /** Guardas de filas nuevas en ingress: retiradas con la tubería vieja; el
+     *  bloque se conserva porque `getIngressGuardsCfg` (fluTranscriptMotor) lo exige. */
+    ingressGuards: {},
     /** Fusión ASR / filas cortas (speechMerge.js). */
     speechMerge: {
       shortFinalKeywords: [
@@ -2181,12 +2098,6 @@ export const FLU_CONFIG = {
       echoCoverageFloor: 0.6,
 
     },
-    /** Tras este intervalo sin commit: no shrink/redundant agresivo en ingress. */
-    relaxGuardsAfterCommitMs: 1500,
-    /** Pausa entre frases: fuerza nueva fila (evita machacar voz por TV continua). */
-    logRowPauseForceNewMs: 1000,
-    /** Solapamiento acústico (ms) al pasar al siguiente turno tras commit confirmado. */
-    turnAudioOverlapMs: 800,
   },
   voiceCommands: {
  /** Wake words + alias ASR (Chrome confunde flu → flow/blue/flo).

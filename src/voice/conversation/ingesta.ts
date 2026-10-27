@@ -11,6 +11,9 @@ import type { FlujoTexto } from './texto.ts'
 import type { Pendientes } from './cola.ts'
 import type { BufferAsr, RegistroTramos } from './tramos.ts'
 import type { Sesion } from './sesion.ts'
+import { decidirIdentidad } from './identidad.ts'
+import { concatenarMuestras, retenerCola } from './muestras.ts'
+import { fusionarVoz } from './fila.ts'
 import { asrEmpujaAudio } from './ports.ts'
 import type { ConfiguracionConversacion, MotivoCierre } from './ports.ts'
 import type {
@@ -18,6 +21,7 @@ import type {
   BloqueAudio,
   DependenciasConversacion,
   InstantaneaConversacion,
+  LocucionAbierta,
   TramoAudio,
 } from './tipos.ts'
 
@@ -42,16 +46,19 @@ export function crearIngesta({
   tramos,
   pendientes,
   bufferAsr,
+  encolar,
 }: {
   dependencias: Pick<
     DependenciasConversacion,
-    'reloj' | 'id' | 'vad' | 'asr' | 'ultimoTextoDicho'
+    'reloj' | 'id' | 'vad' | 'asr' | 'ultimoTextoDicho' | 'config' | 'registro' | 'embebedor'
   >
   configuracion: ConfiguracionConversacion
   sesion: Sesion
   tramos: RegistroTramos
   pendientes: Pendientes
   bufferAsr: BufferAsr
+  /** Reentrada a la cola ÚNICA: la medida temprana muta el estado al resolverse. */
+  encolar: <T>(tarea: () => Promise<T>) => Promise<T>
 }): Ingesta {
   const estado = sesion.estado
   const flujo: FlujoTexto = crearFlujoTexto({
@@ -188,6 +195,14 @@ export function crearIngesta({
 
     const abierta = estado.abierta
     if (abierta) {
+      estado.muestrasAbierta = retenerCola(
+        estado.muestrasAbierta,
+        bloque.muestras,
+        configuracion.maxSegundosVozRetenida * sampleRate,
+      )
+      lanzarMedidaSiCorresponde(abierta, sampleRate)
+    }
+    if (abierta) {
       const frontera = decidirFrontera({
         medida,
         textoAjeno: false,
@@ -214,6 +229,74 @@ export function crearIngesta({
     }
     await flujo.procesarResultadoAsr({ ...entrada, tramoId })
     return sesion.snapshot()
+  }
+
+  /**
+   * Medida TEMPRANA de la voz: con el puerto y audio retenido suficiente, se
+   * embebe en el worker mientras la locución sigue abierta (como hacía el
+   * preflight, pero decidida por el módulo). La continuación vuelve por la cola
+   * ÚNICA: el estado solo muta serializado. Un fallo se registra y no rompe la
+   * locución (cerrará con continuidad/semilla).
+   */
+  function lanzarMedidaSiCorresponde(locucion: LocucionAbierta, sampleRate: number): void {
+    const embebedor = dependencias.embebedor
+    if (!embebedor || String(locucion.voz.vozId || '').trim() || estado.medidaVozEnCurso) {
+      return
+    }
+    const totalMuestras = estado.muestrasAbierta.reduce(
+      (suma, bloque) => suma + bloque.length,
+      0,
+    )
+    if (sampleRate > 0 && totalMuestras / sampleRate < configuracion.minSegundosVozMedida) {
+      return
+    }
+    const locutionId = locucion.locutionId
+    estado.medidaVozEnCurso = true
+    embebedor.medir(concatenarMuestras(estado.muestrasAbierta), sampleRate).then(
+      (vector) => encolar(() => Promise.resolve().then(() => aplicarMedidaVoz(locutionId, vector))),
+      (error) =>
+        encolar(() =>
+          Promise.resolve().then(() => {
+            estado.medidaVozEnCurso = false
+            dependencias.registro.registrar('conversacion.voz.medida.fallo', {
+              sessionId: estado.sessionId,
+              locutionId,
+              error,
+            })
+          }),
+        ),
+    )
+  }
+
+  /** Aplica la medida a la locución abierta (dentro de la cola): una sola vez. */
+  function aplicarMedidaVoz(locutionId: string, vector: readonly number[] | null): void {
+    estado.medidaVozEnCurso = false
+    const abierta = estado.abierta
+    const embebedor = dependencias.embebedor
+    if (!abierta || !embebedor || !vector) return
+    if (abierta.locutionId !== locutionId) return
+    if (String(abierta.voz.vozId || '').trim()) return
+    const identidad = decidirIdentidad({
+      vector,
+      ultimoVozId: estado.ultimaVozId,
+      ultimoVector: estado.ultimoVectorVoz,
+      umbral: dependencias.config.umbralContinuidadVoz(),
+      etiquetaNueva: dependencias.config.etiquetaAnonima(estado.contadorVoces + 1),
+      comparar: embebedor.comparar,
+      id: dependencias.id.uuid,
+    })
+    if (!identidad.continuidad) estado.contadorVoces += 1
+    estado.ultimaVozId = identidad.vozId
+    estado.ultimoVectorVoz = [...vector]
+    estado.abierta = {
+      ...abierta,
+      voz: fusionarVoz(abierta.voz, {
+        vozId: identidad.vozId,
+        hablante: identidad.hablante,
+        continuidad: identidad.continuidad,
+      }),
+      continuidadVoz: identidad.continuidad,
+    }
   }
 
   return {

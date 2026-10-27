@@ -10,7 +10,6 @@ import { DEFAULT_SAMPLE_RATE } from './audioConstants.js'
 import { COMMAND_IDS } from './commandIds.js'
 import { isTutoringGlobalProgressQuery, isTutoringProgressQuery, isTutoringReviewQuery } from '../../core/tutoring/tutoringModel.ts'
 import { CONFIRMATION_SUFFIXES } from '../../lib/confirmationSuffix.ts'
-import { defaultLanguage } from './languageDefault.ts'
 
 // Fuente única de normalización de espacios y del plegado NFD
 // (src/lib/textUtils.ts). `stripDiacritics` se re-exporta con el contrato
@@ -568,29 +567,6 @@ function stripLeadingWakeRepeats(text = '', wakeWords = []) {
     rest = normalizeSpaces(rest.slice(prefix.length))
   }
   return rest
-}
-
-/**
- * Locución canónica: consume el ECO de la wake al inicio ("ok flu ok flu <orden>"
- * → "ok flu <orden>") conservando UNA wake, tal como se dijo. Mismo criterio de
- * coincidencia que el resto del motor (`matchWakeWordPrefix`). Sin este recorte el
- * eco se lee como tartamudeo del ASR (guard anti-alucinación) y la frase canónica
- * perdía su wake. Sin wake al inicio (o con la wake inline) el texto no cambia.
- */
-export function stripLeadingWakeEcho(text = '', wakeWords = []) {
-  const source = cleanForSpeech(text)
-  if (!source || !wakeWords.length) return source
-  const words = source.split(' ')
-  const wakeWordCount = (value) => speechWords(matchWakeWordPrefix(value, wakeWords) || '').length
-  let consumed = 0
-  while (consumed < words.length) {
-    const prefixWords = wakeWordCount(words.slice(consumed).join(' '))
-    if (!prefixWords) break
-    consumed += prefixWords
-  }
-  const leading = wakeWordCount(source)
-  if (!leading || consumed === leading) return source
-  return cleanForSpeech([words.slice(0, leading).join(' '), ...words.slice(consumed)].join(' '))
 }
 
 export function splitTranscriptAtWakeWord(text = '', wakeWords = []) {
@@ -1509,40 +1485,6 @@ export async function computeAudioSignature(samples = [], sampleRate = DEFAULT_S
   }
 }
 
-export function detectRole(text = '', language = defaultLanguage()) {
-  const normalized = stripDiacritics(text)
-  const isEnglish = language === 'en'
-
-  if (isEnglish) {
-    if (/(student tutor|tutor|children|students|kids)/.test(normalized)) {
-      return 'Tutor de Alumnos'
-    }
-
-    if (/(meeting coordinator|coordinator|technical council|cte|meeting)/.test(normalized)) {
-      return 'Coordinador en Juntas'
-    }
-
-    if (/(teacher assistant|assistant|teacher|educator|instructor)/.test(normalized)) {
-      return 'Asistente'
-    }
-    return ''
-  }
-
-  if (/(tutor de alumnos|tutor|ninos|alumnos de 5|alumnos de 6)/.test(normalized)) {
-    return 'Tutor de Alumnos'
-  }
-
-  if (/(coordinador en juntas|coordinador|consejo tecnico|cte|junta)/.test(normalized)) {
-    return 'Coordinador en Juntas'
-  }
-
-  if (/(asistente del maestro|asistente|docente|maestro|profesor)/.test(normalized)) {
-    return 'Asistente'
-  }
-
-  return ''
-}
-
 const NAME_INTRO_PATTERNS = [
   /(?:^|\b)(?:yo\s+)?soy\s+([a-záéíóúüñ]+(?:\s+[a-záéíóúüñ]+){0,2})\b/i,
   /(?:^|\b)me\s+llamo\s+([a-záéíóúüñ]+(?:\s+[a-záéíóúüñ]+){0,2})\b/i,
@@ -1741,24 +1683,6 @@ export function detectWakeIntroducedName(text = '', wakeWords = []) {
   const previo = normalizeSpaces(stripDiacritics(split.beforeWakeText || ''))
   if (!previo) return ''
   return detectIntroducedName(previo, { mustOpen: true })
-}
-
-export function extractTheme(text = '', role = '', wakeWords = []) {
-  const normalizedText = stripDiacritics(removeWakeWord(text, wakeWords))
-  const normalizedRole = stripDiacritics(role)
-  let theme = normalizedText
-
-  if (normalizedRole) {
-    theme = theme.replace(normalizedRole, '')
-  }
-
-  theme = theme
-    .replace(/(soy|quiero|vamos a|vamos a hablar de|hablar de|sobre|el tema de|tema|rol|como|como un|como una)/g, ' ')
-    .replace(/\b(tutor de alumnos|coordinador en juntas|asistente del maestro|tutor|coordinador|asistente|maestro|profesor|docente)\b/g, ' ')
-
-  theme = normalizeSpaces(theme)
-  if (!theme) return FLU_CONFIG.sessionDefaults?.theme || ''
-  return theme
 }
 
 export function formatClock(date = new Date()) {

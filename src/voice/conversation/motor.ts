@@ -82,6 +82,7 @@ export function crearConversacion(dependencias: DependenciasConversacion): Conve
     tramos,
     pendientes,
     bufferAsr,
+    encolar: cola.serializar,
   })
 
   /** Abre la sesión y, si hay ASR, lo arranca con un solo motor. */

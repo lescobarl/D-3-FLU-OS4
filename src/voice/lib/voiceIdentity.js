@@ -5,7 +5,10 @@
  *   - speakerCore.js       — normalización L2, coseno, id y asignación estricta.
  *   - speakerLabels.js     — etiquetas y nombres de hablante (config-driven).
  *   - speakerClusters.js   — clusters + ventana de audio + match de frase corta.
- *   - speakerDiarization.js— el resolver único `resolveConversationSpeaker`.
+ *
+ * La decisión de identidad por turno ya no vive aquí: la mide el módulo de
+ * conversación por sí mismo (`src/voice/conversation/identidad.ts` + puerto
+ * `EmbebedorPort`); `speakerDiarization.js` se retiró con la tubería vieja.
  *
  * Este archivo solo re-exporta (una fuente por función); no define lógica.
  */
@@ -52,4 +55,3 @@ export {
   mergeSpeakerClustersOnRename,
   isVoiceDistinctFromSticky,
 } from './speakerClusters.js'
-export { resolveConversationSpeaker } from './speakerDiarization.js'

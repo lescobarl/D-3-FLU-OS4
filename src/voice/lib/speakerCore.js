@@ -191,7 +191,11 @@ export function nextAutoSpeakerLabel(clusters = [], reserved = [], { maxSpeakers
     if (cleaned) known.add(stripDiacriticsLower(cleaned))
     noteIndex(cleaned)
   }
-  const limit = Number(maxSpeakers) > 0 ? Number(maxSpeakers) : 9999
+  // Corte 2026-10-26: sin tope del llamador, manda el configurado (conversationMaxAutoSpeakers);
+  // su valor historico (99) conserva la semantica "SIN TOPE": el criterio de union es la
+  // diarizacion, no un recuento.
+  const configuredLimit = Number(config?.voiceIdentity?.capture?.conversationMaxAutoSpeakers)
+  const limit = Number(maxSpeakers) > 0 ? Number(maxSpeakers) : configuredLimit > 0 ? configuredLimit : 9999
   for (let index = highest + 1; index <= limit; index += 1) {
     const candidate = autoSpeakerLabel(index, config)
     if (!known.has(stripDiacriticsLower(candidate))) return candidate

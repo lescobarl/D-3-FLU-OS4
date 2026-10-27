@@ -41,7 +41,20 @@ import { compareCosineSignatures, hasVoiceMeasurement, isAutoSpeakerLabel, norma
 import { setSessionPrimarySpeaker } from './sessionPrimarySpeaker.js'
 import { voiceProbe } from './voiceProbe'
 import { getLastCompletedSpeechAt } from './fluSpeech.js'
-import { committedEchoStreakWindowMs } from './activeListen.js'
+import { FLU_CONFIG } from './fluConfig.js'
+
+/**
+ * Ventana (ms) del eco ASR ya commiteado: la MISMA frase re-emitida DENTRO de esta ventana es
+ * el MISMO evento (doble final / loop de Chrome), NO habla nueva; pasada la ventana, la
+ * repeticion es genuina. DUENO UNICO del criterio (antes eran 3 copias del mismo literal).
+ * Vive aqui por ser su unico consumidor (el eco de identidad), tras la retirada de
+ * activeListen.js (tuberia vieja de conversacion).
+ *
+ * @returns {number} ms
+ */
+export function committedEchoStreakWindowMs() {
+  return Number(FLU_CONFIG?.voiceIdentity?.capture?.committedEchoStreakWindowMs) || 1200
+}
 
 /**
  * Registra un nombre propio para la VOZ activa. DUENO UNICO del nombre (mandato del dueno

@@ -14,28 +14,6 @@ export const ROOM_REMATCH_STRICT = 0.85
 export const SHORT_UTTERANCE_HISTORICAL_MATCH = 0.7
 export const SHORT_UTTERANCE_IMMEDIATE_CONTINUITY = 0.72
 
-/**
- * LECTURA de los clusters VIVOS de la sesion, inyectada por su dueno (`useSessionSpeakerClusters`).
- * La necesitan los consumidores que deciden etiqueta de fila sin recibir el ref por parametro
- * (auditoria 2026-10-23): sin esto la primera fila de un monologo no tenia continuidad.
- * @type {() => Array<{ label?: string | null, signature?: number[] | null, anchorVerified?: boolean }>}
- */
-let sessionClustersProvider = () => []
-
-/**
- * Inyecta el lector de clusters de la sesion (dueno: el hook que escribe los clusters).
- * @param {(() => any[]) | null} provider lector; null restaura la lista vacia
- */
-export function setSessionClustersProvider(provider) {
-  sessionClustersProvider = typeof provider === 'function' ? provider : () => []
-}
-
-/** Clusters VIVOS de la sesion (copia defensiva de la lista actual). */
-export function getSessionClusters() {
-  const clusters = sessionClustersProvider()
-  return Array.isArray(clusters) ? clusters : []
-}
-
 /** Umbral coseno validado en (0, 1]; fuera de rango usa el fallback. */
 export function cosineThreshold(thresholds = {}, key, fallback) {
   const value = Number(thresholds?.[key])

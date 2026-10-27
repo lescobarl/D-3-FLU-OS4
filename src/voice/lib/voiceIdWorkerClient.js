@@ -1,19 +1,11 @@
 /**
  * Cliente Web Worker: zero-copy (Transferable) + drop policy (solo el audio más reciente).
  */
-import { FLU_CONFIG } from './fluConfig.js'
 import { getEmbeddingConfig } from './embeddingConfig.js'
-import { ROOM_REMATCH_STRICT } from './speakerClusters.js'
 import { REQUEST_TIMEOUT_DEFAULTS } from '../../core/config/sharedConfig.ts'
-import { labelToSpeakerId } from './conversationRow.js'
-import { resolveSpeakerIdentityFromVector } from './voiceIdentityResolve.js'
 import { computeSpeakerEmbedding } from './speakerEmbeddingCore.js'
-import { logCaughtError } from '../../lib/caughtError.ts';
-import { relayLog } from '../../lib/clientLogRelay.ts';
 import { DEFAULT_SAMPLE_RATE } from './audioConstants.js'
 import { createWorkerPendingBridge } from './workerPendingBridge.js'
-import { scheduleIdle } from './idleSchedule.js'
-import { countVoicedSamples, selectVoicedWindow } from './voicedActivity.js'
 import { voiceProbe } from './voiceProbe.ts'
 
 let seq = 0
@@ -82,29 +74,6 @@ export function prepareTransferableAudio(samples, { transferOwnership = false } 
     sampleCount: owned.length,
     transfer: [audioBuffer],
   }
-}
-
-function scheduleIdleAsync(fn, timeoutMs, { immediate = false } = {}) {
-  // `immediate`: el llamante tiene PLAZO (el limite de turno lo consume el commit). El
-  // embedding corre en un WORKER, asi que no aplazarlo no compite con el hilo principal.
-  if (immediate) return Promise.resolve().then(fn)
-  return new Promise((resolve, reject) => {
-    scheduleIdle(() => {
-      try {
-        resolve(fn())
-      } catch (error) {
-        reject(error)
-      }
-    }, timeoutMs)
-  })
-}
-
-function trimClustersForWorker(clusters = [], max = 6) {
-  return clusters.slice(0, max).map((c) => ({
-    speakerId: c.speakerId,
-    label: c.label,
-    signature: Array.isArray(c.signature) ? c.signature.slice(0, 512) : [],
-  }))
 }
 
 function postImmediate(type, payload = {}, transfer = []) {
@@ -213,150 +182,6 @@ async function embedAudioInternal(samples, sampleRate = DEFAULT_SAMPLE_RATE) {
   })
   logEmbedModel(payload.modelId, result?.dtype)
   return Array.isArray(result?.vector) ? result.vector : []
-}
-
-function resolveIdentityIdle(vector, matchPayload, sampleRate, voicedSampleCount) {
-  return scheduleIdleAsync(
-    () =>
-      resolveSpeakerIdentityFromVector(vector, {
-        speakerClusters: matchPayload.speakerClusters || [],
-        lastSpeaker: matchPayload.lastSpeaker,
-        lastSignature: matchPayload.lastSignature,
-        fallbackSpeaker: matchPayload.fallbackSpeaker,
-        utteranceText: matchPayload.utteranceText || '',
-        sampleRate,
-        voicedSampleCount,
-        atTurnBoundary: matchPayload.atTurnBoundary !== false,
-        allowNewCluster: Boolean(matchPayload.allowNewCluster),
-        preferSpeaker: matchPayload.preferSpeaker || '',
-        reservedLabels: matchPayload.reservedLabels || [],
-        sessionPrimary: matchPayload.sessionPrimary || '',
-      }),
-    3000,
-    { immediate: matchPayload.atTurnBoundary !== false },
-  )
-}
-
-export async function resolveSpeakerFromAudio(samples, sampleRate = DEFAULT_SAMPLE_RATE, matchPayload = {}) {
-  // La ventana del turno llega con la cola de silencio del final del ASR (y a veces con
-  // audio ajeno en los bordes). Se embebe SOLO el tramo con voz; el recorte tiene UN
-  // dueno (`voicedActivity.selectVoicedWindow`) y el piso de voz se sigue midiendo
-  // sobre la ventana (mas abajo). Antes se embebia la ventana entera: la misma voz
-  // medida 0.10-0.43 contra su propio cluster (log del dueno 2026-10-18).
-  const voiceWindow = selectVoicedWindow(samples, { sampleRate })
-  const { audioBuffer, byteOffset, sampleCount, transfer } = prepareTransferableAudio(voiceWindow)
-  const cfg = FLU_CONFIG.voiceIdentity?.capture?.conversationSpeakerThresholds || {}
-  const fallbackName = matchPayload.fallbackSpeaker || FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker
-  const windowSamples = samples?.length || 0
-
-  if (!sampleCount) {
-    return {
-      speakerId: labelToSpeakerId(fallbackName),
-      speakerName: fallbackName,
-      workingClusters: matchPayload.speakerClusters || [],
-      signatureVector: [],
-      reason: 'no-audio',
-    }
-  }
-
-  const payload = {
-    audioBuffer,
-    byteOffset,
-    sampleCount,
-    sampleRate,
-    ...getEmbeddingConfig(),
-    clusters: trimClustersForWorker(matchPayload.speakerClusters || []),
-    lastSpeaker: matchPayload.lastSpeaker || '',
-    preferSpeaker: matchPayload.sessionPrimary || matchPayload.preferSpeaker || '',
-    lastSignature: Array.isArray(matchPayload.lastSignature)
-      ? matchPayload.lastSignature.slice(0, 512)
-      : null,
-    fallbackSpeaker: fallbackName,
-    roomRematchFloor:
-      Number(cfg.roomRematchThreshold) > 0 ? Number(cfg.roomRematchThreshold) : ROOM_REMATCH_STRICT,
-    soloNewVoiceFactor:
-      Number(FLU_CONFIG.voiceIdentity?.capture?.roomCapture?.soloNewVoiceFactor) || 0.82,
-  }
-
-  let vector = []
-  try {
-    // El WORKER solo EMBEBE (su trabajo). La DECISION la toma el dueno unico en el
-    // hilo principal (`resolveIdentityIdle`, mas abajo): antes el worker TAMBIEN
-    // decidia (`embedAndMatch` + speakerCore.assignSpeaker) y su resultado se
-    // DESCARTABA - dos decisiones de la misma cosa, una de ellas trabajo tirado y
-    // ademas mentirosa en el log (medido 2026-10-09).
-    const raw = await post('embed', payload, transfer).catch((error) => {
-      if (typeof window !== 'undefined') throw error
-      return runMainThreadFallback('embed', {
-        ...payload,
-        samples: samplesFromPayload(payload),
-      })
-    })
-    vector = Array.isArray(raw?.vector) ? raw.vector : []
-  } catch (error) {
-        logCaughtError('[catch] src/voice/lib/voiceIdWorkerClient.js', error);
-    if (String(error?.message || error).includes('dropped-stale')) {
-      return {
-        speakerId: labelToSpeakerId(fallbackName),
-        speakerName: fallbackName,
-        workingClusters: matchPayload.speakerClusters || [],
-        signatureVector: [],
-        reason: 'dropped-stale',
-      }
-    }
-    return {
-      speakerId: labelToSpeakerId(fallbackName),
-      speakerName: fallbackName,
-      workingClusters: matchPayload.speakerClusters || [],
-      signatureVector: [],
-      reason: 'worker-fail',
-      error: String(error?.message || error),
-    }
-  }
-
-  if (!vector.length) {
-    return {
-      speakerId: labelToSpeakerId(fallbackName),
-      speakerName: fallbackName,
-      workingClusters: matchPayload.speakerClusters || [],
-      signatureVector: [],
-      reason: 'no-vector',
-    }
-  }
-
-  // P9.71: el piso de voz debe ser de VOZ, no de LONGITUD. Antes se pasaba `sampleCount`
-  // (longitud de la ventana) y, como `conversationMinVoicedMs` == el minimo del embedder,
-  // CUALQUIER ventana aceptada pasaba el piso (incluida TV/silencio). Aqui se cuenta lo VIVO.
-  // P9.72: el umbral NO se fija aqui (era un SEGUNDO umbral, mas permisivo que el del VAD).
-  // El dueno unico del piso de voz es `voicedActivity.getVoicedFloor()`.
-  const voiced = countVoicedSamples(voiceWindow, { sampleRate })
-  const identity = await resolveIdentityIdle(vector, matchPayload, sampleRate, voiced)
-  // Ventana REAL del turno (no la voz): la sonda la usa para distinguir un turno
-  // corto de uno sostenido sin cruzar lineas por orden.
-  const audioMs = sampleRate > 0 ? Math.round((windowSamples / sampleRate) * 1000) : 0
-  if (typeof window !== 'undefined') {
-    // El log dice la decision REAL (la del hilo principal), no la del worker.
-    relayLog(
-      'LOG',
-      'Match',
-      `reason=canonical name="${identity.speakerName || ''}" inClusters=${(matchPayload.speakerClusters || []).length} last="${matchPayload.lastSpeaker || ''}" clusterMatch=${Number(cfg.productionClusterReuseThreshold) || '-'} newVoice=${Number(cfg.cosineNewVoiceThreshold) || '-'}` ,
-    )
-  }
-  return {
-    speakerId: identity.speakerId,
-    speakerName: identity.speakerName,
-    workingClusters: identity.workingClusters,
-    signatureVector: identity.signatureVector?.length ? identity.signatureVector : vector,
-    reason: 'resolved-idle',
-    evidence: identity.evidence === true,
-    // Traza de la decision y clusters PRE-decision: la sonda del preflight calcula
-    // el coseno contra lo que EXISTIA (no contra lo que el turno acaba de crear).
-    diagnosis: identity.diagnosis || null,
-    inputClusters: matchPayload.speakerClusters || [],
-    audioMs,
-    voicedSampleCount: voiced,
-    sampleRate,
-  }
 }
 
 export function preloadVoiceIdWorker() {

@@ -2,14 +2,46 @@
  * Envoltorio local de SpeechRecognition (navegador).
  */
 import { getActiveListenConfig } from './fluConfig'
-import { getRecognitionLanguage } from './activeListen'
 import { relayLog } from '../../lib/clientLogRelay'
+import { equalsTrimmed, pickLabel } from '../../lib/textUtils.ts'
 import { logCaughtError } from '../../lib/caughtError';
 import { defaultLanguage } from './languageDefault.ts'
 
 export function isSpeechRecognitionSupported() {
   if (typeof window === 'undefined') return false
   return Boolean(window.SpeechRecognition || window.webkitSpeechRecognition)
+}
+
+/**
+ * Trio del LOCALE del reconocedor. DUENO UNICO: este modulo es la unica puerta del
+ * motor SR (fabrica y lock), asi que el idioma de la instancia vive aqui (antes en
+ * activeListen.js, retirado con la tuberia vieja de conversacion).
+ */
+
+/** Locale BCP-47 del motor SR segun el modo UI (con locale activo explícito, manda este). */
+export function getRecognitionLanguage(language = defaultLanguage(), activeLocale = '') {
+  const { languages, bilingual } = getActiveListenConfig()
+  if (activeLocale) return activeLocale
+  if (language === 'both') {
+    return bilingual?.defaultLocale || languages.es
+  }
+  return pickLabel(languages, language, languages.es)
+}
+
+/** Modo escucha: es | en | both (bilingüe). */
+export function isBilingualListenMode(language = '') {
+  return equalsTrimmed(language, 'both')
+}
+
+/** Locale BCP-47 del motor SR según modo UI y texto detectado. */
+export function resolveRecognitionLocale(language = defaultLanguage(), detected = '') {
+  const { languages } = getActiveListenConfig()
+  if (!isBilingualListenMode(language)) {
+    return getRecognitionLanguage(language)
+  }
+  if (detected === 'en') return languages.en
+  if (detected === 'es') return languages.es
+  return getRecognitionLanguage('both')
 }
 
 export function createSpeechRecognition(language = defaultLanguage(), activeLocale = '') {
