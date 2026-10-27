@@ -146,6 +146,14 @@ test(`FLU Playback (${MODE}, SR=${SR})`, async ({ page }) => {
     if (SR !== 'real' && LEAD_IN_MS > 0) await page.waitForTimeout(LEAD_IN_MS);
 
     if (SR !== 'real') {
+        // DECISIÓN TOMADA (2026-10-27): el micrófono virtual se instala al pedir el
+        // micrófono y `ready` llega tras decodificar el WAV; se espera con condición
+        // y timeout explícitos (sin tocar las aserciones de producto).
+        await page.waitForFunction(
+            () => (window as any).__fluPlayback?.status?.()?.ready === true,
+            null,
+            { timeout: 60000 },
+        );
         const playbackBefore = await page.evaluate(() => (window as any).__fluPlayback?.status?.());
         if (!playbackBefore?.ready) {
             throw new Error(`Micrófono virtual no listo: ${JSON.stringify(playbackBefore)}`);
