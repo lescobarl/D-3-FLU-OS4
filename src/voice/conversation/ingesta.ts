@@ -121,6 +121,9 @@ export function crearIngesta({
     if (!Number.isFinite(fin) || fin <= inicio) {
       throw new Error(`tramo de audio invalido: [${inicio}, ${fin}]`)
     }
+    // Caso 5 (INGESTA): un bloque validado está ENTREGADO, con voz o sin ella.
+    // El criterio es entregadas >= 0,98N de la sesión. Único dueño del contador.
+    estado.totalMuestrasEntregadas += bloque.muestras.length
     if (estado.tramoAudio && estado.tramoAudio.sampleRate !== sampleRate) {
       throw new Error(
         `sampleRate inconsistente en el tramo ${estado.tramoAudio.tramoId}: ${estado.tramoAudio.sampleRate} != ${sampleRate}`,

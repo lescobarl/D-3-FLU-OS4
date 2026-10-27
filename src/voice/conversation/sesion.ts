@@ -50,6 +50,8 @@ export type EstadoSesion = {
   nombresPorVoz: Map<string, string>
   /** PCM retenido de la locución abierta (tope en `configuracion`), para medir. */
   muestrasAbierta: Float32Array[]
+  /** Muestras PCM entregadas a la ingesta en la sesión (Caso 5, sin tope). */
+  totalMuestrasEntregadas: number
   /** Vector de la última voz medida (continuidad entre locuciones). */
   ultimoVectorVoz: number[] | null
   /** Voces nuevas contadas en la sesión (`Hablante N`). */
@@ -110,6 +112,7 @@ export function crearEstadoSesion(idiomaInicial: IdiomaLocucion): EstadoSesion {
     filas: new Map(),
     nombresPorVoz: new Map(),
     muestrasAbierta: [],
+    totalMuestrasEntregadas: 0,
     ultimoVectorVoz: null,
     contadorVoces: 0,
     medidaVozEnCurso: false,
@@ -202,6 +205,7 @@ export function crearSesion(
             sampleRate: estado.tramoAudio.sampleRate,
           }
         : null,
+      totalMuestrasEntregadas: estado.totalMuestrasEntregadas,
       descartes: [...estado.descartes],
     }
   }
@@ -250,6 +254,7 @@ export function crearSesion(
     estado.motorAsr = null
     estado.nombresPorVoz.clear()
     estado.muestrasAbierta = []
+    estado.totalMuestrasEntregadas = 0
     estado.ultimoVectorVoz = null
     estado.contadorVoces = 0
     estado.medidaVozEnCurso = false

@@ -165,6 +165,8 @@ export type InstantaneaConversacion = Readonly<{
     fin: number
     sampleRate: number
   }> | null
+  /** Muestras PCM entregadas a la ingesta en la sesión (Caso 5, sin tope). */
+  totalMuestrasEntregadas: number
   filas: readonly Fila[]
   descartes: readonly DescarteConversacion[]
 }>
