@@ -149,30 +149,23 @@ export function useFluVoiceAssistant({
   const [error, setError] = useState('')
   const [activeKnowledgeBase, setActiveKnowledgeBase] = useState('general')
   const [liveTranscript, setLiveTranscript] = useState('')
-  /**
-   * §9 FUENTE ÚNICA de la frase visible: `lastTranscript` vive en el store
-   * (`lastCommittedTranscript`); el hook ya no mantiene un estado local espejo.
-   */
+  // §9 FUENTE ÚNICA de la frase visible: `lastTranscript` vive en el store, sin espejo local.
   const lastTranscript = useIntegrationStore((state) => state.lastCommittedTranscript)
   const commitVisibleTranscript = useCallback((text) => {
     useIntegrationStore.getState().setLastCommittedTranscript(typeof text === 'string' ? text : '')
   }, [])
-  /**
-   * §9: ÚNICO punto de commit de la locución: la frase llega YA canónica del
-   * MÓDULO (normalización, dedup y commit viven allí — Anexo B 2/6); `trim` es
-   * identidad sobre ella, así display === fila por construcción.
-   */
+  // §9 ÚNICO punto de commit de la locución: la frase llega YA canónica del
+  // MÓDULO (Anexo B 2/6); `trim` es identidad, así display === fila por construcción.
   const commitTurnPhrase = useCallback((text, fallback = '') => {
     return String(text || '').trim() || String(fallback || '').trim()
   }, [])
   // Wake words efectivas (Ajustes o default): UN solo criterio.
   const resolvedWakeWords = resolveWakeWords(wakeWords)
   const activeTurnIdRef = useRef(0)
+  const sessionTurnRecordedRef = useRef('') // ultimo turnId de fila ya registrado (Paso 0: sin snapshots duplicados)
   const lastEmittedTurnRef = useRef(0) // turno de la ultima locucion emitida: resolucion tardia idempotente
-  /**
-   * §9: par ÚNICO `commit + resolución` del turno. TODAS las ramas cierran por
-   * aquí: la fila es SIEMPRE el valor commiteado y el display no diverge.
-   */
+  // §9 par ÚNICO `commit + resolución`: TODAS las ramas cierran aquí; la fila
+  // es SIEMPRE el valor commiteado y el display no diverge.
   const commitAndResolveTurn = useCallback(
     async ({ capture, fallbackCapture = '', contract, commitOnly = false, ...payload } = {}) => {
       // ÚNICA frase canónica del turno (display === fila), la del MÓDULO (Anexo B 2/6).
@@ -392,8 +385,7 @@ export function useFluVoiceAssistant({
         // planificador único decide revisión y dedup sobre ese texto.
         onFraseCanonica: (frase, opciones = {}) => {
           const interim = opciones.interim === true
-          // El turno de la FRASE se captura ANTES del commit: el despacho corre
-          // con la locución ABIERTA y el commit avanza el contador al cerrarla.
+          // El turno de la FRASE se captura ANTES del commit (el despacho corre con la locución abierta).
           lastEmittedTranscriptRef.current = frase
           lastEmittedTurnRef.current = activeTurnIdRef.current
           tryDispatchConversationActionRef.current(frase, {
@@ -403,6 +395,14 @@ export function useFluVoiceAssistant({
         },
         // Frontera de TURNO (locución nueva): la siguiente frase es otro turno.
         onLocucionCommiteada: (fila) => {
+          // Paso 0: UNA instantánea por locución commiteada, con los campos
+          // REALES de la fila; la revisión del mismo turnId no añade snapshot.
+          const turnId = String(fila?.turnId ?? '').trim()
+          if (turnId && turnId !== sessionTurnRecordedRef.current) {
+            sessionTurnRecordedRef.current = turnId
+            const tramoFila = tramoDelTurno({ chunks: chunksRef.current, totalSamples: chunkTotalSamplesRef.current, sinceSample: turnAudioStartSampleRef.current, sampleRate: sampleRateRef.current })
+            recordSessionTurn({ kind: 'commit', text: fila?.texto || '', speaker: fila?.etiqueta || '', signature: lastTurnSignatureRef.current, clusters: speakerClustersRef.current, lastSpeaker: lastSpeakerRef.current, primary: sessionPrimarySpeakerRef.current, audioStartSample: tramoFila.audioStartSample, audioEndSample: tramoFila.audioEndSample, tramoValido: tramoFila.tramoValido, sessionTurnId: turnId, locutionId: fila?.locutionId || '' })
+          }
           activeTurnIdRef.current += 1
           lastModuleLabelRef.current = String(fila?.etiqueta || '')
           turnSegmentStartedAtRef.current = Date.now()
@@ -1084,9 +1084,7 @@ export function useFluVoiceAssistant({
     [reconcileSpeakerClusters, userSpeakersView],
   )
 
-  // §9: se eliminó `injectDialogueEntry`. App ya persiste el evento en el store
-  // (`addConversationEntry`) y el diálogo se DERIVA del store; el canal lateral
-  // del motor era redundante.
+  // §9: `injectDialogueEntry` se eliminó: App persiste en el store y el diálogo se DERIVA de él.
 
   // UN dueno de desconectar el grafo de audio del micro; antes eran DOS copias.
   const disconnectAudioGraph = useCallback(async () => {
@@ -1243,8 +1241,7 @@ export function useFluVoiceAssistant({
           FLU_CONFIG.voiceIdentity?.capture?.passiveBufferMs,
           chunkTotalSamplesRef,
         )
-        // Fallback OFFLINE: el motor local (Whisper WASM) se alimenta del MISMO
-        // PCM del micrófono cuando es la instancia activa (predicado unico).
+        // Fallback OFFLINE: Whisper WASM se alimenta del MISMO PCM cuando es la instancia activa.
         if (fallback.isLocal(recognitionRef.current)) {
           recognitionRef.current.pushAudio(input, sampleRateRef.current || AUDIO_SAMPLE_RATE)
         }
