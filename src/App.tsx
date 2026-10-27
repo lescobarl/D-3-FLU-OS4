@@ -1174,7 +1174,9 @@ function App() {
                 // P8.40: la etiqueta de diarizacion se escribe TAL CUAL: el vinculo con un
                 // participante registrado NO la asciende (una sola via del nombre: el mandato).
                 // El dueno de esa decision es `resolveRowSpeakerName`. 
-                commitUserTurnRow({
+                // ACUÑADO EN EL LLAMADOR (auditoria 2026-10-23): el turno se conoce aqui.
+                const turnIdFila = resolved?.turnId ?? `app-${Date.now()}`;
+                const resultado = commitUserTurnRow({
                     text: transcript,
                     signature: (resolved as { signature?: number[] | null })?.signature ?? null,
                     speakerName,
@@ -1182,9 +1184,11 @@ function App() {
                     evidenciaAcustica: resolved?.evidenciaAcustica === true,
                     replaceLast: resolved?.replaceLastRawLog === true,
                     turnWindow: (resolved as { turnWindow?: { inicio: number; fin: number } | null })?.turnWindow ?? null,
-                    // ACUÑADO EN EL LLAMADOR (auditoria 2026-10-23): el turno se conoce aqui.
-                    turnId: resolved?.turnId ?? `app-${Date.now()}`,
+                    turnId: turnIdFila,
                 });
+                // Aviso al participante con la IDENTIDAD del turno. Si el motor activo
+                // ya avisó el mismo `turnId`, su dedupe lo cuenta UNA sola vez.
+                if (resultado.action !== 'skipped') fluParticipant.onTurnCommitted?.(turnIdFila);
             }
             if (userCommitOnly) return;
 
@@ -1209,14 +1213,9 @@ function App() {
                     phase,
                 }, 'Raw transcript logged').catch((e) => logCaughtError('src/App.tsx: auditLog.logEvent', e));
 
-                // NOTE: Do NOT call fluParticipant.onTurnCommitted() here.
-                // conversationStreamCommit.js already calls
-                // fluParticipantRef.current?.onTurnCommitted?.() after
-                // finalizeTurnCommit() (lines 379 and 427). Calling it here
-                // would double-increment turnsSinceLastEval, causing the
-                // participant evaluation to trigger on turn 2 instead of turn 3
-                // (evaluateEveryNTurns=3), and then immediately reset the counter.
-                // This is the root cause of FLU never reaching 'raised' phase.
+                // El aviso de turno comprometido lo da este punto para el modo PASIVO y
+                // `onLocucionCommiteada` para el motor activo; ambos llaman a la MISMA
+                // funcion con el `turnId` y el hook dedupe: una sola cuenta por turno.
 
                 return;
             }

@@ -139,6 +139,80 @@ describe('useFluParticipant — turno N con historial desacoplado (regresión OS
 
         expect(generateParticipantEvaluationMock).not.toHaveBeenCalled();
     });
+
+    it('dedupe: el MISMO turnId reportado por motor y pasivo cuenta UNA vez', async () => {
+        const conversationActiveRef: RefObject<boolean> = { current: true };
+        const getLogSnapshot = () => ({ texts: ['turno'], speakers: ['Hablante 1'] });
+
+        const { result } = renderHook(() =>
+            useFluParticipant({
+                conversationActiveRef,
+                getLogSnapshot,
+                config: { evaluateEveryNTurns: 3 },
+            }),
+        );
+
+        // El motor activo y el escritor pasivo reportan el MISMO turno; una revision
+        // ASR lo repite. Tres avisos del mismo `turnId` son UN turno, no tres.
+        act(() => {
+            result.current.onTurnCommitted('t1');
+            result.current.onTurnCommitted('t1');
+            result.current.onTurnCommitted('t1');
+        });
+
+        await act(async () => {
+            await Promise.resolve();
+        });
+
+        expect(generateParticipantEvaluationMock).not.toHaveBeenCalled();
+
+        act(() => result.current.onTurnCommitted('t2'));
+        act(() => result.current.onTurnCommitted('t3'));
+
+        await act(async () => {
+            await Promise.resolve();
+            await Promise.resolve();
+        });
+
+        expect(generateParticipantEvaluationMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('resetParticipant limpia la identidad de turno (sesion nueva reusa ids)', async () => {
+        const conversationActiveRef: RefObject<boolean> = { current: true };
+        const getLogSnapshot = () => ({ texts: ['turno'], speakers: ['Hablante 1'] });
+
+        const { result } = renderHook(() =>
+            useFluParticipant({
+                conversationActiveRef,
+                getLogSnapshot,
+                config: { evaluateEveryNTurns: 2 },
+            }),
+        );
+
+        act(() => result.current.onTurnCommitted('t1'));
+        act(() => result.current.resetParticipant());
+        // Tras reiniciar, los ids vuelven a empezar: t1 es un turno NUEVO.
+        act(() => result.current.onTurnCommitted('t1'));
+        act(() => result.current.onTurnCommitted('t2'));
+
+        await act(async () => {
+            await Promise.resolve();
+            await Promise.resolve();
+        });
+
+        expect(generateParticipantEvaluationMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('GUARD: un solo dueño del aviso; los DOS reportantes pasan turnId', () => {
+        const hookSrc = readFileSync('src/voice/hooks/useFluVoiceAssistant.js', 'utf8');
+        const appSrc = readFileSync('src/App.tsx', 'utf8');
+        // El aviso existe UNA vez (dueño: el hook) y solo lo reportan los dos modos
+        // excluyentes: motor activo y escritor pasivo de App.
+        expect(hookSrc).toContain('fluParticipantRef.current?.onTurnCommitted?.(fila?.turnId)');
+        expect(appSrc).toContain('fluParticipant.onTurnCommitted?.(turnIdFila)');
+        const llamadas = (src: string) => (src.match(/\.onTurnCommitted\?\.\(/g) || []).length;
+        expect(llamadas(hookSrc) + llamadas(appSrc)).toBe(2);
+    });
 });
 
 

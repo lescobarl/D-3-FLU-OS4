@@ -407,6 +407,7 @@ export function useFluVoiceAssistant({
           lastModuleLabelRef.current = String(fila?.etiqueta || '')
           turnSegmentStartedAtRef.current = Date.now()
           turnAudioStartSampleRef.current = chunkTotalSamplesRef.current
+          fluParticipantRef.current?.onTurnCommitted?.(fila?.turnId)
         },
       })
     }

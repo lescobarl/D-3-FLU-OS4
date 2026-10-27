@@ -97,7 +97,8 @@ describe('la fila del turno se reutiliza por IDENTIDAD de turno', () => {
         const path = await import('node:path');
         const app = fs.readFileSync(path.join(process.cwd(), 'src', 'App.tsx'), 'utf8');
         // ACUÑADO EN EL LLAMADOR (auditoria 2026-10-23): el turno ya no se pasa como null.
-        expect(app).toMatch(/turnId: resolved\?\.turnId \?\? `app-/);
+        expect(app).toMatch(/const turnIdFila = resolved\?\.turnId \?\? `app-/);
+        expect(app).toMatch(/turnId: turnIdFila/);
     });
 
     it('GUARD: el hook publica la identidad del turno en TODOS los puntos de escritura', async () => {
