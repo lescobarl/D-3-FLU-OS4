@@ -26,8 +26,10 @@ import { describe, expect, it } from 'vitest'
 
 const CFG = readFileSync('src/voice/lib/fluConfig.js', 'utf8')
 const REVISION = readFileSync('src/voice/conversation/revision.ts', 'utf8')
-const MOTOR = readFileSync('src/voice/compose/conversationMotorProducto.js', 'utf8')
-const TURN_ROW = readFileSync('src/voice/lib/conversationTurnRow.ts', 'utf8')
+// Corte 2026-10-26: conversationTurnRow.ts se retiró con la tubería vieja; la fila de
+// usuario la escribe el módulo (pasivo.ts) y el nombre/evidencia los junta el HOOK.
+const TURN_ROW = readFileSync('src/voice/conversation/pasivo.ts', 'utf8')
+const HOOK = readFileSync('src/voice/hooks/useFluVoiceAssistant.js', 'utf8')
 
 const json = (l: string): Record<string, unknown> => {
   try {
@@ -150,10 +152,12 @@ describe('rutina de revision - la traza de UNA corrida cumple los invariantes', 
     expect(REVISION.includes('revisionMasCorta'), 'sin revision-mas-corta').toBe(false)
     expect(REVISION.includes('palabrasNuevas > palabrasAnteriores'), 'crece solo con MAS palabras').toBe(true)
     expect(REVISION.includes('pintar: false'), 'perder palabras no se pinta').toBe(true)
-    // Nombre: UNA via por DATO (el mandato "soy X") + la MEDIDA del preflight. El
-    // compositor del motor es el dueno de juntarlas; la fila no asciende por voz.
-    expect(MOTOR.includes('preflightEvidenceMeasured('), 'la evidencia es la MEDIDA').toBe(true)
-    expect(MOTOR.includes('resolveSpeakerNameFromUtterance('), 'el dato es el mandato').toBe(true)
+    // Nombre: UNA via por DATO (el mandato "soy X") + la MEDIDA del turno. Corte
+    // 2026-10-26: el dueno de juntarlas es el HOOK (preflightEvidenceMeasured se
+    // retiró con la tubería vieja); la fila no asciende por voz.
+    expect(HOOK.includes('resolveSpeakerNameFromUtterance('), 'el dato es el mandato').toBe(true)
+    expect(HOOK.includes('evidenciaAcustica: audioSnapshot.length > 0'), '"hay audio" NO es evidencia').toBe(false)
+    expect((HOOK.match(/evidenciaAcustica: (true|false)/g) || []).filter((m) => m === 'evidenciaAcustica: true').length, 'la marca true sale SOLO de la medida').toBe(1)
     expect(TURN_ROW.includes('resolveRegisteredSpeakerName'), 'la fila no asciende por voz').toBe(false)
     // Sin defaults que mientan: `evidenciaAcustica` no puede venir en true por defecto.
     expect(/evidenciaAcustica = true/.test(TURN_ROW), 'ningun default en true').toBe(false)

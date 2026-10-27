@@ -10,7 +10,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { useIntegrationStore } from '../src/store/integrationStore';
 import { logFluReply } from '../src/voice/lib/fluConversationLog';
-import { commitUserTurnRow } from '../src/voice/lib/conversationTurnRow';
+import { commitUserTurnRow } from '../src/voice/conversation';
 import { detectSentiment } from '../src/store/integrationStore';
 import { FLU_CONFIG } from '../src/voice/lib/fluConfig';
 

@@ -15,19 +15,23 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
-const ROW = readFileSync('src/voice/lib/conversationTurnRow.ts', 'utf8')
+// Corte 2026-10-26: conversationTurnRow.ts se retiró con la tubería vieja. La fila la
+// escribe el módulo (pasivo.ts guarda `signature: firma`) y la clave por TIMBRE la
+// aporta el adaptador del módulo (adapters.ts `claveVoz` -> `voiceKeyFor`).
+const ROW = readFileSync('src/voice/conversation/pasivo.ts', 'utf8')
+const ADAPTADORES = readFileSync('src/voice/conversation/adapters.ts', 'utf8')
 const DIRECTORY = readFileSync('src/voice/lib/speakerDirectory.js', 'utf8')
 const CORE = readFileSync('src/voice/lib/speakerCore.js', 'utf8')
 const APP = readFileSync('src/App.tsx', 'utf8')
 
 /** true si el escritor de la fila vincula la VOZ por TIMBRE (y no solo por etiqueta). */
 export function vinculaPorTimbre(src: string): boolean {
-  return /voiceKeyFor\(\{\s*voiceId:\s*labelToSpeakerId\(resolved\),\s*signature\s*\}\)/.test(src)
+  return /voiceKeyFor\(\{\s*voiceId:\s*datos\.voiceId,\s*signature\s*:/.test(src)
 }
 
 describe('el vinculo de la fila con su VOZ es por TIMBRE', () => {
   it('el escritor calcula la clave de voz por TIMBRE', () => {
-    expect(vinculaPorTimbre(ROW), 'sin timbre, dos etiquetas de la misma persona no se ven con su nombre').toBe(true)
+    expect(vinculaPorTimbre(ADAPTADORES), 'sin timbre, dos etiquetas de la misma persona no se ven con su nombre').toBe(true)
   })
 
   it('el criterio de "misma voz" por timbre tiene UN dueno', () => {
@@ -36,13 +40,13 @@ describe('el vinculo de la fila con su VOZ es por TIMBRE', () => {
   })
 
   it('la fila GUARDA su firma y App la aporta (la medida del turno)', () => {
-    expect(ROW, 'la fila guarda su firma').toContain('signature: normalizeRowSignature(signature)')
+    expect(ROW, 'la fila guarda su firma').toContain('signature: firma')
     expect(APP, 'App pasa la firma del turno').toContain('signature: (resolved as { signature?: number[] | null })?.signature ?? null')
   })
 
   it('PRUEBA DE DETECTOR (el detector no es decorativo): el vinculo SOLO por etiqueta se marca', () => {
     const viejo = 'const vozDeLaFila = labelToSpeakerId(resolved)'
     expect(vinculaPorTimbre(viejo), 'vincular solo por etiqueta no basta').toBe(false)
-    expect(vinculaPorTimbre(ROW)).toBe(true)
+    expect(vinculaPorTimbre(ADAPTADORES)).toBe(true)
   })
 })

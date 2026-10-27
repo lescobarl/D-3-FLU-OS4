@@ -18,9 +18,9 @@ vi.mock('../src/voice/lib/fluSpeech.js', () => ({
     getLastCompletedSpeechAt: () => estado.ttsAt,
     isSpeechSynthesisSpeaking: () => false,
 }))
-vi.mock('../src/voice/lib/activeListen.js', () => ({
-    committedEchoStreakWindowMs: () => 1200,
-}))
+// Corte 2026-10-26: el mock de activeListen.js se retira: el registro vivo
+// (speakerIdentityRegister) lee su propia `committedEchoStreakWindowMs` de FLU_CONFIG
+// y ya no importa la isla.
 
 import { registerSpeakerIdentity } from '../src/voice/lib/speakerIdentityRegister'
 

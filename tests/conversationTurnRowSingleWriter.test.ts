@@ -11,7 +11,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { resolveRowSpeakerLabel } from '../src/voice/lib/conversationRow';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { commitUserTurnRow } from '../src/voice/lib/conversationTurnRow';
+import { commitUserTurnRow } from '../src/voice/conversation';
 import { useIntegrationStore } from '../src/store/integrationStore';
 
 const FRASE = 'okay flow crea una cita';

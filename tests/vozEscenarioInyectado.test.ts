@@ -10,9 +10,9 @@
 // su etiqueta.
 // ============================================================
 import { describe, it, expect, beforeEach } from 'vitest'
-import { commitUserTurnRow, updateTurnRowSpeaker, renameSpeakerRows } from '../src/voice/lib/conversationTurnRow'
+import { commitUserTurnRow } from '../src/voice/conversation'
 import { resolveRowSpeakerLabel } from '../src/voice/lib/conversationRow'
-import { resetVoiceDirectory } from '../src/voice/lib/speakerDirectory.js'
+import { resetVoiceDirectory, resolveVoiceName } from '../src/voice/lib/speakerDirectory.js'
 import { useIntegrationStore } from '../src/store/integrationStore'
 import { registerSpeakerIdentity } from '../src/voice/lib/speakerIdentityRegister.js'
 import { findLabelsWithSharedVoice } from '../src/voice/lib/speakerClusters'
@@ -41,12 +41,22 @@ describe('escenario inyectado: hablantes, registro y fila inmutable', () => {
     const r = commitUserTurnRow({ text: 'bueno empecemos a hacer unas pruebas', turnId: 7 })
     // A5: la fila escrita sin etiqueta lleva el RESPALDO (ya no queda vacia).
     expect(resolveRowSpeakerLabel(userRows().find((row) => row.id === r.id) || {})).toBe('Hablante 1')
-    const changed = updateTurnRowSpeaker(7, 'luis', { evidenciaAcustica: true })
-    expect(changed).toBe(true)
+    // Corte 2026-10-26: `updateTurnRowSpeaker` se retiro con la tuberia vieja. La via
+    // viva completa la fila con el MISMO escritor (identidad de turno): el resolutor
+    // que llega tarde re-commitea el MISMO turno con la medida y la etiqueta propia.
+    const completada = commitUserTurnRow({
+      text: 'bueno empecemos a hacer unas pruebas',
+      speakerName: 'luis',
+      evidenciaAcustica: true,
+      signature: VOZ_LUIS,
+      turnId: 7,
+    })
+    expect(completada.id).toBe(r.id)
+    expect(userRows()).toHaveLength(1)
     expect(resolveRowSpeakerLabel(userRows().find((row) => row.id === r.id) || {})).toBe('Luis')
   })
 
-  it('identificado Luis, TODA su participacion pasa a "luis" y la mujer conserva su etiqueta', () => {
+  it('identificado Luis, su VOZ queda nombrada en el directorio; las filas NO se reescriben y la mujer conserva su etiqueta', () => {
     commitUserTurnRow({ text: 'hola hola como estan todos', speakerName: 'Hablante 1', evidenciaAcustica: true, turnId: 1 })
     commitUserTurnRow({ text: 'soy luis y estoy probando la transcripcion', speakerName: 'Hablante 1', evidenciaAcustica: true, turnId: 2 })
     commitUserTurnRow({ text: 'hoy me robo el estilo lolita', speakerName: 'Hablante 2', evidenciaAcustica: true, turnId: 3 })
@@ -57,9 +67,20 @@ describe('escenario inyectado: hablantes, registro y fila inmutable', () => {
     expect(labels).toContain('Hablante 1')
     expect(labels).not.toContain('Hablante 2')
 
-    const cambiadas = renameSpeakerRows(labels, 'luis')
-    expect(cambiadas).toBe(2)
-    expect(userRows().map((r) => resolveRowSpeakerLabel(r))).toEqual(['Luis', 'Luis', 'Hablante 2', 'Hablante 2'])
+    // Corte 2026-10-26: `renameSpeakerRows` se retiro con la tuberia vieja (renombrar
+    // filas ya escritas era la ruta doble del mandato). El registro liga el nombre a
+    // la VOZ en el directorio; las filas quedan como las escribio el modulo.
+    const registro = registerSpeakerIdentity({
+      name: 'luis',
+      previousLabel: 'Hablante 1',
+      clusters,
+      signatureVector: VOZ_LUIS,
+    })
+    expect(registro.registered).toBe(true)
+    expect(registro.rowsChanged).toBe(0)
+    expect(resolveVoiceName('speaker_1'), 'la voz de Luis queda nombrada').toBe('Luis')
+    expect(resolveVoiceName('speaker_2'), 'la mujer conserva la suya').toBe('')
+    expect(userRows().map((r) => resolveRowSpeakerLabel(r))).toEqual(['Hablante 1', 'Hablante 1', 'Hablante 2', 'Hablante 2'])
   })
 
   it('RUTA REAL, sin microfono: "soy Luis" registra la VOZ y NO reescribe las filas ya escritas', () => {

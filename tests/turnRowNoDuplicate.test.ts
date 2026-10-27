@@ -15,8 +15,9 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { resolveRowSpeakerLabel } from '../src/voice/lib/conversationRow';
 import { useIntegrationStore } from '../src/store/integrationStore';
-import { commitUserTurnRow, escribeFilaDeUsuario, updateTurnRowSpeaker } from '../src/voice/lib/conversationTurnRow';
-import { resetVoiceDirectory } from '../src/voice/lib/speakerDirectory.js';
+import { commitUserTurnRow, escribeFilaDeUsuario } from '../src/voice/conversation';
+import { resetVoiceDirectory, resolveVoiceName } from '../src/voice/lib/speakerDirectory.js';
+import { registerSpeakerIdentity } from '../src/voice/lib/speakerIdentityRegister.js';
 
 /** Marcas `effectOnly: true` en un fuente (mismo criterio del guard). */
 export function effectOnlyMarks(src: string): number {
@@ -106,18 +107,17 @@ describe('la fila del turno se reutiliza por IDENTIDAD de turno', () => {
             path.join(process.cwd(), 'src', 'voice', 'hooks', 'useFluVoiceAssistant.js'),
             'utf8',
         );
-        // Commit temprano + resolucion + LOG CRUDO (el path raw tambien escribe
-        // fila: sin identidad caia al criterio posicional, ya retirado). La RESOLUCION puede
-        // derivar el turno de la FRASE emitida (idempotencia: una locucion = una fila), que es
-        // tan identidad de turno como el vivo.
+        // Corte 2026-10-26: el hook escribe SOLO por `onContractResolved` (dos puertas:
+        // commit temprano + resolucion). La tercera puerta vieja (LOG CRUDO inline con
+        // `turnIdDeLaFila`) se retiro con la tuberia vieja: el path raw vive en App y su
+        // identidad la fija el guard anterior (`resolved?.turnId ?? app-`). La RESOLUCION
+        // deriva el turno de la FRASE emitida (idempotencia: una locucion = una fila), que
+        // es tan identidad de turno como el vivo.
         const marcas = [
             ...(hook.match(/turnId: activeTurnIdRef\.current/g) || []),
             ...(hook.match(/turnId: turnIdDeLaFrase/g) || []),
-            // La puerta del LOG tambien puede derivar el turno de la frase emitida cuando la
-            // emision es un RECORTE de ella (mandato 2026-10-23: identidad de turno unica).
-            ...(hook.match(/turnId: turnIdDeLaFila \?\? activeTurnIdRef\.current/g) || []),
         ];
-        expect(marcas).toHaveLength(3);
+        expect(marcas).toHaveLength(2);
     });
 
     // ------------------------------------------------------------
@@ -171,33 +171,34 @@ describe('fila del turno - el detector no es decorativo', () => {
         expect(effectOnlyMarks('const a = 1')).toBe(0);
     });
 });
-// P8.39 - la reentrega identica no vuelve a colarse: el criterio vive en un modulo
-// (captureDedup) con la ventana del despacho, y el hook no puede volver al bypass
-// inline que se saltaba el dedup ENTERO mientras habia un turno en curso.
+// P8.39 - la reentrega identica no vuelve a colarse: el criterio vive en el MODULO
+// (revision por tramoId + fila por identidad de turno) y la ventana del despacho es
+// UN solo valor (`sameRequestWindowMs`); el hook no puede volver al bypass inline
+// que se saltaba el dedup ENTERO mientras habia un turno en curso. Corte 2026-10-26:
+// `captureDedup.js` se retiro con la tuberia vieja.
 export function dedupPorCapturaInline(src: string): boolean {
     return /const correctionInFlight = isNavSettlePending\(\) \|\| isProcessingRef\.current/.test(src);
 }
 
 describe('fila del turno - la reentrega identica no vuelve a colarse (P8.39)', () => {
-    it('el hook pregunta al criterio unico y no tiene el bypass inline', async () => {
+    it('el hook no tiene el criterio viejo ni el bypass inline (captureDedup retirado)', async () => {
         const fs = await import('node:fs');
         const path = await import('node:path');
         const hook = fs.readFileSync(
             path.join(process.cwd(), 'src', 'voice', 'hooks', 'useFluVoiceAssistant.js'),
             'utf8',
         );
-        expect(hook).toContain('shouldSkipCapture(');
-        expect(hook).toContain('createEmissionDeduper(');
+        expect(hook.includes('shouldSkipCapture('), 'el criterio viejo ya no vive en el hook').toBe(false);
+        expect(hook.includes('createEmissionDeduper(')).toBe(false);
         expect(dedupPorCapturaInline(hook)).toBe(false);
     });
 
-    it('la ventana de "misma peticion" es UN solo valor (despacho y fila)', async () => {
+    it('la ventana de "misma peticion" es UN solo valor (despacho, sin re-declararla)', async () => {
         const fs = await import('node:fs');
         const path = await import('node:path');
         const audio = fs.readFileSync(path.join(process.cwd(), 'src', 'voice', 'lib', 'audioMath.js'), 'utf8');
-        const dedup = fs.readFileSync(path.join(process.cwd(), 'src', 'voice', 'lib', 'captureDedup.js'), 'utf8');
         expect(audio).toContain('sameRequestWindowMs()');
-        expect(dedup).toContain('sameRequestWindowMs');
+        expect(audio).toContain('dedupMs = sameRequestWindowMs(),');
         expect(audio).not.toContain('dedupMs = 4500');
     });
 });
@@ -218,8 +219,8 @@ describe('reentrega identica - el detector no es decorativo', () => {
 // IDENTIDAD de turno: la resolucion tardia COMPLETA la suya, no la del vecino.
 // Mandato del dueno (2026-10-13): el nombre NO vive en la conversacion (la fila es texto
 // insertado y NO se reescribe). El hablante que llega tarde REGISTRA el nombre para la VOZ
-// de SU turno (`updateTurnRowSpeaker`), y sus filas se ven con el nombre al MOSTRAR; la voz
-// de otro hablante queda intacta. (Antes esta via MUTABA la fila del turno resuelto.)
+// de SU turno. Corte 2026-10-26: `updateTurnRowSpeaker` se retiro con la tuberia vieja; la
+// via viva es `registerSpeakerIdentity` (mismo directorio de voz, `rowsChanged = 0`).
 describe('el hablante que llega tarde nombra su VOZ (mandato 2026-10-13), no la de otro hablante', () => {
     beforeEach(() => {
         useIntegrationStore.getState().resetConversationHistory();
@@ -231,17 +232,40 @@ describe('el hablante que llega tarde nombra su VOZ (mandato 2026-10-13), no la 
         fliHabla('Entendido.');
         commitUserTurnRow({ text: 'otra locucion distinta', speakerName: 'Hablante 2', turnId: 202 });
 
-        expect(updateTurnRowSpeaker(201, 'Luis', { evidenciaAcustica: true })).toBe(true);
+        // El nombre se registra para la VOZ de SU turno (la etiqueta con la que venia
+        // apareciendo, `previousLabel`), con la MEDIDA del turno como evidencia.
+        const registro = registerSpeakerIdentity({
+            name: 'Luis',
+            previousLabel: 'Hablante 1',
+            signatureVector: [1, 0, 0],
+            clusters: [],
+            refs: {},
+        });
+        expect(registro.registered).toBe(true);
+        expect(registro.rowsChanged, 'ninguna fila se reescribe').toBe(0);
 
         const rows = userRows();
         expect(rows).toHaveLength(2);
-        // La fila NO se reescribe: guarda la VOZ; el nombre se resuelve al MOSTRAR.
-        expect(resolveRowSpeakerLabel(rows[0]), 'la resolucion tardia nombra SU voz').toBe('Luis');
-        expect(resolveRowSpeakerLabel(rows[1]), 'y NO nombra la de otro hablante').toBe('Hablante 2');
+        // La fila NO se reescribe: se guarda la VOZ (directorio). La otra voz intacta.
+        expect(resolveVoiceName('speaker_1'), 'la resolucion tardia nombra SU voz').toBe('Luis');
+        expect(resolveVoiceName('speaker_2'), 'y NO nombra la de otro hablante').toBe('');
+        expect(resolveRowSpeakerLabel(rows[1]), 'la fila sin timbre muestra su etiqueta').toBe('Hablante 2');
     });
 
-    it('no hace nada si el turno no tiene fila registrada o el hablante esta vacio', () => {
-        expect(updateTurnRowSpeaker(999, 'Luis')).toBe(false);
-        expect(updateTurnRowSpeaker(201, '')).toBe(false);
+    it('no registra nada si el nombre esta vacio y jamas reescribe filas', () => {
+        commitUserTurnRow({ text: 'hola que tal', speakerName: 'Hablante 1', turnId: 301 });
+        const antes = userRows()[0];
+        const registro = registerSpeakerIdentity({
+            name: '',
+            previousLabel: 'Hablante 1',
+            signatureVector: [1, 0, 0],
+            clusters: [],
+            refs: {},
+        });
+        expect(registro.registered).toBe(false);
+        const filas = userRows();
+        expect(filas).toHaveLength(1);
+        expect(filas[0].id).toBe(antes.id);
+        expect(resolveVoiceName('speaker_1')).toBe('');
     });
 });

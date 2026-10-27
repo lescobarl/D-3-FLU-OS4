@@ -13,6 +13,9 @@
  * `fluTranscriptPause.countSpeechWords` es un RECUENTO (no una copia divergente);
  * el guard fija que coincide con el dueno palabra a palabra.
  *
+ * CORTE 2026-10-26: `countSharedSpeechWords` se importa de su dueno vivo
+ * (`src/voice/core/locucion.js`), no de la isla conversationStream.js.
+ *
  * El guard pregunta DOS cosas: que no exista otra `function speechWords` fuera del
  * dueno (texto) y que el recuento siga siendo el del dueno (conducta).
  *
@@ -24,7 +27,7 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { speechWords } from '../src/voice/lib/audioMath.js';
 import { countSpeechWords } from '../src/voice/lib/fluTranscriptPause.js';
-import { countSharedSpeechWords } from '../src/voice/lib/conversationStream.js';
+import { countSharedSpeechWords } from '../src/voice/core/locucion.js';
 
 const OWNER = 'src/voice/lib/audioMath.js';
 
@@ -75,9 +78,11 @@ describe('speechWordsSingleOwnerGuard — la tokenizacion de voz tiene un dueno'
     it('PRUEBA DE DETECTOR: una copia fuera del dueno se marca', () => {
         const synthetic: SourceFile[] = [
             { file: OWNER, source: "export function speechWords(text = '') {\n  return []\n}" },
-            { file: 'src/voice/lib/conversationStream.js', source: "function speechWords(text = '') {\n  return []\n}" },
+            // Etiqueta sintetica: fluSpeech.js es un sitio vivo plausible de la copia
+            // (la isla conversationStream.js se retira con la tuberia vieja).
+            { file: 'src/voice/lib/fluSpeech.js', source: "function speechWords(text = '') {\n  return []\n}" },
         ];
-        expect(findForeignSpeechWords(synthetic)).toEqual(['src/voice/lib/conversationStream.js:1']);
+        expect(findForeignSpeechWords(synthetic)).toEqual(['src/voice/lib/fluSpeech.js:1']);
     });
 
     it('el codigo limpio no se marca', () => {

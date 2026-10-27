@@ -18,9 +18,31 @@ import {
   applySessionCommandToPrimary,
   isSessionCloseRequest,
 } from '../src/voice/lib/sessionLifecycle.js'
-import { resolveConversationSpeaker } from '../src/voice/lib/voiceIdentity.js'
+import { decidirIdentidad } from '../src/voice/conversation/identidad'
+import { compareCosineSignatures } from '../src/voice/lib/speakerCore.js'
+import { resetVoiceDirectory, resolveVoiceIdentity } from '../src/voice/lib/speakerDirectory.js'
 
 const vozA = Array.from({ length: 512 }, (_, i) => Math.sin(i * 0.1))
+
+const ids = (() => {
+  let n = 0
+  return { next: () => `uuid-turno-${(n += 1)}` }
+})()
+
+// Corte 2026-10-26: `resolveConversationSpeaker` se retiro con la tuberia vieja. La
+// identidad de la locucion la decide la regla del MODULO (`decidirIdentidad`); el nombre
+// con ancla, la resolucion VIVA por timbre (`resolveVoiceIdentity`).
+const decidirTurno = (vector: number[], ultimoVozId: string, ultimoVector: number[] | null, etiquetaNueva: string) =>
+  decidirIdentidad({
+    vector,
+    ultimoVozId,
+    ultimoVector,
+    umbral: 0.8,
+    etiquetaNueva,
+    // El coseno es el REAL del dueño (speakerCore.compareCosineSignatures).
+    comparar: (a, b) => compareCosineSignatures([...a], [...b]),
+    id: ids.next,
+  })
 
 describe('A4 - el primario sobrevive al reinicio de escucha', () => {
   it('ABRIR/reanudar la escucha NO limpia el nombre presentado', () => {
@@ -43,36 +65,18 @@ describe('A4 - el primario sobrevive al reinicio de escucha', () => {
 
   it('los turnos siguientes salen con el nombre (el primario conservado manda, con su ancla)', () => {
     // MANDATO 2026-10-18: el primario NO crea el ancla (la primera voz podia ser la TV);
-    // el nombre exige un ancla REGISTRADA que ya exista y una ventana SOSTENIDA.
-    const sinAncla: { label?: string; signature?: number[] }[] = []
-    const primero = resolveConversationSpeaker({
-      speakerClusters: sinAncla,
-      sessionPrimary: 'Luz',
-      signatureVector: vozA,
-      voicedSampleCount: 96000,
-      minVoicedSamples: 12000,
-      sampleRate: 48000,
-      utteranceText: 'siguiente carta por favor',
-      atTurnBoundary: true,
-      allowNewCluster: true,
-    } as never)
-    expect(primero, 'sin ancla no se afirma el nombre').not.toBe('Luz')
-    expect(sinAncla.some((c) => c.label === 'Luz'), 'el primario no se convierte en ancla').toBe(false)
+    // el nombre exige un ancla REGISTRADA que ya exista. Corte 2026-10-26: la regla viva
+    // es la del MODULO (sin primario en la entrada) + la resolucion por anclas de la base.
+    resetVoiceDirectory()
+    const primero = decidirTurno(vozA, '', null, 'Hablante 1')
+    expect(primero.hablante, 'sin ancla no se afirma el nombre').toBe('Hablante 1')
+    expect(primero.continuidad).toBe(false)
 
-    const conAncla: { label?: string; signature?: number[] }[] = [{ label: 'Luz', signature: vozA }]
-    const conNombre = resolveConversationSpeaker({
-      speakerClusters: conAncla,
-      sessionPrimary: 'Luz',
-      signatureVector: vozA,
-      lastSpeaker: String(primero),
-      voicedSampleCount: 96000,
-      minVoicedSamples: 12000,
-      sampleRate: 48000,
-      utteranceText: 'siguiente carta por favor',
-      atTurnBoundary: true,
-      allowNewCluster: true,
-    } as never)
-    expect(conNombre, 'con su ancla registrada y medida sostenida, el nombre SI').toBe('Luz')
+    const conNombre = resolveVoiceIdentity(vozA, {
+      model: '',
+      candidates: [{ name: 'Luz', vector: vozA, verified: true }],
+    })
+    expect(conNombre?.name, 'con su ancla registrada, el nombre SI').toBe('Luz')
   })
 
   it('PRUEBA DE DETECTOR (el detector no es decorativo): el criterio es la lista de config', () => {

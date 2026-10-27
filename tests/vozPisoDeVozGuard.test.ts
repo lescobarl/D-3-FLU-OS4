@@ -4,6 +4,14 @@
 // como `voicedSampleCount` y `conversationMinVoicedMs: 350` == el minimo del embedder ->
 // CUALQUIER ventana aceptada pasaba el piso, incluida una de TV/silencio. El piso de VOZ
 // exige contar lo VIVO (`countVoicedSamples`). NACE ROJO: antes se pasaba `sampleCount`.
+//
+// REANCLA DE LA FUENTE (corte 2026-10-26): el resolutor idle (`resolveIdentityIdle`) se
+// retiro con la diarizacion en idle (tuberia vieja); su expectativa aqui quedaba atada al
+// dueno muerto. El dueno vivo del piso es el embebedor del PRODUCTO
+// (`crearEmbebedorProducto`, src/voice/conversation/adapters.ts): recorta la ventana de
+// VOZ con el dueno unico (`selectVoicedWindow`) ANTES de embeder
+// (`embedAudioForDiarization`), de modo que la longitud de la captura nunca atraviese el
+// piso. El guard se reancla a esa fuente; la conducta (contar muestras vivas) no cambia.
 // ============================================================
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -22,10 +30,10 @@ describe('P9.71 - el piso de voz es de VOZ, no de longitud de ventana', () => {
     expect(countVoicedSamples(v, { sampleRate: 16000 })).toBeGreaterThan(0)
   })
 
-  it('FUENTE: el worker pasa el conteo de VOZ (no `sampleCount`) al resolutor', () => {
-    const src = readFileSync(join(process.cwd(), 'src/voice/lib/voiceIdWorkerClient.js'), 'utf8')
-    expect(src, 'debe pasar `voiced`').toMatch(/resolveIdentityIdle\(vector, matchPayload, sampleRate, voiced\)/)
-    expect(src, 'no debe pasar la longitud').not.toMatch(/resolveIdentityIdle\(vector, matchPayload, sampleRate, sampleCount\)/)
+  it('FUENTE: el embebedor del producto mide la ventana de VOZ (nunca la captura cruda)', () => {
+    const src = readFileSync(join(process.cwd(), 'src/voice/conversation/adapters.ts'), 'utf8')
+    expect(src, 'el piso de voz: la ventana la recorta el dueno unico').toMatch(/selectVoicedWindow\(muestras, \{ sampleRate \}\)/)
+    expect(src, 'solo la ventana de VOZ se embebe').toMatch(/embedAudioForDiarization\(ventanaVoz, sampleRate\)/)
   })
 
   it('PRUEBA DE DETECTOR (el detector no es decorativo): silencio uniforme no cuenta como voz', () => {

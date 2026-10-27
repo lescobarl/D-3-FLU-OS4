@@ -38,8 +38,8 @@ import {
     isGameSuspended,
     getActiveGameSession,
 } from '../src/core/games/gameSessionStore';
-import { isAssistantVoiceEcho } from '../src/voice/lib/conversationStream';
-import { commitUserTurnRow } from '../src/voice/lib/conversationTurnRow';
+import { esEcoDeTts } from '../src/voice/conversation';
+import { commitUserTurnRow } from '../src/voice/conversation';
 import { unavailableGameMessage } from '../src/app/gameActions';
 import { useIntegrationStore } from '../src/store/integrationStore';
 import type { GameSession } from '../src/core/games/types';
@@ -191,25 +191,35 @@ describe('5. el eco de la COLA del TTS no abre turno de persona', () => {
         'He notado que repeti la informacion sobre los ratones. Te gustaria que continuemos con la loteria o prefieres que te cuente algo mas?';
 
     test('la cola de lo que FLU acaba de decir es ECO (antes: false)', () => {
-        expect(isAssistantVoiceEcho('o prefieres que te cuente algo mas esta', DICHO_POR_FLU)).toBe(true);
+        // Corte 2026-10-26: el gate de eco es del MODULO (`esEcoDeTts`, dueño unico;
+        // `isAssistantVoiceEcho` se retiro con la tuberia vieja). El minimo de la
+        // cola se inyecta por el puerto de config (assistantEchoMinWords + 1).
+        expect(esEcoDeTts('o prefieres que te cuente algo mas esta', DICHO_POR_FLU, 4)).toBe(true);
     });
 
     test('la cola pegada al turno real tambien es ECO', () => {
         expect(
-            isAssistantVoiceEcho(
+            esEcoDeTts(
                 'o prefieres que te cuente algo mas esta Okay flu estabamos jugando Adivina quien',
                 DICHO_POR_FLU,
+                4,
             ),
         ).toBe(true);
     });
 
     test('una frase CORTA que no es cola no se marca (el detector no borra contenido real)', () => {
-        expect(isAssistantVoiceEcho('pon la alarma a las siete', DICHO_POR_FLU)).toBe(false);
+        expect(esEcoDeTts('pon la alarma a las siete', DICHO_POR_FLU, 4)).toBe(false);
     });
 
     test('la ventana de eco se ancla al FIN DEL HABLA (antes: a la fila de FLU, escrita antes de hablar)', () => {
+        // El gate de eco vive en el MODULO (`ultimoTextoDicho`); el hook ya no
+        // compara por contenido. El ancla al fin del habla la entrega el COMPOSE
+        // del motor (`getLastCompletedSpeechAt`, dueño: fluSpeech.js).
         const hook = readFileSync('src/voice/hooks/useFluVoiceAssistant.js', 'utf8');
-        expect(hook).toContain('getLastCompletedSpeechAt');
+        expect(hook).toContain('crearMotorConversacionHook(');
+        expect(hook.includes('isAssistantVoiceEcho'), 'el hook ya no gated por contenido').toBe(false);
+        const compose = readFileSync('src/voice/compose/conversationMotorProducto.js', 'utf8');
+        expect(compose).toContain('getLastCompletedSpeechAt');
         expect(readFileSync('src/voice/lib/fluSpeech.js', 'utf8')).toContain('export function getLastCompletedSpeechAt');
     });
 });

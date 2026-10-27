@@ -52,6 +52,9 @@ const h = vi.hoisted(() => {
     acquireSpeechRecognition: vi.fn(),
     startSpeechRecognition: vi.fn(),
     stopSpeechRecognition: vi.fn(),
+    getRecognitionLanguage: vi.fn((language: unknown) => (language === 'en' ? 'en-US' : 'es-ES')),
+    isBilingualListenMode: vi.fn((language: unknown) => language === 'both'),
+    resolveRecognitionLocale: vi.fn((language: unknown) => (language === 'en' ? 'en-US' : 'es-ES')),
     listVoiceProfiles: vi.fn(),
     loadSessionState: vi.fn(),
     saveSessionState: vi.fn(),
@@ -65,12 +68,8 @@ const h = vi.hoisted(() => {
     logCaughtError: vi.fn(),
     fluAsyncErrorHandler: vi.fn(() => vi.fn()),
     wireMicCapturePipeline: vi.fn(),
-    startContinuousIdentityPipeline: vi.fn(),
-    stopAllContinuousIdentityPipelines: vi.fn(),
     createLocalRecognition: vi.fn(),
     shouldUseLocalFallback: vi.fn(() => false),
-    createTurnSpeakerAudioResolver: vi.fn(() => ({})),
-    peekTurnSpeakerPreflight: vi.fn(() => ({ ready: false })),
     isSelfKnowledgeRequest: vi.fn(() => false),
     noteGameTurn: vi.fn(),
     debugHotPath: false,
@@ -123,15 +122,13 @@ vi.mock('../src/voice/lib/speechRecognitionLocal', () => ({
   acquireSpeechRecognition: h.acquireSpeechRecognition,
   startSpeechRecognition: h.startSpeechRecognition,
   stopSpeechRecognition: h.stopSpeechRecognition,
+  getRecognitionLanguage: h.getRecognitionLanguage,
+  isBilingualListenMode: h.isBilingualListenMode,
+  resolveRecognitionLocale: h.resolveRecognitionLocale,
 }));
 
 vi.mock('../src/voice/lib/micCaptureBridge.js', () => ({
   wireMicCapturePipeline: h.wireMicCapturePipeline,
-}));
-
-vi.mock('../src/voice/lib/turnIdentityPipeline.js', () => ({
-  startContinuousIdentityPipeline: h.startContinuousIdentityPipeline,
-  stopAllContinuousIdentityPipelines: h.stopAllContinuousIdentityPipelines,
 }));
 
 vi.mock('../src/voice/lib/voiceLocalFallback', () => ({
@@ -145,12 +142,6 @@ vi.mock('../src/voice/lib/voiceLocalFallback', () => ({
   installChromeRecognition: vi.fn(() => null),
   getLocalFallbackRuntimeConfig: vi.fn(() => ({ recoveryMs: 20000, recoverySegments: 3, probeMs: 4000, finalMinSpeechLikeMs: 180, partialMinSpeechLikeMs: 300 })),
   resolveSilentDegrade: vi.fn(() => ({ degrade: false, speechLikeMs: 0, rms: 0, voicedMs: 0, sinceSrResultMs: 0, failedRebuilds: 0, log: '' })),
-}));
-
-vi.mock('../src/voice/lib/turnSpeakerPreflight.js', () => ({
-  createTurnSpeakerAudioResolver: h.createTurnSpeakerAudioResolver,
-  peekTurnSpeakerPreflight: h.peekTurnSpeakerPreflight,
-  preflightEvidenceMeasured: () => false,
 }));
 
 vi.mock('../src/core/selfKnowledge/selfKnowledge', () => ({

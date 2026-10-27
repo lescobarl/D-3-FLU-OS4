@@ -75,17 +75,13 @@ vi.mock('../src/voice/lib/speechRecognitionLocal', () => ({
   acquireSpeechRecognition: vi.fn(() => h.recognition),
   startSpeechRecognition: vi.fn(() => true),
   stopSpeechRecognition: vi.fn(),
+  getRecognitionLanguage: vi.fn((l) => (l === 'en' ? 'en-US' : 'es-ES')),
+  isBilingualListenMode: vi.fn((l) => l === 'both'),
+  resolveRecognitionLocale: vi.fn((l) => (l === 'en' ? 'en-US' : 'es-ES')),
 }))
 
 vi.mock('../src/voice/lib/micCaptureBridge.js', () => ({
   wireMicCapturePipeline: vi.fn(async () => ({ zeroGain: { disconnect: vi.fn() } })),
-}))
-
-vi.mock('../src/voice/lib/turnIdentityPipeline.js', async (original) => ({
-  ...((await original()) as object),
-  startContinuousIdentityPipeline: vi.fn(),
-  stopAllContinuousIdentityPipelines: vi.fn(),
-  finalizeTurnIdentityPipeline: vi.fn(() => null),
 }))
 
 // Frontera: el MOTOR LOCAL. Se instala el fake y se cablea como el real, para que
@@ -105,11 +101,6 @@ vi.mock('../src/voice/lib/voiceLocalFallback', async (original) => {
   }
 })
 
-vi.mock('../src/voice/lib/turnSpeakerPreflight.js', () => ({
-  createTurnSpeakerAudioResolver: vi.fn(() => ({})),
-  peekTurnSpeakerPreflight: vi.fn(() => ({ ready: false })),
-  preflightEvidenceMeasured: vi.fn(() => false),
-}))
 vi.mock('../src/core/selfKnowledge/selfKnowledge', () => ({ isSelfKnowledgeRequest: vi.fn(() => false) }))
 vi.mock('../src/core/games/gameSessionStore', () => ({ noteGameTurn: vi.fn() }))
 vi.mock('../src/hooks/useFluParticipant', () => ({

@@ -58,6 +58,9 @@ const configDePrueba = (): ConfigPort => ({
   semillaEtiqueta: () => 'Hablante 1',
   esEtiquetaAnonima: isAutoSpeakerLabel,
   conversationEngine: () => 'new',
+  umbralContinuidadVoz: () => 0.8,
+  etiquetaAnonima: (indice) => `Hablante ${indice}`,
+  echoMinPalabrasCola: () => 4,
 })
 
 describe('configuración del plan — una sola fuente', () => {
@@ -68,6 +71,8 @@ describe('configuración del plan — una sola fuente', () => {
       orphanBufferMs: 8000,
       asr: { engine: 'auto', lang: 'es' },
       maxRetentionMin: 120,
+      minSegundosVozMedida: 1.5,
+      maxSegundosVozRetenida: 60,
       overlapMargin: null,
       conversation: { engine: 'new' },
     })
@@ -239,9 +244,13 @@ describe('VAD del producto — el silencio es de COLA, no acumulado histórico',
 describe('puertos inyectables — VAD, embeddings y registro', () => {
   it('VAD y embeddings se implementan sin el módulo (contrato usable)', async () => {
     const vad: VadPort = { medir: () => ({ hayVoz: true, silencioMs: 0 }) }
-    const embebedor: EmbebedorPort = { medir: async () => null }
+    const embebedor: EmbebedorPort = {
+      medir: async () => null,
+      comparar: () => 0,
+    }
     expect(vad.medir(new Float32Array(0), 16000)).toEqual({ hayVoz: true, silencioMs: 0 })
     expect(await embebedor.medir(new Float32Array(0), 16000)).toBeNull()
+    expect(embebedor.comparar([], [])).toBe(0)
   })
 
   it('el registro del proyecto está detrás del puerto', () => {

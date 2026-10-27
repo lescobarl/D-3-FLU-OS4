@@ -5,7 +5,7 @@
 //   G1a — UNA sola función de coseno (hoy: compareAudioSignatures + compareCosineSignatures).
 //   G1b — UNA sola normalización L2 (hoy: normalizeEmbeddingVector + normalizeSignatureVector
 //         + normalizeSignatureForCosine).
-//   G2  — UN solo resolver de hablante (hoy: resolveConversationSpeaker ×2 + assignSpeakerStrictCosine).
+//   G2  — UN solo resolver de hablante (hoy: decidirIdentidad, módulo de conversación).
 //   G3  — sin "Hablante 1" hardcodeado fuera de config (debe venir de FLU_CONFIG).
 //   G4  — el motor de voz NO define un segundo resolver de hablante (2026-10-20: se
 //         midió la ruta doble del modo pasivo, matchSegmentNames, que decidía con sus
@@ -114,7 +114,10 @@ describe('diarización — un solo motor, sin duplicados ni hardcode', () => {
   })
 
   it('G2: UN solo resolver de hablante', () => {
-    const defs = grepExportFn(['resolveConversationSpeaker', 'assignSpeakerStrictCosine'])
+    // Corte 2026-10-26: `resolveConversationSpeaker` (speakerDiarization) y
+    // `assignSpeakerStrictCosine` se retiraron con la tubería vieja. El dueño
+    // único vivo de la identidad de la locución es el módulo: decidirIdentidad.
+    const defs = grepExportFn(['decidirIdentidad'])
     expect(defs, `motores duplicados (N=${defs.length}); debe quedar 1:\n  ${defs.join('\n  ')}`).toHaveLength(1)
   })
 
@@ -179,11 +182,9 @@ describe('P2.4 speakerDiarizationUnified - el detector no es decorativo', () => 
     expect(lineasVoiceProfilesEnHook(infractor).length, 'voiceProfiles en el matching debe marcarse').toBeGreaterThan(0)
 
     const limpio = [
-      "import { resolveSpeakerIdentityFromVector } from '../lib/voiceIdentityResolve.js'",
-      'const identity = resolveSpeakerIdentityFromVector(signatureVector, {',
-      '  speakerClusters: speakerClustersRef.current,',
-      '})',
-      'setSpeakerClusters(identity.workingClusters)',
+      "import { decidirIdentidad } from '../conversation/identidad.ts'",
+      'const identity = decidirIdentidad({ vector: signatureVector, umbral: 0.8 })',
+      'setSpeakerClusters(identity ? [{ label: identity.hablante, signature: signatureVector }] : [])',
       '// matchSegmentNames se borro; el dueño decide (comentario, no código)',
       'if (!hasGetUserMedia) missing.push("getUserMedia")',
     ].join('\n')

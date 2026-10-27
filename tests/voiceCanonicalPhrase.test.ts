@@ -12,11 +12,78 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { FLU_CONFIG } from '../src/voice/lib/fluConfig'
 import { cleanForSpeech, normalizeVoiceCommandText } from '../src/voice/lib/audioMath'
 import { analyzeWakeTurn } from '../src/voice/lib/wakeTurnCommit'
-import { resolveLogRowAction } from '../src/voice/lib/conversationStream'
 import { deriveUserRowTexts, selectVisiblePhrase } from '../src/voice/lib/conversationDialogue'
 import { useIntegrationStore } from '../src/store/integrationStore'
+import { crearEscritorFilaUsuario } from '../src/voice/conversation/pasivo'
+import type {
+  EntradaCompromisoUsuario,
+  FilaVistaUsuario,
+  PuertoVistaFilas,
+  UtilidadesFila,
+} from '../src/voice/conversation/ports'
+import { canonicalSpeakerName, isProperSpeakerName, pendingSpeakerLabel } from '../src/voice/lib/speakerLabels'
+import { autoSpeakerIndexFromKey, getFallbackSpeaker, isAutoSpeakerLabel } from '../src/voice/lib/speakerCore'
+import { labelToSpeakerId, normalizeRowSignature } from '../src/voice/lib/conversationRow'
+import { speechWords, stripDiacritics } from '../src/voice/lib/audioMath'
+import { voiceKeyFor } from '../src/voice/lib/speakerDirectory'
 
 const wakeWords: string[] = FLU_CONFIG.voiceCommands?.wakeWords || []
+
+/** Utilidades REALES del proyecto (mismo cableado que adapters.ts). */
+const utilidades: UtilidadesFila = {
+  normalizar: (texto) => cleanForSpeech(texto),
+  nombrePropio: (nombre) => isProperSpeakerName(nombre),
+  canonica: (nombre) => canonicalSpeakerName(nombre),
+  etiquetaPendiente: () => pendingSpeakerLabel(),
+  respaldoEtiqueta: () => getFallbackSpeaker(),
+  claveDeEtiqueta: (etiqueta) => labelToSpeakerId(etiqueta),
+  claveVoz: (datos) =>
+    voiceKeyFor({ voiceId: datos.voiceId, signature: datos.signature ? [...datos.signature] : null }),
+  indiceAltoDeClave: (clave) => autoSpeakerIndexFromKey(clave) ?? 0,
+  normalizarFirma: (firma) => normalizeRowSignature(firma ? [...firma] : null),
+  palabras: (texto) => speechWords(texto),
+  compactar: (texto) => stripDiacritics(cleanForSpeech(texto)).replace(/[^a-z0-9]+/g, ''),
+}
+
+const config = {
+  esEtiquetaAnonima: (etiqueta: string) => isAutoSpeakerLabel(etiqueta),
+  semillaEtiqueta: () => getFallbackSpeaker(),
+}
+
+/** Vista falsa del escritor del módulo (dependencia aislada, §0.7). */
+function crearEscritorModulo() {
+  let filas: FilaVistaUsuario[] = []
+  const vista: PuertoVistaFilas = {
+    leerHistorial: () => filas,
+    agregarEntrada: (entrada) => {
+      filas = [...filas, entrada]
+    },
+    completarFragmento: (id, texto) => {
+      filas = filas.map((f) => (f.id === id ? { ...f, text: texto } : f))
+    },
+    fijarAltavoz: (id, vozId, opciones) => {
+      filas = filas.map((f) =>
+        f.id === id
+          ? { ...f, speakerId: vozId, ...(opciones?.firma ? { signature: [...opciones.firma] } : {}) }
+          : f,
+      )
+    },
+    fijarNombre: (id, nombre) => {
+      filas = filas.map((f) => (f.id === id ? { ...f, speakerName: nombre } : f))
+    },
+    anotarHighWater: () => {},
+    epoch: () => 1,
+  }
+  const escritor = crearEscritorFilaUsuario({
+    vista,
+    utilidades,
+    config,
+    id: { uuid: () => 'uuid-inv7' },
+    reloj: { ahora: () => 1000 },
+    registro: { registrar: () => {} },
+  })
+  return { escritor, filas: () => filas }
+}
 
 describe('voiceCanonicalPhrase — una frase → una fila + misma query (§9.7)', () => {
   beforeEach(() => {
@@ -41,24 +108,23 @@ describe('voiceCanonicalPhrase — una frase → una fila + misma query (§9.7)'
     expect(deriveUserRowTexts([{ role: 'user', text: row }] as any)).toEqual([cleanForSpeech(row)])
   })
 
-  it('una misma emisión no agrega fila: el motor decide reemplazar', () => {
+  it('una misma emisión no agrega fila: el escritor reutiliza la del MISMO turno', () => {
+    // Corte 2026-10-26: `resolveLogRowAction` (conversationStream.js, isla) se
+    // retira; el dueño vivo de «misma emisión no duplica» es el escritor del
+    // módulo: el MISMO turno re-emitido se reutiliza; un turno distinto agrega.
+    const { escritor, filas } = crearEscritorModulo()
+    const compromiso = (text: string, turnId: string): EntradaCompromisoUsuario => ({ text, turnId })
+
     const v1 = 'Okay flu Platícame de los aviones'
-    const repite = resolveLogRowAction({
-      turnCommit: true,
-      lastEmitted: v1,
-      lastCommitted: v1,
-      capture: v1,
-    })
-    expect(repite.replaceLast).toBe(true)
+    expect(escritor.commitUserTurnRow(compromiso(v1, 'turno-1')).action).toBe('added')
+    const repite = escritor.commitUserTurnRow(compromiso(v1, 'turno-1'))
+    expect(repite.action).toBe('reused')
+    expect(filas()).toHaveLength(1)
 
     const otra = 'Okay flu Cuéntame un chiste'
-    const nueva = resolveLogRowAction({
-      turnCommit: true,
-      lastEmitted: v1,
-      lastCommitted: v1,
-      capture: otra,
-    })
-    expect(nueva.replaceLast).toBe(false)
+    const nueva = escritor.commitUserTurnRow(compromiso(otra, 'turno-2'))
+    expect(nueva.action).toBe('added')
+    expect(filas()).toHaveLength(2)
   })
 
   it('una frase hablada deja UNA sola fila de usuario en el store, coherente con la query', () => {

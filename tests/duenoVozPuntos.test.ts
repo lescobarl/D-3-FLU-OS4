@@ -12,7 +12,7 @@
 import { readFileSync } from 'node:fs'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useIntegrationStore } from '../src/store/integrationStore'
-import { commitUserTurnRow, escribeFilaDeUsuario, updateTurnRowSpeaker } from '../src/voice/lib/conversationTurnRow'
+import { commitUserTurnRow, escribeFilaDeUsuario } from '../src/voice/conversation'
 import { registerSpeakerIdentity, registerSpeakerIdentityFromCommand } from '../src/voice/lib/speakerIdentityRegister.js'
 import { FLU_CONFIG } from '../src/voice/lib/fluConfig.js'
 import { getCommandSpeech } from '../src/voice/lib/voiceCommands.js'
@@ -224,14 +224,24 @@ describe('P5b - la etiqueta automatica no degrada el nombre de la VOZ', () => {
         expect(resolveVoiceName('speaker_1'), 'la voz conserva su nombre').toBe('Luis')
     })
 
-    it('el camino REAL (medida tardia de un turno) tampoco degrada el nombre', () => {
-        commitUserTurnRow({ text: 'uno', speakerName: 'Hablante 1', turnId: 21 } as never)
-        updateTurnRowSpeaker(21, 'Luis', { evidenciaAcustica: true })
+    it('el camino REAL (registro tardio del nombre por la voz MEDIDA) tampoco degrada el nombre', () => {
+        // Corte 2026-10-26: la ruta retirada era `updateTurnRowSpeaker` del escritor viejo
+        // (conversationTurnRow.ts, BORRADO), que registraba la etiqueta del turno en el
+        // DIRECTORIO a cada medida. La ruta viva del registro tardio es el dueno unico
+        // `registerSpeakerIdentity` (clave de la voz medida -> nombre en el directorio).
+        commitUserTurnRow({ text: 'uno', speakerName: 'Hablante 1', turnId: 21 })
+        registerSpeakerIdentity({
+            name: 'Luis',
+            previousLabel: 'Hablante 1',
+            signatureVector: [1, 0, 0],
+            clusters: [],
+            refs: {} as never,
+        })
         expect(resolveVoiceName('speaker_1')).toBe('Luis')
-        commitUserTurnRow({ text: 'dos', speakerName: 'Hablante 1', turnId: 22 } as never)
-        updateTurnRowSpeaker(22, 'Hablante 1', { evidenciaAcustica: true })
-        commitUserTurnRow({ text: 'tres', speakerName: 'Hablante 1', turnId: 23 } as never)
-        updateTurnRowSpeaker(23, 'Hablante 3', { evidenciaAcustica: true })
+        // Los turnos siguientes cierran con etiquetas automaticas (el modulo CONVERSACION
+        // no escribe el directorio): el nombre afirmado de la voz no se degrada.
+        commitUserTurnRow({ text: 'dos', speakerName: 'Hablante 1', turnId: 22 })
+        commitUserTurnRow({ text: 'tres', speakerName: 'Hablante 3', turnId: 23 })
         expect(resolveVoiceName('speaker_1'), 'el nombre no se degrada a etiqueta').toBe('Luis')
     })
 

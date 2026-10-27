@@ -1,17 +1,14 @@
 // @vitest-environment jsdom
 // ============================================================
-// Regresión de la DIARIZACIÓN EN MODO PASIVO (2026-10-20)
+// Contrato de la RAMA PASIVA del hook (decisión A, 2026-10-26)
 // ------------------------------------------------------------
-// Antes el modo pasivo tenía UN SEGUNDO resolver (`matchSegmentNames`) con sus
-// PROPIOS umbrales (1 - clusterMatchMaxDistance), su propia base de perfiles y
-// su propio `distanceToLast`: dos rutas que decidían lo mismo sobre la MISMA
-// señal. Esta prueba ejercita la rama pasiva REAL del hook contra el DUEÑO
-// CANÓNICO (`resolveSpeakerIdentityFromVector` → `resolveConversationSpeaker`).
-//
-// Se sustituye SOLO la frontera del modelo de embeddings (el artefacto WASM no
-// corre en CI); el resolver, los umbrales, los clusters y los refs son los
-// reales. Prueba de que se toma la ruta canónica: la línea `Identity` del log
-// solo la emite `resolveSpeakerIdentityFromVector`.
+// La decisión de hablante en modo pasivo la toma el RESOLVER del módulo
+// (`crearResolucionPasivaProducto`, decisión A del dueño): UNA medida por
+// turno, sin estado, y la CADENA de evidencia (voz anterior, vector, contador
+// de voces) la conserva el hook entre llamadas. Este test monta el hook REAL
+// y sustituye SOLO la frontera del resolver del módulo: se prueban el
+// contrato de delegación (qué recibe el resolver), la continuidad de la
+// cadena y los fallbacks ciegos (`blindSpeakerFallback`, dueño único).
 // ============================================================
 import { renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -20,6 +17,8 @@ const h = vi.hoisted(() => ({
   /** Vector que devolverá el embedder en la siguiente llamada (frontera simulada). */
   embedding: { vector: [1, 0, 0, 0] as number[] },
   relayLog: vi.fn(),
+  /** Resolver pasivo controlable: sustituye SOLO la frontera del módulo. */
+  resolver: vi.fn(),
 }))
 
 vi.mock('../src/voice/lib/speakerEmbedding.js', () => ({
@@ -56,13 +55,11 @@ vi.mock('../src/voice/lib/speechRecognitionLocal', () => ({
   acquireSpeechRecognition: vi.fn(() => null),
   startSpeechRecognition: vi.fn(() => true),
   stopSpeechRecognition: vi.fn(),
+  getRecognitionLanguage: vi.fn((l: unknown) => (l === 'en' ? 'en-US' : 'es-ES')),
+  isBilingualListenMode: vi.fn((l: unknown) => l === 'both'),
+  resolveRecognitionLocale: vi.fn((l: unknown) => (l === 'en' ? 'en-US' : 'es-ES')),
 }))
 vi.mock('../src/voice/lib/micCaptureBridge.js', () => ({ wireMicCapturePipeline: vi.fn(async () => ({ zeroGain: { disconnect: vi.fn() } })) }))
-vi.mock('../src/voice/lib/turnIdentityPipeline.js', () => ({
-  startContinuousIdentityPipeline: vi.fn(),
-  stopAllContinuousIdentityPipelines: vi.fn(),
-  primeTurnSpeakerPreflight: vi.fn(async () => {}),
-}))
 vi.mock('../src/voice/lib/voiceLocalFallback', () => ({
   createLocalRecognition: vi.fn(),
   shouldUseLocalFallback: vi.fn(() => false),
@@ -73,11 +70,6 @@ vi.mock('../src/voice/lib/voiceLocalFallback', () => ({
   installChromeRecognition: vi.fn(() => null),
   getLocalFallbackRuntimeConfig: vi.fn(() => ({ recoveryMs: 20000, recoverySegments: 3, probeMs: 4000, finalMinSpeechLikeMs: 180, partialMinSpeechLikeMs: 300 })),
   resolveSilentDegrade: vi.fn(() => ({ degrade: false, speechLikeMs: 0, rms: 0, voicedMs: 0, sinceSrResultMs: 0, failedRebuilds: 0, log: '' })),
-}))
-vi.mock('../src/voice/lib/turnSpeakerPreflight.js', () => ({
-  createTurnSpeakerAudioResolver: vi.fn(() => ({})),
-  peekTurnSpeakerPreflight: vi.fn(() => ({ ready: false })),
-  preflightEvidenceMeasured: vi.fn(() => false),
 }))
 vi.mock('../src/core/games/gameSessionStore', () => ({ noteGameTurn: vi.fn() }))
 vi.mock('../src/hooks/useFluParticipant', () => ({
@@ -102,6 +94,16 @@ vi.mock('../src/voice/lib/fluDebug', () => ({
   getFluDebugApi: vi.fn(() => ({})),
 }))
 
+// FRONTERA DEL MÓDULO (decisión A): todo lo demás del módulo es REAL; solo se
+// sustituye la fábrica del resolver pasivo por el stub controlable de `h`.
+vi.mock('../src/voice/conversation/index', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../src/voice/conversation/index')>()
+  return {
+    ...actual,
+    crearResolucionPasivaProducto: () => h.resolver,
+  }
+})
+
 import { useFluVoiceAssistant } from '../src/voice/hooks/useFluVoiceAssistant'
 import { FLU_CONFIG } from '../src/voice/lib/fluConfig'
 
@@ -119,11 +121,10 @@ function audioVoz(segundos: number): Float32Array {
   for (let i = 0; i < n; i += 1) out[i] = 0.5 * Math.sin((2 * Math.PI * 440 * i) / SR)
   return out
 }
-/** Lineas emitidas por el ÚNICO dueño de la identidad (`resolveSpeakerIdentityFromVector`). */
-function lineasIdentity(): string[] {
-  return h.relayLog.mock.calls
-    .filter((call) => call[1] === 'Identity')
-    .map((call) => String(call[2] ?? ''))
+/** Argumento que el hook entregó al resolver del módulo en la llamada `i`. */
+function argResolver(i: number): Record<string, unknown> {
+  const call = h.resolver.mock.calls[i]
+  return call ? (call[0] as Record<string, unknown>) : {}
 }
 
 function montar() {
@@ -135,67 +136,88 @@ beforeEach(() => {
   h.embedding.vector = vectorEn(0)
 })
 
-describe('modo pasivo — UNA sola decisión de hablante (dueño canónico)', () => {
-  it('la primera voz pasiva abre el cluster por el resolutor canónico (línea Identity, boundary=false)', async () => {
+describe('modo pasivo — la decisión de hablante la toma el resolver del MÓDULO (decisión A)', () => {
+  const H1 = FLU_CONFIG.voiceIdentity.labels.template.replace('{n}', '1')
+  const H2 = FLU_CONFIG.voiceIdentity.labels.template.replace('{n}', '2')
+  const VEC0 = vectorEn(0)
+  const VEC1 = vectorEn(1)
+
+  it('la primera voz pasiva delega la decisión en el resolver del módulo y estampa su etiqueta', async () => {
+    h.resolver.mockResolvedValueOnce({ vozId: 'voz-1', hablante: H1, continuidad: false, evidencia: true, vector: VEC0 })
     const { result } = montar()
     await waitFor(() => expect(typeof result.current.resolveSpeaker).toBe('function'))
 
-    const r = await result.current.resolveSpeaker(
-      'abre la configuracion',
-      audioVoz(1),
-      SR,
-      'FLU',
-    )
+    const audio = audioVoz(1)
+    const r = await result.current.resolveSpeaker('abre la configuracion', audio, SR, 'FLU')
 
-    const identity = lineasIdentity()
-    expect(identity, 'la rama pasiva NO pasó por resolveSpeakerIdentityFromVector').toHaveLength(1)
-    expect(identity[0]).toContain('boundary=false')
-    expect(r.speakerName).toBe(FLU_CONFIG.voiceIdentity.labels.template.replace('{n}', '1'))
-    expect(r.resolvedSpeakerName).toBe(r.speakerName)
-    // `new-cluster`/`no-vector` no son "coincidencia medida" → la fila no estampa nombre propio.
-    expect(r.evidenciaAcustica).toBe(false)
+    expect(h.resolver).toHaveBeenCalledTimes(1)
+    const arg = argResolver(0)
+    // Contrato de delegación: el audio CRUDO del turno, la frecuencia y la
+    // cadena de evidencia (vacía en la primera medida).
+    expect(arg.muestras).toBe(audio)
+    expect(arg.sampleRate).toBe(SR)
+    expect(arg.ultimoVozId).toBe('')
+    expect(arg.ultimoVector).toBeNull()
+    expect(arg.contadorVoces).toBe(0)
+    expect(r.speakerName).toBe(H1)
+    expect(r.resolvedSpeakerName).toBe(H1)
+    // La evidencia la DECLARA el resolver (medida del EmbebedorPort): se propaga.
+    expect(r.evidenciaAcustica).toBe(true)
   })
 
-  it('la continuidad sin turno abierto la resuelve el dueño (2ª llamada, MISMA voz, sin etiqueta nueva)', async () => {
+  it('la continuidad la conserva la CADENA del hook: la 2ª medida recibe la voz anterior y no abre etiqueta nueva', async () => {
+    h.resolver
+      .mockResolvedValueOnce({ vozId: 'voz-1', hablante: H1, continuidad: false, evidencia: true, vector: VEC0 })
+      .mockResolvedValueOnce({ vozId: 'voz-1', hablante: H1, continuidad: true, evidencia: true, vector: VEC0 })
     const { result } = montar()
     await waitFor(() => expect(typeof result.current.resolveSpeaker).toBe('function'))
 
-    h.embedding.vector = vectorEn(0)
     const primero = await result.current.resolveSpeaker('apaga la luz', audioVoz(1), SR, 'FLU')
     const segundo = await result.current.resolveSpeaker('sube el volumen', audioVoz(1), SR, 'FLU')
 
+    const arg = argResolver(1)
+    expect(arg.ultimoVozId).toBe('voz-1')
+    expect(arg.ultimoVector).toEqual(VEC0)
+    // La continuidad NO abre voz nueva: el contador sigue en 1 (la 1ª medida
+    // abrió la voz y solo una voz NUEVA lo incrementa).
+    expect(arg.contadorVoces).toBe(1)
     expect(segundo.speakerName).toBe(primero.speakerName)
-    expect(lineasIdentity()[1]).toContain(`reason=cluster-match`)
-    // La continuidad ya NO vive en un `distanceToLast` local (borrado): la decide el dueño.
-    expect(segundo.evidenciaAcustica).toBe(false)
+    expect(segundo.evidenciaAcustica).toBe(true)
   })
 
-  it('una voz distinta con ventana sostenida abre "Hablante 2" por el dueño', async () => {
+  it('una voz distinta abre "Hablante 2" y el contador de voces avanza para la medida siguiente', async () => {
+    h.resolver
+      .mockResolvedValueOnce({ vozId: 'voz-1', hablante: H1, continuidad: false, evidencia: true, vector: VEC0 })
+      .mockResolvedValueOnce({ vozId: 'voz-2', hablante: H2, continuidad: false, evidencia: true, vector: VEC1 })
     const { result } = montar()
     await waitFor(() => expect(typeof result.current.resolveSpeaker).toBe('function'))
 
     const primero = await result.current.resolveSpeaker('empieza el minuto', audioVoz(1), SR, 'FLU')
-    // Vector ORTOGONAL (coseno 0) + ventana por encima de conversationMinVoicedForNewMs.
-    h.embedding.vector = vectorEn(1)
-    const otro = await result.current.resolveSpeaker('pon el temporizador', audioVoz(2.6), SR, 'FLU')
+    const otro = await result.current.resolveSpeaker('pon el temporizador', audioVoz(1), SR, 'FLU')
 
-    expect(primero.speakerName).toBe(FLU_CONFIG.voiceIdentity.labels.template.replace('{n}', '1'))
-    expect(otro.speakerName).toBe(FLU_CONFIG.voiceIdentity.labels.template.replace('{n}', '2'))
-    expect(lineasIdentity()[1]).toContain('reason=new-cluster')
+    expect(primero.speakerName).toBe(H1)
+    expect(otro.speakerName).toBe(H2)
+    // La primera medida abrió una voz nueva: la medida siguiente ya recibe 1.
+    expect(argResolver(1).contadorVoces).toBe(1)
   })
 
-  it('sin audio NO hay medición: devuelve el respaldo y no emite la línea del dueño', async () => {
+  it('sin audio NO hay medición: fallback ciego y el resolver del módulo NO se llama', async () => {
     const { result } = montar()
     await waitFor(() => expect(typeof result.current.resolveSpeaker).toBe('function'))
 
     const r = await result.current.resolveSpeaker('hola', new Float32Array(0), SR, 'FLU')
 
+    expect(h.resolver).not.toHaveBeenCalled()
+    // blindSpeakerFallback('FLU'): 'FLU' NO es nombre propio (dueño único
+    // `isProperSpeakerName`) → se conserva; no se inventa una etiqueta.
     expect(r.speakerName).toBe('FLU')
     expect(r.resolvedSpeakerName).toBe('FLU')
-    expect(lineasIdentity()).toHaveLength(0)
+    expect(r.evidenciaAcustica).toBe(false)
+    expect(h.relayLog.mock.calls.some((c) => c[1] === 'SpeakerTrace')).toBe(true)
   })
 
-  it('sin wake, "soy X" NO infiere nombre (politica unica del resolutor en la rama pasiva)', async () => {
+  it('sin wake, "soy X" NO infiere nombre (política del dueño único resolveSpeakerNameFromUtterance)', async () => {
+    h.resolver.mockResolvedValueOnce({ vozId: 'voz-1', hablante: H1, continuidad: false, evidencia: true, vector: VEC0 })
     const { result } = montar()
     await waitFor(() => expect(typeof result.current.resolveSpeaker).toBe('function'))
 
@@ -203,26 +225,32 @@ describe('modo pasivo — UNA sola decisión de hablante (dueño canónico)', ()
 
     // requireWakeWordForSpeakerName: true -> sin wake no hay nombre propio (auditoria 2026-10-23).
     expect(r.introducedName).toBe('')
-    // `speakerName` es lo que midió el dueño; `resolvedSpeakerName` trae la etiqueta de la frase.
-    expect(r.speakerName).toBe(FLU_CONFIG.voiceIdentity.labels.template.replace('{n}', '1'))
-    expect(r.resolvedSpeakerName).toBe(r.speakerName)
+    expect(r.speakerName).toBe(H1)
+    expect(r.resolvedSpeakerName).toBe(H1)
     expect(r.speakerAlias).toBeNull()
-    // La linea `Identity` la emite el resolutor canonico (evidencia de la ruta); lo que ya
-    // NO aparece es el NOMBRE inferido sin wake.
-    expect(lineasIdentity()).toHaveLength(1)
   })
-})
 
-describe('modo pasivo — la rama pasiva no tiene decisor propio', () => {
-  it('dos voces distintas sin ventana sostenida NO abren cluster nuevo (piso del dueño)', async () => {
+  it('sin evidencia del resolver: fallback ciego sin evidencia acustica y la cadena NO avanza', async () => {
+    h.resolver
+      .mockResolvedValueOnce({ vozId: 'voz-1', hablante: H1, continuidad: false, evidencia: true, vector: VEC0 })
+      .mockResolvedValueOnce({ vozId: '', hablante: '', continuidad: false, evidencia: false, vector: null })
     const { result } = montar()
     await waitFor(() => expect(typeof result.current.resolveSpeaker).toBe('function'))
 
-    await result.current.resolveSpeaker('hola', audioVoz(1), SR, 'FLU')
-    h.embedding.vector = vectorEn(1)
-    // 1 s < conversationMinVoicedForNewMs (2200 ms): el dueño conserva la etiqueta.
-    const r = await result.current.resolveSpeaker('adios', audioVoz(1), SR, 'FLU')
+    const primero = await result.current.resolveSpeaker('hola', audioVoz(1), SR, 'FLU')
+    expect(primero.speakerName).toBe(H1)
 
-    expect(r.speakerName).toBe(FLU_CONFIG.voiceIdentity.labels.template.replace('{n}', '1'))
+    // La medida falló: el hook degrada a ciego (la última voz resuelta, no un nombre inventado).
+    const r = await result.current.resolveSpeaker('adios', audioVoz(1), SR, 'FLU')
+    expect(r.speakerName).toBe(H1)
+    expect(r.evidenciaAcustica).toBe(false)
+
+    // Y la cadena NO avanzó: la medida siguiente recibe la MISMA voz y el MISMO contador.
+    h.resolver.mockResolvedValueOnce({ vozId: 'voz-2', hablante: H2, continuidad: false, evidencia: true, vector: VEC1 })
+    const tercera = await result.current.resolveSpeaker('otra frase', audioVoz(1), SR, 'FLU')
+    const arg = argResolver(2)
+    expect(arg.ultimoVozId).toBe('voz-1')
+    expect(arg.contadorVoces).toBe(1)
+    expect(tercera.speakerName).toBe(H2)
   })
 })

@@ -1,6 +1,14 @@
+// Corte 2026-10-26: `isAssistantVoiceEcho` (conversationStream.js, isla de la
+// tuberia retirada) se sustituye por el dueno vivo del detector de eco:
+// `esEcoDeTts` (src/voice/conversation/eco.ts). `deriveAssistantLastText`
+// (conversationDialogue.js) sigue vivo y se conserva tal cual.
 import { describe, expect, it } from 'vitest';
 import { deriveAssistantLastText } from '../src/voice/lib/conversationDialogue.js';
-import { isAssistantVoiceEcho } from '../src/voice/lib/conversationStream.js';
+import { esEcoDeTts } from '../src/voice/conversation/eco.ts';
+import { VOICE_DIARIZATION_DEFAULTS } from '../src/core/config/sharedConfig';
+
+/** Mismo valor que cablea el puerto de config (adapters.ts): assistantEchoMinWords + 1. */
+const MIN_PALABRAS_COLA = VOICE_DIARIZATION_DEFAULTS.assistantEchoMinWords + 1;
 
 const FLU_TTS = 'Claro que sí, ¡vamos a jugar lotería! Prepárense para la diversión.';
 
@@ -20,37 +28,39 @@ describe('eco de la propia voz de FLU (no debe ser un turno de persona)', () => 
 
     it('el TTS re-capturado por el micrófono se reconoce como eco', () => {
         expect(
-            isAssistantVoiceEcho('vamos a jugar lotería prepárense para la diversión', FLU_TTS),
+            esEcoDeTts('vamos a jugar lotería prepárense para la diversión', FLU_TTS, MIN_PALABRAS_COLA),
         ).toBe(true);
     });
 
     it('una frase del usuario ajena al TTS no se descarta', () => {
-        expect(isAssistantVoiceEcho('agrega cloro a la nota del super', FLU_TTS)).toBe(false);
+        expect(esEcoDeTts('agrega cloro a la nota del super', FLU_TTS, MIN_PALABRAS_COLA)).toBe(false);
     });
 
-    it('una frase corta no se descarta aunque aparezca en el TTS', () => {
-        expect(isAssistantVoiceEcho('sí', 'Claro que sí')).toBe(false);
+    it('una frase corta no se descarta aunque aparezca en el TTS (no es la cola)', () => {
+        // El dueño vivo declara eco por cola exacta o por cola que abre el fragmento
+        // (minimo 4 palabras); repetir una palabra suelta del medio NO es eco.
+        expect(esEcoDeTts('sí', 'Claro que sí, vamos a jugar', MIN_PALABRAS_COLA)).toBe(false);
     });
 
     it("un fragmento CORTO dentro de una respuesta LARGA de FLU no se descarta", () => {
         // Caso reportado: el usuario retoma palabras de lo que acaba de decir FLU
         // ("...poner esto en orbita...") y su turno se perdia (solo se veia en la
-        // ultima frase). La corrida contigua existe, pero NO cubre la respuesta.
+        // ultima frase). La corrida contigua existe, pero NO es la cola: no es eco.
         const fluLargo =
             'Entonces si quieres poner esto en orbita y luego tienes que llevar el uno por ciento de la masa y vivir dentro de una cueva en otro planeta';
-        expect(isAssistantVoiceEcho('si quieres poner esto en orbita', fluLargo)).toBe(false);
+        expect(esEcoDeTts('si quieres poner esto en orbita', fluLargo, MIN_PALABRAS_COLA)).toBe(false);
     });
 
     it("la respuesta COMPLETA re-capturada si es eco (protege el caso original)", () => {
         const fluLargo =
             'Entonces si tu quieres poner esto en orbita y luego tienes que llevar el uno por ciento de la masa';
-        expect(isAssistantVoiceEcho(fluLargo, fluLargo)).toBe(true);
+        expect(esEcoDeTts(fluLargo, fluLargo, MIN_PALABRAS_COLA)).toBe(true);
     });
 });
 
 describe('PRUEBA DE DETECTOR (el detector no es decorativo)', () => {
     it('marca el eco re-capturado y NO una frase ajena al TTS', () => {
-        expect(isAssistantVoiceEcho(FLU_TTS, FLU_TTS)).toBe(true);
-        expect(isAssistantVoiceEcho('compra pan y leche en el super', FLU_TTS)).toBe(false);
+        expect(esEcoDeTts(FLU_TTS, FLU_TTS, MIN_PALABRAS_COLA)).toBe(true);
+        expect(esEcoDeTts('compra pan y leche en el super', FLU_TTS, MIN_PALABRAS_COLA)).toBe(false);
     });
 });

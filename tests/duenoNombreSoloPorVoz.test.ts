@@ -16,7 +16,6 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { resolveCommitStickyFallback } from '../src/voice/lib/speakerPolicy.js'
 import { buildConversationLog } from '../src/core/ai/aiServiceBase'
-import { listSessionSpeakers } from '../src/voice/lib/conversationSession.js'
 import { registerVoiceName, resetVoiceDirectory } from '../src/voice/lib/speakerDirectory.js'
 
 afterEach(() => resetVoiceDirectory())
@@ -90,11 +89,8 @@ describe('N2 - lo que ve la IA es el nombre RESUELTO (no la etiqueta cruda)', ()
     expect(log).toContain('Hablante 2: hola')
   })
 
-  it('los hablantes de la sesion se listan por su VOZ resuelta', () => {
-    registerVoiceName('speaker_1', 'Luis')
-    const speakers = listSessionSpeakers([
-      { role: 'user', text: 'hola', speakerId: 'speaker_1', speakerName: 'Luis' },
-    ] as never)
-    expect(speakers).toContain('Luis')
-  })
+  // RETIRADO (corte 2026-10-26): `listSessionSpeakers` vivia en conversationSession.js
+  // (isla de la tuberia vieja, sin consumidores en src tras el corte). La cobertura de
+  // "la IA ve el nombre resuelto, no la etiqueta cruda" la sostienen los dos casos vivos
+  // de arriba con el dueno real (buildConversationLog).
 })

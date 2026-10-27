@@ -16,7 +16,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { useIntegrationStore } from '../src/store/integrationStore'
-import { commitUserTurnRow } from '../src/voice/lib/conversationTurnRow'
+import { commitUserTurnRow } from '../src/voice/conversation'
 import {
   applyKnownVoiceName,
   registerSpeakerIdentity,

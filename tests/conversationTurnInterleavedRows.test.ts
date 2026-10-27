@@ -7,7 +7,7 @@
 // ============================================================
 import { describe, it, expect, beforeEach } from 'vitest';
 import { useIntegrationStore } from '../src/store/integrationStore';
-import { commitUserTurnRow } from '../src/voice/lib/conversationTurnRow';
+import { commitUserTurnRow } from '../src/voice/conversation';
 import { resolveRowSpeakerLabel } from '../src/voice/lib/conversationRow';
 
 const userRows = () =>

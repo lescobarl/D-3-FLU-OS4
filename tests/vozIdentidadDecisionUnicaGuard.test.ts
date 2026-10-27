@@ -1,98 +1,137 @@
 // ============================================================
-// vozIdentidadDecisionUnicaGuard - la DECISION "voz conocida vs voz nueva"
-// (quien habla) tiene UN SOLO DUENO.
+// vozIdentidadDecisionUnicaGuard - la DECISION de identidad de voz tiene
+// UN SOLO DUENO.
 // ------------------------------------------------------------
-// RUTA DOBLE DE RESPONSABILIDAD MEDIDA (2026-10-09). El encabezado de
-// speakerDiarization.js:6 AFIRMA "El Worker y el hilo principal consumen el mismo
-// nucleo (speakerCore.js)"... y es verdad solo a medias: comparten las PRIMITIVAS
-// (coseno, normalizacion) pero CADA UNO implementa su DECISION:
-//   - WORKER:            speakerCore.assignSpeaker   (voiceId.worker.js:104)
-//   - HILO PRINCIPAL:    speakerDiarization.resolveProductionSpeakerAtBoundary /
-//                        resolveRoomNearestNeighbor (dentro de resolveConversationSpeaker)
-// El log del dueno (17:18-17:21) muestra LAS DOS decidiendo en la misma sesion
-// (`Match reason=...` del worker + `identity {resolved-idle}` del principal) y la
-// MISMA voz en Hablante 2/3/4 (new-voice-below-threshold=3, forced-...=1).
+// DECISION B, POR ESCRITO (corte 2026-10-26): SIN identidad acustica. El dueno
+// de la etiqueta `Hablante N` es el que la ASIGNA: `decidirIdentidad`
+// (src/voice/conversation/identidad.ts) es el UNICO modulo que la implementa
+// (asigna `hablante: entrada.etiquetaNueva` a una voz nueva). La continuidad
+// por coseno es una MEDIDA inyectada (`comparar`, llegada por el puerto del
+// embebedor), no una decision del modulo: nadie decide hablante comparando
+// cosenos por su cuenta.
 //
-// QUE MIDE (AGENTS 7.7.d: implementaciones, no literales): modulos que IMPLEMENTAN
-// la decision (una funcion que decide hablante comparando cosenos) frente a los que
-// solo COMPARAN cosenos o consumen el resultado.
+// Las decisoras de la diarizacion retirada (assignSpeaker /
+// resolveProductionSpeakerAtBoundary / resolveRoomNearestNeighbor, de la
+// tuberia vieja) NO deben existir: si vuelven, este guard se pone ROJO.
 //
-// NACE ROJO: hoy 2 modulos la implementan (speakerCore + speakerDiarization).
+// QUE MIDE (AGENTS 7.7.d: implementaciones, no literales): modulos que
+// IMPLEMENTAN la decision B (definen `decidirIdentidad` Y asignan la etiqueta)
+// frente a los que solo la consumen; y que ninguna decisora retirada vuelva
+// a medir coseno.
+//
+// ESTADO PREVIO: el guard exigia 1 decisora por coseno y el corte de la
+// diarizacion dejo 0 (la regla habia cambiado, no el dueno): la regla se
+// declara POR ESCRITO, no se afloja.
 // ============================================================
 import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const ROOT = process.cwd()
-/** Funciones que DECIDEN hablante (no las que solo miden similitud). */
-const DECISORAS = /(export\s+)?function\s+(assignSpeaker|resolveProductionSpeakerAtBoundary|resolveRoomNearestNeighbor)\b/
+/** Funciones que DECIDIAN hablante en la diarizacion retirada (no deben volver). */
+const DECISORAS_RETIRADAS = /(export\s+)?function\s+(assignSpeaker|resolveProductionSpeakerAtBoundary|resolveRoomNearestNeighbor)\b/
 const COSENO = /compareCosineSignatures\s*\(/
+/** La decision B: define la regla de identidad del modulo. */
+const DECISORA_B = /\bfunction\s+decidirIdentidad\b/
+/** La decision B asigna la etiqueta anonima a una voz nueva (forma real de la regla). */
+const ETIQUETA_B = /hablante:\s*entrada\.etiquetaNueva/
 
-/** Predicado puro: la linea define una funcion decisora. */
-export function defineDecisora(linea: string): boolean {
-    const t = String(linea || '').trim()
-    if (!t || t.startsWith('*') || t.startsWith('//') || t.startsWith('/*')) return false
-    return DECISORAS.test(t)
-}
-
-/** Modulos que IMPLEMENTAN la decision (definen una decisora y miden coseno). */
+/** Modulos que IMPLEMENTAN la decision B (definen la regla Y asignan la etiqueta). */
 export function modulosQueDeciden(fuentes: Record<string, string>): string[] {
     const out: string[] = []
     for (const [ruta, texto] of Object.entries(fuentes)) {
-        const define = String(texto).split(/\r?\n/).some((l) => defineDecisora(l))
+        if (DECISORA_B.test(String(texto)) && ETIQUETA_B.test(String(texto))) out.push(ruta)
+    }
+    return out.sort()
+}
+
+/** Modulos con una decisora de la diarizacion RETIRADA que ademas mediria coseno. */
+export function modulosConDecisoraRetirada(fuentes: Record<string, string>): string[] {
+    const out: string[] = []
+    for (const [ruta, texto] of Object.entries(fuentes)) {
+        const define = String(texto).split(/\r?\n/).some((l) => {
+            const t = String(l || '').trim()
+            if (!t || t.startsWith('*') || t.startsWith('//') || t.startsWith('/*')) return false
+            return DECISORAS_RETIRADAS.test(t)
+        })
         if (define && COSENO.test(String(texto))) out.push(ruta)
     }
     return out.sort()
 }
 
-function ficherosJsVoz(): string[] {
+function ficherosVoz(): string[] {
     const out: string[] = []
     const walk = (dir: string) => {
         for (const entry of readdirSync(dir, { withFileTypes: true })) {
             const p = join(dir, entry.name)
             if (entry.isDirectory()) walk(p)
-            else if (entry.name.endsWith('.js')) out.push(p)
+            else if (/\.(js|ts)$/.test(entry.name) && !entry.name.endsWith('.d.ts')) out.push(p)
         }
     }
     walk(join(ROOT, 'src', 'voice'))
     return out
 }
 
-describe('vozIdentidadDecisionUnicaGuard - decidir quien habla tiene un solo dueno', () => {
-    it('un solo modulo IMPLEMENTA la decision por coseno (no dos)', () => {
-        const fuentes: Record<string, string> = {}
-        for (const f of ficherosJsVoz()) {
-            fuentes[f.replace(ROOT, '').replace(/\\/g, '/').replace(/^\//, '')] = readFileSync(f, 'utf8')
-        }
-        const sitios = modulosQueDeciden(fuentes)
+function fuentesVoz(): Record<string, string> {
+    const fuentes: Record<string, string> = {}
+    for (const f of ficherosVoz()) {
+        fuentes[f.replace(ROOT, '').replace(/\\/g, '/').replace(/^\//, '')] = readFileSync(f, 'utf8')
+    }
+    return fuentes
+}
+
+describe('vozIdentidadDecisionUnicaGuard - la decision B tiene un solo dueno', () => {
+    it('un solo modulo IMPLEMENTA la decision B (decidirIdentidad asigna la etiqueta)', () => {
+        const sitios = modulosQueDeciden(fuentesVoz())
         expect(
             sitios,
-            'modulos que IMPLEMENTAN la decision de identidad (debe ser 1): ' + sitios.join(', '),
-        ).toHaveLength(1)
+            'modulos que IMPLEMENTAN la decision B (debe ser 1, identidad.ts): ' + sitios.join(', '),
+        ).toEqual(['src/voice/conversation/identidad.ts'])
+    })
+
+    it('ninguna decisora de la diarizacion retirada vuelve', () => {
+        const sitios = modulosConDecisoraRetirada(fuentesVoz())
+        expect(
+            sitios,
+            'decisoras retiradas que volvieron (deben ser 0): ' + sitios.join(', '),
+        ).toEqual([])
     })
 })
 
 describe('vozIdentidadDecisionUnicaGuard - el detector no es decorativo', () => {
-    it('cuenta solo a quien DEFINE la decisora y mide coseno', () => {
+    it('cuenta solo a quien DEFINE la decision B y asigna la etiqueta; el consumidor no', () => {
         const fuentes = {
-            'src/dueno.js':
-                'function assignSpeaker(v) {\n  return compareCosineSignatures(a, b)\n}',
-            'src/consumidor.js':
-                'import { assignSpeaker } from "./dueno.js"\nconst x = compareCosineSignatures(a, b)\nconst y = assignSpeaker(v)',
+            'src/dueno.ts':
+                'export function decidirIdentidad(entrada) {\n  return { vozId: entrada.id(), continuidad: false, hablante: entrada.etiquetaNueva }\n}',
+            'src/consumidor.ts':
+                'import { decidirIdentidad } from "./dueno.js"\nconst d = decidirIdentidad(e)',
         }
-        expect(modulosQueDeciden(fuentes)).toEqual(['src/dueno.js'])
+        expect(modulosQueDeciden(fuentes)).toEqual(['src/dueno.ts'])
     })
 
     it('una segunda decision SI se marca (control positivo)', () => {
         const fuentes = {
-            'src/dueno.js': 'function assignSpeaker(v) {\n return compareCosineSignatures(a, b)\n}',
-            'src/clon.js': 'function resolveRoomNearestNeighbor(v) {\n return compareCosineSignatures(a, b)\n}',
+            'src/dueno.ts': 'function decidirIdentidad(entrada) {\n return { hablante: entrada.etiquetaNueva }\n}',
+            'src/clon.ts': 'function decidirIdentidad(entrada) {\n return { hablante: entrada.etiquetaNueva }\n}',
         }
-        expect(modulosQueDeciden(fuentes)).toEqual(['src/clon.js', 'src/dueno.js'])
+        expect(modulosQueDeciden(fuentes)).toEqual(['src/clon.ts', 'src/dueno.ts'])
     })
 
-    it('no marca a quien solo mide coseno sin decidir', () => {
-        const fuentes = { 'src/medidor.js': 'export function compareCosineSignatures(a, b) { return a }' }
+    it('no marca a quien define la regla SIN asignar la etiqueta', () => {
+        const fuentes = { 'src/incompleto.ts': 'export function decidirIdentidad(e) { return { vozId: e.id() } }' }
         expect(modulosQueDeciden(fuentes)).toEqual([])
+    })
+
+    it('marca la decisora retirada si vuelve con coseno, y perdona al medidor puro', () => {
+        expect(
+            modulosConDecisoraRetirada({
+                'src/viejo.js': 'function assignSpeaker(v) {\n  return compareCosineSignatures(a, b)\n}',
+            }),
+        ).toEqual(['src/viejo.js'])
+        expect(
+            modulosConDecisoraRetirada({
+                'src/medidor.js': 'export function compareCosineSignatures(a, b) { return a }',
+            }),
+        ).toEqual([])
     })
 })

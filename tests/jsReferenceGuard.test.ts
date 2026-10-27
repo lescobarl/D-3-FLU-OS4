@@ -9,97 +9,33 @@
  * significa "esto revienta al ejecutarse" es TS2304/TS2552 ("Cannot find name"):
  * codigo que llama a algo que no existe.
  *
- * Eran 8 en base 7bf93f0. Seis REALES y dos falsos positivos:
- *   - turnTranscript.js:49 usaba `getTranscriptDelta` desnudo, pero el import lo
- *     renombraba a `getTranscriptDeltaFromBoundary`. El caso 1 de aqui LANZABA
- *     ReferenceError.
- *   - conversationStream.js usaba `countSpeechWords` en 4 sitios, y el import lo
- *     renombraba a `countWordsFromPauseCfg`. `evaluateSrGapSegmentCommit` (gap de
- *     10 s por defecto, NO desactivado) LANZABA ReferenceError: casos 3 y 4.
- *   - turnStream.js:37 usaba `readTurnLive` sin importarlo: caso 5.
- *   - micCapture.processor.js: `AudioWorkletProcessor` y `registerProcessor` si
- *     existen, pero en el hilo de audio, y lib.dom no los declara. No tocados
- *     como bug: se declaran en micCapture.processor.d.ts.
+ * CAUSA RAIZ de los casos medidos entonces, la misma: `export { X } from './y'`
+ * NO crea un binding local de X. Comprobado con Node: da `ReferenceError: X is
+ * not defined`. El reexport deja el nombre visible para los demas modulos, pero
+ * dentro del fichero X sigue sin existir.
  *
- * CAUSA RAIZ de los tres primeros, la misma: `export { X } from './y'` NO crea un
- * binding local de X. Comprobado con Node: da `ReferenceError: X is not defined`.
- * El reexport deja el nombre visible para los demas modulos, pero dentro del
- * fichero X sigue sin existir; por eso los tres pasaban desapercibidos.
+ * La metrica es una sola fuente (scripts/js-ref-metric.mjs, export
+ * `erroresDeNombreLibre`) y este guard la importa para que metrica y guard no
+ * puedan divergir.
  *
- * El guard se prueba con entradas REALES y valores exactos (prueba de mutacion:
- * en base, los casos 1, 3, 4 y 5 fallan con ReferenceError, asi que estos casos
- * falsifican de verdad y no son decorativos).
+ * Corte 2026-10-26 (feature/conversacion-modulo-nuevo): los 5 casos de
+ * ejemplar (stripCommittedPrefix, evaluateSrGapSegmentCommit x2,
+ * isTailOnlyInterimCapture y applyMicPreview) se retiraron con sus duenos
+ * (turnTranscript.js BORRADO; conversationStream.js, transcriptDelta.js y
+ * turnStream.js huerfanos tras el commit 365eeef5). Quedan los DOS casos que
+ * miden la metrica en si: la ausencia completa y el no-bloqueo del event loop.
  */
 import { describe, expect, it } from 'vitest'
 import { ticksWhile } from './_asyncExec'
 import { erroresDeNombreLibre } from '../scripts/js-ref-metric.mjs'
-import {
-  evaluateSrGapSegmentCommit,
-  isTailOnlyInterimCapture,
-} from '../src/voice/lib/conversationStream.js'
-import { getTranscriptDelta } from '../src/voice/lib/transcriptDelta.js'
-import { applyMicPreview, createTurnStreamState } from '../src/voice/lib/turnStream.js'
-import { stripCommittedPrefix } from '../src/voice/lib/turnTranscript.js'
 
 describe('P6.7 jsReferenceGuard - referencias a nombres que no existen', () => {
-  it('stripCommittedPrefix usa el delta real y no un nombre libre', () => {
-    // Antes: `getTranscriptDelta is not defined` por este mismo camino.
-    expect(stripCommittedPrefix('aa bb', 'xx yy zz')).toBe(getTranscriptDelta('aa bb', 'xx yy zz'))
-    expect(stripCommittedPrefix('aa bb', 'xx yy zz')).toBe('xx yy zz')
-    // El camino que ya funcionaba (el fragmento empieza por lo registrado) sigue igual.
-    expect(stripCommittedPrefix('buenos dias', 'buenos dias que tal')).toBe('que tal')
-  })
-
-  it('evaluateSrGapSegmentCommit cuenta palabras y no revienta (linea 359)', () => {
-    const r = evaluateSrGapSegmentCommit(
-      { openLine: 'hola mundo' },
-      { sinceLastResultMs: 10001, lastCommitted: '' },
-    )
-    // Cierre por SILENCIO con DOS palabras: la regla de cierre del dueno (2026-10-11) baja el
-    // minimo 3 -> 2 (medido: "no man" nunca cerraba -> sin fila, sin respuesta, sin reascuchar).
-    expect(r).toEqual({ flush: true, capture: 'hola mundo', reason: 'sr-gap-segment-commit', sinceLastResultMs: 10001, openLineAgeMs: 0 })
-    // UNA palabra TAMBIEN cierra: con el minimo en 2, "hola" se quedaba en ULTIMA FRASE y no
-    // pasaba a la conversacion (medido por el dueno 2026-10-11 21:25:42: asrFinal "Hola"
-    // len=4 sin commit; el srGap de 21:25:49 bloqueado por too-short).
-    const r1 = evaluateSrGapSegmentCommit({ openLine: 'hola' }, { sinceLastResultMs: 10001, lastCommitted: '' })
-    expect(r1).toEqual({ flush: true, capture: 'hola', reason: 'sr-gap-segment-commit', sinceLastResultMs: 10001, openLineAgeMs: 0 })
-    // La linea VACIA sigue sin cerrar (la rama no se queda sin cubrir).
-    const r0 = evaluateSrGapSegmentCommit({ openLine: '   ' }, { sinceLastResultMs: 10001, lastCommitted: '' })
-    expect(r0).toEqual({ flush: false, capture: '', reason: 'empty-openline' })
-  })
-
-  it('evaluateSrGapSegmentCommit con prior cuenta la extension (lineas 369/370)', () => {
-    const r = evaluateSrGapSegmentCommit(
-      { openLine: 'hola mundo que tal' },
-      { sinceLastResultMs: 10001, lastCommitted: 'hola' },
-    )
-    expect(r).toEqual({
-      flush: true,
-      capture: 'hola mundo que tal',
-      reason: 'sr-gap-segment-commit',
-      sinceLastResultMs: 10001,
-      openLineAgeMs: 0,
-    })
-  })
-
-  it('isTailOnlyInterimCapture sigue dando un booleano', () => {
-    expect(isTailOnlyInterimCapture('hola mundo')).toBe(false)
-    expect(typeof isTailOnlyInterimCapture('hola mundo que tal y mas')).toBe('boolean')
-  })
-
-  it('applyMicPreview no depende de readTurnLive sin importar (linea 37)', () => {
-    const r = applyMicPreview(createTurnStreamState(), {}, {})
-    expect(r.changed).toBe(false)
-    expect(r.preview).toBe('')
-    expect(typeof r.packet).toBe('object')
-  })
-
   // `tsc --checkJs` tarda ~11 s: el timeout se declara aqui para que el
   // guard no dependa de que quien lo invoque pase --testTimeout (lint:guards
   // no lo pasa y el defecto de 5 s lo cortaria).
   it('no queda ningun nombre inexistente en src/ (checkJs)', { timeout: 120000 }, async () => {
-    // El detector se prueba en los casos de arriba; aqui se mide la ausencia
-    // completa. Si aparece un nombre nuevo sin definir, este caso lo caza.
+    // La metrica es la unica fuente (scripts/js-ref-metric.mjs); aqui se mide la
+    // ausencia completa. Si aparece un nombre nuevo sin definir, este caso lo caza.
     const errores = await erroresDeNombreLibre()
     expect(errores, `nombres inexistentes:\n  ${errores.join('\n  ')}`).toEqual([])
   })

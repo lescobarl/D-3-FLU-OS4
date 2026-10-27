@@ -23,9 +23,8 @@ import {
 import {
     splitTranscriptAtWakeWord,
 } from '../src/voice/lib/audioMath.js';
-import { isDuplicateTurnCommit } from '../src/voice/lib/turnStream.js';
 import { spokenUtteranceRevision } from '../src/voice/lib/audioMath.js';
-import { isProgressiveExtension } from '../src/voice/lib/conversationStream.js';
+import { unirRevision, decidirRevision } from '../src/voice/conversation/revision.ts';
 import { resolveInlineWakeAtCommit } from '../src/voice/lib/wakeTurnCommit.js';
 import { FLU_CONFIG } from '../src/voice/lib/fluConfig.js';
 
@@ -110,12 +109,10 @@ function regla10SinDuplicado(): Resultado {
 /**
  * El doble turno: la MISMA orden reemitida con un resultado de reconocimiento
  * nuevo (eco de FLU / ruido de sala) no puede producir un segundo despacho. El
- * DUENO de esa decision NO es isDuplicateTurnCommit: su contrato, con guard
- * congelado en voiceTurnRefireDedup, es "pausa (habla nueva) => turno nuevo", asi
- * que exigirle que descarte aqui un resultado nuevo contradecia ese guard. El
- * dueno real es la capa de commit, que recorta el eco de wake+orden que la
- * captura arrastra. Si ese recorte no ocurre, la orden se despacha otra vez:
- * una orden, dos cartas.
+ * DUENO de esa decision NO es el discriminante por timestamps de la tuberia
+ * vieja (retirado con ella); el dueno real es la capa de commit, que recorta
+ * el eco de wake+orden que la captura arrastra. Si ese recorte no ocurre, la
+ * orden se despacha otra vez: una orden, dos cartas.
  */
 function reglaEcoNeutralizado(): Resultado {
     const r = resolveInlineWakeAtCommit(
@@ -134,14 +131,17 @@ function reglaEcoNeutralizado(): Resultado {
 /** Regla 14: los dos comparadores de revision ASR son DISTINTOS a proposito. */
 function regla14Comparadores(): Resultado {
     if (typeof spokenUtteranceRevision !== 'function') return 'falta spokenUtteranceRevision';
-    if (typeof isProgressiveExtension !== 'function') return 'falta isProgressiveExtension';
-    // Mismo par de frases: NO son el mismo criterio.
+    if (typeof unirRevision !== 'function') return 'falta unirRevision';
+    // Mismo par de frases: NO son el mismo criterio. El comparador del ASR pela la
+    // wake y declara 'equal'; la union del modulo ve una reemision MAS CORTA y
+    // declara 'revisa' sin pintar (la locucion nunca pierde palabras).
     const ultimo = 'okay flow siguiente carta';
     const siguiente = 'siguiente carta';
     const revision = spokenUtteranceRevision(ultimo, siguiente, WAKE_WORDS);
-    const progresiva = isProgressiveExtension(siguiente, ultimo);
-    if (revision === progresiva) {
-        return `los dos criterios coinciden (${revision}): la regla 14 exige que sean distintos`;
+    const union = unirRevision(ultimo, siguiente);
+    if (revision !== 'equal') return `spokenUtteranceRevision debe declarar 'equal', dio ${String(revision)}`;
+    if (union.tipo !== 'revisa' || union.pintar !== false || union.texto !== ultimo) {
+        return `unirRevision debe declarar revisa sin pintar conservando el texto: ${JSON.stringify(union)}`;
     }
     return null;
 }
@@ -241,25 +241,27 @@ describe('simulador de reglas - escenarios ejercitados con entrada real', () => 
         expect(reglaEcoNeutralizado()).toBeNull();
     });
 
-    it('frontera del dueno: reemision SIN habla nueva es duplicado; pausa con habla nueva no lo es', () => {
-        // Contrato REAL de isDuplicateTurnCommit (guard congelado voiceTurnRefireDedup).
-        // El eco se neutraliza en la capa de commit, no aqui.
+    it('frontera del dueno: la reemision del MISMO tramo revisa; un tramo distinto abre locucion nueva', () => {
+        // Contrato REAL de decidirRevision (regla 3 del modulo, guard propio en
+        // conversacionRevision.test.ts): el tramo identifica la locucion; la
+        // re-emision de la misma locucion no duplica (reutiliza su fila, cubierto
+        // en conversacionEtapa3UnaFilaPorTramo.test.ts).
         expect(
-            isDuplicateTurnCommit('siguiente carta', {
-                lastEmitted: 'siguiente carta',
-                lastCommitted: 'siguiente carta',
-                lastResultAt: 1000,
-                lastCommitAt: 1200,
-            }),
-        ).toBe(true);
+            decidirRevision({
+                tramoAbierto: { id: 't1', texto: 'siguiente carta' },
+                tramoId: 't1',
+                texto: 'siguiente carta',
+                final: true,
+            }).tipo,
+        ).toBe('revisa');
         expect(
-            isDuplicateTurnCommit('siguiente carta', {
-                lastEmitted: 'siguiente carta',
-                lastCommitted: 'siguiente carta',
-                lastResultAt: 2000,
-                lastCommitAt: 1200,
-            }),
-        ).toBe(false);
+            decidirRevision({
+                tramoAbierto: { id: 't1', texto: 'siguiente carta' },
+                tramoId: 't2',
+                texto: 'siguiente carta',
+                final: false,
+            }).tipo,
+        ).toBe('nueva');
     });
 
     it('el mismo item repetido no duplica la lista', () => {

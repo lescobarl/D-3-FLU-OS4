@@ -5,7 +5,7 @@
  * VERDE cuando los tipos, stubs, deps, directorio e import muertos se eliminan
  * físicamente. Complementa (no sustituye) los guards C16/C17 ya congelados.
  */
-import { readFileSync, readdirSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
@@ -29,11 +29,9 @@ const DEAD_SYMBOLS = [
   // apareciendo como etiqueta de diagnostico y como ruta de import, asi que el detector
   // por nombre daria falso positivo. Se vigila con la asercion de API ('listenLog' in m).
 
-  // src/voice/lib/activeListen.js — deprecados/lectores sin consumidor.
-  'appendNewHeard',
-  'readSessionTranscript',
-  'readDisplayText',
-  'shouldEmitLog',
+  // src/voice/lib/activeListen.js — RETIRADO con la tubería vieja (corte 2026-10-26);
+  // sus símbolos muertos (appendNewHeard, readSessionTranscript, readDisplayText,
+  // shouldEmitLog) se custodian por la ausencia FÍSICA del fichero (ver el `it` abajo).
   // src/voice/lib/voiceCommands.js — wrapper deprecado sin consumidor.
   'getNavigationCommandSpeech',
 ]
@@ -125,12 +123,11 @@ describe('specificDeadGuard — sin código muerto ni basura específicos', () =
     const commands = await import('../src/voice/lib/voiceCommands.js')
     expect(typeof commands.getCommandSpeech).toBe('function')
     expect('getNavigationCommandSpeech' in commands).toBe(false)
+  })
 
-    const active = await import('../src/voice/lib/activeListen.js')
-    expect(typeof active.mergeSpeechText).toBe('function')
-    expect('appendNewHeard' in active).toBe(false)
-    expect('readSessionTranscript' in active).toBe(false)
-    expect('readDisplayText' in active).toBe(false)
-    expect('shouldEmitLog' in active).toBe(false)
+  it('activeListen.js ya no existe: se retiro con la tuberia vieja (corte 2026-10-26)', () => {
+    // El modulo isla entero se elimino fisicamente; la ausencia del fichero es el
+    // guard mas fuerte que la ausencia de sus simbolos (no pueden resucitar sin el).
+    expect(existsSync(join(ROOT, 'src', 'voice', 'lib', 'activeListen.js'))).toBe(false)
   })
 })

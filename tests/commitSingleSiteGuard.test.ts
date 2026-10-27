@@ -24,6 +24,10 @@ describe('C26 commitSingleSite — un solo commit de turno', () => {
       readFileSync(f, 'utf8')
         .split(/\r?\n/)
         .forEach((line, i) => {
+          // Corte 2026-10-26: la SUPERFICIE del módulo (fachada en adapters.ts y
+          // escritor en pasivo.ts) ES la ruta única; el guard vigila que ningún
+          // CONSUMIDOR de fuera del módulo escriba la fila por otra puerta.
+          if (r.startsWith('src/voice/conversation/')) return
           if (RE.test(strip(line)) && !/export function/.test(line)) {
             calls.push(`${r}:${i + 1}:${line.trim().slice(0, 110)}`)
           }

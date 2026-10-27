@@ -189,30 +189,36 @@ describe('🧪 Guard de estabilidad — Bug C: el proxy no puede tumbar Vite', (
 //
 // La corrección: en un rebuild el interino parcial se DESCARTA (no se
 // commitea) y la línea abierta se resetea limpia, sin emitir fila al log.
-describe('🧪 Guard de estabilidad — Bug D: flushListenStateBeforeRebuild no commitea interinos parciales', () => {
-    // Extrae el bloque completo de flushListenStateBeforeRebuild (desde su
-    // declaración hasta el cierre del useCallback).
-    function flushBlock(): string {
-        const start = VOICE_SRC.indexOf('const flushListenStateBeforeRebuild = useCallback');
-        expect(start, 'Debe existir flushListenStateBeforeRebuild').toBeGreaterThan(-1);
+describe('🧪 Guard de estabilidad — Bug D: el rebuild del reconocedor no commitea interinos parciales', () => {
+    // Extrae el bloque completo de rebuildRecognition (desde su declaración hasta el
+    // cierre del useCallback).
+    function rebuildBlock(): string {
+        const start = VOICE_SRC.indexOf('const rebuildRecognition = useCallback');
+        expect(start, 'Debe existir rebuildRecognition').toBeGreaterThan(-1);
         // El bloque termina en el "}, [" que cierra el useCallback + su array de deps.
         const end = VOICE_SRC.indexOf('}, [', start);
         expect(end, 'El useCallback debe cerrarse con }, [').toBeGreaterThan(start);
         return VOICE_SRC.slice(start, end);
     }
 
-    it('existe la función flushListenStateBeforeRebuild', () => {
-        expect(VOICE_SRC).toContain('const flushListenStateBeforeRebuild = useCallback');
+    it('existe el rebuild del reconocedor y NO commitea el interino parcial', () => {
+        // Corte 2026-10-26: `flushListenStateBeforeRebuild` salio con la tuberia vieja.
+        // El rebuild vivo es `rebuildRecognition`: recrea el SR y re-cablea los eventos
+        // SIN tocar la locucion del modulo (el defecto Bug D era commitear el parcial
+        // en vuelo como turno final).
+        expect(VOICE_SRC).toContain('const rebuildRecognition = useCallback');
+        expect(rebuildTocaLaLocucion(rebuildBlock()), 'el rebuild no toca la locución viva').toBe(false);
     });
 
-    it('rearma el preflight y NO cierra ni vacía la locución viva (el módulo es su dueño)', () => {
-        const block = flushBlock();
-        // Contrato nuevo (corte 2026-10-25): la locución viva y su cierre son del módulo
-        // CONVERSACIÓN (VAD), que SOBREVIVE al rebuild con su locución abierta (edb4a2b6).
-        // El hook solo rearma la medida de identidad del turno.
-        expect(block, 'rearma el preflight').toContain('preflightScheduledForTurnRef.current = false');
-        // Y no toca nada de la locución: ni la línea, ni el preview, ni la caja, ni cierra.
-        expect(rebuildTocaLaLocucion(block), 'el rebuild no toca la locución viva').toBe(false);
+    it('re-cablea el SR y NO cierra la sesion ni rearma el preflight del turno (el módulo es su dueño)', () => {
+        const block = rebuildBlock();
+        // Contrato nuevo (corte 2026-10-26): la locución viva y su cierre son del módulo
+        // CONVERSACIÓN, que SOBREVIVE al rebuild con su sesión abierta (edb4a2b6). El hook
+        // solo recrea el reconocedor y re-cablea onresult/onend/onerror.
+        expect(block, 're-cablea los eventos del SR nuevo').toContain('wireRecognitionEvents(Recognition)');
+        // El preflight de identidad del turno ya no vive en el hook (lo mide el módulo).
+        expect(VOICE_SRC, 'el preflight del turno ya no vive en el hook').not.toContain('preflightScheduledForTurnRef');
+        expect(block, 'el rebuild NO cierra la locución del módulo').not.toContain('.cerrar(');
         // La "ultima frase" NO se vacia en el rebuild (spec del dueno 2026-10-11): antes la
         // borraba a mitad de frase y producia el borra-y-reaparece. Su dueno es el reset de sesion/voz.
         expect(block, 'NO debe borrar la memoria de la frase viva').not.toContain("publishedLiveRef.current = ''");

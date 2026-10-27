@@ -25,11 +25,13 @@ vi.mock('../src/voice/lib/conversationRow', async (importOriginal) => {
 })
 
 import { useIntegrationStore } from '../src/store/integrationStore'
-import { commitUserTurnRow } from '../src/voice/lib/conversationTurnRow'
+import { commitUserTurnRow } from '../src/voice/conversation'
 import { formatRowClock, resolveRowSpeakerLabel } from '../src/voice/lib/conversationRow'
 import { ConversationLog } from '../src/voice/components/ConversationLog'
 
-const ESCRITOR = 'src/voice/lib/conversationTurnRow.ts'
+// Corte 2026-10-26: el escritor retirado (conversationTurnRow.ts) se sustituyo por el
+// del modulo nuevo (pasivo.ts); el guard de TEXTO lee el archivo VIVO.
+const ESCRITOR = 'src/voice/conversation/pasivo.ts'
 
 /** El escritor de filas NO puede reconstruir la conversacion ni reescribir textos. */
 export function reconstruyeLaConversacion(fuente: string): string[] {

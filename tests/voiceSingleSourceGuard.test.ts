@@ -19,7 +19,6 @@ import { join, relative } from 'node:path'
 import { FLU_CONFIG } from '../src/voice/lib/fluConfig'
 import { ARBITER_DOMAINS, resolveDeterministicCommand } from '../src/voice/lib/deterministicArbiter'
 import { resolveConfigCommandFromText } from '../src/voice/lib/configCommands'
-import { detectNextSpeakerPhrase } from '../src/voice/lib/activeListen'
 import { VOICE_CONFIG_CATALOG } from '../src/core/config/voiceConfigCatalog'
 import { getGameEngine } from '../src/core/games/gameCatalog'
 import { setActiveGameSession, clearActiveGameSession } from '../src/core/games/gameSessionStore'
@@ -237,41 +236,13 @@ describe('voiceSingleSourceGuard — una sola fuente de verdad (§9)', () => {
 })
 
 // ------------------------------------------------------------
-// G11 - Las frases de mando de turno declaradas en la config tienen lector.
-// 'nextSpeaker' no lo resuelve el arbitro (es control de TURNO, no un dominio):
-// lo consume 'detectNextSpeakerPhrase' en la capa de turno, ANTES de que la
-// navegacion o el juego vean el texto. Una frase declarada que su consumidor no
-// reconoce es config muerta y aqui se cae.
+// G11 RETIRADO (corte 2026-10-26): las frases de mando de turno
+// (`voiceCommands.nextSpeaker`) solo las leía `detectNextSpeakerPhrase`
+// (activeListen.js), capa de TURNO de la tubería vieja sin dueño vivo tras el
+// corte. Con la capa de turno retirada, la regla "frase declarada con lector
+// vivo" no tiene consumidor que custodiar: la descripción de G11 se retira
+// junto con su dueño.
 // ------------------------------------------------------------
-describe('G11 voiceSingleSource - las frases de nextSpeaker declaradas tienen consumidor', () => {
-    it('detectNextSpeakerPhrase reconoce TODAS las frases declaradas', () => {
-        const phrases: readonly string[] = FLU_CONFIG.voiceCommands.nextSpeaker || []
-        expect(phrases.length).toBeGreaterThan(0)
-        const sinLector = phrases.filter((p) => !detectNextSpeakerPhrase(`oye flu ${p}`))
-        expect(sinLector, `frases sin lector: ${sinLector.join(', ')}`).toEqual([])
-    })
-
-    it('el detector no es decorativo', () => {
-        expect(detectNextSpeakerPhrase('oye flu pon una alarma a las siete')).toBeFalsy()
-    })
-
-    // Defecto MEDIDO en el log del dueno (2026-10-12 21:16, sesion de prueba):
-    // mientras dictaba "en la ultima frase no hay ni cambio de hablante ni ni silencio
-    // para que lo escriba" el commit salio `src=explicit-next name="Hablante 2"` y la
-    // sesion (UNA sola voz) quedo partida en "Hablante 1"/"Hablante 2"/"Luis".
-    // El cue era una MENCION dentro del dictado, no una ORDEN: la orden ABRE el mandato.
-    it('una MENCION del cue dentro del dictado NO es una orden de cambio de hablante', () => {
-        const dictado =
-            'en la ultima frase no hay ni cambio de hablante ni ni silencio para que lo escriba entonces eso esta provocando delay'
-        expect(
-            detectNextSpeakerPhrase(dictado),
-            'mencionar "cambio de hablante" no ordena cambiar de hablante',
-        ).toBe(false)
-        // La ORDEN sigue reconociendose: el mandato abre con el cue.
-        expect(detectNextSpeakerPhrase('ok flu cambio de hablante')).toBe(true)
-        expect(detectNextSpeakerPhrase('ahora habla otra persona')).toBe(true)
-    })
-})
 
 // ------------------------------------------------------------
 // G12 - Con una partida ACTIVA, un comando que OTRO dominio sabe ejecutar no

@@ -9,7 +9,7 @@
 // ============================================================
 import { describe, it, expect, beforeEach } from 'vitest';
 import { useIntegrationStore } from '../src/store/integrationStore';
-import { commitUserTurnRow } from '../src/voice/lib/conversationTurnRow';
+import { commitUserTurnRow } from '../src/voice/conversation';
 import { resolveRowSpeakerLabel } from '../src/voice/lib/conversationRow';
 
 const userRows = () =>
@@ -101,59 +101,10 @@ describe('una locución → una fila (el fast-path de estado no reescribe la fil
 });
 
 // ============================================================
-// Eco de la wake ("ok flu ok flu siguiente carta"): la locucion canonica
-// conserva UNA wake, no es basura para el guard anti-alucinacion (la repeticion
-// de la wake es eco, no tartamudeo) y por tanto TODOS los commits del turno
-// llevan el MISMO texto -> una sola fila. Antes: el eco hacia que la frase del
-// turno cayera al texto post-wake y la conversacion mostraba dos filas, una sin
-// el "ok flu".
+// RETIRADO (2026-10-26, feature/conversacion-modulo-nuevo): el describe del ECO
+// DE LA WAKE media `resolveTurnCommitPhrase` de `turnCommitPhrase.js`, el punto
+// unico de cierre de la locucion del turno de la TUBERIA VIEJA. Ese modulo quedo
+// sin consumidores vivos (commit 365eeef5) y se retira con su test: la dedup del
+// doble commit que el caso "commit crudo + commit del turno" tambien ejercitaba
+// sigue cubierta arriba (una locucion -> una fila, MISMO turno).
 // ============================================================
-import { resolveTurnCommitPhrase } from '../src/voice/lib/turnCommitPhrase.js';
-
-describe('eco de la wake: una sola locucion (con wake) y una sola fila', () => {
-    const ECO = 'ok flu ok flu siguiente carta'; // captura cruda del ASR (eco)
-    const POST_WAKE = 'siguiente carta'; // texto validado post-wake (query)
-
-    beforeEach(() => {
-        useIntegrationStore.getState().resetConversationHistory();
-    });
-
-    it('la captura con eco se canoniza a UNA wake y NO se marca como basura', () => {
-        const phrase = resolveTurnCommitPhrase({ capture: ECO, fallback: POST_WAKE });
-        expect(phrase).toBe('ok flu siguiente carta');
-    });
-
-    it('commit crudo + commit del turno = 1 fila con la wake', () => {
-        // 1) commit de la emision cruda (eco incluido).
-        commitUserTurnRow({ text: resolveTurnCommitPhrase({ capture: ECO }), turnId: 1 });
-        // 2) commit temprano/final del turno: misma frase canonica + respaldo.
-        commitUserTurnRow({
-            text: resolveTurnCommitPhrase({ capture: ECO, fallback: POST_WAKE }),
-            speakerName: 'Hablante 1',
-            turnId: 1,
-        });
-
-        const rows = userRows();
-        expect(rows).toHaveLength(1);
-        expect(rows[0].text).toBe('ok flu siguiente carta');
-        expect(resolveRowSpeakerLabel(rows[0])).toBe('Hablante 1');
-    });
-
-    it('una locucion sin eco no cambia (no se rompe lo validado)', () => {
-        expect(resolveTurnCommitPhrase({ capture: 'okay flow crea una cita' })).toBe(
-            'okay flow crea una cita',
-        );
-        expect(resolveTurnCommitPhrase({ capture: 'siguiente carta' })).toBe('siguiente carta');
-        // Wake INLINE (prefijo pasivo delante): el recorte no aplica, no se toca.
-        expect(resolveTurnCommitPhrase({ capture: 'hay una noticia ok flu siguiente carta' })).toBe(
-            'hay una noticia ok flu siguiente carta',
-        );
-    });
-
-    it('el eco se consume aunque la wake se repita mas de dos veces', () => {
-        expect(resolveTurnCommitPhrase({ capture: 'ok flu ok flu ok flu pon una alarma' })).toBe(
-            'ok flu pon una alarma',
-        );
-        expect(resolveTurnCommitPhrase({ capture: 'oye flu oye flu' })).toBe('oye flu');
-    });
-});

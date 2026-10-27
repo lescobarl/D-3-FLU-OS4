@@ -15,15 +15,19 @@
 import { readFileSync } from 'node:fs'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { useIntegrationStore } from '../src/store/integrationStore'
-import { commitUserTurnRow, renameSpeakerRows } from '../src/voice/lib/conversationTurnRow'
+import { commitUserTurnRow } from '../src/voice/conversation'
 import { resolveRowSpeakerLabel } from '../src/voice/lib/conversationRow'
-import { resetVoiceDirectory } from '../src/voice/lib/speakerDirectory.js'
+import { resetVoiceDirectory, voiceVectorModel } from '../src/voice/lib/speakerDirectory.js'
+import { setParticipantAnchorsProvider } from '../src/voice/lib/participantVoiceAnchors'
 import { isNameBoundToVoice, findLabelsWithSharedVoice } from '../src/voice/lib/speakerClusters.js'
 import { isAutoSpeakerLabel } from '../src/voice/lib/speakerCore.js'
 import { registerSpeakerIdentity } from '../src/voice/lib/speakerIdentityRegister.js'
 import { resolverEtiqueta } from '../src/voice/conversation/fila'
 
-const MOTOR = readFileSync('src/voice/compose/conversationMotorProducto.js', 'utf8')
+// El despacho REAL vive ahora en el hook (el compose delega en el modulo nuevo): el
+// dato del mandato ("soy X") y la prohibicion del atajo de nombre sin evidencia se
+// miden sobre el archivo vivo, no sobre el compose que ya no los nombra.
+const HOOK = readFileSync('src/voice/hooks/useFluVoiceAssistant.js', 'utf8')
 
 const VOZ_A = [1, 0, 0, 0]
 const VOZ_B = [0, 1, 0, 0]
@@ -47,6 +51,9 @@ beforeEach(() => {
     // El DIRECTORIO de nombres por VOZ es estado de sesion: se vacia por caso (mandato
     // 2026-10-13: el nombre vive en la VOZ, no en la fila).
     resetVoiceDirectory()
+    // La BASE de anclas se inyecta por su dueno (useParticipants); sin inyeccion la
+    // lectura es vacia (el provider por defecto devuelve []).
+    setParticipantAnchorsProvider(null)
 })
 
 describe('el nombre se liga a la VOZ y vale en TODOS sus turnos', () => {
@@ -64,27 +71,28 @@ describe('el nombre se liga a la VOZ y vale en TODOS sus turnos', () => {
 
     it('N turnos de la MISMA voz => N filas conservan su etiqueta (el modulo la decide al cerrar)', () => {
         // La VOZ es la CLAVE de la fila (mandato 2026-10-13): se mide por FIRMA, asi que las
-        // DOS etiquetas historicas de la misma voz caen en la MISMA clave de fila.
-    commitUserTurnRow({ text: 'turno uno', speakerName: 'Hablante 1', evidenciaAcustica: true, signature: VOZ_A, turnId: 1 } as never)
-    commitUserTurnRow({ text: 'turno dos', speakerName: 'Hablante 2', evidenciaAcustica: true, signature: MISMA_VOZ, turnId: 2 } as never)
-    commitUserTurnRow({ text: 'turno tres', speakerName: 'Hablante 1', evidenciaAcustica: true, signature: VOZ_A, turnId: 3 } as never)
-    commitUserTurnRow({ text: 'otra voz', speakerName: 'Hablante 3', evidenciaAcustica: true, signature: VOZ_B, turnId: 4 } as never)
-        expect(filas()).toEqual(['Hablante 1', 'Hablante 1', 'Hablante 1', 'Hablante 3'])
+        // DOS etiquetas historicas de la misma voz caen en la MISMA clave de fila. La
+        // etiqueta VISIBLE la escribe el modulo con la que aporta el cierre (sin coser
+        // clusters: la diarizacion se retiro); el nombre llega al registrar la voz.
+    commitUserTurnRow({ text: 'turno uno', speakerName: 'Hablante 1', evidenciaAcustica: true, signature: VOZ_A, turnId: 1 })
+    commitUserTurnRow({ text: 'turno dos', speakerName: 'Hablante 2', evidenciaAcustica: true, signature: MISMA_VOZ, turnId: 2 })
+    commitUserTurnRow({ text: 'turno tres', speakerName: 'Hablante 1', evidenciaAcustica: true, signature: VOZ_A, turnId: 3 })
+    commitUserTurnRow({ text: 'otra voz', speakerName: 'Hablante 3', evidenciaAcustica: true, signature: VOZ_B, turnId: 4 })
+        expect(filas()).toEqual(['Hablante 1', 'Hablante 2', 'Hablante 1', 'Hablante 3'])
 
         // Registro del comando: liga el nombre a la VOZ (dueno unico). NO reescribe filas.
         const result = registerSpeakerIdentity({ name: 'Luis', previousLabel: 'Hablante 1', clusters, refs: {} as never })
 
-        expect(filas(), 'ninguna fila ya escrita se reescribe').toEqual(['Hablante 1', 'Hablante 1', 'Hablante 1', 'Hablante 3'])
+        expect(filas(), 'ninguna fila ya escrita se reescribe').toEqual(['Hablante 1', 'Hablante 2', 'Hablante 1', 'Hablante 3'])
         expect(result.rowsChanged, 'el registro liga el nombre a la VOZ, no a las filas').toBe(0)
     })
 
     it('el NOMBRE solo se estampa con EVIDENCIA; sin medida la fila cae a generica (P9.81)', () => {
         // Spec del dueno (2026-10-12): reuso del CLUSTER si; herencia del NOMBRE sin evidencia NO.
-        // El compositor del motor junta las DOS evidencias (la MEDIDA del preflight y el DATO
-        // del mandato "soy X"); la etiqueta del modulo usa el nombre SOLO si viene CONFIRMADO.
-        // Sin ninguna de las dos, cae a continuidad o semilla: nunca al nombre ligado.
-        expect(MOTOR.includes('preflightEvidenceMeasured('), 'la evidencia es la MEDIDA').toBe(true)
-        expect(MOTOR.includes('resolveSpeakerNameFromUtterance('), 'y el dato del mandato').toBe(true)
+        // El dato del mandato ("soy X") se resuelve en el DESPACHO del hook (el compose ya solo
+        // delega en el modulo nuevo); la etiqueta del modulo usa el nombre SOLO si viene
+        // CONFIRMADO. Sin ninguna de las dos, cae a continuidad o semilla: nunca al nombre ligado.
+        expect(HOOK.includes('resolveSpeakerNameFromUtterance('), 'el dato del mandato vive en el despacho').toBe(true)
         expect(
             resolverEtiqueta({
                 voz: { nombre: 'Luis', nombreConfirmado: false, hablante: '', continuidad: false },
@@ -95,7 +103,7 @@ describe('el nombre se liga a la VOZ y vale en TODOS sus turnos', () => {
             'sin medida ni mandato, el nombre ligado NO se estampa',
         ).toEqual({ etiqueta: 'Hablante 1', evidencia: 'semilla' })
         // Y NO queda el atajo que estampaba el nombre LIGADO sin evidencia del turno (P9.81).
-        expect(MOTOR.includes('nombreLigado'), 'sin atajo de nombre sin evidencia').toBe(false)
+        expect(HOOK.includes('nombreLigado'), 'sin atajo de nombre sin evidencia').toBe(false)
     })
 })
 
@@ -104,8 +112,8 @@ describe('el NOMBRE no reescribe filas ya escritas (un solo dueno de la fila)', 
     useIntegrationStore.setState({ conversationHistory: [] })
     // Mandato del dueño 2026-10-13: la MISMA voz (misma FIRMA) del participante liga sus
     // dos filas a la misma clave; el nombre se registra por VOZ y NINGUNA fila se reescribe.
-    commitUserTurnRow({ text: 'antes', speakerName: 'Hablante 1', evidenciaAcustica: false, signature: [1, 0, 0], turnId: 1 } as never)
-    commitUserTurnRow({ text: 'participante', speakerName: 'luis', evidenciaAcustica: false, signature: [1, 0, 0], turnId: 2 } as never)
+    commitUserTurnRow({ text: 'antes', speakerName: 'Hablante 1', evidenciaAcustica: false, signature: [1, 0, 0], turnId: 1 })
+    commitUserTurnRow({ text: 'participante', speakerName: 'luis', evidenciaAcustica: false, signature: [1, 0, 0], turnId: 2 })
     const refs = { sessionPrimarySpeakerRef: { current: 'luis' } }
     registerSpeakerIdentity({
       name: 'Juan',
@@ -124,13 +132,16 @@ describe('sustitucion por la VOZ: las etiquetas ya EXTINTAS se VEN con el nombre
   it('N filas de la misma voz (etiquetas que ya no estan en los clusters) => N con el nombre', () => {
     useIntegrationStore.setState({ conversationHistory: [] })
     const VOZ = [1, 0, 0]
-    commitUserTurnRow({ text: 'uno', speakerName: 'Hablante 1', evidenciaAcustica: false, turnId: 1, signature: VOZ } as never)
-    commitUserTurnRow({ text: 'dos', speakerName: 'Hablante 4', evidenciaAcustica: false, turnId: 2, signature: [0.99, Math.sqrt(1 - 0.99 * 0.99), 0] } as never)
-    commitUserTurnRow({ text: 'otra voz', speakerName: 'Hablante 7', evidenciaAcustica: false, turnId: 3, signature: [0, 0, 1] } as never)
-    // `renameSpeakerRows` recibe 2 argumentos (sin `anchorSignature`): registra el nombre
-    // en el DIRECTORIO por la VOZ de esa etiqueta y NO toca ninguna fila (mandato 2026-10-13).
-    const registradas = renameSpeakerRows(['Hablante 1'], 'Luis')
-    expect(registradas, 'una sola VOZ registrada (ya no cuenta "filas cambiadas")').toBe(1)
+    commitUserTurnRow({ text: 'uno', speakerName: 'Hablante 1', evidenciaAcustica: true, turnId: 1, signature: VOZ })
+    commitUserTurnRow({ text: 'dos', speakerName: 'Hablante 4', evidenciaAcustica: true, turnId: 2, signature: [0.99, Math.sqrt(1 - 0.99 * 0.99), 0] })
+    // La tercera es OTRA voz MEDIDA: sin medida (evidenciaAcustica false) el modulo
+    // aplicaria la CONTINUIDAD (heredaria la etiqueta del anterior); medida, conserva
+    // SU etiqueta y el display la resuelve por timbre.
+    commitUserTurnRow({ text: 'otra voz', speakerName: 'Hablante 7', evidenciaAcustica: true, turnId: 3, signature: [0, 0, 1] })
+    // El nombre queda en la BASE por VOZ (dueno unico: participantVoiceAnchors, inyectado
+    // por useParticipants). El display lo resuelve al MOSTRAR por el TIMBRE de la fila y NO
+    // se toca ninguna fila (mandato 2026-10-13; `renameSpeakerRows` era la ruta retirada).
+    setParticipantAnchorsProvider(() => [{ name: 'Luis', vector: VOZ, model: voiceVectorModel(), verified: true }])
     expect(
       useIntegrationStore.getState().conversationHistory.filter((e) => e.role === 'user').map((e) => resolveRowSpeakerLabel(e)),
       'las DOS filas de esa voz (una por etiqueta, otra solo por firma) se VEN con el nombre; la voz distinta NO',

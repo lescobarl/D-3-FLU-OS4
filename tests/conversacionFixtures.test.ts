@@ -71,6 +71,9 @@ function crearMotorDeFixture() {
     semillaEtiqueta: () => 'Hablante 1',
     esEtiquetaAnonima: isAutoSpeakerLabel,
     conversationEngine: () => 'new',
+    umbralContinuidadVoz: () => 0.8,
+    etiquetaAnonima: (indice) => `Hablante ${indice}`,
+    echoMinPalabrasCola: () => 4,
   }
   const almacen = crearAlmacenMemoria({ reloj: RELOJ })
   const api = crearConversacion({

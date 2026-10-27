@@ -40,12 +40,21 @@ export const TECHOS: Record<string, number> = {
   // (resolveSpeakerIdentityFromVector -> resolveConversationSpeaker).
   // -515 (2026-10-25): corte de la tuberia vieja de conversacion; el hook ya no monta
   // ingress/cola/consumidor y solo conserva captura + el motor del producto.
-  'src/voice/hooks/useFluVoiceAssistant.js': 3868,
+  // -1263 (2026-10-26): el commit de la fila de usuario y la diarizacion pasaron al
+  // modulo (commitUserTurnRow, decidirIdentidad); el hook solo orquesta captura.
+  'src/voice/hooks/useFluVoiceAssistant.js': 2606,
   // -66: 49 claves de config SIN lector (prometian comportamiento sin efecto) se borraron,
   // con su barrera (configConEfectoGuard).
   // -50 al cortar la tuberia vieja de conversacion (2026-10-25): el tracer, la
   // segmentacion ASR y las claves de la escucha retirada salieron con sus lectores.
-  'src/voice/lib/fluConfig.js': 2649,
+  // -64 (2026-10-26): 29 claves de la diarizacion retirada (tope/fusion de clusters,
+  // preflight, dictado, schedule pasivo, ingressGuards) sin lector tras la tuberia vieja;
+  // conversationMaxAutoSpeakers SE CONSERVA y lo lee nextAutoSpeakerLabel (fallback del tope).
+  // -23 mas (2026-10-26, misma pasada): stickySpeaker/strictCosineDiarization/turnBoundary*,
+  // stripPriorTurns* y transcriptSettle* (lectores en la tuberia retirada).
+  // -6 mas (2026-10-26, misma pasada): soloSpeakerSticky/diarizeIntervalMs/turnAudioOverlapMs
+  // se fueron con sus unicos lectores (retirados por deadExportsGuard).
+  'src/voice/lib/fluConfig.js': 2557,
   'src/voice/lib/gemini.js': 1848,
 }
 

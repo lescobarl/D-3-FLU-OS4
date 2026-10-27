@@ -23,7 +23,28 @@ import {
   autoSpeakerCount,
 } from '../src/voice/lib/speakerClusters.js'
 import { FLU_CONFIG } from '../src/voice/lib/fluConfig.js'
-import { resolveConversationSpeaker } from '../src/voice/lib/voiceIdentity.js'
+import { decidirIdentidad } from '../src/voice/conversation/identidad'
+import { compareCosineSignatures } from '../src/voice/lib/speakerCore.js'
+
+const ids = (() => {
+  let n = 0
+  return { next: () => `uuid-turno-${(n += 1)}` }
+})()
+
+// Corte 2026-10-26: `resolveConversationSpeaker` (speakerDiarization) se retiro con la
+// tuberia vieja. La identidad de la locucion la decide la regla del MODULO
+// (`decidirIdentidad`): misma voz = coseno >= umbral contra el ULTIMO vector.
+const decidirTurno = (vector: number[], ultimoVozId: string, ultimoVector: number[] | null, etiquetaNueva: string) =>
+  decidirIdentidad({
+    vector,
+    ultimoVozId,
+    ultimoVector,
+    umbral: 0.8,
+    etiquetaNueva,
+    // El coseno es el REAL del dueño (speakerCore.compareCosineSignatures).
+    comparar: (a, b) => compareCosineSignatures([...a], [...b]),
+    id: ids.next,
+  })
 
 function v(cos: number, dim = 64): number[] {
   const out = new Array(dim).fill(0)
@@ -69,22 +90,21 @@ describe('A6 - una voz = un cluster (tope + fusion)', () => {
     expect(autoSpeakerCount(out)).toBeLessThanOrEqual(tope)
   })
 
-  it('N turnos de una voz => 1 cluster (fijado con el resolver real)', () => {
-    const clusters: any[] = []
+  it('N turnos de una voz => UNA sola voz de sesion (fijado con la regla real del modulo)', () => {
+    // Corte 2026-10-26: el resolver viejo escribia los clusters por turno. La regla viva
+    // es decidirIdentidad: la MISMA voz continua contra el ultimo vector (cosenos ~1
+    // entre turnos consecutivos) y la sesion conserva UNA identidad acunada.
+    let vozId = ''
+    let ultimoVector: number[] | null = null
+    let acunadas = 0
     for (let turn = 0; turn < 8; turn += 1) {
-      resolveConversationSpeaker({
-        speakerClusters: clusters,
-        sessionPrimary: '',
-        signatureVector: v(0.70 + turn * 0.002),
-        voicedSampleCount: 96000,
-        minVoicedSamples: 12000,
-        sampleRate: 48000,
-        utteranceText: 'esta es una frase de prueba para voz',
-        atTurnBoundary: true,
-        allowNewCluster: true,
-      } as never)
+      const vector = v(0.70 + turn * 0.002)
+      const r = decidirTurno(vector, vozId, ultimoVector, `Hablante ${turn + 1}`)
+      if (!r.continuidad) acunadas += 1
+      vozId = r.vozId
+      ultimoVector = vector
     }
-    expect(clusters.length).toBe(1)
+    expect(acunadas, 'una voz no se acuna una vez por turno').toBe(1)
   })
 
 
@@ -101,30 +121,19 @@ describe('A6 - una voz = un cluster (tope + fusion)', () => {
 
 
 describe('REPRO del dueno 2026-10-11, CORREGIDO 2026-10-18: una medida que no casa es OTRA voz', () => {
-  it('coseno 0.5 sostenido contra el cluster anterior => NO hereda "Hablante 1": abre su etiqueta', () => {
+  it('coseno 0.5 sostenido contra la voz anterior => NO hereda "Hablante 1": abre su etiqueta', () => {
     // La expectativa anterior era "sin evidencia no se acuna una etiqueta nueva" (reuso
     // de la etiqueta del anterior). Medido en vivo, ese reuso fue el defecto: el dueno y
     // la nina quedaron bajo UNA etiqueta ("Hablante 1", lastSim 0.143/0.192/0.380/0.374)
     // y "soy Luis" ya no podia separarlos. Regla del dueno: voz distinta = etiqueta
     // distinta; prohibido heredar por cercania, participante activo o ultimo hablante.
-    const clusters: any[] = [{ label: 'Hablante 1', signature: v(1) }]
-    const diagnosis: Record<string, unknown> = {}
-    const out = resolveConversationSpeaker({
-      speakerClusters: clusters,
-      sessionPrimary: '',
-      signatureVector: v(0.5),
-      lastSpeaker: 'Hablante 1',
-      lastSignature: v(1),
-      voicedSampleCount: 96000,
-      minVoicedSamples: 12000,
-      sampleRate: 48000,
-      utteranceText: 'esta es una frase de prueba para voz',
-      atTurnBoundary: true,
-      allowNewCluster: true,
-      diagnosis,
-    } as never)
-    expect(out, 'la voz distinta NO hereda la etiqueta del anterior').toBe('Hablante 2')
-    expect(diagnosis.reason).toBe('production-forced-new-voice')
-    expect(clusters.length, 'un cluster por VOZ: la voz distinta tiene el suyo').toBe(2)
+    // Corte 2026-10-26: la regla viva es decidirIdentidad: 0.5 no alcanza el umbral de
+    // continuidad y la sesion acuna OTRA voz con SU etiqueta.
+    const primera = decidirTurno(v(1), '', null, 'Hablante 1')
+    expect(primera.hablante).toBe('Hablante 1')
+    const distinta = decidirTurno(v(0.5), primera.vozId, v(1), 'Hablante 2')
+    expect(distinta.continuidad, 'la voz distinta NO hereda la etiqueta del anterior').toBe(false)
+    expect(distinta.hablante, 'una voz por identidad: la voz distinta tiene su etiqueta').toBe('Hablante 2')
+    expect(distinta.vozId, 'la identidad de sesion es OTRA').not.toBe(primera.vozId)
   })
 })

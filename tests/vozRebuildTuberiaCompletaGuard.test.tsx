@@ -73,6 +73,9 @@ vi.mock('../src/voice/lib/speechRecognitionLocal', () => ({
   acquireSpeechRecognition: vi.fn(() => h.recognition),
   startSpeechRecognition: vi.fn(() => true),
   stopSpeechRecognition: vi.fn(),
+  getRecognitionLanguage: vi.fn((l) => (l === 'en' ? 'en-US' : 'es-ES')),
+  isBilingualListenMode: vi.fn((l) => l === 'both'),
+  resolveRecognitionLocale: vi.fn((l) => (l === 'en' ? 'en-US' : 'es-ES')),
 }));
 
 // El PCM del micrófono se captura para inyectarlo desde el test: el VAD y el
@@ -84,14 +87,6 @@ vi.mock('../src/voice/lib/micCaptureBridge.js', () => ({
     h.mic.onRawPcmBlock = opciones.onRawPcmBlock;
     return { zeroGain: { disconnect: vi.fn() } };
   }),
-}));
-
-vi.mock('../src/voice/lib/turnIdentityPipeline.js', async (original) => ({
-  ...((await original()) as object),
-  startContinuousIdentityPipeline: vi.fn(),
-  stopAllContinuousIdentityPipelines: vi.fn(),
-  // Sin audio real no hay preflight: la fila se escribe sin hablante (regla del dueno).
-  finalizeTurnIdentityPipeline: vi.fn(() => null),
 }));
 
 vi.mock('../src/voice/lib/voiceLocalFallback', () => ({
@@ -110,12 +105,6 @@ vi.mock('../src/voice/lib/voiceLocalFallback', () => ({
     partialMinSpeechLikeMs: 300,
   })),
   resolveSilentDegrade: vi.fn(() => ({ degrade: false, voicedMs: 0, speechLikeMs: 0, rms: 0, sinceSrResultMs: 0, failedRebuilds: 0, log: '' })),
-}));
-
-vi.mock('../src/voice/lib/turnSpeakerPreflight.js', () => ({
-  createTurnSpeakerAudioResolver: vi.fn(() => ({})),
-  peekTurnSpeakerPreflight: vi.fn(() => ({ ready: false })),
-  preflightEvidenceMeasured: vi.fn(() => false),
 }));
 
 vi.mock('../src/core/selfKnowledge/selfKnowledge', () => ({ isSelfKnowledgeRequest: vi.fn(() => false) }));

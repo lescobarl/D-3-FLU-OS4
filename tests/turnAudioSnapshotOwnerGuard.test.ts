@@ -8,140 +8,101 @@
 // Medido en la sesión real del dueño (2026-10-06, debug.log): 24 de 25 turnos con
 // `SpeakerTrace snap=0` y un único embedding calculado → toda la sesión caía a
 // "Hablante 1". El audio existía en el buffer, pero se leía DESPUÉS de vaciarlo.
+//
+// CORTE 2026-10-26: el arnés de resolución (`createTurnSpeakerAudioResolver`,
+// turnSpeakerPreflight.js, isla retirada con la tubería vieja) se sustituye por
+// el dueño VIVO `turnAudioSnapshot.js` (semántica pura) y por el guard de fuente
+// del camino vivo en `useFluVoiceAssistant.js`: la firma se calcula SOLO del
+// snapshot (`selectVoicedWindow(audioSnapshot)`), sin snapshot no se mide, y la
+// diarización consume `turnAudioForDiarize` (snapshot primero, chunks SOLO como
+// respaldo mientras el turno sigue activo).
 // ============================================================
-import { describe, expect, it, vi, beforeEach } from 'vitest'
-
-const { resolveSpeakerFromAudio } = vi.hoisted(() => ({
-  resolveSpeakerFromAudio: vi.fn(async (samples: Float32Array | number[], _sampleRate?: number, _payload?: unknown) => {
-    const len = samples?.length || 0
-    return {
-      speakerId: `spk-${len}`,
-      speakerName: len ? 'Hablante 2' : 'Hablante 1',
-      signatureVector: len ? [0, 1] : [],
-      similarity: 0,
-      reason: len ? 'captured-audio' : 'no-audio',
-    }
-  }),
-}))
-
-vi.mock('../src/voice/lib/voiceIdWorkerClient.js', () => ({
-  resolveSpeakerFromAudio: (samples: Float32Array | number[], sampleRate: number, payload: unknown) =>
-    resolveSpeakerFromAudio(samples, sampleRate, payload),
-}))
-
-import { createTurnSpeakerAudioResolver } from '../src/voice/lib/turnSpeakerPreflight.js'
+import { describe, expect, it } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import {
   captureTurnAudioSnapshot,
   capturedTurnAudio,
 } from '../src/voice/lib/turnAudioSnapshot.js'
 
-function emptyLiveBuffer() {
-  return {
-    getTurnStartSample: () => 0,
-    snapshotTurnWindow: () => new Float32Array(0),
-  }
-}
+const HOOK = 'src/voice/hooks/useFluVoiceAssistant.js'
 
-function buildResolver(overrides: Record<string, unknown> = {}) {
-  return createTurnSpeakerAudioResolver({
-    getAudioBuffer: () => emptyLiveBuffer(),
-    getSampleRate: () => 16000,
-    getCapturedAudio: () => null,
-    getFallbackSpeaker: () => 'Hablante 1',
-    atTurnBoundary: true,
-    ...overrides,
-  })
+/** Fuente del camino vivo (una vez por corrida). */
+function hookSource(): string {
+  return readFileSync(join(process.cwd(), HOOK), 'utf8')
 }
 
 /**
- * Predicado EXPORTADO para poder falsificarlo (prueba de mutación del propio guard):
- * ¿el resolver de identidad consume el snapshot capturado aunque el buffer vivo
- * esté vacío?
+ * Detector de la mutación: cada `selectVoicedWindow(` del camino vivo debe
+ * alimentarse del SNAPSHOT; alimentarlo del buffer vivo (chunks) es la forma
+ * del defecto original. Devuelve las líneas infractoras.
  */
-export async function resolverUsesCapturedAudio(captured: Float32Array | null): Promise<boolean> {
-  resolveSpeakerFromAudio.mockClear()
-  const resolver = buildResolver({ getCapturedAudio: () => captured })
-  const result = await resolver()
-  const sent = resolveSpeakerFromAudio.mock.calls[0]?.[0] as Float32Array | undefined
-  return Boolean(result?.reason === 'captured-audio' && (sent?.length || 0) >= 1)
+export function findLiveBufferFeeds(source: string): string[] {
+  return source
+    .split(/\r?\n/)
+    .map((line, index) => ({ line, index }))
+    .filter(({ line }) => /selectVoicedWindow\(/.test(line) && !/selectVoicedWindow\(audioSnapshot/.test(line))
+    .map(({ index }) => `${HOOK}:${index + 1}`)
 }
 
-describe('diarización — el audio del turno lo captura su dueño único (no el buffer vivo)', () => {
-  beforeEach(() => {
-    resolveSpeakerFromAudio.mockClear()
+describe('diarización — el audio del turno lo captura su dueño único (semántica pura)', () => {
+  it('captura por turno: el turno sellado lee SU snapshot (no el del turno activo)', () => {
+    captureTurnAudioSnapshot(1, { buildWindow: () => new Float32Array([1, 2, 3]) })
+    const audio = capturedTurnAudio(1, 2)
+    expect(audio).not.toBeNull()
+    expect(audio!.length).toBe(3)
   })
 
-  it('con snapshot capturado y buffer vivo vacío, el resolver usa el snapshot capturado', async () => {
-    const resolver = buildResolver({ getCapturedAudio: () => new Float32Array([0.1, 0.2, 0.3, 0.4]) })
-    const result = await resolver()
-    expect(resolveSpeakerFromAudio).toHaveBeenCalledTimes(1)
-    const sent = resolveSpeakerFromAudio.mock.calls[0][0] as Float32Array
-    expect(sent.length).toBe(4)
-    expect(result.reason).toBe('captured-audio')
-  })
-
-  it('SIN snapshot capturado, el buffer vivo vacío se reporta honestamente como no-audio', async () => {
-    const resolver = buildResolver({ getCapturedAudio: () => null })
-    const result = await resolver()
-    expect(result.reason).toBe('no-audio')
-  })
-
-  it('el snapshot capturado gana al buffer vivo aunque el vivo tenga audio (dueño único)', async () => {
-    const liveAdapter = {
-      getTurnStartSample: () => 0,
-      snapshotTurnWindow: () => new Float32Array([9, 9, 9, 9, 9, 9]),
-    }
-    const resolver = buildResolver({
-      getAudioBuffer: () => liveAdapter,
-      getCapturedAudio: () => new Float32Array([1, 2]),
+  it('una captura con MAS VOZ mejora el slot; una vacía o con menos voz NO pisa', () => {
+    captureTurnAudioSnapshot(4, { buildWindow: () => new Float32Array([0.1, 0.2]), meta: { sampleRate: 16000 } })
+    // Más voz: la ventana nueva reemplaza a la corta.
+    const mejor = captureTurnAudioSnapshot(4, {
+      buildWindow: () => new Float32Array([0.1, 0.2, 0.3, 0.4]),
+      meta: { sampleRate: 16000 },
     })
-    await resolver()
-    const sent = resolveSpeakerFromAudio.mock.calls[0][0] as Float32Array
-    expect(sent.length).toBe(2)
+    expect(mejor.length).toBe(4)
+    // Captura vacía después de una buena: la buena se conserva (write-once invertido).
+    captureTurnAudioSnapshot(4, { buildWindow: () => new Float32Array(0), meta: { sampleRate: 16000 } })
+    expect(capturedTurnAudio(4, 9)!.length).toBe(4)
   })
 
-  it('turno SELLADO sin snapshot => no-audio aunque el buffer vivo tenga audio de OTRO turno', async () => {
+  it('turno ACTIVO sin snapshot => null (aun no capturado: el resolver usa la ventana del turno)', () => {
+    expect(capturedTurnAudio(5, 5)).toBeNull()
+  })
+
+  it('turno SELLADO sin snapshot => vacío: NUNCA el buffer vivo de otro turno', () => {
     // MEDIDO (log del dueño 2026-10-18): el preflight tardío del turno 11 leyó 10.088 /
     // 18.509 ms del buffer vivo (audio de otros turnos + eco del TTS) y creó un
     // "Hablante 2" con similitud 0.091. Un turno sellado sin SU audio no se mide.
-    const SELLADO = 901
-    const ACTIVO = 902
-    const liveAdapter = {
-      getTurnStartSample: () => 0,
-      snapshotTurnWindow: () => new Float32Array(192000),
-    }
-    const resolver = buildResolver({
-      getAudioBuffer: () => liveAdapter,
-      getCapturedAudio: () => capturedTurnAudio(SELLADO, ACTIVO),
-    })
-    const result = await resolver()
-    expect(result.reason, 'no hay audio de ESE turno').toBe('no-audio')
-    expect(resolveSpeakerFromAudio, 'no se mide el buffer de otro turno').not.toHaveBeenCalled()
+    const audio = capturedTurnAudio(6, 7)
+    expect(audio).not.toBeNull()
+    expect(audio!.length).toBe(0)
   })
 
-  it('turno SELLADO con su snapshot usa SU audio, no el del turno activo', async () => {
-    const SELLADO = 903
-    const ACTIVO = 904
-    captureTurnAudioSnapshot(SELLADO, { buildWindow: () => new Float32Array([1, 2, 3]) })
-    const liveAdapter = {
-      getTurnStartSample: () => 0,
-      snapshotTurnWindow: () => new Float32Array([9, 9, 9, 9, 9, 9]),
+  it('la retención es ACOTADA: el turno más viejo sale del mapa (sin fuga)', () => {
+    for (let i = 100; i < 117; i += 1) {
+      captureTurnAudioSnapshot(i, { buildWindow: () => new Float32Array([1]) })
     }
-    const resolver = buildResolver({
-      getAudioBuffer: () => liveAdapter,
-      getCapturedAudio: () => capturedTurnAudio(SELLADO, ACTIVO),
-    })
-    await resolver()
-    const sent = resolveSpeakerFromAudio.mock.calls[0][0] as Float32Array
-    expect(sent.length, 'la ventana es la del turno sellado').toBe(3)
+    // 16 slots: el turno 100 ya no está; el último sí.
+    expect(capturedTurnAudio(100, 999)!.length).toBe(0)
+    expect(capturedTurnAudio(116, 999)!.length).toBe(1)
   })
 })
 
-describe('el detector no es decorativo (prueba de mutación del propio guard)', () => {
-  it('marca la ENTRADA INFRACTORA (buffer vivo a 0) y NO la legítima', async () => {
-    // Infractor: si el resolver ignorara el snapshot, el buffer vivo a 0 lo delata.
-    expect(await resolverUsesCapturedAudio(new Float32Array([1, 2, 3]))).toBe(true)
-    // Legítimo: sin snapshot no hay audio que consumir; no debe "inventarlo".
-    expect(await resolverUsesCapturedAudio(null)).toBe(false)
+describe('el camino vivo consume el snapshot del dueño (guard de fuente)', () => {
+  it('el hook importa al dueño y la firma se calcula SOLO del snapshot', () => {
+    const source = hookSource()
+    expect(source).toContain("from '../lib/turnAudioSnapshot.js'")
+    expect(source).toContain('selectVoicedWindow(audioSnapshot')
+    expect(source, 'la firma jamas se alimenta del buffer vivo').toContain('audioSnapshot?.length')
+    expect(source, 'sin snapshot no hay medida').toContain('if (!audioSnapshot.length)')
+    expect(source, 'la diarizacion pasa por el dueno (snapshot primero, chunks como respaldo)').toContain('turnAudioForDiarize(activeTurnIdRef.current')
+  })
+
+  it('PRUEBA DE DETECTOR: alimentar el buffer vivo a la firma se marca', () => {
+    const legitimo = hookSource()
+    expect(findLiveBufferFeeds(legitimo)).toEqual([])
+    const infractor = legitimo.replace('selectVoicedWindow(audioSnapshot', 'selectVoicedWindow(chunksRef.current')
+    expect(findLiveBufferFeeds(infractor)).not.toEqual([])
   })
 })

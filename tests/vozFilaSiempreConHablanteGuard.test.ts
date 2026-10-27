@@ -6,20 +6,20 @@
 // commits: la fila nacía sin hablante "por diseno" y dependia del relleno tardio
 // (`updateTurnRowSpeaker`), que ademas solo alcanzaba 13 turnos.
 //
-// REGLA (un dato, un dueno): la fila de usuario SIEMPRE lleva hablante. El dueno de la fila
-// (`resolveRowSpeakerName`) aplica el RESPALDO cuando no hay etiqueta, y el commit aporta la
-// etiqueta que trae el resolver (la evidencia acustica solo decide el ASCENSO a nombre
-// propio). El relleno tardio COMPLETA; no es la unica via.
+// REGLA (un dato, un dueno): la fila de usuario SIEMPRE lleva hablante. El dueno de la
+// etiqueta es `resolverEtiqueta` (src/voice/conversation/fila.ts), que LANZA con semilla
+// vacia o con `?`; el commit del modulo nuevo aplica el RESPALDO cuando no hay etiqueta.
 //
 // ESTE GUARD mide la PROPIEDAD en las vias de escritura reales que quedan tras el
 // corte de la tuberia vieja (2026-10-25): el commit del modulo nuevo
-// (`commitUserTurnRow`: nueva, reutilizada y reemplazada) y el relleno tardio.
+// (`commitUserTurnRow` de src/voice/conversation: nueva, reutilizada y reemplazada).
+// El relleno tardio (`updateTurnRowSpeaker` de conversationTurnRow.ts, BORRADO) ya no
+// existe: la etiqueta se resuelve en el propio commit.
 // ============================================================
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { resolveRowSpeakerLabel } from '../src/voice/lib/conversationRow'
 import { useIntegrationStore } from '../src/store/integrationStore'
-import { commitUserTurnRow, updateTurnRowSpeaker } from '../src/voice/lib/conversationTurnRow'
-import { resetTurnSpeakerPreflights } from '../src/voice/lib/turnSpeakerPreflight.js'
+import { commitUserTurnRow, resolverEtiqueta } from '../src/voice/conversation'
 import { FLU_CONFIG } from '../src/voice/lib/fluConfig.js'
 
 const RESPALDO = String(
@@ -35,35 +35,51 @@ const hablantes = () => filasUsuario().map((e) => String(resolveRowSpeakerLabel(
 describe('P9.65 - la fila de usuario SIEMPRE lleva hablante', () => {
   beforeEach(() => {
     useIntegrationStore.setState({ conversationHistory: [] })
-    resetTurnSpeakerPreflights()
   })
   afterEach(() => {
-    resetTurnSpeakerPreflights()
+    useIntegrationStore.setState({ conversationHistory: [] })
   })
 
   it('sin etiqueta NINGUNA: la fila nueva sale con el respaldo (nunca vacia)', () => {
-    commitUserTurnRow({ text: 'hola que tal', turnId: 1 } as never)
+    commitUserTurnRow({ text: 'hola que tal', turnId: 1 })
     expect(hablantes()).toEqual([RESPALDO])
   })
 
   it('las TRES vias del dueno (nueva, reutilizada, reemplazada) dejan hablante', () => {
     // 1) nueva
-    commitUserTurnRow({ text: 'hola que tal', speakerName: 'Hablante 2', turnId: 1 } as never)
+    commitUserTurnRow({ text: 'hola que tal', speakerName: 'Hablante 2', turnId: 1 })
     // 2) reutilizada por identidad de turno (texto mas completo)
-    commitUserTurnRow({ text: 'hola que tal y buenos dias', speakerName: 'Hablante 2', turnId: 1 } as never)
+    commitUserTurnRow({ text: 'hola que tal y buenos dias', speakerName: 'Hablante 2', turnId: 1 })
     // 3) reemplazada (misma emision, `replaceLast`). MISMO turno: la identidad de turno es
     // el unico criterio de reutilizacion (mandato 2026-10-23, 3a pasada).
-    commitUserTurnRow({ text: 'hola que tal y buenos dias', speakerName: 'luis', replaceLast: true, turnId: 1 } as never)
+    commitUserTurnRow({ text: 'hola que tal y buenos dias', speakerName: 'luis', replaceLast: true, turnId: 1 })
     const h = hablantes()
     expect(h).toHaveLength(1)
     h.forEach((nombre, i) => expect(nombre, `fila ${i} sin hablante`).not.toBe(''))
   })
 
-  it('el relleno tardio tampoco deja vacio (y no pisa el respaldo con nada)', () => {
-    const { id } = commitUserTurnRow({ text: 'una frase cualquiera', turnId: 5 } as never)
-    updateTurnRowSpeaker(5, '' as never)
+  it('sin evidencia no queda vacio en el commit, y el dueno de la etiqueta prohibe vacio y `?`', () => {
+    const { id } = commitUserTurnRow({ text: 'una frase cualquiera', turnId: 5 })
     const fila = useIntegrationStore.getState().conversationHistory.find((e) => e.id === id)
     expect(String(resolveRowSpeakerLabel(fila) || '')).toBe(RESPALDO)
+    // El dueno de la etiqueta del modulo (resolverEtiqueta) LANZA antes de dejar la
+    // fila vacia o con «?»: la propiedad no depende del camino del commit.
+    expect(() =>
+      resolverEtiqueta({
+        voz: { hablante: '' },
+        anterior: '',
+        semilla: '',
+        esEtiquetaAnonima: () => false,
+      } as never),
+    ).toThrow('semilla vacia')
+    expect(() =>
+      resolverEtiqueta({
+        voz: { hablante: '?' },
+        anterior: '',
+        semilla: '',
+        esEtiquetaAnonima: () => false,
+      } as never),
+    ).toThrow('etiqueta ? prohibida')
   })
 
   it('control NEGATIVO (el detector no es decorativo): el gate VIEJO dejaba `written` vacio', () => {

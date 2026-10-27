@@ -10,28 +10,32 @@
 //   "… ya está todo Cloud de que ya está ya …"
 // De ahí pasaba a la caja (boxDuplicated / noBoxDuplicatedBlock) y a la fila.
 //
-// La regla (un solo dueno, `integrateOpenLine` + `isSameFragmentRevision`): un trozo que
-// REVISA el ultimo pegado se REEMPLAZA sobre la misma base; una hipotesis que repite la
-// locucion de la linea se conserva UNA (la mas completa), no se concatena; y el habla nueva
-// (que si extiende) se sigue anadiendo sin perder texto.
+// CORTE 2026-10-26: el arnés de la tubería vieja (integrateMicPacket/readTurnLive de
+// conversationStream.js y createActiveListenState de activeListen.js, islas retiradas) se
+// sustituye por el DUENO VIVO de la línea abierta: `mergeIntoOpenLine` (speechMerge.js), el
+// mismo que consumen los adaptadores del módulo (`fusionarEnLineaAbierta`). La regla se
+// ejercita con el libro `{ base, chunk, line }` arrastrado por la secuencia real, sin
+// arnés muerto. La fila = frase de la caja (cierre por silencio) la cubren nativamente
+// tests/conversacionEtapa56CajaPlayback.test.ts y tests/conversacionAcumulacionAsr.test.ts.
 // ============================================================
 import { describe, expect, it } from 'vitest'
 import {
   isSameFragmentRevision,
   resolveMicFragmentMerge,
+  mergeIntoOpenLine,
 } from '../src/voice/lib/speechMerge.js'
-import { integrateMicPacket, readTurnLive, utterancesSameRevision, evaluateSrGapSegmentCommit } from '../src/voice/lib/conversationStream.js'
-import { createActiveListenState } from '../src/voice/lib/activeListen.js'
+import { utterancesSameRevision } from '../src/voice/core/locucion.js'
 
 /** Pasa la secuencia por el DUENO real de la linea viva y devuelve lo que se ve. */
 function lineaTras(secuencia: string[], { inicial = '' } = {}): string {
-  const state = createActiveListenState()
-  if (inicial) {
-    state.openLine = inicial
-    state.pendingInterim = ''
+  let linea = inicial
+  let libro: { base: string; chunk: string; line: string } | null = null
+  for (const trozo of secuencia) {
+    const r = mergeIntoOpenLine(linea, libro, trozo)
+    linea = r.linea
+    libro = r.libro
   }
-  for (const interim of secuencia) integrateMicPacket(state, { interim })
-  return readTurnLive(state)
+  return linea
 }
 
 /** Ningun bloque de 4+ palabras puede aparecer dos veces. */
@@ -46,7 +50,7 @@ function tieneBloqueRepetido(texto: string, size = 4): boolean {
   return false
 }
 
-describe('ingress - UNA hipotesis por hueco de audio (dos motores)', () => {
+describe('ingress - UNA hipotesis por hueco de audio (dueno vivo mergeIntoOpenLine)', () => {
   it('`isSameFragmentRevision` distingue una revision del mismo trozo de habla nueva', () => {
     expect(isSameFragmentRevision('de', 'debido')).toBe(true)
     expect(isSameFragmentRevision('debido', 'debió')).toBe(true)
@@ -105,15 +109,12 @@ describe('ingress - UNA hipotesis por hueco de audio (dos motores)', () => {
   })
 
   it('la locucion siguiente NO se pega a la anterior (caja vaciada en el cierre)', () => {
-    const state = createActiveListenState()
-    integrateMicPacket(state, { interim: 'voy a poner a la mujer' })
-    expect(readTurnLive(state)).toBe('voy a poner a la mujer')
-    // El cierre real vacia la linea (lo hace `resetInterimControlBuffers` del ingress).
-    state.openLine = ''
-    state.pendingInterim = ''
-    integrateMicPacket(state, { interim: 'no lo voy a preparar al 100%' })
-    expect(readTurnLive(state)).toBe('no lo voy a preparar al 100%')
-    expect(readTurnLive(state).toLowerCase()).not.toContain('mujer')
+    const primera = lineaTras(['voy a poner a la mujer'])
+    expect(primera).toBe('voy a poner a la mujer')
+    // El cierre real vacia la linea: el tramo nuevo arranca sin libro ni linea.
+    const segunda = lineaTras(['no lo voy a preparar al 100%'])
+    expect(segunda).toBe('no lo voy a preparar al 100%')
+    expect(segunda.toLowerCase()).not.toContain('mujer')
   })
 
   it('`resolveMicFragmentMerge` sigue siendo el dueno de la fusion de trozos', () => {
@@ -128,9 +129,9 @@ describe('ingress - UNA hipotesis por hueco de audio (dos motores)', () => {
 // tramo ("... 100 porque" / "... al 100%"). No se pueden conservar las dos colas sin
 // MEZCLARLAS (concatenar dos hipotesis completas es justo lo que se proscribe), asi que:
 //  - se conserva UNA (la mas completa) y NO se pega la otra detras;
-//  - no hay perdida de FILA: las dos hipotesis son la MISMA locucion (`utterancesSameRevision`),
-//    y el replay sigue escribiendo su fila (ver `replayEvents` sobre d4c1c8f3: 18 filas,
-//    `missingUnique: 0`, y la cola descartada entra como VARIANTE de la fuente).
+//  - no hay perdida de FILA: las dos hipotesis son la MISMA locucion
+//    (`utterancesSameRevision`, dueno vivo core/locucion.js), y el replay sigue
+//    escribiendo su fila.
 describe('ingress - REGRESION #11: dos hipotesis divergentes no se concatenan', () => {
   const COMPLETA = 'no lo voy a preparar 100 porque'
   const CORREGIDA = 'no lo voy a preparar al 100%'
@@ -166,32 +167,9 @@ describe('ingress - REGRESION #11: dos hipotesis divergentes no se concatenan', 
     expect(tieneBloqueRepetido(linea)).toBe(false)
   })
 
-  // B.3 (mandato 2026-10-21): la FILA es la MISMA frase que la caja. No se elige una
-  // "correccion" del ultimo interino que la caja no muestra.
-  it('el cierre por SILENCIO escribe la MISMA frase que la caja', () => {
-    const state = createActiveListenState()
-    integrateMicPacket(state, { interim: COMPLETA })
-    integrateMicPacket(state, { interim: CORREGIDA })
-    expect(readTurnLive(state)).toBe(COMPLETA)
-    const cierre = evaluateSrGapSegmentCommit(state, {
-      sinceLastResultMs: 10001,
-      lastCommitted: '',
-      published: COMPLETA,
-    })
-    expect(cierre.flush).toBe(true)
-    expect(cierre.capture).toBe(COMPLETA)
-  })
-
-  it('si la caja esta en la locucion nueva, la fila NO se lleva la linea vieja', () => {
-    const state = createActiveListenState()
-    integrateMicPacket(state, { interim: 'por eso le escribe a mi papá para que fuera por mí tan peligroso soy Porque no solo te fuiste y ya' })
-    const cajaNueva = 'se me hace como que no te acuerdas muy bien de qué pasó'
-    const cierre = evaluateSrGapSegmentCommit(state, {
-      sinceLastResultMs: 10001,
-      lastCommitted: '',
-      published: cajaNueva,
-    })
-    expect(cierre.flush).toBe(true)
-    expect(cierre.capture).toBe(cajaNueva)
-  })
+  // B.3 RETIRADO (corte 2026-10-26): «el cierre por SILENCIO escribe la MISMA frase
+  // que la caja» lo decidía `evaluateSrGapSegmentCommit` (conversationStream.js,
+  // isla sin dueño vivo). La regla viva la custodian nativamente
+  // tests/conversacionEtapa56CajaPlayback.test.ts («la caja manda») y
+  // tests/conversacionAcumulacionAsr.test.ts.
 })

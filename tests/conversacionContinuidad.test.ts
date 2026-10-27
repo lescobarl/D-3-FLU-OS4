@@ -50,6 +50,9 @@ function crearProbe(ultimaVozId = '', ultimaEtiqueta = ''): Probe {
     ultimaVozId,
     filas: new Map(),
     nombresPorVoz: new Map(),
+    muestrasAbierta: [],
+    ultimoVectorVoz: null,
+    contadorVoces: 0,
   }
   const reglas = crearReglasCierre({
     estado,
@@ -66,7 +69,11 @@ function crearProbe(ultimaVozId = '', ultimaEtiqueta = ''): Probe {
       semillaEtiqueta: () => SEMILLA,
       esEtiquetaAnonima: isAutoSpeakerLabel,
       conversationEngine: () => 'new',
+      umbralContinuidadVoz: () => 0.8,
+      etiquetaAnonima: (indice) => `Hablante ${indice}`,
+      echoMinPalabrasCola: () => 4,
     },
+    id: { uuid: () => '00000000-0000-4000-8000-000000000001' },
   })
   return { estado, reglas }
 }

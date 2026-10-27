@@ -57,13 +57,9 @@ const h = vi.hoisted(() => {
     logCaughtError: vi.fn(),
     fluAsyncErrorHandler: vi.fn(() => vi.fn()),
     wireMicCapturePipeline: vi.fn(),
-    startContinuousIdentityPipeline: vi.fn(),
-    stopAllContinuousIdentityPipelines: vi.fn(),
     createLocalRecognition: vi.fn(),
     shouldUseLocalFallback: vi.fn(() => false),
   isLocalRecognitionEngine: (engine: any) => typeof engine?.pushAudio === 'function',
-    createTurnSpeakerAudioResolver: vi.fn(() => ({})),
-    peekTurnSpeakerPreflight: vi.fn(() => ({ ready: false })),
     isSelfKnowledgeRequest: vi.fn(() => false),
     noteGameTurn: vi.fn(),
     debugHotPath: false,
@@ -103,15 +99,13 @@ vi.mock('../src/voice/lib/speechRecognitionLocal', () => ({
   acquireSpeechRecognition: h.acquireSpeechRecognition,
   startSpeechRecognition: h.startSpeechRecognition,
   stopSpeechRecognition: h.stopSpeechRecognition,
+  getRecognitionLanguage: vi.fn((l) => (l === 'en' ? 'en-US' : 'es-ES')),
+  isBilingualListenMode: vi.fn((l) => l === 'both'),
+  resolveRecognitionLocale: vi.fn((l) => (l === 'en' ? 'en-US' : 'es-ES')),
 }));
 
 vi.mock('../src/voice/lib/micCaptureBridge.js', () => ({
   wireMicCapturePipeline: h.wireMicCapturePipeline,
-}));
-
-vi.mock('../src/voice/lib/turnIdentityPipeline.js', () => ({
-  startContinuousIdentityPipeline: h.startContinuousIdentityPipeline,
-  stopAllContinuousIdentityPipelines: h.stopAllContinuousIdentityPipelines,
 }));
 
 vi.mock('../src/voice/lib/voiceLocalFallback', () => ({
@@ -123,12 +117,6 @@ vi.mock('../src/voice/lib/voiceLocalFallback', () => ({
   installChromeRecognition: vi.fn(() => null),
   getLocalFallbackRuntimeConfig: vi.fn(() => ({ recoveryMs: 20000, recoverySegments: 3, probeMs: 4000, finalMinSpeechLikeMs: 180, partialMinSpeechLikeMs: 300 })),
   resolveSilentDegrade: vi.fn(() => ({ degrade: false, speechLikeMs: 0, rms: 0, voicedMs: 0, sinceSrResultMs: 0, failedRebuilds: 0, log: '' })),
-}));
-
-vi.mock('../src/voice/lib/turnSpeakerPreflight.js', () => ({
-  createTurnSpeakerAudioResolver: h.createTurnSpeakerAudioResolver,
-  peekTurnSpeakerPreflight: h.peekTurnSpeakerPreflight,
-  preflightEvidenceMeasured: () => false,
 }));
 
 vi.mock('../src/core/selfKnowledge/selfKnowledge', () => ({
@@ -549,7 +537,7 @@ describe('useFluVoiceAssistant - avance de hablante', () => {
     expect(segundo).toBe('Hablante 2');
   });
 
-  it('con conversacion activa delega el avance en el estado de escucha', () => {
+  it('con conversacion activa el avance usa la MISMA cadena unica (sin segundo decisor)', () => {
     const conversationActiveRef = { current: true };
     const { result } = montar({ conversationActiveRef } as Partial<Props>);
 
@@ -562,8 +550,11 @@ describe('useFluVoiceAssistant - avance de hablante', () => {
       segundo = result.current.advanceConversationSpeaker();
     });
 
-    expect(primero).toBe('Hablante 2');
-    expect(segundo).toBe('Hablante 3');
+    // El estado de escucha (`listenStateRef`) se retiró con la tubería vieja: la
+    // etiqueta de VISTA tiene UNA sola cadena en ambos modos (la identidad de la
+    // fila la resuelve el MÓDULO por su propia medida, decisión A).
+    expect(primero).toBe('Hablante 1');
+    expect(segundo).toBe('Hablante 2');
   });
 });
 

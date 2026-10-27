@@ -12,7 +12,7 @@
  */
 import { beforeEach, describe, expect, it } from 'vitest'
 import { useIntegrationStore } from '../src/store/integrationStore'
-import { commitUserTurnRow, escribeFilaDeUsuario } from '../src/voice/lib/conversationTurnRow'
+import { commitUserTurnRow, escribeFilaDeUsuario } from '../src/voice/conversation'
 import { resetVoiceDirectory } from '../src/voice/lib/speakerDirectory.js'
 
 const userRows = () => useIntegrationStore.getState().conversationHistory.filter((row) => row.role === 'user')

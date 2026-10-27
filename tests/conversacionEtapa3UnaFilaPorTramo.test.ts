@@ -14,7 +14,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { useIntegrationStore } from '../src/store/integrationStore'
-import { commitUserTurnRow } from '../src/voice/lib/conversationTurnRow'
+import { commitUserTurnRow } from '../src/voice/conversation'
 
 const filas = () => useIntegrationStore.getState().conversationHistory
 const VENTANA_DEL_TURNO = { inicio: 0, fin: 192000 }
@@ -96,9 +96,11 @@ describe('MUTACIÓN — la identidad por ventana (regla retirada) está prohibid
   })
 
   it('el escritor de la fila no consulta la ventana para reutilizar (guard de fuente)', () => {
-    const fuente = readFileSync(join(process.cwd(), 'src', 'voice', 'lib', 'conversationTurnRow.ts'), 'utf8')
+    // Corte 2026-10-26: el escritor retirado (conversationTurnRow.ts) se sustituyo por el
+    // del modulo nuevo (pasivo.ts); el guard lee el archivo VIVO.
+    const fuente = readFileSync(join(process.cwd(), 'src', 'voice', 'conversation', 'pasivo.ts'), 'utf8')
     expect(fuente, 'la identidad por tramo/ventana no puede volver al escritor').not.toMatch(
-      /mismoTramo|e\?\.tramo|tramoDeEntrada/,
+      /mismoTramo|e\?\.tramo|tramoDeEntrada|turnWindow\s*===/,
     )
   })
 })

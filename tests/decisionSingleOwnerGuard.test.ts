@@ -30,6 +30,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { walkFiles } from './_helpers';
+import type { ConfigPort } from '../src/voice/conversation/ports';
 
 const ROOT = process.cwd();
 const rel = (f: string) => relative(ROOT, f).replace(/\\/g, '/');
@@ -57,13 +58,16 @@ export function findUiLocutionCriteria(content: string, file = 'src/sintetico.js
 }
 
 // ---------------------------------------------------------------- D3
-/** Definiciones propias de `scheduleIdle` (debe haber UNA, la del dueno compartido). */
-export function countScheduleIdleDefs(
-    files: Array<{ rel: string; content: string }>,
-    owner = 'src/voice/lib/idleSchedule.js',
-): string[] {
+/**
+ * Definiciones de `scheduleIdle` (debe haber 0): se RETIRA (corte 2026-10-26).
+ * Programaba la diarizacion en idle (voiceIdentityQueue / el resolutor idle de
+ * voiceIdWorkerClient), borrada con la tuberia vieja. Sin consumidores, el
+ * modulo compartido `idleSchedule.js` se elimina; una definicion propia que
+ * volviera seria basura o una ruta doble sin dueno vivo.
+ */
+export function countScheduleIdleDefs(files: Array<{ rel: string; content: string }>): string[] {
     return files
-        .filter((f) => f.rel !== owner && /function\s+scheduleIdle\s*\(/.test(f.content))
+        .filter((f) => /function\s+scheduleIdle\s*\(/.test(f.content))
         .map((f) => `${f.rel}:function scheduleIdle`);
 }
 
@@ -188,16 +192,19 @@ export function findTimeOnlyDispatchEchoGate(content: string, file = 'src/sintet
 }
 
 describe('D14 - el eco del DESPACHO se filtra por CONTENIDO, no por tiempo', () => {
-    it('la puerta de despacho del hook compara contra la voz de FLU', () => {
-        const hook = read('src/voice/hooks/useFluVoiceAssistant.js');
-        const offenders = findTimeOnlyDispatchEchoGate(hook, 'src/voice/hooks/useFluVoiceAssistant.js');
+    it('la puerta de eco del despacho (el modulo) compara por CONTENIDO, no por tiempo', () => {
+        // Corte 2026-10-26: la puerta se movio del hook al MODULO (texto.ts filtra el
+        // ASR con esEcoDeTts ANTES de que el texto llegue al despacho). Mismo guard:
+        // sin puerta por TIEMPO y el comparador de contenido presente (anti-vacuidad).
+        const texto = read('src/voice/conversation/texto.ts');
+        const offenders = findTimeOnlyDispatchEchoGate(texto, 'src/voice/conversation/texto.ts');
         expect(
             offenders,
             `Puertas de despacho que descartan por TIEMPO (N=${offenders.length}); usa ` +
-                `isAssistantVoiceEcho:\n  ${offenders.join('\n  ')}`,
+                `esEcoDeTts:\n  ${offenders.join('\n  ')}`,
         ).toEqual([]);
         // Anti-vacuidad: la puerta EXISTE y de verdad consulta el comparador.
-        expect(hook).toContain('isAssistantVoiceEcho(');
+        expect(texto).toContain('esEcoDeTts(');
     });
     it('el detector no es decorativo: marca el gate por tiempo y perdona el de contenido', () => {
         expect(findTimeOnlyDispatchEchoGate('if (isFluSpeaking()) {\n  return false\n}')).toHaveLength(1);
@@ -210,14 +217,23 @@ describe('D14 - el eco del DESPACHO se filtra por CONTENIDO, no por tiempo', () 
     });
 });
 
-describe('D2 - "es la MISMA locucion" tiene UNA memoria (la del despacho)', () => {
-    it('conversationStreamCommit no decide por el estado de la UI', () => {
-        const offenders = findUiLocutionCriteria(read('src/voice/lib/conversationStreamCommit.js'));
-        expect(
-            offenders,
-            `Segundo criterio de "misma locucion" (N=${offenders.length}); el dueno es ` +
-                `sameRequestAsLastDispatch:\n  ${offenders.join('\n  ')}`,
-        ).toEqual([]);
+describe('D2 - "es la MISMA locucion" tiene UNA memoria (el tramoId del modulo)', () => {
+    it('el modulo no decide por el estado de la UI (un solo criterio: el tramoId)', () => {
+        // Corte 2026-10-26: conversationStreamCommit (con su criterio de UI
+        // `mismaLocucionViva`) se retira con la tuberia vieja. El dueno vivo de "es la
+        // MISMA locucion" es el MODULO por tramoId (revision.ts: abierto.id !== tramoId)
+        // y la memoria del despacho (audioMath.planConversationDispatch). Ninguna fuente
+        // del modulo re-introduce un criterio de UI.
+        const fuentes = ['texto.ts', 'tramos.ts', 'revision.ts', 'frontera.ts', 'cierre.ts', 'ingesta.ts', 'fila.ts', 'motor.ts', 'pasivo.ts', 'sesion.ts'];
+        for (const f of fuentes) {
+            const offenders = findUiLocutionCriteria(read('src/voice/conversation/' + f), 'src/voice/conversation/' + f);
+            expect(
+                offenders,
+                `Segundo criterio de "misma locucion" en ${f} (N=${offenders.length}); el dueno es ` +
+                    `el tramoId:\n  ${offenders.join('\n  ')}`,
+            ).toEqual([]);
+        }
+        expect(read('src/voice/conversation/revision.ts'), 'el criterio vivo es el tramoId').toContain('abierto.id !== tramoId');
     });
     it('el detector no es decorativo: marca el criterio de UI y perdona el del despacho', () => {
         expect(findUiLocutionCriteria('const mismaLocucionViva = sameLiveEmission(prev, capture)')).toHaveLength(1);
@@ -225,24 +241,22 @@ describe('D2 - "es la MISMA locucion" tiene UNA memoria (la del despacho)', () =
     });
 });
 
-describe('D3 - un solo dueno de "programar en idle"', () => {
-    it('solo el modulo compartido define scheduleIdle', () => {
+describe('D3 - "programar en idle" se retira sin dueño vivo', () => {
+    it('ningun modulo de voz define scheduleIdle (el dueno se retiro)', () => {
         const offenders = countScheduleIdleDefs(voiceLibFiles());
         expect(
             offenders,
-            `Definiciones propias de scheduleIdle (N=${offenders.length}); importa el dueno ` +
-                `compartido:\n  ${offenders.join('\n  ')}`,
+            `Definiciones de scheduleIdle (N=${offenders.length}); el programador de idle se ` +
+                `retiro con la diarizacion en idle (sin consumidores):\n  ${offenders.join('\n  ')}`,
         ).toEqual([]);
     });
-    it('el detector no es decorativo: marca una definicion fuera del dueno', () => {
+    it('el detector no es decorativo: marca una definicion y perdona el consumo', () => {
         expect(
             countScheduleIdleDefs([{ rel: 'src/voice/lib/otro.js', content: 'function scheduleIdle(fn) {}' }]),
         ).toHaveLength(1);
         expect(
-            countScheduleIdleDefs([
-                { rel: 'src/voice/lib/idleSchedule.js', content: 'export function scheduleIdle(fn) {}' },
-            ]),
-        ).toHaveLength(0);
+            countScheduleIdleDefs([{ rel: 'src/voice/lib/consumidor.js', content: "import { scheduleIdle } from './idleSchedule.js'" }]),
+        ).toEqual([]);
     });
 });
 
@@ -390,25 +404,69 @@ export function logDedupRespectsPause(src: string): boolean {
     return /!replaceLastRawLog\s*&&[\s\S]{0,120}isDuplicateLogPhrase\(/.test(src);
 }
 
-describe('D11 - la repeticion tras pausa escapa del dedup del log (clasificacion, no unificacion)', () => {
-    it('el dedup del log conserva su escape (replaceLastRawLog)', () => {
+describe('D11 - la repeticion tras pausa conserva su fila (clasificacion, no unificacion)', () => {
+    it('el dedup del log crudo se retiro y el MODULO nunca deduplica por texto entre turnos', async () => {
+        // Corte 2026-10-26: el dedup del LOG crudo (isDuplicateLogPhrase) vivia en
+        // conversationSession.js (borrado con la tuberia vieja) y su escape
+        // `!replaceLastRawLog &&` murio con el. La regla viva es del MODULO: una fila
+        // por turno, sin dedupe por texto — la repeticion tras pausa conserva su fila
+        // por construccion. Se mide con la API real y se blinda que el dedup viejo no
+        // vuelva al hook.
         const hook = read('src/voice/hooks/useFluVoiceAssistant.js');
-        expect(
-            logDedupRespectsPause(hook),
-            'al dedup del log le falta el escape: una repeticion tras pausa perderia su fila',
-        ).toBe(true);
+        expect(hook.includes('isDuplicateLogPhrase'), 'el dedup del log crudo volvio al hook').toBe(false);
+
+        const { crearConversacion } = await import('../src/voice/conversation/index');
+        const { crearAlmacenMemoria, crearIdUuid, crearPartidorWake } = await import('../src/voice/conversation/adapters');
+        const { isAutoSpeakerLabel } = await import('../src/voice/lib/speakerCore.js');
+        const reloj = { ahora: () => 1_700_000_000_000 };
+        const config: ConfigPort = {
+            wakeWords: () => ['ok flu'],
+            semillaEtiqueta: () => 'Hablante 1',
+            esEtiquetaAnonima: isAutoSpeakerLabel,
+            conversationEngine: () => 'new',
+            umbralContinuidadVoz: () => 0.8,
+            etiquetaAnonima: (indice) => `Hablante ${indice}`,
+            echoMinPalabrasCola: () => 4,
+        };
+        const api = crearConversacion({
+            reloj,
+            id: crearIdUuid(),
+            registro: { registrar: () => undefined },
+            almacen: crearAlmacenMemoria({ reloj }),
+            config,
+            partidor: crearPartidorWake(config),
+            ultimoTextoDicho: () => '',
+        });
+        await api.start();
+        const bloque = (inicio: number, fin: number, medida: { hayVoz: boolean; silencioMs: number }) => ({
+            muestras: new Float32Array(fin - inicio),
+            sampleRate: 16000,
+            inicio,
+            fin,
+            medida,
+        });
+        const voz = () => ({ hayVoz: true, silencioMs: 0 });
+        // Turno 1: "hola", final.
+        const tramoUno = await api.ingestAudio(bloque(0, 16000, voz()));
+        const idUno = tramoUno.locucionAbierta?.locutionId;
+        if (!idUno) throw new Error('el audio con voz no abrio locucion');
+        const cierreUno = await api.ingestAsr({ tramoId: idUno, texto: 'hola', final: true });
+        expect(cierreUno.filas.map((fila) => fila.texto)).toEqual(['hola']);
+        // PAUSA (silencio >= 900) y turno 2 con la MISMA frase: su fila NO desaparece.
+        await api.ingestAudio(bloque(16000, 16000 + 4000, { hayVoz: false, silencioMs: 4000 }));
+        const tramoDos = await api.ingestAudio(bloque(20000, 36000, voz()));
+        const idDos = tramoDos.locucionAbierta?.locutionId;
+        if (!idDos) throw new Error('el segundo tramo no abrio locucion');
+        const cierreDos = await api.ingestAsr({ tramoId: idDos, texto: 'hola', final: true });
+        expect(cierreDos.filas.map((fila) => fila.texto), 'la repeticion tras pausa conserva su fila').toEqual(['hola', 'hola']);
     });
-    it('los cuatro predicados siguen existiendo en su modulo (no se colapsaron en uno)', () => {
-        const dueños = [
-            ['src/voice/lib/turnStream.js', 'isDuplicateTurnCommit'],
-            ['src/voice/lib/activeListen.js', 'isRedundantFinal'],
-            ['src/voice/lib/conversationStream.js', 'isCommittedInterimEcho'],
-            ['src/voice/lib/conversationSession.js', 'isDuplicateLogPhrase'],
-        ] as const;
-        for (const [fichero, fn] of dueños) {
-            expect(read(fichero), fichero + ' perdio ' + fn).toContain('export function ' + fn);
-        }
-    });
+    // RETIRADO (corte 2026-10-26) el test del censo "los cuatro predicados siguen
+    // existiendo en su modulo": turnStream.isDuplicateTurnCommit, activeListen.
+    // isRedundantFinal y conversationStream.isCommittedInterimEcho viven en islas de la
+    // tuberia vieja (sin consumidores en src, se retiran en este corte); isDuplicateLogPhrase
+    // ya se borro con conversationSession.js el 2026-10-25. La clasificacion "no
+    // colapsarlos en uno" queda registrada en AGENTS.md Anexo B.14 y cubierta por
+    // spokenUtteranceRevision.test.ts y transcriptionDedupLoss.test.ts.
     it('el detector no es decorativo: marca el dedup sin escape y perdona el que lo tiene', () => {
         expect(logDedupRespectsPause('if (isDuplicateLogPhrase(capture, prev)) return false')).toBe(false);
         expect(

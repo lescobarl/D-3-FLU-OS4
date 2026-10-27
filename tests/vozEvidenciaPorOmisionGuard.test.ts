@@ -21,16 +21,17 @@
 import { readFileSync } from 'node:fs'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { resolveRowSpeakerLabel } from '../src/voice/lib/conversationRow'
-import { isAutoSpeakerLabel } from '../src/voice/lib/speakerCore.js'
+import { hasVoiceMeasurement, isAutoSpeakerLabel } from '../src/voice/lib/speakerCore.js'
 import { useIntegrationStore } from '../src/store/integrationStore'
-import {
-    commitUserTurnRow,
-    updateTurnRowSpeaker,
-} from '../src/voice/lib/conversationTurnRow'
-import { preflightEvidenceMeasured } from '../src/voice/lib/turnSpeakerPreflight.js'
+import { commitUserTurnRow } from '../src/voice/conversation'
+import { registerSpeakerIdentity } from '../src/voice/lib/speakerIdentityRegister.js'
+import { resolveVoiceName } from '../src/voice/lib/speakerDirectory.js'
 import { resolverEtiqueta } from '../src/voice/conversation/fila'
 
-const TURN_ROW = readFileSync('src/voice/lib/conversationTurnRow.ts', 'utf8')
+// Corte 2026-10-26: conversationTurnRow.ts y turnSpeakerPreflight.js se retiraron con
+// la tuberia vieja. El dueno de la fila es el MODULO (pasivo.ts); el preflight no existe
+// y la medida la declara quien MIDIO (hook, solo en la ruta con vector).
+const PASIVO = readFileSync('src/voice/conversation/pasivo.ts', 'utf8')
 const HOOK = readFileSync('src/voice/hooks/useFluVoiceAssistant.js', 'utf8')
 const MOTOR = readFileSync('src/voice/compose/conversationMotorProducto.js', 'utf8')
 
@@ -47,17 +48,17 @@ beforeEach(() => {
 })
 
 describe('A) omitir la marca de evidencia NO es "medida" (fuente)', () => {
-    it('los duelos de la fila declaran el default en FALSE', () => {
-        expect(/(evidenciaAcustica = true)/.test(TURN_ROW), 'ningun dueno puede tener el default en true').toBe(false)
-        // DOS duelos reales de la fila (updateTurnRowSpeaker + commitUserTurnRow). El tercero
-        // era `preserveProperSpeaker`, retirado por duplicar la regla sin consumidor.
-        expect(TURN_ROW.match(/evidenciaAcustica = false/g)?.length).toBe(2)
+    it('el dueno de la fila exige la marca explicita; el default nunca es "medida"', () => {
+        expect(/(evidenciaAcustica\s*=\s*true)/.test(PASIVO), 'ningun dueno puede tener el default en true').toBe(false)
+        expect(PASIVO.includes('entrada.evidenciaAcustica === true'), 'solo la marca explicita cuenta').toBe(true)
+        expect(HOOK.includes('payload.evidenciaAcustica === true'), 'el hook deriva la evidencia de la marca, no por omision').toBe(true)
     })
     it('el PARTICIPANTE elegido NO estampa su nombre sin coincidencia (solo el mandato "soy X")', () => {
         // Medido 2026-10-11: tras elegir a Luis en el onboarding sus filas salian "Luis" sin decir
-        // el comando. La unica fuente de nombre por DATO es el texto del mandato: el compositor del
-        // motor la toma de `resolveSpeakerNameFromUtterance` (la ruta `wake-intro` se retiro).
-        expect(MOTOR.includes('resolveSpeakerNameFromUtterance(texto)'), 'solo el mandato es fuente por dato').toBe(true)
+        // el comando. La unica fuente de nombre por DATO es el texto del mandato, resuelto por la
+        // politica unica (`resolveSpeakerNameFromUtterance`); corte 2026-10-26: la consume el HOOK
+        // (ruta "soy X"), no el compositor, y la ruta `wake-intro`/`pinned` se retiro con la vieja.
+        expect(HOOK.includes('resolveSpeakerNameFromUtterance(transcriptForIntro)'), 'solo el mandato es fuente por dato').toBe(true)
         expect(MOTOR.includes("'wake-intro', 'pinned'"), 'el participante NO es fuente de nombre').toBe(false)
         // Y el nombre, sin venir CONFIRMADO, no desplaza a la etiqueta medida (regla 5 del modulo).
         expect(
@@ -71,16 +72,21 @@ describe('A) omitir la marca de evidencia NO es "medida" (fuente)', () => {
         ).toEqual({ etiqueta: 'Hablante 1', evidencia: 'medida' })
     })
 
-    it('el resolver sincrono declara la evidencia con el dueno de la MEDIDA, no por "hay audio"', () => {
-        expect(HOOK).toContain('preflightEvidenceMeasured(peekTurnSpeakerPreflight')
+    it('el hook declara la evidencia SOLO en la ruta que midio (nunca por "hay audio")', () => {
         expect(HOOK.includes('evidenciaAcustica: audioSnapshot.length > 0'), '"hay audio" NO es evidencia').toBe(false)
+        // La marca true sale UNICAMENTE de la resolucion medida (vector del turno); las
+        // demas rutas del hook la declaran false de forma explicita.
+        const marcas = HOOK.match(/evidenciaAcustica: (true|false)/g) || []
+        expect(marcas.filter((marca) => marca === 'evidenciaAcustica: true')).toHaveLength(1)
+        expect(marcas.filter((marca) => marca === 'evidenciaAcustica: false')).toHaveLength(3)
     })
-    it('preflightEvidenceMeasured exige coincidencia (ready sin evidence NO es medida)', () => {
-        expect(preflightEvidenceMeasured({ ready: true, evidence: false })).toBe(false)
-        expect(preflightEvidenceMeasured({ ready: true })).toBe(false)
-        expect(preflightEvidenceMeasured({ ready: false, evidence: true })).toBe(false)
-        expect(preflightEvidenceMeasured(null)).toBe(false)
-        expect(preflightEvidenceMeasured({ ready: true, evidence: true })).toBe(true)
+    it('hasVoiceMeasurement exige medida real (un vector sin energia NO es medida)', () => {
+        // Corte 2026-10-26: `preflightEvidenceMeasured` se retiro con la tuberia vieja.
+        // El gate vivo de "hay medida" es el vector: sin energia no hay evidencia.
+        expect(hasVoiceMeasurement([1, 0, 0])).toBe(true)
+        expect(hasVoiceMeasurement([])).toBe(false)
+        expect(hasVoiceMeasurement([0, 0, 0])).toBe(false)
+        expect(hasVoiceMeasurement(undefined), 'ausencia de vector (undefined) no es medida').toBe(false)
     })
 })
 
@@ -89,11 +95,21 @@ describe('A) la fila NO asciende al nombre sin evidencia declarada', () => {
         commitUserTurnRow({ text: 'hola a todos', speakerName: 'Hablante 1', turnId: 1 } as never)
         expect(etiquetaDe(1), 'la etiqueta automatica no asciende sin coincidencia').toBe('Hablante 1')
     })
-    it('updateTurnRowSpeaker SIN la marca NO escribe el nombre; CON ella lo CONFIRMA', () => {
+    it('SIN la medida el nombre no se liga a la voz; CON ella la voz CONFIRMA el nombre', () => {
         commitUserTurnRow({ text: 'hola', speakerName: 'Hablante 1', turnId: 2 } as never)
-        updateTurnRowSpeaker(2, 'Luis', { evidenciaAcustica: false } as never)
-        expect(etiquetaDe(2), 'sin coincidencia medida no se escribe el nombre proprio').toBe('Hablante 1')
-        updateTurnRowSpeaker(2, 'Luis', { evidenciaAcustica: true } as never)
-        expect(etiquetaDe(2), 'con coincidencia medida la voz CONFIRMA el nombre').toBe('Luis')
+        // Corte 2026-10-26: updateTurnRowSpeaker se retiro. El registro liga el nombre a
+        // la VOZ solo con la MEDIDA del turno; sin vector, el directorio queda intacto.
+        registerSpeakerIdentity({ name: 'Luis', previousLabel: 'Hablante 1', clusters: [] })
+        expect(resolveVoiceName('speaker_1'), 'sin coincidencia medida no se liga el nombre').toBe('')
+        expect(etiquetaDe(2), 'la etiqueta automatica no asciende sin coincidencia').toBe('Hablante 1')
+        registerSpeakerIdentity({
+            name: 'Luis',
+            previousLabel: 'Hablante 1',
+            signatureVector: [1, 0, 0],
+            clusters: [],
+            refs: {},
+        })
+        expect(resolveVoiceName('speaker_1'), 'con coincidencia medida la voz CONFIRMA el nombre').toBe('Luis')
+        expect(etiquetaDe(2), 'la fila escrita sin timbre conserva su etiqueta').toBe('Hablante 1')
     })
 })

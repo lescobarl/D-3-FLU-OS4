@@ -1,16 +1,19 @@
 // ============================================================
 // voiceLiveSingleWriter.test.ts — GUARD §9 (un solo escritor)
 // ------------------------------------------------------------
-// Invariante: la frase viva (liveTranscript) tiene UN escritor por modo.
-//   CONVERSACIÓN ACTIVA — solo el motor de conversación: el hook le pasa
-//   `onLiveTranscript: setLiveTranscript` al crearlo, y `onresult` le ENTREGA el
-//   evento crudo (`motorConversacionRef.current.evento(event)`) y RETORNA: no
-//   publica por su cuenta.
-//   MODO PASIVO — solo la caja (`crearCajaDeLaFrase`), y todos sus caminos pasan
-//   por `flushLiveTranscript`, que se retira en activo.
-// El escritor viejo (ingress/`pushMicRecognitionEvent`) se retiró con la tubería
-// vieja de conversación (corte 2026-10-25); este guard se reancla al motor del
-// producto. Si vuelve un segundo escritor por `onresult`, FALLA.
+// Invariante: la frase viva (liveTranscript) tiene UN escritor: el MÓDULO de
+// conversación. El hook le pasa `onLiveTranscript: setLiveTranscript` al crearlo,
+// y `onresult` le ENTREGA el evento crudo
+// (`motorConversacionRef.current.evento(event)`) y RETORNA: no publica por su
+// cuenta.
+//
+// REANCLA (corte 2026-10-26): `flushLiveTranscript` se RETIRÓ con la caja pasiva
+// (`crearCajaDeLaFrase`) que el punto 1 del corte mandó quitar ("solo escribe el
+// módulo"). No tenía llamador y reintroducirlo sería código muerto o un segundo
+// escritor. El guard ahora exige, sobre TODO el archivo: (a) 0 ocurrencias de
+// `flushLiveTranscript`, y (b) 0 llamadas a cualquier escritor de la frase viva
+// fuera de la delegación al módulo. La delegación NO es una llamada del hook:
+// es entregar el setter al dueño.
 // ============================================================
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -19,10 +22,9 @@ import { describe, expect, it } from 'vitest';
 const source = (): string =>
     readFileSync(join(process.cwd(), 'src/voice/hooks/useFluVoiceAssistant.js'), 'utf8');
 
-const FLUSH_ANCHOR = 'const flushLiveTranscript = useCallback(';
-const ACTIVE_GUARD = 'if (conversationActiveRef?.current) {';
 const MODULE_ANCHOR = 'onLiveTranscript: setLiveTranscript';
 const MODULE_DISPATCH = 'motorConversacionRef.current.evento(event)';
+const ACTIVE_GUARD = 'if (conversationActiveRef?.current) {';
 const ONRESULT_START = 'Recognition.onresult = (event) => {';
 const ONRESULT_END = 'Recognition.onerror = (event) => {';
 
@@ -34,6 +36,20 @@ const LIVE_WRITERS = [
     'publishLiveFromTurn(',
 ];
 
+/** Líneas (1-based) del fuente que contienen alguna escritura viva. */
+export function liveWriterSites(src: string): number[] {
+    const lines: number[] = [];
+    src.split('\n').forEach((line, index) => {
+        if (LIVE_WRITERS.some((call) => line.includes(call))) lines.push(index + 1);
+    });
+    return lines;
+}
+
+/** ¿Volvió el flusher retirado con la caja pasiva? */
+export function tieneFlusherRetirado(src: string): boolean {
+    return src.includes('flushLiveTranscript');
+}
+
 /** Líneas (1-based) del tramo que contienen alguna escritura viva. */
 function liveWriterLines(tramo: string, base: number): number[] {
     const lines: number[] = [];
@@ -41,20 +57,6 @@ function liveWriterLines(tramo: string, base: number): number[] {
         if (LIVE_WRITERS.some((call) => line.includes(call))) lines.push(base + index);
     });
     return lines;
-}
-
-/**
- * ¿`flushLiveTranscript` escribe la frase viva ANTES de retirarse en conversación
- * activa? HOY la invariante exige CERO: el módulo es el único escritor.
- */
-export function flushWritesLiveWhenActive(src: string): number[] {
-    const start = src.indexOf(FLUSH_ANCHOR);
-    if (start < 0) return [0];
-    const guard = src.indexOf(ACTIVE_GUARD, start);
-    if (guard < 0) return [0];
-    const ret = src.indexOf('return', guard);
-    if (ret < guard) return [0];
-    return liveWriterLines(src.slice(guard, ret), src.slice(0, guard).split('\n').length);
 }
 
 /**
@@ -88,10 +90,13 @@ describe('§9 — UN solo escritor de la frase viva', () => {
         expect(src, 'onresult no entrega el evento al motor').toContain(MODULE_DISPATCH);
     });
 
-    it('flushLiveTranscript NO escribe liveTranscript en conversación activa', () => {
+    it('el hook NO escribe la frase viva: sin flushLiveTranscript y sin escrituras fuera de la delegación', () => {
         const src = source();
-        expect(src).toContain(FLUSH_ANCHOR);
-        expect(flushWritesLiveWhenActive(src)).toEqual([]);
+        expect(tieneFlusherRetirado(src), 'flushLiveTranscript se retiró con la caja pasiva').toBe(false);
+        expect(
+            liveWriterSites(src),
+            'el hook no llama a ningún escritor de la frase viva en TODO el archivo',
+        ).toEqual([]);
     });
 
     it('onresult NO publica el preview: delega en el motor y RETORNA', () => {
@@ -103,17 +108,22 @@ describe('§9 — UN solo escritor de la frase viva', () => {
 
 // P2.4 — prueba de detector: alimentado el infractor sintetico, la marca.
 describe('§9 — el detector no es decorativo', () => {
-    const flushSrc = (body: string) =>
-        `${FLUSH_ANCHOR}\n  ${ACTIVE_GUARD}\n    ${body}\n    return;\n  }\n`;
     const onresultSrc = (body: string) =>
         `${ONRESULT_START}\n  if (conversationActiveRef?.current) {\n    ${body}\n    return;\n  }\n${ONRESULT_END}\n`;
 
-    it('marca el segundo escritor de la frase viva y no la escritura del dueño', () => {
-        expect(flushWritesLiveWhenActive(flushSrc('setLiveTranscript(frase);'))).toHaveLength(1);
-        expect(flushWritesLiveWhenActive(flushSrc('cajaVivaRef.current.publicarEnLaCaja(frase);'))).toHaveLength(1);
-        // El módulo publicando por su API NO es un segundo escritor.
-        expect(flushWritesLiveWhenActive(flushSrc('motorConversacionRef.current.evento(event);'))).toEqual([]);
-        expect(flushWritesLiveWhenActive(flushSrc('publicarEnLaCaja(frase);')).length, 'sin caja la llamada suelta tambien cuenta').toBe(1);
+    it('marca el segundo escritor de la frase viva y no la delegación del dueño', () => {
+        expect(liveWriterSites('setLiveTranscript(frase);')).toEqual([1]);
+        expect(liveWriterSites('cajaVivaRef.current.publicarEnLaCaja(frase);')).toEqual([1]);
+        expect(liveWriterSites('publishLiveFromTurn();')).toEqual([1]);
+        expect(liveWriterSites('scheduleLiveTranscriptUpdate(frase);')).toEqual([1]);
+        // La delegación al módulo NO es una llamada del hook; el dispatch tampoco.
+        expect(liveWriterSites('onLiveTranscript: setLiveTranscript,')).toEqual([]);
+        expect(liveWriterSites('motorConversacionRef.current.evento(event)')).toEqual([]);
+    });
+
+    it('marca el flusher retirado si vuelve y perdona al hook limpio', () => {
+        expect(tieneFlusherRetirado('const flushLiveTranscript = useCallback(')).toBe(true);
+        expect(tieneFlusherRetirado('onLiveTranscript: setLiveTranscript,')).toBe(false);
     });
 
     it('marca la rama de conversación que publica por su cuenta y no la que solo delega', () => {

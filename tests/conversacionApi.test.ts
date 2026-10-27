@@ -65,6 +65,9 @@ const configDePrueba = (): ConfigPort => ({
   semillaEtiqueta: () => 'Hablante 1',
   esEtiquetaAnonima: isAutoSpeakerLabel,
   conversationEngine: () => 'new',
+  umbralContinuidadVoz: () => 0.8,
+  etiquetaAnonima: (indice) => `Hablante ${indice}`,
+  echoMinPalabrasCola: () => 4,
 })
 
 function crearEscenario(extra: Partial<DependenciasConversacion> = {}) {
@@ -511,12 +514,23 @@ describe('regla 6 — la caja es la locución abierta y solo el cierre la vacía
 
 describe('eco y barge-in — la voz de FLU nunca es fila de usuario', () => {
   it('detecta eco por sufijo y cobertura de palabras, no por caracteres', () => {
-    expect(esEcoDeTts('mundo entero', 'hola mundo entero')).toBe(true)
-    expect(esEcoDeTts('MUNDO, entero!', 'hola mundo entero')).toBe(true)
-    expect(esEcoDeTts('hola mundo', 'hola mundo entero')).toBe(false)
-    expect(esEcoDeTts('mundo entero y algo mas', 'hola mundo entero')).toBe(false)
-    expect(esEcoDeTts('', 'hola mundo entero')).toBe(false)
-    expect(esEcoDeTts('mundo', '')).toBe(false)
+    expect(esEcoDeTts('mundo entero', 'hola mundo entero', 4)).toBe(true)
+    expect(esEcoDeTts('MUNDO, entero!', 'hola mundo entero', 4)).toBe(true)
+    expect(esEcoDeTts('hola mundo', 'hola mundo entero', 4)).toBe(false)
+    expect(esEcoDeTts('mundo entero y algo mas', 'hola mundo entero', 4)).toBe(false)
+    expect(esEcoDeTts('', 'hola mundo entero', 4)).toBe(false)
+    expect(esEcoDeTts('mundo', '', 4)).toBe(false)
+  })
+
+  it('la cola que ABRE el fragmento es eco (medido 18:12:34); un prefijo corto no', () => {
+    const dicho =
+      'He notado que repeti la informacion sobre los ratones. Te gustaria que continuemos con la loteria o prefieres que te cuente algo mas?'
+    expect(esEcoDeTts('o prefieres que te cuente algo mas esta', dicho, 4)).toBe(true)
+    expect(
+      esEcoDeTts('o prefieres que te cuente algo mas esta Okay flu estabamos jugando Adivina quien', dicho, 4),
+    ).toBe(true)
+    expect(esEcoDeTts('te cuente algo', dicho, 4), 'solo 3 palabras de la cola no es eco').toBe(false)
+    expect(esEcoDeTts('pon la alarma a las siete', dicho, 4)).toBe(false)
   })
 
   it('el eco se cuenta y no mueve la caja; lo ajeno interrumpe y sí entra', async () => {

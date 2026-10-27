@@ -8,8 +8,11 @@
 //   `continuityThreshold ?? 0.74`: al venir el literal, NO se leia
 //   `voiceIdentity.capture.conversationSpeakerThresholds` (0.66 / 0.64).
 //
-// P9.57: el worker solo EMBEBE; la decision es del DUENO UNICO
-// (`resolveConversationSpeaker`), que lee los umbrales de la config.
+// P9.57: el worker solo EMBEBE; la decision es del DUENO UNICO de los pisos
+// (`speakerClusters.sameVoiceFloor`, que lee los umbrales de la config). Corte
+// 2026-10-26: `resolveConversationSpeaker` (speakerDiarization) se retiro con la
+// tuberia vieja; la reutilizacion viva por umbral es `findNearestCluster` +
+// `sameVoiceFloor` (la misma que consume el registro de identidad).
 // Guard de DOS caras: (A) estructural (nadie incrusta el literal) y (B) de
 // COMPORTAMIENTO con prueba de DETECTOR (el veredicto depende de la similitud:
 // 0.70 reutiliza el cluster, 0.50 abre etiqueta nueva).
@@ -17,7 +20,7 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { resolveConversationSpeaker } from '../src/voice/lib/speakerDiarization.js'
+import { findNearestCluster, sameVoiceFloor } from '../src/voice/lib/speakerClusters.js'
 import { FLU_CONFIG } from '../src/voice/lib/fluConfig.js'
 import { getMinSamples, getTargetSampleRate } from '../src/voice/lib/embeddingConfig.js'
 import { getConversationMinVoicedSamples } from '../src/voice/lib/micCapture.js'
@@ -71,16 +74,17 @@ const SIG = [1, 0, 0, 0]
  */
 function decidir(cos = 0.7): string {
   const vector = [cos, Math.sqrt(Math.max(0, 1 - cos * cos)), 0, 0]
-  return resolveConversationSpeaker({
-    signatureVector: vector,
-    speakerClusters: [{ label: 'Hablante 1', signature: SIG }],
-    lastSpeaker: '',
-    lastSignature: null,
-    voicedSampleCount: 86400,
-    sampleRate: 48000,
-    atTurnBoundary: false,
-    allowNewCluster: true,
-  } as any)
+  // Corte 2026-10-26: la decision viva de reutilizacion es la del registro
+  // (speakerIdentityRegister): findNearestCluster + sameVoiceFloor (config).
+  // El dueño es JS sin checkJs: tsc pierde la forma del resultado. Se declara la forma
+  // REAL que devuelve (speakerClusters.js findNearestCluster), sin `as any`.
+  const nearest = findNearestCluster(vector, [{ label: 'Hablante 1', signature: SIG }]) as {
+    nearestSimilarity: number
+    nearestCluster: { label?: string } | null
+  }
+  return nearest && nearest.nearestSimilarity >= sameVoiceFloor()
+    ? String(nearest.nearestCluster?.label || '')
+    : 'Hablante 2'
 }
 
 describe('una voz que puntua 0.70 con el cluster NO es una voz nueva (reutiliza el cluster)', () => {

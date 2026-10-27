@@ -12,16 +12,23 @@
 // TODOS los turnos de esa voz llevan su nombre; (b) el control inverso: una voz DISTINTA
 // no hereda el nombre ni la etiqueta.
 // ============================================================
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { resolveConversationSpeaker } from '../src/voice/lib/speakerDiarization';
+import { decidirIdentidad } from '../src/voice/conversation/identidad';
 import { registerSpeakerIdentity } from '../src/voice/lib/speakerIdentityRegister';
 import {
     clearSessionPrimarySpeaker,
     setSessionPrimarySpeaker,
 } from '../src/voice/lib/sessionPrimarySpeaker';
-import { forgetVoiceName, registerVoiceName, resolveVoiceName } from '../src/voice/lib/speakerDirectory';
+import { compareCosineSignatures } from '../src/voice/lib/speakerCore';
+import {
+    forgetVoiceName,
+    registerVoiceName,
+    resetVoiceDirectory,
+    resolveVoiceIdentity,
+    resolveVoiceName,
+} from '../src/voice/lib/speakerDirectory';
 import { resolveSpeakerNameFromUtterance } from '../src/voice/lib/speakerPolicy';
 
 const hookSource = () =>
@@ -59,60 +66,74 @@ export function directSessionPrimaryWrites(src: string): number {
 const vozA = Array.from({ length: 512 }, (_, i) => Math.sin(i * 0.1));
 const vozB = Array.from({ length: 512 }, (_, i) => Math.cos(i * 0.37));
 
-const turno = (
-    clusters: { label?: string; signature?: number[] }[],
+// Corte 2026-10-26: `resolveConversationSpeaker` (speakerDiarization) se retiro con la
+// tuberia vieja. La identidad de la locucion la decide la REGLA DEL MODULO
+// (`decidirIdentidad`, dueno unico de ingesta/cierre/resolucion pasiva): misma voz =
+// coseno >= umbral contra el ULTIMO vector de la sesion. El primario NO participa.
+const ids = (() => {
+    let n = 0;
+    return { next: () => `uuid-turno-${(n += 1)}` };
+})();
+
+const decidirTurno = (
     vector: number[],
-    extra: Record<string, unknown> = {},
+    ultimoVozId: string,
+    ultimoVector: number[] | null,
+    etiquetaNueva: string,
 ) =>
-    resolveConversationSpeaker({
-        speakerClusters: clusters,
-        sessionPrimary: 'Luis',
-        signatureVector: vector,
-        // Ventana SOSTENIDA (2.0 s): la medida corta no afirma nombres (mandato 2026-10-18).
-        voicedSampleCount: 96000,
-        minVoicedSamples: 12000,
-        sampleRate: 48000,
-        utteranceText: 'siguiente carta por favor',
-        atTurnBoundary: true,
-        allowNewCluster: true,
-        ...extra,
-    } as never) as string;
+    decidirIdentidad({
+        vector,
+        ultimoVozId,
+        ultimoVector,
+        // Mismo umbral del adaptador del modulo (cosineContinuityThreshold); con el
+        // MISMO vector el coseno es 1.0: continua con cualquier umbral real <= 1.
+        umbral: 0.8,
+        etiquetaNueva,
+        // El coseno es el REAL del dueño (speakerCore.compareCosineSignatures).
+        comparar: (a, b) => compareCosineSignatures([...a], [...b]),
+        id: ids.next,
+    });
+
+/** Ancla de la base para la resolucion VIVA por timbre (resolveVoiceIdentity). */
+const ancla = (name: string, vector: number[], verified = true) => ({ name, vector, verified });
 
 describe('el hablante primario de la sesion conserva su nombre', () => {
-    it('SIN ancla, la MISMA voz conserva su «Hablante N» estable (el primario no la bautiza)', () => {
-        const clusters: { label?: string; signature?: number[] }[] = [];
-        const r1 = turno(clusters, vozA);
-        const r2 = turno(clusters, vozA, { lastSpeaker: r1 });
-        const r3 = turno(clusters, vozA, { lastSpeaker: r2 });
+    beforeEach(() => resetVoiceDirectory());
 
-        // MANDATO 2026-10-18: el primer cluster es ANONIMO. Si la primera voz es la TV
-        // (medido en la sesion del dueno), el nombre del onboarding no se le estampa.
-        expect(r1).toBe('Hablante 1');
-        expect(r2).toBe('Hablante 1');
-        expect(r3).toBe('Hablante 1');
-        expect(clusters.some((c) => c.label === 'Luis')).toBe(false);
+    it('SIN ancla, la MISMA voz conserva su «Hablante N» estable (el primario no la bautiza)', () => {
+        // MANDATO 2026-10-18: la primera voz recibe etiqueta ANONIMA. Si la primera voz
+        // es la TV (medido en la sesion del dueno), el nombre del onboarding no se le
+        // estampa. En la regla viva el primario ni siquiera es una entrada: la fuente no
+        // lo conoce (guard estructural).
+        const r1 = decidirTurno(vozA, '', null, 'Hablante 1');
+        expect(r1).toMatchObject({ continuidad: false, hablante: 'Hablante 1' });
+        const r2 = decidirTurno(vozA, r1.vozId, vozA, 'Hablante 2');
+        const r3 = decidirTurno(vozA, r2.vozId, vozA, 'Hablante 3');
+        // Misma voz: continuidad con la anterior; la etiqueta la conserva el consumidor.
+        expect(r2.continuidad, 'la MISMA voz no abre etiqueta nueva').toBe(true);
+        expect(r3.continuidad).toBe(true);
+        expect(r2.hablante, 'la continuidad hereda la etiqueta, no la reacuña').toBe('');
+        expect([r1.hablante, r2.hablante, r3.hablante].every((h) => h !== 'Luis')).toBe(true);
+        const regla = readFileSync(join(process.cwd(), 'src', 'voice', 'conversation', 'identidad.ts'), 'utf8');
+        expect(regla.includes('sessionPrimary'), 'la regla del modulo no conoce el primario (no puede bautizar)').toBe(false);
     });
 
     it('con un ancla REGISTRADA preexistente, la MISMA voz mantiene el nombre', () => {
         // El ancla entra por su DATO ("soy Luis" / registro), no la crea el primer turno.
-        const clusters: { label?: string; signature?: number[] }[] = [
-            { label: 'Luis', signature: vozA },
-        ];
-        const r1 = turno(clusters, vozA);
-        const r2 = turno(clusters, vozA, { lastSpeaker: r1 });
-        expect(r1).toBe('Luis');
-        expect(r2).toBe('Luis');
+        // La resolucion VIVA por timbre (resolveVoiceIdentity) casa la voz contra el
+        // ancla de la base y afirma el nombre en CADA turno. (`model: ''` a proposito:
+        // en pruebas el modelo de embeddings no participa y el default lo excluiria.)
+        const r1 = resolveVoiceIdentity(vozA, { model: '', candidates: [ancla('Luis', vozA)] });
+        const r2 = resolveVoiceIdentity(vozA, { model: '', candidates: [ancla('Luis', vozA)] });
+        expect(r1?.name).toBe('Luis');
+        expect(r2?.name).toBe('Luis');
     });
 
     it('CONTROL: una voz DISTINTA no hereda el nombre', () => {
-        const clusters: { label?: string; signature?: number[] }[] = [
-            { label: 'Luis', signature: vozA },
-        ];
-        const r1 = turno(clusters, vozA);
-        expect(r1).toBe('Luis');
+        expect(resolveVoiceIdentity(vozA, { model: '', candidates: [ancla('Luis', vozA)] })?.name).toBe('Luis');
         // La otra voz no casa el ancla de Luis; recibe su propia etiqueta anonima.
-        const otra = turno(clusters, vozB, { lastSpeaker: r1 });
-        expect(otra).not.toBe('Luis');
+        const otra = resolveVoiceIdentity(vozB, { model: '', candidates: [ancla('Luis', vozA)] });
+        expect(otra?.name).not.toBe('Luis');
     });
 
     it('GUARD: el hook enruta la presentacion por voz al dueno unico del registro', () => {
@@ -240,15 +261,18 @@ describe('"soy X" marca VERIFICADO solo el cluster de SU voz', () => {
         expect(r.registered).toBe(true);
         const luis = salida.find((c) => c.label === 'Luis');
         expect(luis?.anchorVerified).toBe(true);
-        // El titular en su banda real afirma el nombre (antes 0.76 lo excluia).
-        expect(turno(salida, vozC, { sessionPrimary: '' })).toBe('Luis');
+        // El titular en su banda real afirma el nombre (antes 0.76 lo excluia): la
+        // resolucion VIVA por timbre usa el piso del ancla VERIFICADA (0.62).
+        expect(
+            resolveVoiceIdentity(vozC, { model: '', candidates: [ancla('Luis', vozA)] })?.name,
+        ).toBe('Luis');
     });
 
-    it('FALSIFICACION: el MISMO cluster SIN la marca no afirma al titular (piso 0.76)', () => {
-        const sinMarca: { label?: string; signature?: number[] }[] = [
-            { label: 'Luis', signature: vozA },
-        ];
-        expect(turno(sinMarca, vozC, { sessionPrimary: '' })).not.toBe('Luis');
+    it('FALSIFICACION: el MISMO ancla SIN la marca no afirma al titular (piso 0.76)', () => {
+        expect(
+            resolveVoiceIdentity(vozC, { model: '', candidates: [ancla('Luis', vozA, false)] })?.name,
+            'sin marca verificada el piso registrado excluye la banda 0.62-0.76',
+        ).not.toBe('Luis');
     });
 
     it('un cluster del nombre con firma AJENA no se marca (la mujer no verifica "Luis")', () => {

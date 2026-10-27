@@ -70,8 +70,7 @@ const rel = (f: string) => f.replace(/\\/g, '/').replace(`${SRC.replace(/\\/g, '
 const READ_TARGETS = [
     'src/core/games/gameUtils.ts',
     'src/core/games/loteria.ts',
-    'src/voice/lib/conversationTurnRow.ts',
-    'src/voice/lib/conversationStreamCommit.js',
+    'src/voice/conversation/pasivo.ts',
 ] as const;
 
 describe('un dato, un dueno — identificadores y afirmaciones', () => {
@@ -89,9 +88,14 @@ describe('un dato, un dueno — identificadores y afirmaciones', () => {
     });
 
     it('la fila del usuario decide por UN criterio (sin rama posicional)', () => {
-        const row = read(join(ROOT, 'src/voice/lib/conversationTurnRow.ts'));
+        // Corte 2026-10-26: conversationTurnRow.ts se retiró con la tubería vieja.
+        // El dueño de la fila de usuario es el módulo (pasivo.ts): identidad por
+        // turno (`filaPuedeSerDeEsteTurno`), sin relaciones difusas de frases ni
+        // rama posicional.
+        const row = read(join(ROOT, 'src/voice/conversation/pasivo.ts'));
         expect(row.includes('phrasesRelate')).toBe(false);
         expect(/turnId\s*==\s*null/.test(row)).toBe(false);
+        expect(row.includes('filaPuedeSerDeEsteTurno')).toBe(true);
     });
 
     it('ningun motor re-enumera el conjunto completo de afirmaciones', () => {

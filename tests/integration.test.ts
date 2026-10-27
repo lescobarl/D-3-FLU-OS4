@@ -52,7 +52,7 @@ import { buildSyncTuple } from '../src/core/db/syncTuple';
 import { EXPRESSION_MAP } from '../src/avatar/index';
 import { EXPRESSION_REGISTRY, getValidAnimations } from '../src/core/anim/expressionRegistry';
 import { resolveStateExpression } from '../src/core/anim/emotionEngine';
-import { commitUserTurnRow } from '../src/voice/lib/conversationTurnRow';
+import { commitUserTurnRow } from '../src/voice/conversation';
 import { resolveRowSpeakerLabel } from '../src/voice/lib/conversationRow.js';
 import { resetVoiceDirectory } from '../src/voice/lib/speakerDirectory.js';
 import { detectSentiment } from '../src/store/integrationStore';

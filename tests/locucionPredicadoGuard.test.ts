@@ -3,17 +3,19 @@
  * GUARD DEL PREDICADO DE LOCUCIÓN · una sola definición, con pares de MUTACIÓN.
  *
  * `core/locucion.js` es dueño de "misma revisión / locución nueva" (`utterancesSameRevision`,
- * `countSharedSpeechWords`) y de su composición (`estadoDeLocucion`). `conversationStream` los
- * importa y re-exporta; el CIERRE (`fraseDeCierreDeLocucion`) usa `estadoDeLocucion`: una sola
- * respuesta para "¿esto es la misma locución?".
+ * `countSharedSpeechWords`) y de su composición (`estadoDeLocucion`). Corte 2026-10-26: el
+ * acoplamiento con el CIERRE viejo (`fraseDeCierreDeLocucion`, conversationStream.js) se
+ * retira con la tubería vieja; el consumidor VIVO que delega en el dueño es
+ * `core/tramoDeLocucion.js` (importa `estadoDeLocucion` de `locucion.js`).
  *
  * Los pares de mutación fijan la SEMÁNTICA: si alguien cambia el predicado (por ejemplo,
  * "todo lo que crece es la misma locución" o "todo lo que comparte palabras es lo mismo"),
  * alguno de estos casos se pone rojo.
  */
 import { describe, expect, it } from 'vitest'
-import { estadoDeLocucion, utterancesSameRevision } from '../src/voice/core/locucion.js'
-import { fraseDeCierreDeLocucion } from '../src/voice/lib/conversationStream.js'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { estadoDeLocucion } from '../src/voice/core/locucion.js'
 
 describe('predicado de locución: semántica fijada con pares de mutación', () => {
   const casos: Array<{ a: string; b: string; nueva: boolean; porque: string }> = [
@@ -58,22 +60,15 @@ describe('predicado de locución: semántica fijada con pares de mutación', () 
   for (const caso of casos) {
     it(`${caso.porque}`, () => {
       expect(estadoDeLocucion(caso.a, caso.b).locucionNueva).toBe(caso.nueva)
-      // El cierre usa EXACTAMENTE la misma respuesta (no un segundo criterio).
-      const cierre = fraseDeCierreDeLocucion({ caja: caso.a, finalConfirmado: caso.b })
-      if (caso.nueva) {
-        expect(cierre.texto, 'cierra el final (la caja es de otra locución)').toBe(caso.b)
-        expect(cierre.motivo).toBe('final')
-      } else {
-        expect(cierre.texto, 'cierra la caja (es su locución)').toBe(caso.a)
-        expect(cierre.motivo).toBe('caja')
-      }
     })
   }
 
-  it('MUTACIÓN de fuente: conversationStream RE-EXPORTA el predicado del dueño (no una copia)', () => {
-    // Si alguien reintrodujera una segunda implementación en conversationStream, el binding
-    // re-exportado dejaría de ser el del dueño y este test se pondría rojo.
-    expect(typeof utterancesSameRevision).toBe('function')
+  it('MUTACIÓN de fuente: el consumidor vivo DELEGA en el dueño (no re-implementa el predicado)', () => {
+    // Si alguien reintrodujera una segunda implementación del predicado en el consumidor
+    // vivo, dejaría de importar al dueño y este test se pondría rojo.
+    const consumidor = readFileSync(join(process.cwd(), 'src/voice/core/tramoDeLocucion.js'), 'utf8')
+    expect(consumidor, 'el consumidor usa el predicado del dueno').toContain('estadoDeLocucion')
+    expect(consumidor, 'y lo importa del dueno (core/locucion.js)').toContain("from './locucion.js'")
     const propio = estadoDeLocucion('hola a todos', 'hola a todos los presentes').crecimiento
     expect(propio).toBe(true)
   })

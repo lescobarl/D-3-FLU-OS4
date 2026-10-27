@@ -20,7 +20,7 @@
 //   el nombre. REGLA: un dato (voz), un dueno; el renombre va por FIRMA del cluster.
 // ============================================================
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { commitUserTurnRow, renameSpeakerRows, resolveRowSpeakerName } from '../src/voice/lib/conversationTurnRow'
+import { commitUserTurnRow, renameRowSpeakerName } from '../src/voice/conversation'
 import { resolveRowSpeakerLabel } from '../src/voice/lib/conversationRow'
 import { resetVoiceDirectory } from '../src/voice/lib/speakerDirectory.js'
 import { useIntegrationStore } from '../src/store/integrationStore'
@@ -111,20 +111,21 @@ describe('B2 - la identidad es la VOZ (firma), no la etiqueta', () => {
 
   it('una etiqueta reusada por OTRA voz NO se vuelve el nombre', () => {
     // El defecto medido: el mapa global etiqueta->nombre contaminaba la etiqueta.
-    expect(resolveRowSpeakerName('Hablante 1'), 'sin voz que la respalde').toBe('Hablante 1')
-    commitUserTurnRow({ text: 'hola que tal', speakerName: 'Hablante 1', evidenciaAcustica: false, turnId: 1 } as never)
+    // El dueno del display (resolveRowSpeakerLabel) resuelve SOLO desde la fila.
+    expect(resolveRowSpeakerLabel({ speakerName: 'Hablante 1' } as never), 'sin voz que la respalde').toBe('Hablante 1')
+    commitUserTurnRow({ text: 'hola que tal', speakerName: 'Hablante 1', evidenciaAcustica: false, turnId: 1 })
     // Si "Luis" se registra para ESA voz, la ETIQUETA sigue siendo una etiqueta: una fila
     // nueva de OTRA voz que reutilice "Hablante 1" no hereda "Luis".
-    expect(resolveRowSpeakerName('Hablante 1')).toBe('Hablante 1')
+    expect(resolveRowSpeakerLabel({ speakerName: 'Hablante 1' } as never)).toBe('Hablante 1')
   })
 
   it('"soy X" registra el nombre en la VOZ y NO reescribe filas ya escritas', () => {
     // Mandato del dueño 2026-10-26: registrar el nombre NO muta ninguna fila (la conversacion
     // es texto insertado); el nombre se liga a la VOZ y cada fila conserva la etiqueta con la
     // que el modulo CONVERSACION la cerro.
-    commitUserTurnRow({ text: 'hola', speakerName: 'Hablante 1', evidenciaAcustica: true, turnId: 1 } as never)
-    commitUserTurnRow({ text: 'que tal', speakerName: 'Hablante 3', evidenciaAcustica: true, turnId: 2 } as never)
-    commitUserTurnRow({ text: 'bueno', speakerName: 'Hablante 1', evidenciaAcustica: true, turnId: 3 } as never)
+    commitUserTurnRow({ text: 'hola', speakerName: 'Hablante 1', evidenciaAcustica: true, turnId: 1 })
+    commitUserTurnRow({ text: 'que tal', speakerName: 'Hablante 3', evidenciaAcustica: true, turnId: 2 })
+    commitUserTurnRow({ text: 'bueno', speakerName: 'Hablante 1', evidenciaAcustica: true, turnId: 3 })
     const setClusters = vi.fn()
     // Las etiquetas de la MISMA voz las decide el dueno de los clusters (por FIRMA).
     const etiquetas = findLabelsWithSharedVoice(CLUSTERS as never, 'Hablante 1')
@@ -163,7 +164,7 @@ describe('B2 - la identidad es la VOZ (firma), no la etiqueta', () => {
   })
 
   it('RUTA DEL COMANDO: registra igual, deja la VOZ con el nombre y no reescribe filas', () => {
-    commitUserTurnRow({ text: 'hola', speakerName: 'Hablante 1', evidenciaAcustica: true, turnId: 1 } as never)
+    commitUserTurnRow({ text: 'hola', speakerName: 'Hablante 1', evidenciaAcustica: true, turnId: 1 })
     const setClusters = vi.fn()
     const result = registerSpeakerIdentityFromCommand({
       transcript: 'okay flu soy Luis',
@@ -188,10 +189,17 @@ describe('B2 - la identidad es la VOZ (firma), no la etiqueta', () => {
     const aliasGlobal = new Map<string, string>([['hablante 1', 'Luis']])
     const viejo = (label: string) => aliasGlobal.get(label.trim().toLowerCase()) || label
     expect(viejo('Hablante 1'), 'el defecto medido').toBe('Luis')
-    // El dueno real NO usa ese mapa.
-    expect(resolveRowSpeakerName('Hablante 1')).toBe('Hablante 1')
-    // Y el renombre por etiqueta desnuda ya no cambia el nombre de una fila por si solo.
-    renameSpeakerRows(['Hablante 1'], 'Luis')
-    expect(resolveRowSpeakerName('Hablante 1')).toBe('Hablante 1')
+    // El dueno real NO usa ese mapa: el display resuelve desde la propia fila.
+    expect(resolveRowSpeakerLabel({ speakerName: 'Hablante 1' } as never)).toBe('Hablante 1')
+    // Y el renombre del modulo es POR FILA (id), no por etiqueta: una fila nueva con la
+    // MISMA etiqueta no hereda el nombre que se fijo en otra (nada de mapa global).
+    const { id } = commitUserTurnRow({ text: 'primera', speakerName: 'Hablante 1', turnId: 11 })
+    expect(renameRowSpeakerName(String(id), 'Luis'), 'el renombre fija la fila pedida').toBe(true)
+    commitUserTurnRow({ text: 'segunda', speakerName: 'Hablante 1', turnId: 12 })
+    const filas = useIntegrationStore
+      .getState()
+      .conversationHistory.filter((e) => e.role === 'user')
+      .map((e) => resolveRowSpeakerLabel(e))
+    expect(filas, 'solo la fila renombrada cambia; la etiqueta desnuda no hereda').toEqual(['Luis', 'Hablante 1'])
   })
 })

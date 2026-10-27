@@ -33,7 +33,7 @@
 //      del log era exactamente el defecto).
 // ============================================================
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { commitUserTurnRow } from '../src/voice/lib/conversationTurnRow'
+import { commitUserTurnRow } from '../src/voice/conversation'
 import { resolveRowSpeakerLabel } from '../src/voice/lib/conversationRow'
 import { resetVoiceDirectory, resolveVoiceIdentity, voiceVectorModel } from '../src/voice/lib/speakerDirectory.js'
 import { registerSpeakerIdentity } from '../src/voice/lib/speakerIdentityRegister.js'

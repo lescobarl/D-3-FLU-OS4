@@ -17,7 +17,6 @@ const core = vi.hoisted(() => ({
 const workerClient = vi.hoisted(() => ({
   embedAudioForDiarization: vi.fn(),
   preloadVoiceIdWorker: vi.fn(),
-  resolveSpeakerFromAudio: vi.fn(),
 }))
 
 vi.mock('../src/voice/lib/speakerEmbeddingCore.js', () => core)
@@ -29,18 +28,16 @@ import {
   getSpeakerEmbeddingModelStatus,
   preloadSpeakerEmbeddingModel,
   preloadVoiceIdWorker,
-  resolveSpeakerFromAudio,
 } from '../src/voice/lib/speakerEmbedding.js'
 
 describe('speakerEmbedding — API publica reexportada', () => {
-  it('expone las seis funciones esperadas', () => {
+  it('expone las cinco funciones esperadas', () => {
     for (const fn of [
       preloadSpeakerEmbeddingModel,
       getSpeakerEmbeddingModelStatus,
       computeSpeakerEmbedding,
       embedAudioForDiarization,
       preloadVoiceIdWorker,
-      resolveSpeakerFromAudio,
     ]) {
       expect(typeof fn).toBe('function')
     }
@@ -66,10 +63,6 @@ describe('speakerEmbedding — API publica reexportada', () => {
     expect(preloadVoiceIdWorker).toBe(workerClient.preloadVoiceIdWorker)
   })
 
-  it('resolveSpeakerFromAudio es el mismo que el del cliente worker', () => {
-    expect(resolveSpeakerFromAudio).toBe(workerClient.resolveSpeakerFromAudio)
-  })
-
   it('invocar preloadSpeakerEmbeddingModel delega y devuelve el resultado del nucleo', async () => {
     core.preloadSpeakerEmbeddingModel.mockResolvedValueOnce({ ready: true })
     await expect(preloadSpeakerEmbeddingModel()).resolves.toEqual({ ready: true })
@@ -82,14 +75,5 @@ describe('speakerEmbedding — API publica reexportada', () => {
     const compute = computeSpeakerEmbedding as (s: any, rate: number) => Promise<number[]>
     await expect(compute(samples, 16000)).resolves.toEqual([0.1, 0.2])
     expect(core.computeSpeakerEmbedding).toHaveBeenCalledWith(samples, 16000)
-  })
-
-  it('invocar resolveSpeakerFromAudio delega en el cliente worker', async () => {
-    workerClient.resolveSpeakerFromAudio.mockResolvedValueOnce({ speakerName: 'Ana' })
-    const samples = new Float32Array([1, 2, 3])
-    await expect(resolveSpeakerFromAudio(samples, 48000, {})).resolves.toEqual({
-      speakerName: 'Ana',
-    })
-    expect(workerClient.resolveSpeakerFromAudio).toHaveBeenCalledWith(samples, 48000, {})
   })
 })
