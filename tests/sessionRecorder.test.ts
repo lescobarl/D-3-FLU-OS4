@@ -5,10 +5,18 @@
 // logs, capturar el audio real del micrófono y los eventos del pipeline, y
 // exportar un WAV reproducible junto al JSON de eventos.
 //
+// CONTRATO DEL CANAL DE AUDIO (529c672d, PORTERO A1 medido 2026-10-23): el
+// audio NUNCA se apaga — un canal roto dejaba la grabación truncada en
+// silencio; cada lote perdido se declara como HUECO (`audioGaps`) y se sigue
+// reintentando. El breaker de 5 fallos consecutivos vale para el RESTO de
+// canales (`events`/`turns`/`start`/`finalize`), con contador POR canal.
+//
 // Entorno `node`: es lógica pura (sin DOM); el fallback de `localStore` es un
 // mapa en memoria y `Blob` existe en Node 22.
 // ============================================================
 // @vitest-environment node
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
     buildSessionWavBlob,
@@ -23,9 +31,12 @@ import {
     isSessionRecordingEnabled,
     pushSessionAudio,
     recordSessionEvent,
+    recordSessionTurn,
 } from '../src/voice/lib/sessionRecorder.js';
 import { FLU_CONFIG } from '../src/voice/lib/fluConfig.js';
 import { localGet } from '../src/core/storage/localStore';
+
+const RECORDER_SRC = join(process.cwd(), 'src', 'voice', 'lib', 'sessionRecorder.js');
 
 const DEFAULT_MAX_MINUTES = FLU_CONFIG.recorder.maxMinutes;
 const DEFAULT_MAX_EVENTS = FLU_CONFIG.recorder.maxEvents;
@@ -235,7 +246,7 @@ describe('sessionRecorder — sumidero HTTP y límites reales del navegador', ()
         expect(chunks.reduce((sum, bytes) => sum + bytes, 0)).toBe(750 * 128 * 2);
     });
 
-    it('un canal que falla se detiene y se declara; el éxito de otro canal NO lo tapa', async () => {
+    it('el canal de AUDIO nunca se apaga: reintenta SIEMPRE y cada lote perdido se declara como hueco', async () => {
         let audioAttempts = 0;
         const eventosPersistidos: string[] = [];
         configureSessionSink({
@@ -257,11 +268,102 @@ describe('sessionRecorder — sumidero HTTP y límites reales del navegador', ()
         }
         await finalizeSessionRecording({ withBase: false });
 
-        // Falsificador: con el contador global reiniciado por cada tarea encolada
-        // (el defecto medido) el canal de audio NUNCA se declaraba caído.
-        expect(audioAttempts).toBe(5);
-        expect(getSessionRecordingStatus().channelsDown).toContain('audio');
+        // Contrato fijado por 529c672d (PORTERO A1 medido 2026-10-23): el canal
+        // de audio NO se detiene tras 5 fallos — un lote perdido es un HUECO
+        // declarado, no una grabación truncada en silencio. Reintenta siempre:
+        // 6 volcados = 6 intentos, huecos contados y el canal sigue vivo.
+        expect(audioAttempts).toBe(6);
+        expect(getSessionRecordingStatus().audioGaps).toBeGreaterThan(0);
+        expect(getSessionRecordingStatus().channelsDown).not.toContain('audio');
         // Los eventos siguen persistiendo: un canal roto no apaga la grabación.
         expect(eventosPersistidos.length).toBeGreaterThan(0);
+    });
+
+    it('el éxito del canal de audio NO tapa el fallo de turns: contador POR canal y breaker a los 5', async () => {
+        let audioAttempts = 0;
+        let turnAttempts = 0;
+        configureSessionSink({
+            start: () => undefined,
+            audio: () => {
+                audioAttempts += 1;
+                return undefined;
+            },
+            events: () => undefined,
+            turns: () => {
+                turnAttempts += 1;
+                return Promise.reject(new Error('Failed to fetch'));
+            },
+        });
+        // 6 tandas de 40 turnos: cada tanda dispara UN volcado del canal `turns`.
+        // Entre tanda y tanda, un bloque de audio de 32 KiB ACIERTA: con un
+        // contador global (el defecto medido 2026-10-19) el éxito del audio
+        // reiniciaría el contador y `turns` jamás se declararía caído.
+        for (let tanda = 0; tanda < 6; tanda += 1) {
+            pushSessionAudio(new Float32Array(16384).fill(0.1), 48000);
+            for (let i = 0; i < 40; i += 1) recordSessionTurn({ kind: 'turn', text: `t${tanda}-${i}` });
+        }
+        await finalizeSessionRecording({ withBase: false });
+
+        // Contador POR canal: 5 fallos consecutivos de `turns` lo detienen y la
+        // 6a tanda ni se intenta (recordSessionTurn devuelve false). El audio
+        // acertó 6 veces sin tapar nada y sigue fuera de `channelsDown`.
+        expect(turnAttempts).toBe(5);
+        expect(audioAttempts).toBe(6);
+        expect(getSessionRecordingStatus().channelsDown).toContain('turns');
+        expect(getSessionRecordingStatus().channelsDown).not.toContain('audio');
+    });
+});
+
+describe('sessionRecorder — guard: el audio nunca se apaga (PORTERO A1)', () => {
+    /**
+     * ¿La rama de `audio` del catch declara el hueco y RETORNA antes del breaker?
+     * Verdadero solo si: la rama existe y anota `audioGaps.push`, termina en
+     * `return` SIN tocar `persistChannelsDown`, y el invariante del contrato
+     * ("el audio NUNCA se apaga") sigue escrito en la fuente.
+     */
+    function audioNuncaSeApaga(src: string): boolean {
+        const rama = /if \(label === 'audio'\) \{([\s\S]*?)\n      \}/.exec(src)?.[1] ?? '';
+        const anotaHueco = rama.includes('audioGaps.push');
+        const retornaSinBajarlo = rama.includes('return') && !rama.includes('persistChannelsDown');
+        const invariante = src.includes('el audio NUNCA se apaga');
+        return anotaHueco && retornaSinBajarlo && invariante;
+    }
+
+    it('la fuente real conserva la exención de audio (rama + invariante)', () => {
+        expect(audioNuncaSeApaga(readFileSync(RECORDER_SRC, 'utf8'))).toBe(true);
+    });
+
+    it('PRUEBA DE DETECTOR: la forma vieja (audio cae con el breaker) => rojo', () => {
+        const viejo = `    .catch((error) => {
+      const attempts = (persistFailures.get(label) || 0) + 1
+      persistFailures.set(label, attempts)
+      if (attempts < 5) return
+      persistChannelsDown.add(label)
+      if (label !== 'events') logCaughtError('sessionRecorder.persistChannel', error, { label, attempts })
+    })`;
+        expect(audioNuncaSeApaga(viejo), 'sin la exención el audio vuelve a truncarse en silencio').toBe(false);
+        const sinInvariante = `    .catch((error) => {
+      const attempts = (persistFailures.get(label) || 0) + 1
+      persistFailures.set(label, attempts)
+      if (label === 'audio') {
+        audioGaps.push({ sample: audioSamples, at: Date.now() })
+        return
+      }
+      if (attempts < 5) return
+      persistChannelsDown.add(label)
+    })`;
+        expect(audioNuncaSeApaga(sinInvariante), 'sin el contrato escrito el cambio se pierde sin rastro').toBe(false);
+        const sinHueco = `    .catch((error) => {
+      const attempts = (persistFailures.get(label) || 0) + 1
+      persistFailures.set(label, attempts)
+      if (label === 'audio') {
+        if (attempts === 5) logCaughtError('sessionRecorder.audioGap', error, { attempts })
+        return
+      }
+      if (attempts < 5) return
+      persistChannelsDown.add(label)
+    })
+    // el audio NUNCA se apaga`;
+        expect(audioNuncaSeApaga(sinHueco), 'sin declarar el hueco el defecto no se puede medir').toBe(false);
     });
 });

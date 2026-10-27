@@ -4,4 +4,5 @@
   'tests/conversacionUnIdPorGrabacionGuard.test.ts',
   'tests/conversacionTrazaDeFilaGuard.test.ts',
   'tests/conversacionUnCicloDeEscuchaGuard.test.ts',
+  'tests/sessionRecorder.test.ts',
 ]

@@ -59,7 +59,7 @@ const PERSIST_TURN_ROWS = 40
 
 /**
  * @typedef {{ sampleRate: number, samples: number, seconds: number, truncated: boolean, markers: Array<{ t: number, sample: number }> }} SessionAudioExport
- * @typedef {{ enabled: boolean, startedAt: string|null, durationMs: number, audioSeconds: number, sampleRate: number, audioTruncated: boolean, events: number, droppedEvents: number, maxMinutes: number, maxEvents: number, persisted: boolean, channelsDown: string[], sessionId: string, pendingPersist: number }} SessionRecorderStatus
+ * @typedef {{ enabled: boolean, startedAt: string|null, durationMs: number, audioSeconds: number, sampleRate: number, audioTruncated: boolean, audioGaps: number, events: number, droppedEvents: number, maxMinutes: number, maxEvents: number, persisted: boolean, channelsDown: string[], sessionId: string, pendingPersist: number }} SessionRecorderStatus
  * @typedef {{ seq: number, t: number, iso: string, category: string, event: string, data: unknown }} SessionEventRow
  * @typedef {{ exportedAt: string, status: SessionRecorderStatus, audio: SessionAudioExport, events: SessionEventRow[] }} SessionRecordingSnapshot
  */
