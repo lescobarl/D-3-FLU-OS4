@@ -13,10 +13,12 @@
  * detrás y pegaba el texto a la locución anterior (defecto medido en el
  * playback del 2026-10-25: tramos fabricados `[0, cursor]` y filas de 119–152 s).
  *
- * Un `final` del reconocedor no es el cierre de la locución: el cierre real es
- * la frontera VAD (silencio + texto del tramo siguiente) o el fin de la sesión
- * (`cerrar`). Así una locución = un tramo = una fila, y no se escribe una fila
- * por cada corte de Chrome.
+ * Un `final` del reconocedor MARCA la frase completa (Caso 7+6) pero NO cierra
+ * la locución: el cierre por contenido llega con el corte del tramo (ingesta) o
+ * con el fin de la sesión (`cerrar`). Un final con la ventana FUERA del tramo
+ * cerrado no marca nada; sin final, el cierre por silencio queda provisional.
+ * Así una locución = un tramo = una fila, y no se escribe una fila por cada
+ * corte de Chrome.
  *
  * TEXTO ACUMULADO DEL TRAMO. El módulo recibe el texto de la locución COMPLETO en
  * cada ingesta (`revision.ts` decide crecer/revisar/mantener), pero el reconocedor
@@ -34,6 +36,7 @@ import {
   crearConfigFlu,
   crearEmbebedorProducto,
   crearIdUuid,
+  crearMedidorTramo,
   crearPartidorWake,
   crearRegistroCaughtError,
   crearRelojSistema,
@@ -61,7 +64,25 @@ type ResultadoProducto = ArrayLike<AlternativaProducto> &
 export type EventoProducto = Readonly<{
   results?: ArrayLike<ResultadoProducto>
   resultIndex?: number
+  /** Métricas acústicas del evento (el hook ya las manda con esta forma). */
+  metrics?: Readonly<{ durationMs?: number; speechLikeMs?: number; rms?: number }>
 }>
+
+/**
+ * ¿El evento trae un final del reconocedor desde `resultIndex`?
+ * (Caso 7+6: dueño único de la pregunta "¿es final?"; `isFinal` es la marca
+ * de Chrome de que la frase quedó completa.)
+ * @param evento Evento real del reconocedor.
+ * @returns `true` si algún resultado nuevo es final.
+ */
+export function traeFinal(evento: EventoProducto): boolean {
+  const resultados = evento.results
+  if (!resultados) return false
+  for (let i = Number(evento.resultIndex) || 0; i < resultados.length; i += 1) {
+    if (resultados[i]?.isFinal === true) return true
+  }
+  return false
+}
 
 /** Libro del último trozo pegado a la línea abierta (regla: `speechMerge`). */
 type LibroDeLinea = Readonly<{ base: string; chunk: string; line: string }>
@@ -126,6 +147,7 @@ export function crearMotorConversacionProducto({
     config,
     partidor: crearPartidorWake(config),
     vad: crearVadProducto(),
+    medidor: crearMedidorTramo(),
     ultimoTextoDicho,
     embebedor: crearEmbebedorProducto(),
   })
@@ -206,13 +228,16 @@ export function crearMotorConversacionProducto({
         }
         const trozo = componerFraseDelEvento(evento.results, evento.resultIndex)
         if (!trozo) return
+        const hayFinal = traeFinal(evento)
         const lineaPrevia = continua && abierta ? abierta.texto : ''
         const fusion = fusionarEnLineaAbierta(lineaPrevia, libroDeLinea, trozo)
         libroDeLinea = fusion.libro
         // Misma línea = síntoma de reentrega del MISMO tramo (Chrome repite el
-        // evento): no se reingiere. No se compara por índice: una frase legítima
-        // idéntica llega con un tramo NUEVO, donde `lineaPrevia` es ''.
-        if (!fusion.linea || fusion.linea === lineaPrevia) return
+        // evento): no se reingiere, SALVO que el evento traiga el final (Caso 7+6:
+        // el final MARCA la frase completa y debe llegar al módulo).
+        if (!fusion.linea) return
+        if (fusion.linea === lineaPrevia && !hayFinal) return
+        const metrics = evento.metrics
         await registrarFallo(
           'conversacion.producto.ingest.error',
           api.ingestAsr({
@@ -221,11 +246,14 @@ export function crearMotorConversacionProducto({
             // bloque por detrás y atribuía el texto a la locución anterior.
             tramoId: '',
             texto: fusion.linea,
-            // El final del reconocedor NO cierra la locución: solo declara el corte
-            // de SU segmento. El cierre lo decide la frontera VAD o `cerrar()`.
-            final: false,
+            // Caso 7+6: el final NO cierra la locución: marca la frase completa;
+            // el cierre por contenido llega con el corte o con `cerrar()`.
+            final: hayFinal,
             idioma,
             turnId: turno,
+            ...(metrics
+              ? { medida: { speechLikeMs: metrics.speechLikeMs, rms: metrics.rms } }
+              : {}),
           }),
         )
       }),

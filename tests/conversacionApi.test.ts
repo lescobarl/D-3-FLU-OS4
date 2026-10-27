@@ -23,6 +23,7 @@ import type {
 import {
   crearAlmacenMemoria,
   crearIdUuid,
+  crearMedidorTramo,
   crearPartidorWake,
 } from '../src/voice/conversation/adapters'
 import { CONVERSACION_CONFIG } from '../src/voice/conversation/ports'
@@ -81,6 +82,7 @@ function crearEscenario(extra: Partial<DependenciasConversacion> = {}) {
     almacen,
     config,
     partidor: crearPartidorWake(config),
+    medidor: crearMedidorTramo(),
     ultimoTextoDicho: () => '',
     ...extra,
   })
@@ -244,7 +246,11 @@ describe('regla 1 y 3 — el audio abre el tramo y el texto lo revisa', () => {
     await api.start()
     const tramoId = await abrirConVoz(api)
     await api.ingestAsr(asr(tramoId, { texto: 'hola mundo entero' }))
-    const estado = await api.ingestAsr(asr(tramoId, { texto: 'hola mundo', final: true }))
+    await api.ingestAsr(asr(tramoId, { texto: 'hola mundo', final: true }))
+    // Caso 7+6: el final marca; el corte de 900 ms cierra por contenido.
+    const estado = await api.ingestAudio(
+      bloque(SAMPLE_RATE, SAMPLE_RATE * 2, SILENCIO(900)),
+    )
     expect(estado.filas).toHaveLength(1)
     expect(estado.filas[0]).toMatchObject({
       locutionId: tramoId,
@@ -262,7 +268,9 @@ describe('regla 1 y 3 — el audio abre el tramo y el texto lo revisa', () => {
       api.ingestAsr(asr(tramoId, { texto: 'hola', final: true })),
       api.ingestAsr(asr(tramoId, { texto: 'hola', final: true })),
     ])
-    const estado = api.snapshot()
+    const estado = await api.ingestAudio(
+      bloque(SAMPLE_RATE, SAMPLE_RATE * 2, SILENCIO(900)),
+    )
     expect(estado.filas).toHaveLength(1)
   })
 })
@@ -280,10 +288,15 @@ describe('regla 2 — el texto se aplica primero y después decide la frontera',
     if (!tramoDos) throw new Error('sin tramo de audio nuevo')
     expect(estadoDos.locucionAbierta?.locutionId).toBe(tramoUno)
 
-    const final = await api.ingestAsr(asr(tramoDos, { texto: 'dos', final: true }))
-    expect(final.filas.map((fila) => fila.texto)).toEqual(['uno', 'dos'])
-    expect(final.filas[0]).toMatchObject({ reason: 'system', provisional: true })
-    expect(final.filas[1]).toMatchObject({ provisional: false })
+    await api.ingestAsr(asr(tramoDos, { texto: 'dos', final: true }))
+    // Caso 7+6: el final marca la locución abierta; el corte de 900 ms del
+    // tramo (candidato = fin: no lo extiende) la cierra por contenido.
+    const cerradas = await api.ingestAudio(
+      bloque(SAMPLE_RATE * 3, SAMPLE_RATE * 3 + 14400, SILENCIO(900)),
+    )
+    expect(cerradas.filas.map((fila) => fila.texto)).toEqual(['uno', 'dos'])
+    expect(cerradas.filas[0]).toMatchObject({ reason: 'system', provisional: true })
+    expect(cerradas.filas[1]).toMatchObject({ provisional: false })
     expect(eventos).toContainEqual(
       expect.objectContaining({
         tipo: 'locution.closed',
@@ -430,12 +443,15 @@ describe('regla 5 — etiquetas con evidencia y solo la voz que habló', () => {
     await api.ingestAudio(bloque(SAMPLE_RATE * 2, SAMPLE_RATE * 3, VOZ()))
     const tramoDos = api.snapshot().tramoAudio?.tramoId
     if (!tramoDos) throw new Error('sin tramo nuevo')
-    const estado = await api.ingestAsr(
+    await api.ingestAsr(
       asr(tramoDos, {
         texto: 'dos',
         final: true,
         voz: { vozId: 'B', hablante: 'Hablante 2' },
       }),
+    )
+    const estado = await api.ingestAudio(
+      bloque(SAMPLE_RATE * 3, SAMPLE_RATE * 3 + 14400, SILENCIO(900)),
     )
     expect(estado.filas.map((fila) => fila.etiqueta)).toEqual(['Hablante 1', 'Hablante 2'])
     expect(estado.filas.every((fila) => fila.evidencia === 'medida')).toBe(true)
@@ -450,15 +466,20 @@ describe('regla 5 — etiquetas con evidencia y solo la voz que habló', () => {
     )
     const nombrada = api.registerName({ nombre: 'Ana' })
     expect(nombrada.descartes).toEqual([])
-    const cerrada = await api.ingestAsr(asr(tramoUno, { texto: 'ok flu soy ana', final: true }))
+    await api.ingestAsr(asr(tramoUno, { texto: 'ok flu soy ana', final: true }))
+    const cerrada = await api.ingestAudio(
+      bloque(SAMPLE_RATE, SAMPLE_RATE * 2, SILENCIO(900)),
+    )
     expect(cerrada.filas[0]).toMatchObject({ etiqueta: 'Ana', evidencia: 'nombre' })
 
-    await api.ingestAudio(bloque(SAMPLE_RATE, SAMPLE_RATE * 2, SILENCIO(900)))
     await api.ingestAudio(bloque(SAMPLE_RATE * 2, SAMPLE_RATE * 3, VOZ()))
     const tramoDos = api.snapshot().tramoAudio?.tramoId
     if (!tramoDos) throw new Error('sin tramo nuevo')
-    const otra = await api.ingestAsr(
+    await api.ingestAsr(
       asr(tramoDos, { texto: 'otra voz', final: true, voz: { vozId: 'B' } }),
+    )
+    const otra = await api.ingestAudio(
+      bloque(SAMPLE_RATE * 3, SAMPLE_RATE * 3 + 14400, SILENCIO(900)),
     )
     expect(otra.filas[1].etiqueta).toBe('Hablante 1')
     expect(otra.filas[1].etiqueta).not.toBe('Ana')
@@ -504,10 +525,15 @@ describe('regla 6 — la caja es la locución abierta y solo el cierre la vacía
     const { api } = crearEscenario()
     await api.start()
     const tramoId = await abrirConVoz(api)
-    await api.ingestAsr(asr(tramoId, { texto: 'hola', final: true }))
-    expect(api.snapshot().box).toEqual({ texto: '', abierta: false })
-    expect(api.snapshot().fraseCanonica).toBe('')
-    expect(api.snapshot().fraseParaMostrar).toBe('')
+    // Caso 7+6: el final NO cierra ni vacía la caja; el corte sí.
+    const trasFinal = await api.ingestAsr(asr(tramoId, { texto: 'hola', final: true }))
+    expect(trasFinal.box).toEqual({ texto: 'hola', abierta: true })
+    const cerrada = await api.ingestAudio(
+      bloque(SAMPLE_RATE, SAMPLE_RATE * 2, SILENCIO(900)),
+    )
+    expect(cerrada.box).toEqual({ texto: '', abierta: false })
+    expect(cerrada.fraseCanonica).toBe('')
+    expect(cerrada.fraseParaMostrar).toBe('')
   })
 })
 
@@ -544,8 +570,11 @@ describe('eco y barge-in — la voz de FLU nunca es fila de usuario', () => {
     expect(eco.descartes).toEqual([expect.objectContaining({ motivo: 'eco' })])
     expect(eventos.some((evento) => evento.tipo === 'barge.in')).toBe(false)
 
-    const interrumpe = await api.ingestAsr(asr(tramoId, { texto: 'espera', final: true }))
-    expect(interrumpe.filas[0].texto).toBe('espera')
+    await api.ingestAsr(asr(tramoId, { texto: 'espera', final: true }))
+    const cerrada = await api.ingestAudio(
+      bloque(SAMPLE_RATE, SAMPLE_RATE * 2, SILENCIO(900)),
+    )
+    expect(cerrada.filas[0].texto).toBe('espera')
     expect(eventos).toContainEqual(
       expect.objectContaining({ tipo: 'barge.in', texto: 'espera' }),
     )
@@ -557,7 +586,10 @@ describe('eco y barge-in — la voz de FLU nunca es fila de usuario', () => {
     const { api, eventos } = crearEscenario({ ultimoTextoDicho: dicho.ultimoTextoDicho })
     await api.start()
     const tramoId = await abrirConVoz(api)
-    const estado = await api.ingestAsr(asr(tramoId, { texto: 'mundo entero', final: true }))
+    await api.ingestAsr(asr(tramoId, { texto: 'mundo entero', final: true }))
+    const estado = await api.ingestAudio(
+      bloque(SAMPLE_RATE, SAMPLE_RATE * 2, SILENCIO(900)),
+    )
     expect(estado.filas[0].texto).toBe('mundo entero')
     expect(eventos.some((evento) => evento.tipo === 'barge.in')).toBe(false)
   })
@@ -580,8 +612,9 @@ describe('ASR por puerto — un motor, estados y audio local', () => {
     const tramoId = await abrirConVoz(api)
     expect(asrFalso.empujados).toHaveLength(1)
     asrFalso.resultado({ texto: 'hola', final: true, idioma: 'es' })
+    // El drenaje procesa el final y el corte de 900 ms cierra por contenido.
     const estado = await api.ingestAudio(
-      bloque(SAMPLE_RATE, SAMPLE_RATE * 2, VOZ()),
+      bloque(SAMPLE_RATE, SAMPLE_RATE * 2, SILENCIO(900)),
     )
     expect(estado.filas[0]).toMatchObject({ locutionId: tramoId, texto: 'hola' })
     expect(eventos).toContainEqual(

@@ -22,25 +22,10 @@
 import { metaDeFilaConversacion } from '../../core/db/conversationRowMapping'
 import { logCaughtError } from '../../lib/caughtError.ts'
 import { useIntegrationStore } from '../../store/integrationStore'
-import { crearMotorConversacionProducto } from '../conversation/index'
+import { crearMotorConversacionProducto, traeFinal } from '../conversation/index'
 import { resolveEchoContext } from '../lib/conversationDialogue.js'
 import { labelToSpeakerId } from '../lib/conversationRow.js'
 import { getLastCompletedSpeechAt } from '../lib/fluSpeech.js'
-
-/**
- * Indica si el evento del reconocedor trae algún resultado final.
- * @param {{ results?: ArrayLike<object>, resultIndex?: number }} evento Evento del ASR.
- * @returns {boolean} true si al menos un resultado nuevo es final.
- */
-function traeFinal(evento) {
-  const resultados = evento?.results
-  if (!resultados) return false
-  const primero = evento.resultIndex ?? 0
-  for (let indice = primero; indice < resultados.length; indice += 1) {
-    if (resultados[indice]?.isFinal === true) return true
-  }
-  return false
-}
 
 /**
  * Compone el motor de conversación del producto con la vista del hook.

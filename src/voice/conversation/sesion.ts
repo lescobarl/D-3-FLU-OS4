@@ -23,6 +23,7 @@ import type {
   EstadoAsr,
   Fila,
   IdiomaLocucion,
+  MedidaMotor,
   MedidaVad,
   MotivoCierre,
   MotorAsr,
@@ -76,6 +77,7 @@ export type Sesion = Readonly<{
     texto: string,
     final: boolean,
     voz: EvidenciaVoz,
+    medida?: MedidaMotor,
   ): boolean
   cerrarLocucion(
     locucion: LocucionAbierta,
@@ -130,12 +132,12 @@ export function crearEstadoSesion(idiomaInicial: IdiomaLocucion): EstadoSesion {
 export function crearSesion(
   dependencias: Pick<
     DependenciasConversacion,
-    'reloj' | 'id' | 'almacen' | 'config' | 'partidor' | 'registro' | 'embebedor'
+    'reloj' | 'id' | 'almacen' | 'config' | 'partidor' | 'registro' | 'embebedor' | 'medidor'
   >,
   estado: EstadoSesion,
   configuracion: ConfiguracionConversacion,
 ): Sesion {
-  const { reloj, id, almacen, config, partidor, registro, embebedor } = dependencias
+  const { reloj, id, almacen, config, partidor, registro, embebedor, medidor } = dependencias
 
   /** Emite un evento a los oyentes actuales (una copia, por si se dan de baja). */
   function emitir(evento: EventoConversacion): void {
@@ -234,6 +236,7 @@ export function crearSesion(
     config,
     id,
     embebedor,
+    medidor,
   })
 
   /** Resetea el estado de una sesión nueva sin perder filas ni oyentes. */

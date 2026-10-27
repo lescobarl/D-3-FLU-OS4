@@ -26,6 +26,7 @@ import type {
 import {
   crearAlmacenMemoria,
   crearIdUuid,
+  crearMedidorTramo,
   crearPartidorWake,
 } from '../src/voice/conversation/adapters'
 import type { ConfigPort, Fila, MedidaVad } from '../src/voice/conversation/ports'
@@ -79,6 +80,7 @@ function crearEscenario(): Escenario {
     almacen: crearAlmacenMemoria({ reloj }),
     config,
     partidor: crearPartidorWake(config),
+    medidor: crearMedidorTramo(),
     ultimoTextoDicho: () => '',
   }
   return { api: crearConversacion(dependencias) }
@@ -118,8 +120,11 @@ type OpcionesLocucion = Readonly<{
 
 /**
  * Locución completa: pausa de 900 ms (corta el tramo anterior), 1 s de voz que
- * abre el tramo, texto del ASR y cierre por final o por silencio. Devuelve la
- * instantánea del bloque de voz (con el `tramoId` de la locución abierta).
+ * abre el tramo, texto del ASR y cierre del tramo con un bloque de silencio que
+ * arranca EXACTAMENTE en el fin del tramo (candidato = fin: no lo extiende).
+ * Con final, el corte de 900 ms cierra POR CONTENIDO (Caso 7+6); sin final, el
+ * silencio de 5000 ms cierra la fila provisional. Devuelve la instantánea del
+ * bloque de voz (con el `tramoId` de la locución abierta).
  */
 async function locucion(
   escenario: Escenario,
@@ -134,17 +139,26 @@ async function locucion(
     opciones.inicio ?? cursor,
     opciones.turnoAudio,
   )
-  const tramoId = conVoz.locucionAbierta?.locutionId
-  if (!tramoId) throw new Error('el audio con voz no abrio locucion')
+  const abierta = conVoz.locucionAbierta
+  if (!abierta) throw new Error('el audio con voz no abrio locucion')
+  const tramoId = abierta.locutionId
+  const finTramo = abierta.tramo.fin
   await api.ingestAsr({
     tramoId,
     texto,
     final: Boolean(opciones.final),
     turnId: opciones.turnId,
   })
-  if (!opciones.final) {
-    await entregarAudio(api, SILENCIO(5000), cursor)
-  }
+  const cierreMs = opciones.final ? 900 : 5000
+  const muestrasCierre = Math.round((SAMPLE_RATE * cierreMs) / 1000)
+  await api.ingestAudio({
+    muestras: new Float32Array(muestrasCierre),
+    sampleRate: SAMPLE_RATE,
+    inicio: finTramo,
+    fin: finTramo + muestrasCierre,
+    medida: SILENCIO(cierreMs),
+  })
+  cursor = Math.max(cursor, finTramo + muestrasCierre)
   return conVoz
 }
 

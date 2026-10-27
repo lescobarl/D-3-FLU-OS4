@@ -58,7 +58,13 @@ import { embedAudioForDiarization } from '../lib/voiceIdWorkerClient.js'
 import { useIntegrationStore } from '../../store/integrationStore.ts'
 import { VOICE_DIARIZATION_DEFAULTS } from '../../core/config/sharedConfig.ts'
 import { fraseDelEventoAsr, mergeIntoOpenLine } from '../lib/speechMerge.js'
-import { frameSamplesFor, isVoicedFrame, selectVoicedWindow } from '../lib/voicedActivity.js'
+import {
+  countSpeechLikeSamplesInBlocks,
+  frameSamplesFor,
+  isVoicedFrame,
+  rmsOfBlocks,
+  selectVoicedWindow,
+} from '../lib/voicedActivity.js'
 import {
   escribirRegistroConversacion,
   leerRegistroConversacion,
@@ -77,6 +83,7 @@ import type {
   FilaNueva,
   IdPort,
   MedidaVad,
+  MedidorTramoPort,
   PartidorPort,
   PuertoVistaFilas,
   RegistroPort,
@@ -282,6 +289,31 @@ export function crearVadProducto(): VadPort {
       }
       silencioColaMs += (muestras.length / tasa) * 1000
       return { hayVoz: false, silencioMs: silencioColaMs }
+    },
+  }
+}
+
+/**
+ * Medidor del tramo CERRADO (Caso 7+6): mide el PCM retenido de la locución con
+ * los dueños únicos de `voicedActivity` (`countSpeechLikeSamplesInBlocks`,
+ * `rmsOfBlocks`). Sin bloques o sin frecuencia válida mide cero, nunca null.
+ * @returns Puerto medidor del tramo que la sesión exige para cerrar.
+ */
+export function crearMedidorTramo(): MedidorTramoPort {
+  return {
+    medir: (bloques, sampleRate) => {
+      const tasa = Number(sampleRate)
+      if (!(tasa > 0) || !bloques || bloques.length === 0) {
+        return { speechLikeMs: 0, rms: 0 }
+      }
+      // Copia superficial del arreglo: las funciones de voicedActivity esperan
+      // un array mutable; los bloques PCM no se tocan (inmutabilidad de entrada).
+      const copia = [...bloques]
+      const speechLike = countSpeechLikeSamplesInBlocks(copia, { sampleRate: tasa })
+      return {
+        speechLikeMs: (speechLike * 1000) / tasa,
+        rms: rmsOfBlocks(copia, { sampleRate: tasa }),
+      }
     },
   }
 }

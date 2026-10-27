@@ -59,9 +59,14 @@ beforeEach(async () => {
 describe('producto — el tramo lo resuelve el módulo al procesar', () => {
   it('cada fila lleva su tramo de audio y el texto ajeno cierra por frontera', async () => {
     const eventos: EventoConversacion[] = []
+    // Caso 8: un turnId => una fila. El hook real avanza el turno con cada commit;
+    // sin proveedor, las dos locuciones compartirían el turno de sesión y la
+    // segunda se consolidaría en la fila de la primera (la fila 'adios' no nace).
+    let turnoVigente = 'turno-uno'
     const motor = crearMotorConversacionProducto({
       idioma: 'es',
       ultimoTextoDicho: () => '',
+      turnId: () => turnoVigente,
     })
     motor.suscribir((evento) => eventos.push(evento))
     motor.abrir()
@@ -71,6 +76,8 @@ describe('producto — el tramo lo resuelve el módulo al procesar', () => {
     // 1 s de voz: tramo T1 arranca en la muestra 16000.
     for (let i = 0; i < 10; i += 1) emitir(motor, tono(100), 16000 + i * BLOQUE)
     await motor.evento(eventoAsr('hola'))
+    // La primera locución queda en su turno: la segunda nace en OTRO turno.
+    turnoVigente = 'turno-dos'
 
     // 1 s de silencio: el VAD corta T1 (silencio de cola ≥ 900 ms).
     for (let i = 0; i < 10; i += 1) emitir(motor, silencio(100), 32000 + i * BLOQUE)

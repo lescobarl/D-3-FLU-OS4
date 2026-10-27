@@ -15,7 +15,10 @@ import type {
   Fila,
   IdiomaLocucion,
   IdPort,
+  MedidaFinal,
+  MedidaMotor,
   MedidaVad,
+  MedidorTramoPort,
   MotivoCierre,
   PartidorPort,
   RegistroPort,
@@ -84,6 +87,8 @@ export type AsrIngestado = Readonly<{
   voz?: EvidenciaVoz
   /** Tramo declarado por el llamador; si falta, se resuelve del registro. */
   tramo?: TramoMuestreado
+  /** Métricas acústicas del motor para el final (pueden faltar). */
+  medida?: MedidaMotor
   /** Turno al que pertenece la locución; si falta, se conserva el actual. */
   turnId?: string
 }>
@@ -122,6 +127,8 @@ export type EventoConversacion =
       tramo: TramoMuestreado
       motivo: MotivoCierre
       causa: CausaCierre
+      /** Medida del tramo CERRADO (Caso 7+6): nunca null. */
+      medida: MedidaFinal
     }>
   | Readonly<{ tipo: 'row.committed'; sessionId: string; fila: Fila }>
   | Readonly<{
@@ -195,6 +202,11 @@ export type DependenciasConversacion = Readonly<{
    * él, las locuciones cierran con continuidad/semilla, sin medida.
    */
   embebedor?: EmbebedorPort
+  /**
+   * Medidor del tramo cerrado (Caso 7+6): obligatorio. Sin él no hay
+   * `speechLikeMs`/`rms` del PCM retenido cuando el motor no trae métricas.
+   */
+  medidor: MedidorTramoPort
 }>
 
 /** Las 7 llamadas del plan. */
@@ -237,6 +249,8 @@ export type LocucionAbierta = Readonly<{
   idioma: IdiomaLocucion
   voz: EvidenciaVoz
   final: boolean
+  /** Métricas del motor para el final (pasan tal cual al cierre). */
+  medidaMotor?: MedidaMotor
   /** Continuidad de voz calculada al abrir (no se reescribe al azar). */
   continuidadVoz: boolean
 }>
@@ -250,6 +264,8 @@ export type EntradaPendiente = Readonly<{
   turnId: string
   voz: EvidenciaVoz
   tramo?: TramoMuestreado
+  /** Métricas del motor para el final retenido (pueden faltar). */
+  medida?: MedidaMotor
   recibidoAt: number
 }>
 

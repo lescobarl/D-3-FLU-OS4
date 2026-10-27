@@ -416,7 +416,7 @@ describe('D11 - la repeticion tras pausa conserva su fila (clasificacion, no uni
         expect(hook.includes('isDuplicateLogPhrase'), 'el dedup del log crudo volvio al hook').toBe(false);
 
         const { crearConversacion } = await import('../src/voice/conversation/index');
-        const { crearAlmacenMemoria, crearIdUuid, crearPartidorWake } = await import('../src/voice/conversation/adapters');
+        const { crearAlmacenMemoria, crearIdUuid, crearMedidorTramo, crearPartidorWake } = await import('../src/voice/conversation/adapters');
         const { isAutoSpeakerLabel } = await import('../src/voice/lib/speakerCore.js');
         const reloj = { ahora: () => 1_700_000_000_000 };
         const config: ConfigPort = {
@@ -434,6 +434,7 @@ describe('D11 - la repeticion tras pausa conserva su fila (clasificacion, no uni
             almacen: crearAlmacenMemoria({ reloj }),
             config,
             partidor: crearPartidorWake(config),
+            medidor: crearMedidorTramo(),
             ultimoTextoDicho: () => '',
         });
         await api.start();
@@ -449,14 +450,18 @@ describe('D11 - la repeticion tras pausa conserva su fila (clasificacion, no uni
         const tramoUno = await api.ingestAudio(bloque(0, 16000, voz()));
         const idUno = tramoUno.locucionAbierta?.locutionId;
         if (!idUno) throw new Error('el audio con voz no abrio locucion');
-        const cierreUno = await api.ingestAsr({ tramoId: idUno, texto: 'hola', final: true });
-        expect(cierreUno.filas.map((fila) => fila.texto)).toEqual(['hola']);
+        // Caso 7+6: el final marca, no cierra; el corte de la pausa (candidato
+        // negativo => finHabla = finPrevio) cierra el tramo POR CONTENIDO.
+        await api.ingestAsr({ tramoId: idUno, texto: 'hola', final: true });
         // PAUSA (silencio >= 900) y turno 2 con la MISMA frase: su fila NO desaparece.
-        await api.ingestAudio(bloque(16000, 16000 + 4000, { hayVoz: false, silencioMs: 4000 }));
+        const trasPausa = await api.ingestAudio(bloque(16000, 16000 + 4000, { hayVoz: false, silencioMs: 4000 }));
+        expect(trasPausa.filas.map((fila) => fila.texto)).toEqual(['hola']);
         const tramoDos = await api.ingestAudio(bloque(20000, 36000, voz()));
         const idDos = tramoDos.locucionAbierta?.locutionId;
         if (!idDos) throw new Error('el segundo tramo no abrio locucion');
-        const cierreDos = await api.ingestAsr({ tramoId: idDos, texto: 'hola', final: true });
+        await api.ingestAsr({ tramoId: idDos, texto: 'hola', final: true });
+        // Corte de 900 ms que arranca en el fin del tramo: cierra por contenido.
+        const cierreDos = await api.ingestAudio(bloque(36000, 36000 + 14400, { hayVoz: false, silencioMs: 900 }));
         expect(cierreDos.filas.map((fila) => fila.texto), 'la repeticion tras pausa conserva su fila').toEqual(['hola', 'hola']);
     });
     // RETIRADO (corte 2026-10-26) el test del censo "los cuatro predicados siguen

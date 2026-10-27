@@ -7,6 +7,7 @@
  */
 import { esEcoDeTts } from './eco.ts'
 import { decidirFrontera } from './frontera.ts'
+import { ventanaDentroDe } from './fila.ts'
 import type { Pendientes } from './cola.ts'
 import type { RegistroTramos } from './tramos.ts'
 import type { Sesion } from './sesion.ts'
@@ -54,6 +55,7 @@ export function crearFlujoTexto({
       turnId: entrada.turnId ? String(entrada.turnId).trim() : estado.turnoActual,
       voz: entrada.voz ?? {},
       tramo: entrada.tramo,
+      medida: entrada.medida,
       recibidoAt: dependencias.reloj.ahora(),
     })
   }
@@ -75,8 +77,16 @@ export function crearFlujoTexto({
         turnId: siguiente.turnId,
         idioma: siguiente.idioma,
         voz: siguiente.voz,
+        finalLlego: siguiente.final,
+        medidaMotor: siguiente.medida,
       })
       if (!siguiente.final) break
+      // Caso 7+6: el final NO cierra por reloj: si el tramo de audio sigue
+      // abierto, la locución espera el corte (o el cierre por contenido).
+      const tramoAbierto = Boolean(
+        estado.tramoAudio && estado.tramoAudio.tramoId === siguiente.tramoId,
+      )
+      if (tramoAbierto) break
       const locucion = estado.abierta
       if (locucion) await sesion.cerrarLocucion(locucion, motivo, 'final', true)
     }
@@ -96,7 +106,7 @@ export function crearFlujoTexto({
       }
       if (estado.abierta) {
         const previa = estado.abierta
-        await sesion.cerrarLocucion(previa, motivo, 'stop', false)
+        await sesion.cerrarLocucion(previa, motivo, 'stop', previa.final)
       }
       sesion.abrirLocucion({
         tramoId: siguiente.tramoId,
@@ -105,9 +115,11 @@ export function crearFlujoTexto({
         turnId: siguiente.turnId,
         idioma: siguiente.idioma,
         voz: siguiente.voz,
+        finalLlego: siguiente.final,
+        medidaMotor: siguiente.medida,
       })
       const locucion = estado.abierta
-      if (locucion) await sesion.cerrarLocucion(locucion, motivo, 'stop', siguiente.final)
+      if (locucion) await sesion.cerrarLocucion(locucion, motivo, 'stop', locucion.final)
     }
   }
 
@@ -146,13 +158,27 @@ export function crearFlujoTexto({
 
     const abierta = estado.abierta
     if (abierta && abierta.locutionId === tramoId) {
+      // Caso 7+6: el final SOLO completa la frase si su ventana cabe DENTRO del
+      // tramo cerrado de la locución (un final con ventana ajena no la marca).
+      const finalValido =
+        Boolean(entrada.final) &&
+        (!entrada.tramo ||
+          ventanaDentroDe(entrada.tramo, {
+            inicio: abierta.inicio,
+            fin: abierta.fin,
+            sampleRate: abierta.sampleRate,
+          }))
       const completa = sesion.aplicarRevision(
         abierta,
         texto,
-        Boolean(entrada.final),
+        finalValido,
         voz,
+        finalValido ? entrada.medida : undefined,
       )
-      if (completa) {
+      const tramoAbierto = Boolean(
+        estado.tramoAudio && estado.tramoAudio.tramoId === tramoId,
+      )
+      if (completa && !tramoAbierto) {
         const locucion = estado.abierta
         if (locucion) await sesion.cerrarLocucion(locucion, 'system', 'final', true)
         await flushPendientes('system')
@@ -165,7 +191,7 @@ export function crearFlujoTexto({
       })
       if (frontera.cerrar) {
         const locucion = estado.abierta
-        if (locucion) await sesion.cerrarLocucion(locucion, 'system', 'silencio', false)
+        if (locucion) await sesion.cerrarLocucion(locucion, 'system', 'silencio', locucion.final)
         await flushPendientes('system')
       }
       return
@@ -183,7 +209,7 @@ export function crearFlujoTexto({
       })
       if (frontera.cerrar) {
         const locucion = estado.abierta
-        if (locucion) await sesion.cerrarLocucion(locucion, 'system', 'frontera', false)
+        if (locucion) await sesion.cerrarLocucion(locucion, 'system', 'frontera', locucion.final)
         await flushPendientes('system')
       }
       return
@@ -194,11 +220,27 @@ export function crearFlujoTexto({
       encolar(entrada, tramoId, texto)
       return
     }
-    sesion.abrirLocucion({ tramoId, texto, tramo, turnId, idioma: idiomaDe(entrada), voz })
+    sesion.abrirLocucion({
+      tramoId,
+      texto,
+      tramo,
+      turnId,
+      idioma: idiomaDe(entrada),
+      voz,
+      finalLlego: Boolean(entrada.final),
+      medidaMotor: entrada.medida,
+    })
     if (entrada.final) {
-      const locucion = estado.abierta
-      if (locucion) await sesion.cerrarLocucion(locucion, 'system', 'final', true)
-      await flushPendientes('system')
+      // Caso 7+6: con el tramo de audio abierto el final NO cierra por reloj;
+      // espera el corte (ingesta) que cierra por contenido.
+      const tramoAbierto = Boolean(
+        estado.tramoAudio && estado.tramoAudio.tramoId === tramoId,
+      )
+      if (!tramoAbierto) {
+        const locucion = estado.abierta
+        if (locucion) await sesion.cerrarLocucion(locucion, 'system', 'final', true)
+        await flushPendientes('system')
+      }
     }
   }
 

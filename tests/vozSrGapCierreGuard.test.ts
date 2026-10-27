@@ -47,7 +47,9 @@ async function abrirLocucionConTexto() {
   const motor = crearMotorConversacionProducto({ idioma: 'es', ultimoTextoDicho: () => '' })
   motor.abrir()
   for (let i = 0; i < 10; i += 1) motor.audio(tono(100), SR, i * BLOQUE)
-  await motor.evento({ resultIndex: 0, results: [{ 0: { transcript: 'hola que tal' }, isFinal: true, length: 1 }] })
+  // Caso 7+6: sin final manda el RELOJ del silencio (con final, el corte de
+  // 900 ms cerraría por contenido antes del umbral y no mediría el reloj).
+  await motor.evento({ resultIndex: 0, results: [{ 0: { transcript: 'hola que tal' }, isFinal: false, length: 1 }] })
   expect(motor.instantanea().locucionAbierta?.texto).toBe('hola que tal')
   return motor
 }

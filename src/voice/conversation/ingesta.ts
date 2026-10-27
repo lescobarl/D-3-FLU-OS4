@@ -97,7 +97,7 @@ export function crearIngesta({
     estado.cierreAsrPendiente = null
     if (estado.abierta) {
       const locucion = estado.abierta
-      await sesion.cerrarLocucion(locucion, motivo, 'asr', false)
+      await sesion.cerrarLocucion(locucion, motivo, 'asr', locucion.final)
     }
     await flujo.flushPendientes(motivo)
   }
@@ -193,6 +193,16 @@ export function crearIngesta({
         }
         estado.silencioPendienteMs = medida.silencioMs
         estado.tramoAudio = null
+        // Caso 7+6: el corte NO cierra por reloj; si el final del tramo ya
+        // llegó, este cierre es POR CONTENIDO (causa 'final', no 'frontera').
+        if (
+          estado.abierta &&
+          estado.abierta.locutionId === cortado.tramoId &&
+          estado.abierta.final
+        ) {
+          await sesion.cerrarLocucion(estado.abierta, 'system', 'final', true)
+          await flujo.flushPendientes('system')
+        }
       }
     }
 
@@ -212,7 +222,7 @@ export function crearIngesta({
         abierta: true,
       })
       if (frontera.cerrar) {
-        await sesion.cerrarLocucion(abierta, 'system', 'silencio', false)
+        await sesion.cerrarLocucion(abierta, 'system', 'silencio', abierta.final)
         await flujo.flushPendientes('system')
       }
     }

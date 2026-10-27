@@ -53,11 +53,17 @@ function elegirMotor(
  * @param dependencias Puertos del producto; la configuración es opcional.
  * @returns Las 7 llamadas del plan sobre un único escritor.
  * @throws Si falta `ultimoTextoDicho`: sin él no hay eco ni barge-in.
+ * @throws Si falta `medidor` (Caso 7+6): sin él la medida del tramo quedaría null.
  */
 export function crearConversacion(dependencias: DependenciasConversacion): ConversacionApi {
   if (typeof dependencias.ultimoTextoDicho !== 'function') {
     throw new Error(
       'ultimoTextoDicho es obligatorio: el modulo no habla ni detecta eco sin el',
+    )
+  }
+  if (typeof dependencias.medidor?.medir !== 'function') {
+    throw new Error(
+      'medidor es obligatorio: sin el, la medida del tramo cerrado quedaria null',
     )
   }
   const { reloj, id, registro, asr } = dependencias
@@ -163,7 +169,7 @@ export function crearConversacion(dependencias: DependenciasConversacion): Conve
     estado.cierreAsrPendiente = null
     if (estado.abierta) {
       const locucion = estado.abierta
-      await sesion.cerrarLocucion(locucion, stopKind, 'stop', false)
+      await sesion.cerrarLocucion(locucion, stopKind, 'stop', locucion.final)
     }
     await ingesta.finalizarPendientes(stopKind)
     if (asr && estado.motorAsr) asr.detener()

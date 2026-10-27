@@ -21,6 +21,7 @@ import type {
 import {
   crearAlmacenMemoria,
   crearIdUuid,
+  crearMedidorTramo,
   crearPartidorWake,
 } from '../src/voice/conversation/adapters'
 import type { ConfigPort, MedidaVad } from '../src/voice/conversation/ports'
@@ -67,6 +68,7 @@ function crearEscenario(): ConversacionApi {
     almacen: crearAlmacenMemoria({ reloj }),
     config,
     partidor: crearPartidorWake(config),
+    medidor: crearMedidorTramo(),
     ultimoTextoDicho: () => '',
   }
   return crearConversacion(dependencias)

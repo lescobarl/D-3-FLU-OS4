@@ -31,6 +31,7 @@ import type {
   FilaNueva,
   IdiomaLocucion,
   MotivoCierre,
+  TramoMuestreado,
 } from './ports.ts'
 
 /** Forma UUIDv4 de la clave de fila (`locutionId` = `tramoId`). */
@@ -240,6 +241,22 @@ export function consolidarFilaDelTurno(previa: Fila, nueva: CierreLocucion): Cam
     ...(finExtendido !== undefined ? { tramo: { ...previa.tramo, fin: finExtendido } } : {}),
   }
   return Object.keys(cambios).length > 0 ? cambios : null
+}
+
+/**
+ * ¿La ventana del final cabe DENTRO del tramo cerrado de la locución?
+ * (Caso 7+6: "frase completa" exige el asrFinal del turno con su ventana dentro
+ * del tramo cerrado; un final con ventana ajena NO completa la fila.)
+ * @param ventana Ventana declarada por el final del ASR.
+ * @param tramo Tramo cerrado de la locución.
+ * @returns `true` solo si la ventana es un sub-tramo del tramo (misma frecuencia).
+ */
+export function ventanaDentroDe(ventana: TramoMuestreado, tramo: TramoMuestreado): boolean {
+  return (
+    ventana.sampleRate === tramo.sampleRate &&
+    ventana.inicio >= tramo.inicio &&
+    ventana.fin <= tramo.fin
+  )
 }
 
 /**

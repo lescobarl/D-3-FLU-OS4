@@ -25,6 +25,7 @@ import type {
 import {
   crearAlmacenMemoria,
   crearIdUuid,
+  crearMedidorTramo,
   crearPartidorWake,
 } from '../src/voice/conversation/adapters'
 import type { ConfigPort, EmbebedorPort, MedidaVad } from '../src/voice/conversation/ports'
@@ -112,6 +113,7 @@ function crearEscenario(conEmbebedor: boolean): Escenario {
     almacen: crearAlmacenMemoria({ reloj }),
     config,
     partidor: crearPartidorWake(config),
+    medidor: crearMedidorTramo(),
     ultimoTextoDicho: () => '',
     embebedor: conEmbebedor ? embebedor : undefined,
   }
@@ -154,6 +156,16 @@ async function locucion(
   }
   const final: AsrIngestado = { tramoId, texto, final: true }
   await api.ingestAsr(final)
+  // Caso 7+6: el final marca, no cierra; el corte de 900 ms arranca EXACTAMENTE
+  // en el fin del tramo (candidato = fin: no lo extiende) y cierra por contenido.
+  await api.ingestAudio({
+    muestras: new Float32Array(14400),
+    sampleRate: SAMPLE_RATE,
+    inicio: cursor,
+    fin: cursor + 14400,
+    medida: SILENCIO(900),
+  })
+  cursor += 14400
   return tramoId
 }
 

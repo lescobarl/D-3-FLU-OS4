@@ -60,6 +60,7 @@ export {
   crearEmbebedorProducto,
   crearEscritorFilaUsuarioProducto,
   crearIdUuid,
+  crearMedidorTramo,
   crearPartidorWake,
   crearPuertoVistaFilasProducto,
   crearRegistroCaughtError,
@@ -69,7 +70,7 @@ export {
   commitUserTurnRow,
   renameRowSpeakerName,
 } from './adapters.ts'
-export { crearMotorConversacionProducto } from './producto.ts'
+export { crearMotorConversacionProducto, traeFinal } from './producto.ts'
 export type { EventoProducto, MotorConversacionProducto } from './producto.ts'
 export { crearEscritorFilaUsuario, crearResolucionPasiva, escribeFilaDeUsuario } from './pasivo.ts'
 export type {

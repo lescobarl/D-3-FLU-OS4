@@ -16,6 +16,7 @@ import {
   CONVERSACION_CONFIG,
   crearAlmacenMemoria,
   crearConversacion,
+  crearMedidorTramo,
   crearPartidorWake,
 } from '../src/voice/conversation/index'
 import type { InstantaneaConversacion } from '../src/voice/conversation/index'
@@ -76,6 +77,7 @@ function crearMotorDeFixture() {
     almacen,
     config,
     partidor: crearPartidorWake(config),
+    medidor: crearMedidorTramo(),
     configuracion: CONVERSACION_CONFIG,
     ultimoTextoDicho: () => '',
   })

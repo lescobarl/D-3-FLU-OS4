@@ -183,6 +183,42 @@ export function asrEmpujaAudio(motor: MotorAsr | null): boolean {
   return motor === MOTOR_ASR_LOCAL
 }
 
+/**
+ * Medida final del tramo CERRADO de una locución (Caso 7+6): nunca null.
+ * `ms` es SIEMPRE la duración del tramo cerrado del módulo (no la ventana de
+ * apertura del reconocedor); `speechLikeMs`/`rms` los trae el motor o, si no,
+ * los calcula el módulo sobre el PCM retenido (`MedidorTramoPort`).
+ */
+export type MedidaFinal = Readonly<{
+  /** Duración del tramo cerrado, en milisegundos. */
+  ms: number
+  /** Muestras speech-like del tramo, en milisegundos. */
+  speechLikeMs: number
+  /** Energía RMS del tramo. */
+  rms: number
+}>
+
+/** Métricas acústicas que el motor de ASR entrega con el final (pueden faltar). */
+export type MedidaMotor = Readonly<{
+  /** Muestras speech-like medidas por el motor, en milisegundos. */
+  speechLikeMs?: number
+  /** Energía RMS medida por el motor. */
+  rms?: number
+}>
+
+/**
+ * Medidor del tramo cerrado: habla y energía del PCM retenido, con los dueños
+ * únicos de `voicedActivity`. El módulo lo usa SOLO cuando el motor no trae
+ * métricas con el final.
+ */
+export interface MedidorTramoPort {
+  /** Mide speech-like (ms) y RMS de los bloques del tramo cerrado. */
+  medir(
+    bloques: readonly Float32Array[],
+    sampleRate: number,
+  ): Readonly<{ speechLikeMs: number; rms: number }>
+}
+
 /** Estado del ASR. `aborted` es estado del ASR, nunca de la fila. */
 export type EstadoAsr =
   | 'idle'
@@ -201,6 +237,8 @@ export type ResultadoAsr = Readonly<{
   final: boolean
   /** Idioma de la locución reconocida. */
   idioma: IdiomaLocucion
+  /** Métricas acústicas del motor para el final (pueden faltar). */
+  medida?: MedidaMotor
 }>
 
 /** Opciones de apertura del ASR: un solo ASR por sesión, sin fallback en caliente. */

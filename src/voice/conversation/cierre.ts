@@ -25,6 +25,9 @@ import type {
   Fila,
   IdiomaLocucion,
   IdPort,
+  MedidaFinal,
+  MedidaMotor,
+  MedidorTramoPort,
   MotivoCierre,
   RegistroPort,
   TramoMuestreado,
@@ -56,6 +59,8 @@ export type ContextoCierre = Readonly<{
   id: IdPort
   /** Embeddings inyectados; sin puerto no hay medida (solo continuidad/semilla). */
   embebedor?: EmbebedorPort
+  /** Medidor del tramo cerrado (Caso 7+6): obligatorio, nada de medida null. */
+  medidor: MedidorTramoPort
 }>
 
 /** Datos de apertura de la única locución abierta. */
@@ -66,6 +71,10 @@ export type DatosApertura = Readonly<{
   turnId: string
   idioma: IdiomaLocucion
   voz: EvidenciaVoz
+  /** ¿El final del ASR ya llegó? (Caso 7+6: marca la frase completa.) */
+  finalLlego?: boolean
+  /** Métricas del motor para el final (pueden faltar). */
+  medidaMotor?: MedidaMotor
 }>
 
 /** Reglas de cierre que la sesión publica en su superficie. */
@@ -76,6 +85,7 @@ export type ReglasCierre = Readonly<{
     texto: string,
     final: boolean,
     voz: EvidenciaVoz,
+    medida?: MedidaMotor,
   ): boolean
   cerrarLocucion(
     locucion: LocucionAbierta,
@@ -114,13 +124,42 @@ export function resolverVoz(
 }
 
 /**
+ * Mide el tramo CERRADO de la locución (Caso 7+6): `ms` sale del tramo del
+ * módulo `((fin-inicio)/sampleRate)*1000`; `speechLikeMs`/`rms` los calcula el
+ * medidor inyectado sobre el PCM retenido. Nada queda null.
+ * @param tramo Tramo cerrado que se commitea (es el que se mide).
+ * @param bloques PCM retenido de la locución abierta.
+ * @param medidor Medidor inyectado (dueños únicos en voicedActivity).
+ * @returns Medida completa del tramo cerrado, nunca null.
+ */
+export function medirTramoCerrado(
+  tramo: TramoMuestreado,
+  bloques: readonly Float32Array[],
+  medidor: MedidorTramoPort,
+): MedidaFinal {
+  const ms = ((tramo.fin - tramo.inicio) / tramo.sampleRate) * 1000
+  const { speechLikeMs, rms } = medidor.medir(bloques, tramo.sampleRate)
+  return { ms, speechLikeMs, rms }
+}
+
+/**
  * Crea las reglas de cierre sobre el estado de una sesión.
  * @param contexto Estado de sesión, emisión, almacén, config y registro.
  * @returns Apertura, revisión, cierre y promoción de filas.
  */
 export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
-  const { estado, emitir, emitirCaja, contarDescarte, registro, almacen, config, id, embebedor } =
-    contexto
+  const {
+    estado,
+    emitir,
+    emitirCaja,
+    contarDescarte,
+    registro,
+    almacen,
+    config,
+    id,
+    embebedor,
+    medidor,
+  } = contexto
 
   /** Abre la única locución abierta; el llamador garantiza que no hay otra. */
   function abrirLocucion(datos: DatosApertura): void {
@@ -142,7 +181,8 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
       turnId: turno,
       idioma: datos.idioma,
       voz: datos.voz,
-      final: false,
+      final: Boolean(datos.finalLlego),
+      medidaMotor: datos.medidaMotor,
       continuidadVoz,
     }
     registro.registrar('conversacion.locucion.abierta', {
@@ -159,6 +199,7 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
     texto: string,
     final: boolean,
     voz: EvidenciaVoz,
+    medida?: MedidaMotor,
   ): boolean {
     const decision = decidirRevision({
       tramoAbierto: { id: locucion.locutionId, texto: locucion.texto },
@@ -176,6 +217,8 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
       ...locucion,
       texto: decision.pintar ? decision.texto : locucion.texto,
       final: locucion.final || final,
+      // Las métricas del motor viajan con SU final; sin final no se guardan.
+      medidaMotor: final ? medida ?? locucion.medidaMotor : locucion.medidaMotor,
       voz: fusionarVoz(locucion.voz, voz),
       continuidadVoz,
     }
@@ -253,6 +296,7 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
     motivo: MotivoCierre,
     causa: CausaCierre,
     tramo: TramoMuestreado,
+    medida: MedidaFinal,
   ): Promise<boolean> {
     const cambios = consolidarFilaDelTurno(previa, cierre)
     emitir({
@@ -262,6 +306,7 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
       tramo,
       motivo,
       causa,
+      medida,
     })
     const consolidada = cambios
       ? await almacen.actualizar(previa.locutionId, cambios)
@@ -293,6 +338,14 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
       inicio: locucion.inicio,
       fin: locucion.fin,
       sampleRate: locucion.sampleRate,
+    }
+    // Caso 7+6: la medida SIEMPRE parte del tramo CERRADO; las métricas del motor
+    // (si el final las trajo) sustituyen speechLikeMs/rms, nunca el ms del tramo.
+    const medidaTramo = medirTramoCerrado(tramo, estado.muestrasAbierta, medidor)
+    const medida: MedidaFinal = {
+      ms: medidaTramo.ms,
+      speechLikeMs: locucion.medidaMotor?.speechLikeMs ?? medidaTramo.speechLikeMs,
+      rms: locucion.medidaMotor?.rms ?? medidaTramo.rms,
     }
     const vozMedida = await medirVozAlCerrar(locucion)
     const vozCerrada = vozMedida === locucion.voz ? locucion.voz : fusionarVoz(locucion.voz, vozMedida)
@@ -328,6 +381,7 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
         tramo,
         motivo,
         causa,
+        medida,
       })
       contarDescarte(resultado.descarte, locucion.locutionId, tramo)
       registro.registrar('conversacion.locucion.cerrada', {
@@ -346,7 +400,9 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
     // inserta una segunda fila con el mismo turnId.
     const previaDelTurno = filaDelTurno(cierre.turnId)
     if (previaDelTurno) {
-      if (await consolidarEnLaFilaDelTurno(previaDelTurno, cierre, motivo, causa, tramo)) return
+      if (await consolidarEnLaFilaDelTurno(previaDelTurno, cierre, motivo, causa, tramo, medida)) {
+        return
+      }
     }
 
     const fila = await almacen.guardar(resultado.fila)
@@ -359,6 +415,7 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
       tramo,
       motivo,
       causa,
+      medida,
     })
     emitir({ tipo: 'row.committed', sessionId: sesion, fila })
     emitir({

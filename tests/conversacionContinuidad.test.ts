@@ -73,6 +73,8 @@ function crearProbe(ultimaVozId = '', ultimaEtiqueta = ''): Probe {
       echoMinPalabrasCola: () => 4,
     },
     id: { uuid: () => '00000000-0000-4000-8000-000000000001' },
+    // Caso 7+6: la continuidad no mide el tramo; el medidor es un stub honesto.
+    medidor: { medir: () => ({ speechLikeMs: 0, rms: 0 }) },
   })
   return { estado, reglas }
 }
@@ -96,7 +98,9 @@ async function correrLocucion(
     tramoId: uuid,
     texto: 'hola',
     tramo: { inicio: 0, fin: 16000, sampleRate: 16000 },
-    turnId: 'turno-guard',
+    // Caso 8: un turnId => una fila. Cada locución es SU turno; compartir
+    // 'turno-guard' haría consolidar la segunda en la fila de la primera.
+    turnId: uuid,
     idioma: 'es',
     voz: vozApertura,
   })
