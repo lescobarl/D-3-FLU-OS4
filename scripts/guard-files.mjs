@@ -2,4 +2,5 @@
   'tests/conversacionUnaLocucionUnaFilaGuard.test.ts',
   'tests/conversacionEtiquetasYMezclaGuard.test.ts',
   'tests/conversacionUnIdPorGrabacionGuard.test.ts',
+  'tests/conversacionTrazaDeFilaGuard.test.ts',
 ]

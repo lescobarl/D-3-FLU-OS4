@@ -11,6 +11,7 @@ import { decidirRevision } from './revision.ts'
 import { decidirIdentidad } from './identidad.ts'
 import { concatenarMuestras } from './muestras.ts'
 import { logCaughtError } from '../../lib/caughtError.ts'
+import { recordSessionEvent } from '../api/sessionLog.ts'
 import type {
   CausaCierre,
   ContarDescarte,
@@ -322,7 +323,7 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
     if (!consolidada) return false
     estado.filas.set(consolidada.locutionId, consolidada)
     estado.ultimaEtiqueta = consolidada.etiqueta
-    emitir({ tipo: 'row.committed', sessionId: cierre.sessionId, fila: consolidada })
+    commitar(consolidada)
     registro.registrar('conversacion.turno.consolidado', {
       sessionId: cierre.sessionId,
       turnId: cierre.turnId,
@@ -332,6 +333,25 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
       provisional: consolidada.provisional,
     })
     return true
+  }
+
+  /**
+   * Commitea la fila: emite `row.committed` y deja la TRAZA del commit (Caso 12)
+   * en la grabación de diagnóstico — turnId, hablante y longitud del texto — por
+   * el sink único `recordSessionEvent` (no-op sin grabación activa; jamás
+   * `console.*`). ÚNICO dueño del commit: ningún `row.committed` sale fuera de
+   * aquí, así todo commit tiene traza por construcción.
+   * @param fila Fila commiteada que se emite y se traza.
+   */
+  function commitar(fila: Fila): void {
+    emitir({ tipo: 'row.committed', sessionId: fila.sessionId, fila })
+    recordSessionEvent('conversacion', 'fila.commiteada', {
+      sessionId: fila.sessionId,
+      turnId: fila.turnId,
+      hablante: fila.etiqueta,
+      longitud: String(fila.texto || '').length,
+      locutionId: fila.locutionId,
+    })
   }
 
   /** Cierra la locución abierta: una fila o un descarte contado (regla 4). */
@@ -427,7 +447,7 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
       causa,
       medida,
     })
-    emitir({ tipo: 'row.committed', sessionId: sesion, fila })
+    commitar(fila)
     emitir({
       tipo: 'speaker.labeled',
       sessionId: sesion,
@@ -455,11 +475,7 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
       if (actualizada) {
         estado.filas.set(tramoId, actualizada)
         estado.ultimaEtiqueta = actualizada.etiqueta
-        emitir({
-          tipo: 'row.committed',
-          sessionId: actualizada.sessionId,
-          fila: actualizada,
-        })
+        commitar(actualizada)
       }
     }
     return true
