@@ -1,5 +1,9 @@
 # Cola del módulo CONVERSACIÓN
 
+> **Nota (2026-10-27):** el CLI `npm run replay` se retiró con el corte de
+> conversación; la medición vigente es `npm run playback`. Lo que sigue es registro
+> histórico de la etapa.
+
 Protocolo por etapa (en este orden, sin invertir):
 **implementar → cablear → fixture verde → borrar lo reemplazado → typecheck/lint → commit → marcar aquí.**
 

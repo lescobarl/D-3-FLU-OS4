@@ -54,9 +54,8 @@ Fila {
 | `asr.lang` | `es` | ASR |
 | `maxRetentionMin` | 120 | buffer/sesiones |
 | `overlapMargin` | medir en Etapa 0 (`null`) | identidad |
-| `conversation.engine` | `legacy` (`new` para probar) | arranque |
 
-Sin estas claves no hay `900 ms`, ni `auto`, ni retención: sería hardcode. `overlapMargin` no se inventa: se mide en Etapa 0; sin medida, sin margen → continuidad. `conversation.engine` es la bandera de motor: `legacy` hasta que la pantalla esté validada; `new` sólo para probar, y con una sola implementación escribiendo filas.
+Sin estas claves no hay `900 ms`, ni `auto`, ni retención: sería hardcode. `overlapMargin` no se inventa: se mide en Etapa 0; sin medida, sin margen → continuidad. No hay bandera de motor: el corte dejó UNA implementación (`new`) y la clave `conversation.engine` se retiró (2026-10-27).
 
 ## ASR y diarización
 
@@ -105,29 +104,33 @@ Sin estas claves no hay `900 ms`, ni `auto`, ni retención: sería hardcode. `ov
 - Fixture: `events.ndjson`, `turns.ndjson`, `audio`, `manifest.json`; aceptación `N/0/0`.
 - **Barge-in: sí.** El eco es el portero y el módulo emite **`barge.in`**; el consumidor apaga `fluSpeech`. La voz de FLU no es fila del usuario.
 
-## 17 archivos
+## 20 archivos
 
-Inventario REAL (medido con `Get-ChildItem` sobre el árbol de trabajo):
+Inventario REAL (medido con `Get-ChildItem` el 2026-10-27). Los techos de tamaño
+los fija `tests/godFileSizeGuard.test.ts`; esta tabla es el mapa, no el trinquete.
 
 ```text
 src/voice/conversation/
-  index.ts          API: solo compone y re-exporta            66/120
-  tipos.ts          contrato público (fila, eventos, API)     250/250 (SIN holgura)
-  motor.ts          orquestador de la sesión                  228/300
-  cola.ts           ingesta serializada y pendientes          108/150
-  eco.ts            detector de eco por palabras              35/100
-  frontera.ts       regla 2: cuándo cerrar                    65/100
-  revision.ts       regla 3: mismo tramo / revisa / extiende  108/150
-  fila.ts           reglas 4–5: commit, etiqueta y modelo     192/200 (casi sin holgura)
-  ports.ts          ASR, audio, embeddings, store, reloj, VAD 261/300
-  adapters.ts       única puerta externa; compose la DB       279/300
-  adaptersAlmacen.ts almacén Dexie con `DbLike` inyectado     157/300
-  producto.ts       composición real; segmento: `tramoDelSegmento` y final único en `cerrar()`  237/300
-  cierre.ts         reglas de cierre y fila                261
-  ingesta.ts        audio, ASR, frontera y pendientes      208
-  sesion.ts         estado, caja, voz y sesión             247
-  texto.ts          revisión/extensión de la locución      206
-  tramos.ts         registro de tramos y buffer de ASR     100
+  index.ts          API: solo compone y re-exporta
+  tipos.ts          contrato público (fila, eventos, API)
+  motor.ts          orquestador de la sesión
+  cola.ts           ingesta serializada y pendientes
+  eco.ts            detector de eco por palabras
+  frontera.ts       regla 2: cuándo cerrar
+  revision.ts       regla 3: mismo tramo / revisa / extiende
+  fila.ts           reglas 4–5: commit, etiqueta y modelo
+  ports.ts          ASR, audio, embeddings, store, reloj, VAD
+  adapters.ts       única puerta externa; compone la DB
+  adaptersAlmacen.ts almacén Dexie con `DbLike` inyectado
+  producto.ts       composición real; segmento y final único en `cerrar()`
+  cierre.ts         reglas de cierre y fila
+  ingesta.ts        audio, ASR, frontera y pendientes
+  sesion.ts         estado, caja, voz y sesión
+  texto.ts          revisión/extensión de la locución
+  tramos.ts         registro de tramos y buffer de ASR
+  pasivo.ts         superficie pasiva: escritor ÚNICO de la fila del usuario
+  identidad.ts      decisión de voz por medida + continuidad
+  muestras.ts       ventanas de audio para la medida
 ```
 
 `adapters.ts` es la ÚNICA puerta que importa fuera del módulo: importa
@@ -144,11 +147,11 @@ commitear.
 - **El módulo NO habla.** No existe `TtsPort`. El consumidor entrega
   `ultimoTextoDicho(): string`; el eco compara contra esa función y desde ahí se
   emite `barge.in`.
-- **`engine: new` APAGA el escritor legacy.** `legacy` no instancia el módulo.
-  Dos escritores activos = entrega rechazada.
-- **Default: `conversation.engine: legacy`.** `?conversationEngine=new` es
-  override de runtime SOLO en dev (`import.meta.env.DEV`); en un build de
-  producción no enciende nada.
+- **El motor es ÚNICO (`new`).** La bandera `conversation.engine` se retiró con el
+  corte (2026-10-27): no queda implementación `legacy` que elegir ni override de
+  runtime. Dos escritores activos = entrega rechazada.
+- **Medición:** `npm run playback`. El CLI `replay` (modos `events`/`vectors`) se
+  retiró porque medía la tubería vieja y el resolutor acústico de la decisión B.
 
 ## Reglas de operación y repo
 
@@ -174,7 +177,7 @@ commitear.
 ## 3 pasos
 
 1. Dominio con pruebas. Primero `ports`/`adapters`; `revision.ts` antes de `index.ts`.
-2. Cablear detrás de bandera: el producto usa la API nueva. Si la pantalla no da paridad, se apaga la bandera, vuelve el motor viejo y las filas nuevas se conservan con su `sessionId`.
+2. Cablear el producto a la API nueva (hecho con el corte: sin bandera; el motor viejo se retiró).
 3. Borrar la tubería vieja completa.
 
 ## Aceptación

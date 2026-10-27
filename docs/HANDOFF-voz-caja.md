@@ -1,5 +1,9 @@
 # HANDOFF · auditoría de voz / caja de última frase / filas
 
+> **Nota (2026-10-27):** el CLI `npm run replay` se retiró con el corte de
+> conversación; la medición vigente es `npm run playback`. Las referencias de abajo
+> son registro histórico.
+
 ## TL;DR (lee esto y para si solo necesitas arrancar)
 
 1. **Único cambio de producto pendiente:** el cierre por srGap pierde texto —

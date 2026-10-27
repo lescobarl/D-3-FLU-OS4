@@ -1,4 +1,9 @@
 # PLAN · autonomía / IA / config (2026-10-22)
+
+> **Nota (2026-10-27):** el CLI `npm run replay` se retiró con el corte de
+> conversación; la medición vigente es `npm run playback`. Las referencias de abajo
+> son registro histórico.
+
 > **PARKED (2026-10-22):** fuera del alcance de esta sesión (conversación / transcripción /
 > diarización). Los cambios de código de este plan están en el stash
 > `fuera-de-alcance: autonomia/IA/imagen/config (2026-10-22)`; este documento se conserva

@@ -1,5 +1,9 @@
 # PLAN · voz/caja/rutas dobles (2026-10-22)
 
+> **Nota (2026-10-27):** el CLI `npm run replay` se retiró con el corte de
+> conversación; la medición vigente es `npm run playback`. Las referencias de abajo
+> son registro histórico.
+
 **Base medida:** auditoría del 2026-10-22 sobre `6d06ed34`. Defectos D1–D5 y rutas
 dobles R1–R5 en `docs/HANDOFF-voz-caja.md` §2 y en el informe de auditoría de esa
 sesión. **No hay cambios de producto aún**; este plan los ordena por riesgo.
