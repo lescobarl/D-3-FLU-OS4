@@ -284,7 +284,8 @@ export function crearIngesta({
       ultimoVozId: estado.ultimaVozId,
       ultimoVector: estado.ultimoVectorVoz,
       umbral: dependencias.config.umbralContinuidadVoz(),
-      etiquetaNueva: dependencias.config.etiquetaAnonima(estado.contadorVoces + 1),
+      // Perezoso: la plantilla SOLO se resuelve si la voz es nueva (Caso 10).
+      etiquetaNueva: () => dependencias.config.etiquetaAnonima(estado.contadorVoces + 1),
       comparar: embebedor.comparar,
       id: dependencias.id.uuid,
     })

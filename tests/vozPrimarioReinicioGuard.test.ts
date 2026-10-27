@@ -38,7 +38,7 @@ const decidirTurno = (vector: number[], ultimoVozId: string, ultimoVector: numbe
     ultimoVozId,
     ultimoVector,
     umbral: 0.8,
-    etiquetaNueva,
+    etiquetaNueva: () => etiquetaNueva,
     // El coseno es el REAL del dueño (speakerCore.compareCosineSignatures).
     comparar: (a, b) => compareCosineSignatures([...a], [...b]),
     id: ids.next,

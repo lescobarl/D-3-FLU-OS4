@@ -21,8 +21,8 @@ export type EntradaIdentidad = Readonly<{
   ultimoVector: readonly number[] | null
   /** Umbral de continuidad resuelto por el puerto de config (0..1). */
   umbral: number
-  /** Etiqueta anónima de una voz nueva (`Hablante N`), del dueño de la plantilla. */
-  etiquetaNueva: string
+  /** Etiqueta anónima de una voz nueva (`Hablante N`); se resuelve SOLO si la voz es nueva. */
+  etiquetaNueva: () => string
   /** Comparador de coseno inyectado (dueño único fuera del módulo). */
   comparar: (a: readonly number[], b: readonly number[]) => number
   /** Generador de id inyectado (UUIDv4): la voz nueva acuña su identidad. */
@@ -64,6 +64,6 @@ export function decidirIdentidad(entrada: EntradaIdentidad): IdentidadDecidida {
   return {
     vozId: entrada.id(),
     continuidad: false,
-    hablante: entrada.etiquetaNueva,
+    hablante: entrada.etiquetaNueva(),
   }
 }

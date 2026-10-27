@@ -212,7 +212,8 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
       ultimoVozId: estado.ultimaVozId,
       ultimoVector: estado.ultimoVectorVoz,
       umbral: config.umbralContinuidadVoz(),
-      etiquetaNueva: config.etiquetaAnonima(estado.contadorVoces + 1),
+      // Perezoso: la plantilla SOLO se resuelve si la voz es nueva (Caso 10).
+      etiquetaNueva: () => config.etiquetaAnonima(estado.contadorVoces + 1),
       comparar: embebedor.comparar,
       id: id.uuid,
     })

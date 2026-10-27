@@ -588,7 +588,8 @@ export function crearResolucionPasiva(deps: DependenciasResolucionPasiva): Resol
       ultimoVozId: entrada.ultimoVozId,
       ultimoVector: entrada.ultimoVector,
       umbral: deps.config.umbralContinuidadVoz(),
-      etiquetaNueva: deps.config.etiquetaAnonima(entrada.contadorVoces + 1),
+      // Perezoso: la plantilla SOLO se resuelve si la voz es nueva (Caso 10).
+      etiquetaNueva: () => deps.config.etiquetaAnonima(entrada.contadorVoces + 1),
       comparar: deps.embebedor.comparar,
       id: deps.id.uuid,
     })

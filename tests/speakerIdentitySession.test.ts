@@ -88,7 +88,7 @@ const decidirTurno = (
         // Mismo umbral del adaptador del modulo (cosineContinuityThreshold); con el
         // MISMO vector el coseno es 1.0: continua con cualquier umbral real <= 1.
         umbral: 0.8,
-        etiquetaNueva,
+        etiquetaNueva: () => etiquetaNueva,
         // El coseno es el REAL del dueño (speakerCore.compareCosineSignatures).
         comparar: (a, b) => compareCosineSignatures([...a], [...b]),
         id: ids.next,
