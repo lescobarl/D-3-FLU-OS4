@@ -62,7 +62,6 @@ const RE = {
   consoleDebug: /console\.debug\s*\(/,
   consumerNorm:
     /(?:cleanForSpeech|normalizeTranscriptText|stripWakeWord|stripWakeWordAnywhere|collapseStutter|normalizeCommandForDeterministic)\s*\(/,
-  finalizeSites: /finalizeTurnCommit\(\)/,
   umbralLiteral: /0\.[0-9]{2}/,
   // C47: locales BCP-47 de la familia es/en declarados como literal.
   localeLiteral: /['"`](?:es|en)-(?:MX|US|ES|GB)['"`]/,
@@ -278,7 +277,6 @@ const CONSUMER_NORM_FILES = new Set([
   'src/voice/lib/noteIntentParser.js',
 ])
 const UMBRAL_FILES = new Set([
-  'src/voice/lib/speakerDiarization.js',
   'src/core/autonomy/healthMonitor.ts',
   'src/core/autonomy/decisionEngine.ts',
   'src/core/autonomy/autoOptimization.ts',
@@ -553,10 +551,6 @@ const metrics = {
     }
     return n
   },
-  'finalize-sites': () =>
-    countLinesWhere(
-      (r, l) => r === 'src/voice/lib/conversationStreamCommit.js' && RE.finalizeSites.test(stripComment(l)),
-    ),
   'umbrales-autonomy': () =>
     countFilesWhere((r, f) => UMBRAL_FILES.has(r) && RE.umbralLiteral.test(read(f))),
   // ---- C47 ---------------------------------------------------------------

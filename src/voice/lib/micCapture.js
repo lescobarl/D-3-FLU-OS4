@@ -42,11 +42,6 @@ export function getConversationMinVoicedSamples(sampleRate, config = FLU_CONFIG)
   return Math.floor(sampleRate * (ms / 1000))
 }
 
-export function getConversationMinVoicedForNewSamples(sampleRate, config = FLU_CONFIG) {
-  const ms = Number(getVoiceIdentityCaptureConfig(config).conversationMinVoicedForNewMs)
-  return Math.floor(sampleRate * (ms / 1000))
-}
-
 /**
  * Constraints del microfono (fuente unica de la decision).
  *

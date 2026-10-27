@@ -1,7 +1,0 @@
-{
-  "name": "duplicado-fuente",
-  "descripcion": "La FUENTE trae la misma locucion dos veces (la sesion real duplica): 3 commits, 2 unicos. El replay escribe los 2 unicos -> 1 duplicado en la fuente, 0 perdidas.",
-  "source": [{ "text": "hola que tal" }, { "text": "hola que tal" }, { "text": "vamos a comer" }],
-  "observed": [{ "text": "hola que tal" }, { "text": "vamos a comer" }],
-  "want": { "sourceRows": 3, "sourceDuplicates": 1, "missingUnique": 0, "extraUnique": 0, "textVariants": 0 }
-}

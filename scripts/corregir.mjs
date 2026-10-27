@@ -70,7 +70,7 @@ const ORDERS = {
   },
   D5: {
     title: 'Utils/voice duplicados (misma lógica)',
-    allow: ['src/lib/textUtils.ts', 'src/voice/lib/audioMath.js', 'src/voice/lib/voiceIdentity.js', 'src/voice/lib/conversationStream.js', 'src/voice/lib/fluTranscriptPause.js', 'src/voice/lib/transcriptDelta.js', 'src/voice/lib/turnTranscript.js', 'src/voice/lib/activeListen.js', 'src/voice/lib/speechMerge.js', 'src/core/days/dayRollover.ts', 'src/core/browser/browserSession.ts'],
+    allow: ['src/lib/textUtils.ts', 'src/voice/lib/audioMath.js', 'src/voice/lib/voiceIdentity.js', 'src/voice/lib/fluTranscriptPause.js', 'src/voice/lib/transcriptDelta.js', 'src/voice/lib/speechMerge.js', 'src/core/days/dayRollover.ts', 'src/core/browser/browserSession.ts'],
     steps: [
       'normalizeSpaces/cleanForSpeech: dueño src/lib/textUtils.ts; audioMath re-exporta.',
       'compareAudioSignatures: dueño en audioMath; voiceIdentity delega.',

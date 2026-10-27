@@ -8,7 +8,6 @@ import { describe, expect, it } from 'vitest'
 
 const ROOT = process.cwd()
 const FILES = [
-  'src/voice/lib/speakerDiarization.js',
   'src/core/autonomy/healthMonitor.ts',
   'src/core/autonomy/decisionEngine.ts',
   'src/core/autonomy/autoOptimization.ts',

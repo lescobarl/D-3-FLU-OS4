@@ -1,7 +1,0 @@
-{
-  "name": "falta-una",
-  "descripcion": "La fuente tiene 3 locuciones UNICAS y el replay solo 2: falta una de verdad (missingUnique = 1).",
-  "source": [{ "text": "uno dos tres" }, { "text": "cuatro cinco" }, { "text": "seis siete ocho" }],
-  "observed": [{ "text": "uno dos tres" }, { "text": "cuatro cinco" }],
-  "want": { "sourceRows": 3, "sourceDuplicates": 0, "missingUnique": 1, "extraUnique": 0, "textVariants": 0 }
-}

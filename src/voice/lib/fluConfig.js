@@ -113,8 +113,6 @@ export const FLU_CONFIG = {
       turnBoundaryTailCapMs: 2000,
       /** Voz mínima para timbre (ms); es el piso REAL del embedder (350 ms). */
       conversationMinVoicedMs: 350,
-      /** Voz mínima para nuevo hablante (ms); bajo en sala/TV para no perder cambios de voz. */
-      conversationMinVoicedForNewMs: 2200,
       conversationMaxAutoSpeakers: 99, // SIN TOPE de etiquetas automaticas: un tope bajo fuerza FUSIONES FALSAS (se pierden voces); el unico criterio de union es el de la diarizacion, no un recuento.
       /** Umbrales de similitud coseno entre embeddings WavLM-SV 512-D (mayor = misma persona). */
       conversationSpeakerThresholds: {

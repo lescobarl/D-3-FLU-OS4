@@ -1,7 +1,0 @@
-{
-  "name": "sobra-una",
-  "descripcion": "El replay escribe una fila que NO esta en la fuente (partido/pegado distinto): extraUnique = 1. NO es una perdida de la fuente.",
-  "source": [{ "text": "uno dos tres" }],
-  "observed": [{ "text": "uno dos tres" }, { "text": "algo que no se dijo antes" }],
-  "want": { "sourceRows": 1, "sourceDuplicates": 0, "missingUnique": 0, "extraUnique": 1, "textVariants": 0 }
-}

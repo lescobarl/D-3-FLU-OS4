@@ -18,19 +18,6 @@ export function foldSpeakerKey(label = '') {
 }
 
 /**
- * Etiquetas que RESERVAN numero de hablante: las voces REALES de la sesion. El RESPALDO
- * ("sin medida") NO es una voz: si reservara, la primera voz medida nace "Hablante 2"
- * aunque no exista un "Hablante 1" real (defecto medido 2026-10-18).
- *
- * @param {Iterable<string>} labels etiquetas vivas de la sesion
- * @returns {string[]} etiquetas que cuentan para el high-water de "Hablante N"
- */
-export function reservedSpeakerLabels(labels = []) {
-  const fallback = foldSpeakerKey(getFallbackSpeaker())
-  return [...(labels || [])].filter((label) => Boolean(label) && foldSpeakerKey(label) !== fallback)
-}
-
-/**
  * DUENO UNICO de la GRAFIA canonica de un nombre propio. Las etiquetas automaticas
  * («Hablante N») y el motor («FLU») se dejan TAL CUAL: no son nombres de persona.
  * Un nombre propio se escribe con la INICIAL EN MAYUSCULA, asi "luis" y "Luis" son
