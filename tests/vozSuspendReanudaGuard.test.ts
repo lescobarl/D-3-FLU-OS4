@@ -20,7 +20,7 @@ const POLICY = readFileSync('src/voice/lib/voiceStallPolicy.js', 'utf8')
 
 /** (a) El suspend reanuda si la conversacion sigue activa (una sola via, la del que suspende). */
 export function suspendReanudaConConversacionActiva(src: string): boolean {
-  return /waitForSpeechIdle\(\)\.then\(\(\) => \{[\s\S]{0,120}requestRestart\?\.\(0\)/.test(src)
+  return /waitForSpeechIdle\(\)\.then\(\(\) => \{[\s\S]{0,160}requestRestart\?\.\('reanudar', 0\)/.test(src)
 }
 
 /** (b) El turno abierto se suelta con la ventana del watchdog EXISTENTE. */

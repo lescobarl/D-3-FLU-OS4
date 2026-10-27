@@ -3,4 +3,5 @@
   'tests/conversacionEtiquetasYMezclaGuard.test.ts',
   'tests/conversacionUnIdPorGrabacionGuard.test.ts',
   'tests/conversacionTrazaDeFilaGuard.test.ts',
+  'tests/conversacionUnCicloDeEscuchaGuard.test.ts',
 ]

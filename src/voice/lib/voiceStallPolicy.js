@@ -19,7 +19,7 @@ import { relayLog } from '../../lib/clientLogRelay'
 
 /**
  * (a) Reanuda la escucha tras el suspend, segun el modo. Unico sitio de esta decision.
- * @param {{ wasListeningBefore?: boolean, isConversationActive?: () => boolean, requestRestart?: (ms: number) => void }} params
+ * @param {{ wasListeningBefore?: boolean, isConversationActive?: () => boolean, requestRestart?: (motivo: string, ms: number) => void }} params
  * @returns {'no-escuchaba'|'pasivo'|'activo'} rama tomada
  */
 export function resumeAfterSpeechSuspend({ wasListeningBefore = false, isConversationActive = () => false, requestRestart = null } = {}) {
@@ -29,12 +29,13 @@ export function resumeAfterSpeechSuspend({ wasListeningBefore = false, isConvers
   }
   if (!isConversationActive()) {
     relayLog('LOG', 'useFluVoiceAssistant', '[REC] suspend: reanudando tras habla (modo pasivo)', { wasListeningBefore })
-    requestRestart?.(0)
+    // Caso 13: el reinicio declara su motivo ('reanudar'); sin el, no se agenda.
+    requestRestart?.('reanudar', 0)
     return 'pasivo'
   }
   relayLog('LOG', 'useFluVoiceAssistant', '[REC] suspend: reanudando tras el habla (conversacion activa)', { wasListeningBefore })
   waitForSpeechIdle().then(() => {
-    if (isConversationActive()) requestRestart?.(0)
+    if (isConversationActive()) requestRestart?.('reanudar', 0)
   })
   return 'activo'
 }

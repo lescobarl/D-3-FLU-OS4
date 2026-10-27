@@ -803,13 +803,20 @@ export function useFluVoiceAssistant({
   }, [getConversationContext, phase, session])
 
   const requestRecognitionRestart = useCallback(
-    (delay = getFluTimingCfg().recognitionRestartDefaultDelayMs) => {
+    (motivo, delay = getFluTimingCfg().recognitionRestartDefaultDelayMs) => {
+      // Caso 13: un reinicio de la escucha SOLO se agenda con motivo declarado.
+      const motivoDeclarado = String(motivo || '').trim()
+      if (!motivoDeclarado) {
+        logCaughtError('escucha.reinicio.sinMotivo', new Error('reinicio de la escucha sin motivo declarado'))
+        return
+      }
       if (typeof window === 'undefined') return
       if (!isListeningRef.current || !recognitionRef.current || isStoppingRef.current) return
 
       clearRecognitionRetryTimer()
       recognitionRestartPendingRef.current = true
       recognitionRetryTimerRef.current = window.setTimeout(() => {
+        fluDebugHot('recognition-restart', { motivo: motivoDeclarado, delay })
         recognitionRetryTimerRef.current = null
         recognitionRestartPendingRef.current = false
         if (!isListeningRef.current || !recognitionRef.current || isStoppingRef.current) return
@@ -858,10 +865,10 @@ export function useFluVoiceAssistant({
               restartCfg.retryBackoffMs * Math.min(retryCount, 8),
             )
             : Math.min(220 + retryCount * 40, 800)
-          requestRecognitionRestart(backoff)
+          requestRecognitionRestart('reintento', backoff)
         } else if (conversationActiveRef?.current) {
           recognitionRetryCountRef.current = 0
-          requestRecognitionRestart(restartCfg.maxBackoffMs)
+          requestRecognitionRestart('bucle-lento', restartCfg.maxBackoffMs)
         }
       }, delay)
     },
@@ -933,10 +940,8 @@ export function useFluVoiceAssistant({
     isStoppingRef.current = false
     recognitionEndResolverRef.current = null
 
-    // Reanudar la escucha si estaba activa antes del habla. SOLO en modo pasivo:
-    // en conversación activa lo hace App (onContractResolved →
-    // scheduleResumeListening); reabrir aqui forzaba LISTENING en el mismo ms del
-    // SPEAKING y congelaba la boca aunque el audio siguiera.
+    // Reanudar la escucha si estaba activa antes del habla. SOLO en modo pasivo: en conversación
+    // activa lo hace App (onContractResolved → scheduleResumeListening); reabrir aqui forzaba LISTENING.
     resumeAfterSpeechSuspend({ wasListeningBefore, isConversationActive: () => Boolean(conversationActiveRef?.current), requestRestart: requestRecognitionRestart }) // (a) dueno unico: voiceStallPolicy
   }, [conversationActiveRef, requestRecognitionRestart])
 
@@ -1298,8 +1303,7 @@ export function useFluVoiceAssistant({
     (Recognition) => {
       Recognition.onstart = () => {
         recognitionActiveRef.current = true
-        // El motor del producto abre con CADA onstart (corte de Chrome): un solo
-        // camino en ambos modos; la sesión del módulo sobrevive a los reinicios.
+        // El motor del producto abre con CADA onstart (corte de Chrome): un solo camino en ambos modos; la sesión del módulo sobrevive a los reinicios (Caso 13).
         abrirMotorConversacion()
         recognitionRetryCountRef.current = 0
         recognitionRestartPendingRef.current = false
@@ -1386,14 +1390,14 @@ export function useFluVoiceAssistant({
           !fallback.isLocal(recognitionRef.current)
         ) {
           if (!fallback.degradeRef.current?.()) {
-            requestRecognitionRestart(getRecognitionRetryDelay(errorCode))
+            requestRecognitionRestart('fallback', getRecognitionRetryDelay(errorCode))
           }
           return
         }
 
         if (errorCode === 'no-speech' || errorCode === 'aborted') {
           if ((isListeningRef.current || (conversationActiveRef?.current && !isStoppingRef.current)) && !isStoppingRef.current) {
-            requestRecognitionRestart(FLU_CONFIG.listening?.restartAfterNoSpeechMs)
+            requestRecognitionRestart('no-speech', FLU_CONFIG.listening?.restartAfterNoSpeechMs)
           }
           return
         }
@@ -1409,7 +1413,7 @@ export function useFluVoiceAssistant({
             setError('Micrófono o reconocimiento interrumpido. Reintentando…')
             window.setTimeout(() => setError(''), getFluTimingCfg().errorBannerClearMs)
           }
-          requestRecognitionRestart(getRecognitionRetryDelay(errorCode))
+          requestRecognitionRestart('error-captura', getRecognitionRetryDelay(errorCode))
           return
         }
 
@@ -1418,7 +1422,7 @@ export function useFluVoiceAssistant({
         if (errorCode === 'engine-error') {
           setError('')
           isProcessingRef.current = false
-          requestRecognitionRestart(getRecognitionRetryDelay(errorCode))
+          requestRecognitionRestart('error-motor', getRecognitionRetryDelay(errorCode))
           return
         }
 
@@ -1426,7 +1430,7 @@ export function useFluVoiceAssistant({
         if (recoverableError) {
           setError('')
           isProcessingRef.current = false
-          requestRecognitionRestart(getRecognitionRetryDelay(errorCode))
+          requestRecognitionRestart('error-recuperable', getRecognitionRetryDelay(errorCode))
           return
         }
 
@@ -1455,10 +1459,8 @@ export function useFluVoiceAssistant({
         }
 
         if (!isListeningRef.current && !(conversationActiveRef?.current && !isStoppingRef.current)) return
-        // La sesión del módulo vive mientras la escucha vive: Chrome reinicia el
-        // reconocedor cada pocos segundos y cerrar aquí partía la conversación en
-        // una sesión por reinicio (medido 2026-10-25). El cierre real es de
-        // `stopListening`/`cerrarMotorConversacion`.
+        // La sesión del módulo vive mientras la escucha vive: Chrome reinicia el reconocedor cada pocos
+        // segundos y cerrar aquí partía la conversación en una sesión por reinicio (medido 2026-10-25).
 
         const streak = consecutiveEndsWithoutResultRef.current + 1
         consecutiveEndsWithoutResultRef.current = streak
@@ -1475,11 +1477,11 @@ export function useFluVoiceAssistant({
 
         if (conversationActiveRef?.current) {
           const restartCfg = getConversationRestartConfig(true)
-          requestRecognitionRestart(restartCfg.retryBackoffMs)
+          requestRecognitionRestart('onend-conversacion', restartCfg.retryBackoffMs)
           return
         }
 
-        requestRecognitionRestart(delay)
+        requestRecognitionRestart('onend-pasivo', delay)
       }
     },
     [
@@ -1632,10 +1634,10 @@ export function useFluVoiceAssistant({
         } else if (rebuildRecognitionRef.current()) {
           recognitionRetryCountRef.current = 0
         } else {
-          requestRecognitionRestart(0)
+          requestRecognitionRestart('reanudar', 0)
         }
       } else if (!recognitionActiveRef.current) {
-        requestRecognitionRestart(0)
+        requestRecognitionRestart('reanudar', 0)
       }
       schedulePassiveAudioCapture()
       return
@@ -1674,7 +1676,7 @@ export function useFluVoiceAssistant({
       if (isLocalFallbackEnabled()) prewarmLocalRecognition()
 
       if (!startSpeechRecognition(Recognition)) {
-        requestRecognitionRestart(getActiveListenConfig().restart.retryBackoffMs)
+        requestRecognitionRestart('arranque', getActiveListenConfig().restart.retryBackoffMs)
       }
 
       schedulePassiveAudioCapture()
@@ -2343,7 +2345,7 @@ export function useFluVoiceAssistant({
         })
         turnLifecycleRef.current?.lap('commit(accion+voz)')
         if (isListeningRef.current && !recognitionActiveRef.current) {
-          requestRecognitionRestart(FLU_CONFIG.timing.resumeAfterSpeechMs)
+          requestRecognitionRestart('tras-habla', FLU_CONFIG.timing.resumeAfterSpeechMs)
         }
       } finally {
         isProcessingRef.current = false
@@ -2550,7 +2552,7 @@ export function useFluVoiceAssistant({
       }
 
       if (recognitionActiveRef.current || !recognitionRef.current) return
-      requestRecognitionRestartRef.current?.(listeningCfg.restartAfterEndMs)
+      requestRecognitionRestartRef.current?.('watchdog', listeningCfg.restartAfterEndMs)
     }, conversationActiveRef?.current
       ? getActiveListenConfig().restart.stallCheckMs
       : watchdogMs)

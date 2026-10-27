@@ -248,7 +248,8 @@ export function useLocalAsrFallback({
       if (step.kind === 'stall') lastStallRebuildAtRef.current = now
       stallRebuildStreakRef.current += 1
       if (!rebuildRecognitionRef.current()) {
-        requestRecognitionRestartRef.current?.(restartCfg.retryBackoffMs)
+        // Caso 13: el reinicio declara su motivo; sin el, no se agenda.
+        requestRecognitionRestartRef.current?.('fallback-rebuild', restartCfg.retryBackoffMs)
       }
       return 'handled'
     }
