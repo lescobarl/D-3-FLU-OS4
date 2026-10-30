@@ -1,13 +1,23 @@
 # CODEOWNERS — el criterio/gate es INMUTABLE sin aprobación del dueño.
-# Reemplazá @TU_USUARIO por tu handle real de GitHub para que aplique.
-# Objetivo: evitar RUTAS DOBLES impidiendo que el agente edite el guard/gate.
+# Objetivo: evitar RUTAS DOBLES impidiendo que el agente edite el criterio que lo juzga.
+# Solo tiene efecto en GitHub con: Settings > Branches > main >
+#   "Require a pull request before merging" + "Require review from Code Owners".
 
-/tests/voiceLiveSingleWriter.test.ts  @TU_USUARIO
-/tests/hardcodeGuard.test.ts          @TU_USUARIO
-/tests/protocolGuard.test.ts          @TU_USUARIO
-/tests/stability-guards.test.ts       @TU_USUARIO
-/tests/voiceSingleSourceGuard.test.ts @TU_USUARIO
-/tests/searchSingleRouteGuard.test.ts @TU_USUARIO
-/scripts/task-gate.mjs                @TU_USUARIO
-/scripts/task-gate-baseline.mjs       @TU_USUARIO
-/.task/**                             @TU_USUARIO
+# Criterio: qué cuenta como duplicado y qué guards corren
+/scripts/auditoria.mjs        @lescobarl
+/scripts/guard-files.mjs      @lescobarl
+
+# Guards de comportamiento (tests/*Guard*)
+/tests/*Guard*.test.ts        @lescobarl
+/tests/*Guard*.test.tsx       @lescobarl
+
+# Gate y hooks
+/scripts/guard-architecture.mjs @lescobarl
+/scripts/task-gate.mjs         @lescobarl
+/scripts/task-gate-baseline.mjs @lescobarl
+/scripts/install-hooks.mjs     @lescobarl
+/.task/**                      @lescobarl
+/.github/**                    @lescobarl
+
+# Definición del gate (aquí vive el orden de `lint`)
+/package.json                  @lescobarl

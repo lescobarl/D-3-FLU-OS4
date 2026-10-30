@@ -29,7 +29,7 @@ PROHIBIDA en local**: la corre el CI (§1.15).
 |--------|---------|
 | Dev | `npm run dev` |
 | Tipos | `npm run typecheck` |
-| Linters (comportamiento + ESLint) | `npm run lint` |
+| Linters (D0 duplicados + comportamiento + ESLint) | `npm run lint` |
 | ESLint | `npm run lint:eslint` |
 | Test rápido (archivo tocado) | `npm run test:file <ruta>` |
 | Test de cambios | `npm test` |
