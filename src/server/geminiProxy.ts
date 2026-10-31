@@ -131,6 +131,33 @@ function errorField(err: unknown, key: string): unknown {
     return undefined;
 }
 
+/**
+ * Responde un error del proxy con el diagnostico completo. Dueño unico de esa
+ * forma. El `logCaughtError` lo hace cada `catch` (catchSilenciosoGuard).
+ * @param res Respuesta HTTP del middleware.
+ * @param error Error capturado.
+ */
+function sendProxyErrorFull(res: ServerResponse, error: unknown): void {
+    sendJson(res, Number(errorField(error, 'status')) || 500, {
+        error: errorField(error, 'message'),
+        code: errorField(error, 'code') || 'unknown',
+        detail: errorField(error, 'detail') || '',
+        model: errorField(error, 'model') || '',
+        apiKeySource: errorField(error, 'apiKeySource') || '',
+        bodyPreview: errorField(error, 'bodyPreview') || '',
+    });
+}
+
+/**
+ * Responde un error del proxy solo con su mensaje. Dueño unico de la forma breve.
+ * El `logCaughtError` lo hace cada `catch` (catchSilenciosoGuard).
+ * @param res Respuesta HTTP del middleware.
+ * @param error Error capturado.
+ */
+function sendProxyErrorBrief(res: ServerResponse, error: unknown): void {
+    sendJson(res, Number(errorField(error, 'status')) || 500, { error: errorField(error, 'message') });
+}
+
 interface CacheEntry {
     data: unknown;
     timestamp: number;
@@ -524,14 +551,7 @@ async function handleSummary(req: IncomingMessage, res: ServerResponse) {
         sendJson(res, 200, normalized);
     } catch (error: unknown) {
         logCaughtError('[geminiProxy] /api/gemini/summary error', errorField(error, 'message'));
-        sendJson(res, Number(errorField(error, 'status')) || 500, {
-            error: errorField(error, 'message'),
-            code: errorField(error, 'code') || 'unknown',
-            detail: errorField(error, 'detail') || '',
-            model: errorField(error, 'model') || '',
-            apiKeySource: errorField(error, 'apiKeySource') || '',
-            bodyPreview: errorField(error, 'bodyPreview') || '',
-        });
+        sendProxyErrorFull(res, error);
     }
 }
 
@@ -579,14 +599,7 @@ async function handleParticipantEval(req: IncomingMessage, res: ServerResponse) 
         sendJson(res, 200, normalized);
     } catch (error: unknown) {
         logCaughtError('[geminiProxy] /api/gemini/participant-eval error', errorField(error, 'message'));
-        sendJson(res, Number(errorField(error, 'status')) || 500, {
-            error: errorField(error, 'message'),
-            code: errorField(error, 'code') || 'unknown',
-            detail: errorField(error, 'detail') || '',
-            model: errorField(error, 'model') || '',
-            apiKeySource: errorField(error, 'apiKeySource') || '',
-            bodyPreview: errorField(error, 'bodyPreview') || '',
-        });
+        sendProxyErrorFull(res, error);
     }
 }
 
@@ -598,7 +611,7 @@ async function handleWorkspaceImage(req: IncomingMessage, res: ServerResponse) {
         sendJson(res, 200, result);
     } catch (error: unknown) {
         logCaughtError('[geminiProxy] /api/workspace-image error', errorField(error, 'message'));
-        sendJson(res, Number(errorField(error, 'status')) || 500, { error: errorField(error, 'message') });
+        sendProxyErrorBrief(res, error);
     }
 }
 
@@ -613,7 +626,7 @@ async function handleOpenRouterImage(req: IncomingMessage, res: ServerResponse) 
         sendJson(res, 200, result);
     } catch (error: unknown) {
         logCaughtError('[geminiProxy] /api/openrouter-image error', errorField(error, 'message'));
-        sendJson(res, Number(errorField(error, 'status')) || 500, { error: errorField(error, 'message') });
+        sendProxyErrorBrief(res, error);
     }
 }
 
@@ -626,7 +639,7 @@ async function handleFalVideo(req: IncomingMessage, res: ServerResponse) {
         sendJson(res, 200, result);
     } catch (error: unknown) {
         logCaughtError('[geminiProxy] /api/fal-video error', errorField(error, 'message'));
-        sendJson(res, Number(errorField(error, 'status')) || 500, { error: errorField(error, 'message') });
+        sendProxyErrorBrief(res, error);
     }
 }
 
@@ -656,7 +669,7 @@ async function handleVisionAnalysis(req: IncomingMessage, res: ServerResponse) {
         sendJson(res, 200, result);
     } catch (error: unknown) {
         logCaughtError('[geminiProxy] /api/gemini/vision error', errorField(error, 'message'));
-        sendJson(res, Number(errorField(error, 'status')) || 500, { error: errorField(error, 'message') });
+        sendProxyErrorBrief(res, error);
     }
 }
 
