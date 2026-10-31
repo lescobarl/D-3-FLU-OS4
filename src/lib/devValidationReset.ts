@@ -29,9 +29,9 @@ import { enableSessionRecorder, getSessionRecordingStatus } from '../voice/api/s
 import { fluDb } from '../core/db/fluDatabase';
 import {
     createParticipantRegistry,
-    resolveKindRole,
     type ParticipantRegistry,
 } from '../core/multiuser/participantRegistry';
+import { resolveAnonymousProfile } from '../core/multiuser/anonymousProfile';
 import { createOnboardingService } from '../core/onboarding/onboardingService';
 import { DEFAULT_VOICE_CONFIG, STORAGE_KEYS } from '../core/config/appConfig';
 import { localGet, localRemove } from '../core/storage/localStore';
@@ -60,12 +60,7 @@ function createValidationRegistry(): { registry: ParticipantRegistry; anonymousN
     const roles = Array.isArray(config.roles) ? (config.roles as readonly string[]) : [];
     const defaultVoice = { ...DEFAULT_VOICE_CONFIG, ...((config.defaultVoice as object) || {}) };
     const birthdayAdvanceDays = Number(config.birthdayAdvanceDays) || 7;
-    const skipDefaults = (config.skipDefaults as Record<string, unknown>) || {};
-    const anonymousName = String(skipDefaults.anonymousName || 'Anónimo');
-    const anonymousKind = String(skipDefaults.defaultKind || 'niño');
-    const anonymousRole =
-        resolveKindRole(anonymousKind, (config.kindToRole as Record<string, string>) || {}) ||
-        'Estudiante';
+    const anonymous = resolveAnonymousProfile(config);
 
     const registry = createParticipantRegistry({
         db: fluDb.participants,
@@ -73,11 +68,11 @@ function createValidationRegistry(): { registry: ParticipantRegistry; anonymousN
             roles,
             defaultVoice,
             birthdayAdvanceDays,
-            anonymous: { name: anonymousName, role: anonymousRole },
+            anonymous,
         },
         now: () => Date.now(),
     });
-    return { registry, anonymousName };
+    return { registry, anonymousName: anonymous.name };
 }
 
 /**

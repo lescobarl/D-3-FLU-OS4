@@ -20,11 +20,11 @@ import { FLU_CONFIG } from '../voice/api/config'
 import { renameRowSpeakerName, speakerIdToDefaultName } from '../voice/api/conversation'
 import { participantVoiceAnchorsForDiarization, setParticipantAnchorsProvider, voiceVectorModel } from '../voice/api/identity';
 import { repairConfirmationNameDuplicates } from '../core/multiuser/confirmationNameRepair';
+import { resolveAnonymousProfile } from '../core/multiuser/anonymousProfile';
 import { fluDb, type ParticipantRecord } from '../core/db/fluDatabase';
 import {
   createParticipantRegistry,
   PARTICIPANTS_CHANGED_CHANNEL,
-  resolveKindRole,
   type ParticipantInput,
   type ParticipantPatch,
   type ParticipantRegistry,
@@ -90,12 +90,7 @@ export function useParticipants({ now }: UseParticipantsOptions = {}): UsePartic
   // Perfil anónimo por defecto (config-driven vía multiuser.skipDefaults):
   // siempre existe desde el primer arranque, es el default activo y NO se
   // puede eliminar. `role` se deriva del defaultKind vía kindToRole.
-  const skipDefaults = (config.skipDefaults as Record<string, unknown>) || {};
-  const anonymousName = String(skipDefaults.anonymousName || 'Anónimo');
-  const anonymousKind = String(skipDefaults.defaultKind || 'niño');
-  const anonymousRole =
-    resolveKindRole(anonymousKind, (config.kindToRole as Record<string, string>) || {}) || 'Estudiante';
-  const anonymous = { name: anonymousName, role: anonymousRole };
+  const anonymous = resolveAnonymousProfile(config);
 
   // Crear el servicio ANTES de cualquier useState: el inicializador de
   // estado o los callbacks referencian `service`, y una referencia en
