@@ -7,20 +7,11 @@
  * intent -> escritura -> respuesta hablada queda en un solo sitio, con los
  * mensajes inyectados (la config de voz sigue siendo la fuente del texto).
  */
-import { removeSuperNoteItem, superNoteItemRemovedReply } from './superNoteActions';
+import { removeSuperNoteItem, superNoteItemRemovedReply, type SuperNoteStore } from './superNoteActions';
 import type { SuperNoteRow } from '../core/notes/superNoteTarget';
 
 /** Operaciones de notas que el despacho de borrado necesita (las de `useNotes`). */
-export interface NoteRemovalStore {
-    add: (input: {
-        label: string;
-        body?: string;
-        personId?: string;
-        personName?: string;
-    }) => Promise<{ ok: boolean }>;
-    rename: (id: string, label: string) => Promise<unknown>;
-    setBody: (id: string, body: string) => Promise<unknown>;
-    softRemove: (id: string) => Promise<unknown>;
+export interface NoteRemovalStore extends SuperNoteStore {
     removeByTarget: (target: string) => Promise<number>;
     clearAll: (opts?: { personId?: string }) => Promise<number>;
 }
