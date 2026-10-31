@@ -276,9 +276,16 @@ export function AgendaPanel({
     };
 
     // Fila de item (agenda y próximos): bolita de color por tipo + hora + texto.
-    const renderRow = (item: AgendaItem, timeText: string, idPrefix: string, cancelPrefix: string) => (
+    const renderRow = (
+        item: AgendaItem,
+        timeText: string,
+        idPrefix: string,
+        cancelPrefix: string,
+        dayText?: string,
+    ) => (
         <li key={item.id} className="agenda-item" data-testid={`${idPrefix}${item.id}`}>
             <span className="agenda-item__dot" style={{ background: colors[item.kind] }} aria-hidden="true" />
+            {dayText ? <span className="agenda-item__day">{dayText}</span> : null}
             <span className="agenda-item__time">{timeText}</span>
             <span className="agenda-item__label">{item.label}</span>
             <div className="agenda-item__actions">
@@ -315,32 +322,7 @@ export function AgendaPanel({
                     <p className="hoy-panel__empty">Sin próximos.</p>
                 ) : (
                     <ul className="agenda-list">
-                        {proximos.map(({ item, due }) => (
-                            <li key={item.id} className="agenda-item" data-testid={`proximo-${item.id}`}>
-                                <span className="agenda-item__dot" style={{ background: colors[item.kind] }} aria-hidden="true" />
-                                <span className="agenda-item__day">{relativeDayLabel(due, nowMs)}</span>
-                                <span className="agenda-item__time">{formatTimeLabel(due)}</span>
-                                <span className="agenda-item__label">{item.label}</span>
-                                <div className="agenda-item__actions">
-                                    {onEdit ? (
-                                        <button className="agenda-item__edit" type="button" aria-label="Editar" onClick={() => startEdit(item)}>
-                                            ✎
-                                        </button>
-                                    ) : null}
-                                    {onCancel ? (
-                                        <button
-                                            className="agenda-item__cancel"
-                                            type="button"
-                                            aria-label="Cancelar"
-                                            data-testid={`proximo-cancel-${item.id}`}
-                                            onClick={() => onCancel(item.id)}
-                                        >
-                                            ×
-                                        </button>
-                                    ) : null}
-                                </div>
-                            </li>
-                        ))}
+                        {proximos.map(({ item, due }) => renderRow(item, formatTimeLabel(due), 'proximo-', 'proximo-cancel-', relativeDayLabel(due, nowMs)))}
                     </ul>
                 )}
             </section>
