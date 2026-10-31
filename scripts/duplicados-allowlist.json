@@ -1,17 +1,11 @@
 {
   "_nota": "Pares de archivos que HOY comparten un bloque clonado. Cada uno declara motivo, dueno y fecha. Solo se quitan: el par arreglado se borra aqui en el mismo commit. maxPairs es el techo y solo baja; anadir una excepcion exige aprobacion del dueno (CODEOWNERS).",
   "minTokens": 70,
-  "maxPairs": 9,
+  "maxPairs": 8,
   "allowedPairs": [
     {
       "pair": "src/avatar/model/bunnyAnimator.ts | src/avatar/model/bunnyAnimator.ts",
       "reason": "ramas del mismo flujo de animacion dentro de un archivo",
-      "owner": "@lescobarl",
-      "date": "2026-10-31"
-    },
-    {
-      "pair": "src/components/ShoppingPanel.tsx | src/components/ShoppingPanel.tsx",
-      "reason": "ramas del mismo render dentro de un archivo",
       "owner": "@lescobarl",
       "date": "2026-10-31"
     },

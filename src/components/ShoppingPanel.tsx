@@ -45,6 +45,32 @@ export function ShoppingPanel({
   const pending = items.filter((item) => !item.checked);
   const checked = items.filter((item) => item.checked);
 
+  /** Fila de la lista (pendiente o comprado). Dueño único de ese render. */
+  const renderItem = (item: ShoppingItemRecord, done: boolean) => (
+    <li key={item.id} className={done ? 'flu-reminders-item flu-reminders-item--done' : 'flu-reminders-item'}>
+      <label className="flu-shopping-item__label">
+        <input
+          type="checkbox"
+          checked={done}
+          onChange={() => handleToggle(item.id)}
+          data-testid={`shopping-toggle-${item.id}`}
+        />
+        <span className="flu-reminders-item__text">{item.label}</span>
+      </label>
+      <div className="flu-reminders-item__actions">
+        <button
+          type="button"
+          title={ui.removeTitle || 'Quitar'}
+          aria-label={ui.removeTitle || 'Quitar'}
+          data-testid={`shopping-remove-${item.id}`}
+          onClick={() => handleRemove(item.id)}
+        >
+          ×
+        </button>
+      </div>
+    </li>
+  );
+
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const labelValue = label.trim();
@@ -109,30 +135,7 @@ export function ShoppingPanel({
               <p className="flu-settings-image-config__hint">{ui.emptyState || 'Tu lista de compras está vacía.'}</p>
             ) : (
               <ul className="flu-reminders-list" data-testid="shopping-pending-list">
-                {pending.map((item) => (
-                  <li key={item.id} className="flu-reminders-item">
-                    <label className="flu-shopping-item__label">
-                      <input
-                        type="checkbox"
-                        checked={false}
-                        onChange={() => handleToggle(item.id)}
-                        data-testid={`shopping-toggle-${item.id}`}
-                      />
-                      <span className="flu-reminders-item__text">{item.label}</span>
-                    </label>
-                    <div className="flu-reminders-item__actions">
-                      <button
-                        type="button"
-                        title={ui.removeTitle || 'Quitar'}
-                        aria-label={ui.removeTitle || 'Quitar'}
-                        data-testid={`shopping-remove-${item.id}`}
-                        onClick={() => handleRemove(item.id)}
-                      >
-                        ×
-                      </button>
-                    </div>
-                  </li>
-                ))}
+                {pending.map((item) => renderItem(item, false))}
               </ul>
             )}
           </div>
@@ -144,30 +147,7 @@ export function ShoppingPanel({
             <div className="flu-settings-section__body">
               <h4 className="flu-reminders__heading">{ui.checkedLabel || 'Comprados'}</h4>
               <ul className="flu-reminders-list">
-                {checked.map((item) => (
-                  <li key={item.id} className="flu-reminders-item flu-reminders-item--done">
-                    <label className="flu-shopping-item__label">
-                      <input
-                        type="checkbox"
-                        checked
-                        onChange={() => handleToggle(item.id)}
-                        data-testid={`shopping-toggle-${item.id}`}
-                      />
-                      <span className="flu-reminders-item__text">{item.label}</span>
-                    </label>
-                    <div className="flu-reminders-item__actions">
-                      <button
-                        type="button"
-                        title={ui.removeTitle || 'Quitar'}
-                        aria-label={ui.removeTitle || 'Quitar'}
-                        data-testid={`shopping-remove-${item.id}`}
-                        onClick={() => handleRemove(item.id)}
-                      >
-                        ×
-                      </button>
-                    </div>
-                  </li>
-                ))}
+                {checked.map((item) => renderItem(item, true))}
               </ul>
               <button
                 type="button"
