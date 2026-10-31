@@ -339,6 +339,43 @@ function normalizeCommonsMedia(
     return results;
 }
 
+/** Plantillas de URL de video resueltas para un proveedor de busqueda. */
+interface IVideoUrlTemplates {
+    readonly origin: string;
+    readonly embed: string;
+    readonly watch: string;
+}
+
+/** URLs de embed y watch de un video concreto. */
+interface IVideoUrls {
+    readonly embedUrl: string;
+    readonly watchUrl: string;
+}
+
+/**
+ * Resuelve las plantillas embed/watch del proveedor, o el origen de su endpoint
+ * cuando no las declara. Dueño unico de esa resolucion.
+ */
+function videoUrlTemplates(provider?: SearchProviderConfig): IVideoUrlTemplates {
+    return {
+        origin: deriveOrigin(String(provider?.endpoint || '')),
+        embed: String(provider?.embedUrlTemplate || '').trim(),
+        watch: String(provider?.watchUrlTemplate || '').trim(),
+    };
+}
+
+/**
+ * Construye las URLs de embed y watch de un video con las plantillas dadas.
+ * Dueño unico de la sustitucion de `{id}`.
+ */
+function videoUrls(templates: IVideoUrlTemplates, videoId: string): IVideoUrls {
+    const id = encodeURIComponent(videoId);
+    return {
+        embedUrl: templates.embed ? templates.embed.replace(/\{id\}/g, id) : templates.origin ? `${templates.origin}/embed/${id}` : '',
+        watchUrl: templates.watch ? templates.watch.replace(/\{id\}/g, id) : templates.origin ? `${templates.origin}/watch?v=${id}` : '',
+    };
+}
+
 /**
  * Normaliza la respuesta de YouTube Data API v3 (search.list).
  * El embed/watch se construyen desde las plantillas del proveedor ({id})
@@ -348,9 +385,7 @@ function normalizeYouTube(raw: unknown, provider?: SearchProviderConfig): Search
     const items = (raw as { items?: unknown[] })?.items;
     if (!Array.isArray(items)) return [];
     const results: SearchResult[] = [];
-    const origin = deriveOrigin(String(provider?.endpoint || ''));
-    const embedTemplate = String(provider?.embedUrlTemplate || '').trim();
-    const watchTemplate = String(provider?.watchUrlTemplate || '').trim();
+    const templates = videoUrlTemplates(provider);
     for (const item of items) {
         if (!item || typeof item !== 'object') continue;
         const record = item as {
@@ -363,17 +398,7 @@ function normalizeYouTube(raw: unknown, provider?: SearchProviderConfig): Search
         };
         const videoId = record.id?.videoId;
         if (!videoId) continue;
-        const videoIdEnc = encodeURIComponent(videoId);
-        const embedUrl = embedTemplate
-            ? embedTemplate.replace(/\{id\}/g, videoIdEnc)
-            : origin
-                ? `${origin}/embed/${videoIdEnc}`
-                : '';
-        const watchUrl = watchTemplate
-            ? watchTemplate.replace(/\{id\}/g, videoIdEnc)
-            : origin
-                ? `${origin}/watch?v=${videoIdEnc}`
-                : '';
+        const { embedUrl, watchUrl } = videoUrls(templates, videoId);
         const title = String(record.snippet?.title || '').trim() || videoId;
         results.push({
             title,
@@ -398,9 +423,7 @@ function normalizeYouTube(raw: unknown, provider?: SearchProviderConfig): Search
 function normalizeInvidious(raw: unknown, provider?: SearchProviderConfig): SearchResult[] {
     if (!Array.isArray(raw)) return [];
     const results: SearchResult[] = [];
-    const origin = deriveOrigin(String(provider?.endpoint || ''));
-    const embedTemplate = String(provider?.embedUrlTemplate || '').trim();
-    const watchTemplate = String(provider?.watchUrlTemplate || '').trim();
+    const templates = videoUrlTemplates(provider);
     for (const item of raw) {
         if (!item || typeof item !== 'object') continue;
         const record = item as {
@@ -413,17 +436,7 @@ function normalizeInvidious(raw: unknown, provider?: SearchProviderConfig): Sear
         if (record.type && record.type !== 'video') continue;
         const videoId = record.videoId;
         if (!videoId) continue;
-        const videoIdEnc = encodeURIComponent(videoId);
-        const embedUrl = embedTemplate
-            ? embedTemplate.replace(/\{id\}/g, videoIdEnc)
-            : origin
-                ? `${origin}/embed/${videoIdEnc}`
-                : '';
-        const watchUrl = watchTemplate
-            ? watchTemplate.replace(/\{id\}/g, videoIdEnc)
-            : origin
-                ? `${origin}/watch?v=${videoIdEnc}`
-                : '';
+        const { embedUrl, watchUrl } = videoUrls(templates, videoId);
         const title = String(record.title || '').trim() || videoId;
         results.push({
             title,
