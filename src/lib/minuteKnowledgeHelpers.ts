@@ -276,6 +276,39 @@ export function resolveMinuteThemeForSpeech(
 // createMinuteDraftFromSummary (OS2 parity) — usado por buildMinuteLookupContract
 // ------------------------------------------------------------
 
+/**
+ * Construye la instantanea de una minuta a partir del objeto crudo del modelo.
+ * Dueño unico de esa forma: el hook y los flujos de resumen no la repiten.
+ * @param origen Objeto crudo (respuesta del modelo o borrador guardado).
+ * @param tituloPorDefecto Titulo cuando el origen no trae uno.
+ * @param temaSesion Tema de la sesion (se recorta y se guarda tal cual).
+ * @returns Instantanea normalizada con las seis listas garantizadas.
+ */
+export function buildMinuteSnapshot(
+    origen: MinuteSnapshotLike = {},
+    tituloPorDefecto: string = 'Minuta',
+    temaSesion: string = '',
+): {
+    titulo: string;
+    participantes: string[];
+    resumen: string;
+    acuerdos: string[];
+    pendientes: string[];
+    siguientes_pasos: string[];
+    tema_sesion: string;
+} {
+    const lista = (valor: unknown): string[] => (Array.isArray(valor) ? (valor as string[]) : []);
+    return {
+        titulo: String(origen?.titulo || tituloPorDefecto).trim(),
+        participantes: lista(origen?.participantes),
+        resumen: String(origen?.resumen || '').trim(),
+        acuerdos: lista(origen?.acuerdos),
+        pendientes: lista(origen?.pendientes),
+        siguientes_pasos: lista(origen?.siguientes_pasos),
+        tema_sesion: String(temaSesion || '').trim(),
+    };
+}
+
 export function createMinuteDraftFromSummary(summary: MinuteSnapshotLike = {}, theme: string = '', id: string = ''): {
     id: string;
     titulo: string;

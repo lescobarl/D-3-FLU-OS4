@@ -1,7 +1,7 @@
 {
   "_nota": "Pares de archivos que HOY comparten un bloque clonado. Cada uno declara motivo, dueno y fecha. Solo se quitan: el par arreglado se borra aqui en el mismo commit. maxPairs es el techo y solo baja; anadir una excepcion exige aprobacion del dueno (CODEOWNERS).",
   "minTokens": 70,
-  "maxPairs": 17,
+  "maxPairs": 16,
   "allowedPairs": [
     {
       "pair": "src/avatar/model/bunnyAnimator.ts | src/avatar/model/bunnyAnimator.ts",
@@ -60,12 +60,6 @@
     {
       "pair": "src/core/games/trivia.ts | src/core/games/veoVeo.ts",
       "reason": "esqueleto de motor (similitud de forma, AGENTS 6.6)",
-      "owner": "@lescobarl",
-      "date": "2026-10-31"
-    },
-    {
-      "pair": "src/hooks/useMinuteHandlers.ts | src/hooks/useMinuteHandlers.ts",
-      "reason": "ramas del mismo flujo dentro de un archivo",
       "owner": "@lescobarl",
       "date": "2026-10-31"
     },

@@ -15,7 +15,7 @@ import { aiService } from '../services/aiServiceFactory';
 import { COMMAND_IDS } from '../voice/api/commands'
 import { FLU_CONFIG } from '../voice/api/config'
 import { speakResponse } from '../voice/api/speech';
-import { createMinuteDraftFromSummary } from '../lib/minuteKnowledgeHelpers';
+import { buildMinuteSnapshot, createMinuteDraftFromSummary } from '../lib/minuteKnowledgeHelpers';
 import type { IntegrationStore } from '../store/integrationStore';
 import type { MinuteUIEntry } from './useMinuteKnowledge';
 import type { AuditLogEntry, MinuteSummarySnapshot } from '../core/db/fluDatabase';
@@ -147,15 +147,7 @@ export function useMinuteHandlers(deps: MinuteHandlersDeps): MinuteHandlers {
             );
             if (result) {
                 // Build a MinuteSummarySnapshot from the Gemini result
-                const snapshot = {
-                    titulo: result.titulo || 'Minuta',
-                    participantes: Array.isArray(result.participantes) ? result.participantes : [],
-                    resumen: result.resumen || '',
-                    acuerdos: Array.isArray(result.acuerdos) ? result.acuerdos : [],
-                    pendientes: Array.isArray(result.pendientes) ? result.pendientes : [],
-                    siguientes_pasos: Array.isArray(result.siguientes_pasos) ? result.siguientes_pasos : [],
-                    tema_sesion: result.tema_sesion || '',
-                };
+                const snapshot = buildMinuteSnapshot(result, 'Minuta', String(result.tema_sesion || ''));
                 // Add to IndexedDB via minuteKnowledge (expects MinuteSummarySnapshot)
                 // C10: la publicación en integrationStore la hace el dueño de la
                 // minuta (useMinuteKnowledge.addMinute); aquí NO se espeja.
@@ -232,15 +224,7 @@ export function useMinuteHandlers(deps: MinuteHandlersDeps): MinuteHandlers {
                 setSelectedMinuteId('');
 
                 if (save) {
-                    const snapshot = {
-                        titulo: String(result.titulo || 'Minuta').trim(),
-                        participantes: Array.isArray(result.participantes) ? result.participantes : [],
-                        resumen: String(result.resumen || '').trim(),
-                        acuerdos: Array.isArray(result.acuerdos) ? result.acuerdos : [],
-                        pendientes: Array.isArray(result.pendientes) ? result.pendientes : [],
-                        siguientes_pasos: Array.isArray(result.siguientes_pasos) ? result.siguientes_pasos : [],
-                        tema_sesion: String(sessionRole || '').trim(),
-                    };
+                    const snapshot = buildMinuteSnapshot(result, 'Minuta', sessionRole);
                     const persisted = await minuteKnowledge.addMinute({ ...snapshot, ...withTutoringArea(snapshot, history), ...practicaOf(result) });
                     setSelectedMinuteId(persisted.id);
                     saved = true;
@@ -309,15 +293,7 @@ export function useMinuteHandlers(deps: MinuteHandlersDeps): MinuteHandlers {
         try {
             // sourceDraft is a flat draft object (titulo, participantes, resumen, etc.)
             // Convert to MinuteSummarySnapshot for minuteKnowledge.addMinute
-            const snapshot = {
-                titulo: String(sourceDraft.titulo || '').trim(),
-                participantes: Array.isArray(sourceDraft.participantes) ? sourceDraft.participantes : [],
-                resumen: String(sourceDraft.resumen || '').trim(),
-                acuerdos: Array.isArray(sourceDraft.acuerdos) ? sourceDraft.acuerdos : [],
-                pendientes: Array.isArray(sourceDraft.pendientes) ? sourceDraft.pendientes : [],
-                siguientes_pasos: Array.isArray(sourceDraft.siguientes_pasos) ? sourceDraft.siguientes_pasos : [],
-                tema_sesion: String(sourceDraft.tema_sesion || sessionRole || '').trim(),
-            };
+            const snapshot = buildMinuteSnapshot(sourceDraft, '', sourceDraft.tema_sesion || sessionRole);
             const persisted = await minuteKnowledge.addMinute({ ...snapshot, ...withTutoringArea(snapshot, history) });
             setSelectedMinuteId(persisted.id);
             setMinuteDraft(
@@ -369,15 +345,7 @@ export function useMinuteHandlers(deps: MinuteHandlersDeps): MinuteHandlers {
             );
             if (!result) return;
 
-            const snapshot = {
-                titulo: String(result.titulo || 'Conversación').trim(),
-                participantes: Array.isArray(result.participantes) ? result.participantes : [],
-                resumen: String(result.resumen || '').trim(),
-                acuerdos: Array.isArray(result.acuerdos) ? result.acuerdos : [],
-                pendientes: Array.isArray(result.pendientes) ? result.pendientes : [],
-                siguientes_pasos: Array.isArray(result.siguientes_pasos) ? result.siguientes_pasos : [],
-                tema_sesion: String(sessionRole || '').trim(),
-            };
+            const snapshot = buildMinuteSnapshot(result, 'Conversación', sessionRole);
             const persisted = await minuteKnowledge.addMinute({ ...snapshot, ...withTutoringArea(snapshot, history), ...practicaOf(result) }, { kind: 'conversacion' });
 
             if (announce) {
