@@ -6,6 +6,8 @@
 # Criterio: qué cuenta como duplicado y qué guards corren
 /scripts/auditoria.mjs        @lescobarl
 /scripts/guard-files.mjs      @lescobarl
+/scripts/guard-duplicados.mjs @lescobarl
+/scripts/duplicados-allowlist.json @lescobarl
 
 # Guards de comportamiento (tests/*Guard*)
 /tests/*Guard*.test.ts        @lescobarl

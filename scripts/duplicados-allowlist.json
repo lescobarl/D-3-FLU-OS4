@@ -1,0 +1,23 @@
+{
+  "_nota": "Pares de archivos que HOY comparten un bloque clonado. Solo se quitan: cada par arreglado se borra aqui en el mismo commit. Anadir uno exige aprobacion del dueno (CODEOWNERS).",
+  "minTokens": 70,
+  "allowedPairs": [
+    "src/avatar/model/bunnyAnimator.ts | src/avatar/model/bunnyAnimator.ts",
+    "src/components/AgendaPanel.tsx | src/components/AgendaPanel.tsx",
+    "src/components/ShoppingPanel.tsx | src/components/ShoppingPanel.tsx",
+    "src/components/WorkspaceHub.tsx | src/components/WorkspaceHub.tsx",
+    "src/core/games/abecedario.ts | src/core/games/veoVeo.ts",
+    "src/core/games/ordenaSecuencia.ts | src/core/games/veoVeo.ts",
+    "src/core/games/repiteTraduce.ts | src/core/games/veoVeo.ts",
+    "src/core/games/riddles.ts | src/core/games/veoVeo.ts",
+    "src/core/games/trabalenguas.ts | src/core/games/veoVeo.ts",
+    "src/core/games/trivia.ts | src/core/games/veoVeo.ts",
+    "src/hooks/useMinuteHandlers.ts | src/hooks/useMinuteHandlers.ts",
+    "src/hooks/useNavigationCommands.ts | src/hooks/useNavigationCommands.ts",
+    "src/server/browserProxy.ts | src/server/searchProxy.ts",
+    "src/server/geminiProxy.ts | src/server/geminiProxy.ts",
+    "src/services/deepseek.ts | src/services/deepseek.ts",
+    "src/services/deepseek.ts | src/services/gemini.ts",
+    "src/services/gemini.ts | src/services/gemini.ts"
+  ]
+}
