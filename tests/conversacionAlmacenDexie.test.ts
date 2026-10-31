@@ -36,6 +36,7 @@ function filaNueva(overrides: Partial<FilaNueva> = {}): FilaNueva {
     tramo: { inicio: 16_000, fin: 32_000, sampleRate: 16_000 },
     etiqueta: 'Hablante 1',
     evidencia: 'semilla',
+    firma: null,
     idioma: 'es',
     overlap: false,
     provisional: false,

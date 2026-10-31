@@ -7,16 +7,23 @@
 // ============================================================
 import { describe, it, expect, beforeEach } from 'vitest';
 import { useIntegrationStore } from '../src/store/integrationStore';
-import { commitUserTurnRow } from '../src/voice/conversation';
 import { detectSentiment } from '../src/store/integrationStore';
 import { FLU_CONFIG } from '../src/voice/lib/fluConfig';
 
 let __seedTurn = 0;
-/** Siembra una fila de usuario por el DUENO unico de la fila (una sola fila). */
+let __seedId = 0;
+/**
+ * Siembra una fila de usuario por la ÚNICA puerta del store (`addConversationEntry`).
+ * El escritor pasivo (`commitUserTurnRow`) se retiró (2026-10-30): la fila del usuario
+ * la commitea SOLO el módulo; el test usa la misma puerta que el módulo.
+ */
 const addUserRow = (text: string, speakerName?: string) => {
     const speaker = speakerName || FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker;
-    commitUserTurnRow({
+    useIntegrationStore.getState().addConversationEntry({
+        id: `seed-${++__seedId}`,
+        role: 'user',
         text,
+        timestamp: Date.now(),
         speakerName: speaker,
         sentiment: detectSentiment(text),
         turnId: `seed-${++__seedTurn}`,

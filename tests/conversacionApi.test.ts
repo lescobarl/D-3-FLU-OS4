@@ -5,7 +5,9 @@
  *
  * Cada caso falla si se quita la rama que mide: frontera tras aplicar texto,
  * no-pérdida de palabras, caja sin retroceso, cierre por stop, eco/barge-in,
- * huérfanos contados, promoción del provisional y una sola fila por tramo.
+ * huérfanos contados y una sola fila por tramo. Mandato 2026-10-30: el final
+ * NO cierra (la puerta de abajo es el silencio de 5 s o el texto ajeno) y la
+ * fila commiteada es INMUTABLE (insert-only): la reentrega no la reescribe.
  */
 import { describe, expect, it } from 'vitest'
 import { isAutoSpeakerLabel } from '../src/voice/lib/speakerCore.js'
@@ -107,6 +109,14 @@ async function abrirConVoz(api: ConversacionApi, inicio = 0): Promise<string> {
   const estado = await api.ingestAudio(bloque(inicio, inicio + SAMPLE_RATE, VOZ()))
   if (!estado.locucionAbierta) throw new Error('el audio con voz no abrio locucion')
   return estado.locucionAbierta.locutionId
+}
+
+/** Cierra la locución abierta por SILENCIO (puerta de abajo, mandato 2026-10-30). */
+async function cerrarPorSilencio(api: ConversacionApi, inicio: number) {
+  const muestras = Math.round((SAMPLE_RATE * CONVERSACION_CONFIG.silenceCloseMs) / 1000)
+  return api.ingestAudio(
+    bloque(inicio, inicio + muestras, SILENCIO(CONVERSACION_CONFIG.silenceCloseMs)),
+  )
 }
 
 const asr = (tramoId: string, extra: Partial<AsrIngestado> = {}): AsrIngestado => ({
@@ -247,10 +257,9 @@ describe('regla 1 y 3 — el audio abre el tramo y el texto lo revisa', () => {
     const tramoId = await abrirConVoz(api)
     await api.ingestAsr(asr(tramoId, { texto: 'hola mundo entero' }))
     await api.ingestAsr(asr(tramoId, { texto: 'hola mundo', final: true }))
-    // Caso 7+6: el final marca; el corte de 900 ms cierra por contenido.
-    const estado = await api.ingestAudio(
-      bloque(SAMPLE_RATE, SAMPLE_RATE * 2, SILENCIO(900)),
-    )
+    // Mandato 2026-10-30: el final MARCA la frase completa; el silencio de 5 s
+    // (puerta de abajo) cierra UNA fila con la mejor versión.
+    const estado = await cerrarPorSilencio(api, SAMPLE_RATE)
     expect(estado.filas).toHaveLength(1)
     expect(estado.filas[0]).toMatchObject({
       locutionId: tramoId,
@@ -268,9 +277,7 @@ describe('regla 1 y 3 — el audio abre el tramo y el texto lo revisa', () => {
       api.ingestAsr(asr(tramoId, { texto: 'hola', final: true })),
       api.ingestAsr(asr(tramoId, { texto: 'hola', final: true })),
     ])
-    const estado = await api.ingestAudio(
-      bloque(SAMPLE_RATE, SAMPLE_RATE * 2, SILENCIO(900)),
-    )
+    const estado = await cerrarPorSilencio(api, SAMPLE_RATE)
     expect(estado.filas).toHaveLength(1)
   })
 })
@@ -289,11 +296,9 @@ describe('regla 2 — el texto se aplica primero y después decide la frontera',
     expect(estadoDos.locucionAbierta?.locutionId).toBe(tramoUno)
 
     await api.ingestAsr(asr(tramoDos, { texto: 'dos', final: true }))
-    // Caso 7+6: el final marca la locución abierta; el corte de 900 ms del
-    // tramo (candidato = fin: no lo extiende) la cierra por contenido.
-    const cerradas = await api.ingestAudio(
-      bloque(SAMPLE_RATE * 3, SAMPLE_RATE * 3 + 14400, SILENCIO(900)),
-    )
+    // Mandato 2026-10-30: el final marca la locución abierta; el silencio de 5 s
+    // (puerta de abajo) la cierra.
+    const cerradas = await cerrarPorSilencio(api, SAMPLE_RATE * 3)
     expect(cerradas.filas.map((fila) => fila.texto)).toEqual(['uno', 'dos'])
     expect(cerradas.filas[0]).toMatchObject({ reason: 'system', provisional: true })
     expect(cerradas.filas[1]).toMatchObject({ provisional: false })
@@ -381,8 +386,8 @@ describe('regla 4 y stop — provisional o descarte contado', () => {
   })
 })
 
-describe('promoción — el final del mismo tramo actualiza la provisional', () => {
-  it('un final posterior promueve la fila cerrada por silencio', async () => {
+describe('reentrega — el final tardío NO reescribe la fila (insert-only, mandato 2026-10-30)', () => {
+  it('un final posterior NO promueve la fila cerrada por silencio', async () => {
     const { api } = crearEscenario()
     await api.start()
     const tramoId = await abrirConVoz(api)
@@ -390,18 +395,18 @@ describe('promoción — el final del mismo tramo actualiza la provisional', () 
     await api.ingestAudio(
       bloque(SAMPLE_RATE, SAMPLE_RATE * 2, SILENCIO(CONVERSACION_CONFIG.silenceCloseMs)),
     )
-    const promovida = await api.ingestAsr(
+    const reentrega = await api.ingestAsr(
       asr(tramoId, { texto: 'hola mundo', final: true }),
     )
-    expect(promovida.filas).toHaveLength(1)
-    expect(promovida.filas[0]).toMatchObject({
-      texto: 'hola mundo',
-      provisional: false,
-      revision: 2,
+    expect(reentrega.filas).toHaveLength(1)
+    expect(reentrega.filas[0]).toMatchObject({
+      texto: 'hola',
+      provisional: true,
+      revision: 1,
     })
   })
 
-  it('el final que llega tras stop(user) promueve la fila de la sesión anterior', async () => {
+  it('el final tardío tras stop(user) NO reescribe la fila de la sesión anterior', async () => {
     const { api, eventos } = crearEscenario()
     const filas = () =>
       eventos.flatMap((evento) => (evento.tipo === 'row.committed' ? [evento.fila] : []))
@@ -418,15 +423,17 @@ describe('promoción — el final del mismo tramo actualiza la provisional', () 
       texto: 'hola',
     })
 
+    // El tramo ya commiteó: la reentrega se ignora (`tramoYaCommiteado`), la
+    // fila de la sesión anterior queda inmutable.
     await api.start()
     await api.ingestAsr(asr(tramoId, { texto: 'hola mundo', final: true }))
     const despues = filas()
-    expect(despues).toHaveLength(2)
-    expect(despues[1]).toMatchObject({
+    expect(despues).toHaveLength(1)
+    expect(despues[0]).toMatchObject({
       sessionId: primera.sessionId,
-      texto: 'hola mundo',
-      provisional: false,
-      revision: 2,
+      texto: 'hola',
+      provisional: true,
+      revision: 1,
     })
   })
 })
@@ -450,9 +457,7 @@ describe('regla 5 — etiquetas con evidencia y solo la voz que habló', () => {
         voz: { vozId: 'B', hablante: 'Hablante 2' },
       }),
     )
-    const estado = await api.ingestAudio(
-      bloque(SAMPLE_RATE * 3, SAMPLE_RATE * 3 + 14400, SILENCIO(900)),
-    )
+    const estado = await cerrarPorSilencio(api, SAMPLE_RATE * 3)
     expect(estado.filas.map((fila) => fila.etiqueta)).toEqual(['Hablante 1', 'Hablante 2'])
     expect(estado.filas.every((fila) => fila.evidencia === 'medida')).toBe(true)
   })
@@ -467,9 +472,7 @@ describe('regla 5 — etiquetas con evidencia y solo la voz que habló', () => {
     const nombrada = api.registerName({ nombre: 'Ana' })
     expect(nombrada.descartes).toEqual([])
     await api.ingestAsr(asr(tramoUno, { texto: 'ok flu soy ana', final: true }))
-    const cerrada = await api.ingestAudio(
-      bloque(SAMPLE_RATE, SAMPLE_RATE * 2, SILENCIO(900)),
-    )
+    const cerrada = await cerrarPorSilencio(api, SAMPLE_RATE)
     expect(cerrada.filas[0]).toMatchObject({ etiqueta: 'Ana', evidencia: 'nombre' })
 
     await api.ingestAudio(bloque(SAMPLE_RATE * 2, SAMPLE_RATE * 3, VOZ()))
@@ -478,18 +481,37 @@ describe('regla 5 — etiquetas con evidencia y solo la voz que habló', () => {
     await api.ingestAsr(
       asr(tramoDos, { texto: 'otra voz', final: true, voz: { vozId: 'B' } }),
     )
-    const otra = await api.ingestAudio(
-      bloque(SAMPLE_RATE * 3, SAMPLE_RATE * 3 + 14400, SILENCIO(900)),
-    )
+    const otra = await cerrarPorSilencio(api, SAMPLE_RATE * 3)
     expect(otra.filas[1].etiqueta).toBe('Hablante 1')
     expect(otra.filas[1].etiqueta).not.toBe('Ana')
   })
 
-  it('sin voz identificada no se bautiza a nadie', async () => {
+  it('sin voz identificada el nombre queda PENDIENTE y bautiza la voz que cierra (problema 5)', async () => {
     const { api } = crearEscenario()
     await api.start()
-    await abrirConVoz(api)
-    expect(() => api.registerName({ nombre: 'Ana' })).toThrow(/sin voz identificada/)
+    const tramoUno = await abrirConVoz(api, 0)
+    await api.ingestAsr(
+      asr(tramoUno, { texto: 'ok flu soy ana', voz: { hablante: 'Hablante 1' } }),
+    )
+    // La medida de respaldo resuelve la voz AL CERRAR: sin vozId aún, el nombre
+    // no se pierde — queda pendiente y se aplica a la voz que cierre la locución.
+    const pendiente = api.registerName({ nombre: 'Ana' })
+    expect(pendiente.descartes).toEqual([])
+    await api.ingestAsr(
+      asr(tramoUno, { texto: 'ok flu soy ana', final: true, voz: { vozId: 'A' } }),
+    )
+    const cerrada = await cerrarPorSilencio(api, SAMPLE_RATE)
+    expect(cerrada.filas[0]).toMatchObject({ etiqueta: 'Ana', evidencia: 'nombre' })
+
+    // La voz quedó REGISTRADA: la siguiente fila de la MISMA voz lleva el nombre.
+    await api.ingestAudio(bloque(SAMPLE_RATE * 2, SAMPLE_RATE * 3, VOZ()))
+    const tramoDos = api.snapshot().tramoAudio?.tramoId
+    if (!tramoDos) throw new Error('sin tramo nuevo')
+    await api.ingestAsr(
+      asr(tramoDos, { texto: 'sigo yo', final: true, voz: { vozId: 'A' } }),
+    )
+    const otra = await cerrarPorSilencio(api, SAMPLE_RATE * 3)
+    expect(otra.filas[1]).toMatchObject({ etiqueta: 'Ana', evidencia: 'nombre' })
   })
 
   it('el nombre ? se rechaza y nunca llega a una fila', async () => {
@@ -525,12 +547,11 @@ describe('regla 6 — la caja es la locución abierta y solo el cierre la vacía
     const { api } = crearEscenario()
     await api.start()
     const tramoId = await abrirConVoz(api)
-    // Caso 7+6: el final NO cierra ni vacía la caja; el corte sí.
+    // Mandato 2026-10-30: el final NO cierra ni vacía la caja; la puerta de
+    // abajo (silencio de 5 s) sí.
     const trasFinal = await api.ingestAsr(asr(tramoId, { texto: 'hola', final: true }))
     expect(trasFinal.box).toEqual({ texto: 'hola', abierta: true })
-    const cerrada = await api.ingestAudio(
-      bloque(SAMPLE_RATE, SAMPLE_RATE * 2, SILENCIO(900)),
-    )
+    const cerrada = await cerrarPorSilencio(api, SAMPLE_RATE)
     expect(cerrada.box).toEqual({ texto: '', abierta: false })
     expect(cerrada.fraseCanonica).toBe('')
     expect(cerrada.fraseParaMostrar).toBe('')
@@ -571,9 +592,7 @@ describe('eco y barge-in — la voz de FLU nunca es fila de usuario', () => {
     expect(eventos.some((evento) => evento.tipo === 'barge.in')).toBe(false)
 
     await api.ingestAsr(asr(tramoId, { texto: 'espera', final: true }))
-    const cerrada = await api.ingestAudio(
-      bloque(SAMPLE_RATE, SAMPLE_RATE * 2, SILENCIO(900)),
-    )
+    const cerrada = await cerrarPorSilencio(api, SAMPLE_RATE)
     expect(cerrada.filas[0].texto).toBe('espera')
     expect(eventos).toContainEqual(
       expect.objectContaining({ tipo: 'barge.in', texto: 'espera' }),
@@ -587,9 +606,7 @@ describe('eco y barge-in — la voz de FLU nunca es fila de usuario', () => {
     await api.start()
     const tramoId = await abrirConVoz(api)
     await api.ingestAsr(asr(tramoId, { texto: 'mundo entero', final: true }))
-    const estado = await api.ingestAudio(
-      bloque(SAMPLE_RATE, SAMPLE_RATE * 2, SILENCIO(900)),
-    )
+    const estado = await cerrarPorSilencio(api, SAMPLE_RATE)
     expect(estado.filas[0].texto).toBe('mundo entero')
     expect(eventos.some((evento) => evento.tipo === 'barge.in')).toBe(false)
   })
@@ -612,10 +629,8 @@ describe('ASR por puerto — un motor, estados y audio local', () => {
     const tramoId = await abrirConVoz(api)
     expect(asrFalso.empujados).toHaveLength(1)
     asrFalso.resultado({ texto: 'hola', final: true, idioma: 'es' })
-    // El drenaje procesa el final y el corte de 900 ms cierra por contenido.
-    const estado = await api.ingestAudio(
-      bloque(SAMPLE_RATE, SAMPLE_RATE * 2, SILENCIO(900)),
-    )
+    // El drenaje procesa el final; el silencio de 5 s (puerta de abajo) cierra.
+    const estado = await cerrarPorSilencio(api, SAMPLE_RATE)
     expect(estado.filas[0]).toMatchObject({ locutionId: tramoId, texto: 'hola' })
     expect(eventos).toContainEqual(
       expect.objectContaining({ tipo: 'asr.status', estado: 'active' }),
@@ -686,7 +701,10 @@ describe('huérfanos y descartes contados', () => {
         tramo: { inicio: 0, fin: SAMPLE_RATE, sampleRate: SAMPLE_RATE },
       }),
     )
-    expect(despues.filas.map((fila) => fila.texto)).toEqual(['nuevo'])
+    // El final solo MARCA la locución; la puerta de abajo (silencio de 5 s)
+    // cierra la fila de 'nuevo'.
+    const cerrada = await cerrarPorSilencio(api, SAMPLE_RATE)
+    expect(cerrada.filas.map((fila) => fila.texto)).toEqual(['nuevo'])
     expect(despues.descartes).toContainEqual(
       expect.objectContaining({ motivo: 'huerfano', locutionId: UUID_A }),
     )

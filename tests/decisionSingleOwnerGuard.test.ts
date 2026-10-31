@@ -450,18 +450,19 @@ describe('D11 - la repeticion tras pausa conserva su fila (clasificacion, no uni
         const tramoUno = await api.ingestAudio(bloque(0, 16000, voz()));
         const idUno = tramoUno.locucionAbierta?.locutionId;
         if (!idUno) throw new Error('el audio con voz no abrio locucion');
-        // Caso 7+6: el final marca, no cierra; el corte de la pausa (candidato
-        // negativo => finHabla = finPrevio) cierra el tramo POR CONTENIDO.
+        // Mandato 2026-10-30: el final marca, NO cierra; el turno cierra por la
+        // puerta de abajo (5 s de silencio).
         await api.ingestAsr({ tramoId: idUno, texto: 'hola', final: true });
-        // PAUSA (silencio >= 900) y turno 2 con la MISMA frase: su fila NO desaparece.
-        const trasPausa = await api.ingestAudio(bloque(16000, 16000 + 4000, { hayVoz: false, silencioMs: 4000 }));
+        // PAUSA (silencio >= 5000: la puerta de abajo) y turno 2 con la MISMA
+        // frase: su fila NO desaparece.
+        const trasPausa = await api.ingestAudio(bloque(16000, 16000 + 80000, { hayVoz: false, silencioMs: 5000 }));
         expect(trasPausa.filas.map((fila) => fila.texto)).toEqual(['hola']);
-        const tramoDos = await api.ingestAudio(bloque(20000, 36000, voz()));
+        const tramoDos = await api.ingestAudio(bloque(96000, 112000, voz()));
         const idDos = tramoDos.locucionAbierta?.locutionId;
         if (!idDos) throw new Error('el segundo tramo no abrio locucion');
         await api.ingestAsr({ tramoId: idDos, texto: 'hola', final: true });
-        // Corte de 900 ms que arranca en el fin del tramo: cierra por contenido.
-        const cierreDos = await api.ingestAudio(bloque(36000, 36000 + 14400, { hayVoz: false, silencioMs: 900 }));
+        // Corte de 5 s que arranca en el fin del tramo: cierra por la puerta de abajo.
+        const cierreDos = await api.ingestAudio(bloque(112000, 112000 + 80000, { hayVoz: false, silencioMs: 5000 }));
         expect(cierreDos.filas.map((fila) => fila.texto), 'la repeticion tras pausa conserva su fila').toEqual(['hola', 'hola']);
     });
     // RETIRADO (corte 2026-10-26) el test del censo "los cuatro predicados siguen

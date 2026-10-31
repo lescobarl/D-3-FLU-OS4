@@ -1,6 +1,7 @@
 // @vitest-environment node
 /**
- * CASOS 7+6 (CIERRE POR CONTENIDO, NO POR RELOJ) — guard de comportamiento.
+ * CASOS 7+6 (EL FINAL MARCA, LA PUERTA DE ABAJO CIERRA) — guard de
+ * comportamiento.
  *
  * Hecho del encargo: 29/29 por frontera; la base 0,43–0,90 s es la ventana de
  * apertura, pero el tramo CERRADO del log mide 1,5–6,7 s: se mide el tramo
@@ -10,14 +11,15 @@
  *    el módulo los calcula desde el tramo cerrado (nada de null);
  *  - "frase completa" = el asrFinal del turno ya llegó y su ventana está
  *    DENTRO del tramo cerrado;
- *  - guard: final sin métricas => rojo; cierre por frontera con texto
- *    incompleto => rojo.
+ *  - mandato 2026-10-30: el final solo MARCA la frase completa; la locución
+ *    cierra por la puerta de abajo (silencio 5 s, cambio de voz, texto ajeno
+ *    o fin de sesión) — la causa 'final' ya no existe.
  *
  * Se mide con el MÓDULO REAL y el medidor REAL (`crearMedidorTramo`), con PCM
  * sintético modulado (un tono plano no pasa el criterio de habla): un final
- * con el tramo abierto NO cierra; el corte de 900 ms cierra por contenido con
- * causa 'final'. Sin final, el corte no cierra y el silencio de 5000 ms deja
- * la fila provisional. Los detectores viven en el código real (sin vaciedad).
+ * con el tramo abierto NO cierra; el silencio de 5000 ms cierra con causa
+ * 'silencio' y la fila sale provisional SOLO sin final. Los detectores viven
+ * en el código real (sin vaciedad).
  */
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -61,9 +63,13 @@ export function productoPasaFinalReal(src: string): boolean {
   return /final:\s*hayFinal/.test(src) && !/final:\s*false/.test(src)
 }
 
-/** El texto NO cierra una locución cuyo tramo de audio sigue abierto. */
-export function gateTramoAbiertoEnTexto(src: string): boolean {
-  return /estado\.tramoAudio && estado\.tramoAudio\.tramoId === tramoId/.test(src)
+/**
+ * El final en texto.ts NO cierra: marca la frase (`finalValido`) y la puerta
+ * de abajo es la frontera — ningún `cerrarLocucion` lleva la causa 'final'
+ * (mandato 2026-10-30).
+ */
+export function finalNoCierraEnTexto(src: string): boolean {
+  return !/cerrarLocucion\([^)]*'final'/.test(src) && /finalValido\s*=/.test(src)
 }
 
 /** La ventana del final se valida con el dueño único de fila.ts y se usa en texto.ts. */
@@ -152,21 +158,34 @@ async function cortar(api: ConversacionApi, finTramo: number): Promise<void> {
   })
 }
 
-describe('Caso 7+6 — cierre por contenido con el módulo real', () => {
-  it('un final sin métricas cierra con medida COMPLETA del tramo (ms exacto, nunca null)', async () => {
+/** Silencio de 5 s desde el fin del tramo: la puerta de abajo (mandato 2026-10-30). */
+async function cerrarPorSilencio(api: ConversacionApi, finTramo: number) {
+  return api.ingestAudio({
+    muestras: new Float32Array(5 * SAMPLE_RATE),
+    sampleRate: SAMPLE_RATE,
+    inicio: finTramo,
+    fin: finTramo + 5 * SAMPLE_RATE,
+    medida: SILENCIO(5000),
+  })
+}
+
+describe('Caso 7+6 — el final MARCA y la puerta de abajo cierra (mandato 2026-10-30)', () => {
+  it('el silencio de 5 s cierra con medida COMPLETA del tramo (ms exacto, nunca null)', async () => {
     const { api, eventos } = crearEscenario()
     await api.start()
     const tramoId = await abrirConVoz(api)
     await api.ingestAsr({ tramoId, texto: 'hola', final: true })
-    await cortar(api, SAMPLE_RATE)
+    await cerrarPorSilencio(api, SAMPLE_RATE)
 
     const cerrados = cierresDe(eventos)
     expect(cerrados).toHaveLength(1)
-    expect(cerrados[0]).toMatchObject({ locutionId: tramoId, causa: 'final' })
+    expect(cerrados[0]).toMatchObject({ locutionId: tramoId, causa: 'silencio' })
     // ms sale SIEMPRE del tramo cerrado (1 s => 1000 ms), no de la apertura.
     expect(cerrados[0].medida.ms).toBe(1000)
     expect(cerrados[0].medida.speechLikeMs).toBeGreaterThan(0)
-    expect(cerrados[0].medida.rms).toBeGreaterThan(0.2)
+    // La retención incluye los 5 s de silencio de la puerta: rms ≈ voz/√6 ≈ 0,11.
+    // El umbral descarta que la voz se PIERDA (rms → 0), no el silencio diluido.
+    expect(cerrados[0].medida.rms).toBeGreaterThan(0.1)
   })
 
   it('las métricas del MOTOR pasan tal cual y el ms sigue siendo del tramo', async () => {
@@ -179,14 +198,14 @@ describe('Caso 7+6 — cierre por contenido con el módulo real', () => {
       final: true,
       medida: { speechLikeMs: 123, rms: 0.42 },
     })
-    await cortar(api, SAMPLE_RATE)
+    await cerrarPorSilencio(api, SAMPLE_RATE)
 
     const cerrados = cierresDe(eventos)
     expect(cerrados).toHaveLength(1)
     expect(cerrados[0].medida).toEqual({ ms: 1000, speechLikeMs: 123, rms: 0.42 })
   })
 
-  it('el final con el tramo abierto NO cierra: tres finales, una fila al corte', async () => {
+  it('el final con el tramo abierto NO cierra: tres finales, una fila al silencio', async () => {
     const { api } = crearEscenario()
     await api.start()
     const tramoId = await abrirConVoz(api)
@@ -195,13 +214,7 @@ describe('Caso 7+6 — cierre por contenido con el módulo real', () => {
       expect(estado.filas).toEqual([])
       expect(estado.box.abierta).toBe(true)
     }
-    const estado = await api.ingestAudio({
-      muestras: new Float32Array(MUESTRAS_CORTE),
-      sampleRate: SAMPLE_RATE,
-      inicio: SAMPLE_RATE,
-      fin: SAMPLE_RATE + MUESTRAS_CORTE,
-      medida: SILENCIO(CORTE_MS),
-    })
+    const estado = await cerrarPorSilencio(api, SAMPLE_RATE)
     expect(estado.filas).toHaveLength(1)
     expect(estado.filas[0]).toMatchObject({ texto: 'hola mundo entero', provisional: false })
   })
@@ -236,16 +249,17 @@ describe('Caso 7+6 — cierre por contenido con el módulo real', () => {
     expect(api.snapshot().filas[0]).toMatchObject({ provisional: true })
   })
 
-  it('falsifica el 29/29: con el final disponible el cierre es por CONTENIDO, no por frontera', async () => {
+  it('falsifica el mandato viejo: con el final disponible el cierre es por la puerta de abajo, nunca por contenido', async () => {
     const { api, eventos } = crearEscenario()
     await api.start()
     const tramoId = await abrirConVoz(api)
     await api.ingestAsr({ tramoId, texto: 'hola', final: true })
-    await cortar(api, SAMPLE_RATE)
+    await cerrarPorSilencio(api, SAMPLE_RATE)
 
     const cerrados = cierresDe(eventos)
     expect(cerrados).toHaveLength(1)
-    expect(cerrados[0].causa).toBe('final')
+    expect(cerrados[0].causa).toBe('silencio')
+    expect(cerrados[0].causa).not.toBe('final')
     expect(cerrados[0].causa).not.toBe('frontera')
     expect(api.snapshot().filas[0]).toMatchObject({ provisional: false })
   })
@@ -287,8 +301,8 @@ describe('Caso 7+6 — los dueños viven en el archivo real', () => {
     expect(productoPasaFinalReal(fuenteDe('src/voice/conversation/producto.ts'))).toBe(true)
   })
 
-  it('el texto no cierra una locución con el tramo de audio abierto (texto.ts)', () => {
-    expect(gateTramoAbiertoEnTexto(fuenteDe('src/voice/conversation/texto.ts'))).toBe(true)
+  it('el final en texto.ts NO cierra: la puerta de abajo es la frontera (texto.ts)', () => {
+    expect(finalNoCierraEnTexto(fuenteDe('src/voice/conversation/texto.ts'))).toBe(true)
   })
 
   it('la ventana del final se valida con el dueño único (fila.ts + texto.ts)', () => {
@@ -327,12 +341,12 @@ describe('Caso 7+6 — PRUEBA DE DETECTOR (el detector no es decorativo)', () =>
     expect(productoPasaFinalReal('final: hayFinal,\nidioma,')).toBe(true)
   })
 
-  it('un texto que cierra sin gate de tramo abierto => rojo; con el gate => verde', () => {
-    const sinGate = 'if (completa) await sesion.cerrarLocucion(locucion, \'system\', \'final\', true)'
-    expect(gateTramoAbiertoEnTexto(sinGate)).toBe(false)
-    const conGate =
-      'const tramoAbierto = Boolean(estado.tramoAudio && estado.tramoAudio.tramoId === tramoId)\nif (completa && !tramoAbierto) await sesion.cerrarLocucion(locucion, \'system\', \'final\', true)'
-    expect(gateTramoAbiertoEnTexto(conGate)).toBe(true)
+  it('un texto que cierra con causa final => rojo; sin ella y con finalValido => verde', () => {
+    const conCierreFinal =
+      "if (finalValido = true) await sesion.cerrarLocucion(locucion, 'system', 'final', true)"
+    expect(finalNoCierraEnTexto(conCierreFinal)).toBe(false)
+    const sinCierreFinal = 'const finalValido =\n  Boolean(entrada.final)'
+    expect(finalNoCierraEnTexto(sinCierreFinal)).toBe(true)
   })
 
   it('una ventana del final sin dueño único => rojo; con fila.ts + texto.ts => verde', () => {

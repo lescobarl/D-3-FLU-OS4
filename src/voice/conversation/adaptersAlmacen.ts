@@ -37,6 +37,8 @@ export type RegistroFila = Readonly<{
   sampleRate: number
   etiqueta: string
   evidencia: string
+  /** TIMBRE medido de la voz (null si no hubo medida): evidencia inmutable. */
+  firma: readonly number[] | null
   idioma: string
   overlap: boolean
   provisional: boolean
@@ -69,6 +71,7 @@ function aRegistro(fila: FilaNueva, sync: TuplaSync): RegistroFila {
     sampleRate: fila.tramo.sampleRate,
     etiqueta: fila.etiqueta,
     evidencia: fila.evidencia,
+    firma: fila.firma ?? null,
     idioma: fila.idioma,
     overlap: fila.overlap,
     provisional: fila.provisional,
@@ -95,6 +98,7 @@ function aFila(registro: RegistroFila): Fila {
     },
     etiqueta: registro.etiqueta,
     evidencia: registro.evidencia as EvidenciaEtiqueta,
+    firma: registro.firma ?? null,
     idioma: registro.idioma as Fila['idioma'],
     overlap: registro.overlap,
     provisional: registro.provisional,

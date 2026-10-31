@@ -23,16 +23,17 @@
 //     locución NUEVA.
 //   • `decidirFrontera` (frontera.ts): pausa ≥ silenceCloseMs ⇒ cierre; sin
 //     pausa el tramo sigue abierto.
-//   • `construirFila`/`promoverFila` (fila.ts): una locución = UNA fila; el
-//     final del mismo tramo la promueve en su fila (no duplica, no borra).
+//   • `construirFila` (fila.ts): una locución = UNA fila commiteada UNA vez
+//     (insert-only, mandato 2026-10-30). El texto se decide ANTES del insert
+//     con `unirRevision`, que conserva la frase completa (no duplica, no borra);
+//     la reentrega de un tramo ya commiteado se ignora (`turnoYaEscrito`).
 //   • `mergeTranscriptText` (transcriptDelta.js, VIVO) se conserva tal cual.
 // ============================================================
 import { describe, it, expect } from 'vitest';
 import { unirRevision, decidirRevision } from '../src/voice/conversation/revision.ts';
 import { decidirFrontera } from '../src/voice/conversation/frontera.ts';
-import { construirFila, promoverFila } from '../src/voice/conversation/fila.ts';
+import { construirFila } from '../src/voice/conversation/fila.ts';
 import type { CierreLocucion } from '../src/voice/conversation/fila.ts';
-import type { Fila } from '../src/voice/conversation/ports';
 import { mergeTranscriptText } from '../src/voice/lib/transcriptDelta.js';
 import { wouldShrinkLog } from '../src/voice/lib/speechMerge.js';
 
@@ -56,6 +57,7 @@ const cierre = (locutionId: string, texto: string, sobre: Partial<CierreLocucion
     etiquetaAnterior: null,
     semillaEtiqueta: 'Hablante 1',
     esEtiquetaAnonima: (etiqueta: string) => etiqueta.startsWith('Hablante'),
+    firma: null,
     ...sobre,
 });
 
@@ -159,12 +161,14 @@ describe('transcriptionDedupLoss — fila por locución (no se borra ni se dupli
         expect(segunda.fila.texto).toBe('intervención 2');
     });
 
-    it('el dedup legítimo (mismo tramo) deja UNA sola fila «intervención 2»', () => {
-        const creada = construirFila(cierre(UUID_A, 'intervención', { final: false }));
+    it('el dedup legítimo (mismo tramo) se decide ANTES del insert: la revisión conserva la frase completa', () => {
+        const union = unirRevision('intervención', 'intervención 2');
+        expect(union.tipo).toBe('extiende');
+        expect(union.texto).toBe('intervención 2');
+        const creada = construirFila(cierre(UUID_A, 'intervención 2', { final: true }));
         if (!creada.fila) throw new Error('la locución válida no se descarta');
-        const fila: Fila = { ...creada.fila, revision: 0, updated_at: 0, deleted: false };
-        const cambios = promoverFila(fila, 'intervención 2');
-        expect(cambios).toEqual({ texto: 'intervención 2', provisional: false });
+        expect(creada.fila.texto).toBe('intervención 2');
+        expect(creada.fila.provisional).toBe(false);
     });
 });
 
@@ -204,15 +208,13 @@ describe('transcriptionDedupLoss - la fila no puede ser mas corta que la ultima 
         }
     });
 
-    it('promovida, la fila conserva la frase larga (mismo tramo, una sola fila)', () => {
+    it('la fila commiteada conserva la frase larga (mismo tramo, UNA fila, insert-only)', () => {
         const shown = 'vamos a la tienda del centro';
-        const creada = construirFila(cierre(UUID_A, shown, { final: false }));
+        const union = unirRevision(shown, 'vamos a la tienda');
+        expect(union.texto).toBe(shown);
+        const creada = construirFila(cierre(UUID_A, shown, { final: true }));
         if (!creada.fila) throw new Error('la locución válida no se descarta');
-        const cambios = promoverFila(
-            { ...creada.fila, revision: 0, updated_at: 0, deleted: false },
-            'vamos a la tienda',
-        );
-        expect(cambios).toEqual({ texto: shown, provisional: false });
+        expect(creada.fila.texto).toBe(shown);
         expect(shown.includes('del centro')).toBe(true);
     });
 

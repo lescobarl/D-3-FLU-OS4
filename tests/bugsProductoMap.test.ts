@@ -29,7 +29,7 @@ export const GUARDS: Record<number, string | null> = {
     6: 'tests/injectedValues.test.ts',
     7: 'tests/audioAlertRepeat.test.ts',
     8: null,
-    9: 'tests/conversationTurnSingleRow.test.ts',
+    9: 'tests/conversacionUnaLocucionUnaFilaGuard.test.ts',
     10: 'tests/noteRemoveIntent.test.ts',
     11: 'tests/noteSuperDestFirst.test.ts',
 }

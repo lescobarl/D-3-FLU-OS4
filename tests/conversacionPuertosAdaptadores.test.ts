@@ -45,6 +45,7 @@ const filaNueva = (locutionId: string, overrides: Partial<FilaNueva> = {}): Fila
   tramo: { inicio: 0, fin: 16000, sampleRate: 16000 },
   etiqueta: 'Hablante 1',
   evidencia: 'semilla',
+  firma: null,
   idioma: 'es',
   overlap: false,
   provisional: false,

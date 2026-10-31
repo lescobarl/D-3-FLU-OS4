@@ -102,6 +102,8 @@ export type MotorConversacionProducto = Readonly<{
   suscribir(oyente: (evento: EventoConversacion) => void): () => void
   /** Instantánea síncrona de la caja y las filas de la sesión. */
   instantanea(): InstantaneaConversacion
+  /** Bautiza la voz de la locución del comando (problema 5: «ok flu soy X»). */
+  registrarNombre(nombre: string): void
   /** Cierra la sesión con el motivo real del cierre. */
   cerrar(motivo: MotivoCierre): void
 }>
@@ -298,6 +300,13 @@ export function crearMotorConversacionProducto({
     suscribir: (oyente) => api.subscribe(oyente),
 
     instantanea: () => api.snapshot(),
+
+    registrarNombre: (nombre) => {
+      if (estadoMotor !== 'activa') return
+      // El nombre entra en la MISMA cadena que el audio y el texto: la locución
+      // del comando sigue abierta cuando se aplica (medida de respaldo al cerrar).
+      void encadenar(() => api.registerName({ nombre }))
+    },
 
     cerrar: (motivo) => {
       void encadenar(async () => {

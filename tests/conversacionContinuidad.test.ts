@@ -4,14 +4,17 @@
  *
  * `conversacionFila.test.ts` ya cubre la tabla de prioridad pura de
  * `resolverEtiqueta`; aquí se mide la decisión que NO es pura: quién decide si
- * una locución SIN medida hereda la etiqueta anterior de la MISMA sesión.
- * Reglas del mandato (2026-10-25):
- *   P3  tras "soy Luis", la siguiente locución sin medida queda `Luis`;
- *   P3b otra voz (vozId distinto) NO hereda el nombre de la voz anterior;
- *   sin etiqueta anterior → semilla, nunca `?`.
+ * una locución continúa una voz de la sesión. Reglas del mandato (2026-10-30,
+ * problema 4):
+ *   SIN medida positiva NO hay continuidad: una locución sin vozId NO hereda la
+ *     etiqueta anterior (el decreto viejo mezclaba hablantes);
+ *   una medida que casa con una PLANTILLA de la sesión continúa ESA voz y
+ *     recupera SU etiqueta (A→B→A devuelve la etiqueta de A, no la de B);
+ *   una medida que NO casa es OTRA voz: no hereda;
+ *   sin etiqueta anterior ni medida → semilla, nunca `?`.
  *
  * FALSIFICACIÓN (par de mutaciones): si el módulo heredara a ciegas, el caso de
- * otra voz es ROJO; si nunca heredara, el caso sin medida es ROJO.
+ * otra voz es ROJO; si nunca continuara, el caso de la plantilla casada es ROJO.
  */
 import { describe, expect, it } from 'vitest'
 import { isAutoSpeakerLabel } from '../src/voice/lib/speakerCore.js'
@@ -41,18 +44,21 @@ type Observacion = Readonly<{
   fila: Fila
 }>
 
-/** Crea el estado mínimo de la sesión con una etiqueta y voz previas. */
-function crearProbe(ultimaVozId = '', ultimaEtiqueta = ''): Probe {
+/** Crea el estado mínimo de la sesión con una etiqueta y plantillas previas. */
+function crearProbe(
+  ultimaEtiqueta = '',
+  plantillas?: Readonly<Record<string, { vector: readonly number[]; etiqueta: string }>>,
+): Probe {
   const estado: EstadoCierre = {
     sessionId: 'sesion-guard',
     abierta: null,
     ultimaEtiqueta,
-    ultimaVozId,
     filas: new Map(),
     nombresPorVoz: new Map(),
+    plantillasVoz: new Map(Object.entries(plantillas ?? {}).map(([vozId, p]) => [vozId, { ...p }])),
     muestrasAbierta: [],
-    ultimoVectorVoz: null,
     contadorVoces: 0,
+    nombrePendiente: '',
   }
   const reglas = crearReglasCierre({
     estado,
@@ -81,7 +87,7 @@ function crearProbe(ultimaVozId = '', ultimaEtiqueta = ''): Probe {
 
 /**
  * Corre una locución completa (abrir → revisar → cerrar) sobre la MISMA sesión.
- * @param probe Sesión de prueba que conserva `ultimaEtiqueta`/`ultimaVozId`.
+ * @param probe Sesión de prueba que conserva `ultimaEtiqueta` y plantillas.
  * @param vozApertura Evidencia con la que abre la locución.
  * @param vozRevision Evidencia que trae la revisión (por defecto, ninguna).
  * @param uuid `locutionId` válido de la locución.
@@ -99,7 +105,7 @@ async function correrLocucion(
     texto: 'hola',
     tramo: { inicio: 0, fin: 16000, sampleRate: 16000 },
     // Caso 8: un turnId => una fila. Cada locución es SU turno; compartir
-    // 'turno-guard' haría consolidar la segunda en la fila de la primera.
+    // 'turno-guard' haría que el gate ignore la segunda como reentrega.
     turnId: uuid,
     idioma: 'es',
     voz: vozApertura,
@@ -111,14 +117,17 @@ async function correrLocucion(
   const revisada = estado.abierta
   if (!revisada) throw new Error('la revisión cerró la locución')
   const continuidadRevision = revisada.continuidadVoz
-  await reglas.cerrarLocucion(revisada, 'system', 'final', true)
+  await reglas.cerrarLocucion(revisada, 'system', 'silencio', true)
   const fila = estado.filas.get(uuid)
   if (!fila) throw new Error('no se escribió la fila')
   return { continuidadApertura, continuidadRevision, fila }
 }
 
 describe('continuidad de voz — decisión de la sesión', () => {
-  it('P3: tras "soy Luis", la siguiente locución SIN medida queda Luis (continuidad, no semilla)', async () => {
+  it('P3 INVERTIDO (mandato 2026-10-30): tras "soy Luis", la siguiente locución SIN medida NO hereda', async () => {
+    // El decreto viejo (sin medida → hereda la etiqueta anterior) mezclaba
+    // hablantes: la mujer quedaba bajo la etiqueta del dueño. Sin medida
+    // positiva no hay continuidad: cae a la semilla.
     const probe = crearProbe()
     const identificada = await correrLocucion(
       probe,
@@ -130,43 +139,42 @@ describe('continuidad de voz — decisión de la sesión', () => {
     expect(identificada.fila.evidencia).toBe('nombre')
 
     const siguiente = await correrLocucion(probe, {}, {}, UUIDS[1]!)
-    expect(siguiente.continuidadApertura, 'sin medida hereda la etiqueta de la misma sesión').toBe(true)
-    expect(siguiente.fila.etiqueta).toBe('Luis')
-    expect(siguiente.fila.evidencia).toBe('continuidad')
+    expect(siguiente.continuidadApertura, 'sin medida positiva NO hay continuidad').toBe(false)
+    expect(siguiente.fila.etiqueta).toBe(SEMILLA)
+    expect(siguiente.fila.evidencia).toBe('semilla')
   })
 
-  it('misma voz medida (vozId igual al anterior) → continuidad, no semilla', async () => {
-    const probe = crearProbe('voz-a', 'Luis')
+  it('misma voz medida (vozId con plantilla de la sesión) → continuidad con SU etiqueta', async () => {
+    const probe = crearProbe('Luis', { 'voz-a': { vector: [1, 0], etiqueta: 'Luis' } })
     const obs = await correrLocucion(probe, { vozId: 'voz-a' }, { vozId: 'voz-a' }, UUIDS[2]!)
     expect(obs.continuidadApertura).toBe(true)
     expect(obs.fila.etiqueta).toBe('Luis')
-    expect(obs.fila.evidencia).toBe('continuidad')
+    expect(obs.fila.evidencia).toBe('medida')
   })
 
-  it('Hablante N no desplaza la continuidad sin evidencia positiva (bug 2026-10-26)', async () => {
-    // Caso del dueño: la voz venía etiquetada 'Luis'; el preflight mide pero solo
-    // produce una agrupación anónima ('Hablante 1'). Sin evidencia POSITIVA de
-    // identidad (speakerCore:98), la etiqueta no puede pisar la continuidad.
-    const probe = crearProbe('', 'Luis')
+  it('Hablante N sin plantilla no hereda la etiqueta anterior: se sostiene SOLO (bug 2026-10-26 invertido)', async () => {
+    // Con el decreto viejo, una agrupación anónima heredaba la etiqueta 'Luis'.
+    // Sin medida positiva no hay continuidad: la medida anónima se sostiene.
+    const probe = crearProbe('Luis')
     const obs = await correrLocucion(probe, { hablante: 'Hablante 1' }, {}, UUIDS[6]!)
-    expect(obs.continuidadApertura).toBe(true)
-    expect(obs.fila.etiqueta).toBe('Luis')
-    expect(obs.fila.evidencia).toBe('continuidad')
+    expect(obs.continuidadApertura).toBe(false)
+    expect(obs.fila.etiqueta).toBe('Hablante 1')
+    expect(obs.fila.evidencia).toBe('medida')
   })
 
-  it('P3b: otra voz (vozId distinto) NO hereda el nombre de la voz anterior', async () => {
-    const probe = crearProbe('voz-a', 'Luis')
+  it('P3b: otra voz (vozId sin plantilla) NO hereda el nombre de la voz anterior', async () => {
+    const probe = crearProbe('Luis', { 'voz-a': { vector: [1, 0], etiqueta: 'Luis' } })
     const obs = await correrLocucion(probe, { vozId: 'voz-b' }, { vozId: 'voz-b' }, UUIDS[3]!)
     expect(obs.continuidadApertura, 'otra voz no continúa la anterior').toBe(false)
     expect(obs.fila.etiqueta).not.toBe('Luis')
     expect(obs.fila.evidencia).toBe('semilla')
   })
 
-  it('medida tardía de otra voz: la continuidad se recalcula y NO hereda', async () => {
-    const probe = crearProbe('voz-a', 'Luis')
+  it('medida tardía de otra voz: la continuidad NO se afirma y no hereda', async () => {
+    const probe = crearProbe('Luis', { 'voz-a': { vector: [1, 0], etiqueta: 'Luis' } })
     const obs = await correrLocucion(probe, {}, { vozId: 'voz-b' }, UUIDS[4]!)
-    expect(obs.continuidadApertura, 'abrió sin medida: aún no hay evidencia en contra').toBe(true)
-    expect(obs.continuidadRevision, 'la medida tardía manda sobre la continuidad').toBe(false)
+    expect(obs.continuidadApertura, 'abrió sin medida: sin evidencia positiva').toBe(false)
+    expect(obs.continuidadRevision, 'la medida tardía no casó plantilla').toBe(false)
     expect(obs.fila.etiqueta).not.toBe('Luis')
     expect(obs.fila.evidencia).toBe('semilla')
   })
@@ -180,9 +188,13 @@ describe('continuidad de voz — decisión de la sesión', () => {
   })
 
   it('la evidencia entrante NO puede afirmar continuidad de otra voz (resolverVoz)', () => {
-    const conOtraVoz = resolverVoz({ vozId: 'voz-b', continuidad: true }, false, new Map())
+    const plantillas = new Map([['voz-a', { vector: [1, 0], etiqueta: 'Luis' }]])
+    const conOtraVoz = resolverVoz({ vozId: 'voz-b', continuidad: true }, false, new Map(), plantillas)
     expect(conOtraVoz.continuidad, 'la continuidad la decide el módulo').toBe(false)
-    const sinMedida = resolverVoz({}, true, new Map())
+    expect(conOtraVoz.etiquetaVoz).toBeUndefined()
+    const sinMedida = resolverVoz({}, true, new Map(), plantillas)
     expect(sinMedida.continuidad).toBe(true)
+    const casada = resolverVoz({ vozId: 'voz-a' }, true, new Map(), plantillas)
+    expect(casada.etiquetaVoz, 'la plantilla casada aporta SU etiqueta').toBe('Luis')
   })
 })

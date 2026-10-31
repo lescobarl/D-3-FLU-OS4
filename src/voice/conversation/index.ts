@@ -42,7 +42,7 @@ export type {
   EntradaFrontera,
   UmbralesFrontera,
 } from './frontera.ts'
-export { construirFila, promoverFila } from './fila.ts'
+export { construirFila } from './fila.ts'
 export { resolverEtiqueta } from './fila.ts'
 export type {
   CierreLocucion,
@@ -58,7 +58,6 @@ export {
   crearAlmacenMemoria,
   crearConfigFlu,
   crearEmbebedorProducto,
-  crearEscritorFilaUsuarioProducto,
   crearIdUuid,
   crearMedidorTramo,
   crearPartidorWake,
@@ -67,27 +66,21 @@ export {
   crearRelojSistema,
   crearResolucionPasivaProducto,
   crearUtilidadesFilaProducto,
-  commitUserTurnRow,
   renameRowSpeakerName,
 } from './adapters.ts'
 export { crearMotorConversacionProducto, traeFinal } from './producto.ts'
 export type { EventoProducto, MotorConversacionProducto } from './producto.ts'
-export { crearEscritorFilaUsuario, crearResolucionPasiva, escribeFilaDeUsuario } from './pasivo.ts'
+export { crearResolucionPasiva, renombrarFilaDeUsuario } from './pasivo.ts'
 export type {
-  DependenciasEscritorFila,
+  DependenciasRenombreFila,
   DependenciasResolucionPasiva,
   EntradaResolucionPasiva,
-  EscritorFilaUsuario,
   ResolucionPasiva,
   ResolucionPasivaHablante,
 } from './pasivo.ts'
 export type {
-  AccionCompromisoUsuario,
-  EntradaCompromisoUsuario,
   FilaVistaUsuario,
-  NuevaEntradaVista,
   PuertoVistaFilas,
-  ResultadoCompromisoUsuario,
   SentimientoLocucion,
   UtilidadesFila,
 } from './ports.ts'

@@ -11,10 +11,10 @@
  *    nunca pierde el texto de la caja).
  *
  * Se mide con el MÓDULO REAL y el medidor REAL (`crearMedidorTramo`), con PCM
- * sintético modulado: se ejercitan las 5 causas de cierre (final, silencio,
- * frontera, stop, asr por watchdog) y las rutas de descarte (eco, huérfano,
- * sinTexto, tramo inválido puro). Los detectores viven en el código real (sin
- * vaciedad) con su prueba de mutación.
+ * sintético modulado: se ejercitan las causas de cierre (silencio, frontera,
+ * stop, asr por watchdog, voz — el final ya NO es causa: mandato 2026-10-30) y
+ * las rutas de descarte (eco, huérfano, sinTexto, tramo inválido puro). Los
+ * detectores viven en el código real (sin vaciedad) con su prueba de mutación.
  */
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -52,7 +52,7 @@ const UUID_A = '11111111-1111-4111-8111-111111111111'
 const UUID_B = '22222222-2222-4222-8222-222222222222'
 
 const MOTIVOS_CIERRE: readonly MotivoCierre[] = ['user', 'system', 'watchdog']
-const CAUSAS_CIERRE = ['final', 'frontera', 'silencio', 'stop', 'asr'] as const
+const CAUSAS_CIERRE = ['frontera', 'silencio', 'stop', 'asr', 'voz'] as const
 const MOTIVOS_DESCARTE = ['tramoInvalido', 'sinTexto', 'eco', 'huerfano'] as const
 
 const fuenteDe = (ruta: string): string =>
@@ -200,16 +200,22 @@ function crearAsrWatchdog(): { port: AsrPort; avisar: (estado: EstadoAsr) => voi
 }
 
 describe('Caso 9 — cada cierre declara motivo y causa (5 causas con el módulo real)', () => {
-  it('final: el corte con final cierra por contenido con causa final', async () => {
+  it('el final NO es causa: con final disponible la puerta de abajo cierra con causa silencio', async () => {
     const { api, eventos } = crearEscenario()
     await api.start()
     const tramoId = await abrirConVoz(api)
     await api.ingestAsr({ tramoId, texto: 'hola', final: true })
-    await cortar(api, SAMPLE_RATE)
+    await api.ingestAudio({
+      muestras: new Float32Array(5 * SAMPLE_RATE),
+      sampleRate: SAMPLE_RATE,
+      inicio: SAMPLE_RATE,
+      fin: 6 * SAMPLE_RATE,
+      medida: SILENCIO(5000),
+    })
 
     const cerrados = cierresDe(eventos)
     expect(cerrados).toHaveLength(1)
-    expect(cerrados[0]).toMatchObject({ motivo: 'system', causa: 'final' })
+    expect(cerrados[0]).toMatchObject({ motivo: 'system', causa: 'silencio' })
   })
 
   it('silencio: sin final, el reloj cierra provisional con causa silencio', async () => {
@@ -336,10 +342,19 @@ describe('Caso 9 — todo descarte se cuenta con su motivo, nunca null', () => {
       final: true,
       tramo: { inicio: 0, fin: SAMPLE_RATE, sampleRate: SAMPLE_RATE },
     })
-    expect(despues.filas.map((fila) => fila.texto)).toEqual(['nuevo'])
     expect(despues.descartes).toContainEqual(
       expect.objectContaining({ motivo: 'huerfano', locutionId: UUID_A }),
     )
+    // El final solo MARCA la locución; el silencio de 5 s (puerta de abajo)
+    // cierra la fila de 'nuevo'.
+    const cerrada = await api.ingestAudio({
+      muestras: new Float32Array(5 * SAMPLE_RATE),
+      sampleRate: SAMPLE_RATE,
+      inicio: SAMPLE_RATE,
+      fin: 6 * SAMPLE_RATE,
+      medida: SILENCIO(5000),
+    })
+    expect(cerrada.filas.map((fila) => fila.texto)).toEqual(['nuevo'])
   })
 
   it('sinTexto: el stop sin texto cuenta el descarte y no inventa fila', async () => {
@@ -368,6 +383,7 @@ describe('Caso 9 — todo descarte se cuenta con su motivo, nunca null', () => {
       etiquetaAnterior: null,
       semillaEtiqueta: 'Hablante 1',
       esEtiquetaAnonima: isAutoSpeakerLabel,
+      firma: null,
     }
     const commiteada = construirFila(base)
     expect(commiteada.descarte).toBeNull()
@@ -381,7 +397,13 @@ describe('Caso 9 — todo descarte se cuenta con su motivo, nunca null', () => {
     await api.start()
     const tramoId = await abrirConVoz(api)
     await api.ingestAsr({ tramoId, texto: 'hola', final: true })
-    await cortar(api, SAMPLE_RATE)
+    await api.ingestAudio({
+      muestras: new Float32Array(5 * SAMPLE_RATE),
+      sampleRate: SAMPLE_RATE,
+      inicio: SAMPLE_RATE,
+      fin: 6 * SAMPLE_RATE,
+      medida: SILENCIO(5000),
+    })
     expect(api.snapshot().filas).toHaveLength(1)
     expect(api.snapshot().descartes).toEqual([])
   })

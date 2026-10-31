@@ -192,7 +192,14 @@ export function crearConversacion(dependencias: DependenciasConversacion): Conve
     if (nombre === '?') throw new Error('nombre ? prohibido')
     const vozId = String(datos.vozId || estado.abierta?.voz.vozId || '').trim()
     if (!vozId) {
-      throw new Error('sin voz identificada: no se bautiza una voz que no hablo')
+      // MANDATO (2026-10-30, problema 5): la medida de respaldo resuelve la voz
+      // al CERRAR; mientras la locución del comando sigue abierta aún no hay
+      // vozId. El nombre queda PENDIENTE y `cierre.cerrarLocucion` lo aplica a
+      // la voz que cierre la locución del comando (con vozId queda registrada
+      // para sus filas siguientes; sin medida, marca solo la fila del comando).
+      estado.nombrePendiente = nombre
+      registro.registrar('conversacion.nombre.pendiente', { sessionId, nombre })
+      return sesion.snapshot()
     }
     estado.nombresPorVoz.set(vozId, nombre)
     if (estado.abierta && estado.abierta.voz.vozId === vozId) {

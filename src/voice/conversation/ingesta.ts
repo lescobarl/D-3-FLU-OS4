@@ -11,9 +11,10 @@ import type { FlujoTexto } from './texto.ts'
 import type { Pendientes } from './cola.ts'
 import type { BufferAsr, RegistroTramos } from './tramos.ts'
 import type { Sesion } from './sesion.ts'
-import { decidirIdentidad } from './identidad.ts'
+import { decidirIdentidad, plantillasDe } from './identidad.ts'
 import { concatenarMuestras, retenerCola } from './muestras.ts'
 import { fusionarVoz } from './fila.ts'
+import { registrarMedidaVoz } from './sesion.ts'
 import { asrEmpujaAudio } from './ports.ts'
 import { logCaughtError } from '../../lib/caughtError.ts'
 import type { ConfiguracionConversacion, MotivoCierre } from './ports.ts'
@@ -100,7 +101,7 @@ export function crearIngesta({
       const locucion = estado.abierta
       await sesion.cerrarLocucion(locucion, motivo, 'asr', locucion.final)
     }
-    await flujo.flushPendientes(motivo)
+    await flujo.flushPendientes()
   }
 
   /** Ingesta un bloque de audio: mide, corta el tramo y evalúa la frontera. */
@@ -194,16 +195,9 @@ export function crearIngesta({
         }
         estado.silencioPendienteMs = medida.silencioMs
         estado.tramoAudio = null
-        // Caso 7+6: el corte NO cierra por reloj; si el final del tramo ya
-        // llegó, este cierre es POR CONTENIDO (causa 'final', no 'frontera').
-        if (
-          estado.abierta &&
-          estado.abierta.locutionId === cortado.tramoId &&
-          estado.abierta.final
-        ) {
-          await sesion.cerrarLocucion(estado.abierta, 'system', 'final', true)
-          await flujo.flushPendientes('system')
-        }
+        // MANDATO DEL DUEÑO (2026-10-30): el final NO cierra por contenido. La
+        // locución cortada sigue abierta y cierra SOLO por la puerta de abajo:
+        // silencio (5 s), cambio de voz (partición), texto ajeno o fin de sesión.
       }
     }
 
@@ -224,7 +218,7 @@ export function crearIngesta({
       })
       if (frontera.cerrar) {
         await sesion.cerrarLocucion(abierta, 'system', 'silencio', abierta.final)
-        await flujo.flushPendientes('system')
+        await flujo.flushPendientes()
       }
     }
     return sesion.snapshot()
@@ -298,17 +292,14 @@ export function crearIngesta({
     if (String(abierta.voz.vozId || '').trim()) return
     const identidad = decidirIdentidad({
       vector,
-      ultimoVozId: estado.ultimaVozId,
-      ultimoVector: estado.ultimoVectorVoz,
+      plantillas: plantillasDe(estado.plantillasVoz),
       umbral: dependencias.config.umbralContinuidadVoz(),
       // Perezoso: la plantilla SOLO se resuelve si la voz es nueva (Caso 10).
       etiquetaNueva: () => dependencias.config.etiquetaAnonima(estado.contadorVoces + 1),
       comparar: embebedor.comparar,
       id: dependencias.id.uuid,
     })
-    if (!identidad.continuidad) estado.contadorVoces += 1
-    estado.ultimaVozId = identidad.vozId
-    estado.ultimoVectorVoz = [...vector]
+    registrarMedidaVoz(estado, vector, identidad)
     estado.abierta = {
       ...abierta,
       voz: fusionarVoz(abierta.voz, {
@@ -338,8 +329,12 @@ export function crearIngesta({
     const abierta = estado.abierta
     if (!embebedor || !abierta || abierta.locutionId !== tramoId) return null
     // Sin medida aplicada no hay qué comparar (la medida temprana sigue su curso).
-    if (!String(abierta.voz.vozId || '').trim()) return null
-    if (!estado.ultimoVectorVoz || estado.ultimoVectorVoz.length === 0) return null
+    const vozIdAbierta = String(abierta.voz.vozId || '').trim()
+    if (!vozIdAbierta) return null
+    // La ventana de cola se compara contra la plantilla de la MISMA voz abierta
+    // (no contra la última voz de la sesión, que puede ser otra).
+    const plantillaAbierta = estado.plantillasVoz.get(vozIdAbierta)
+    if (!plantillaAbierta || plantillaAbierta.vector.length === 0) return null
     const ventana = Math.round(configuracion.minSegundosVozMedida * abierta.sampleRate)
     if (ventana <= 0 || abierta.fin - estado.medidoHastaFin < ventana) return null
     const retenidas = concatenarMuestras(estado.muestrasAbierta)
@@ -358,7 +353,7 @@ export function crearIngesta({
     }
     const vigente = estado.abierta
     if (!vector || !vigente || vigente.locutionId !== tramoId) return null
-    const previo = estado.ultimoVectorVoz
+    const previo = plantillaAbierta.vector
     const mismaVoz =
       vector.length === previo.length &&
       embebedor.comparar(vector, previo) >= dependencias.config.umbralContinuidadVoz()
@@ -426,16 +421,13 @@ export function crearIngesta({
     if (!embebedor || !recien) return null
     const identidad = decidirIdentidad({
       vector,
-      ultimoVozId: estado.ultimaVozId,
-      ultimoVector: estado.ultimoVectorVoz,
+      plantillas: plantillasDe(estado.plantillasVoz),
       umbral: dependencias.config.umbralContinuidadVoz(),
       etiquetaNueva: () => dependencias.config.etiquetaAnonima(estado.contadorVoces + 1),
       comparar: embebedor.comparar,
       id: dependencias.id.uuid,
     })
-    if (!identidad.continuidad) estado.contadorVoces += 1
-    estado.ultimaVozId = identidad.vozId
-    estado.ultimoVectorVoz = [...vector]
+    registrarMedidaVoz(estado, vector, identidad)
     estado.abierta = {
       ...recien,
       voz: fusionarVoz(recien.voz, {

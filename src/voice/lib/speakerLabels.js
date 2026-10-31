@@ -5,7 +5,6 @@
 import { FLU_CONFIG } from './fluConfig.js'
 import { normalizeSpaces, stripDiacritics } from './audioMath.js'
 import { getFallbackSpeaker, isAutoSpeakerLabel, nextAutoSpeakerLabel, parseSpeakerIndex } from './speakerCore.js'
-import { SPEAKER_ASSIGN } from './speakerAssignDefaults.js'
 
 export { isAutoSpeakerLabel, parseSpeakerIndex } from './speakerCore.js'
 
@@ -65,23 +64,6 @@ export function isProperSpeakerName(label = '') {
  * @param {object} [config] Configuracion (para el respaldo generico).
  * @returns {string} Etiqueta segura para un turno sin identidad medida.
  */
-/**
- * DUENO UNICO de la etiqueta PROVISIONAL de un turno cuya voz aun NO esta medida.
- *
- * No es un nombre propio ni una etiqueta automatica `Hablante N`: dice "no se sabe
- * todavia". Existe para que un turno sin medida NO herede la etiqueta del turno anterior
- * (la mujer quedaba con la etiqueta del dueno) ni el nombre del participante primario.
- * La fila se actualiza UNA vez cuando llega el vector de su propio audio.
- *
- * @param {object} [config] Configuracion (etiqueta en `voiceIdentity.labels.pendingSpeaker`).
- * @returns {string}
- */
-export function pendingSpeakerLabel(config = FLU_CONFIG) {
-  const label = config?.voiceIdentity?.labels?.pendingSpeaker
-  const text = String(label || '').trim()
-  return text || SPEAKER_ASSIGN.pendingSpeaker
-}
-
 export function anonymousSpeakerLabel(label = '', config = FLU_CONFIG) {
   const text = normalizeSpeakerLabel(label)
   if (text && !isProperSpeakerName(text)) return text

@@ -31,6 +31,8 @@ function registro(): RegistroConversacion {
     sampleRate: 48_000,
     etiqueta: 'Luis',
     evidencia: 'medida',
+    // TIMBRE medido de la fila: la ida y vuelta lo conserva como `signature`.
+    firma: [0.5, 0.25, 0.75],
     idioma: 'en',
     overlap: true,
     provisional: true,
@@ -83,6 +85,8 @@ describe('meta.conversacion — ida y vuelta por el escritor único', () => {
       speakerName: fila.speakerName,
       participantId: fila.participantId,
       sessionId: fila.sessionId,
+      // El TIMBRE viaja por el campo plano `signature`, no por el meta.
+      signature: fila.signature,
     }).toEqual({
       id: LOCUTION_ID,
       role: 'user',
@@ -92,6 +96,7 @@ describe('meta.conversacion — ida y vuelta por el escritor único', () => {
       speakerName: 'Luis',
       participantId: 'user-a',
       sessionId: SESSION_ID,
+      signature: [0.5, 0.25, 0.75],
     })
 
     // Los nueve campos tipados de `meta.conversacion`, no un JSON opaco.

@@ -15,11 +15,12 @@
  *    y, sin casar, cierra la locución anterior (causa 'voz') y abre la nueva
  *    con SU etiqueta — el texto del evento se atribuye a la voz nueva;
  *  - dos voces sin pausa => DOS filas contiguas y etiquetadas, nunca una fila
- *    mezclada (el gate de consolidación exige continuidad de voz);
+ *    mezclada;
  *  - misma voz en tramo continuo => UNA fila, UNA etiqueta (no cambia dentro
  *    del tramo) y texto que crece;
- *  - la continuación de la voz B consolida en la fila DE B (`filaDelTurno`
- *    casa por etiqueta), no en la de la voz A.
+ *  - mandato insert-only (2026-10-30): la fila commiteada es INMUTABLE — la
+ *    continuación de la voz B NO reescribe la fila DE B: se cuenta como
+ *    reentrega del turno (descarte 'turnoYaEscrito'), nunca un UPDATE.
  *
  * Se mide con el MÓDULO REAL y un embebedor falso de vectores; los detectores
  * viven en el código real.
@@ -69,9 +70,9 @@ export function verificacionAntesDelFlujoDeTexto(src: string): boolean {
   )
 }
 
-/** ¿El gate de consolidación exige continuidad de voz (nunca una fila mezclada)? */
-export function consolidacionExigeContinuidad(src: string): boolean {
-  return /previaDelTurno && cierre\.voz\.continuidad/.test(src)
+/** ¿La puerta insert-only exige una voz DISTINTA medida para escribir una fila? */
+export function insertOnlyExigeVozDistinta(src: string): boolean {
+  return /const vozDistintaMedida =/.test(src) && /previaDelTurno && !vozDistintaMedida/.test(src)
 }
 
 /** ¿La voz que cierra consolida SU fila: casa por etiqueta y cae a la más reciente? */
@@ -157,20 +158,19 @@ async function entregarAudio(
   return estado
 }
 
-/** Silencio de 900 ms que corta el tramo abierto (y cierra por contenido si hay final). */
-async function cortar(api: ConversacionApi): Promise<void> {
+/** Silencio de 5 s (puerta de abajo): cierra la locución abierta (mandato 2026-10-30). */
+async function cerrarPorSilencio(api: ConversacionApi): Promise<void> {
   const abierta = api.snapshot().locucionAbierta
-  if (!abierta) throw new Error('sin locucion abierta para cortar')
+  if (!abierta) throw new Error('sin locucion abierta para cerrar')
   const fin = abierta.tramo.fin
-  const muestrasCorte = Math.round((SAMPLE_RATE * 900) / 1000)
   await api.ingestAudio({
-    muestras: new Float32Array(muestrasCorte),
+    muestras: new Float32Array(5 * SAMPLE_RATE),
     sampleRate: SAMPLE_RATE,
     inicio: fin,
-    fin: fin + muestrasCorte,
-    medida: SILENCIO(900),
+    fin: fin + 5 * SAMPLE_RATE,
+    medida: SILENCIO(5000),
   })
-  cursor = Math.max(cursor, fin + muestrasCorte)
+  cursor = Math.max(cursor, fin + 5 * SAMPLE_RATE)
 }
 
 /** Evento ASR final del turno (el módulo resuelve el tramo vigente). */
@@ -197,7 +197,7 @@ describe('Caso 1+3 — dos voces SIN pausa (módulo real, embebedor falso)', () 
     await entregarAudio(escenario.api, VOZ(), cursor)
     await entregarAudio(escenario.api, VOZ(), cursor)
     await frase(escenario.api, 'con el doctor', 'T5')
-    await cortar(escenario.api)
+    await cerrarPorSilencio(escenario.api)
 
     const filas = filasDe(escenario.api)
     expect(filas).toHaveLength(2)
@@ -235,7 +235,7 @@ describe('Caso 1+3 — dos voces SIN pausa (módulo real, embebedor falso)', () 
     await entregarAudio(escenario.api, VOZ(), cursor)
     // La verificación mide la cola: misma voz => NO parte ni cambia etiqueta.
     await frase(escenario.api, 'ok flu crea una cita con el doctor', 'T5')
-    await cortar(escenario.api)
+    await cerrarPorSilencio(escenario.api)
 
     const filas = filasDe(escenario.api)
     expect(filas).toHaveLength(1)
@@ -247,7 +247,7 @@ describe('Caso 1+3 — dos voces SIN pausa (módulo real, embebedor falso)', () 
     })
   })
 
-  it('la continuación de la voz B consolida en la fila DE B; la de A no se toca', async () => {
+  it('la continuación de la voz B NO reescribe la fila DE B (insert-only); la de A no se toca', async () => {
     const escenario = crearEscenario(VECTOR_A, VECTOR_B, VECTOR_B, VECTOR_B)
     await escenario.api.start({ turnId: 'T5' })
 
@@ -262,21 +262,25 @@ describe('Caso 1+3 — dos voces SIN pausa (módulo real, embebedor falso)', () 
     await entregarAudio(escenario.api, VOZ(), cursor)
     await entregarAudio(escenario.api, VOZ(), cursor)
     await frase(escenario.api, 'con el doctor a las tres', 'T5')
-    await cortar(escenario.api)
+    await cerrarPorSilencio(escenario.api)
 
-    // La voz B vuelve tras la pausa: misma voz => misma etiqueta, y su fila
-    // es la que crece (filaDelTurno casa por etiqueta, no por antigüedad).
+    // La voz B vuelve tras la pausa: misma voz => misma etiqueta, pero su fila
+    // es INMUTABLE (mandato insert-only): la continuación es reentrega del turno
+    // y se cuenta, nunca un UPDATE ni una tercera fila.
     await entregarAudio(escenario.api, VOZ(), cursor)
     await entregarAudio(escenario.api, VOZ(), cursor)
     await frase(escenario.api, 'con el doctor a las tres de la tarde', 'T5')
-    await cortar(escenario.api)
+    await cerrarPorSilencio(escenario.api)
 
     const filas = filasDe(escenario.api)
     expect(filas).toHaveLength(2)
     expect(filas[0]!.texto).toBe('ok flu crea una cita')
     expect(filas[0]!.etiqueta).toBe('Hablante 1')
     expect(filas[1]!.etiqueta).toBe('Hablante 2')
-    expect(filas[1]!.texto).toBe('con el doctor a las tres de la tarde')
+    expect(filas[1]!.texto).toBe('con el doctor a las tres')
+    expect(escenario.api.snapshot().descartes).toContainEqual(
+      expect.objectContaining({ motivo: 'turnoYaEscrito' }),
+    )
   })
 })
 
@@ -291,8 +295,8 @@ describe('Caso 1+3 — los dueños viven en el archivo real', () => {
     )
   })
 
-  it('el gate de consolidación exige continuidad de voz (cierre.ts)', () => {
-    expect(consolidacionExigeContinuidad(fuenteDe('src/voice/conversation/cierre.ts'))).toBe(true)
+  it('la puerta insert-only exige una voz DISTINTA medida para escribir (cierre.ts)', () => {
+    expect(insertOnlyExigeVozDistinta(fuenteDe('src/voice/conversation/cierre.ts'))).toBe(true)
   })
 
   it('la voz que cierra consolida SU fila por etiqueta (cierre.ts)', () => {
@@ -323,15 +327,17 @@ describe('Caso 1+3 — PRUEBA DE DETECTOR (el detector no es decorativo)', () =>
     expect(verificacionAntesDelFlujoDeTexto(conVerificacion)).toBe(true)
   })
 
-  it('un gate sin continuidad consolida voces distintas => rojo; exigido => verde', () => {
-    const sinContinuidad =
+  it('un gate que reescribe sin voz distinta medida => rojo; exigida => verde', () => {
+    const sinExigencia =
       'const previaDelTurno = filaDelTurno(cierre.turnId)\n' +
-      'if (previaDelTurno) await consolidarEnLaFilaDelTurno(previaDelTurno, cierre)'
-    expect(consolidacionExigeContinuidad(sinContinuidad)).toBe(false)
-    const conContinuidad =
-      'const previaDelTurno = filaDelTurno(cierre.turnId, resultado.fila.etiqueta)\n' +
-      'if (previaDelTurno && cierre.voz.continuidad) await consolidarEnLaFilaDelTurno(previaDelTurno, cierre)'
-    expect(consolidacionExigeContinuidad(conContinuidad)).toBe(true)
+      'if (previaDelTurno) await actualizarFila(previaDelTurno, cierre)'
+    expect(insertOnlyExigeVozDistinta(sinExigencia)).toBe(false)
+    const conExigencia =
+      "const vozDistintaMedida = String(vozCerrada.vozId || '').trim() !== '' && !continuidadVoz\n" +
+      'if (previaDelTurno && !vozDistintaMedida) {\n' +
+      "  contarDescarte('turnoYaEscrito', locucion.locutionId, tramo)\n" +
+      '}'
+    expect(insertOnlyExigeVozDistinta(conExigencia)).toBe(true)
   })
 
   it('una búsqueda que devuelve la primera fila del turno => rojo; por etiqueta => verde', () => {

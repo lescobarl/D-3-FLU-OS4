@@ -32,11 +32,14 @@ const ids = (() => {
 // Corte 2026-10-26: `resolveConversationSpeaker` se retiro con la tuberia vieja. La
 // identidad de la locucion la decide la regla del MODULO (`decidirIdentidad`); el nombre
 // con ancla, la resolucion VIVA por timbre (`resolveVoiceIdentity`).
-const decidirTurno = (vector: number[], ultimoVozId: string, ultimoVector: number[] | null, etiquetaNueva: string) =>
+const decidirTurno = (
+  vector: number[],
+  plantillas: ReadonlyArray<{ vozId: string; vector: number[]; etiqueta: string }>,
+  etiquetaNueva: string,
+) =>
   decidirIdentidad({
     vector,
-    ultimoVozId,
-    ultimoVector,
+    plantillas,
     umbral: 0.8,
     etiquetaNueva: () => etiquetaNueva,
     // El coseno es el REAL del dueño (speakerCore.compareCosineSignatures).
@@ -68,7 +71,7 @@ describe('A4 - el primario sobrevive al reinicio de escucha', () => {
     // el nombre exige un ancla REGISTRADA que ya exista. Corte 2026-10-26: la regla viva
     // es la del MODULO (sin primario en la entrada) + la resolucion por anclas de la base.
     resetVoiceDirectory()
-    const primero = decidirTurno(vozA, '', null, 'Hablante 1')
+    const primero = decidirTurno(vozA, [], 'Hablante 1')
     expect(primero.hablante, 'sin ancla no se afirma el nombre').toBe('Hablante 1')
     expect(primero.continuidad).toBe(false)
 

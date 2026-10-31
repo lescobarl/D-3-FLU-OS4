@@ -69,7 +69,7 @@ import { resolveTurnArtifactKind } from './lib/turnArtifactKind';
 import { isMinuteGenerationRequest, isRecoverableRecognitionError } from './voice/api/audio'
 import { COMMAND_IDS, getCommandSpeech, normalizeJuego, resolveDeterministicCommand, resolveNoteVoiceIntent } from './voice/api/commands'
 import { FLU_CONFIG } from './voice/api/config'
-import { buildFluSpeechAuditRows, commitUserTurnRow, createConversationModeController, deriveUserLastText, escribeFilaDeUsuario, evaluateListenParity, logFluReply, resolvedActionIdentity, resolveRowSpeakerLabel, selectVisiblePhrase } from './voice/api/conversation'
+import { buildFluSpeechAuditRows, createConversationModeController, deriveUserLastText, evaluateListenParity, logFluReply, resolvedActionIdentity, resolveRowSpeakerLabel, selectVisiblePhrase } from './voice/api/conversation'
 import { applyKnownVoiceName, forgetVoiceName, isAutoSpeakerLabel, participantVoiceAnchorsForDiarization, resolveVoiceIdentity, resolveVoiceParticipants } from './voice/api/identity'
 import { resolveGeminiErrorPresentation } from './voice/api/media'
 import { cancelSpeech, isSpeechBusy, speakResponse, waitForSpeechIdle } from './voice/api/speech'
@@ -1163,33 +1163,11 @@ function App() {
             const phase: string = resolved?.phase || '';
             const userCommitOnly: boolean = resolved?.userCommitOnly === true;
 
-            // §9 — UNICO escritor de la fila del usuario (`commitUserTurnRow`). Un
-            // SERVICIO (`effectOnly`) aplica su efecto y no escribe la conversacion.
+            // §9 — la fila del USUARIO la escribe SOLO el módulo de conversación
+            // (`row.committed`, ÚNICO escritor en AMBOS modos). El escritor pasivo
+            // de App quedó retirado (2026-10-30, problema 6: era una ruta doble).
+            // Un SERVICIO (`effectOnly`) aplica su efecto y no escribe la conversación.
             if (rawOnly && transcript && !cleanForSpeech(transcript)) return;
-            // La fila del USUARIO en conversación la escribe SOLO el módulo
-            // (`row.committed`); este escritor atiende el modo PASIVO (wake sin
-            // conversación activa). No hay compuerta por motor: `legacy` ya no existe.
-            if (!conversationActiveRef.current &&
-                escribeFilaDeUsuario(resolved, { hayTexto: Boolean(transcript), hablable: Boolean(cleanForSpeech(transcript)) })) {
-                // P8.40: la etiqueta de diarizacion se escribe TAL CUAL: el vinculo con un
-                // participante registrado NO la asciende (una sola via del nombre: el mandato).
-                // El dueno de esa decision es `resolveRowSpeakerName`. 
-                // ACUÑADO EN EL LLAMADOR (auditoria 2026-10-23): el turno se conoce aqui.
-                const turnIdFila = resolved?.turnId ?? `app-${Date.now()}`;
-                const resultado = commitUserTurnRow({
-                    text: transcript,
-                    signature: (resolved as { signature?: number[] | null })?.signature ?? null,
-                    speakerName,
-                    sentiment: detectSentiment(transcript),
-                    evidenciaAcustica: resolved?.evidenciaAcustica === true,
-                    replaceLast: resolved?.replaceLastRawLog === true,
-                    turnWindow: (resolved as { turnWindow?: { inicio: number; fin: number } | null })?.turnWindow ?? null,
-                    turnId: turnIdFila,
-                });
-                // Aviso al participante con la IDENTIDAD del turno. Si el motor activo
-                // ya avisó el mismo `turnId`, su dedupe lo cuenta UNA sola vez.
-                if (resultado.action !== 'skipped') fluParticipant.onTurnCommitted?.(turnIdFila);
-            }
             if (userCommitOnly) return;
 
             // ============================================================
@@ -1201,8 +1179,8 @@ function App() {
             if (rawOnly && transcript) {
                 if (!cleanForSpeech(transcript)) return;
 
-                // §9 — La fila del usuario ya se registró arriba por el punto único
-                // `commitUserTurnRow` (incluida la señal `replaceLastRawLog`).
+                // §9 — La fila del usuario ya se registró por el punto único del
+                // módulo (`row.committed`); aquí no hay escritor paralelo.
 
                 // OS2 parity: audit log for rawOnly entries (Gap 4)
                 // FluShell.jsx lines 430-438: addAuditLog after rawOnly entry
@@ -1213,9 +1191,8 @@ function App() {
                     phase,
                 }, 'Raw transcript logged').catch((e) => logCaughtError('src/App.tsx: auditLog.logEvent', e));
 
-                // El aviso de turno comprometido lo da este punto para el modo PASIVO y
-                // `onLocucionCommiteada` para el motor activo; ambos llaman a la MISMA
-                // funcion con el `turnId` y el hook dedupe: una sola cuenta por turno.
+                // El aviso de turno comprometido lo da `onLocucionCommiteada` del
+                // motor (ÚNICO escritor, ambos modos): una sola cuenta por turno.
 
                 return;
             }

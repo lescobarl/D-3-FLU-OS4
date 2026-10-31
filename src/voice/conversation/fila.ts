@@ -8,26 +8,26 @@
  *
  * Regla 5: la etiqueta se resuelve por prioridad y nunca queda `?`:
  *   1. nombre CONFIRMADO (`ok flu soy XXX`)  → evidencia `nombre`
- *   2. medida con IDENTIDAD POSITIVA          → evidencia `medida`
- *   3. continuidad con la etiqueta anterior   → evidencia `continuidad`
- *   4. medida ANÓNIMA (`Hablante N`)          → evidencia `medida`
- *   5. semilla de la configuración            → evidencia `semilla`
+ *   2. plantilla de sesión casada (`etiquetaVoz`) → evidencia `medida`
+ *      (la voz que vuelve recupera SU etiqueta: problema 4)
+ *   3. medida con IDENTIDAD POSITIVA          → evidencia `medida`
+ *   4. continuidad con la etiqueta anterior   → evidencia `continuidad`
+ *   5. medida ANÓNIMA (`Hablante N`)          → evidencia `medida`
+ *   6. semilla de la configuración            → evidencia `semilla`
  *
  * `Hablante N` es una agrupación sin identidad (definición en
  * `speakerCore.isAutoSpeakerLabel`): no puede pisar la continuidad de una voz
  * ya etiquetada. Solo una medida con identidad positiva (etiqueta con nombre)
  * adelanta a la continuidad.
  *
- * `provisional` es `true` mientras el final del mismo tramo no haya llegado; la
- * promoción reutiliza `decidirRevision` (regla 3, un solo dueño de la no-pérdida)
- * y solo cambia texto/provisional. No hay borrado físico ni mutación de entrada.
+ * `provisional` es `true` mientras el final del mismo tramo no haya llegado.
+ * La fila commiteada es INMUTABLE (mandato del dueño 2026-10-30): no hay
+ * consolidación ni promoción; el texto se decide ANTES del insert y el final
+ * solo marca la frase completa de la locución abierta.
  */
-import { decidirRevision } from './revision.ts'
 import type { EvidenciaVoz } from './tipos.ts'
 import type {
-  CambiosFila,
   EvidenciaEtiqueta,
-  Fila,
   FilaNueva,
   IdiomaLocucion,
   MotivoCierre,
@@ -43,6 +43,11 @@ export type VozEtiqueta = Readonly<{
   nombreConfirmado: boolean
   hablante: string
   continuidad: boolean
+  /**
+   * Etiqueta de la plantilla de sesión que casó la medida (problema 4): la voz
+   * ya conocida recupera SU etiqueta aunque otra voz haya hablado en medio.
+   */
+  etiquetaVoz?: string
 }>
 
 /** Entrada para resolver la etiqueta: voz, etiqueta anterior y semilla. */
@@ -79,6 +84,11 @@ export type CierreLocucion = Readonly<{
   semillaEtiqueta: string
   /** Predicado de etiqueta anónima (`Hablante N`/pendiente): no es identidad. */
   esEtiquetaAnonima: (etiqueta: string) => boolean
+  /**
+   * TIMBRE medido de la voz que cierra la locución (null si no hubo medida):
+   * la fila lo guarda como evidencia del vínculo fila↔voz por timbre.
+   */
+  firma: readonly number[] | null
 }>
 
 /** Motivo del descarte cuando no hay fila (se cuenta, no se silencia). */
@@ -105,6 +115,9 @@ export function resolverEtiqueta(entrada: EntradaEtiqueta): EtiquetaResuelta {
   const medidaIdentifica = hablante !== '' && !esEtiquetaAnonima(hablante)
   const candidatos: ReadonlyArray<EtiquetaResuelta> = [
     { etiqueta: voz.nombreConfirmado ? String(voz.nombre || '').trim() : '', evidencia: 'nombre' },
+    // La plantilla casada identifica la voz física (anónima o con nombre): gana
+    // a la continuidad con la fila anterior (A→B→A recupera la etiqueta de A).
+    { etiqueta: String(voz.etiquetaVoz || '').trim(), evidencia: 'medida' },
     ...(medidaIdentifica ? [{ etiqueta: hablante, evidencia: 'medida' as const }] : []),
     { etiqueta: voz.continuidad ? String(anterior ?? '').trim() : '', evidencia: 'continuidad' },
     { etiqueta: hablante, evidencia: 'medida' },
@@ -160,6 +173,7 @@ export function construirFila(entrada: CierreLocucion): ResultadoFila {
       tramo: { inicio, fin, sampleRate },
       etiqueta: etiqueta.etiqueta,
       evidencia: etiqueta.evidencia,
+      firma: entrada.firma ?? null,
       idioma: entrada.idioma,
       overlap: Boolean(entrada.overlap),
       provisional: !entrada.final,
@@ -167,80 +181,6 @@ export function construirFila(entrada: CierreLocucion): ResultadoFila {
     },
     descarte: null,
   }
-}
-
-/**
- * Promueve una fila provisional cuando llega el final del MISMO tramo.
- * La revisión del texto la decide `decidirRevision`: si el final pierde palabras,
- * conserva el texto ya escrito. Una fila borrada lógicamente no se promueve.
- *
- * @param fila Fila ya persistida del tramo.
- * @param textoFinal Texto del resultado final del ASR.
- * @returns Cambios a aplicar, o `null` si no hay nada que escribir.
- */
-export function promoverFila(fila: Fila, textoFinal: string): CambiosFila | null {
-  if (fila.deleted) return null
-  const decision = decidirRevision({
-    tramoAbierto: { id: fila.locutionId, texto: fila.texto },
-    tramoId: fila.locutionId,
-    texto: textoFinal,
-    final: true,
-  })
-  if (decision.texto === fila.texto && !fila.provisional) return null
-  return { texto: decision.texto, provisional: false }
-}
-
-/**
- * Cambios que consolidan una locución que cierra en la fila YA commiteada del
- * MISMO turno (Caso 8: un turnId => UNA fila por sesión).
- *
- *  - Ventana solapada (mismo origen de audio) o texto emparentado: REEMISIÓN
- *    del mismo contenido — la revisión decide el texto y la fila nunca pierde
- *    palabras.
- *  - Ventana disjunta y texto no emparentado: CONTINUACIÓN del turno — la fila
- *    crece con el texto nuevo (el usuario siguió hablando tras la pausa).
- *
- * `final` completa la fila. El tramo solo se extiende con contenido nuevo
- * (mismo origen de audio o texto que creció): un re-delivery idéntico con
- * ventana disjunta NO toca la fila.
- * @param previa Fila ya commiteada del turno.
- * @param nueva Locución que cierra con el MISMO `turnId`.
- * @returns Cambios a aplicar, o `null` si no hay nada que escribir.
- */
-export function consolidarFilaDelTurno(previa: Fila, nueva: CierreLocucion): CambiosFila | null {
-  if (previa.deleted) return null
-  const siguiente = String(nueva.texto || '').trim()
-  const mismoOrigen =
-    nueva.sampleRate === previa.tramo.sampleRate && nueva.inicio < previa.tramo.fin
-  const emparentado =
-    siguiente !== '' &&
-    (siguiente === previa.texto ||
-      siguiente.startsWith(previa.texto) ||
-      previa.texto.startsWith(siguiente))
-  let texto: string | undefined
-  if (siguiente && (mismoOrigen || emparentado)) {
-    const decision = decidirRevision({
-      tramoAbierto: { id: previa.locutionId, texto: previa.texto },
-      tramoId: previa.locutionId,
-      texto: siguiente,
-      final: true,
-    })
-    if (decision.texto !== previa.texto) texto = decision.texto
-  } else if (siguiente) {
-    texto = `${previa.texto} ${siguiente}`.trim()
-  }
-  const finExtendido =
-    (mismoOrigen || texto !== undefined) &&
-    nueva.sampleRate === previa.tramo.sampleRate &&
-    Number(nueva.fin) > previa.tramo.fin
-      ? Number(nueva.fin)
-      : undefined
-  const cambios: CambiosFila = {
-    ...(texto !== undefined ? { texto } : {}),
-    ...(nueva.final && previa.provisional ? { provisional: false } : {}),
-    ...(finExtendido !== undefined ? { tramo: { ...previa.tramo, fin: finExtendido } } : {}),
-  }
-  return Object.keys(cambios).length > 0 ? cambios : null
 }
 
 /**

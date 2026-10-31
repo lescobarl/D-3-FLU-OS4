@@ -1,13 +1,17 @@
 // @vitest-environment node
 // ============================================================
-// voiceKeyEpochRename — UN SOLO DUENO DE LA ETIQUETA DE LA FILA (mandato 2026-10-26).
+// voiceKeyEpochRename — UN SOLO DUENO DE LA ETIQUETA DE LA FILA (mandato 2026-10-26,
+// reajustado 2026-10-30 con el retiro del escritor pasivo).
 // ------------------------------------------------------------
 // La ruta vieja renombraba filas YA ESCRITAS desde el registro de identidad
 // (`renameVoiceRowsByKey`/`freezeVoiceName`). Con el modulo CONVERSACION la etiqueta
 // la resuelve el modulo al cerrar su locucion: el registro de identidad solo liga el
 // nombre a la VOZ en el directorio. Este guard mide:
 //   1. ninguna via de identidad reescribe filas;
-//   2. el high-water y el epoch siguen sin reutilizar numeros ni tocar filas viejas;
+//   2. el high-water y el epoch siguen sin reutilizar numeros ni tocar filas viejas
+//      (lo aportan la RESTAURACION y el escritor de la vista `conversationMotorProducto.js`
+//      por el raiser unico del store, `noteSpeakerHighWater`; el registro de identidad NO
+//      lo sube);
 //   3. la fuente no vuelve a llamar al renombre viejo (detector con mutacion).
 //
 // PRUEBA DE DETECTOR: `llamadasAlRenombreViejo` se prueba con una entrada infractora
@@ -16,12 +20,12 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { useIntegrationStore } from '../src/store/integrationStore'
-import { commitUserTurnRow } from '../src/voice/conversation'
 import {
   applyKnownVoiceName,
   registerSpeakerIdentity,
 } from '../src/voice/lib/speakerIdentityRegister'
 import { nextAutoSpeakerLabel, sessionSpeakerHighWater } from '../src/voice/lib/speakerCore.js'
+import { labelToSpeakerId } from '../src/voice/lib/conversationRow.js'
 
 const store = () => useIntegrationStore.getState()
 
@@ -37,6 +41,23 @@ const nombres = (speakerId?: string) =>
       (e) => e.role === 'user' && (!speakerId || e.speakerId === speakerId),
     )
     .map((e) => String(e.speakerName || ''))
+
+let seedId = 0
+/**
+ * Siembra una fila de usuario por la ÚNICA puerta del store (`addConversationEntry`),
+ * la misma que usa el módulo al commitear. El escritor pasivo se retiró (2026-10-30).
+ */
+const seed = (texto: string, speakerName: string, turnId: number) => {
+  store().addConversationEntry({
+    id: `seed-${++seedId}`,
+    role: 'user',
+    text: texto,
+    timestamp: Date.now(),
+    speakerName,
+    speakerId: labelToSpeakerId(speakerName),
+    turnId,
+  })
+}
 
 beforeEach(() => {
   useIntegrationStore.setState({
@@ -63,13 +84,7 @@ export function llamadasAlRenombreViejo(fuente: string): string[] {
 describe('registrar identidad NO reescribe filas ya escritas', () => {
   it('"soy Luis" liga el nombre a la VOZ y deja intactas las filas del epoch', () => {
     const voz = V(1)
-    commitUserTurnRow({
-      text: 'hola uno',
-      speakerName: 'Hablante 1',
-      signature: voz,
-      evidenciaAcustica: true,
-      turnId: 1,
-    })
+    seed('hola uno', 'Hablante 1', 1)
     expect(nombres('speaker_1')).toEqual(['Hablante 1'])
 
     const resultado = registerSpeakerIdentity({
@@ -86,13 +101,7 @@ describe('registrar identidad NO reescribe filas ya escritas', () => {
 
   it('reconocer una identidad conocida tampoco reescribe filas', () => {
     const voz = V(2)
-    commitUserTurnRow({
-      text: 'estoy probando',
-      speakerName: 'Hablante 1',
-      signature: voz,
-      evidenciaAcustica: true,
-      turnId: 2,
-    })
+    seed('estoy probando', 'Hablante 1', 2)
     const resultado = applyKnownVoiceName({
       name: 'Luis',
       previousLabel: 'Hablante 1',
@@ -105,20 +114,23 @@ describe('registrar identidad NO reescribe filas ya escritas', () => {
 })
 
 describe('high-water y epoch no dependen del renombre de filas', () => {
-  it('tras registrar el nombre, la voz NUEVA sigue en max+1', () => {
-    commitUserTurnRow({ text: 'hola uno', speakerName: 'Hablante 1', turnId: 3 })
-    expect(store().speakerHighWater).toBe(1)
+  it('tras registrar el nombre, la voz NUEVA sigue en max+1 (el registro no toca el high-water)', () => {
+    // El high-water lo aportan la RESTAURACION y el escritor de la vista
+    // (`conversationMotorProducto.js`) por el unico raiser del store; aqui se fija
+    // la previa para probar que REGISTRAR una identidad ni sube ni baja.
+    store().noteSpeakerHighWater(1)
     registerSpeakerIdentity({ name: 'Luis', clusters: [], previousLabel: 'Hablante 1' })
 
+    expect(store().speakerHighWater, 'registrar ni sube ni baja el high-water').toBe(1)
     expect(nextAutoSpeakerLabel([], [], { highWater: store().speakerHighWater })).toBe('Hablante 2')
   })
 
   it('el epoch nuevo numera desde cero y no toca las filas restauradas', () => {
-    commitUserTurnRow({ text: 'uno', speakerName: 'Hablante 1', turnId: 4 })
-    commitUserTurnRow({ text: 'dos', speakerName: 'Hablante 2', turnId: 5 })
-    expect(store().speakerHighWater).toBe(2)
+    seed('uno', 'Hablante 1', 3)
+    seed('dos', 'Hablante 2', 4)
 
     const viejas = store().conversationHistory.map((e) => ({ ...e }))
+    expect(viejas.every((e) => Number(e.epoch) === 0), 'las filas nacieron en el epoch 0').toBe(true)
     store().resetConversationHistory()
     expect(store().conversationEpoch).toBe(1)
     expect(store().speakerHighWater).toBe(0)

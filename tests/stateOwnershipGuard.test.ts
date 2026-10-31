@@ -70,7 +70,7 @@ const rel = (f: string) => f.replace(/\\/g, '/').replace(`${SRC.replace(/\\/g, '
 const READ_TARGETS = [
     'src/core/games/gameUtils.ts',
     'src/core/games/loteria.ts',
-    'src/voice/conversation/pasivo.ts',
+    'src/voice/compose/conversationMotorProducto.js',
 ] as const;
 
 describe('un dato, un dueno — identificadores y afirmaciones', () => {
@@ -88,14 +88,14 @@ describe('un dato, un dueno — identificadores y afirmaciones', () => {
     });
 
     it('la fila del usuario decide por UN criterio (sin rama posicional)', () => {
-        // Corte 2026-10-26: conversationTurnRow.ts se retiró con la tubería vieja.
-        // El dueño de la fila de usuario es el módulo (pasivo.ts): identidad por
-        // turno (`filaPuedeSerDeEsteTurno`), sin relaciones difusas de frases ni
-        // rama posicional.
-        const row = read(join(ROOT, 'src/voice/conversation/pasivo.ts'));
+        // Corte 2026-10-30 (problema 6): el escritor pasivo (pasivo.ts) se retiró con
+        // la ruta doble. El ÚNICO escritor de la fila de usuario es el compositor del
+        // módulo (conversationMotorProducto.js): identidad por locutionId, sin gate
+        // por turno de la fila ni relaciones difusas de frases ni rama posicional.
+        const row = read(join(ROOT, 'src/voice/compose/conversationMotorProducto.js'));
         expect(row.includes('phrasesRelate')).toBe(false);
-        expect(/turnId\s*==\s*null/.test(row)).toBe(false);
-        expect(row.includes('filaPuedeSerDeEsteTurno')).toBe(true);
+        expect(/\.turnId\s*[=!]==?/.test(row)).toBe(false);
+        expect(row.includes('id: evento.fila.locutionId')).toBe(true);
     });
 
     it('ningun motor re-enumera el conjunto completo de afirmaciones', () => {
@@ -141,5 +141,12 @@ describe('propiedad - el detector no es decorativo', () => {
     it('lee los tokens de su dueno y no los re-enumera', () => {
         const tokens = bareAffirmationTokens("export const BARE_AFFIRMATION_FRAMES: readonly string[] = Object.freeze([\n    'si', 'dale',\n]);");
         expect(tokens).toEqual(['si', 'dale']);
+    });
+
+    it('detecta un gate por turno de fila y perdona la proyeccion y el proveedor', () => {
+        const gate = /\.turnId\s*[=!]==?/;
+        expect(gate.test('if (evento.fila.turnId === ultimo) return')).toBe(true);
+        expect(gate.test('turnId: evento.fila.turnId,')).toBe(false);
+        expect(gate.test("turnId: () => (typeof turnId === 'function' ? turnId() : null)")).toBe(false);
     });
 });

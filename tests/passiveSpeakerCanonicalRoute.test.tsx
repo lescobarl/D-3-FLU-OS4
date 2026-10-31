@@ -156,8 +156,7 @@ describe('modo pasivo — la decisión de hablante la toma el resolver del MÓDU
     // cadena de evidencia (vacía en la primera medida).
     expect(arg.muestras).toBe(audio)
     expect(arg.sampleRate).toBe(SR)
-    expect(arg.ultimoVozId).toBe('')
-    expect(arg.ultimoVector).toBeNull()
+    expect(arg.plantillas).toEqual([])
     expect(arg.contadorVoces).toBe(0)
     expect(r.speakerName).toBe(H1)
     expect(r.resolvedSpeakerName).toBe(H1)
@@ -176,8 +175,7 @@ describe('modo pasivo — la decisión de hablante la toma el resolver del MÓDU
     const segundo = await result.current.resolveSpeaker('sube el volumen', audioVoz(1), SR, 'FLU')
 
     const arg = argResolver(1)
-    expect(arg.ultimoVozId).toBe('voz-1')
-    expect(arg.ultimoVector).toEqual(VEC0)
+    expect(arg.plantillas).toEqual([{ vozId: 'voz-1', vector: VEC0, etiqueta: H1 }])
     // La continuidad NO abre voz nueva: el contador sigue en 1 (la 1ª medida
     // abrió la voz y solo una voz NUEVA lo incrementa).
     expect(arg.contadorVoces).toBe(1)
@@ -249,7 +247,7 @@ describe('modo pasivo — la decisión de hablante la toma el resolver del MÓDU
     h.resolver.mockResolvedValueOnce({ vozId: 'voz-2', hablante: H2, continuidad: false, evidencia: true, vector: VEC1 })
     const tercera = await result.current.resolveSpeaker('otra frase', audioVoz(1), SR, 'FLU')
     const arg = argResolver(2)
-    expect(arg.ultimoVozId).toBe('voz-1')
+    expect(arg.plantillas).toEqual([{ vozId: 'voz-1', vector: VEC0, etiqueta: H1 }])
     expect(arg.contadorVoces).toBe(1)
     expect(tercera.speakerName).toBe(H2)
   })

@@ -16,8 +16,10 @@
  * entrega evidencia externa: el módulo resuelve su propia medida.
  *
  * Frontera declarada (mandato 2026-10-26): solo utilidades puras del despacho.
- * Prohibido reimplementar aquí la escritura de filas, la identidad o los dueños
- * `commitUserTurnRow`/`renameVoiceRowsByKey`; viven en `../conversation`.
+ * Prohibido reimplementar aquí la escritura de filas, la identidad o el dueño
+ * `renameRowSpeakerName`; viven en `../conversation`. Este archivo es el ÚNICO
+ * consumidor de `row.committed`: el escritor pasivo retirado (2026-10-30,
+ * problema 6) era una ruta doble de la fila del usuario.
  */
 import { metaDeFilaConversacion } from '../../core/db/conversationRowMapping'
 import { logCaughtError } from '../../lib/caughtError.ts'
@@ -25,6 +27,8 @@ import { useIntegrationStore } from '../../store/integrationStore'
 import { crearMotorConversacionProducto, traeFinal } from '../conversation/index'
 import { resolveEchoContext } from '../lib/conversationDialogue.js'
 import { labelToSpeakerId } from '../lib/conversationRow.js'
+import { autoSpeakerIndexFromKey } from '../lib/speakerCore.js'
+import { voiceKeyFor } from '../lib/speakerDirectory.js'
 import { getLastCompletedSpeechAt } from '../lib/fluSpeech.js'
 import { getSessionRecordingStatus } from '../lib/sessionRecorder.js'
 
@@ -89,27 +93,39 @@ export function crearMotorConversacionHook({
     }
     if (evento.tipo !== 'row.committed') return
     useIntegrationStore.getState().setLastCommittedTranscript(evento.fila.texto)
-    // ESCRITOR SIMÉTRICO: si el escritor del turno (App, modo pasivo sin cierre VAD)
-    // ya escribió la fila del MISMO turno, el módulo NO la duplica: completa solo la
-    // frontera de abajo. La identidad de la fila es el TURNO, no el locutionId.
-    const turno = String(evento.fila.turnId ?? '').trim()
-    const yaEscritaPorElTurno = turno
-      ? [...(useIntegrationStore.getState().conversationHistory || [])]
-          .reverse()
-          .find((e) => e?.role === 'user' && String(e.turnId ?? '').trim() === turno)
+    // ÚNICO escritor de la fila del usuario (mandato 2026-10-30, problema 6):
+    // el módulo commitea en AMBOS modos y aquí no se re-gatea por turno. El
+    // escritor pasivo de App y el dedupe simétrico quedaron retirados; el
+    // insert-only del módulo (cierre) ya garantiza una fila por locución y la
+    // identidad de la fila es el locutionId.
+    //
+    // TIMBRE (mandato del dueño 2026-10-11/13): la fila se liga a SU voz por la
+    // FIRMA medida por el módulo, no por la etiqueta — la misma voz da la misma
+    // clave aunque su etiqueta provisional cambie (`voiceKeyFor`, dueño único).
+    const firma = Array.isArray(evento.fila.firma) && evento.fila.firma.length
+      ? [...evento.fila.firma]
       : null
-    if (!yaEscritaPorElTurno) {
-      useIntegrationStore.getState().addConversationEntry({
-        id: evento.fila.locutionId,
-        role: 'user',
-        text: evento.fila.texto,
-        timestamp: evento.fila.updated_at,
-        speakerName: evento.fila.etiqueta,
-        speakerId: labelToSpeakerId(evento.fila.etiqueta),
-        sessionId: evento.fila.sessionId,
-        turnId: evento.fila.turnId,
-        meta: metaDeFilaConversacion(evento.fila, evento.fila.sessionId),
-      })
+    const clavePorTimbre = voiceKeyFor({
+      voiceId: labelToSpeakerId(evento.fila.etiqueta),
+      signature: firma,
+    })
+    useIntegrationStore.getState().addConversationEntry({
+      id: evento.fila.locutionId,
+      role: 'user',
+      text: evento.fila.texto,
+      timestamp: evento.fila.updated_at,
+      speakerName: evento.fila.etiqueta,
+      speakerId: clavePorTimbre,
+      signature: firma,
+      sessionId: evento.fila.sessionId,
+      turnId: evento.fila.turnId,
+      meta: metaDeFilaConversacion(evento.fila, evento.fila.sessionId),
+    })
+    // High-water de la sesión: la clave automática (`speaker_N`) lo sube por el
+    // raiser único del store; la próxima voz nueva numera sin reutilizar.
+    const indice = autoSpeakerIndexFromKey(clavePorTimbre)
+    if (indice != null && indice > 0) {
+      useIntegrationStore.getState().noteSpeakerHighWater(indice)
     }
     // Ni renombre de filas ni re-etiquetado: la etiqueta ya la resolvió el módulo
     // al cerrar y las filas anteriores no se reescriben (mandato 2026-10-26).

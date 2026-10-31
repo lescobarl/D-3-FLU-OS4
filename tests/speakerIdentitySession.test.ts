@@ -69,7 +69,8 @@ const vozB = Array.from({ length: 512 }, (_, i) => Math.cos(i * 0.37));
 // Corte 2026-10-26: `resolveConversationSpeaker` (speakerDiarization) se retiro con la
 // tuberia vieja. La identidad de la locucion la decide la REGLA DEL MODULO
 // (`decidirIdentidad`, dueno unico de ingesta/cierre/resolucion pasiva): misma voz =
-// coseno >= umbral contra el ULTIMO vector de la sesion. El primario NO participa.
+// coseno >= umbral contra la MEJOR plantilla de la sesion (mandato 2026-10-30: no
+// solo la ultima voz). El primario NO participa.
 const ids = (() => {
     let n = 0;
     return { next: () => `uuid-turno-${(n += 1)}` };
@@ -77,14 +78,12 @@ const ids = (() => {
 
 const decidirTurno = (
     vector: number[],
-    ultimoVozId: string,
-    ultimoVector: number[] | null,
+    plantillas: ReadonlyArray<{ vozId: string; vector: number[]; etiqueta: string }>,
     etiquetaNueva: string,
 ) =>
     decidirIdentidad({
         vector,
-        ultimoVozId,
-        ultimoVector,
+        plantillas,
         // Mismo umbral del adaptador del modulo (cosineContinuityThreshold); con el
         // MISMO vector el coseno es 1.0: continua con cualquier umbral real <= 1.
         umbral: 0.8,
@@ -105,14 +104,15 @@ describe('el hablante primario de la sesion conserva su nombre', () => {
         // es la TV (medido en la sesion del dueno), el nombre del onboarding no se le
         // estampa. En la regla viva el primario ni siquiera es una entrada: la fuente no
         // lo conoce (guard estructural).
-        const r1 = decidirTurno(vozA, '', null, 'Hablante 1');
+        const r1 = decidirTurno(vozA, [], 'Hablante 1');
         expect(r1).toMatchObject({ continuidad: false, hablante: 'Hablante 1' });
-        const r2 = decidirTurno(vozA, r1.vozId, vozA, 'Hablante 2');
-        const r3 = decidirTurno(vozA, r2.vozId, vozA, 'Hablante 3');
-        // Misma voz: continuidad con la anterior; la etiqueta la conserva el consumidor.
+        const plantillaA = [{ vozId: r1.vozId, vector: vozA, etiqueta: r1.hablante }];
+        const r2 = decidirTurno(vozA, plantillaA, 'Hablante 2');
+        const r3 = decidirTurno(vozA, plantillaA, 'Hablante 3');
+        // Misma voz: continuidad con su plantilla, que devuelve SU etiqueta.
         expect(r2.continuidad, 'la MISMA voz no abre etiqueta nueva').toBe(true);
         expect(r3.continuidad).toBe(true);
-        expect(r2.hablante, 'la continuidad hereda la etiqueta, no la reacuña').toBe('');
+        expect(r2.hablante, 'la continuidad devuelve la etiqueta de su plantilla').toBe('Hablante 1');
         expect([r1.hablante, r2.hablante, r3.hablante].every((h) => h !== 'Luis')).toBe(true);
         const regla = readFileSync(join(process.cwd(), 'src', 'voice', 'conversation', 'identidad.ts'), 'utf8');
         expect(regla.includes('sessionPrimary'), 'la regla del modulo no conoce el primario (no puede bautizar)').toBe(false);

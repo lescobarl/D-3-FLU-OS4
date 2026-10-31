@@ -7,6 +7,7 @@
  */
 import { crearReglasCierre } from './cierre.ts'
 import type { DatosApertura, ReglasCierre } from './cierre.ts'
+import type { IdentidadDecidida, PlantillaVoz } from './identidad.ts'
 import type {
   CausaCierre,
   ContarDescarte,
@@ -44,17 +45,23 @@ export type EstadoSesion = {
   /** Último tramo de audio medido: destina el final que llega tras el cierre. */
   ultimoTramoId: string
   ultimaEtiqueta: string
-  ultimaVozId: string
   cierreAsrPendiente: MotivoCierre | null
   descartes: DescarteConversacion[]
   filas: Map<string, Fila>
   nombresPorVoz: Map<string, string>
+  /** Plantillas de TODAS las voces medidas en la sesión (decisión B: efímeras). */
+  plantillasVoz: Map<string, PlantillaVoz>
+  /**
+   * Nombre del bautizo pendiente (problema 5, mandato 2026-10-30): el comando
+   * «ok flu soy X» llega con la locución ABIERTA, antes de que la medida de
+   * respaldo (al cerrar) resuelva la voz. `cierre.cerrarLocucion` lo aplica a
+   * la voz que cierre la locución del comando.
+   */
+  nombrePendiente: string
   /** PCM retenido de la locución abierta (tope en `configuracion`), para medir. */
   muestrasAbierta: Float32Array[]
   /** Muestras PCM entregadas a la ingesta en la sesión (Caso 5, sin tope). */
   totalMuestrasEntregadas: number
-  /** Vector de la última voz medida (continuidad entre locuciones). */
-  ultimoVectorVoz: number[] | null
   /** Voces nuevas contadas en la sesión (`Hablante N`). */
   contadorVoces: number
   /** ¿Hay una medida de voz en curso para la locución abierta? */
@@ -87,7 +94,7 @@ export type Sesion = Readonly<{
     causa: CausaCierre,
     final: boolean,
   ): Promise<void>
-  promoverSiCorresponde(tramoId: string, texto: string): Promise<boolean>
+  tramoYaCommiteado(tramoId: string): boolean
   reiniciar(sessionId: string, turno: string, idioma: IdiomaLocucion): void
 }>
 
@@ -110,19 +117,46 @@ export function crearEstadoSesion(idiomaInicial: IdiomaLocucion): EstadoSesion {
     silencioPendienteMs: 0,
     ultimoTramoId: '',
     ultimaEtiqueta: '',
-    ultimaVozId: '',
     cierreAsrPendiente: null,
     descartes: [],
     filas: new Map(),
     nombresPorVoz: new Map(),
+    plantillasVoz: new Map(),
+    nombrePendiente: '',
     muestrasAbierta: [],
     totalMuestrasEntregadas: 0,
-    ultimoVectorVoz: null,
     contadorVoces: 0,
     medidaVozEnCurso: false,
     medidoHastaFin: 0,
     oyentes: new Set(),
   }
+}
+
+/**
+ * Registra la medida de una voz en la sesión (dueño único; la usan `ingesta` y
+ * `cierre`). Una voz nueva acuña su plantilla (vector + etiqueta) y cuenta en
+ * `contadorVoces`; una voz ya plantillada refresca su vector (deriva dentro de
+ * la sesión) y conserva su etiqueta.
+ * @param estado Estado mutable de la sesión.
+ * @param vector Vector medido que sostiene la decisión.
+ * @param identidad Decisión de la regla de identidad.
+ */
+export function registrarMedidaVoz(
+  estado: Pick<EstadoSesion, 'plantillasVoz' | 'contadorVoces'>,
+  vector: readonly number[],
+  identidad: IdentidadDecidida,
+): void {
+  if (!identidad.continuidad) estado.contadorVoces += 1
+  const existente = estado.plantillasVoz.get(identidad.vozId)
+  if (existente) {
+    existente.vector = [...vector]
+    if (identidad.hablante) existente.etiqueta = identidad.hablante
+    return
+  }
+  estado.plantillasVoz.set(identidad.vozId, {
+    vector: [...vector],
+    etiqueta: identidad.hablante,
+  })
 }
 
 /**
@@ -253,15 +287,15 @@ export function crearSesion(
     estado.silencioPendienteMs = 0
     estado.ultimoTramoId = ''
     estado.ultimaEtiqueta = ''
-    estado.ultimaVozId = ''
     estado.cierreAsrPendiente = null
     estado.descartes = []
     estado.estadoAsr = 'idle'
     estado.motorAsr = null
     estado.nombresPorVoz.clear()
+    estado.plantillasVoz.clear()
+    estado.nombrePendiente = ''
     estado.muestrasAbierta = []
     estado.totalMuestrasEntregadas = 0
-    estado.ultimoVectorVoz = null
     estado.contadorVoces = 0
     estado.medidaVozEnCurso = false
     estado.medidoHastaFin = 0

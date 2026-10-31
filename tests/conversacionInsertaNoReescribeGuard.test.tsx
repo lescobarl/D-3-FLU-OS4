@@ -6,10 +6,11 @@
 // MEDIDO hoy: reutilizar la fila del turno reconstruia la conversacion entera
 // (`history.map(...)` + `batchLoadHistory`) en CADA emision (3.600 veces / 600 filas) y el texto
 // de una fila ya insertada se reescribia al "recomponer" un fragmento.
-// REGLA: (P1) el TEXTO de una fila se decide UNA vez (solo se COMPLETA una fila FRAGMENTO);
+// REGLA: (P1) el TEXTO de una fila se decide UNA vez, por INSERTS por la puerta del store
+//            (la misma que usa el unico escritor: el modulo, `row.committed`);
 //        (P2) la VOZ se actualiza DIRIGIDA e idempotente (una entrada, no el array);
 //        (P3) la fila se dibuja MEMOIZADA (un insert no redibuja las N filas).
-// Este guard mide CONDUCTA (store real) y TEXTO (el escritor de filas no reconstruye).
+// Este guard mide CONDUCTA (store real) y TEXTO (el unico escritor no reconstruye).
 // ============================================================
 import { readFileSync } from 'node:fs'
 import { describe, expect, it, vi } from 'vitest'
@@ -25,13 +26,13 @@ vi.mock('../src/voice/lib/conversationRow', async (importOriginal) => {
 })
 
 import { useIntegrationStore } from '../src/store/integrationStore'
-import { commitUserTurnRow } from '../src/voice/conversation'
 import { formatRowClock, resolveRowSpeakerLabel } from '../src/voice/lib/conversationRow'
 import { ConversationLog } from '../src/voice/components/ConversationLog'
 
-// Corte 2026-10-26: el escritor retirado (conversationTurnRow.ts) se sustituyo por el
-// del modulo nuevo (pasivo.ts); el guard de TEXTO lee el archivo VIVO.
-const ESCRITOR = 'src/voice/conversation/pasivo.ts'
+// Corte 2026-10-30: el escritor pasivo (pasivo.ts) se retiro; el UNICO escritor de la
+// fila del usuario es el modulo nuevo (`conversationMotorProducto.js`); el guard de
+// TEXTO lee el archivo VIVO del unico escritor.
+const ESCRITOR = 'src/voice/compose/conversationMotorProducto.js'
 
 /** El escritor de filas NO puede reconstruir la conversacion ni reescribir textos. */
 export function reconstruyeLaConversacion(fuente: string): string[] {
@@ -77,40 +78,17 @@ describe('P2 - la VOZ se actualiza DIRIGIDA e idempotente', () => {
   })
 })
 
-describe('P1 - el texto se decide UNA vez (inserts), solo se COMPLETA un fragmento', () => {
+describe('P1 - el texto se decide UNA vez (inserts por la puerta del store)', () => {
   it('dos turnos distintos: dos inserts y CERO reconstrucciones (espiando el store)', () => {
     useIntegrationStore.setState({ conversationHistory: [] })
     const espia = vi.spyOn(useIntegrationStore.getState(), 'batchLoadHistory')
-    commitUserTurnRow({ text: 'hola que tal', speakerName: 'Hablante 1', turnId: 1 })
-    commitUserTurnRow({ text: 'otra locucion distinta', speakerName: 'Hablante 1', turnId: 2 })
+    const store = useIntegrationStore.getState()
+    // Siembra por la ÚNICA puerta del store (la misma que usa el módulo al commitear).
+    store.addConversationEntry({ id: 'p1', role: 'user', text: 'hola que tal', speakerName: 'Hablante 1', turnId: 1, timestamp: 1 })
+    store.addConversationEntry({ id: 'p2', role: 'user', text: 'otra locucion distinta', speakerName: 'Hablante 1', turnId: 2, timestamp: 2 })
     expect(historial().map((e) => e.text), 'las dos locuciones entran como filas').toEqual(['hola que tal', 'otra locucion distinta'])
     expect(espia, 'ninguna fila se ha movido reconstruyendo la conversacion').not.toHaveBeenCalled()
     espia.mockRestore()
-  })
-
-  it('una emision mas corta (trozo) NO toca el texto ya insertado', () => {
-    useIntegrationStore.setState({ conversationHistory: [] })
-    commitUserTurnRow({ text: 'vamos a validar la transcripcion completa de la frase', speakerName: 'Hablante 1', turnId: 7 })
-    const textoAntes = historial()[0].text
-    commitUserTurnRow({ text: 'la transcripcion completa', speakerName: 'Hablante 1', turnId: 7, replaceLast: true })
-    expect(historial(), 'el trozo reutiliza la fila: no hay fila nueva').toHaveLength(1)
-    expect(historial()[0].text, 'y el texto mostrado NO se acorta').toBe(textoAntes)
-  })
-
-  it('completar un FRAGMENTO es la unica escritura de texto, y va dirigida a su fila', () => {
-    useIntegrationStore.setState({ conversationHistory: [] })
-    const vecina = { id: 'vecina', role: 'user' as const, text: 'vecina', speakerId: 'voz-2', timestamp: 9 }
-    useIntegrationStore.getState().addConversationEntry(vecina)
-    commitUserTurnRow({ text: 'hasta aqui llego la frase', speakerName: 'Hablante 1', turnId: 8 })
-    const id = historial()[1].id
-    const vecinaAntes = historial().find((e) => e.id === 'vecina')
-    // Una respuesta de FLU en medio: la fila queda ANTES del turno en curso (es el caso en el que
-    // el ASR reentrega la locucion completa de una fila ya escrita).
-    useIntegrationStore.getState().addConversationEntry({ id: 'flu1', role: 'flu', text: 'respuesta de FLU', timestamp: 10 })
-    // La emision nueva TRAE la locucion completa de la fila anterior (era un fragmento).
-    commitUserTurnRow({ text: 'hasta aqui llego la frase y siguio hablando un rato mas', speakerName: 'Hablante 1', turnId: 8, replaceLast: true })
-    expect(historial().find((e) => e.id === id)?.text, 'la fila completa su texto').toBe('hasta aqui llego la frase y siguio hablando un rato mas')
-    expect(historial().find((e) => e.id === 'vecina'), 'y ninguna otra fila se toca').toBe(vecinaAntes)
   })
 })
 

@@ -361,13 +361,10 @@ export function useFluVoiceAssistant({
   /** Motor CONVERSACIÓN del producto: única ruta de escritura de filas. */
   const motorConversacionRef = useRef(null)
   // ESTADO DE LA MEDIDA PASIVA (decisión A): el resolver del módulo es SIN estado;
-  // el hook conserva la cadena de evidencia entre turnos (voz anterior, vector y
-  // contador de voces nuevas). UNA medida por turno: identidad + firma del turno.
+  // el hook conserva las plantillas por voz y su tamaño cuenta las voces nuevas.
   const resolverPasivoRef = useRef(null)
   if (!resolverPasivoRef.current) resolverPasivoRef.current = crearResolucionPasivaProducto()
-  const ultimoVozIdRef = useRef('')
-  const ultimoVectorRef = useRef(null)
-  const contadorVocesRef = useRef(0)
+  const plantillasPasivasRef = useRef(new Map())
   /** Etiqueta resuelta por el MÓDULO al cerrar la última locución (`row.committed`). */
   const lastModuleLabelRef = useRef('')
   const languageRef = useRef(language)
@@ -1021,12 +1018,12 @@ export function useFluVoiceAssistant({
         }
       }
 
+      const plantillasPasivas = [...plantillasPasivasRef.current.values()]
       const resolucion = await resolverPasivoRef.current({
         muestras: audioSnapshot,
         sampleRate,
-        ultimoVozId: ultimoVozIdRef.current,
-        ultimoVector: ultimoVectorRef.current,
-        contadorVoces: contadorVocesRef.current,
+        plantillas: plantillasPasivas,
+        contadorVoces: plantillasPasivasRef.current.size,
       })
 
       if (!resolucion?.evidencia) {
@@ -1040,14 +1037,15 @@ export function useFluVoiceAssistant({
         }
       }
 
-      // Con evidencia: la cadena de la medida avanza y la etiqueta viene del
-      // resolver; la continuidad prefiere la voz ya resuelta de la sesión.
-      ultimoVozIdRef.current = resolucion.vozId
-      ultimoVectorRef.current = resolucion.vector
-      const resolvedSpeakerName = resolucion.continuidad
-        ? lastResolvedSpeakerRef.current || lastSpeakerRef.current || resolucion.hablante
-        : resolucion.hablante
-      if (!resolucion.continuidad) contadorVocesRef.current += 1
+      // Con evidencia la cadena avanza: la voz ya plantillada refresca su vector y CONSERVA su etiqueta (problema 4); la voz nueva acuña su plantilla.
+      const plantillaPrevia = plantillasPasivasRef.current.get(resolucion.vozId)
+      if (plantillaPrevia) {
+        if (resolucion.vector) plantillaPrevia.vector = resolucion.vector
+        if (resolucion.hablante) plantillaPrevia.etiqueta = resolucion.hablante
+      } else {
+        plantillasPasivasRef.current.set(resolucion.vozId, { vozId: resolucion.vozId, vector: resolucion.vector, etiqueta: resolucion.hablante })
+      }
+      const resolvedSpeakerName = resolucion.continuidad ? (resolucion.hablante || lastResolvedSpeakerRef.current || lastSpeakerRef.current) : resolucion.hablante
       const introducedName = resolveSpeakerNameFromUtterance(transcriptForIntro)
       const speakerAlias = introducedName && introducedName !== resolvedSpeakerName ? resolvedSpeakerName : null
 
@@ -1735,11 +1733,8 @@ export function useFluVoiceAssistant({
         resetVoiceDirectory() // el nombre por VOZ es de la sesion (como los clusters)
         lastSpeakerRef.current = FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker
         lastLoggedSpeakerRef.current = FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker
-        // La cadena de evidencia PASIVA también es de la sesión: una voz de la
-        // sesión anterior no debe continuar en la nueva.
-        ultimoVozIdRef.current = ''
-        ultimoVectorRef.current = null
-        contadorVocesRef.current = 0
+        // La cadena de evidencia PASIVA también es de la sesión.
+        plantillasPasivasRef.current.clear()
         lastResolvedSpeakerRef.current = ''
         lastModuleLabelRef.current = ''
         applySessionCommandToPrimary({ transcript: cleaned, sessionPrimarySpeakerRef })
@@ -2435,6 +2430,12 @@ export function useFluVoiceAssistant({
             phrase: phrase.slice(0, 60),
           })
           return false
+        }
+        // Problema 5: «ok flu soy X» bautiza la VOZ también en el motor (sus
+        // filas siguientes llevan el nombre); el registro sigue en su dueño.
+        if (plan.action.command === COMMAND_IDS.REGISTRAR_PARTICIPANTE) {
+          const nombreBautizo = resolveSpeakerNameFromUtterance(text)
+          if (nombreBautizo) motorConversacionRef.current?.registrarNombre?.(nombreBautizo)
         }
         await invoke(() => dispatchPassiveVoiceCommand(plan.action.command, plan.phrase))
         return true

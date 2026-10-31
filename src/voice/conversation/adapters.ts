@@ -39,21 +39,17 @@
  * decide el módulo (`resolverEtiqueta` / `pasivo.ts`); nada se reimplementa.
  */
 import { logCaughtError } from '../../lib/caughtError.ts'
-import { cleanForSpeech, normalizeForMatch } from '../../lib/textUtils.ts'
+import { normalizeForMatch } from '../../lib/textUtils.ts'
 import { splitTranscriptAtWakeWord } from '../api/audio.ts'
 import { FLU_CONFIG } from '../api/config.ts'
-import { speechWords, stripDiacritics } from '../lib/audioMath.js'
 import { getVadFrameMs } from '../lib/asr/asrConfig.js'
-import { labelToSpeakerId, normalizeRowSignature } from '../lib/conversationRow.js'
+import { labelToSpeakerId } from '../lib/conversationRow.js'
 import {
-  autoSpeakerIndexFromKey,
   autoSpeakerLabel,
   compareCosineSignatures,
-  getFallbackSpeaker,
   isAutoSpeakerLabel,
 } from '../lib/speakerCore.js'
-import { canonicalSpeakerName, isProperSpeakerName, pendingSpeakerLabel } from '../lib/speakerLabels.js'
-import { voiceKeyFor } from '../lib/speakerDirectory.js'
+import { canonicalSpeakerName } from '../lib/speakerLabels.js'
 import { embedAudioForDiarization } from '../lib/voiceIdWorkerClient.js'
 import { useIntegrationStore } from '../../store/integrationStore.ts'
 import { VOICE_DIARIZATION_DEFAULTS } from '../../core/config/sharedConfig.ts'
@@ -78,7 +74,6 @@ import type {
   CambiosFila,
   ConfigPort,
   EmbebedorPort,
-  EntradaCompromisoUsuario,
   Fila,
   FilaNueva,
   IdPort,
@@ -88,12 +83,11 @@ import type {
   PuertoVistaFilas,
   RegistroPort,
   RelojPort,
-  ResultadoCompromisoUsuario,
   UtilidadesFila,
   VadPort,
 } from './ports.ts'
-import { crearEscritorFilaUsuario, crearResolucionPasiva } from './pasivo.ts'
-import type { EscritorFilaUsuario, ResolucionPasivaHablante } from './pasivo.ts'
+import { crearResolucionPasiva, renombrarFilaDeUsuario } from './pasivo.ts'
+import type { ResolucionPasivaHablante } from './pasivo.ts'
 
 /** Reloj del sistema: la ÚNICA llamada a `Date.now()` del módulo, inyectada. */
 export function crearRelojSistema(): RelojPort {
@@ -391,98 +385,54 @@ export function crearAlmacenDexieProducto({
 }
 
 // ---------------------------------------------------------------------------
-// SUPERFICIE PASIVA — la fila del usuario en modo wake (sin conversación
-// activa) la escribe el MISMO módulo. El escritor de App (`conversationTurnRow`,
-// retirado) era un segundo dueño de esa decisión y quedó sustituido por
-// `pasivo.ts`; aquí solo se CABLES el producto: la vista (`useIntegrationStore`)
-// y las primitivas de los dueños vivos.
+// SUPERFICIE PASIVA — la fila del usuario la escribe el MISMO módulo en AMBOS
+// modos (un solo escritor; el escritor pasivo de App quedó RETIRADO 2026-10-30,
+// problema 6). Aquí solo se CABLES el producto: la vista (`useIntegrationStore`),
+// las primitivas de los dueños vivos y la resolución del hablante.
 // ---------------------------------------------------------------------------
 
 /**
  * Vista del producto por puerto: el historial de conversación del store.
  * El acceso es perezoso (`getState()` por llamada): la vista se lee en el
- * momento del compromiso, no al cargar el módulo.
+ * momento del uso, no al cargar el módulo. Tras el retiro del escritor solo
+ * quedan la LECTURA del historial y el renombre de una fila concreta.
  * @returns Puerto de la vista de filas sobre `useIntegrationStore`.
  */
 export function crearPuertoVistaFilasProducto(): PuertoVistaFilas {
   const vista = () => useIntegrationStore.getState()
   return {
     leerHistorial: () => vista().conversationHistory,
-    agregarEntrada: (entrada) => vista().addConversationEntry(entrada),
-    completarFragmento: (id, texto) => vista().completeEntryFragment(id, texto),
-    fijarAltavoz: (id, vozId, opciones) =>
-      vista().setEntrySpeaker(id, vozId, {
-        signature: opciones?.firma ? [...opciones.firma] : null,
-      }),
     fijarNombre: (id, nombre, opciones) =>
       vista().setEntrySpeakerName(id, nombre, opciones ? { resolved: opciones.resuelta } : undefined),
-    anotarHighWater: (indice) => vista().noteSpeakerHighWater(indice),
-    epoch: () => vista().conversationEpoch,
   }
 }
 
 /**
  * Utilidades de fila del producto: delegan en los dueños vivos del proyecto.
- * Ninguna regla se reimplementa en el módulo (una etiqueta, un sitio).
- * @returns Utilidades que consume el escritor pasivo.
+ * Ninguna regla se reimplementa en el módulo (una etiqueta, un sitio). Tras el
+ * retiro del escritor pasivo solo queda la CANONIZACIÓN (el renombre).
+ * @returns Utilidades que consume la superficie pasiva.
  */
 export function crearUtilidadesFilaProducto(): UtilidadesFila {
   return {
-    normalizar: (texto) => cleanForSpeech(texto),
-    nombrePropio: (nombre) => isProperSpeakerName(nombre),
     canonica: (nombre) => canonicalSpeakerName(nombre),
-    etiquetaPendiente: () => pendingSpeakerLabel(),
-    respaldoEtiqueta: () => getFallbackSpeaker(),
-    claveDeEtiqueta: (etiqueta) => labelToSpeakerId(etiqueta),
-    claveVoz: (datos) => voiceKeyFor({ voiceId: datos.voiceId, signature: datos.signature ? [...datos.signature] : null }),
-    indiceAltoDeClave: (clave) => autoSpeakerIndexFromKey(clave) ?? 0,
-    normalizarFirma: (firma) => normalizeRowSignature(firma ? [...firma] : null),
-    palabras: (texto) => speechWords(texto),
-    compactar: (texto) => stripDiacritics(cleanForSpeech(texto)).replace(/[^a-z0-9]+/g, ''),
   }
 }
 
-/** Escritor único de la fila del usuario en modo pasivo (se crea perezosamente). */
-let escritorFilaUsuario: EscritorFilaUsuario | null = null
-
 /**
- * Escritor de la fila del usuario del PRODUCTO (modo pasivo): UNA instancia
- * por proceso, con el estado de turno del factory (como el escritor retirado).
- * @returns El escritor único con `commitUserTurnRow` y `renameRowSpeakerName`.
- */
-export function crearEscritorFilaUsuarioProducto(): EscritorFilaUsuario {
-  if (!escritorFilaUsuario) {
-    escritorFilaUsuario = crearEscritorFilaUsuario({
-      vista: crearPuertoVistaFilasProducto(),
-      utilidades: crearUtilidadesFilaProducto(),
-      config: crearConfigFlu(),
-      id: crearIdUuid(),
-      reloj: crearRelojSistema(),
-      registro: crearRegistroCaughtError(),
-    })
-  }
-  return escritorFilaUsuario
-}
-
-/**
- * Compromete la fila del usuario del turno (modo pasivo) por el escritor único
- * del módulo. Es la MISMA puerta que la fachada publica: App la consume sin
- * saber dónde vive la decisión.
- * @param entrada Entrada del compromiso (texto, hablante, turno, evidencia).
- * @returns Id de la fila y la acción realizada.
- */
-export function commitUserTurnRow(entrada: EntradaCompromisoUsuario): ResultadoCompromisoUsuario {
-  return crearEscritorFilaUsuarioProducto().commitUserTurnRow(entrada)
-}
-
-/**
- * Corrige el nombre de UNA fila concreta de usuario por su id (migración).
+ * Corrige el nombre de UNA fila concreta de usuario por su id (migración de la
+ * fachada; consumidor vivo: `useParticipants`). El escritor pasivo quedó
+ * RETIRADO (2026-10-30, problema 6): la fila la escribe SOLO el módulo; esta
+ * función es la única corrección de rótulo que sobrevive.
  * @param rowId Id de la fila en la vista.
  * @param speakerName Nombre canónico que se fija.
  * @returns `true` si la fila existe y el nombre se fijó.
  */
 export function renameRowSpeakerName(rowId: string, speakerName: string): boolean {
-  return crearEscritorFilaUsuarioProducto().renameRowSpeakerName(rowId, speakerName)
+  return renombrarFilaDeUsuario(rowId, speakerName, {
+    vista: crearPuertoVistaFilasProducto(),
+    utilidades: crearUtilidadesFilaProducto(),
+  })
 }
 
 /**
@@ -499,5 +449,3 @@ export function crearResolucionPasivaProducto(): ResolucionPasivaHablante {
     registro: crearRegistroCaughtError(),
   })
 }
-
-export { escribeFilaDeUsuario } from './pasivo.ts'

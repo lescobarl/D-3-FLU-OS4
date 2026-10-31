@@ -33,12 +33,16 @@ const ids = (() => {
 
 // Corte 2026-10-26: `resolveConversationSpeaker` (speakerDiarization) se retiro con la
 // tuberia vieja. La identidad de la locucion la decide la regla del MODULO
-// (`decidirIdentidad`): misma voz = coseno >= umbral contra el ULTIMO vector.
-const decidirTurno = (vector: number[], ultimoVozId: string, ultimoVector: number[] | null, etiquetaNueva: string) =>
+// (`decidirIdentidad`): misma voz = coseno >= umbral contra la MEJOR plantilla
+// de la sesion (mandato 2026-10-30: no solo la ultima voz).
+const decidirTurno = (
+  vector: number[],
+  plantillas: ReadonlyArray<{ vozId: string; vector: number[]; etiqueta: string }>,
+  etiquetaNueva: string,
+) =>
   decidirIdentidad({
     vector,
-    ultimoVozId,
-    ultimoVector,
+    plantillas,
     umbral: 0.8,
     etiquetaNueva: () => etiquetaNueva,
     // El coseno es el REAL del dueño (speakerCore.compareCosineSignatures).
@@ -92,17 +96,21 @@ describe('A6 - una voz = un cluster (tope + fusion)', () => {
 
   it('N turnos de una voz => UNA sola voz de sesion (fijado con la regla real del modulo)', () => {
     // Corte 2026-10-26: el resolver viejo escribia los clusters por turno. La regla viva
-    // es decidirIdentidad: la MISMA voz continua contra el ultimo vector (cosenos ~1
+    // es decidirIdentidad: la MISMA voz casa su plantilla de sesion (cosenos ~1
     // entre turnos consecutivos) y la sesion conserva UNA identidad acunada.
-    let vozId = ''
-    let ultimoVector: number[] | null = null
+    const plantillas: Array<{ vozId: string; vector: number[]; etiqueta: string }> = []
     let acunadas = 0
     for (let turn = 0; turn < 8; turn += 1) {
       const vector = v(0.70 + turn * 0.002)
-      const r = decidirTurno(vector, vozId, ultimoVector, `Hablante ${turn + 1}`)
-      if (!r.continuidad) acunadas += 1
-      vozId = r.vozId
-      ultimoVector = vector
+      const r = decidirTurno(vector, plantillas, `Hablante ${turn + 1}`)
+      if (r.continuidad) {
+        // Refresco de la plantilla casada (como sesion.registrarMedidaVoz).
+        const previa = plantillas.find((p) => p.vozId === r.vozId)
+        if (previa) previa.vector = vector
+      } else {
+        acunadas += 1
+        plantillas.push({ vozId: r.vozId, vector, etiqueta: r.hablante })
+      }
     }
     expect(acunadas, 'una voz no se acuna una vez por turno').toBe(1)
   })
@@ -129,9 +137,13 @@ describe('REPRO del dueno 2026-10-11, CORREGIDO 2026-10-18: una medida que no ca
     // distinta; prohibido heredar por cercania, participante activo o ultimo hablante.
     // Corte 2026-10-26: la regla viva es decidirIdentidad: 0.5 no alcanza el umbral de
     // continuidad y la sesion acuna OTRA voz con SU etiqueta.
-    const primera = decidirTurno(v(1), '', null, 'Hablante 1')
+    const primera = decidirTurno(v(1), [], 'Hablante 1')
     expect(primera.hablante).toBe('Hablante 1')
-    const distinta = decidirTurno(v(0.5), primera.vozId, v(1), 'Hablante 2')
+    const distinta = decidirTurno(
+      v(0.5),
+      [{ vozId: primera.vozId, vector: v(1), etiqueta: primera.hablante }],
+      'Hablante 2',
+    )
     expect(distinta.continuidad, 'la voz distinta NO hereda la etiqueta del anterior').toBe(false)
     expect(distinta.hablante, 'una voz por identidad: la voz distinta tiene su etiqueta').toBe('Hablante 2')
     expect(distinta.vozId, 'la identidad de sesion es OTRA').not.toBe(primera.vozId)

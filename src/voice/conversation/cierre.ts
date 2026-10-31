@@ -1,14 +1,19 @@
 /**
- * CIERRE de la locución: apertura, revisión, etiqueta, fila y promoción.
+ * CIERRE de la locución: apertura, revisión, etiqueta, fila y descarte.
  *
  * Es la única puerta que escribe filas del módulo: aplica `decidirRevision`
- * (regla 3), `construirFila` (reglas 4–5) y `promoverFila`; nunca borra, nunca
- * muta la entrada. El estado lo posee la sesión, que lo entrega como contexto.
+ * (regla 3), `construirFila` (reglas 4–5) y las INSERTA por el almacén. Una fila
+ * commiteada es INMUTABLE (mandato del dueño 2026-10-30): no hay consolidación
+ * ni promoción; la reentrega de un turno ya commiteado se ignora (descarte
+ * contado) y una voz distinta medida inserta SU fila. El estado lo posee la
+ * sesión, que lo entrega como contexto.
  */
-import { construirFila, consolidarFilaDelTurno, fusionarVoz, promoverFila } from './fila.ts'
+import { construirFila, fusionarVoz } from './fila.ts'
 import type { CierreLocucion, VozEtiqueta } from './fila.ts'
 import { decidirRevision } from './revision.ts'
-import { decidirIdentidad } from './identidad.ts'
+import { decidirIdentidad, plantillasDe } from './identidad.ts'
+import type { PlantillaVoz } from './identidad.ts'
+import { registrarMedidaVoz } from './sesion.ts'
 import { concatenarMuestras } from './muestras.ts'
 import { logCaughtError } from '../../lib/caughtError.ts'
 import { recordSessionEvent } from '../api/sessionLog.ts'
@@ -39,12 +44,13 @@ export type EstadoCierre = {
   sessionId: string | null
   abierta: LocucionAbierta | null
   ultimaEtiqueta: string
-  ultimaVozId: string
   filas: Map<string, Fila>
   nombresPorVoz: Map<string, string>
+  plantillasVoz: Map<string, PlantillaVoz>
   muestrasAbierta: Float32Array[]
-  ultimoVectorVoz: number[] | null
   contadorVoces: number
+  /** Bautizo pendiente del comando «ok flu soy X» (problema 5). */
+  nombrePendiente: string
 }
 
 /** Servicios que la sesión entrega a las reglas de cierre. */
@@ -94,21 +100,24 @@ export type ReglasCierre = Readonly<{
     causa: CausaCierre,
     final: boolean,
   ): Promise<void>
-  promoverSiCorresponde(tramoId: string, texto: string): Promise<boolean>
+  tramoYaCommiteado(tramoId: string): boolean
 }>
 
 /**
- * Resuelve la evidencia de voz de una locución con el nombre registrado, si lo hay.
- * Es pura: la sesión aporta el mapa voz→nombre y la continuidad ya calculada.
+ * Resuelve la evidencia de voz de una locución con el nombre registrado y la
+ * plantilla de la sesión, si los hay. Es pura: la sesión aporta el mapa
+ * voz→nombre, las plantillas medidas y la continuidad ya calculada.
  * @param voz Evidencia de voz del tramo.
  * @param continuidadVoz Continuidad calculada por el módulo al abrir o al recibir la primera medida.
  * @param nombresPorVoz Nombres confirmados por voz en la sesión.
+ * @param plantillasVoz Plantillas de las voces medidas en la sesión.
  * @returns La voz resuelta que consume `resolverEtiqueta`.
  */
 export function resolverVoz(
   voz: EvidenciaVoz,
   continuidadVoz: boolean,
   nombresPorVoz: ReadonlyMap<string, string>,
+  plantillasVoz: ReadonlyMap<string, PlantillaVoz>,
 ): VozEtiqueta {
   const vozId = String(voz.vozId || '').trim()
   const registrado = vozId ? nombresPorVoz.get(vozId) : undefined
@@ -121,6 +130,9 @@ export function resolverVoz(
     // La continuidad la decide el MÓDULO (`abrirLocucion`/`aplicarRevision`):
     // la evidencia entrante no puede afirmar que otra voz continúa la anterior.
     continuidad: continuidadVoz,
+    // Etiqueta de la plantilla casada (problema 4): la voz que vuelve recupera
+    // SU etiqueta y no hereda la de la fila anterior (A→B→A devuelve la de A).
+    etiquetaVoz: vozId ? plantillasVoz.get(vozId)?.etiqueta || undefined : undefined,
   }
 }
 
@@ -165,10 +177,10 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
   /** Abre la única locución abierta; el llamador garantiza que no hay otra. */
   function abrirLocucion(datos: DatosApertura): void {
     const vozId = String(datos.voz.vozId || '').trim()
-    const continuidadVoz = vozId
-      ? vozId === estado.ultimaVozId
-      : Boolean(estado.ultimaEtiqueta)
-    if (vozId) estado.ultimaVozId = vozId
+    // MANDATO DEL DUEÑO (2026-10-30, problema 4): sin medida positiva NO hay
+    // continuidad. Una locución sin vozId no hereda la etiqueta anterior; solo
+    // una medida que casa con una plantilla de la sesión afirma continuidad.
+    const continuidadVoz = vozId ? estado.plantillasVoz.has(vozId) : false
     estado.muestrasAbierta = []
     // Caso 8: sin proveedor de turno, cada locución ES su turno (uuid propio);
     // un turnId solo agrupa lo que vino con el MISMO turno del llamador.
@@ -211,9 +223,9 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
     const vozId = String(voz.vozId || '').trim()
     let continuidadVoz = locucion.continuidadVoz
     if (vozId && !String(locucion.voz.vozId || '').trim()) {
-      continuidadVoz = vozId === estado.ultimaVozId
+      // Medida tardía: la continuidad la afirma una plantilla de la sesión.
+      continuidadVoz = estado.plantillasVoz.has(vozId)
     }
-    if (vozId) estado.ultimaVozId = vozId
     const siguiente: LocucionAbierta = {
       ...locucion,
       texto: decision.pintar ? decision.texto : locucion.texto,
@@ -256,17 +268,14 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
     if (!vector) return locucion.voz
     const identidad = decidirIdentidad({
       vector,
-      ultimoVozId: estado.ultimaVozId,
-      ultimoVector: estado.ultimoVectorVoz,
+      plantillas: plantillasDe(estado.plantillasVoz),
       umbral: config.umbralContinuidadVoz(),
       // Perezoso: la plantilla SOLO se resuelve si la voz es nueva (Caso 10).
       etiquetaNueva: () => config.etiquetaAnonima(estado.contadorVoces + 1),
       comparar: embebedor.comparar,
       id: id.uuid,
     })
-    if (!identidad.continuidad) estado.contadorVoces += 1
-    estado.ultimaVozId = identidad.vozId
-    estado.ultimoVectorVoz = [...vector]
+    registrarMedidaVoz(estado, vector, identidad)
     return {
       vozId: identidad.vozId,
       hablante: identidad.hablante,
@@ -276,9 +285,8 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
 
   /**
    * Fila commiteada del MISMO turno en la sesión (Caso 8: un turnId => una fila).
-   * Si el turno se partió por cambio de voz (Caso 1+3), la voz que cierra
-   * consolida SU fila: la de su etiqueta o, sin casar, la más reciente del
-   * turno (la última voz que habló); nunca la fila de otra voz.
+   * La usa la puerta INSERT-ONLY: si el turno ya commiteó, una locución que no
+   * aporta una voz distinta medida es reentrega y no se escribe.
    */
   function filaDelTurno(turno: string, etiqueta?: string): Fila | null {
     const id = String(turno || '').trim()
@@ -292,47 +300,6 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
       if (etiqueta && fila.etiqueta === etiqueta) return fila
     }
     return reciente
-  }
-
-  /**
-   * Consolida la locución que cierra en la fila commiteada de SU turno (Caso 8).
-   * Los cambios los decide `consolidarFilaDelTurno`; la fila se promueve por el
-   * almacén y el turno NUNCA queda con dos filas.
-   */
-  async function consolidarEnLaFilaDelTurno(
-    previa: Fila,
-    cierre: CierreLocucion,
-    motivo: MotivoCierre,
-    causa: CausaCierre,
-    tramo: TramoMuestreado,
-    medida: MedidaFinal,
-  ): Promise<boolean> {
-    const cambios = consolidarFilaDelTurno(previa, cierre)
-    emitir({
-      tipo: 'locution.closed',
-      sessionId: cierre.sessionId,
-      locutionId: cierre.locutionId,
-      tramo,
-      motivo,
-      causa,
-      medida,
-    })
-    const consolidada = cambios
-      ? await almacen.actualizar(previa.locutionId, cambios)
-      : previa
-    if (!consolidada) return false
-    estado.filas.set(consolidada.locutionId, consolidada)
-    estado.ultimaEtiqueta = consolidada.etiqueta
-    commitar(consolidada)
-    registro.registrar('conversacion.turno.consolidado', {
-      sessionId: cierre.sessionId,
-      turnId: cierre.turnId,
-      locutionId: previa.locutionId,
-      origen: cierre.locutionId,
-      texto: consolidada.texto,
-      provisional: consolidada.provisional,
-    })
-    return true
   }
 
   /**
@@ -376,9 +343,36 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
       rms: locucion.medidaMotor?.rms ?? medidaTramo.rms,
     }
     const vozMedida = await medirVozAlCerrar(locucion)
-    const vozCerrada = vozMedida === locucion.voz ? locucion.voz : fusionarVoz(locucion.voz, vozMedida)
+    let vozCerrada = vozMedida === locucion.voz ? locucion.voz : fusionarVoz(locucion.voz, vozMedida)
     const continuidadVoz =
       vozMedida === locucion.voz ? locucion.continuidadVoz : Boolean(vozMedida.continuidad)
+    // BAUTIZO PENDIENTE (problema 5, mandato 2026-10-30): el nombre del comando
+    // «ok flu soy X» llegó con la locución ABIERTA (la medida de respaldo aún no
+    // resuelve la voz). Se aplica a la voz que cierra ESTA locución: con vozId el
+    // nombre queda REGISTRADO para esa voz (sus filas siguientes lo llevan y la
+    // plantilla aprende el nombre); sin medida, solo marca la fila del comando.
+    if (estado.nombrePendiente) {
+      const vozIdCerrada = String(vozCerrada.vozId || '').trim()
+      if (vozIdCerrada) {
+        estado.nombresPorVoz.set(vozIdCerrada, estado.nombrePendiente)
+        const plantilla = estado.plantillasVoz.get(vozIdCerrada)
+        if (plantilla) plantilla.etiqueta = estado.nombrePendiente
+      }
+      vozCerrada = { ...vozCerrada, nombre: estado.nombrePendiente, nombreConfirmado: true }
+      estado.nombrePendiente = ''
+      registro.registrar('conversacion.nombre.aplicado', {
+        sessionId: sesion,
+        locutionId: locucion.locutionId,
+        vozId: vozIdCerrada || null,
+        nombre: vozCerrada.nombre,
+      })
+    }
+    // TIMBRE DE LA FILA (mandato del dueño 2026-10-11/13): la fila lleva la firma
+    // de SU voz — el vector de la plantilla de sesión, refrescado por la medida —
+    // para que la vista la ligue POR TIMBRE (`voiceKeyFor`), no por etiqueta. Sin
+    // medida (sin vozId) la fila no afirma timbre.
+    const vozIdFirma = String(vozCerrada.vozId || '').trim()
+    const firma = vozIdFirma ? estado.plantillasVoz.get(vozIdFirma)?.vector ?? null : null
     const cierre: CierreLocucion = {
       locutionId: locucion.locutionId,
       sessionId: sesion,
@@ -391,10 +385,11 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
       overlap: Boolean(locucion.voz.overlap),
       final,
       reason: motivo,
-      voz: resolverVoz(vozCerrada, continuidadVoz, estado.nombresPorVoz),
+      voz: resolverVoz(vozCerrada, continuidadVoz, estado.nombresPorVoz, estado.plantillasVoz),
       etiquetaAnterior: estado.ultimaEtiqueta || null,
       semillaEtiqueta: config.semillaEtiqueta(),
       esEtiquetaAnonima: config.esEtiquetaAnonima,
+      firma,
     }
     estado.abierta = null
     estado.muestrasAbierta = []
@@ -423,21 +418,46 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
       return
     }
 
-    // Caso 8: un turnId => UNA fila por sesión. Si el turno ya commiteó, esta
-    // locución consolida la fila existente (reemisión o continuación); nunca se
-    // inserta una segunda fila con el mismo turnId.
-    // Caso 1+3: una voz DISTINTA medida (continuidad false) NUNCA consolida en
-    // la fila de otra voz del turno — dos voces sin pausa son DOS filas.
-    const previaDelTurno = filaDelTurno(cierre.turnId, resultado.fila.etiqueta)
-    if (previaDelTurno && cierre.voz.continuidad) {
-      if (await consolidarEnLaFilaDelTurno(previaDelTurno, cierre, motivo, causa, tramo, medida)) {
-        return
-      }
+    // MANDATO DEL DUEÑO (2026-10-30, INSERT-ONLY): la fila se INSERTA una vez y
+    // NUNCA se actualiza. Si el turno ya commiteó y esta locución NO aporta una
+    // voz distinta medida, es reentrega/continuación: se ignora sin tocar la
+    // fila (descarte contado, nunca una segunda fila ni una actualización).
+    // Caso 1+3: una voz distinta medida (continuidad false) SÍ inserta SU fila
+    // — dos voces sin pausa son DOS filas del mismo turno.
+    const previaDelTurno = filaDelTurno(cierre.turnId)
+    const vozDistintaMedida =
+      String(vozCerrada.vozId || '').trim() !== '' && !continuidadVoz
+    if (previaDelTurno && !vozDistintaMedida) {
+      emitir({
+        tipo: 'locution.closed',
+        sessionId: sesion,
+        locutionId: locucion.locutionId,
+        tramo,
+        motivo,
+        causa,
+        medida,
+      })
+      contarDescarte('turnoYaEscrito', locucion.locutionId, tramo)
+      registro.registrar('conversacion.locucion.cerrada', {
+        sessionId: sesion,
+        locutionId: locucion.locutionId,
+        tramo,
+        motivo,
+        causa,
+        descarte: 'turnoYaEscrito',
+      })
+      return
     }
 
     const fila = await almacen.guardar(resultado.fila)
     estado.filas.set(fila.locutionId, fila)
     estado.ultimaEtiqueta = fila.etiqueta
+    // La plantilla de la voz aprende la etiqueta commiteada (nombre del bautizo).
+    const vozIdFila = String(vozCerrada.vozId || '').trim()
+    if (vozIdFila) {
+      const plantilla = estado.plantillasVoz.get(vozIdFila)
+      if (plantilla) plantilla.etiqueta = fila.etiqueta
+    }
     emitir({
       tipo: 'locution.closed',
       sessionId: sesion,
@@ -465,21 +485,10 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
     })
   }
 
-  /** Si el tramo ya se cerró, promueve su fila; nunca abre una segunda. */
-  async function promoverSiCorresponde(tramoId: string, texto: string): Promise<boolean> {
-    const previa = estado.filas.get(tramoId)
-    if (!previa) return false
-    const cambios = promoverFila(previa, texto)
-    if (cambios) {
-      const actualizada = await almacen.actualizar(tramoId, cambios)
-      if (actualizada) {
-        estado.filas.set(tramoId, actualizada)
-        estado.ultimaEtiqueta = actualizada.etiqueta
-        commitar(actualizada)
-      }
-    }
-    return true
+  /** ¿El tramo ya tiene su fila commiteada? La reentrega no la toca (insert-only). */
+  function tramoYaCommiteado(tramoId: string): boolean {
+    return estado.filas.has(tramoId)
   }
 
-  return { abrirLocucion, aplicarRevision, cerrarLocucion, promoverSiCorresponde }
+  return { abrirLocucion, aplicarRevision, cerrarLocucion, tramoYaCommiteado }
 }

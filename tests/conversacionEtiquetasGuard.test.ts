@@ -4,8 +4,11 @@
  *
  * Criterio del encargo: 1 ancla + 2 voces => exactamente 2 etiquetas; el
  * high-water (`Hablante N`) NO sube por reemisión, revisión ni duplicado; sin
- * vector se CONSERVA la última etiqueta (nunca se acuña por turno). Decisión B:
- * la fila NO lleva identidad persistente (ni vozId ni vector ni ancla).
+ * medida positiva NO hay continuidad (mandato 2026-10-30: cae a la semilla,
+ * nunca se acuña por turno). Decisión B: la fila NO lleva identidad persistente
+ * (ni vozId ni vector ni ancla); SÍ lleva su FIRMA — el timbre medido del turno —
+ * porque el vínculo fila↔voz es POR TIMBRE (mandato 2026-10-11/13): la firma es
+ * evidencia de la fila, no la identidad de la voz (que vive solo en la sesión).
  *
  * Se mide con el MÓDULO REAL y un embebedor falso de vectores deterministas:
  * la medida ocurre al cerrar (locución corta, sin medida temprana) y la
@@ -52,7 +55,17 @@ export function regionDelTipoFila(src: string): string {
 /** ¿La fila declara identidad persistente de voz? Prohibido (Decisión B). */
 export function filaConIdentidadPersistente(src: string): boolean {
   const region = regionDelTipoFila(src)
-  return /\b(?:vozId|vector|firma|ancla|embedding)\b/i.test(region)
+  return /\b(?:vozId|vector|ancla|embedding)\b/i.test(region)
+}
+
+/**
+ * ¿La fila declara su FIRMA? Obligatorio (mandato 2026-10-11/13): la firma es el
+ * timbre medido del turno — evidencia del vínculo fila↔voz por timbre —, NO la
+ * identidad persistente de la voz (Decisión B sigue intacta).
+ */
+export function filaLlevaFirma(src: string): boolean {
+  const region = regionDelTipoFila(src)
+  return /\bfirma\b/.test(region)
 }
 
 /** ¿El punto de llamada resuelve la plantilla de etiqueta de forma PEREZOSA? */
@@ -124,7 +137,9 @@ function crearEscenario(conEmbebedor: boolean): Escenario {
 }
 
 /** Locución completa: pausa de 900 ms (corta el tramo anterior), 1 s de voz,
- * revisiones del texto y final que cierra. Devuelve el `tramoId` de la locución. */
+ * revisiones del texto y final que marca; cierra SOLO por la puerta de abajo
+ * (5 s de silencio, mandato 2026-10-30: el final no cierra por contenido).
+ * Devuelve el `tramoId` de la locución. */
 async function locucion(
   escenario: Escenario,
   texto: string,
@@ -156,16 +171,17 @@ async function locucion(
   }
   const final: AsrIngestado = { tramoId, texto, final: true }
   await api.ingestAsr(final)
-  // Caso 7+6: el final marca, no cierra; el corte de 900 ms arranca EXACTAMENTE
-  // en el fin del tramo (candidato = fin: no lo extiende) y cierra por contenido.
+  // Mandato 2026-10-30: el final marca la frase completa pero NO cierra; la
+  // locución cierra SOLO por silencio (5 s sin texto ajeno) o cambio de voz.
+  const muestrasCierre = Math.round((SAMPLE_RATE * 5000) / 1000)
   await api.ingestAudio({
-    muestras: new Float32Array(14400),
+    muestras: new Float32Array(muestrasCierre),
     sampleRate: SAMPLE_RATE,
     inicio: cursor,
-    fin: cursor + 14400,
-    medida: SILENCIO(900),
+    fin: cursor + muestrasCierre,
+    medida: SILENCIO(5000),
   })
-  cursor += 14400
+  cursor += muestrasCierre
   return tramoId
 }
 
@@ -185,7 +201,9 @@ describe('Caso 10 — 1 ancla + 2 voces => exactamente 2 etiquetas (módulo real
       new Set(['Hablante 1', 'Hablante 2']),
     )
     expect(filas[0]!.evidencia).toBe('medida')
-    expect(filas[1]!.evidencia).toBe('continuidad')
+    // La 2ª de A casó SU plantilla: la etiqueta sale de la plantilla (medida),
+    // no de la continuidad con la fila anterior.
+    expect(filas[1]!.evidencia).toBe('medida')
     expect(filas[2]!.evidencia).toBe('medida')
     expect(Math.max(...escenario.peticionesEtiqueta, 0)).toBe(2)
   })
@@ -198,12 +216,14 @@ describe('Caso 10 — 1 ancla + 2 voces => exactamente 2 etiquetas (módulo real
     await locucion(escenario, 'uno extendido') // duplicado consecutivo de A: continuidad
     escenario.embebedor.ponerVoz(VOZ_B)
     const tramoB = await locucion(escenario, 'dos', ['d', 'do']) // voz B -> Hablante 2
-    // Reemisión del MISMO turno tras el cierre: promoción, no voz nueva.
+    // Reemisión del MISMO tramo tras el cierre: la reentrega se ignora
+    // (insert-only 2026-10-30, `tramoYaCommiteado` en texto.ts); la fila
+    // commiteada es inmutable y la reentrega NO acuña etiqueta nueva.
     await escenario.api.ingestAsr({ tramoId: tramoB, texto: 'dos mejorado', final: true })
 
     const filas = escenario.api.snapshot().filas
     expect(filas).toHaveLength(3)
-    expect(filas[2]!.texto).toBe('dos mejorado')
+    expect(filas[2]!.texto).toBe('dos')
     expect(new Set(filas.map((fila) => fila.etiqueta))).toEqual(
       new Set(['Hablante 1', 'Hablante 2']),
     )
@@ -211,19 +231,24 @@ describe('Caso 10 — 1 ancla + 2 voces => exactamente 2 etiquetas (módulo real
     expect(escenario.peticionesEtiqueta).toEqual([1, 2])
   })
 
-  it('la fila commiteada NO lleva identidad persistente (Decisión B)', async () => {
+  it('la fila commiteada NO lleva identidad persistente (Decisión B) pero SÍ su firma', async () => {
     const escenario = crearEscenario(true)
     await escenario.api.start()
     await locucion(escenario, 'frase')
     const fila = escenario.api.snapshot().filas[0]
     if (!fila) throw new Error('sin fila')
-    for (const clave of ['vozId', 'vector', 'firma', 'ancla']) {
+    // Decisión B: nada de identidad acústica persistente en la fila.
+    for (const clave of ['vozId', 'vector', 'ancla']) {
       expect(fila).not.toHaveProperty(clave)
     }
+    // Mandato 2026-10-11/13: la fila SÍ lleva su firma (el timbre medido del
+    // turno) — es la evidencia con la que la vista la liga a su voz por timbre.
+    expect(fila.firma).toEqual(VOZ_A)
     expect(Object.keys(fila).sort()).toEqual([
       'deleted',
       'etiqueta',
       'evidencia',
+      'firma',
       'idioma',
       'locutionId',
       'overlap',
@@ -239,7 +264,7 @@ describe('Caso 10 — 1 ancla + 2 voces => exactamente 2 etiquetas (módulo real
   })
 })
 
-describe('Caso 10 — sin vector se conserva la última etiqueta (no se acuña por turno)', () => {
+describe('Caso 10 — sin vector NO hay continuidad (mandato 2026-10-30): cae a la semilla, sin acuñar', () => {
   it('tres locuciones sin embebedor: una sola etiqueta y cero acuñaciones', async () => {
     const escenario = crearEscenario(false)
     await escenario.api.start()
@@ -250,15 +275,19 @@ describe('Caso 10 — sin vector se conserva la última etiqueta (no se acuña p
     expect(filas).toHaveLength(3)
     expect(new Set(filas.map((fila) => fila.etiqueta))).toEqual(new Set(['Hablante 1']))
     expect(filas[0]!.evidencia).toBe('semilla')
-    expect(filas[1]!.evidencia).toBe('continuidad')
-    expect(filas[2]!.evidencia).toBe('continuidad')
+    expect(filas[1]!.evidencia).toBe('semilla')
+    expect(filas[2]!.evidencia).toBe('semilla')
     expect(escenario.peticionesEtiqueta).toEqual([])
   })
 })
 
 describe('Caso 10 — la fila sin identidad persistente vive en el archivo real', () => {
-  it('el tipo Fila no declara vozId, vector, firma ni ancla', () => {
+  it('el tipo Fila no declara vozId, vector ni ancla (Decisión B)', () => {
     expect(filaConIdentidadPersistente(fuenteFila())).toBe(false)
+  })
+
+  it('el tipo Fila declara la firma (vínculo por timbre, mandato 2026-10-11/13)', () => {
+    expect(filaLlevaFirma(fuenteFila())).toBe(true)
   })
 })
 
@@ -278,13 +307,13 @@ describe('Caso 10 — la etiqueta nueva se resuelve SOLO para voz nueva (proveed
     }
     const continua = decidirIdentidad({
       ...base,
-      ultimoVozId: 'voz-a',
-      ultimoVector: VOZ_A,
+      plantillas: [{ vozId: 'voz-a', vector: VOZ_A, etiqueta: 'Hablante 1' }],
     })
     expect(continua.continuidad).toBe(true)
+    expect(continua.hablante, 'la continuidad devuelve la etiqueta de su plantilla').toBe('Hablante 1')
     expect(llamadas).toBe(0)
 
-    const nueva = decidirIdentidad({ ...base, ultimoVozId: '', ultimoVector: null })
+    const nueva = decidirIdentidad({ ...base, plantillas: [] })
     expect(nueva.continuidad).toBe(false)
     expect(nueva.hablante).toBe('Hablante 1')
     expect(llamadas).toBe(1)
@@ -309,6 +338,15 @@ describe('Caso 10 — el detector no es decorativo', () => {
   it('fila con vozId => rojo; fila sin identidad => verde', () => {
     expect(filaConIdentidadPersistente(filaInfractora)).toBe(true)
     expect(filaConIdentidadPersistente(filaSana)).toBe(false)
+  })
+
+  it('fila sin firma => rojo en el vínculo por timbre; con firma => verde', () => {
+    expect(filaLlevaFirma(filaSana)).toBe(false)
+    expect(filaLlevaFirma(filaInfractora)).toBe(false)
+    const filaConFirma =
+      'export type Fila = Readonly<{\n  locutionId: string\n  etiqueta: string\n  firma: readonly number[] | null\n  tramo: TramoMuestreado\n}>'
+    expect(filaLlevaFirma(filaConFirma)).toBe(true)
+    expect(filaConIdentidadPersistente(filaConFirma), 'la firma NO es identidad persistente').toBe(false)
   })
 
   it('plantilla ansiosa => rojo; proveedor perezoso => verde', () => {

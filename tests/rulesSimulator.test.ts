@@ -165,7 +165,7 @@ const REGLAS: Sitio[] = [
     { id: 3, modo: 'DELEGA', detalle: 'frase canonica unica (burbuja/bitacora/display)', guard: 'tests/voiceDisplaySingleSource.test.ts' },
     { id: 4, modo: 'DELEGA', detalle: 'wake word unica desde la config', guard: 'tests/wakeStripSingleGuard.test.ts' },
     { id: 5, modo: 'DELEGA', detalle: 'barra de busqueda = transcripcion sin wake', guard: 'tests/voiceSingleSourceGuard.test.ts' },
-    { id: 6, modo: 'DELEGA', detalle: 'la question de la IA sale de la misma frase', guard: 'tests/conversationTurnSingleRow.test.ts' },
+    { id: 6, modo: 'DELEGA', detalle: 'la question de la IA sale de la misma frase', guard: 'tests/voiceTurnCommitDerivation.test.ts' },
     { id: 7, modo: 'SIN_GUARD', detalle: 'TTS: un solo modulo encapsula speechSynthesis' },
     { id: 8, modo: 'SIN_GUARD', detalle: 'idioma: una fuente y un selector' },
     { id: 9, modo: 'DELEGA', detalle: 'ajustes de IA con un dueno (sin clave paralela)', guard: 'tests/storageKeysAliveGuard.test.ts' },
@@ -245,7 +245,7 @@ describe('simulador de reglas - escenarios ejercitados con entrada real', () => 
         // Contrato REAL de decidirRevision (regla 3 del modulo, guard propio en
         // conversacionRevision.test.ts): el tramo identifica la locucion; la
         // re-emision de la misma locucion no duplica (reutiliza su fila, cubierto
-        // en conversacionEtapa3UnaFilaPorTramo.test.ts).
+        // en conversacionUnaLocucionUnaFilaGuard.test.ts).
         expect(
             decidirRevision({
                 tramoAbierto: { id: 't1', texto: 'siguiente carta' },

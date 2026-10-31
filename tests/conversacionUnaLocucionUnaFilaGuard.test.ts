@@ -2,20 +2,20 @@
 /**
  * CASO 2 (UNA LOCUCIÓN = UNA FILA) — guard de comportamiento.
  *
- * Criterio del encargo: la reemisión se deduplica por `turnId+locutionId` o por
- * `turnId+ventana solapada`; SOLO se deduplica la reemisión acumulativa con
- * ventana solapada; dos turnos distintos con la misma frase son DOS filas.
+ * Criterio del encargo (insert-only, mandato del dueño 2026-10-30): la fila se
+ * identifica por el LOCUTION; el almacén (memoria y Dexie) hace UPSERT por
+ * `locutionId` — repetir la misma locución incrementa `revision`, nunca crea
+ * una segunda fila. La fila commiteada es INMUTABLE (sin consolidación ni
+ * promoción): dos turnos distintos con la misma frase son DOS filas.
  * `transcriptionDedupLoss` (invariante 14) sigue siendo el muro de la no-pérdida.
  *
  * Qué mide este guard (lo que NO miden los otros casos):
  *  - identidad por locución: el almacén (memoria y Dexie) hace UPSERT por
  *    `locutionId` — repetir la misma locución incrementa `revision`, nunca
  *    crea una segunda fila (la dedupe `turnId+locutionId`);
- *  - el borde SOLO: con ventana SOLAPADA y texto idéntico, un turno DISTINTO
- *    abre su fila — el solape solo deduplica DENTRO del turno (la dedupe
- *    `turnId+ventana solapada` no cruza turnos);
- *  - la consolidación dentro del turno (solape/continuación) la mide el guard
- *    del Caso 8 y no se duplica aquí.
+ *  - el borde SOLO: un turno DISTINTO con la misma frase y ventana solapada
+ *    abre su fila — cada locución es su fila (insert-only);
+ *  - la identidad de la fila es la LOCUCIÓN (clave UUID), sin criterio de texto.
  *
  * Se mide con el MÓDULO REAL y los almacenes REALES (memoria y Dexie sobre un
  * `DbLike` falso en memoria). Los detectores viven en el código real.
@@ -61,9 +61,9 @@ export function claveFilaEsLocucion(src: string): boolean {
   return /id: registro\.locutionId/.test(src) && /fluDb\.conversations\.put\(fila\)/.test(src)
 }
 
-/** ¿El criterio de reemisión es la VENTANA (mismo origen de audio), no el texto? */
-export function solapeDecideLaVentana(src: string): boolean {
-  return /nueva\.sampleRate === previa\.tramo\.sampleRate && nueva\.inicio < previa\.tramo\.fin/.test(src)
+/** ¿La identidad de la fila es la LOCUCIÓN (clave UUID), sin criterio de texto? */
+export function identidadDeFilaEsLocucion(src: string): boolean {
+  return /UUID_V4/.test(src) && !/\.texto\s*===/.test(src)
 }
 
 const VOZ = (): MedidaVad => ({ hayVoz: true, silencioMs: 0 })
@@ -78,6 +78,7 @@ const filaNueva = (locutionId: string, texto: string): FilaNueva => ({
   tramo: { inicio: 0, fin: SAMPLE_RATE, sampleRate: SAMPLE_RATE },
   etiqueta: 'Hablante 1',
   evidencia: 'semilla',
+  firma: null,
   idioma: 'es',
   overlap: false,
   provisional: false,
@@ -149,9 +150,10 @@ async function entregarAudio(
 }
 
 /**
- * Locución completa: pausa de 900 ms (corta el tramo anterior), 1 s de voz que
- * abre el tramo, texto del ASR con final y corte de 900 ms que cierra por
- * contenido (Caso 7+6). Devuelve la instantánea del bloque de voz.
+ * Locución completa: pausa de 900 ms (separa de la locución anterior), 1 s de voz
+ * que abre el tramo, texto del ASR con final y corte de `silenceCloseMs` (5000 ms)
+ * que cierra por silencio (la puerta de abajo, C1). Devuelve la instantánea del
+ * bloque de voz.
  */
 async function locucion(
   escenario: Escenario,
@@ -167,15 +169,15 @@ async function locucion(
   if (!abierta) throw new Error('el audio con voz no abrio locucion')
   const finTramo = abierta.tramo.fin
   await api.ingestAsr({ tramoId: abierta.locutionId, texto, final: true, turnId })
-  const muestrasCorte = Math.round((SAMPLE_RATE * 900) / 1000)
+  const muestrasCierre = Math.round((SAMPLE_RATE * 5000) / 1000)
   await api.ingestAudio({
-    muestras: new Float32Array(muestrasCorte),
+    muestras: new Float32Array(muestrasCierre),
     sampleRate: SAMPLE_RATE,
     inicio: finTramo,
-    fin: finTramo + muestrasCorte,
-    medida: SILENCIO(900),
+    fin: finTramo + muestrasCierre,
+    medida: SILENCIO(5000),
   })
-  cursor = Math.max(cursor, finTramo + muestrasCorte)
+  cursor = Math.max(cursor, finTramo + muestrasCierre)
   return conVoz
 }
 
@@ -277,8 +279,8 @@ describe('Caso 2 — los dueños viven en el archivo real', () => {
     expect(claveFilaEsLocucion(fuenteDe('src/core/db/conversationRowWriter.ts'))).toBe(true)
   })
 
-  it('el criterio de reemisión es la VENTANA del tramo, no el texto (fila.ts)', () => {
-    expect(solapeDecideLaVentana(fuenteDe('src/voice/conversation/fila.ts'))).toBe(true)
+  it('la identidad de la fila es la LOCUCIÓN (UUID), no el texto (fila.ts)', () => {
+    expect(identidadDeFilaEsLocucion(fuenteDe('src/voice/conversation/fila.ts'))).toBe(true)
   })
 })
 
@@ -307,11 +309,10 @@ describe('Caso 2 — PRUEBA DE DETECTOR (el detector no es decorativo)', () => {
     expect(claveFilaEsLocucion(sano)).toBe(true)
   })
 
-  it('un criterio de reemisión por texto => rojo; por ventana => verde', () => {
-    const porTexto = 'const mismoOrigen = nueva.texto === previa.texto'
-    expect(solapeDecideLaVentana(porTexto)).toBe(false)
-    const porVentana =
-      'const mismoOrigen = nueva.sampleRate === previa.tramo.sampleRate && nueva.inicio < previa.tramo.fin'
-    expect(solapeDecideLaVentana(porVentana)).toBe(true)
+  it('un criterio de reemisión por texto => rojo; por locución => verde', () => {
+    const porTexto = 'const misma = nueva.texto === previa.texto'
+    expect(identidadDeFilaEsLocucion(porTexto)).toBe(false)
+    const porLocucion = 'const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}/'
+    expect(identidadDeFilaEsLocucion(porLocucion)).toBe(true)
   })
 })

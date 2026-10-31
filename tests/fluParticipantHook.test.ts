@@ -203,15 +203,16 @@ describe('useFluParticipant — turno N con historial desacoplado (regresión OS
         expect(generateParticipantEvaluationMock).toHaveBeenCalledTimes(1);
     });
 
-    it('GUARD: un solo dueño del aviso; los DOS reportantes pasan turnId', () => {
+    it('GUARD: un solo dueño del aviso (el hook); el reportante pasivo de App se retiró', () => {
         const hookSrc = readFileSync('src/voice/hooks/useFluVoiceAssistant.js', 'utf8');
         const appSrc = readFileSync('src/App.tsx', 'utf8');
-        // El aviso existe UNA vez (dueño: el hook) y solo lo reportan los dos modos
-        // excluyentes: motor activo y escritor pasivo de App.
+        // Corte 2026-10-30 (problema 6, ruta doble): la fila la commitea el MÓDULO en
+        // AMBOS modos y el aviso de turno tiene UN dueño — el hook, sobre
+        // `row.committed`. El reportante pasivo de App se retiró con el escritor.
         expect(hookSrc).toContain('fluParticipantRef.current?.onTurnCommitted?.(fila?.turnId)');
-        expect(appSrc).toContain('fluParticipant.onTurnCommitted?.(turnIdFila)');
         const llamadas = (src: string) => (src.match(/\.onTurnCommitted\?\.\(/g) || []).length;
-        expect(llamadas(hookSrc) + llamadas(appSrc)).toBe(2);
+        expect(llamadas(hookSrc), 'el aviso vive SOLO en el hook').toBe(1);
+        expect(llamadas(appSrc), 'App ya no reporta turnos: ruta única').toBe(0);
     });
 });
 

@@ -123,8 +123,9 @@ async function entregarAudio(
 
 /**
  * Locución completa: pausa de 900 ms (corta el tramo anterior), 1 s de voz que
- * abre el tramo, texto del ASR con final y corte de 900 ms que cierra por
- * contenido (Caso 7+6). Devuelve la instantánea del bloque de voz.
+ * abre el tramo, texto del ASR con final y corte de 5 s de silencio que cierra
+ * por la puerta de abajo (mandato 2026-10-30: el final marca, no cierra).
+ * Devuelve la instantánea del bloque de voz.
  */
 async function locucion(
   escenario: Escenario,
@@ -139,15 +140,15 @@ async function locucion(
   if (!abierta) throw new Error('el audio con voz no abrio locucion')
   const finTramo = abierta.tramo.fin
   await api.ingestAsr({ tramoId: abierta.locutionId, texto, final: true, turnId })
-  const muestrasCorte = Math.round((SAMPLE_RATE * 900) / 1000)
+  const muestrasCierre = Math.round((SAMPLE_RATE * 5000) / 1000)
   await api.ingestAudio({
-    muestras: new Float32Array(muestrasCorte),
+    muestras: new Float32Array(muestrasCierre),
     sampleRate: SAMPLE_RATE,
     inicio: finTramo,
-    fin: finTramo + muestrasCorte,
-    medida: SILENCIO(900),
+    fin: finTramo + muestrasCierre,
+    medida: SILENCIO(5000),
   })
-  cursor = Math.max(cursor, finTramo + muestrasCorte)
+  cursor = Math.max(cursor, finTramo + muestrasCierre)
   return conVoz
 }
 

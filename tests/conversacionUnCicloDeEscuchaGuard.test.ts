@@ -14,7 +14,9 @@
  *  - el producto NO reinicia la sesión en cada `onstart` (corte de Chrome):
  *    `abrir()` con sesión activa vuelve sin tocar sesión ni turno — COMPORTAMIENTO
  *    con el motor real: dos `abrir()` con locuciones entre medio conservan el
- *    MISMO sessionId y la MISMA fila (nunca una sesión por reinicio).
+ *    MISMO sessionId y el MISMO turno (la segunda locución es reentrega del
+ *    turno commiteado: cierra contada como `turnoYaEscrito`, nunca una segunda
+ *    fila — insert-only, mandato 2026-10-30).
  */
 import 'fake-indexeddb/auto'
 import { readFileSync } from 'node:fs'
@@ -89,31 +91,32 @@ function eventoAsr(texto: string, final = false): EventoProducto {
   }
 }
 
-/** Evento de fila commiteada: la variante que este guard espera. */
-type EventoFilaCommiteada = Extract<EventoConversacion, { tipo: 'row.committed' }>
-
 /**
  * Locución del ciclo real de la escucha: 1 s de silencio + 1 s de voz + frase +
- * CORTE de 900 ms. El corte cierra la locución por contenido (Caso 7+6) y la
- * SESIÓN SIGUE ABIERTA — igual que el watchdog: onend → onstart nunca llama a
- * `cerrar` (eso es solo de stopListening). `base` corre los índices de muestra
- * para no reusar tramos entre locuciones.
+ * CORTE de 5 s de silencio (puerta de abajo, mandato 2026-10-30: el final marca
+ * pero NO cierra). La SESIÓN SIGUE ABIERTA — igual que el watchdog: onend →
+ * onstart nunca llama a `cerrar` (eso es solo de stopListening). `base` corre
+ * los índices de muestra para no reusar tramos entre locuciones; el siguiente
+ * tramo debe empezar tras el cierre (base + 32000 + 80000 muestras).
+ * `espera` elige el evento que confirma el cierre: `row.committed` (turno nuevo)
+ * o `locution.closed` (reentrega descartada, que no commitea).
  */
-async function locucionProducto(
+async function locucionProducto<T extends EventoConversacion['tipo'] = 'row.committed'>(
   motor: ReturnType<typeof crearMotorConversacionProducto>,
   texto: string,
   base: number,
-): Promise<EventoFilaCommiteada> {
+  espera: T = 'row.committed' as T,
+): Promise<Extract<EventoConversacion, { tipo: T }>> {
   for (let i = 0; i < 10; i += 1) motor.audio(silencio(100), SAMPLE_RATE, base + i * BLOQUE)
   for (let i = 0; i < 10; i += 1) motor.audio(tono(100), SAMPLE_RATE, base + 16000 + i * BLOQUE)
   await motor.evento(eventoAsr(texto, true))
-  const commit = new Promise<EventoFilaCommiteada>((resolver) => {
+  const cierre = new Promise<Extract<EventoConversacion, { tipo: T }>>((resolver) => {
     motor.suscribir((evento) => {
-      if (evento.tipo === 'row.committed') resolver(evento)
+      if (evento.tipo === espera) resolver(evento as Extract<EventoConversacion, { tipo: T }>)
     })
   })
-  motor.audio(silencio(900), SAMPLE_RATE, base + 32000)
-  return commit
+  motor.audio(silencio(5000), SAMPLE_RATE, base + 32000)
+  return cierre
 }
 
 beforeEach(async () => {
@@ -137,13 +140,20 @@ describe('Caso 13 — un ciclo de escucha no reinicia sesión ni turno (motor re
     expect(trasReinicio.sessionId).toBe(sessionIdVigente)
     expect(trasReinicio.activa).toBe(true)
 
-    // La conversación sigue: el turno es el MISMO y consolida la fila del turno.
-    const segundoCommit = await locucionProducto(motor, 'adios', 50000)
-    expect(segundoCommit.sessionId).toBe(sessionIdVigente)
-    expect(segundoCommit.fila.turnId).toBe('T-uno')
+    // La conversación sigue: el turno es el MISMO. La segunda locución del mismo
+    // turno es una REENTREGA (insert-only): cierra, se cuenta como descarte y NO
+    // inserta otra fila. base 120000: el cierre de 5 s anterior acaba en 112000.
+    const segundoCierre = await locucionProducto(motor, 'adios', 120000, 'locution.closed')
+    expect(segundoCierre.sessionId).toBe(sessionIdVigente)
     expect(primerCommit.fila.turnId).toBe('T-uno')
-    const filas = motor.instantanea().filas
+    const trasSegundo = motor.instantanea()
+    // El descarte es la prueba de que la reentrega cayó en el MISMO turno: solo
+    // se descarta `turnoYaEscrito` cuando el turnId coincide con la fila ya
+    // commiteada (el turno sobrevivió al reinicio de la escucha).
+    expect(trasSegundo.descartes.map((descarte) => descarte.motivo)).toEqual(['turnoYaEscrito'])
+    const filas = trasSegundo.filas
     expect(filas).toHaveLength(1)
+    expect(filas[0]!.turnId).toBe('T-uno')
     expect(new Set(filas.map((fila) => fila.sessionId))).toEqual(new Set([sessionIdVigente]))
     const persistidas = await fluDb.conversations.toArray()
     expect(persistidas).toHaveLength(1)

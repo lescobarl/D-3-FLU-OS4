@@ -33,6 +33,8 @@ export type RegistroConversacion = Readonly<{
   etiqueta: string
   /** Evidencia de la etiqueta. */
   evidencia: string
+  /** TIMBRE medido de la voz (null si no hubo medida): se persiste como `signature`. */
+  firma: readonly number[] | null
   /** Idioma de la locución. */
   idioma: string
   /** ¿Hubo solape de voces? */
@@ -80,6 +82,7 @@ export function registroDesdeFilaConversacion(
     sampleRate: canonica.sampleRate,
     etiqueta: canonica.etiqueta,
     evidencia: canonica.evidencia,
+    firma: fila.signature ?? null,
     idioma: canonica.idioma,
     overlap: canonica.overlap,
     provisional: canonica.provisional,
@@ -123,6 +126,9 @@ export async function escribirRegistroConversacion(
     text: registro.texto,
     speakerId: String(contexto.speakerId || SPEAKER_ID_POR_DEFECTO),
     speakerName: String(contexto.speakerName ?? registro.etiqueta),
+    // TIMBRE medido de la fila (mandato 2026-10-11/13): persiste como `signature`
+    // para que la restauración conserve el vínculo fila↔voz por timbre.
+    signature: registro.firma ? [...registro.firma] : null,
     timestamp: Number.isFinite(marca) ? marca : Date.now(),
     sessionId: registro.sessionId,
     participantId: contexto.participantId,

@@ -35,6 +35,7 @@ const REGISTRO_MODULO: RegistroConversacion = {
   sampleRate: 16_000,
   etiqueta: 'Hablante 1',
   evidencia: 'semilla',
+  firma: null,
   idioma: 'es',
   overlap: false,
   provisional: false,

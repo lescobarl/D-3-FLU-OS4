@@ -14,9 +14,10 @@
  *    fuera de ahí, así un commit sin traza es imposible por construcción;
  *  - la traza lleva turnId, hablante y longitud del texto y sale por el sink
  *    único `recordSessionEvent`, sin consola;
- *  - COMPORTAMIENTO con el módulo real: cada fila commiteada (nueva,
- *    consolidada y promovida) deja SU traza emparejada — mismas turnId,
- *    hablante y longitud — y un descarte no deja traza (no es commit).
+ *  - COMPORTAMIENTO con el módulo real: cada fila commiteada deja SU traza
+ *    emparejada — mismas turnId, hablante y longitud — y un descarte no deja
+ *    traza (no es commit). La fila commiteada es INMUTABLE (mandato 2026-10-30):
+ *    cada locución es su fila y cada una deja su traza.
  */
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -149,9 +150,9 @@ async function entregarAudio(
 }
 
 /**
- * Locución completa: pausa de 900 ms (corta el tramo anterior), 1 s de voz que
- * abre el tramo, texto del ASR con final y corte de 900 ms que cierra por
- * contenido (Caso 7+6).
+ * Locución completa: pausa de 900 ms (separa de la locución anterior), 1 s de voz
+ * que abre el tramo, texto del ASR con final y corte de `silenceCloseMs` (5000 ms)
+ * que cierra por silencio (la puerta de abajo, C1).
  */
 async function locucion(
   escenario: Escenario,
@@ -166,15 +167,15 @@ async function locucion(
   if (!abierta) throw new Error('el audio con voz no abrio locucion')
   const finTramo = abierta.tramo.fin
   await api.ingestAsr({ tramoId: abierta.locutionId, texto, final: true, turnId })
-  const muestrasCorte = Math.round((SAMPLE_RATE * 900) / 1000)
+  const muestrasCierre = Math.round((SAMPLE_RATE * 5000) / 1000)
   await api.ingestAudio({
-    muestras: new Float32Array(muestrasCorte),
+    muestras: new Float32Array(muestrasCierre),
     sampleRate: SAMPLE_RATE,
     inicio: finTramo,
-    fin: finTramo + muestrasCorte,
-    medida: SILENCIO(900),
+    fin: finTramo + muestrasCierre,
+    medida: SILENCIO(5000),
   })
-  cursor = Math.max(cursor, finTramo + muestrasCorte)
+  cursor = Math.max(cursor, finTramo + muestrasCierre)
 }
 
 /** Trazas de fila registradas por el sink (solo las del commit). */
@@ -209,19 +210,20 @@ describe('Caso 12 — cada commit deja su traza (módulo real, sink espiado)', (
     expect(datos.longitud).toBe(texto.length)
   })
 
-  it('consolidación y promoción también trazan: cada commit con SU traza emparejada', async () => {
+  it('cada commit deja SU traza emparejada (dos turnos, dos filas)', async () => {
     const escenario = crearEscenario()
     await escenario.api.start({ turnId: 'T5' })
     await locucion(escenario, 'ok flu pon una alarma', 'T5', undefined)
-    // Mismo turno: la segunda locución consolida la fila del turno (Caso 8).
-    await locucion(escenario, 'con el doctor', 'T5', 'T5')
+    // Turno DISTINTO: la segunda locución es OTRA fila (insert-only por turno;
+    // la reemisión del MISMO turno se descarta como `turnoYaEscrito`, Caso 8).
+    await locucion(escenario, 'con el doctor', 'T6', 'T6')
 
     const commits = escenario.eventos
       .filter((evento) => evento.tipo === 'row.committed')
       .map((evento) => (evento.tipo === 'row.committed' ? evento.fila : null))
       .filter((fila) => fila !== null)
     const trazas = trazasDeCommit()
-    expect(commits.length).toBeGreaterThanOrEqual(2)
+    expect(commits, 'una fila por turno').toHaveLength(2)
     // Un commit sin traza es ROJO: mismo número de trazas que de commits, y cada
     // traza empareja turnId, hablante y longitud con SU fila commiteada.
     expect(trazas).toHaveLength(commits.length)

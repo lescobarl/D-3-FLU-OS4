@@ -586,10 +586,12 @@ export const useIntegrationStore = create<IntegrationStore>()(
             addUserMessage: (text: string, speakerName?: string) => {
                 const sentiment = detectSentiment(text);
                 const emotion = sentimentToEmotion(sentiment);
-                // UN DUENO de la fila del usuario: `commitUserTurnRow` (el unico sitio que
-                // escribe la conversacion, App.tsx:1328). Antes este metodo TAMBIEN concatenaba
-                // la entrada en `conversationHistory`: la MISMA fila escrita dos veces, con otras
-                // reglas de hablante y sin la sonda de diagnostico. Aqui queda lo suyo:
+                // UN DUENO de la fila del usuario: el MODULO de conversacion
+                // (`row.committed` -> `addConversationEntry`, unico escritor en AMBOS
+                // modos; el escritor pasivo de App se retiro 2026-10-30). Antes este
+                // metodo TAMBIEN concatenaba la entrada en `conversationHistory`: la
+                // MISMA fila escrita dos veces, con otras reglas de hablante y sin la
+                // sonda de diagnostico. Aqui queda lo suyo:
                 // sentimiento y estadisticas de la sesion.
                 set((current) => {
                     const stats = current.sessionStats;
@@ -636,7 +638,7 @@ addSystemMessage: (text: string) => {
                 // al ultimo turno del usuario (`response` / `meta.response`): el MISMO texto
                 // dos veces en el mismo store, tapado por un parche de PRESENTACION en
                 // ConversationLog.jsx. Mismo arreglo que ya tiene `addUserMessage` (duenio de
-                // la fila del usuario: `commitUserTurnRow`).
+                // la fila del usuario: el MODULO de conversacion).
                 set((current) => ({
                     conversationHistory: capConversationHistory([...current.conversationHistory, entry]),
                     sessionStats: {

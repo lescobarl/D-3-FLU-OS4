@@ -17,7 +17,7 @@ import type { IdiomaLocucion, MotivoCierre } from './ports.ts'
 /** Superficie del flujo de texto que compone la ingesta. */
 export type FlujoTexto = Readonly<{
   procesarResultadoAsr(entrada: AsrIngestado): Promise<void>
-  flushPendientes(motivo: MotivoCierre): Promise<void>
+  flushPendientes(): Promise<void>
   finalizarPendientes(motivo: MotivoCierre): Promise<void>
 }>
 
@@ -61,7 +61,7 @@ export function crearFlujoTexto({
   }
 
   /** Abre los pendientes en orden mientras haya tramo; no duplica ni mezcla. */
-  async function flushPendientes(motivo: MotivoCierre): Promise<void> {
+  async function flushPendientes(): Promise<void> {
     if (estado.abierta) return
     pendientes.expurgar()
     for (;;) {
@@ -80,15 +80,10 @@ export function crearFlujoTexto({
         finalLlego: siguiente.final,
         medidaMotor: siguiente.medida,
       })
-      if (!siguiente.final) break
-      // Caso 7+6: el final NO cierra por reloj: si el tramo de audio sigue
-      // abierto, la locución espera el corte (o el cierre por contenido).
-      const tramoAbierto = Boolean(
-        estado.tramoAudio && estado.tramoAudio.tramoId === siguiente.tramoId,
-      )
-      if (tramoAbierto) break
-      const locucion = estado.abierta
-      if (locucion) await sesion.cerrarLocucion(locucion, motivo, 'final', true)
+      // MANDATO DEL DUEÑO (2026-10-30): el final NO cierra por contenido. La
+      // locución abierta cierra por silencio (5 s), cambio de voz, texto ajeno
+      // o fin de sesión; aquí solo se abre y el bucle se detiene (una abierta).
+      break
     }
   }
 
@@ -148,13 +143,15 @@ export function crearFlujoTexto({
       })
     }
 
-    if (await sesion.promoverSiCorresponde(tramoId, texto)) return
+    // MANDATO DEL DUEÑO (2026-10-30, insert-only): la reentrega de un tramo ya
+    // commiteado se ignora — la fila es inmutable, no se promueve ni reescribe.
+    if (sesion.tramoYaCommiteado(tramoId)) return
 
     const voz = entrada.voz ?? {}
     const turnId = entrada.turnId ? String(entrada.turnId).trim() : estado.turnoActual
     if (entrada.turnId) estado.turnoActual = turnId
 
-    if (!estado.abierta) await flushPendientes('system')
+    if (!estado.abierta) await flushPendientes()
 
     const abierta = estado.abierta
     if (abierta && abierta.locutionId === tramoId) {
@@ -168,22 +165,17 @@ export function crearFlujoTexto({
             fin: abierta.fin,
             sampleRate: abierta.sampleRate,
           }))
-      const completa = sesion.aplicarRevision(
+      // MANDATO DEL DUEÑO (2026-10-30): el final MARCA la frase completa pero NO
+      // cierra: la puerta de cierre es la frontera de abajo (silencio 5 s, cambio
+      // de voz, texto ajeno o fin de sesión). Sin cierres ansiosos, la fila sale
+      // UNA vez con la frase completa, no palabras cortas por cada final.
+      sesion.aplicarRevision(
         abierta,
         texto,
         finalValido,
         voz,
         finalValido ? entrada.medida : undefined,
       )
-      const tramoAbierto = Boolean(
-        estado.tramoAudio && estado.tramoAudio.tramoId === tramoId,
-      )
-      if (completa && !tramoAbierto) {
-        const locucion = estado.abierta
-        if (locucion) await sesion.cerrarLocucion(locucion, 'system', 'final', true)
-        await flushPendientes('system')
-        return
-      }
       const frontera = decidirFrontera({
         medida: estado.ultimaMedida,
         textoAjeno: false,
@@ -192,7 +184,7 @@ export function crearFlujoTexto({
       if (frontera.cerrar) {
         const locucion = estado.abierta
         if (locucion) await sesion.cerrarLocucion(locucion, 'system', 'silencio', locucion.final)
-        await flushPendientes('system')
+        await flushPendientes()
       }
       return
     }
@@ -210,7 +202,7 @@ export function crearFlujoTexto({
       if (frontera.cerrar) {
         const locucion = estado.abierta
         if (locucion) await sesion.cerrarLocucion(locucion, 'system', 'frontera', locucion.final)
-        await flushPendientes('system')
+        await flushPendientes()
       }
       return
     }
@@ -230,18 +222,8 @@ export function crearFlujoTexto({
       finalLlego: Boolean(entrada.final),
       medidaMotor: entrada.medida,
     })
-    if (entrada.final) {
-      // Caso 7+6: con el tramo de audio abierto el final NO cierra por reloj;
-      // espera el corte (ingesta) que cierra por contenido.
-      const tramoAbierto = Boolean(
-        estado.tramoAudio && estado.tramoAudio.tramoId === tramoId,
-      )
-      if (!tramoAbierto) {
-        const locucion = estado.abierta
-        if (locucion) await sesion.cerrarLocucion(locucion, 'system', 'final', true)
-        await flushPendientes('system')
-      }
-    }
+    // MANDATO DEL DUEÑO (2026-10-30): el final MARCA la frase completa pero NO
+    // cierra; la locución abierta espera la frontera (silencio, voz, ajeno, fin).
   }
 
   return { procesarResultadoAsr, flushPendientes, finalizarPendientes }

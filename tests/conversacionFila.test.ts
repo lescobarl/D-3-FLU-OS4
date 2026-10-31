@@ -3,14 +3,15 @@
  * REGLAS 4 Y 5 — una fila por locución cerrada y etiqueta sin `?`.
  *
  * Cada caso falla si se quita la rama que mide: tramo válido, texto no vacío,
- * prioridad de etiqueta, UUIDv4, provisional/promoción y borrado lógico.
+ * prioridad de etiqueta, UUIDv4, provisional y borrado lógico. La fila
+ * commiteada es INMUTABLE (mandato 2026-10-30): no hay promoción ni
+ * consolidación; el final marca la frase completa ANTES del insert.
  */
 import { describe, expect, it } from 'vitest'
 import { isAutoSpeakerLabel } from '../src/voice/lib/speakerCore.js'
 import { crearAlmacenMemoria } from '../src/voice/conversation/adapters'
 import {
   construirFila,
-  promoverFila,
   resolverEtiqueta,
 } from '../src/voice/conversation/fila'
 import type {
@@ -19,7 +20,6 @@ import type {
   ResultadoFila,
   VozEtiqueta,
 } from '../src/voice/conversation/fila'
-import type { Fila } from '../src/voice/conversation/ports'
 
 const LOC = '123e4567-e89b-42d3-a456-426614174000'
 
@@ -56,24 +56,7 @@ const cierre = (extra: Partial<CierreLocucion> = {}): CierreLocucion => ({
   etiquetaAnterior: null,
   semillaEtiqueta: 'Hablante 1',
   esEtiquetaAnonima: isAutoSpeakerLabel,
-  ...extra,
-})
-
-const filaPersistida = (texto: string, extra: Partial<Fila> = {}): Fila => ({
-  locutionId: LOC,
-  sessionId: 's1',
-  turnId: 't1',
-  texto,
-  tramo: { inicio: 0, fin: 16000, sampleRate: 16000 },
-  etiqueta: 'Hablante 1',
-  evidencia: 'semilla',
-  idioma: 'es',
-  overlap: false,
-  provisional: true,
-  reason: 'user',
-  revision: 1,
-  updated_at: 1000,
-  deleted: false,
+  firma: null,
   ...extra,
 })
 
@@ -95,6 +78,20 @@ describe('regla 5 — prioridad de la etiqueta', () => {
         entradaEtiqueta({
           voz: { nombre: 'Ana', nombreConfirmado: false, hablante: 'Hablante 2' },
           anterior: 'Luis',
+        }),
+      ),
+    ).toEqual({ etiqueta: 'Hablante 2', evidencia: 'medida' })
+  })
+
+  it('la etiqueta de la plantilla casada (etiquetaVoz) gana a la continuidad y al hablante entrante', () => {
+    // Problema 4 (2026-10-30): A→B→A recupera la etiqueta de A. La medida casó
+    // la plantilla 'Hablante 2' de la sesión: ni la anterior 'Hablante 3' ni el
+    // hablante crudo 'Hablante 9' la pisan.
+    expect(
+      resolverEtiqueta(
+        entradaEtiqueta({
+          voz: { hablante: 'Hablante 9', continuidad: true, etiquetaVoz: 'Hablante 2' },
+          anterior: 'Hablante 3',
         }),
       ),
     ).toEqual({ etiqueta: 'Hablante 2', evidencia: 'medida' })
@@ -153,6 +150,7 @@ describe('regla 4 — tramo válido y texto producen una fila', () => {
         tramo: { inicio: 0, fin: 16000, sampleRate: 16000 },
         etiqueta: 'Hablante 1',
         evidencia: 'semilla',
+        firma: null,
         idioma: 'es',
         overlap: false,
         provisional: true,
@@ -209,35 +207,5 @@ describe('regla 4 — tramo válido y texto producen una fila', () => {
     expect(guardada).toMatchObject({ revision: 1, updated_at: 1000, deleted: false })
     const repetida = await almacen.guardar(resultado.fila)
     expect(repetida.revision).toBe(2)
-  })
-})
-
-describe('promoción — el final del mismo tramo actualiza sin perder palabras', () => {
-  it('un final más largo extiende el texto y quita provisional', () => {
-    expect(promoverFila(filaPersistida('hola mundo'), 'hola mundo entero')).toEqual({
-      texto: 'hola mundo entero',
-      provisional: false,
-    })
-  })
-
-  it('un final que pierde palabras conserva el texto y quita provisional', () => {
-    expect(promoverFila(filaPersistida('hola mundo entero'), 'hola mundo')).toEqual({
-      texto: 'hola mundo entero',
-      provisional: false,
-    })
-  })
-
-  it('una fila ya promovida con el mismo texto no se reescribe', () => {
-    expect(promoverFila(filaPersistida('hola', { provisional: false }), 'hola')).toBeNull()
-  })
-
-  it('una fila ya promovida sí acepta un final más largo', () => {
-    expect(
-      promoverFila(filaPersistida('hola', { provisional: false }), 'hola mundo'),
-    ).toEqual({ texto: 'hola mundo', provisional: false })
-  })
-
-  it('una fila borrada lógicamente no se promueve', () => {
-    expect(promoverFila(filaPersistida('hola', { deleted: true }), 'hola mundo')).toBeNull()
   })
 })

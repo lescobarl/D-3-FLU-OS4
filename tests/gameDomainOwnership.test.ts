@@ -39,7 +39,6 @@ import {
     getActiveGameSession,
 } from '../src/core/games/gameSessionStore';
 import { esEcoDeTts } from '../src/voice/conversation';
-import { commitUserTurnRow } from '../src/voice/conversation';
 import { unavailableGameMessage } from '../src/app/gameActions';
 import { useIntegrationStore } from '../src/store/integrationStore';
 import type { GameSession } from '../src/core/games/types';
@@ -224,31 +223,34 @@ describe('5. el eco de la COLA del TTS no abre turno de persona', () => {
     });
 });
 
-describe('6. una locucion = una fila (reemision que crece)', () => {
+describe('6. la fila del usuario: el store NO re-gatea por turno (el dueño del dedupe es el módulo)', () => {
     const userRows = () => useIntegrationStore.getState().conversationHistory.filter((r) => r.role === 'user');
+    let seedId = 0;
+    /** Inserta por la ÚNICA puerta del store (la misma que usa el módulo). */
+    const seed = (texto: string, turnId: number) => {
+        useIntegrationStore.getState().addConversationEntry({
+            id: `seed-${++seedId}`,
+            role: 'user',
+            text: texto,
+            timestamp: Date.now(),
+            turnId,
+        });
+    };
     beforeEach(() => useIntegrationStore.getState().resetConversationHistory());
 
-    test('la reemision de 18:12:06 no abre una segunda fila', () => {
-        commitUserTurnRow({ text: 'Okay Flow empiezas', turnId: 1 });
-        commitUserTurnRow({ text: 'Okay Flow empiezas Okay Flow empieza tu', turnId: 1 });
-        // La reemision NO abre fila nueva y NO reescribe el texto ya insertado: la
-        // conversacion solo se INSERTA (spec del dueno 2026-10-12).
-        expect(userRows()).toHaveLength(1);
-        expect(userRows()[0].text, 'append-only: la fila insertada no se reescribe').toBe('Okay Flow empiezas');
+    test('dos inserts del MISMO turno quedan DOS filas: append-only en el store', () => {
+        // Corte 2026-10-30 (problema 6): el dedupe por turnId que hacía el escritor
+        // pasivo se retiró CON el escritor. Consolidar la reemisión en UNA fila es
+        // responsabilidad del MÓDULO (guards conversacionTurnIdUnico/conversacionFila);
+        // si alguien re-gatea aquí vuelve la ruta doble y este test cae.
+        seed('Okay Flow empiezas', 1);
+        seed('Okay Flow empiezas Okay Flow empieza tu', 1);
+        expect(userRows()).toHaveLength(2);
     });
 
-    test('la reemision de 18:12:34 (eco + frase) no abre una segunda fila', () => {
-        commitUserTurnRow({ text: 'o prefieres que te cuente algo mas esta', turnId: 2 });
-        commitUserTurnRow({
-            text: 'o prefieres que te cuente algo mas esta Okay flu estabamos jugando Adivina quien',
-            turnId: 2,
-        });
-        expect(userRows()).toHaveLength(1);
-    });
-
-    test('una locucion DISTINTA (turno distinto) si es otra fila', () => {
-        commitUserTurnRow({ text: 'Okay Flow empiezas', turnId: 3 });
-        commitUserTurnRow({ text: 'Okay Flow pon la alarma', turnId: 4 });
+    test('locuciones de turnos DISTINTOS son filas distintas', () => {
+        seed('Okay Flow empiezas', 3);
+        seed('Okay Flow pon la alarma', 4);
         expect(userRows()).toHaveLength(2);
     });
 });

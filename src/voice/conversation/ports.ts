@@ -51,6 +51,13 @@ export type Fila = Readonly<{
   etiqueta: string
   /** Evidencia de la etiqueta. */
   evidencia: EvidenciaEtiqueta
+  /**
+   * TIMBRE medido de la voz de la fila (null si no hubo medida): la vista liga
+   * la fila a su voz POR TIMBRE (`voiceKeyFor`), no por etiqueta — la misma voz
+   * da la misma clave aunque su etiqueta provisional cambie (mandato del dueño
+   * 2026-10-11/13). Es evidencia inmutable: no existe en `CambiosFila`.
+   */
+  firma: readonly number[] | null
   /** Idioma de la locución. */
   idioma: IdiomaLocucion
   /** ¿Hubo solape de voces? Se declara, no se adivina. */
@@ -305,16 +312,17 @@ export const CONVERSACION_CONFIG: ConfiguracionConversacion = Object.freeze({
 // ---------------------------------------------------------------------------
 // SUPERFICIE PASIVA del módulo (modo wake sin conversación activa).
 //
-// La fila del usuario en modo pasivo la escribe el MISMO módulo (un solo
-// escritor de la fila del usuario; el segundo escritor de App se retiró). La
-// lógica pura vive en `pasivo.ts`; la vista del producto y las utilidades de
-// etiquetado llegan por estos puertos desde `adapters.ts`.
+// La fila del usuario la escribe el MISMO módulo (`row.committed`) en AMBOS
+// modos (un solo escritor; el segundo escritor de App se retiró, 2026-10-30).
+// La superficie pasiva solo RESUELVE el hablante (`pasivo.ts`) y RENOMBRA una
+// fila concreta por su id; la vista del producto y las utilidades de etiquetado
+// llegan por estos puertos desde `adapters.ts`.
 // ---------------------------------------------------------------------------
 
 /** Sentimiento declarado de la locución (lo calcula quien la captura). */
 export type SentimientoLocucion = 'positive' | 'negative' | 'neutral' | 'question'
 
-/** Fila de usuario en la VISTA del producto (lo que el escritor pasivo lee). */
+/** Fila de usuario en la VISTA del producto (lo que la superficie pasiva lee). */
 export type FilaVistaUsuario = Readonly<{
   id: string
   role: string
@@ -332,102 +340,26 @@ export type FilaVistaUsuario = Readonly<{
   sentiment?: SentimientoLocucion
 }>
 
-/** Entrada que el escritor pasivo agrega a la vista del producto. */
-export type NuevaEntradaVista = Readonly<{
-  id: string
-  role: 'user'
-  epoch: number
-  text: string
-  speakerId: string
-  speakerName?: string
-  speakerPending?: boolean
-  turnId?: number | string
-  turnWindow?: { inicio: number; fin: number } | null
-  timestamp: number
-  sentiment: SentimientoLocucion
-  signature: number[] | null
-}>
-
-/** Entrada del compromiso de una fila de usuario en modo pasivo. */
-export type EntradaCompromisoUsuario = Readonly<{
-  /** Frase canónica de la locución (con wake word, tal como se muestra). */
-  text: string
-  /** Hablante resuelto por el que llama (puede llegar solo en el commit final). */
-  speakerName?: string
-  /** El que llama DECLARA que el nombre viene de una ventana de AUDIO medida. */
-  evidenciaAcustica?: boolean
-  /** Firma de la voz del turno (clave de la voz en la vista). */
-  signature?: readonly number[] | null
-  /** Epoch de la fila; por defecto el vigente de la vista. */
-  epoch?: number
-  /** Sentimiento de la locución; por defecto `neutral`. */
-  sentiment?: SentimientoLocucion
-  /** Marca de tiempo inyectable; por defecto el reloj del producto. */
-  timestamp?: number
-  /** La emisión cruda crece: reutiliza la fila del turno en lugar de agregar. */
-  replaceLast?: boolean
-  /** Identidad del turno (obligatoria): único criterio de reutilización. */
-  turnId: number | string | null
-  /** Ventana de audio del turno: dato informativo, nunca identidad. */
-  turnWindow?: { inicio: number; fin: number } | null
-}>
-
-/** Acción del compromiso sobre la fila del usuario. */
-export type AccionCompromisoUsuario = 'replaced' | 'reused' | 'added' | 'skipped'
-
-/** Resultado del compromiso: id de la fila y qué se hizo con ella. */
-export type ResultadoCompromisoUsuario = Readonly<{
-  id: string | null
-  action: AccionCompromisoUsuario
-}>
-
-/** Vista del producto (historial de conversación): el escritor pasivo lee y escribe aquí. */
+/**
+ * Vista del producto (historial de conversación). Tras el retiro del escritor
+ * pasivo (2026-10-30) la superficie pasiva solo LEE el historial y FIJA el
+ * nombre de una fila concreta: los métodos de escritura de filas quedaron
+ * retirados con el escritor (la fila la escribe el módulo).
+ */
 export interface PuertoVistaFilas {
   /** Historial visible, del más antiguo al más reciente. */
   leerHistorial(): readonly FilaVistaUsuario[]
-  /** Agrega una entrada de usuario (una fila por locución). */
-  agregarEntrada(entrada: NuevaEntradaVista): void
-  /** Completa el texto de una fila existente (recorte posterior del ASR). */
-  completarFragmento(id: string, texto: string): void
-  /** Fija la CLAVE de la voz (`speakerId`) de una fila, con su firma si la hay. */
-  fijarAltavoz(id: string, vozId: string, opciones?: Readonly<{ firma?: readonly number[] | null }>): void
   /** Fija el NOMBRE visible de una fila (freeze: no se re-resuelve). */
   fijarNombre(id: string, nombre: string, opciones?: Readonly<{ resuelta?: boolean }>): void
-  /** Anota el high-water de la clave automática (nunca baja). */
-  anotarHighWater(indice: number): void
-  /** Epoch vigente de la conversación (dueño: la vista). */
-  epoch(): number
 }
 
 /**
- * Utilidades de fila que el escritor pasivo delega en los dueños únicos vivos
- * del proyecto (`audioMath`, `speakerCore`, `speakerLabels`, `speakerDirectory`,
- * `conversationRow`, `turnStream`). Ninguna se reimplementa en el módulo.
+ * Utilidades de fila que la superficie pasiva delega en los dueños únicos
+ * vivos del proyecto (`speakerLabels`). Ninguna se reimplementa en el módulo.
+ * Tras el retiro del escritor pasivo (2026-10-30) solo queda la canonización
+ * del renombre.
  */
 export interface UtilidadesFila {
-  /** Normaliza el texto de la locución (`cleanForSpeech`). */
-  normalizar(texto: string): string
-  /** ¿El nombre es un nombre propio (no una etiqueta automática)? */
-  nombrePropio(nombre: string): boolean
   /** Canoniza un nombre de hablante (`luis` → `Luis`). */
   canonica(nombre: string): string
-  /** Etiqueta PENDIENTE de la config («aún no se sabe»). */
-  etiquetaPendiente(): string
-  /** Etiqueta de respaldo de la config (solo cuando no hay etiqueta). */
-  respaldoEtiqueta(): string
-  /** Clave de hablante de una etiqueta (`labelToSpeakerId`). */
-  claveDeEtiqueta(etiqueta: string): string
-  /** Clave de la VOZ: el timbre cuando se midió (`voiceKeyFor`). */
-  claveVoz(datos: { voiceId: string; signature?: readonly number[] | null }): string
-  /** Índice alto de una clave automática (`autoSpeakerIndexFromKey`). */
-  indiceAltoDeClave(clave: string): number
-  /** Firma normalizada para la fila (`normalizeRowSignature`). */
-  normalizarFirma(firma?: readonly number[] | null): number[] | null
-  /** Palabras de un texto (`speechWords`): el módulo las usa para decidir. */
-  palabras(texto: string): string[]
-  /**
-   * Compacto de comparación (`compactForRevision`): sin acentos, minúsculas y
-   * solo alfanuméricos. El módulo lo usa para la revisión ASR de un fragmento.
-   */
-  compactar(texto: string): string
 }
