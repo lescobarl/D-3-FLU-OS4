@@ -63,54 +63,48 @@ function resolveMinuteWord(word: string | undefined): number | null {
     return resolveSpokenNumber(w);
 }
 
+/**
+ * Lleva una hora de 12 h a 24 h segun el meridiem o la parte del dia dichas.
+ * Dueño unico de la conversion: ningun resolver la repite.
+ */
+function hour24(h: number, meridiem: string | null, part: string | null = null): number {
+    if (meridiem === 'pm') return h < 12 ? h + 12 : h;
+    if (meridiem === 'am') return h === 12 ? 0 : h;
+    if (part === 'tarde') return h < 12 ? h + 12 : h;
+    if (part === 'noche') return h === 12 ? 0 : h < 12 ? h + 12 : h;
+    return h;
+}
+
+/** Hora de reloj en HH:MM (dueño unico del formato de salida). */
+function clockLabel(h: number, min: number): string {
+    return `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
+}
+
 function resolveEsTime(m: RegExpExecArray): string | null {
     // La hora llega en cifra o en palabra ("a las 7" / "a las siete").
     const base = resolveSpokenNumber(m[1]);
     if (base == null) return null;
-    let h = base;
     const min =
         (m[2] ? Number(m[2]) : m[3] ? Number(m[3]) : m[4] ? Number(m[4]) : null) ??
         resolveMinuteWord(m[5]) ??
         0;
     const part = m[6] ? m[6].toLowerCase() : null;
     const meridiem = m[7] ? m[7].toLowerCase().replace(/\./g, '').replace(/\s+/g, '') : null;
-    if (meridiem === 'pm') {
-        if (h < 12) h += 12;
-    } else if (meridiem === 'am') {
-        if (h === 12) h = 0;
-    } else if (part === 'tarde') {
-        if (h < 12) h += 12;
-    } else if (part === 'noche') {
-        if (h === 12) h = 0;
-        else if (h < 12) h += 12;
-    }
-    return `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
+    return clockLabel(hour24(base, meridiem, part), min);
 }
 
 function resolveEnTime(m: RegExpExecArray): string | null {
     const base = resolveSpokenNumber(m[1]);
     if (base == null) return null;
-    let h = base;
     const min = (m[2] ? Number(m[2]) : m[3] ? Number(m[3]) : null) ?? resolveSpokenNumber(m[4]) ?? 0;
     const meridiem = m[5] ? m[5].toLowerCase().replace(/\./g, '').replace(/\s+/g, '') : null;
-    if (meridiem === 'pm') {
-        if (h < 12) h += 12;
-    } else if (meridiem === 'am') {
-        if (h === 12) h = 0;
-    }
-    return `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
+    return clockLabel(hour24(base, meridiem), min);
 }
 
 function resolveBareMeridiemTime(m: RegExpExecArray): string {
-    let h = Number(m[1]);
     const min = m[2] ? Number(m[2]) : 0;
     const meridiem = m[3].toLowerCase().replace(/\./g, '').replace(/\s+/g, '');
-    if (meridiem === 'pm') {
-        if (h < 12) h += 12;
-    } else if (meridiem === 'am') {
-        if (h === 12) h = 0;
-    }
-    return `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
+    return clockLabel(hour24(Number(m[1]), meridiem), min);
 }
 
 export function pickTimeOfDay(text: string): PickedTimeOfDay {
