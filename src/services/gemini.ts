@@ -33,6 +33,7 @@ import type { FluAccion, FluContract, FluDiagnostics } from '../types/bridge';
 import { postGeminiContract } from './geminiContractClient';
 import { logCaughtError } from '../lib/caughtError';
 import { POLLINATIONS_DEFAULTS, resolveApiKey } from '../core/config/sharedConfig';
+import { buildPollinationsImageResult } from './pollinationsImage';
 import { fetchTextEngineResilient, REQUEST_TIMEOUT_PRESETS } from '../core/ai/httpClient';
 import { resolveConfiguredTemperature } from './aiTemperature';
 import { VISUAL_CONFIG } from '../voice/api/uiConfig';
@@ -366,19 +367,7 @@ Responde como ${botName}:`;
             }
 
             // Fallback: build URL directly (Pollinations is stateless)
-            const imageUrl = buildPollinationsUrl(prompt);
-            return {
-                image_url: imageUrl,
-                trace: {
-                    provider: POLLINATIONS_DEFAULTS.ID,
-                    model: POLLINATIONS_DEFAULTS.ID,
-                    kind: 'url',
-                    source: 'pollinations_ai',
-                    hasImage: true,
-                    prompt,
-                    language,
-                },
-            };
+            return buildPollinationsImageResult(prompt, language);
         } catch (error: unknown) {
             const detail = error && typeof error === 'object' && 'message' in error ? error.message : error;
             logCaughtError('[Gemini] Workspace image generation failed', detail || error);

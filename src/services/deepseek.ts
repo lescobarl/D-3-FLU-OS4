@@ -16,7 +16,8 @@
 // F1/F2/F3 en modo 100% local (isLocalTextEndpoint), sin requerir clave API.
 // ============================================================
 
-import { OPENROUTER_CONFIG, STORAGE_KEYS, TEXT_TEMPERATURE_DEFAULT, TEXT_TOKEN_LIMITS, buildPollinationsUrl, buildTextApiUrl, isLocalTextEndpoint, readStorage, resolveTextApiKey } from '../core/config/appConfig';import { POLLINATIONS_DEFAULTS, resolveApiKey } from '../core/config/sharedConfig';
+import { OPENROUTER_CONFIG, STORAGE_KEYS, TEXT_TEMPERATURE_DEFAULT, TEXT_TOKEN_LIMITS, buildTextApiUrl, isLocalTextEndpoint, readStorage, resolveTextApiKey } from '../core/config/appConfig';import { resolveApiKey } from '../core/config/sharedConfig';
+import { buildPollinationsImageResult } from './pollinationsImage';
 import { fetchTextEngine } from '../core/ai/httpClient';
 import { logCaughtError } from '../lib/caughtError';
 import type {
@@ -172,23 +173,8 @@ class DeepSeekService extends BaseAIService {
                 }),
             });
 
-            if (!response.ok) {
-                throw new Error(`Text API error: ${response.status} ${response.statusText}`);
-            }
-
-            const data = await response.json();
-            const responseText = data.choices[0]?.message?.content || '{}';
-
-            // Parse JSON response
-            let parsed;
-            try {
-                parsed = JSON.parse(responseText);
-            } catch (e) {
-                logCaughtError('src/services/deepseek.ts', e);
-                // Fallback if JSON parsing fails
-                parsed = {};
-            }
-            return parsed as Record<string, unknown>;
+            const parsed = await this.readJsonResponse<Record<string, unknown>>(response, {}, 'Text API error');
+            return parsed;
         } catch (error) {
             logCaughtError('src/services/deepseek.ts', error);
             throw error;
@@ -209,21 +195,64 @@ class DeepSeekService extends BaseAIService {
     /**
      * Respuesta contextual desde el motor de texto.
      */
+    /**
+     * Resuelve el preambulo de una llamada de texto (clave, temperatura, modelo,
+     * URL e idioma). Dueño unico de ese bloque en el adaptador.
+     * @param options Opciones de la peticion de IA.
+     * @returns Parametros ya resueltos para el fetch.
+     */
+    private resolveTextCall(options: AIRequestOptions): {
+        apiKey: string;
+        temperature: number | undefined;
+        model: string;
+        url: string;
+        isEnglish: boolean;
+    } {
+        const { apiKey } = resolveDeepSeekApiKey(options.apiKey);
+        if (!apiKey) {
+            throw new Error('API key de texto no configurada (OpenRouter/Gemini)');
+        }
+        return {
+            apiKey,
+            temperature: options.temperature ?? resolveConfiguredTemperature(),
+            model: readStorage(STORAGE_KEYS.TEXT_MODEL, OPENROUTER_CONFIG.MODEL),
+            url: buildTextApiUrl('/chat/completions'),
+            isEnglish: options.language === 'en',
+        };
+    }
+
+    /**
+     * Lee la respuesta del API de texto y parsea su JSON con un respaldo.
+     * Dueño unico del "chequeo ok + parseo + respaldo": las tres llamadas del
+     * adaptador (texto, evaluacion, vision) la consumen en vez de repetirla.
+     * @param response Respuesta cruda de fetch.
+     * @param fallback Objeto que se devuelve si el JSON no se puede parsear.
+     * @param errorLabel Prefijo del error cuando la respuesta no es ok.
+     * @returns JSON parseado o el respaldo.
+     */
+    private async readJsonResponse<T>(response: Response, fallback: T, errorLabel: string): Promise<T> {
+        if (!response.ok) {
+            throw new Error(`${errorLabel}: ${response.status} ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        const responseText = data.choices[0]?.message?.content || '{}';
+
+        try {
+            return JSON.parse(responseText) as T;
+        } catch (e) {
+            logCaughtError('src/services/deepseek.ts', e);
+            return fallback;
+        }
+    }
+
     protected async fetchResponse(
         options: AIRequestOptions,
         userText: string,
         botName: string,
         history: AIHistoryEntry[],
     ): Promise<string> {
-        const { apiKey } = resolveDeepSeekApiKey(options.apiKey);
-        if (!apiKey) {
-            throw new Error('API key de texto no configurada (OpenRouter/Gemini)');
-        }
-
-        const temperature = options.temperature ?? resolveConfiguredTemperature();
-        const model = readStorage(STORAGE_KEYS.TEXT_MODEL, OPENROUTER_CONFIG.MODEL);
-        const url = buildTextApiUrl('/chat/completions');
-        const isEnglish = options.language === 'en';
+        const { apiKey, temperature, model, url, isEnglish } = this.resolveTextCall(options);
 
         // Format conversation context
         const messages = [
@@ -276,15 +305,7 @@ class DeepSeekService extends BaseAIService {
         conversationLog: string,
         maxDraftChars: number = 200,
     ): Promise<AIParticipantEvaluation> {
-        const { apiKey } = resolveDeepSeekApiKey(options.apiKey);
-        if (!apiKey) {
-            throw new Error('API key de texto no configurada (OpenRouter/Gemini)');
-        }
-
-        const temperature = options.temperature ?? resolveConfiguredTemperature();
-        const model = readStorage(STORAGE_KEYS.TEXT_MODEL, OPENROUTER_CONFIG.MODEL);
-        const url = buildTextApiUrl('/chat/completions');
-        const isEnglish = options.language === 'en';
+        const { apiKey, temperature, model, url, isEnglish } = this.resolveTextCall(options);
 
         const systemPrompt = isEnglish
             ? `You are FLU, an educational assistant. Analyze the conversation and decide if FLU should intervene.
@@ -331,20 +352,11 @@ Formato de respuesta (JSON):
                 }),
             });
 
-            if (!response.ok) {
-                throw new Error(`Text API error: ${response.status} ${response.statusText}`);
-            }
-
-            const data = await response.json();
-            const responseText = data.choices[0]?.message?.content || '{}';
-
-            let parsed;
-            try {
-                parsed = JSON.parse(responseText);
-            } catch (e) {
-                logCaughtError('src/services/deepseek.ts', e);
-                parsed = { intervenir: false, motivo_corto: '', borrador_aportacion: '', confianza: 0.5 };
-            }
+            const parsed = await this.readJsonResponse(
+                response,
+                { intervenir: false, motivo_corto: '', borrador_aportacion: '', confianza: 0.5 },
+                'Text API error',
+            );
 
             return {
                 intervenir: Boolean(parsed.intervenir),
@@ -369,19 +381,7 @@ Formato de respuesta (JSON):
         void tipoStr;
         // Use Pollinations.ai directly (stateless, no API key needed)
         try {
-            const imageUrl = buildPollinationsUrl(prompt);
-            return {
-                image_url: imageUrl,
-                trace: {
-                    provider: POLLINATIONS_DEFAULTS.ID,
-                    model: POLLINATIONS_DEFAULTS.ID,
-                    kind: 'url',
-                    source: 'pollinations_ai',
-                    hasImage: true,
-                    prompt,
-                    language,
-                },
-            };
+            return buildPollinationsImageResult(prompt, language);
         } catch (error: unknown) {
             const detail = error && typeof error === 'object' && 'message' in error ? error.message : error;
             logCaughtError('[Text engine] Workspace image generation failed', detail || error);
@@ -453,26 +453,17 @@ Formato de respuesta (JSON):
                 }),
             });
 
-            if (!response.ok) {
-                throw new Error(`Vision API error (OpenRouter/Gemini): ${response.status} ${response.statusText}`);
-            }
-
-            const data = await response.json();
-            const responseText = data.choices[0]?.message?.content || '{}';
-
-            let parsed;
-            try {
-                parsed = JSON.parse(responseText);
-            } catch (e) {
-                logCaughtError('src/services/deepseek.ts', e);
-                parsed = {
+            const parsed = await this.readJsonResponse(
+                response,
+                {
                     materia: 'Desconocida',
                     problemas: [],
                     instrucciones: '',
                     nivel: 'Básico',
                     texto_extraido: ''
-                };
-            }
+                },
+                'Vision API error (OpenRouter/Gemini)',
+            );
 
             return {
                 materia: String(parsed.materia || 'Desconocida'),
