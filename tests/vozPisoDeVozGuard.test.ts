@@ -32,7 +32,13 @@ describe('P9.71 - el piso de voz es de VOZ, no de longitud de ventana', () => {
 
   it('FUENTE: el embebedor del producto mide la ventana de VOZ (nunca la captura cruda)', () => {
     const src = readFileSync(join(process.cwd(), 'src/voice/conversation/adapters.ts'), 'utf8')
-    expect(src, 'el piso de voz: la ventana la recorta el dueno unico').toMatch(/selectVoicedWindow\(muestras, \{ sampleRate \}\)/)
+    expect(src, 'la ventana la recorta el dueño único y declara si hay voz').toMatch(/ventanaConVoz\(muestras, \{ sampleRate \}\)/)
+    expect(src, 'sin voz no hay medida: no se embebe silencio').toMatch(
+      /if \(!hayVoz \|\| fin <= inicio\) \{[\s\S]*?return null/,
+    )
+    expect(src, 'el piso se cuenta en muestras VIVAS del proyecto').toMatch(
+      /countVoicedSamples\(ventanaVoz, \{ sampleRate \}\)[\s\S]*?getConversationMinVoicedSamples\(sampleRate\)[\s\S]*?vozMuestras < minimo/,
+    )
     expect(src, 'solo la ventana de VOZ se embebe').toMatch(/embedAudioForDiarization\(ventanaVoz, sampleRate\)/)
   })
 

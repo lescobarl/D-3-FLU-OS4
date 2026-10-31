@@ -123,4 +123,61 @@ describe('producto — el tramo lo resuelve el módulo al procesar', () => {
     expect(hola.meta?.conversacion?.tramo).toMatchObject({ inicio: 16000, fin: 32000 })
     expect(adios.meta?.conversacion?.tramo).toMatchObject({ inicio: 48000, fin: 64000 })
   })
+
+  it('un final ajeno SIN tramo vivo no se pega a la línea abierta', async () => {
+    const eventos: EventoConversacion[] = []
+    let turnoVigente = 'turno-uno'
+    const motor = crearMotorConversacionProducto({
+      idioma: 'es',
+      ultimoTextoDicho: () => '',
+      turnId: () => turnoVigente,
+    })
+    motor.suscribir((evento) => eventos.push(evento))
+    motor.abrir()
+
+    // 1 s de silencio + 1 s de voz: tramo T1 y locución abierta.
+    for (let i = 0; i < 10; i += 1) emitir(motor, silencio(100), i * BLOQUE)
+    for (let i = 0; i < 10; i += 1) emitir(motor, tono(100), 16000 + i * BLOQUE)
+    const primera = 'duplicados ahí está el escenario todo mal'
+    await motor.evento(eventoAsr(primera, true))
+
+    // 1 s de silencio: el VAD corta T1 (no hay tramo VIVO) pero la locución
+    // sigue abierta (aún no hay 5 s de silencio de cierre).
+    for (let i = 0; i < 10; i += 1) emitir(motor, silencio(100), 32000 + i * BLOQUE)
+
+    // Final de OTRA frase que el VAD no segmentó (medido en el playback
+    // 2026-10-31). Sin la guarda del límite, el trozo se pegaba a la línea y la
+    // fila commiteaba las DOS frases (93 caracteres donde iban 41).
+    await motor.evento(eventoAsr('voy a poner a la mujer hablar para que no digan que', true))
+
+    const filas = (): Array<Extract<EventoConversacion, { tipo: 'row.committed' }>> =>
+      eventos.filter(
+        (evento): evento is Extract<EventoConversacion, { tipo: 'row.committed' }> =>
+          evento.tipo === 'row.committed',
+      )
+    expect(filas()).toHaveLength(1)
+    expect(filas()[0].fila.texto).toBe(primera)
+    expect(motor.instantanea().locucionAbierta).toBeNull()
+    turnoVigente = 'turno-dos'
+
+    // La continuación de esa frase llega CON su tramo: es SU audio y su fila.
+    for (let i = 0; i < 10; i += 1) emitir(motor, tono(100), 48000 + i * BLOQUE)
+    const completa = 'voy a poner a la mujer hablar para que no digan que no hago mi tarea'
+    await motor.evento(eventoAsr(completa, true))
+    // 5 s de silencio: cierre por la puerta de abajo (silencio de cierre). La
+    // cadena de audio es asíncrona: el commit de la segunda fila se espera.
+    for (let i = 0; i < 55; i += 1) emitir(motor, silencio(100), 64000 + i * BLOQUE)
+    const segundaFila = new Promise<void>((resolver) => {
+      motor.suscribir((evento) => {
+        if (evento.tipo === 'row.committed' && evento.fila.texto === completa) resolver()
+      })
+    })
+    motor.cerrar('user')
+    await segundaFila
+
+    expect(filas().map((evento) => evento.fila.texto)).toEqual([primera, completa])
+    const persistidas = await fluDb.conversations.toArray()
+    expect(persistidas).toHaveLength(2)
+    expect(persistidas.some((fila) => fila.text.includes(primera) && fila.text !== primera)).toBe(false)
+  })
 })

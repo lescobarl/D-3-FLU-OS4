@@ -391,8 +391,11 @@ describe('producto — engine new escribe la fila desde el reconocedor real', ()
     expect(fila.id).toMatch(
       /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
     );
-    expect(fila.speakerName).toBe(FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker);
-    expect(fila.speakerName).not.toContain('?');
+    // Sin medida de voz (este escenario no entrega PCM) la fila NO inventa
+    // identidad: nace con la etiqueta TEMPORAL y la medida tardía la reemplaza
+    // (mandato del dueño 2026-10-30: «puedes poner un hablante temporal si aun
+    // no llega, y cuando lo tengas reemplazar»).
+    expect(fila.speakerName).toBe(FLU_CONFIG.voiceIdentity.labels.pendingSpeaker);
     // Caja = fila: la frase de la caja es exactamente la frase de la fila.
     expect(caja).toBe(fila.text);
     // UN `row.committed`: el módulo es el ÚNICO que compromete la frase.

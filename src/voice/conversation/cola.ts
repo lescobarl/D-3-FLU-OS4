@@ -6,6 +6,9 @@
  */
 import { fusionarVoz } from './fila.ts'
 import { decidirRevision } from './revision.ts'
+// Dueño único de «¿este texto continúa la frase?»: el retén no reimplementa la
+// comparación para decidir qué pendiente sin tramo adopta el tramo que llega.
+import { continuaLaFrase } from '../core/locucion.js'
 import type { ContarDescarte, EntradaPendiente } from './tipos.ts'
 import type { RelojPort } from './ports.ts'
 
@@ -60,20 +63,40 @@ export function crearPendientes({
 
   return {
     encolar: (entrada) => {
-      const indice = pendientes.findIndex((p) => p.tramoId === entrada.tramoId)
+      const tramoId = String(entrada.tramoId || '').trim()
+      // SIN TRAMO: el texto aún no tiene audio que lo sostenga. Se retiene hasta
+      // su ventana de huérfano y NO se fusiona con otro texto sin tramo: la
+      // regla de revisión exige un tramo y nada prueba que sean la misma frase.
+      if (!tramoId) {
+        pendientes = [...pendientes, entrada]
+        return
+      }
+      // El texto de un tramo CONTINÚA a un pendiente SIN tramo: es la MISMA
+      // frase y el tramo que llega ahora ES el suyo. El parcial sin audio cede
+      // al final que ya trae audio (medido 2026-10-31: tras una pausa que el
+      // VAD no segmentó, el final del enunciado llegó sin tramo y su
+      // continuación con tramo; sin adoptar, el parcial quedaba delante).
+      const delTramo = pendientes.findIndex((p) => p.tramoId === tramoId)
+      const indice =
+        delTramo >= 0
+          ? delTramo
+          : pendientes.findIndex(
+              (p) => !p.tramoId && continuaLaFrase(p.texto, entrada.texto),
+            )
       if (indice < 0) {
         pendientes = [...pendientes, entrada]
         return
       }
       const previa = pendientes[indice]
       const decision = decidirRevision({
-        tramoAbierto: { id: previa.tramoId, texto: previa.texto },
-        tramoId: entrada.tramoId,
+        tramoAbierto: { id: tramoId, texto: previa.texto },
+        tramoId,
         texto: entrada.texto,
         final: previa.final || entrada.final,
       })
       const siguiente: EntradaPendiente = {
         ...previa,
+        tramoId,
         texto: decision.pintar ? decision.texto : previa.texto,
         final: previa.final || entrada.final,
         idioma: entrada.idioma,

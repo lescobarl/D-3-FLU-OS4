@@ -132,21 +132,21 @@ export function crearAlmacenDexie({
         return aFila(registro)
       }),
 
+    // Mandato del dueño 2026-10-30: de una fila commiteada SOLO se actualiza el
+    // hablante (etiqueta y su evidencia). El tipo `CambiosFila` ya no admite otra
+    // cosa; aquí no se mergea ningún otro campo.
     actualizar: async (locutionId: string, cambios: CambiosFila): Promise<Fila | null> =>
       db.transaccion(async () => {
         const previo = await db.leer(locutionId)
         if (!previo) return null
         const anterior = aFila(previo)
-        const sincronizada = sincronizar(previo.sync, reloj.ahora())
         const registro = aRegistro(
           {
             ...anterior,
-            texto: cambios.texto ?? anterior.texto,
-            provisional: cambios.provisional ?? anterior.provisional,
-            reason: cambios.reason ?? anterior.reason,
-            tramo: cambios.tramo ?? anterior.tramo,
+            etiqueta: cambios.etiqueta ?? anterior.etiqueta,
+            evidencia: cambios.evidencia ?? anterior.evidencia,
           },
-          cambios.deleted === undefined ? sincronizada : { ...sincronizada, deleted: cambios.deleted },
+          sincronizar(previo.sync, reloj.ahora()),
         )
         await db.escribir(registro)
         return aFila(registro)

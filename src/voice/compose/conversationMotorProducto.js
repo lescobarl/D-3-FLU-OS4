@@ -91,6 +91,19 @@ export function crearMotorConversacionHook({
       onLiveTranscript(evento.abierta ? evento.fraseCanonica : '')
       return
     }
+    if (evento.tipo === 'speaker.labeled') {
+      // REETIQUETADO de la ÚNICA cosa actualizable de una fila (mandato del dueño
+      // 2026-10-30: «puedes poner un hablante temporal si aun no llega, y cuando
+      // lo tengas reemplazar»). La etiqueta TEMPORAL no resuelve la fila: su
+      // `speakerPending` sigue vivo hasta que llegue la medida, que emite otra vez
+      // este evento ya con evidencia `medida`/`nombre`.
+      if (evento.evidencia !== 'pendiente') {
+        useIntegrationStore
+          .getState()
+          .setEntrySpeakerName(evento.locutionId, evento.etiqueta, { resolved: true })
+      }
+      return
+    }
     if (evento.tipo !== 'row.committed') return
     useIntegrationStore.getState().setLastCommittedTranscript(evento.fila.texto)
     // ÚNICO escritor de la fila del usuario (mandato 2026-10-30, problema 6):
@@ -119,6 +132,9 @@ export function crearMotorConversacionHook({
       signature: firma,
       sessionId: evento.fila.sessionId,
       turnId: evento.fila.turnId,
+      // La fila nació con la etiqueta TEMPORAL: la vista lo declara y la medida
+      // tardía la reemplaza con `speaker.labeled` (mandato 2026-10-30).
+      speakerPending: evento.fila.evidencia === 'pendiente',
       meta: metaDeFilaConversacion(evento.fila, evento.fila.sessionId),
     })
     // High-water de la sesión: la clave automática (`speaker_N`) lo sube por el
@@ -127,8 +143,10 @@ export function crearMotorConversacionHook({
     if (indice != null && indice > 0) {
       useIntegrationStore.getState().noteSpeakerHighWater(indice)
     }
-    // Ni renombre de filas ni re-etiquetado: la etiqueta ya la resolvió el módulo
-    // al cerrar y las filas anteriores no se reescriben (mandato 2026-10-26).
+    // El HABLANTE de esta fila ya lo resolvió el módulo al cerrar. Su única
+    // corrección posterior (la medida tardía sobre una etiqueta temporal) llega
+    // por `speaker.labeled`, no por aquí: el texto y el resto de la fila no se
+    // reescriben (mandato 2026-10-30).
     // Frontera de TURNO: una locución nueva. La promoción de la MISMA fila no lo es.
     if (evento.fila.locutionId !== ultimaCommiteada) {
       ultimaCommiteada = evento.fila.locutionId

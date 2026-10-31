@@ -70,15 +70,22 @@ export function crearFlujoTexto({
       const tramo = siguiente.tramo ?? tramos.resolver(siguiente.tramoId)
       if (!tramo) break
       pendientes.quitarPrimero()
+      // El pendiente nace DESPUÉS de su habla: se siembra con SU audio retenido
+      // para que la identidad de voz no se mida sobre el silencio o la voz ajena.
+      const muestrasIniciales = tramos.muestras(siguiente.tramoId, tramo)
       sesion.abrirLocucion({
         tramoId: siguiente.tramoId,
         texto: siguiente.texto,
         tramo,
-        turnId: siguiente.turnId,
+        // El turno VIGENTE manda: el pendiente esperó al commit de la locución
+        // anterior y el hook ya avanzó el turno. El de llegada solo respalda una
+        // sesión sin turno propio (tests del módulo puro).
+        turnId: estado.turnoActual || siguiente.turnId,
         idioma: siguiente.idioma,
         voz: siguiente.voz,
         finalLlego: siguiente.final,
         medidaMotor: siguiente.medida,
+        ...(muestrasIniciales ? { muestrasIniciales } : {}),
       })
       // MANDATO DEL DUEÑO (2026-10-30): el final NO cierra por contenido. La
       // locución abierta cierra por silencio (5 s), cambio de voz, texto ajeno
@@ -103,6 +110,7 @@ export function crearFlujoTexto({
         const previa = estado.abierta
         await sesion.cerrarLocucion(previa, motivo, 'stop', previa.final)
       }
+      const muestrasIniciales = tramos.muestras(siguiente.tramoId, tramo)
       sesion.abrirLocucion({
         tramoId: siguiente.tramoId,
         texto: siguiente.texto,
@@ -112,6 +120,7 @@ export function crearFlujoTexto({
         voz: siguiente.voz,
         finalLlego: siguiente.final,
         medidaMotor: siguiente.medida,
+        ...(muestrasIniciales ? { muestrasIniciales } : {}),
       })
       const locucion = estado.abierta
       if (locucion) await sesion.cerrarLocucion(locucion, motivo, 'stop', locucion.final)
@@ -122,7 +131,11 @@ export function crearFlujoTexto({
   async function procesarResultadoAsr(entrada: AsrIngestado): Promise<void> {
     const sesionId = sesion.exigirActiva()
     const tramoId = String(entrada.tramoId || '').trim()
-    if (!tramoId) {
+    // SIN TRAMO solo es huérfano si NO hay locución abierta (regla 1). Con la
+    // locución abierta, el texto sin tramo es de otra frase que el VAD no
+    // segmentó: entra por la puerta de texto ajeno (se retiene como pendiente y
+    // su llegada evalúa la frontera), nunca se tira en silencio.
+    if (!tramoId && !estado.abierta) {
       sesion.contarDescarte('huerfano', null, null)
       return
     }
@@ -184,7 +197,7 @@ export function crearFlujoTexto({
       if (frontera.cerrar) {
         const locucion = estado.abierta
         if (locucion) await sesion.cerrarLocucion(locucion, 'system', 'silencio', locucion.final)
-        await flushPendientes()
+        // Sin flush aquí: ver la nota de `flushPendientes` (turno vigente).
       }
       return
     }
@@ -202,7 +215,9 @@ export function crearFlujoTexto({
       if (frontera.cerrar) {
         const locucion = estado.abierta
         if (locucion) await sesion.cerrarLocucion(locucion, 'system', 'frontera', locucion.final)
-        await flushPendientes()
+        // Sin flush aquí: el pendiente NO puede nacer con el turno que acaba de
+        // commitear la fila anterior. Lo abre el siguiente evento, cuyo turno ya
+        // es el vigente (el hook lo avanza con ese commit).
       }
       return
     }
@@ -212,6 +227,9 @@ export function crearFlujoTexto({
       encolar(entrada, tramoId, texto)
       return
     }
+    // El final puede llegar después de sonar su tramo: se siembra su audio
+    // retenido (si lo hay) para que la voz de la fila sea la de SU hablante.
+    const muestrasIniciales = tramos.muestras(tramoId, tramo)
     sesion.abrirLocucion({
       tramoId,
       texto,
@@ -221,6 +239,7 @@ export function crearFlujoTexto({
       voz,
       finalLlego: Boolean(entrada.final),
       medidaMotor: entrada.medida,
+      ...(muestrasIniciales ? { muestrasIniciales } : {}),
     })
     // MANDATO DEL DUEÑO (2026-10-30): el final MARCA la frase completa pero NO
     // cierra; la locución abierta espera la frontera (silencio, voz, ajeno, fin).

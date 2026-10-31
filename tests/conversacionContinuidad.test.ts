@@ -57,6 +57,8 @@ function crearProbe(
     nombresPorVoz: new Map(),
     plantillasVoz: new Map(Object.entries(plantillas ?? {}).map(([vozId, p]) => [vozId, { ...p }])),
     muestrasAbierta: [],
+    tramosDeLaAbierta: new Set(),
+    muestrasEnUltimoIntento: 0,
     contadorVoces: 0,
     nombrePendiente: '',
   }

@@ -231,7 +231,7 @@ describe('Caso 2 — identidad por locución: el almacén hace upsert, nunca ins
       }),
     })
 
-    const resultado = await almacen.actualizar(UUID_A, { texto: 'fantasma' })
+    const resultado = await almacen.actualizar(UUID_A, { etiqueta: 'Luis' })
     expect(resultado).toBeNull()
     expect(tamano()).toBe(0)
   })

@@ -62,10 +62,15 @@ export function particionPorCambioDeVoz(src: string): boolean {
   return /function partirLocucionPorVoz/.test(src) && /function verificarCambioVoz/.test(src)
 }
 
-/** ¿El resultado ASR pasa por la verificación de cambio ANTES del flujo de texto? */
+/**
+ * ¿El resultado ASR pasa por la atribución y por la verificación de cambio ANTES
+ * del flujo de texto? La atribución va PRIMERA: un texto de la frase abierta no
+ * puede verificar el cambio de voz de un tramo ajeno.
+ */
 export function verificacionAntesDelFlujoDeTexto(src: string): boolean {
   return (
-    /verificarCambioVoz\(tramoId\)/.test(src) &&
+    /const tramoAtribuido = tramoDestinoDeTexto\(tramoId, entrada\.texto\)/.test(src) &&
+    /verificarCambioVoz\(tramoAtribuido\)/.test(src) &&
     /procesarResultadoAsr\(\{ \.\.\.entrada, tramoId: tramoDestino \}\)/.test(src)
   )
 }
@@ -109,9 +114,8 @@ let cursor = 0
 
 type Escenario = Readonly<{ api: ConversacionApi }>
 
-function crearEscenario(
-  ...vectores: readonly (readonly number[])[]
-): Escenario {
+/** Monta el módulo REAL sobre el embebedor inyectado (la medida es del puerto). */
+function crearEscenarioConEmbebedor(embebedor: EmbebedorPort): Escenario {
   cursor = 0
   const reloj = { ahora: () => 1_700_000_000_000 }
   const config: ConfigPort = {
@@ -131,9 +135,15 @@ function crearEscenario(
     partidor: crearPartidorWake(config),
     medidor: crearMedidorTramo(),
     ultimoTextoDicho: () => '',
-    embebedor: crearEmbebedorFalso(...vectores),
+    embebedor,
   }
   return { api: crearConversacion(dependencias) }
+}
+
+function crearEscenario(
+  ...vectores: readonly (readonly number[])[]
+): Escenario {
+  return crearEscenarioConEmbebedor(crearEmbebedorFalso(...vectores))
 }
 
 /** Filas de la instantánea (la retención no borra, solo oculta). */
@@ -171,6 +181,47 @@ async function cerrarPorSilencio(api: ConversacionApi): Promise<void> {
     medida: SILENCIO(5000),
   })
   cursor = Math.max(cursor, fin + 5 * SAMPLE_RATE)
+}
+
+/** Silencio de `ms` entregado en `inicio`: corta el tramo, no cierra salvo 5 s. */
+async function entregarSilencio(
+  api: ConversacionApi,
+  inicio: number,
+  ms: number,
+): Promise<void> {
+  const muestras = Math.round((SAMPLE_RATE * ms) / 1000)
+  await api.ingestAudio({
+    muestras: new Float32Array(muestras),
+    sampleRate: SAMPLE_RATE,
+    inicio,
+    fin: inicio + muestras,
+    medida: SILENCIO(ms),
+  })
+  cursor = Math.max(cursor, inicio + muestras)
+}
+
+/**
+ * Audio con VOZ en bloques CORTOS: el AudioWorklet entrega 128 muestras por
+ * bloque (medido en 89a0d948), así que la ingesta recibe cientos de bloques por
+ * segundo de habla.
+ */
+async function entregarBloques(
+  api: ConversacionApi,
+  inicio: number,
+  total: number,
+  bloque: number,
+): Promise<void> {
+  for (let offset = 0; offset < total; offset += bloque) {
+    const fin = Math.min(offset + bloque, total)
+    await api.ingestAudio({
+      muestras: new Float32Array(fin - offset),
+      sampleRate: SAMPLE_RATE,
+      inicio: inicio + offset,
+      fin: inicio + fin,
+      medida: VOZ(),
+    })
+  }
+  cursor = Math.max(cursor, inicio + total)
 }
 
 /** Evento ASR final del turno (el módulo resuelve el tramo vigente). */
@@ -245,6 +296,112 @@ describe('Caso 1+3 — dos voces SIN pausa (módulo real, embebedor falso)', () 
       etiqueta: 'Hablante 1',
       tramo: { inicio: 0, fin: 64000, sampleRate: SAMPLE_RATE },
     })
+  })
+
+  it('la reentrega del ASR que CONTINÚA la frase tras una pausa interna => UNA fila', async () => {
+    // Medido en la sesión 263adae9: dos finales del MISMO enunciado (300 y 330
+    // caracteres) separados por una pausa del VAD de ~1,5 s. La pausa NO es la
+    // puerta de cierre (5 s): el texto que contiene la frase abierta la continúa
+    // y la fila sale UNA vez con la frase completa, nunca duplicada.
+    const escenario = crearEscenario()
+    await escenario.api.start({ turnId: 'T5' })
+    await entregarAudio(escenario.api, VOZ(), cursor)
+    await entregarAudio(escenario.api, VOZ(), cursor)
+    await frase(escenario.api, 'ok flu crea una cita', 'T5')
+    // Pausa interna: corta el tramo (VAD 900 ms) pero la locución sigue abierta.
+    await entregarSilencio(escenario.api, cursor, 1500)
+    // La voz vuelve: tramo NUEVO; el ASR reemite la frase completa.
+    await entregarAudio(escenario.api, VOZ(), cursor)
+    await frase(escenario.api, 'ok flu crea una cita con el doctor', 'T5')
+    await entregarSilencio(escenario.api, cursor, 5000)
+
+    const filas = filasDe(escenario.api)
+    expect(filas).toHaveLength(1)
+    expect(filas[0]!.texto).toBe('ok flu crea una cita con el doctor')
+    expect(filas[0]!.etiqueta).toBe('Hablante 1')
+  })
+
+  it('la reentrega que CONTINÚA la frase durante el silencio (sin tramo vigente) => UNA fila', async () => {
+    const escenario = crearEscenario()
+    await escenario.api.start({ turnId: 'T5' })
+    await entregarAudio(escenario.api, VOZ(), cursor)
+    await entregarAudio(escenario.api, VOZ(), cursor)
+    await frase(escenario.api, 'ok flu crea una cita', 'T5')
+    await entregarSilencio(escenario.api, cursor, 1500)
+    // El final completo llega con el silencio en curso (el producto pasa
+    // tramoId vacío y ya lo trata como continuación de la línea abierta).
+    await frase(escenario.api, 'ok flu crea una cita con el doctor', 'T5')
+    await entregarSilencio(escenario.api, cursor, 5000)
+
+    const filas = filasDe(escenario.api)
+    expect(filas).toHaveLength(1)
+    expect(filas[0]!.texto).toBe('ok flu crea una cita con el doctor')
+  })
+
+  it('la medida temprana se lanza con audio NUEVO, no en cada bloque (freno)', async () => {
+    // Medido en 89a0d948 (2026-10-31): sin freno la medida se relanzaba en CADA
+    // bloque tras alcanzar 1,5 s (19.886 intentos y ~31.000 trazas en 182 s de
+    // audio); cada intento copiaba todo el PCM retenido y la UI se congelaba.
+    let medidas = 0
+    const embebedor: EmbebedorPort = {
+      medir: async () => {
+        medidas += 1
+        return null
+      },
+      comparar: () => 0,
+    }
+    const escenario = crearEscenarioConEmbebedor(embebedor)
+    await escenario.api.start({ turnId: 'T5' })
+    // 4 s de voz en bloques de 64 ms: un intento por bloque serían ~39.
+    await entregarBloques(escenario.api, cursor, 4 * SAMPLE_RATE, 1024)
+
+    // Un intento al llegar al mínimo (1,5 s) y otro por cada tramo NUEVO de
+    // 1,5 s de audio: el fallo no se reintenta bloque a bloque.
+    expect(medidas).toBeGreaterThanOrEqual(1)
+    expect(medidas).toBeLessThanOrEqual(4)
+  })
+
+  it('el audio del tramo que CONTINÚA la frase entra en la medida (la fila se mide)', async () => {
+    // El tramo de la continuación NO entra en vivo (solo el de la locución): su
+    // audio se suma cuando el TEXTO se atribuye a la frase abierta. Sin eso la
+    // medida se quedaba con el primer tramo (240 ms de voz medidos en
+    // 89a0d948) y la fila nacía 'Hablante ?' para siempre.
+    // El embebedor solo mide si el búfer trae la MARCA de la continuación (0,5).
+    const embebedor: EmbebedorPort = {
+      medir: async (muestras) => {
+        let marca = 0
+        for (const valor of muestras) if (valor === 0.5) marca += 1
+        return marca >= 800 ? [1, 0] : null
+      },
+      comparar: (a, b) =>
+        a.length === b.length ? a.reduce((suma, valor, i) => suma + valor * (b[i] ?? 0), 0) : 0,
+    }
+    const escenario = crearEscenarioConEmbebedor(embebedor)
+    await escenario.api.start({ turnId: 'T5' })
+    await entregarAudio(escenario.api, VOZ(), cursor)
+    await entregarAudio(escenario.api, VOZ(), cursor)
+    await frase(escenario.api, 'ok flu crea una cita', 'T5')
+    // Pausa interna: corta el tramo pero la locución sigue abierta.
+    await entregarSilencio(escenario.api, cursor, 1500)
+    // La voz vuelve con SU audio (marcado): tramo NUEVO de la misma frase.
+    await escenario.api.ingestAudio({
+      muestras: new Float32Array(SAMPLE_RATE).fill(0.5),
+      sampleRate: SAMPLE_RATE,
+      inicio: cursor,
+      fin: cursor + SAMPLE_RATE,
+      medida: VOZ(),
+    })
+    cursor += SAMPLE_RATE
+    await frase(escenario.api, 'ok flu crea una cita con el doctor', 'T5')
+    await entregarSilencio(escenario.api, cursor, 5000)
+
+    const filas = filasDe(escenario.api)
+    expect(filas).toHaveLength(1)
+    expect(filas[0]!.texto).toBe('ok flu crea una cita con el doctor')
+    // Medida POSITIVA (no la semilla): el búfer de la fila incluyó la
+    // continuación, así que la voz se pudo medir y etiquetar.
+    expect(filas[0]!.evidencia).toBe('medida')
+    expect(filas[0]!.etiqueta).toBe('Hablante 1')
   })
 
   it('la continuación de la voz B NO reescribe la fila DE B (insert-only); la de A no se toca', async () => {
@@ -322,7 +479,8 @@ describe('Caso 1+3 — PRUEBA DE DETECTOR (el detector no es decorativo)', () =>
     const sinVerificacion = 'await flujo.procesarResultadoAsr({ ...entrada, tramoId })'
     expect(verificacionAntesDelFlujoDeTexto(sinVerificacion)).toBe(false)
     const conVerificacion =
-      'const tramoDestino = (await verificarCambioVoz(tramoId)) ?? tramoId\n' +
+      'const tramoAtribuido = tramoDestinoDeTexto(tramoId, entrada.texto)\n' +
+      'const tramoDestino = (await verificarCambioVoz(tramoAtribuido)) ?? tramoAtribuido\n' +
       'await flujo.procesarResultadoAsr({ ...entrada, tramoId: tramoDestino })'
     expect(verificacionAntesDelFlujoDeTexto(conVerificacion)).toBe(true)
   })

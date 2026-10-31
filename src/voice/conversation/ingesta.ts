@@ -12,11 +12,15 @@ import type { Pendientes } from './cola.ts'
 import type { BufferAsr, RegistroTramos } from './tramos.ts'
 import type { Sesion } from './sesion.ts'
 import { decidirIdentidad, plantillasDe } from './identidad.ts'
+import type { IdentidadDecidida } from './identidad.ts'
 import { concatenarMuestras, retenerCola } from './muestras.ts'
 import { fusionarVoz } from './fila.ts'
 import { registrarMedidaVoz } from './sesion.ts'
 import { asrEmpujaAudio } from './ports.ts'
 import { logCaughtError } from '../../lib/caughtError.ts'
+// Dueño único de «¿este texto continúa la locución o abre otra?»: el módulo no
+// reimplementa la comparación de palabras ni la revisión del ASR.
+import { continuaLaFrase } from '../core/locucion.js'
 import type { ConfiguracionConversacion, MotivoCierre } from './ports.ts'
 import type {
   AsrIngestado,
@@ -84,10 +88,105 @@ export function crearIngesta({
     )
   }
 
+  /** Retiene el PCM del tramo para la voz de un pendiente que abre tarde. */
+  function retenerTramo(
+    tramoId: string,
+    inicio: number,
+    fin: number,
+    muestras: Float32Array,
+    sampleRate: number,
+  ): void {
+    tramos.retener(
+      tramoId,
+      { inicio, fin, muestras },
+      configuracion.maxSegundosVozRetenida * sampleRate,
+    )
+  }
+
+  /**
+   * Suma al PCM de la locución abierta el audio de un tramo cuyo TEXTO se le
+   * atribuyó (la frase sigue tras una pausa interna). El audio sigue a la
+   * atribución del texto: el tramo de una voz DISTINTA no continúa la frase y
+   * no entra aquí. Sin esto la medida se quedaba con el primer tramo (240 ms
+   * de voz medidos en 89a0d948/263adae9) y nunca alcanzaba el piso de voz: la
+   * fila nacía temporal y su medida no llegaba jamás.
+   * @param tramoId Tramo atribuido a la locución abierta (distinto del suyo).
+   */
+  function sumarAudioAtribuido(tramoId: string): void {
+    const abierta = estado.abierta
+    if (!abierta || estado.tramosDeLaAbierta.has(tramoId)) return
+    const tramo = tramos.resolver(tramoId)
+    if (!tramo) return
+    const bloques = tramos.muestras(tramoId, tramo)
+    if (!bloques || bloques.length === 0) return
+    estado.tramosDeLaAbierta.add(tramoId)
+    const tope = configuracion.maxSegundosVozRetenida * abierta.sampleRate
+    for (const bloque of bloques) {
+      estado.muestrasAbierta = retenerCola(estado.muestrasAbierta, bloque, tope)
+    }
+  }
+
+  /**
+   * Tramo al que PERTENECE un texto del ASR (problema 1/3: el texto se colgaba
+   * del tramo de audio más reciente aunque la frase abierta fuera otra, y la
+   * frase acababa partida en dos filas).
+   *
+   * El texto es de la locución ABIERTA cuando el tramo que trae no es el suyo
+   * pero la frase sigue viva: el texto la CONTINÚA (dueño `continuaLaFrase`:
+   * revisión del ASR o crecimiento; el reconocedor reemite la frase completa
+   * tras una pausa interna) y no la separa más que la ventana de CIERRE del
+   * plan (`silenceCloseMs`).
+   * Dentro de esa ventana la pausa del VAD no parte la frase: partirla por el
+   * silencio mínimo de 900 ms duplicaba la fila (medido en la sesión
+   * 89a0d948/263adae9: dos finales del mismo enunciado, 300 y 330 caracteres).
+   * Sin texto previo manda el hueco mínimo (la locución aún no afirma nada) y,
+   * fuera de la ventana de cierre, manda el tramo: el texto abre otra locución.
+   * @param tramoId Tramo que declaró (o al que se destinó) el resultado.
+   * @param texto Texto del resultado.
+   * @returns El `tramoId` de destino, ya atribuido.
+   */
+  function tramoDestinoDeTexto(tramoId: string, texto: string): string {
+    const abierta = estado.abierta
+    if (!abierta) return tramoId
+    const previo = String(abierta.texto || '').trim()
+    const textoLimpio = String(texto || '').trim()
+    const continua = previo !== '' && textoLimpio !== '' && continuaLaFrase(previo, textoLimpio)
+    if (abierta.locutionId === tramoId) {
+      // MISMO TRAMO: con su audio VIVO el texto es una revisión de la locución
+      // (el producto compone los fragmentos del reconocedor en una línea). SIN
+      // audio vivo, el id llegó del RESPALDO (locución abierta o último tramo):
+      // el texto solo entra si CONTINÚA la frase. Si no, es otra frase que el
+      // VAD no segmentó y va SIN tramo a la puerta de texto ajeno. Sin esta
+      // prueba un final ajeno reescribía la fila abierta (defecto medido en el
+      // playback 2026-10-31: 93 caracteres donde iban 41).
+      if (estado.tramoAudio?.tramoId === tramoId) return tramoId
+      if (!textoLimpio || previo === '' || continua) return tramoId
+      return ''
+    }
+    // Sin tramo vigente (silencio en curso): el texto que CONTINÚA la frase es
+    // de la locución abierta; sin esa prueba no hay a quién atribuirlo.
+    if (!tramoId) return continua ? abierta.locutionId : tramoId
+    const tramo = tramos.resolver(tramoId)
+    if (!tramo) return continua ? abierta.locutionId : tramoId
+    const huecoMs = ((tramo.inicio - abierta.fin) / abierta.sampleRate) * 1000
+    const destino = continua
+      ? huecoMs <= configuracion.silenceCloseMs
+        ? abierta.locutionId
+        : tramoId
+      : huecoMs > configuracion.minSilenceMs || previo
+        ? tramoId
+        : abierta.locutionId
+    // El audio acompaña al texto: la evidencia de voz de la fila es la de TODO
+    // el audio que produjo su frase, no solo el del primer tramo.
+    if (destino === abierta.locutionId) sumarAudioAtribuido(tramoId)
+    return destino
+  }
+
   /** Drena los resultados del `AsrPort` en orden; el tramo se fija al drenar. */
   async function drenarResultadosAsr(): Promise<void> {
     for (const crudo of bufferAsr.drenar()) {
-      const tramoId = crudo.tramoId || tramoVigente()
+      const tramoVigenteId = crudo.tramoId || tramoVigente()
+      const tramoId = tramoDestinoDeTexto(tramoVigenteId, crudo.texto)
       await flujo.procesarResultadoAsr({ ...crudo, tramoId })
     }
   }
@@ -101,7 +200,8 @@ export function crearIngesta({
       const locucion = estado.abierta
       await sesion.cerrarLocucion(locucion, motivo, 'asr', locucion.final)
     }
-    await flujo.flushPendientes()
+    // Sin flush aquí: el pendiente se abre con el turno vigente del siguiente
+    // evento (o al cerrar la sesión, que los finaliza contados).
   }
 
   /** Ingesta un bloque de audio: mide, corta el tramo y evalúa la frontera. */
@@ -132,6 +232,11 @@ export function crearIngesta({
       )
     }
     if (bloque.turnId) estado.turnoActual = String(bloque.turnId).trim()
+    // El pendiente espera a este bloque para abrir: aquí el turno ya es el
+    // vigente DESPUÉS del commit que lo liberó (el hook lo avanza al commitear,
+    // y el siguiente bloque lo trae). Abrirlo dentro del cierre le pegaba el
+    // turno viejo y el gate `turnoYaEscrito` descartaba una fila legítima.
+    if (!estado.abierta) await flujo.flushPendientes()
 
     const medida =
       bloque.medida ??
@@ -156,6 +261,21 @@ export function crearIngesta({
         estado.tramoAudio = nuevo
         estado.ultimoTramoId = tramoId
         tramos.registrar(nuevo)
+        retenerTramo(tramoId, inicio, fin, bloque.muestras, sampleRate)
+        // CAPARAZÓN: una locución ABIERTA sin texto (ruido/eco que abrió sesión)
+        // no puede quedarse con la voz que arranca ahora. Si entre su último
+        // audio y este tramo ya había silencio de cierre (>= silenceCloseMs), se
+        // cierra como sinTexto: nada se pierde y la voz nueva se mide sobre SU
+        // audio. Si el hueco es menor, se conserva (la frase sigue en curso).
+        const huecoMs =
+          ((inicio - (estado.abierta?.fin ?? inicio)) / sampleRate) * 1000
+        if (
+          estado.abierta &&
+          !String(estado.abierta.texto).trim() &&
+          huecoMs >= configuracion.silenceCloseMs
+        ) {
+          await sesion.cerrarLocucion(estado.abierta, 'system', 'voz', false)
+        }
         if (!estado.abierta) {
           sesion.abrirLocucion({
             tramoId,
@@ -178,6 +298,7 @@ export function crearIngesta({
       }
       estado.tramoAudio = actualizado
       tramos.registrar(actualizado)
+      retenerTramo(actualizado.tramoId, inicio, fin, bloque.muestras, sampleRate)
       if (estado.abierta && estado.abierta.locutionId === actualizado.tramoId) {
         estado.abierta = { ...estado.abierta, fin: actualizado.fin }
       }
@@ -203,11 +324,19 @@ export function crearIngesta({
 
     const abierta = estado.abierta
     if (abierta) {
-      estado.muestrasAbierta = retenerCola(
-        estado.muestrasAbierta,
-        bloque.muestras,
-        configuracion.maxSegundosVozRetenida * sampleRate,
-      )
+      // Solo el audio de SU tramo alimenta EN VIVO la medida de la locución
+      // abierta. El de un tramo ajeno se retiene para ESE tramo y entra en la
+      // locución únicamente si su TEXTO se atribuye a ella (continuación de la
+      // frase: `sumarAudioAtribuido`). Sumar en vivo el audio de otra voz
+      // contaminaba la medida y acuñaba etiquetas falsas (problema 3).
+      const suyo = !estado.tramoAudio || estado.tramoAudio.tramoId === abierta.locutionId
+      if (suyo) {
+        estado.muestrasAbierta = retenerCola(
+          estado.muestrasAbierta,
+          bloque.muestras,
+          configuracion.maxSegundosVozRetenida * sampleRate,
+        )
+      }
       lanzarMedidaSiCorresponde(abierta, sampleRate)
     }
     if (abierta) {
@@ -218,7 +347,8 @@ export function crearIngesta({
       })
       if (frontera.cerrar) {
         await sesion.cerrarLocucion(abierta, 'system', 'silencio', abierta.final)
-        await flujo.flushPendientes()
+        // El pendiente NO se abre aquí (turno viejo): el siguiente bloque o
+        // resultado lo abre con el turno vigente (ver `flushPendientes` arriba).
       }
     }
     return sesion.snapshot()
@@ -236,8 +366,11 @@ export function crearIngesta({
       return sesion.snapshot()
     }
     // Caso 1+3: antes de atribuir el texto, ¿cambió la voz DENTRO del tramo
-    // abierto? Si partió, el texto es de la voz nueva y va a SU tramo.
-    const tramoDestino = (await verificarCambioVoz(tramoId)) ?? tramoId
+    // abierto? Si partió, el texto es de la voz nueva y va a SU tramo. La
+    // atribución va PRIMERO: un texto de la frase abierta no puede verificar el
+    // cambio de voz de un tramo ajeno.
+    const tramoAtribuido = tramoDestinoDeTexto(tramoId, entrada.texto)
+    const tramoDestino = (await verificarCambioVoz(tramoAtribuido)) ?? tramoAtribuido
     await flujo.procesarResultadoAsr({ ...entrada, tramoId: tramoDestino })
     return sesion.snapshot()
   }
@@ -258,8 +391,16 @@ export function crearIngesta({
       (suma, bloque) => suma + bloque.length,
       0,
     )
-    if (sampleRate > 0 && totalMuestras / sampleRate < configuracion.minSegundosVozMedida) {
-      return
+    if (sampleRate > 0) {
+      const minimo = Math.max(1, Math.round(configuracion.minSegundosVozMedida * sampleRate))
+      if (totalMuestras < minimo) return
+      // Un intento fallido NO se repite por bloque: cada intento copia TODO el
+      // audio retenido y lanza un embed. Sin este freno la medida se relanzaba
+      // en cada bloque (medido 2026-10-31, sesión 89a0d948: 19.886 intentos y
+      // ~31.000 trazas en 182 s de audio; la UI se congelaba). Se reintenta solo
+      // cuando el búfer creció lo mínimo que ya justifica volver a medir.
+      if (totalMuestras - estado.muestrasEnUltimoIntento < minimo) return
+      estado.muestrasEnUltimoIntento = totalMuestras
     }
     const locutionId = locucion.locutionId
     estado.medidaVozEnCurso = true
@@ -267,7 +408,18 @@ export function crearIngesta({
     // (Caso 1+3) arranca en el fin cubierto por esta medida.
     estado.medidoHastaFin = Math.max(estado.medidoHastaFin, locucion.fin)
     embebedor.medir(concatenarMuestras(estado.muestrasAbierta), sampleRate).then(
-      (vector) => encolar(() => Promise.resolve().then(() => aplicarMedidaVoz(locutionId, vector))),
+      (vector) =>
+        encolar(() => Promise.resolve().then(() => aplicarMedidaVoz(locutionId, vector))).catch(
+          (error: unknown) => {
+            // AGENTS §1.5: ningún fallo capturado se pierde. La medida no se
+            // reintenta; la locución cierra con la evidencia que tenga.
+            logCaughtError('conversacion.voz.medida.aplicar.fallo', error, {
+              sessionId: estado.sessionId,
+              locutionId,
+            })
+            estado.medidaVozEnCurso = false
+          },
+        ),
       (error) =>
         encolar(() =>
           Promise.resolve().then(() => {
@@ -282,15 +434,13 @@ export function crearIngesta({
     )
   }
 
-  /** Aplica la medida a la locución abierta (dentro de la cola): una sola vez. */
-  function aplicarMedidaVoz(locutionId: string, vector: readonly number[] | null): void {
-    estado.medidaVozEnCurso = false
-    const abierta = estado.abierta
-    const embebedor = dependencias.embebedor
-    if (!abierta || !embebedor || !vector) return
-    if (abierta.locutionId !== locutionId) return
-    if (String(abierta.voz.vozId || '').trim()) return
-    const identidad = decidirIdentidad({
+  /**
+   * Decide la identidad de un vector medido contra las plantillas de la sesión.
+   * Único constructor de la decisión dentro de la ingesta (medida temprana,
+   * partición por voz y medida tardía). El llamador garantiza el embebedor.
+   */
+  function decidirIdentidadSesion(vector: readonly number[], embebedor: NonNullable<typeof dependencias.embebedor>): IdentidadDecidida {
+    return decidirIdentidad({
       vector,
       plantillas: plantillasDe(estado.plantillasVoz),
       umbral: dependencias.config.umbralContinuidadVoz(),
@@ -299,6 +449,59 @@ export function crearIngesta({
       comparar: embebedor.comparar,
       id: dependencias.id.uuid,
     })
+  }
+
+  /**
+   * Reemplaza la etiqueta TEMPORAL de una fila ya commiteada por la de su medida
+   * tardía (mandato del dueño 2026-10-30: «puedes poner un hablante temporal si
+   * aun no llega, y cuando lo tengas reemplazar»). Solo aplica a filas de ESTA
+   * sesión que sigan pendientes: cualquier otra fila es inmutable.
+   * @param locucionId Fila commiteada que espera su medida.
+   * @param vector Vector medido de su audio.
+   */
+  async function reetiquetarConMedidaTardia(
+    locucionId: string,
+    vector: readonly number[],
+  ): Promise<void> {
+    const embebedor = dependencias.embebedor
+    const fila = estado.filas.get(locucionId)
+    if (!embebedor || !fila || fila.deleted) return
+    if (fila.sessionId !== estado.sessionId) return
+    if (fila.evidencia !== 'pendiente') return
+    const identidad = decidirIdentidadSesion(vector, embebedor)
+    registrarMedidaVoz(estado, vector, identidad)
+    const aplicada = await sesion.reetiquetarFila(locucionId, identidad.vozId, identidad.hablante)
+    dependencias.registro.registrar('conversacion.fila.medida.tardia', {
+      sessionId: estado.sessionId,
+      locutionId: locucionId,
+      vozId: identidad.vozId,
+      hablante: identidad.hablante,
+      aplicada,
+    })
+  }
+
+  /**
+   * Aplica la medida a la locución abierta (dentro de la cola): una sola vez.
+   * Si la locución ya cerró, la medida no se pierde: reetiqueta su fila si nació
+   * con la etiqueta temporal.
+   */
+  async function aplicarMedidaVoz(
+    locucionId: string,
+    vector: readonly number[] | null,
+  ): Promise<void> {
+    estado.medidaVozEnCurso = false
+    const embebedor = dependencias.embebedor
+    if (!embebedor || !vector) return
+    const abierta = estado.abierta
+    const esSuya =
+      abierta !== null &&
+      abierta.locutionId === locucionId &&
+      !String(abierta.voz.vozId || '').trim()
+    if (!esSuya || abierta === null) {
+      await reetiquetarConMedidaTardia(locucionId, vector)
+      return
+    }
+    const identidad = decidirIdentidadSesion(vector, embebedor)
     registrarMedidaVoz(estado, vector, identidad)
     estado.abierta = {
       ...abierta,
@@ -407,6 +610,9 @@ export function crearIngesta({
     estado.tramoAudio = nuevo
     estado.ultimoTramoId = tramoId
     tramos.registrar(nuevo)
+    // La ventana medida ES el audio de este tramo: si un pendiente lo abre
+    // después, su voz se mide sobre su propia evidencia.
+    retenerTramo(tramoId, limite, finAlMedir, ventana, sampleRate)
     sesion.abrirLocucion({
       tramoId,
       texto: '',
@@ -419,14 +625,7 @@ export function crearIngesta({
     const embebedor = dependencias.embebedor
     const recien = estado.abierta
     if (!embebedor || !recien) return null
-    const identidad = decidirIdentidad({
-      vector,
-      plantillas: plantillasDe(estado.plantillasVoz),
-      umbral: dependencias.config.umbralContinuidadVoz(),
-      etiquetaNueva: () => dependencias.config.etiquetaAnonima(estado.contadorVoces + 1),
-      comparar: embebedor.comparar,
-      id: dependencias.id.uuid,
-    })
+    const identidad = decidirIdentidadSesion(vector, embebedor)
     registrarMedidaVoz(estado, vector, identidad)
     estado.abierta = {
       ...recien,

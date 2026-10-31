@@ -3,10 +3,13 @@
  *
  * Es la única puerta que escribe filas del módulo: aplica `decidirRevision`
  * (regla 3), `construirFila` (reglas 4–5) y las INSERTA por el almacén. Una fila
- * commiteada es INMUTABLE (mandato del dueño 2026-10-30): no hay consolidación
- * ni promoción; la reentrega de un turno ya commiteado se ignora (descarte
- * contado) y una voz distinta medida inserta SU fila. El estado lo posee la
- * sesión, que lo entrega como contexto.
+ * commiteada es INMUTABLE (mandato del dueño 2026-10-30) salvo UNA cosa: el
+ * HABLANTE. Una fila que nació con la etiqueta TEMPORAL (`pendiente`) y recibe
+ * después una medida fiable se REETIQUETA por `AlmacenPort.actualizar` — «puedes
+ * poner un hablante temporal si aun no llega, y cuando lo tengas reemplazar; ese
+ * es el único campo de la conversación que se puede actualizar». La reentrega de
+ * un turno ya commiteado se ignora (descarte contado) y una voz distinta medida
+ * inserta SU fila. El estado lo posee la sesión, que lo entrega como contexto.
  */
 import { construirFila, fusionarVoz } from './fila.ts'
 import type { CierreLocucion, VozEtiqueta } from './fila.ts'
@@ -48,6 +51,10 @@ export type EstadoCierre = {
   nombresPorVoz: Map<string, string>
   plantillasVoz: Map<string, PlantillaVoz>
   muestrasAbierta: Float32Array[]
+  /** Tramos cuyo audio ya entró en `muestrasAbierta` (dueño del anti-duplicado). */
+  tramosDeLaAbierta: Set<string>
+  /** Muestras retenidas en el último intento de medida temprana (freno). */
+  muestrasEnUltimoIntento: number
   contadorVoces: number
   /** Bautizo pendiente del comando «ok flu soy X» (problema 5). */
   nombrePendiente: string
@@ -82,6 +89,11 @@ export type DatosApertura = Readonly<{
   finalLlego?: boolean
   /** Métricas del motor para el final (pueden faltar). */
   medidaMotor?: MedidaMotor
+  /**
+   * PCM del tramo cuando la locución nace de un pendiente ya hablado: la
+   * evidencia de voz de la fila es SU audio, no el que venga después.
+   */
+  muestrasIniciales?: readonly Float32Array[]
 }>
 
 /** Reglas de cierre que la sesión publica en su superficie. */
@@ -100,6 +112,16 @@ export type ReglasCierre = Readonly<{
     causa: CausaCierre,
     final: boolean,
   ): Promise<void>
+  /**
+   * Reemplaza la etiqueta TEMPORAL de una fila por la de su medida tardía. Es la
+   * ÚNICA actualización que admite una fila (mandato del dueño 2026-10-30) y solo
+   * mientras su evidencia sea `pendiente`: después, la fila vuelve a ser inmutable.
+   * @param locucionId Fila commiteada a reetiquetar.
+   * @param vozId Voz medida que identifica al hablante de esa fila.
+   * @param hablante Etiqueta de la medida (nombre registrado o `Hablante N`).
+   * @returns `true` si la fila existía con etiqueta pendiente y se actualizó.
+   */
+  reetiquetarFila(locucionId: string, vozId: string, hablante: string): Promise<boolean>
   tramoYaCommiteado(tramoId: string): boolean
 }>
 
@@ -173,7 +195,6 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
     embebedor,
     medidor,
   } = contexto
-
   /** Abre la única locución abierta; el llamador garantiza que no hay otra. */
   function abrirLocucion(datos: DatosApertura): void {
     const vozId = String(datos.voz.vozId || '').trim()
@@ -181,7 +202,13 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
     // continuidad. Una locución sin vozId no hereda la etiqueta anterior; solo
     // una medida que casa con una plantilla de la sesión afirma continuidad.
     const continuidadVoz = vozId ? estado.plantillasVoz.has(vozId) : false
-    estado.muestrasAbierta = []
+    // Sin siembra la locución arranca sorda (su tramo ya sonó): el pendiente
+    // trae SU audio retenido y la medida de voz parte de él.
+    estado.muestrasAbierta = datos.muestrasIniciales ? [...datos.muestrasIniciales] : []
+    // El tramo de la locución ya está en el búfer; un tramo de CONTINUACIÓN
+    // entra cuando su texto se le atribuye (ingesta: `sumarAudioAtribuido`).
+    estado.tramosDeLaAbierta = new Set([datos.tramoId])
+    estado.muestrasEnUltimoIntento = 0
     // Caso 8: sin proveedor de turno, cada locución ES su turno (uuid propio);
     // un turnId solo agrupa lo que vino con el MISMO turno del llamador.
     const turno = String(datos.turnId || '').trim() || id.uuid()
@@ -245,6 +272,13 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
    * ya trae `vozId` y no entra aquí. Sin medida temprana, se embebe el PCM retenido
    * y se decide la identidad ANTES de construir la fila; un fallo de la medida se
    * registra y la locución cierra con la evidencia que tenía.
+   *
+   * El piso de VOZ no vive aquí: lo posee el embebedor del adaptador, que exige
+   * una ventana con habla real y descarta el resto (problema 3: acuñar con una
+   * ventana corta fabricaba `Hablante N`). Si no hay voz medible el vector es
+   * null, la fila nace TEMPORAL y su medida tardía la reemplaza (`reetiquetarFila`).
+   * @param locucion Locución que se cierra, con su evidencia de voz previa.
+   * @returns Evidencia de voz que cierra; la misma si no se mide.
    */
   async function medirVozAlCerrar(locucion: LocucionAbierta): Promise<EvidenciaVoz> {
     if (
@@ -265,7 +299,17 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
         locutionId: locucion.locutionId,
       })
     }
-    if (!vector) return locucion.voz
+    if (!vector) {
+      // Traza MEDIDA (Caso 12): la fila nace TEMPORAL y esta es la razón del
+      // audio que se midió (el piso de VOZ lo aplica el embebedor del adaptador).
+      registro.registrar('conversacion.voz.medida.sinVector', {
+        sessionId: estado.sessionId,
+        locutionId: locucion.locutionId,
+        muestras: muestras.length,
+        sampleRate: locucion.sampleRate,
+      })
+      return locucion.voz
+    }
     const identidad = decidirIdentidad({
       vector,
       plantillas: plantillasDe(estado.plantillasVoz),
@@ -276,6 +320,15 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
       id: id.uuid,
     })
     registrarMedidaVoz(estado, vector, identidad)
+    registro.registrar('conversacion.voz.medida.cerrada', {
+      sessionId: estado.sessionId,
+      locutionId: locucion.locutionId,
+      muestras: muestras.length,
+      sampleRate: locucion.sampleRate,
+      vozId: identidad.vozId,
+      hablante: identidad.hablante,
+      continuidad: identidad.continuidad,
+    })
     return {
       vozId: identidad.vozId,
       hablante: identidad.hablante,
@@ -342,6 +395,9 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
       speechLikeMs: locucion.medidaMotor?.speechLikeMs ?? medidaTramo.speechLikeMs,
       rms: locucion.medidaMotor?.rms ?? medidaTramo.rms,
     }
+    // La medida del cierre NO tiene puerta de duración aquí: el habla REAL de la
+    // ventana la exige el embebedor del adaptador (problema 3). Duplicar el piso
+    // en el módulo impedía medir voces legítimas al cerrar.
     const vozMedida = await medirVozAlCerrar(locucion)
     let vozCerrada = vozMedida === locucion.voz ? locucion.voz : fusionarVoz(locucion.voz, vozMedida)
     const continuidadVoz =
@@ -373,6 +429,10 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
     // medida (sin vozId) la fila no afirma timbre.
     const vozIdFirma = String(vozCerrada.vozId || '').trim()
     const firma = vozIdFirma ? estado.plantillasVoz.get(vozIdFirma)?.vector ?? null : null
+    // Etiqueta TEMPORAL mientras la medida no es fiable: solo tiene sentido si
+    // hay embebedor (sin él nunca llegará medida) y la config la declara.
+    const pendienteEtiqueta =
+      embebedor && config.etiquetaPendiente ? String(config.etiquetaPendiente() || '').trim() : ''
     const cierre: CierreLocucion = {
       locutionId: locucion.locutionId,
       sessionId: sesion,
@@ -389,10 +449,13 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
       etiquetaAnterior: estado.ultimaEtiqueta || null,
       semillaEtiqueta: config.semillaEtiqueta(),
       esEtiquetaAnonima: config.esEtiquetaAnonima,
+      pendienteEtiqueta,
       firma,
     }
     estado.abierta = null
     estado.muestrasAbierta = []
+    estado.tramosDeLaAbierta.clear()
+    estado.muestrasEnUltimoIntento = 0
     emitirCaja()
 
     const resultado = construirFila(cierre)
@@ -419,9 +482,10 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
     }
 
     // MANDATO DEL DUEÑO (2026-10-30, INSERT-ONLY): la fila se INSERTA una vez y
-    // NUNCA se actualiza. Si el turno ya commiteó y esta locución NO aporta una
-    // voz distinta medida, es reentrega/continuación: se ignora sin tocar la
-    // fila (descarte contado, nunca una segunda fila ni una actualización).
+    // NUNCA se toca — la ÚNICA excepción es el HABLANTE (`reetiquetarFila`), que
+    // reemplaza una etiqueta TEMPORAL por su medida. Si el turno ya commiteó y
+    // esta locución NO aporta una voz distinta medida, es reentrega/continuación:
+    // se ignora sin tocar la fila (descarte contado, nunca una segunda fila).
     // Caso 1+3: una voz distinta medida (continuidad false) SÍ inserta SU fila
     // — dos voces sin pausa son DOS filas del mismo turno.
     const previaDelTurno = filaDelTurno(cierre.turnId)
@@ -485,10 +549,59 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
     })
   }
 
+  /**
+   * Reemplaza la etiqueta TEMPORAL de una fila ya commiteada (`pendiente`) por la
+   * de su medida tardía y por NADA más. `CambiosFila` limita el almacén a
+   * etiqueta+evidencia, y aquí se exige además que la evidencia previa siga siendo
+   * `pendiente`: en cuanto la fila tiene un hablante afirmado, vuelve a ser
+   * inmutable (un segundo intento no la toca).
+   * @param locucionId Fila commiteada a reetiquetar.
+   * @param vozId Voz medida que identifica al hablante de esa fila.
+   * @param hablante Etiqueta de la medida (nombre registrado o `Hablante N`).
+   * @returns `true` si la fila existía pendiente y quedó reetiquetada.
+   */
+  async function reetiquetarFila(
+    locucionId: string,
+    vozId: string,
+    hablante: string,
+  ): Promise<boolean> {
+    const idFila = String(locucionId || '').trim()
+    const fila = idFila ? estado.filas.get(idFila) : undefined
+    if (!fila || fila.deleted) return false
+    if (fila.evidencia !== 'pendiente') return false
+    const nombreRegistrado = estado.nombresPorVoz.get(String(vozId || '').trim())
+    const etiqueta = String(nombreRegistrado ?? hablante ?? '').trim()
+    if (!etiqueta) return false
+    // La plantilla aprende la etiqueta que la medida acaba de afirmar.
+    const plantilla = estado.plantillasVoz.get(String(vozId || '').trim())
+    if (plantilla) plantilla.etiqueta = etiqueta
+    const evidencia = nombreRegistrado ? 'nombre' : 'medida'
+    const actualizada = await almacen.actualizar(fila.locutionId, { etiqueta, evidencia })
+    if (!actualizada) return false
+    estado.filas.set(fila.locutionId, actualizada)
+    // La continuidad de la sesión sigue a la fila más reciente ya etiquetada.
+    if (estado.ultimaEtiqueta === fila.etiqueta) estado.ultimaEtiqueta = etiqueta
+    emitir({
+      tipo: 'speaker.labeled',
+      sessionId: fila.sessionId,
+      locutionId: fila.locutionId,
+      etiqueta,
+      evidencia,
+    })
+    recordSessionEvent('conversacion', 'fila.reetiquetada', {
+      sessionId: fila.sessionId,
+      locutionId: fila.locutionId,
+      turnId: fila.turnId,
+      hablante: etiqueta,
+      anterior: fila.etiqueta,
+    })
+    return true
+  }
+
   /** ¿El tramo ya tiene su fila commiteada? La reentrega no la toca (insert-only). */
   function tramoYaCommiteado(tramoId: string): boolean {
     return estado.filas.has(tramoId)
   }
 
-  return { abrirLocucion, aplicarRevision, cerrarLocucion, tramoYaCommiteado }
+  return { abrirLocucion, aplicarRevision, cerrarLocucion, reetiquetarFila, tramoYaCommiteado }
 }

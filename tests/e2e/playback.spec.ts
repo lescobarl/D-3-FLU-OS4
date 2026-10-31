@@ -168,7 +168,27 @@ test(`FLU Playback (${MODE}, SR=${SR})`, async ({ page }) => {
         TAIL_MS +
         (SR === 'real' ? REAL_LEAD_IN_MS : 0);
     trace('playback-wait-start', { listenMs });
-    await page.waitForTimeout(listenMs);
+    if (SR === 'real') {
+        await page.waitForTimeout(listenMs);
+    } else {
+        // Válido solo si el WAV se consumió hasta el final. El guion va anclado
+        // al reloj de AUDIO (posición), no al de pared: si el AudioContext se
+        // estrangula, esperar por pared mediría un escenario que no ocurrió.
+        await page.waitForFunction(
+            () => {
+                const status = (window as any).__fluPlayback?.status?.();
+                if (!status) return false;
+                if (status.ended) return true;
+                return (
+                    Number(status.duration) > 0 &&
+                    Number(status.position) >= Number(status.duration) - 0.25
+                );
+            },
+            null,
+            { timeout: Math.min(TIMEOUT_MS - 60000, Math.max(listenMs * 4, 120000)) },
+        );
+        await page.waitForTimeout(TAIL_MS);
+    }
     trace('playback-wait-done');
 
     const ui = await stopUiObserver(page);
@@ -218,6 +238,13 @@ test(`FLU Playback (${MODE}, SR=${SR})`, async ({ page }) => {
 
     const captured = NO_CAPTURE || Number(snapshot?.audio?.seconds || 0) > 0;
     const rowsOk = SR === 'real' ? rows.length > 0 : true;
+    // Invariante del HARNESS (no del producto): el audio debe haberse consumido
+    // hasta el final. Con el AudioContext estrangulado, la corrida mide otro
+    // escenario (finales adelantados) y no puede darse por válida.
+    const audioOk =
+        SR === 'real' ||
+        Boolean(playback?.ended) ||
+        Number(playback?.position || 0) >= Number(playback?.duration || 0) - 0.25;
     // Invariante del HARNESS (no del producto): si el guion no se emitió completo,
     // la corrida no mide lo que dice medir y no puede darse por válida.
     const scriptOk =
@@ -232,6 +259,7 @@ test(`FLU Playback (${MODE}, SR=${SR})`, async ({ page }) => {
             Boolean(playback?.ready) &&
             Boolean(playback?.started) &&
             captured &&
+            audioOk &&
             rowsOk &&
             scriptOk,
         mode: MODE,

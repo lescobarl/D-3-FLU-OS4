@@ -18,8 +18,12 @@ export type IdiomaLocucion = Exclude<Idioma, 'both'>
 /** Motivo declarado del cierre de una locución (`stop(stopKind)`). */
 export type MotivoCierre = 'user' | 'system' | 'watchdog'
 
-/** Evidencia con la que se afirmó la etiqueta de una fila. */
-export type EvidenciaEtiqueta = 'nombre' | 'medida' | 'continuidad' | 'semilla'
+/**
+ * Evidencia con la que se afirmó la etiqueta de una fila.
+ * `pendiente` = etiqueta TEMPORAL: la medida de la voz todavía no es fiable (o no
+ * ha llegado). El dueño la autorizó el 2026-10-30 y la reemplaza la medida tardía.
+ */
+export type EvidenciaEtiqueta = 'nombre' | 'medida' | 'continuidad' | 'semilla' | 'pendiente'
 
 /** Tramo de audio con su frecuencia: `[inicio, fin]` sin `sampleRate` no significa nada. */
 export type TramoMuestreado = Readonly<{
@@ -77,8 +81,14 @@ export type Fila = Readonly<{
 /** Fila lista para insertar: el almacén completa `[revision, updated_at, deleted]`. */
 export type FilaNueva = Omit<Fila, 'revision' | 'updated_at' | 'deleted'>
 
-/** Campos que el almacén puede actualizar (promoción, consolidación y borrado lógico). */
-export type CambiosFila = Partial<Pick<Fila, 'texto' | 'provisional' | 'reason' | 'deleted' | 'tramo'>>
+/**
+ * Campos actualizables de una fila: SOLO la VOZ — su etiqueta y la evidencia de
+ * esa etiqueta. Mandato del dueño (2026-10-30): «puedes poner un hablante
+ * temporal si aun no llega, y cuando lo tengas reemplazar; ese es el único campo
+ * de la conversación que se puede actualizar». Texto, tramo, firma, idioma,
+ * estado y borrado son INMUTABLES (insert-only).
+ */
+export type CambiosFila = Readonly<Partial<Pick<Fila, 'etiqueta' | 'evidencia'>>>
 
 /** Reloj inyectado: dentro del módulo no se llama `Date.now()`. */
 export interface RelojPort {
@@ -138,6 +148,14 @@ export interface ConfigPort {
   wakeWords(): readonly string[]
   /** Etiqueta de la primera locución sin medida ni continuidad. */
   semillaEtiqueta(): string
+  /**
+   * Etiqueta TEMPORAL de una fila cuya medida de voz todavía no es fiable
+   * (`speakerAssignDefaults.pendingSpeaker`, «Hablante ?»). Fuente única:
+   * `FLU_CONFIG.voiceIdentity.labels.pendingSpeaker`. Opcional para los dobles
+   * de prueba: sin ella el módulo no usa etiqueta temporal y cae a la semilla.
+   * El producto la implementa SIEMPRE.
+   */
+  etiquetaPendiente?(): string
   /**
    * `true` si la etiqueta es una agrupación ANÓNIMA (`Hablante N` o pendiente),
    * no una identidad: no puede afirmar ni heredar un nombre propio. Definición

@@ -83,3 +83,19 @@ export function estadoDeLocucion(anterior = '', nuevo = '') {
   const crecimiento = utterancesRelate(previo, texto)
   return { mismaRevision, crecimiento, locucionNueva: !mismaRevision && !crecimiento }
 }
+
+/**
+ * ¿El texto nuevo CONTINÚA la frase anterior (misma locución)?
+ *
+ * Pregunta del límite del producto y de la ingesta: una revisión del ASR del
+ * mismo enunciado o un crecimiento del dictado continúan la frase; cualquier
+ * otro texto es OTRA frase y no puede pegarse a la línea abierta ni reescribir
+ * su fila. Dueño único de la comparación: no se reimplementa en los llamadores.
+ * @param {string} anterior texto ya conocido de la locución.
+ * @param {string} nuevo texto que llega.
+ * @returns {boolean} `true` solo si es la misma frase en curso.
+ */
+export function continuaLaFrase(anterior = '', nuevo = '') {
+  const estado = estadoDeLocucion(anterior, nuevo)
+  return estado.mismaRevision || estado.crecimiento
+}

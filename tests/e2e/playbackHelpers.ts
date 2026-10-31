@@ -37,6 +37,12 @@ export function stubWavMicrophone() {
                 ended: w.__fluPlayback.ended,
                 duration: w.__fluPlayback.duration,
                 elapsed: w.__fluPlayback.elapsed,
+                // Posición REAL del WAV en el reloj de audio: si el AudioContext
+                // se estrangula, el guion debe seguir al audio, no al reloj de
+                // pared (medido 2026-10-31: 0,5x => finales adelantados).
+                position: typeof w.__fluPlayback.audioPosition === 'function'
+                    ? w.__fluPlayback.audioPosition()
+                    : 0,
                 error: w.__fluPlayback.error,
                 fetchInfo: w.__fluPlayback.fetchInfo || null,
             }),
@@ -72,9 +78,16 @@ export function stubWavMicrophone() {
             src.connect(destination);
             w.__fluPlayback.ready = true;
             w.__fluPlayback.duration = audio.duration;
+            let startedAtAudio = 0;
+            w.__fluPlayback.audioPosition = () => {
+                if (!w.__fluPlayback.started) return 0;
+                const avanzado = ctx.currentTime - startedAtAudio;
+                return Math.max(0, Math.min(w.__fluPlayback.duration, avanzado));
+            };
             w.__fluPlayback.start = async () => {
                 if (w.__fluPlayback.started) return;
                 await ctx.resume().catch(() => undefined);
+                startedAtAudio = ctx.currentTime;
                 src.start();
                 w.__fluPlayback.started = true;
                 w.__fluPlayback.startedAt = performance.now();
@@ -141,9 +154,9 @@ export function stubMuteRecognition() {
 }
 
 /**
- * SR guionizado para `--sr script`: reemite por `onresult` los textos GRABADOS en
- * la sesión real (`turns.ndjson`) en su línea de tiempo, mientras el VAD y el motor
- * de conversación corren sobre el PCM real del WAV.
+ * SR guionizado para `--sr script`: reemite por `onresult` los finales REALES de
+ * la sesión (`chrome-raw`, reubicados a la posición del WAV) mientras el VAD y el
+ * motor de conversación corren sobre el PCM real del WAV.
  *
  * Motivo (medido 2026-10-26): la Web Speech API de Chrome no consume el dispositivo
  * falso (`--use-file-for-fake-audio-capture`): `audiostart` → `audioend` a los ~8 s →
@@ -151,11 +164,12 @@ export function stubMuteRecognition() {
  * filas que medir. Este modo sustituye SOLO al reconocedor; audio, VAD, tramos,
  * cierre y filas son los del producto.
  *
- * La línea de tiempo se ancla a `__fluPlayback.startedAt` (WAV t=0), no al arranque
- * de cada instancia: el hook reconstruye el SR durante la corrida y el guion debe
- * seguir donde va el audio. Cada final llega como sesión de reconocimiento de UN
- * resultado (`resultIndex: 0`, `results[0].isFinal === true`), la forma legítima
- * que Chrome usa al inicio de una sesión.
+ * La línea de tiempo es la POSICIÓN del WAV en el reloj de audio
+ * (`__fluPlayback.status().position`), no el reloj de pared: el AudioContext
+ * puede estrangularse (medido 2026-10-31: 0,5x) y un guion por pared adelanta
+ * los finales respecto de su habla. Cada final llega como sesión de
+ * reconocimiento de UN resultado (`resultIndex: 0`, `results[0].isFinal === true`),
+ * la forma legítima que Chrome usa al inicio de una sesión.
  *
  * @param events Guion `{ atMs, text }` (ms desde WAV t=0), ordenado por el helper.
  */
@@ -181,7 +195,12 @@ export function stubScriptedRecognition() {
         const deliverDue = () => {
             const playback = w.__fluPlayback;
             if (!playback?.started || !playback?.startedAt || !active) return;
-            const elapsed = performance.now() - Number(playback.startedAt);
+            // La línea de tiempo es la del AUDIO (posición del WAV), no la de
+            // pared: con el AudioContext estrangulado, `performance.now()` se
+            // adelanta y los finales caen antes de su habla.
+            const elapsed = typeof playback.audioPosition === 'function'
+                ? playback.audioPosition() * 1000
+                : performance.now() - Number(playback.startedAt);
             for (const item of pending) {
                 if (item.emitted || item.atMs > elapsed) continue;
                 item.emitted = true;

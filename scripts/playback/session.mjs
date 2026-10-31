@@ -213,18 +213,42 @@ export function loadSession(input) {
 }
 
 /**
- * GUIÓN DE FINALES para `--sr script`: reconstruye, desde los commits REALES de la
- * sesión (`turns.ndjson`), qué frase produjo el ASR y en qué momento del audio.
+ * Instante de pared en que arrancó la captura (t=0 del `audio.wav`), derivado del
+ * primer `LOG:MicPcm` de la sesión: `ms` ya capturados en ese log.
  *
- * El commit del recorder ocurre DESPUÉS del habla (Chrome entrega su final con
- * latencia); `lagMs` desplaza el final hacia el habla que lo produjo, para que caiga
- * dentro del tramo de audio correcto. Las filas consecutivas con el MISMO texto son
- * PROMOCIONES de la tubería que grabó la sesión, no locuciones distintas: se emite
- * una vez cada texto (re-emitirlas fabricaría una repetición que el origen no dijo).
+ * Medido en 89a0d948 (2026-10-31): el micrófono arrancó 11,10 s después de
+ * `meta.startedAt`. Sin este ancla, el reloj de pared del commit (que además
+ * incluye el retraso de la tubería que grabó) desplaza cada final ~9-17 s y
+ * fabrica agrupaciones que el ASR real no produjo.
  *
  * @param {any} session sesión cargada por `loadSession`
- * @param {{ lagMs?: number, minAtMs?: number }} [options]
- * @returns {Array<{ atMs: number, text: string, sourceAtMs: number }>}
+ * @returns {number | null} ms de pared del primer sample capturado
+ */
+function capturaArranqueMs(session) {
+  for (const event of session?.events || []) {
+    if (event?.event !== 'LOG:MicPcm') continue
+    const ms = Number(/ms=(\d+)/.exec(String(event?.data?.message || ''))?.[1])
+    const t = Number(event?.t)
+    if (Number.isFinite(ms) && Number.isFinite(t)) return t - ms
+  }
+  return null
+}
+
+/**
+ * GUIÓN DE FINALES para `--sr script`: los finales REALES que Chrome entregó en la
+ * sesión (`chrome-raw`), reubicados del reloj de pared al del WAV con el arranque
+ * de captura (`LOG:MicPcm`).
+ *
+ * El commit del recorder NO sirve de ancla: ocurre cuando la tubería que grabó
+ * terminó de procesar (medido 2026-10-31: hasta 17 s después de su final), así que
+ * anclar ahí metía cada final ~8,7 s tarde y el tramo vivo ya era la frase
+ * siguiente. Las entregas consecutivas con el MISMO texto son promociones del
+ * reconocedor, no locuciones distintas: vale la ÚLTIMA (la que el commit usó).
+ *
+ * @param {any} session sesión cargada por `loadSession`
+ * @param {{ lagMs?: number, minAtMs?: number }} [options] `lagMs` solo aplica al
+ *   último recurso (reloj de pared), para sesiones sin `chrome-raw`.
+ * @returns {Array<{ atMs: number, text: string, sourceAtMs: number | null }>}
  */
 export function buildScriptedFinals(session, { lagMs = 4000, minAtMs = 500 } = {}) {
   const origin = Date.parse(session?.meta?.startedAt || '')
@@ -232,22 +256,53 @@ export function buildScriptedFinals(session, { lagMs = 4000, minAtMs = 500 } = {
     throw new Error('Sesion sin meta.startedAt: no se puede guionizar el reconocedor')
   }
   const limitMs = Number(session?.audio?.seconds || 0) * 1000
+  const sampleRate = Number(session?.audio?.sampleRate || 0)
+  const capturaMs = capturaArranqueMs(session)
   const finals = []
-  let ultimo = ''
+  /** Alta con dedupe consecutivo por texto; `atMs` siempre en ms del WAV. */
+  const agregar = (atMs, text, sourceAtMs) => {
+    const posicion = Math.max(minAtMs, Math.round(atMs))
+    if (!Number.isFinite(posicion) || posicion > limitMs) return
+    const previo = finals[finals.length - 1]
+    if (previo && previo.text === text) {
+      previo.atMs = posicion
+      previo.sourceAtMs = sourceAtMs
+      return
+    }
+    finals.push({ atMs: posicion, text, sourceAtMs })
+  }
+  const sourceAt = (t) => (Number.isFinite(t) ? Math.round(t - origin) : null)
+
+  if (capturaMs !== null) {
+    for (const event of session.events || []) {
+      if (event?.event !== 'chrome-raw') continue
+      const data = event?.data || {}
+      if (data.kind !== 'final') continue
+      const text = String(data.text || '').trim()
+      const t = Number(event?.t)
+      if (!text || !Number.isFinite(t)) continue
+      agregar(t - capturaMs, text, sourceAt(t))
+    }
+    if (finals.length > 0) return finals
+  }
+
+  // Respaldo: ventana de audio del commit. `audioEndSample` sigue siendo el fin
+  // real del habla aunque el búfer circular haya saturado el inicio; el final de
+  // Chrome llega ~0,15 s después.
   for (const turn of session.turns || []) {
     if (turn?.kind !== 'commit' || typeof turn.text !== 'string') continue
     const text = String(turn.text).trim()
-    if (!text || text === ultimo) continue
-    ultimo = text
+    if (!text) continue
     const t = Number(turn.t ?? turn.timestamp)
+    const finMuestras = Number(turn.audioEndSample)
+    if (Number.isFinite(finMuestras) && finMuestras > 0 && sampleRate > 0) {
+      agregar((finMuestras / sampleRate) * 1000 + 150, text, sourceAt(t))
+      continue
+    }
+    // Último recurso: reloj de pared del commit (incluye el retraso de la
+    // tubería que grabó; solo para sesiones sin `chrome-raw` ni ventana).
     if (!Number.isFinite(t)) continue
-    const sourceAtMs = t - origin
-    if (sourceAtMs > limitMs) continue
-    finals.push({
-      atMs: Math.max(minAtMs, Math.round(sourceAtMs - lagMs)),
-      text,
-      sourceAtMs: Math.round(sourceAtMs),
-    })
+    agregar(t - origin - lagMs, text, sourceAt(t))
   }
   return finals
 }

@@ -100,7 +100,7 @@ describe('identidad y tiempo inyectados', () => {
 })
 
 describe('almacén — una fila por locución y tupla [revision, updated_at, deleted]', () => {
-  it('guardar asigna la tupla; actualizar incrementa revisión; el borrado es lógico', async () => {
+  it('guardar asigna la tupla; actualizar reetiqueta e incrementa revisión; el borrado es lógico', async () => {
     let ahora = 1000
     const reloj: RelojPort = { ahora: () => ahora }
     const almacen = crearAlmacenMemoria({ reloj })
@@ -109,12 +109,16 @@ describe('almacén — una fila por locución y tupla [revision, updated_at, del
     expect(guardada).toMatchObject({ revision: 1, updated_at: 1000, deleted: false })
 
     ahora = 2000
-    const promovida = await almacen.actualizar('loc-1', { provisional: true })
-    expect(promovida).toMatchObject({ revision: 2, updated_at: 2000, provisional: true })
-
-    ahora = 3000
-    const borrada = await almacen.actualizar('loc-1', { deleted: true })
-    expect(borrada).toMatchObject({ revision: 3, deleted: true })
+    // Mandato del dueño 2026-10-30: el ÚNICO campo actualizable es el hablante.
+    const reetiquetada = await almacen.actualizar('loc-1', { etiqueta: 'Luis', evidencia: 'medida' })
+    expect(reetiquetada).toMatchObject({
+      revision: 2,
+      updated_at: 2000,
+      etiqueta: 'Luis',
+      evidencia: 'medida',
+      texto: guardada.texto,
+      deleted: false,
+    })
   })
 
   it('repetir la misma locución es upsert: una fila y revisión incremental', async () => {
@@ -126,7 +130,7 @@ describe('almacén — una fila por locución y tupla [revision, updated_at, del
 
   it('actualizar una fila inexistente devuelve null, no inventa fila', async () => {
     const almacen = crearAlmacenMemoria({ reloj: { ahora: () => 1 } })
-    expect(await almacen.actualizar('no-existe', { provisional: false })).toBeNull()
+    expect(await almacen.actualizar('no-existe', { etiqueta: 'Luis' })).toBeNull()
   })
 })
 

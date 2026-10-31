@@ -60,6 +60,10 @@ export type EstadoSesion = {
   nombrePendiente: string
   /** PCM retenido de la locución abierta (tope en `configuracion`), para medir. */
   muestrasAbierta: Float32Array[]
+  /** Tramos cuyo audio YA entró en `muestrasAbierta` (evita duplicarlo al reatribuir). */
+  tramosDeLaAbierta: Set<string>
+  /** Muestras retenidas en el último intento de medida temprana (freno de reintentos). */
+  muestrasEnUltimoIntento: number
   /** Muestras PCM entregadas a la ingesta en la sesión (Caso 5, sin tope). */
   totalMuestrasEntregadas: number
   /** Voces nuevas contadas en la sesión (`Hablante N`). */
@@ -94,6 +98,12 @@ export type Sesion = Readonly<{
     causa: CausaCierre,
     final: boolean,
   ): Promise<void>
+  /**
+   * Reemplaza la etiqueta TEMPORAL de una fila por la de su medida tardía: la
+   * ÚNICA actualización que admite una fila commiteada (mandato del dueño
+   * 2026-10-30). `true` si la fila existía pendiente y quedó reetiquetada.
+   */
+  reetiquetarFila(locucionId: string, vozId: string, hablante: string): Promise<boolean>
   tramoYaCommiteado(tramoId: string): boolean
   reiniciar(sessionId: string, turno: string, idioma: IdiomaLocucion): void
 }>
@@ -124,6 +134,8 @@ export function crearEstadoSesion(idiomaInicial: IdiomaLocucion): EstadoSesion {
     plantillasVoz: new Map(),
     nombrePendiente: '',
     muestrasAbierta: [],
+    tramosDeLaAbierta: new Set(),
+    muestrasEnUltimoIntento: 0,
     totalMuestrasEntregadas: 0,
     contadorVoces: 0,
     medidaVozEnCurso: false,
@@ -295,6 +307,8 @@ export function crearSesion(
     estado.plantillasVoz.clear()
     estado.nombrePendiente = ''
     estado.muestrasAbierta = []
+    estado.tramosDeLaAbierta = new Set()
+    estado.muestrasEnUltimoIntento = 0
     estado.totalMuestrasEntregadas = 0
     estado.contadorVoces = 0
     estado.medidaVozEnCurso = false

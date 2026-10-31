@@ -54,9 +54,13 @@ export function filaInmutableEnFila(src: string): boolean {
   return /export function construirFila/.test(src) && !/promoverFila|consolidarFilaDelTurno/.test(src)
 }
 
-/** Los almacenes aplican `tramo` en `actualizar` (la ventana se conserva). */
-export function actualizarTramoEnAlmacen(src: string): boolean {
-  return /tramo:\s*cambios\.tramo/.test(src)
+/**
+ * ¿Los almacenes aplican SOLO la etiqueta y su evidencia en `actualizar`?
+ * Mandato del dueño 2026-10-30: el hablante es el único campo actualizable; el
+ * resto de la fila (texto, tramo, estado) es inmutable.
+ */
+export function actualizarSoloEtiqueta(src: string): boolean {
+  return /etiqueta:\s*cambios\.etiqueta/.test(src) && /evidencia:\s*cambios\.evidencia/.test(src)
 }
 
 const VOZ = (): MedidaVad => ({ hayVoz: true, silencioMs: 0 })
@@ -362,9 +366,9 @@ describe('Caso 8 — los dueños viven en el archivo real', () => {
     expect(filaInmutableEnFila(fuenteDe('src/voice/conversation/fila.ts'))).toBe(true)
   })
 
-  it('los almacenes (Dexie y memoria) aplican tramo en actualizar', () => {
-    expect(actualizarTramoEnAlmacen(fuenteDe('src/voice/conversation/adaptersAlmacen.ts'))).toBe(true)
-    expect(actualizarTramoEnAlmacen(fuenteDe('src/voice/conversation/adapters.ts'))).toBe(true)
+  it('los almacenes (Dexie y memoria) solo actualizan la etiqueta y su evidencia', () => {
+    expect(actualizarSoloEtiqueta(fuenteDe('src/voice/conversation/adaptersAlmacen.ts'))).toBe(true)
+    expect(actualizarSoloEtiqueta(fuenteDe('src/voice/conversation/adapters.ts'))).toBe(true)
   })
 })
 
@@ -382,8 +386,11 @@ describe('Caso 8 — PRUEBA DE DETECTOR (el detector no es decorativo)', () => {
     expect(filaInmutableEnFila('export function construirFila() {}')).toBe(true)
   })
 
-  it('un almacén que ignora tramo en actualizar => rojo', () => {
-    expect(actualizarTramoEnAlmacen('texto: cambios.texto ?? anterior.texto')).toBe(false)
-    expect(actualizarTramoEnAlmacen('tramo: cambios.tramo ?? anterior.tramo')).toBe(true)
+  it('un almacén que actualiza el texto en vez de la etiqueta => rojo', () => {
+    expect(actualizarSoloEtiqueta('texto: cambios.texto ?? anterior.texto')).toBe(false)
+    expect(actualizarSoloEtiqueta('etiqueta: cambios.etiqueta ?? anterior.etiqueta')).toBe(false)
+    const soloEtiqueta =
+      'etiqueta: cambios.etiqueta ?? previa.etiqueta, evidencia: cambios.evidencia ?? previa.evidencia'
+    expect(actualizarSoloEtiqueta(soloEtiqueta)).toBe(true)
   })
 })

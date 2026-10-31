@@ -91,22 +91,30 @@ describe('almacén Dexie de filas de conversación', () => {
     expect(await fluDb.conversations.count()).toBe(1)
   })
 
-  it('actualizar incrementa revisión y el borrado es lógico', async () => {
+  it('actualizar SOLO reetiqueta el hablante y el resto de la fila queda inmutable', async () => {
     const almacen = crearAlmacenDexieProducto({ reloj: crearReloj() })
-    await almacen.guardar(filaNueva())
+    const original = await almacen.guardar(filaNueva())
+    // Mandato del dueño 2026-10-30: el único campo actualizable es el hablante.
     const actualizada = await almacen.actualizar(LOCUTION_ID, {
-      texto: 'hola flu corregido',
-      deleted: true,
+      etiqueta: 'Luis',
+      evidencia: 'medida',
     })
 
     expect(actualizada).toMatchObject({
-      texto: 'hola flu corregido',
+      etiqueta: 'Luis',
+      evidencia: 'medida',
       revision: 2,
-      deleted: true,
+    })
+    expect(actualizada).toMatchObject({
+      texto: original.texto,
+      tramo: original.tramo,
+      deleted: false,
     })
     expect(await fluDb.conversations.count()).toBe(1)
     const crudo = await fluDb.conversations.get(LOCUTION_ID)
-    expect(crudo?.sync.deleted).toBe(true)
+    expect(crudo?.sync.revision).toBe(2)
+    expect(crudo?.sync.deleted).toBe(false)
+    expect(crudo?.text).toBe('hola flu')
   })
 
   it('sessionId indexado separa las filas de cada sesión', async () => {
@@ -127,7 +135,7 @@ describe('almacén Dexie de filas de conversación', () => {
 
   it('actualizar una locución inexistente devuelve null sin escribir', async () => {
     const almacen = crearAlmacenDexieProducto({ reloj: crearReloj() })
-    expect(await almacen.actualizar('00000000-0000-4000-8000-000000000099', { texto: 'x' })).toBeNull()
+    expect(await almacen.actualizar('00000000-0000-4000-8000-000000000099', { etiqueta: 'Luis' })).toBeNull()
     expect(await fluDb.conversations.count()).toBe(0)
   })
 })

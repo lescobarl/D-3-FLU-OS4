@@ -55,12 +55,15 @@ import { useIntegrationStore } from '../../store/integrationStore.ts'
 import { VOICE_DIARIZATION_DEFAULTS } from '../../core/config/sharedConfig.ts'
 import { fraseDelEventoAsr, mergeIntoOpenLine } from '../lib/speechMerge.js'
 import {
+  countVoicedSamples,
   countSpeechLikeSamplesInBlocks,
   frameSamplesFor,
   isVoicedFrame,
   rmsOfBlocks,
-  selectVoicedWindow,
+  ventanaConVoz,
 } from '../lib/voicedActivity.js'
+import { getConversationMinVoicedSamples } from '../lib/micCapture.js'
+import { voiceProbe } from '../lib/voiceProbe.ts'
 import {
   escribirRegistroConversacion,
   leerRegistroConversacion,
@@ -188,6 +191,9 @@ export function crearConfigFlu(): ConfigPort {
         : VOICE_DIARIZATION_DEFAULTS.cosineContinuity
     },
     etiquetaAnonima: (indice) => autoSpeakerLabel(indice),
+    // Etiqueta TEMPORAL mientras la medida de la voz no es fiable (mandato del
+    // dueño 2026-10-30). Fuente única: `speakerAssignDefaults.pendingSpeaker`.
+    etiquetaPendiente: () => String(FLU_CONFIG.voiceIdentity.labels.pendingSpeaker || ''),
     // Regla 2 del eco: el mínimo de palabras de la cola que abre el fragmento.
     // Fuente única: assistantEchoMinWords (+1: repetir solo las 3 últimas
     // palabras de FLU no es eco, es conversación — medido 18:12:34).
@@ -198,17 +204,44 @@ export function crearConfigFlu(): ConfigPort {
 /**
  * Embeddings de voz del PRODUCTO: mide en el worker único del proyecto y
  * compara con el coseno de su dueño único. El módulo SOLO decide (`identidad.ts`).
+ *
+ * PUERTA DE VOZ (problema 3): una ventana SIN voz no se embebe. `ventanaConVoz`
+ * devuelve `hayVoz:false` y, si no hay voz, también un recorte: embeberlo
+ * fabricaba vectores de silencio y acuñaba `Hablante N` nuevos. Además se exige
+ * el mínimo de audio VIVO declarado por el proyecto
+ * (`getConversationMinVoicedSamples`): la longitud de la captura no atraviesa
+ * nunca el piso de voz (P9.71).
  * @returns Puerto de embeddings: vector (o `null`) y comparador de medidas.
  */
 export function crearEmbebedorProducto(): EmbebedorPort {
   return {
     medir: async (muestras, sampleRate) => {
-      // La ventana del turno llega con cola de silencio del ASR (y a veces con
-      // audio ajeno en los bordes): se embebe SOLO el tramo con voz. El recorte
-      // tiene UN dueño (`voicedActivity.selectVoicedWindow`), el mismo que usaba
-      // la diarización vieja.
-      const ventanaVoz = selectVoicedWindow(muestras, { sampleRate })
+      const { inicio, fin, hayVoz } = ventanaConVoz(muestras, { sampleRate })
+      if (!hayVoz || fin <= inicio) {
+        voiceProbe('vozMedida', { motivo: 'sinVoz', muestras: muestras.length, sampleRate })
+        return null
+      }
+      const ventanaVoz = new Float32Array(muestras.subarray(inicio, fin))
+      const vozMuestras = countVoicedSamples(ventanaVoz, { sampleRate })
+      const minimo = getConversationMinVoicedSamples(sampleRate)
+      if (vozMuestras < minimo) {
+        voiceProbe('vozMedida', {
+          motivo: 'vozInsuficiente',
+          vozMs: Math.round((vozMuestras / sampleRate) * 1000),
+          minMs: Math.round((minimo / sampleRate) * 1000),
+          muestras: muestras.length,
+          sampleRate,
+        })
+        return null
+      }
       const vector = await embedAudioForDiarization(ventanaVoz, sampleRate)
+      voiceProbe('vozMedida', {
+        motivo: vector.length > 0 ? 'ok' : 'sinVector',
+        vozMs: Math.round((vozMuestras / sampleRate) * 1000),
+        muestras: muestras.length,
+        sampleRate,
+        vector: vector.length,
+      })
       return vector.length > 0 ? vector : null
     },
     comparar: (a, b) => compareCosineSignatures([...a], [...b]),
@@ -337,16 +370,14 @@ export function crearAlmacenMemoria({ reloj }: { reloj: RelojPort }): AlmacenPor
       return instantanea(guardada)
     },
 
+    // Solo el hablante: `CambiosFila` no admite otro campo (mandato 2026-10-30).
     actualizar: async (locutionId: string, cambios: CambiosFila): Promise<Fila | null> => {
       const previa = filas.get(locutionId)
       if (!previa) return null
       const siguiente: Fila = {
         ...previa,
-        texto: cambios.texto ?? previa.texto,
-        provisional: cambios.provisional ?? previa.provisional,
-        reason: cambios.reason ?? previa.reason,
-        tramo: cambios.tramo ? { ...cambios.tramo } : previa.tramo,
-        deleted: cambios.deleted ?? previa.deleted,
+        etiqueta: cambios.etiqueta ?? previa.etiqueta,
+        evidencia: cambios.evidencia ?? previa.evidencia,
         revision: previa.revision + 1,
         updated_at: reloj.ahora(),
       }
@@ -437,7 +468,7 @@ export function renameRowSpeakerName(rowId: string, speakerName: string): boolea
 
 /**
  * Resolutor del hablante del PRODUCTO (modo pasivo): la medida real
- * (`crearEmbebedorProducto`, con el recorte de `selectVoicedWindow`) y la regla
+ * (`crearEmbebedorProducto`, con la puerta de voz de `ventanaConVoz`) y la regla
  * de identidad del módulo. UNA instancia por proceso.
  * @returns El resolutor `resolverHablante` con la evidencia de medida.
  */

@@ -46,6 +46,9 @@ import {
   registrarFallo,
 } from './adapters.ts'
 import { crearConversacion } from './motor.ts'
+// Dueño único de «¿este texto continúa la frase abierta?»: el límite no
+// reimplementa la comparación (revisión del ASR o crecimiento del dictado).
+import { continuaLaFrase } from '../core/locucion.js'
 import type { IdiomaLocucion, MotivoCierre } from './ports.ts'
 import type {
   ConversacionApi,
@@ -235,20 +238,26 @@ export function crearMotorConversacionProducto({
         const instantanea = api.snapshot()
         const abierta = instantanea.locucionAbierta
         const tramoVigente = instantanea.tramoAudio?.tramoId ?? ''
-        // El texto sin tramo lo atribuye el MÓDULO dentro de su cola: va al tramo de
-        // audio si existe y, si no, a la locución abierta. Solo hay continuidad
-        // cuando no los separa un tramo nuevo; con tramo nuevo el texto empieza de
-        // cero (esa frontera la decide el módulo).
-        const continua = Boolean(abierta) && (!tramoVigente || tramoVigente === abierta?.locutionId)
-        const clave = continua && abierta ? abierta.locutionId : ''
+        const trozo = componerFraseDelEvento(evento.results, evento.resultIndex)
+        if (!trozo) return
+        // La línea abierta SOLO recibe el trozo si es SU audio vivo o si el trozo
+        // la CONTINÚA (final tardío del mismo enunciado; dueño de la relación:
+        // `continuaLaFrase`). Sin tramo vivo y sin continuación el texto es de
+        // otra frase que el VAD no segmentó: se ingiere SOLO y el módulo lo abre
+        // por su puerta de texto ajeno. Sin esta prueba el trozo ajeno se pegaba
+        // a la línea y la fila commiteaba DOS frases (defecto medido en el
+        // playback 2026-10-31: 93 caracteres donde iban 41).
+        const laContinua =
+          abierta !== null &&
+          (tramoVigente === abierta.locutionId ||
+            (!tramoVigente && continuaLaFrase(abierta.texto, trozo)))
+        const clave = laContinua && abierta ? abierta.locutionId : ''
         if (clave !== locucionDelLibro) {
           libroDeLinea = null
           locucionDelLibro = clave
         }
-        const trozo = componerFraseDelEvento(evento.results, evento.resultIndex)
-        if (!trozo) return
         const hayFinal = traeFinal(evento)
-        const lineaPrevia = continua && abierta ? abierta.texto : ''
+        const lineaPrevia = laContinua && abierta ? abierta.texto : ''
         const fusion = fusionarEnLineaAbierta(lineaPrevia, libroDeLinea, trozo)
         libroDeLinea = fusion.libro
         // Misma línea = síntoma de reentrega del MISMO tramo (Chrome repite el
@@ -279,8 +288,6 @@ export function crearMotorConversacionProducto({
 
     audio: (muestras, frecuencia, inicioMuestras) => {
       if (estadoMotor !== 'activa' || !muestras || muestras.length === 0) return
-      const turno = leerTurno()
-      if (!turno) return
       const inicio =
         Number.isFinite(Number(inicioMuestras)) && Number(inicioMuestras) >= 0
           ? Number(inicioMuestras)
@@ -289,12 +296,19 @@ export function crearMotorConversacionProducto({
       cursorMuestras = Math.max(cursorMuestras, fin)
       // El audio entra en la MISMA cadena que el texto: así el evento siguiente
       // compone sobre una instantánea que ya incluye estos bloques.
-      void encadenar(() =>
-        registrarFallo(
+      void encadenar(() => {
+        if (estadoMotor !== 'activa') return undefined
+        // El turno se lee DENTRO de la cadena: un bloque capturado mientras la
+        // locución anterior commitea no puede abrir la siguiente con el turno
+        // viejo (el commit lo avanza; leerlo antes dejaba `turnoYaEscrito` y
+        // mataba una fila legítima).
+        const turno = leerTurno()
+        if (!turno) return undefined
+        return registrarFallo(
           'conversacion.producto.audio.error',
           api.ingestAudio({ muestras, sampleRate: frecuencia, inicio, fin, turnId: turno }),
-        ),
-      )
+        )
+      })
     },
 
     suscribir: (oyente) => api.subscribe(oyente),
