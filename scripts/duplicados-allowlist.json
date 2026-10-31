@@ -1,23 +1,109 @@
 {
-  "_nota": "Pares de archivos que HOY comparten un bloque clonado. Solo se quitan: cada par arreglado se borra aqui en el mismo commit. Anadir uno exige aprobacion del dueno (CODEOWNERS).",
+  "_nota": "Pares de archivos que HOY comparten un bloque clonado. Cada uno declara motivo, dueno y fecha. Solo se quitan: el par arreglado se borra aqui en el mismo commit. maxPairs es el techo y solo baja; anadir una excepcion exige aprobacion del dueno (CODEOWNERS).",
   "minTokens": 70,
+  "maxPairs": 17,
   "allowedPairs": [
-    "src/avatar/model/bunnyAnimator.ts | src/avatar/model/bunnyAnimator.ts",
-    "src/components/AgendaPanel.tsx | src/components/AgendaPanel.tsx",
-    "src/components/ShoppingPanel.tsx | src/components/ShoppingPanel.tsx",
-    "src/components/WorkspaceHub.tsx | src/components/WorkspaceHub.tsx",
-    "src/core/games/abecedario.ts | src/core/games/veoVeo.ts",
-    "src/core/games/ordenaSecuencia.ts | src/core/games/veoVeo.ts",
-    "src/core/games/repiteTraduce.ts | src/core/games/veoVeo.ts",
-    "src/core/games/riddles.ts | src/core/games/veoVeo.ts",
-    "src/core/games/trabalenguas.ts | src/core/games/veoVeo.ts",
-    "src/core/games/trivia.ts | src/core/games/veoVeo.ts",
-    "src/hooks/useMinuteHandlers.ts | src/hooks/useMinuteHandlers.ts",
-    "src/hooks/useNavigationCommands.ts | src/hooks/useNavigationCommands.ts",
-    "src/server/browserProxy.ts | src/server/searchProxy.ts",
-    "src/server/geminiProxy.ts | src/server/geminiProxy.ts",
-    "src/services/deepseek.ts | src/services/deepseek.ts",
-    "src/services/deepseek.ts | src/services/gemini.ts",
-    "src/services/gemini.ts | src/services/gemini.ts"
+    {
+      "pair": "src/avatar/model/bunnyAnimator.ts | src/avatar/model/bunnyAnimator.ts",
+      "reason": "ramas del mismo flujo de animacion dentro de un archivo",
+      "owner": "@lescobarl",
+      "date": "2026-10-31"
+    },
+    {
+      "pair": "src/components/AgendaPanel.tsx | src/components/AgendaPanel.tsx",
+      "reason": "ramas del mismo render dentro de un archivo",
+      "owner": "@lescobarl",
+      "date": "2026-10-31"
+    },
+    {
+      "pair": "src/components/ShoppingPanel.tsx | src/components/ShoppingPanel.tsx",
+      "reason": "ramas del mismo render dentro de un archivo",
+      "owner": "@lescobarl",
+      "date": "2026-10-31"
+    },
+    {
+      "pair": "src/components/WorkspaceHub.tsx | src/components/WorkspaceHub.tsx",
+      "reason": "ramas del mismo render dentro de un archivo",
+      "owner": "@lescobarl",
+      "date": "2026-10-31"
+    },
+    {
+      "pair": "src/core/games/abecedario.ts | src/core/games/veoVeo.ts",
+      "reason": "esqueleto de motor (similitud de forma, AGENTS 6.6)",
+      "owner": "@lescobarl",
+      "date": "2026-10-31"
+    },
+    {
+      "pair": "src/core/games/ordenaSecuencia.ts | src/core/games/veoVeo.ts",
+      "reason": "esqueleto de motor (similitud de forma, AGENTS 6.6)",
+      "owner": "@lescobarl",
+      "date": "2026-10-31"
+    },
+    {
+      "pair": "src/core/games/repiteTraduce.ts | src/core/games/veoVeo.ts",
+      "reason": "esqueleto de motor (similitud de forma, AGENTS 6.6)",
+      "owner": "@lescobarl",
+      "date": "2026-10-31"
+    },
+    {
+      "pair": "src/core/games/riddles.ts | src/core/games/veoVeo.ts",
+      "reason": "esqueleto de motor (similitud de forma, AGENTS 6.6)",
+      "owner": "@lescobarl",
+      "date": "2026-10-31"
+    },
+    {
+      "pair": "src/core/games/trabalenguas.ts | src/core/games/veoVeo.ts",
+      "reason": "esqueleto de motor (similitud de forma, AGENTS 6.6)",
+      "owner": "@lescobarl",
+      "date": "2026-10-31"
+    },
+    {
+      "pair": "src/core/games/trivia.ts | src/core/games/veoVeo.ts",
+      "reason": "esqueleto de motor (similitud de forma, AGENTS 6.6)",
+      "owner": "@lescobarl",
+      "date": "2026-10-31"
+    },
+    {
+      "pair": "src/hooks/useMinuteHandlers.ts | src/hooks/useMinuteHandlers.ts",
+      "reason": "ramas del mismo flujo dentro de un archivo",
+      "owner": "@lescobarl",
+      "date": "2026-10-31"
+    },
+    {
+      "pair": "src/hooks/useNavigationCommands.ts | src/hooks/useNavigationCommands.ts",
+      "reason": "ramas del mismo flujo dentro de un archivo",
+      "owner": "@lescobarl",
+      "date": "2026-10-31"
+    },
+    {
+      "pair": "src/server/browserProxy.ts | src/server/searchProxy.ts",
+      "reason": "manejo comun del error de fetch: pendiente de unificar",
+      "owner": "@lescobarl",
+      "date": "2026-10-31"
+    },
+    {
+      "pair": "src/server/geminiProxy.ts | src/server/geminiProxy.ts",
+      "reason": "ramas del mismo flujo dentro de un archivo",
+      "owner": "@lescobarl",
+      "date": "2026-10-31"
+    },
+    {
+      "pair": "src/services/deepseek.ts | src/services/deepseek.ts",
+      "reason": "respuesta y traza de Pollinations repetidas: pendiente de unificar",
+      "owner": "@lescobarl",
+      "date": "2026-10-31"
+    },
+    {
+      "pair": "src/services/deepseek.ts | src/services/gemini.ts",
+      "reason": "fallback de Pollinations compartido: pendiente de unificar",
+      "owner": "@lescobarl",
+      "date": "2026-10-31"
+    },
+    {
+      "pair": "src/services/gemini.ts | src/services/gemini.ts",
+      "reason": "respuesta y traza de Pollinations repetidas: pendiente de unificar",
+      "owner": "@lescobarl",
+      "date": "2026-10-31"
+    }
   ]
 }
