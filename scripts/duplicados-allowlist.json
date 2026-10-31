@@ -1,7 +1,7 @@
 {
   "_nota": "Pares de archivos que HOY comparten un bloque clonado. Cada uno declara motivo, dueno y fecha. Solo se quitan: el par arreglado se borra aqui en el mismo commit. maxPairs es el techo y solo baja; anadir una excepcion exige aprobacion del dueno (CODEOWNERS).",
   "minTokens": 70,
-  "maxPairs": 13,
+  "maxPairs": 12,
   "allowedPairs": [
     {
       "pair": "src/avatar/model/bunnyAnimator.ts | src/avatar/model/bunnyAnimator.ts",
@@ -66,12 +66,6 @@
     {
       "pair": "src/hooks/useNavigationCommands.ts | src/hooks/useNavigationCommands.ts",
       "reason": "ramas del mismo flujo dentro de un archivo",
-      "owner": "@lescobarl",
-      "date": "2026-10-31"
-    },
-    {
-      "pair": "src/server/browserProxy.ts | src/server/searchProxy.ts",
-      "reason": "manejo comun del error de fetch: pendiente de unificar",
       "owner": "@lescobarl",
       "date": "2026-10-31"
     },

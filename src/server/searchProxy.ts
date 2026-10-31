@@ -30,6 +30,7 @@ import { acceptLanguageHeader } from '../core/search/searchLanguage.ts';
 import { REQUEST_TIMEOUT_DEFAULTS } from '../core/config/sharedConfig.ts';
 import { logCaughtError } from '../lib/caughtError.ts';
 import { parseAllowlist } from './allowlist.ts';
+import { proxyFetchError, type ProxyFetchError } from './proxyFetchError.ts';
 import { parseRequestUrl } from './requestUrl.ts';
 
 
@@ -71,12 +72,7 @@ interface FetchOk {
   json: unknown;
 }
 
-interface FetchError {
-  ok: false;
-  reason: 'fetch_error' | 'timeout';
-  status?: number;
-  detail?: string;
-}
+type FetchError = ProxyFetchError;
 
 async function fetchProviderJson(
   request: ProviderRequest,
@@ -123,11 +119,7 @@ async function fetchProviderJson(
     return { ok: true, json };
   } catch (err: unknown) {
         logCaughtError('[catch] src/server/searchProxy.ts', err);
-    if (err && typeof err === 'object' && 'name' in err && err.name === 'AbortError') {
-      return { ok: false, reason: 'timeout' };
-    }
-    const message = err && typeof err === 'object' && 'message' in err ? err.message : undefined;
-    return { ok: false, reason: 'fetch_error', detail: String(message || 'Unknown error') };
+    return proxyFetchError(err);
   } finally {
     clearTimeout(timer);
   }
