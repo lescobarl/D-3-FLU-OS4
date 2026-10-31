@@ -34,6 +34,7 @@ import { float32ToInt16, resampleLinear } from './pcmAudio.js'
 import { logCaughtError } from '../../lib/caughtError.ts'
 import { hasLocalStorage, localGet, localSet } from '../../core/storage/localStore.ts'
 import { writeAscii } from '../../lib/dataViewAscii.ts'
+import { v4 as uuidv4 } from 'uuid'
 
 const IS_DEV = Boolean(import.meta.env?.DEV)
 const STORAGE_KEY = 'flu.recorder'
@@ -266,13 +267,12 @@ export function createHttpSessionSink({ base = '/__flu/recorder', fetchImpl } = 
   }
 }
 
+/**
+ * ID de sesión: UUIDv4 (AGENTS §2.6). Sin fallback a Date.now()+Math.random:
+ * un id que no es UUID deja de ser comparable y rompe el replay.
+ */
 function newSessionId() {
-  try {
-    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID()
-  } catch (error) {
-    logCaughtError('sessionRecorder.newSessionId', error)
-  }
-  return `s-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
+  return uuidv4()
 }
 
 function persistMeta() {
