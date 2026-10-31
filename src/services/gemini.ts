@@ -193,12 +193,7 @@ Genera la minuta en formato JSON.`;
             temperature: options.temperature ?? resolveConfiguredTemperature(),
         });
 
-        if (!response.ok) {
-            const errorData = await response.json().catch((e) => { logCaughtError('src/services/gemini.ts', e); return { error: 'Proxy error' }; });
-            throw new Error(errorData.error || `Proxy returned ${response.status}`);
-        }
-
-        const data = await response.json();
+        const data = await this.readProxyJson(response);
 
         // The proxy returns the summary in OS2 format
         // Normalize to AISummaryResult
@@ -281,13 +276,25 @@ Responde como ${botName}:`;
             temperature: options.temperature ?? resolveConfiguredTemperature(),
         });
 
-        if (!response.ok) {
-            const errorData = await response.json().catch((e) => { logCaughtError('src/services/gemini.ts', e); return { error: 'Proxy error' }; });
-            throw new Error(errorData.error || `Proxy returned ${response.status}`);
-        }
+        const data = await this.readProxyJson<{ respuesta_voz?: string; text?: string }>(response);
+        return String(data.respuesta_voz || data.text || '').trim();
+    }
 
-        const data = await response.json();
-        return (data.respuesta_voz || data.text || '').trim();
+    /**
+     * Valida la respuesta del proxy y devuelve su JSON. Dueño único del manejo
+     * de error del contrato Gemini: las tres llamadas lo consumen.
+     * @param response Respuesta cruda del proxy.
+     * @returns JSON de la respuesta.
+     */
+    private async readProxyJson<T = Record<string, unknown>>(response: Response): Promise<T> {
+        if (!response.ok) {
+            const errorData = await response.json().catch((e) => {
+                logCaughtError('src/services/gemini.ts', e);
+                return { error: 'Proxy error' };
+            });
+            throw new Error(String(errorData?.error || `Proxy returned ${response.status}`));
+        }
+        return (await response.json()) as T;
     }
 
     /**
@@ -312,12 +319,12 @@ Responde como ${botName}:`;
             }),
         }, { timeoutMs: REQUEST_TIMEOUT_PRESETS.conversation });
 
-        if (!response.ok) {
-            const errorData = await response.json().catch((e) => { logCaughtError('src/services/gemini.ts', e); return { error: 'Proxy error' }; });
-            throw new Error(errorData.error || `Proxy returned ${response.status}`);
-        }
-
-        const data = await response.json();
+        const data = await this.readProxyJson<{
+            intervenir?: unknown;
+            motivo_corto?: string;
+            borrador_aportacion?: string;
+            confianza?: number;
+        }>(response);
 
         // The proxy normalizes the response (flattens evaluation wrapper)
         return {

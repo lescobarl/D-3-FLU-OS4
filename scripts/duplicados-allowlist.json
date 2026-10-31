@@ -1,7 +1,7 @@
 {
   "_nota": "Pares de archivos que HOY comparten un bloque clonado. Cada uno declara motivo, dueno y fecha. Solo se quitan: el par arreglado se borra aqui en el mismo commit. maxPairs es el techo y solo baja; anadir una excepcion exige aprobacion del dueno (CODEOWNERS).",
   "minTokens": 70,
-  "maxPairs": 14,
+  "maxPairs": 13,
   "allowedPairs": [
     {
       "pair": "src/avatar/model/bunnyAnimator.ts | src/avatar/model/bunnyAnimator.ts",
@@ -78,12 +78,6 @@
     {
       "pair": "src/server/geminiProxy.ts | src/server/geminiProxy.ts",
       "reason": "ramas del mismo flujo dentro de un archivo",
-      "owner": "@lescobarl",
-      "date": "2026-10-31"
-    },
-    {
-      "pair": "src/services/gemini.ts | src/services/gemini.ts",
-      "reason": "respuesta y traza de Pollinations repetidas: pendiente de unificar",
       "owner": "@lescobarl",
       "date": "2026-10-31"
     }
