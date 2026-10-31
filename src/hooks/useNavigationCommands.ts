@@ -57,28 +57,34 @@ function firstString(...values: unknown[]): string {
     return '';
 }
 
+/**
+ * Parametros de `handleNavigationCommand`. Dueño unico del contrato: la
+ * interfaz del hook y su implementacion lo importan en vez de repetirlo.
+ */
+export interface NavigationCommandParams {
+    navegacion: { comando: string | null; destino?: string | null; parametros?: Record<string, unknown> };
+    transcript: string;
+    speakerName?: string;
+    phase: string;
+    resolvedLanguage: string;
+    commandSpeech: string;
+    showListeningAck?: () => void;
+    integrationStore: IntegrationStore;
+    auditLog: NavigationAuditLog;
+    fluParticipant: { resetParticipant: () => void };
+    os2ResetVoiceDisplay?: () => void;
+    /** Puente de la sesion de IDENTIDAD (clusters vivos + primario): MISMA instancia
+     *  que el hook de voz. */
+    identitySession?: { current: IdentitySessionRefs | null } | null;
+    /** Puerta única e idempotente de generación de medios (video/doc). */
+    requestMedia?: (tipo: GenerationWorkspaceTipo, commandText: string) => boolean;
+}
+
 export interface NavigationCommands {
     speakFlu: (text: string, lang: string, opts?: FluSpeechOptions) => Promise<void>;
     clearResumeListeningTimer: () => void;
     scheduleResumeListening: (responseTextLength?: number) => void;
-    handleNavigationCommand: (params: {
-        navegacion: { comando: string | null; destino?: string | null; parametros?: Record<string, unknown> };
-        transcript: string;
-        speakerName?: string;
-        phase: string;
-        resolvedLanguage: string;
-        commandSpeech: string;
-        showListeningAck?: () => void;
-        integrationStore: IntegrationStore;
-        auditLog: NavigationAuditLog;
-        fluParticipant: { resetParticipant: () => void };
-        os2ResetVoiceDisplay?: () => void;
-        /** Puente de la sesion de IDENTIDAD (clusters vivos + primario): MISMA instancia
-         *  que el hook de voz. */
-        identitySession?: { current: IdentitySessionRefs | null } | null;
-        /** Puerta única e idempotente de generación de medios (video/doc). */
-        requestMedia?: (tipo: GenerationWorkspaceTipo, commandText: string) => boolean;
-    }) => Promise<void>;
+    handleNavigationCommand: (params: NavigationCommandParams) => Promise<void>;
 }
 
 export function useNavigationCommands(
@@ -238,24 +244,7 @@ export function useNavigationCommands(
         os2ResetVoiceDisplay,
         requestMedia,
         identitySession,
-    }: {
-        navegacion: { comando: string | null; destino?: string | null; parametros?: Record<string, unknown> };
-        transcript: string;
-        speakerName?: string;
-        phase: string;
-        resolvedLanguage: string;
-        commandSpeech: string;
-        showListeningAck?: () => void;
-        integrationStore: IntegrationStore;
-        auditLog: NavigationAuditLog;
-        fluParticipant: { resetParticipant: () => void };
-        os2ResetVoiceDisplay?: () => void;
-        /** Puente de la sesion de IDENTIDAD (clusters vivos + primario): MISMA instancia
-         *  que el hook de voz. */
-        identitySession?: { current: IdentitySessionRefs | null } | null;
-        /** Puerta única e idempotente de generación de medios (video/doc). */
-        requestMedia?: (tipo: GenerationWorkspaceTipo, commandText: string) => boolean;
-    }) => {
+    }: NavigationCommandParams) => {
         if (!navegacion.comando) return;
 
         const isResetCmd = isSessionResetCommand(navegacion.comando);
