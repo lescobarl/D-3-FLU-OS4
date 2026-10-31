@@ -720,12 +720,12 @@ export function resolveConfigCommandFromText(text = '', _options = {}) {
 // ------------------------------------------------------------
 
 /**
- * Normaliza el `configuracion` crudo del modelo (objeto o JSON string) al
- * contrato estricto esperado por applyConfigAction. Retorna `null` si no es
- * válido, la clave no existe en el catálogo o el handler no está soportado.
- * @param {*} raw Configuración cruda del modelo (objeto, JSON string o null).
+ * Normaliza la entrada cruda del modelo: acepta un objeto o su JSON en texto y
+ * descarta cualquier cosa que no sea un objeto plano.
+ * @param {*} raw Contrato crudo del modelo (objeto, JSON string o null).
+ * @returns {Record<string, unknown> | null} Objeto plano o null si no es válido.
  */
-export function normalizeConfiguracion(raw = null) {
+function parseModeloJson(raw) {
   if (raw == null) return null
 
   let parsed = raw
@@ -735,12 +735,24 @@ export function normalizeConfiguracion(raw = null) {
     try {
       parsed = JSON.parse(trimmed)
     } catch (e) {
-        logCaughtError('[catch] src/voice/lib/configCommands.js', e);
+      logCaughtError('[catch] src/voice/lib/configCommands.js', e)
       return null
     }
   }
 
   if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return null
+  return parsed
+}
+
+/**
+ * Normaliza el `configuracion` crudo del modelo (objeto o JSON string) al
+ * contrato estricto esperado por applyConfigAction. Retorna `null` si no es
+ * válido, la clave no existe en el catálogo o el handler no está soportado.
+ * @param {*} raw Configuración cruda del modelo (objeto, JSON string o null).
+ */
+export function normalizeConfiguracion(raw = null) {
+  const parsed = parseModeloJson(raw)
+  if (!parsed) return null
 
   const accion = String(parsed.accion || '').trim()
   if (accion !== 'set_branding' && accion !== 'set_config') return null
@@ -785,21 +797,8 @@ export function normalizeConfiguracion(raw = null) {
  * @param {*} raw Contrato de juego crudo del modelo (objeto, JSON string o null).
  */
 export function normalizeJuego(raw = null) {
-  if (raw == null) return null
-
-  let parsed = raw
-  if (typeof raw === 'string') {
-    const trimmed = raw.trim()
-    if (!trimmed) return null
-    try {
-      parsed = JSON.parse(trimmed)
-    } catch (e) {
-        logCaughtError('[catch] src/voice/lib/configCommands.js', e);
-      return null
-    }
-  }
-
-  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return null
+  const parsed = parseModeloJson(raw)
+  if (!parsed) return null
 
   const gameId = String(parsed.gameId || parsed.juego || '').trim()
   const action = String(parsed.action || parsed.accion || '').trim()
