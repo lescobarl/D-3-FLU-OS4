@@ -6,15 +6,13 @@
  * componen y se publican por la superficie de sesión.
  */
 import { crearReglasCierre } from './cierre.ts'
-import type { DatosApertura, ReglasCierre } from './cierre.ts'
+import type { ReglasCierre } from './cierre.ts'
 import type { IdentidadDecidida, PlantillaVoz } from './identidad.ts'
 import type {
-  CausaCierre,
   ContarDescarte,
   DescarteConversacion,
   DependenciasConversacion,
   EventoConversacion,
-  EvidenciaVoz,
   InstantaneaConversacion,
   LocucionAbierta,
   TramoAudio,
@@ -24,7 +22,6 @@ import type {
   EstadoAsr,
   Fila,
   IdiomaLocucion,
-  MedidaMotor,
   MedidaVad,
   MotivoCierre,
   MotorAsr,
@@ -84,29 +81,8 @@ export type Sesion = Readonly<{
   emitirCaja(): void
   snapshot(): InstantaneaConversacion
   contarDescarte: ContarDescarte
-  abrirLocucion(datos: DatosApertura): void
-  aplicarRevision(
-    locucion: LocucionAbierta,
-    texto: string,
-    final: boolean,
-    voz: EvidenciaVoz,
-    medida?: MedidaMotor,
-  ): boolean
-  cerrarLocucion(
-    locucion: LocucionAbierta,
-    motivo: MotivoCierre,
-    causa: CausaCierre,
-    final: boolean,
-  ): Promise<void>
-  /**
-   * Reemplaza la etiqueta TEMPORAL de una fila por la de su medida tardía: la
-   * ÚNICA actualización que admite una fila commiteada (mandato del dueño
-   * 2026-10-30). `true` si la fila existía pendiente y quedó reetiquetada.
-   */
-  reetiquetarFila(locucionId: string, vozId: string, hablante: string): Promise<boolean>
-  tramoYaCommiteado(tramoId: string): boolean
   reiniciar(sessionId: string, turno: string, idioma: IdiomaLocucion): void
-}>
+}> & ReglasCierre
 
 /**
  * Crea el estado vacío de una sesión.
