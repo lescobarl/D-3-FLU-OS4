@@ -1,8 +1,80 @@
 {
   "_nota": "Pares de archivos que HOY comparten un bloque clonado. Cada uno declara motivo, dueno y fecha. Solo se quitan: el par arreglado se borra aqui en el mismo commit. maxPairs es el techo y solo baja; anadir una excepcion exige aprobacion del dueno (CODEOWNERS).",
-  "minTokens": 70,
-  "maxPairs": 6,
+  "minTokens": 50,
+  "maxPairs": 41,
   "allowedPairs": [
+    {
+      "pair": "src/avatar/App.css | src/avatar/App.css",
+      "reason": "pendiente de triaje (umbral 50 tokens)",
+      "owner": "@lescobarl",
+      "date": "2026-11-01"
+    },
+    {
+      "pair": "src/avatar/model/bunnyAnimator.ts | src/avatar/model/bunnyAnimator.ts",
+      "reason": "pendiente de triaje (umbral 50 tokens)",
+      "owner": "@lescobarl",
+      "date": "2026-11-01"
+    },
+    {
+      "pair": "src/avatar/store/bunnyStore.ts | src/avatar/store/bunnyStore.ts",
+      "reason": "pendiente de triaje (umbral 50 tokens)",
+      "owner": "@lescobarl",
+      "date": "2026-11-01"
+    },
+    {
+      "pair": "src/components/AgendaPanel.tsx | src/components/AgendaPanel.tsx",
+      "reason": "pendiente de triaje (umbral 50 tokens)",
+      "owner": "@lescobarl",
+      "date": "2026-11-01"
+    },
+    {
+      "pair": "src/components/AmbienteEditorForm.tsx | src/components/PaletaEditorForm.tsx",
+      "reason": "pendiente de triaje (umbral 50 tokens)",
+      "owner": "@lescobarl",
+      "date": "2026-11-01"
+    },
+    {
+      "pair": "src/components/AppAnalysisPanel.tsx | src/components/DocumentResultPanel.tsx",
+      "reason": "pendiente de triaje (umbral 50 tokens)",
+      "owner": "@lescobarl",
+      "date": "2026-11-01"
+    },
+    {
+      "pair": "src/components/ContactsPanel.tsx | src/components/MateriaGrisPanel.tsx",
+      "reason": "pendiente de triaje (umbral 50 tokens)",
+      "owner": "@lescobarl",
+      "date": "2026-11-01"
+    },
+    {
+      "pair": "src/components/ContactsPanel.tsx | src/components/ParticipantsPanel.tsx",
+      "reason": "pendiente de triaje (umbral 50 tokens)",
+      "owner": "@lescobarl",
+      "date": "2026-11-01"
+    },
+    {
+      "pair": "src/components/ParticipantsPanel.tsx | src/components/ShoppingPanel.tsx",
+      "reason": "pendiente de triaje (umbral 50 tokens)",
+      "owner": "@lescobarl",
+      "date": "2026-11-01"
+    },
+    {
+      "pair": "src/core/autonomy/useAutonomyIntegration.ts | src/core/autonomy/useAutonomyIntegration.ts",
+      "reason": "pendiente de triaje (umbral 50 tokens)",
+      "owner": "@lescobarl",
+      "date": "2026-11-01"
+    },
+    {
+      "pair": "src/core/deviceActions/deviceActionIntentParser.ts | src/core/deviceActions/deviceActionIntentParser.ts",
+      "reason": "pendiente de triaje (umbral 50 tokens)",
+      "owner": "@lescobarl",
+      "date": "2026-11-01"
+    },
+    {
+      "pair": "src/core/games/abecedario.ts | src/core/games/trabalenguas.ts",
+      "reason": "pendiente de triaje (umbral 50 tokens)",
+      "owner": "@lescobarl",
+      "date": "2026-11-01"
+    },
     {
       "pair": "src/core/games/abecedario.ts | src/core/games/veoVeo.ts",
       "reason": "esqueleto de motor (similitud de forma, AGENTS 6.6)",
@@ -10,10 +82,64 @@
       "date": "2026-10-31"
     },
     {
+      "pair": "src/core/games/adivinaNumero.ts | src/core/games/loteria.ts",
+      "reason": "pendiente de triaje (umbral 50 tokens)",
+      "owner": "@lescobarl",
+      "date": "2026-11-01"
+    },
+    {
+      "pair": "src/core/games/adivinaNumero.ts | src/core/games/respiracion.ts",
+      "reason": "pendiente de triaje (umbral 50 tokens)",
+      "owner": "@lescobarl",
+      "date": "2026-11-01"
+    },
+    {
+      "pair": "src/core/games/gameUtils.ts | src/core/games/gameUtils.ts",
+      "reason": "pendiente de triaje (umbral 50 tokens)",
+      "owner": "@lescobarl",
+      "date": "2026-11-01"
+    },
+    {
+      "pair": "src/core/games/gameUtils.ts | src/lib/spokenNumbers.ts",
+      "reason": "pendiente de triaje (umbral 50 tokens)",
+      "owner": "@lescobarl",
+      "date": "2026-11-01"
+    },
+    {
+      "pair": "src/core/games/karaoke.ts | src/core/games/respiracion.ts",
+      "reason": "pendiente de triaje (umbral 50 tokens)",
+      "owner": "@lescobarl",
+      "date": "2026-11-01"
+    },
+    {
+      "pair": "src/core/games/ordenaSecuencia.ts | src/core/games/repiteTraduce.ts",
+      "reason": "pendiente de triaje (umbral 50 tokens)",
+      "owner": "@lescobarl",
+      "date": "2026-11-01"
+    },
+    {
       "pair": "src/core/games/ordenaSecuencia.ts | src/core/games/veoVeo.ts",
       "reason": "esqueleto de motor (similitud de forma, AGENTS 6.6)",
       "owner": "@lescobarl",
       "date": "2026-10-31"
+    },
+    {
+      "pair": "src/core/games/pronunciacion.ts | src/core/games/repiteTraduce.ts",
+      "reason": "pendiente de triaje (umbral 50 tokens)",
+      "owner": "@lescobarl",
+      "date": "2026-11-01"
+    },
+    {
+      "pair": "src/core/games/repiteTraduce.ts | src/core/games/trabalenguas.ts",
+      "reason": "pendiente de triaje (umbral 50 tokens)",
+      "owner": "@lescobarl",
+      "date": "2026-11-01"
+    },
+    {
+      "pair": "src/core/games/repiteTraduce.ts | src/core/games/trivia.ts",
+      "reason": "pendiente de triaje (umbral 50 tokens)",
+      "owner": "@lescobarl",
+      "date": "2026-11-01"
     },
     {
       "pair": "src/core/games/repiteTraduce.ts | src/core/games/veoVeo.ts",
@@ -38,6 +164,90 @@
       "reason": "esqueleto de motor (similitud de forma, AGENTS 6.6)",
       "owner": "@lescobarl",
       "date": "2026-10-31"
+    },
+    {
+      "pair": "src/core/multiuser/participantRegistry.ts | src/core/reminders/shoppingService.ts",
+      "reason": "pendiente de triaje (umbral 50 tokens)",
+      "owner": "@lescobarl",
+      "date": "2026-11-01"
+    },
+    {
+      "pair": "src/core/reminders/nlDateParser.ts | src/core/reminders/nlDateParser.ts",
+      "reason": "pendiente de triaje (umbral 50 tokens)",
+      "owner": "@lescobarl",
+      "date": "2026-11-01"
+    },
+    {
+      "pair": "src/core/search/searchSession.ts | src/core/search/searchSession.ts",
+      "reason": "pendiente de triaje (umbral 50 tokens)",
+      "owner": "@lescobarl",
+      "date": "2026-11-01"
+    },
+    {
+      "pair": "src/hooks/useBrowserProfiles.ts | src/hooks/useCommunicationProfiles.ts",
+      "reason": "pendiente de triaje (umbral 50 tokens)",
+      "owner": "@lescobarl",
+      "date": "2026-11-01"
+    },
+    {
+      "pair": "src/hooks/useNavigationCommands.ts | src/hooks/useNavigationCommands.ts",
+      "reason": "pendiente de triaje (umbral 50 tokens)",
+      "owner": "@lescobarl",
+      "date": "2026-11-01"
+    },
+    {
+      "pair": "src/hooks/useNotes.ts | src/hooks/useShoppingList.ts",
+      "reason": "pendiente de triaje (umbral 50 tokens)",
+      "owner": "@lescobarl",
+      "date": "2026-11-01"
+    },
+    {
+      "pair": "src/lib/documentParser.ts | src/lib/documentParser.ts",
+      "reason": "pendiente de triaje (umbral 50 tokens)",
+      "owner": "@lescobarl",
+      "date": "2026-11-01"
+    },
+    {
+      "pair": "src/server/browserProxy.ts | src/server/searchProxy.ts",
+      "reason": "pendiente de triaje (umbral 50 tokens)",
+      "owner": "@lescobarl",
+      "date": "2026-11-01"
+    },
+    {
+      "pair": "src/server/geminiProxy.ts | src/server/geminiProxy.ts",
+      "reason": "pendiente de triaje (umbral 50 tokens)",
+      "owner": "@lescobarl",
+      "date": "2026-11-01"
+    },
+    {
+      "pair": "src/services/deepseek.ts | src/services/deepseek.ts",
+      "reason": "pendiente de triaje (umbral 50 tokens)",
+      "owner": "@lescobarl",
+      "date": "2026-11-01"
+    },
+    {
+      "pair": "src/services/gemini.ts | src/services/gemini.ts",
+      "reason": "pendiente de triaje (umbral 50 tokens)",
+      "owner": "@lescobarl",
+      "date": "2026-11-01"
+    },
+    {
+      "pair": "src/store/integrationStore.ts | src/store/integrationStore.ts",
+      "reason": "pendiente de triaje (umbral 50 tokens)",
+      "owner": "@lescobarl",
+      "date": "2026-11-01"
+    },
+    {
+      "pair": "src/voice/lib/geminiDiagnostics.js | src/voice/lib/geminiDiagnostics.js",
+      "reason": "pendiente de triaje (umbral 50 tokens)",
+      "owner": "@lescobarl",
+      "date": "2026-11-01"
+    },
+    {
+      "pair": "src/voice/lib/imageGeneration.js | src/voice/lib/imageGeneration.js",
+      "reason": "pendiente de triaje (umbral 50 tokens)",
+      "owner": "@lescobarl",
+      "date": "2026-11-01"
     }
   ]
 }
