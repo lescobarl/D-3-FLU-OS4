@@ -164,6 +164,14 @@ export interface ConfigPort {
   esEtiquetaAnonima(etiqueta: string): boolean
   /** Umbral de continuidad de voz (coseno) de la config viva; 0..1. */
   umbralContinuidadVoz(): number
+  /** Duracion minima para ACUNAR una voz nueva; un turno corto queda pendiente. */
+  minNuevaVozMs?(): number
+  /** Palabras minimas para acunar una voz nueva. */
+  minNuevaVozPalabras?(): number
+  /** Piso para casar con una voz existente (turnos cortos no huerfanos). */
+  umbralExistenteVoz?(): number
+  /** ¿El texto es una orden de CONTROL (cerrar escucha, etc.)? No es conversacion. */
+  esComandoDeControl?(texto: string): boolean
   /** Etiqueta anónima de la voz nueva nº `indice` (`Hablante N`). */
   etiquetaAnonima(indice: number): string
   /**
@@ -309,6 +317,10 @@ export interface ConfiguracionConversacion {
   readonly maxRetentionMin: number
   /** Identidad por medida: segundos mínimos de audio retenido antes de medir. */
   readonly minSegundosVozMedida: number
+  /** Duracion minima para ACUNAR una voz nueva (los turnos cortos quedan pendientes). */
+  readonly minSegundosNuevaVoz: number
+  /** Palabras minimas para acunar una voz nueva. */
+  readonly minPalabrasNuevaVoz: number
   /** Identidad por medida: tope de PCM retenido por locución, en segundos. */
   readonly maxSegundosVozRetenida: number
   /** Margen de solape medido en Etapa 0; `null` = sin medida → continuidad. */
@@ -323,6 +335,8 @@ export const CONVERSACION_CONFIG: ConfiguracionConversacion = Object.freeze({
   asr: Object.freeze({ engine: 'auto', lang: 'es' }),
   maxRetentionMin: 120,
   minSegundosVozMedida: 1.5,
+  minSegundosNuevaVoz: 8,
+  minPalabrasNuevaVoz: 8,
   maxSegundosVozRetenida: 60,
   overlapMargin: null,
 })

@@ -199,10 +199,12 @@ describe('Caso 8 — un turnId => una fila inmutable (módulo real)', () => {
     const filas = filasDe(escenario.api)
     expect(filas).toHaveLength(1)
     expect(filas[0]!.turnId).toBe('T5')
-    expect(filas[0]!.texto).toBe('ok flu crea una cita')
+    // La continuacion del MISMO turno se funde en la fila: no se pierde el
+    // texto nuevo ni aparece una segunda fila (auditoria 2026-11-01).
+    expect(filas[0]!.texto).toBe('ok flu crea una cita manana')
     expect(filas[0]!.provisional).toBe(false)
-    expect(filas[0]!.tramo.fin).toBe(previa.tramo.fin)
-    expect(descartesDe(escenario.api)).toContainEqual(
+    expect(filas[0]!.tramo.fin).toBeGreaterThanOrEqual(previa.tramo.fin)
+    expect(descartesDe(escenario.api)).not.toContainEqual(
       expect.objectContaining({ motivo: 'turnoYaEscrito' }),
     )
   })

@@ -51,11 +51,11 @@ export function cierreMideTramoCerrado(src: string): boolean {
   return /medirTramoCerrado\(/.test(src) && /medidor\.medir\(/.test(src)
 }
 
-/** Los TRES emits de locution.closed llevan `medida` (consolidar/descarte/fila). */
+/** Los emits de locution.closed llevan `medida` (consolidar/descarte/fila). */
 export function losTresCierresLlevanMedida(src: string): boolean {
   const cierres = (src.match(/tipo: 'locution\.closed'/g) || []).length
   const medidas = (src.match(/^\s*medida,$/gm) || []).length
-  return cierres === 3 && medidas >= 3
+  return cierres >= 3 && medidas >= cierres
 }
 
 /** El producto pasa el final REAL del evento al módulo (dueño único traeFinal). */
@@ -293,7 +293,7 @@ describe('Caso 7+6 — los dueños viven en el archivo real', () => {
     expect(cierreMideTramoCerrado(fuenteDe('src/voice/conversation/cierre.ts'))).toBe(true)
   })
 
-  it('los TRES cierres de cierre.ts emiten medida (consolidar, descarte y fila)', () => {
+  it('los cierres de cierre.ts emiten medida (consolidar, descarte y fila)', () => {
     expect(losTresCierresLlevanMedida(fuenteDe('src/voice/conversation/cierre.ts'))).toBe(true)
   })
 

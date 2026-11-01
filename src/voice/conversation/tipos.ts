@@ -115,6 +115,7 @@ export type MotivoDescarteConversacion =
   | 'eco'
   | 'huerfano'
   | 'turnoYaEscrito'
+  | 'control'
 
 /** Descarte contado con su locución y su motivo. */
 export type DescarteConversacion = Readonly<{

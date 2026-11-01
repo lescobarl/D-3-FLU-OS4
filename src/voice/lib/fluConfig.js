@@ -121,6 +121,10 @@ export const FLU_CONFIG = {
         /** Piso EFECTIVO del modulo conversacion (WAV 6c71d867: 0.66 une, 0.72 separa). */
         cosineConversationContinuityThreshold: VOICE_DIARIZATION_DEFAULTS.cosineConversationContinuity,
         cosineNewVoiceThreshold: VOICE_DIARIZATION_DEFAULTS.cosineNewVoice, // medido 2026-10-07: MISMA voz 0.69-0.74, DISTINTA 0.58; con 0.70 (dentro de la misma voz) cada turno abria un 'Hablante N'
+        /** Turno minimo para crear un hablante nuevo; debajo queda pendiente. */
+        minNewSpeakerMs: VOICE_DIARIZATION_DEFAULTS.minNewSpeakerMs,
+        minNewSpeakerWords: VOICE_DIARIZATION_DEFAULTS.minNewSpeakerWords,
+        cosineExistingMatch: VOICE_DIARIZATION_DEFAULTS.cosineExistingMatch,
         cosineRegisteredMatchThreshold: VOICE_DIARIZATION_DEFAULTS.cosineRegisteredMatch,
         /** Piso de match contra un ANCLA VERIFICADA (participantes). Medido 2026-10-19
          * (sesion 18f3888c): misma voz 0.629-0.714, distinta 0.29-0.58. */
@@ -2130,6 +2134,7 @@ export const FLU_CONFIG = {
     ],
     closeListening: [
       'cerrar escucha',
+      'cerrando escucha',
       'cierra escucha',
       'detener escucha',
       'deten la escucha',

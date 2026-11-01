@@ -449,11 +449,22 @@ export function crearIngesta({
    * Único constructor de la decisión dentro de la ingesta (medida temprana,
    * partición por voz y medida tardía). El llamador garantiza el embebedor.
    */
-  function decidirIdentidadSesion(vector: readonly number[], embebedor: NonNullable<typeof dependencias.embebedor>): IdentidadDecidida {
+  function decidirIdentidadSesion(
+    vector: readonly number[],
+    embebedor: NonNullable<typeof dependencias.embebedor>,
+    duracionMs = 0,
+    palabras = 0,
+  ): IdentidadDecidida {
     return decidirIdentidad({
       vector,
       plantillas: plantillasDe(estado.plantillasVoz),
       umbral: dependencias.config.umbralContinuidadVoz(),
+      duracionMs,
+      minNuevaVozMs: dependencias.config.minNuevaVozMs?.() ?? 0,
+      palabras,
+      minNuevaVozPalabras: dependencias.config.minNuevaVozPalabras?.() ?? 0,
+      umbralExistente:
+        dependencias.config.umbralExistenteVoz?.() ?? dependencias.config.umbralContinuidadVoz(),
       // Perezoso: la plantilla SOLO se resuelve si la voz es nueva (Caso 10).
       etiquetaNueva: () => dependencias.config.etiquetaAnonima(estado.contadorVoces + 1),
       comparar: embebedor.comparar,
@@ -478,8 +489,14 @@ export function crearIngesta({
     if (!embebedor || !fila || fila.deleted) return
     if (fila.sessionId !== estado.sessionId) return
     if (fila.evidencia !== 'pendiente') return
-    const identidad = decidirIdentidadSesion(vector, embebedor)
+    const identidad = decidirIdentidadSesion(
+      vector,
+      embebedor,
+      ((fila.tramo.fin - fila.tramo.inicio) / Math.max(1, fila.tramo.sampleRate)) * 1000,
+      String(fila.texto || '').trim().split(/\s+/).filter(Boolean).length,
+    )
     registrarMedidaVoz(estado, vector, identidad)
+    if (!String(identidad.vozId || '').trim()) return
     const aplicada = await sesion.reetiquetarFila(locucionId, identidad.vozId, identidad.hablante)
     dependencias.registro.registrar('conversacion.fila.medida.tardia', {
       sessionId: estado.sessionId,
@@ -511,7 +528,12 @@ export function crearIngesta({
       await reetiquetarConMedidaTardia(locucionId, vector)
       return
     }
-    const identidad = decidirIdentidadSesion(vector, embebedor)
+    const identidad = decidirIdentidadSesion(
+      vector,
+      embebedor,
+      ((abierta.fin - abierta.inicio) / Math.max(1, abierta.sampleRate)) * 1000,
+      String(abierta.texto || '').trim().split(/\s+/).filter(Boolean).length,
+    )
     registrarMedidaVoz(estado, vector, identidad)
     estado.abierta = {
       ...abierta,
@@ -635,7 +657,12 @@ export function crearIngesta({
     const embebedor = dependencias.embebedor
     const recien = estado.abierta
     if (!embebedor || !recien) return null
-    const identidad = decidirIdentidadSesion(vector, embebedor)
+    const identidad = decidirIdentidadSesion(
+      vector,
+      embebedor,
+      ((recien.fin - recien.inicio) / Math.max(1, recien.sampleRate)) * 1000,
+      String(recien.texto || '').trim().split(/\s+/).filter(Boolean).length,
+    )
     registrarMedidaVoz(estado, vector, identidad)
     estado.abierta = {
       ...recien,

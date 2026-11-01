@@ -65,3 +65,30 @@ export function grabarSnapshotDeTurno(fila, ctx = {}) {
     locutionId: ctx.locutionId,
   })
 }
+
+/**
+ * Graba una REVISION del snapshot de una fila ya registrada (firma/tramo
+ * finales). Dueno unico de la revision: la usan la medida tardia y la fusion
+ * de continuaciones; antes cada camino repetia el mismo bloque de 21 lineas.
+ * @param {object|null} fila
+ * @returns {boolean}
+ */
+export function grabarRevisionDeFila(fila) {
+  if (!fila) return false
+  const tramo = fila.tramo || null
+  const inicio = Number(tramo?.inicio)
+  const fin = Number(tramo?.fin)
+  return recordSessionTurn({
+    kind: 'commit',
+    revision: true,
+    text: fila.texto || '',
+    speaker: fila.etiqueta || '',
+    signature: Array.isArray(fila.firma) && fila.firma.length ? fila.firma : null,
+    audioStartSample: Number.isFinite(inicio) ? inicio : 0,
+    audioEndSample: Number.isFinite(fin) ? fin : 0,
+    tramoValido: Number.isFinite(inicio) && Number.isFinite(fin) && fin > inicio,
+    sampleRate: Number(tramo?.sampleRate) || 0,
+    sessionTurnId: fila.turnId,
+    locutionId: fila.locutionId,
+  })
+}

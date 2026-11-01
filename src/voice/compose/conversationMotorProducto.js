@@ -28,7 +28,7 @@ import { crearMotorConversacionProducto, traeFinal } from '../conversation/index
 import { resolveEchoContext } from '../lib/conversationDialogue.js'
 import { labelToSpeakerId } from '../lib/conversationRow.js'
 import { autoSpeakerIndexFromKey } from '../lib/speakerCore.js'
-import { recordSessionTurn } from '../lib/sessionRecorder.js'
+import { grabarRevisionDeFila } from '../conversation/turnSnapshot.js'
 import { voiceKeyFor } from '../lib/speakerDirectory.js'
 import { getLastCompletedSpeechAt } from '../lib/fluSpeech.js'
 import { getSessionRecordingStatus } from '../lib/sessionRecorder.js'
@@ -104,30 +104,16 @@ export function crearMotorConversacionHook({
           .setEntrySpeakerName(evento.locutionId, evento.etiqueta, { resolved: true, persist: false })
       }
       // Revisión de la MISMA locución: el snapshot inicial pudo nacer con
-      // signature null; aquí el grabador recibe la firma/tramo finales.
-      if (evento.revision === true && evento.fila) {
-        const fila = evento.fila
-        const tramo = fila.tramo || null
-        const inicio = Number(tramo?.inicio)
-        const fin = Number(tramo?.fin)
-        recordSessionTurn({
-          kind: 'commit',
-          revision: true,
-          text: fila.texto || '',
-          speaker: evento.etiqueta || '',
-          signature: Array.isArray(fila.firma) && fila.firma.length ? fila.firma : null,
-          audioStartSample: Number.isFinite(inicio) ? inicio : 0,
-          audioEndSample: Number.isFinite(fin) ? fin : 0,
-          tramoValido: Number.isFinite(inicio) && Number.isFinite(fin) && fin > inicio,
-          sampleRate: Number(tramo?.sampleRate) || 0,
-          sessionTurnId: fila.turnId,
-          locutionId: fila.locutionId,
-        })
-      }
+      // signature null; el dueño único recibe la firma/tramo finales.
+      if (evento.revision === true && evento.fila) grabarRevisionDeFila(evento.fila)
       return
     }
     if (evento.tipo !== 'row.committed') return
     useIntegrationStore.getState().setLastCommittedTranscript(evento.fila.texto)
+    // Revisión por FUSIÓN de una continuación/duplicado: el snapshot inicial ya
+    // existe con el mismo locutionId; el dueño único recibe el texto/tramo/firma
+    // finales como revisión (analizador: última por locutionId).
+    if (evento.fila && Number(evento.fila.revision) > 1) grabarRevisionDeFila(evento.fila)
     // ÚNICO escritor de la fila del usuario (mandato 2026-10-30, problema 6):
     // el módulo commitea en AMBOS modos y aquí no se re-gatea por turno. El
     // escritor pasivo de App y el dedupe simétrico quedaron retirados; el

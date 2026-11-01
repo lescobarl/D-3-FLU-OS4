@@ -15,6 +15,7 @@ import { construirFila, fusionarVoz } from './fila.ts'
 import { continuaLaFrase } from '../core/locucion.js'
 import type { CierreLocucion, VozEtiqueta } from './fila.ts'
 import { decidirRevision } from './revision.ts'
+import { decidirFusion } from './fusion.ts'
 import { decidirIdentidad, plantillasDe } from './identidad.ts'
 import type { PlantillaVoz } from './identidad.ts'
 import { registrarMedidaVoz } from './sesion.ts'
@@ -33,6 +34,7 @@ import type {
   ConfigPort,
   EmbebedorPort,
   Fila,
+  FilaNueva,
   IdiomaLocucion,
   IdPort,
   MedidaFinal,
@@ -329,6 +331,11 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
       vector,
       plantillas: plantillasDe(estado.plantillasVoz),
       umbral: config.umbralContinuidadVoz(),
+      duracionMs: ((locucion.fin - locucion.inicio) / Math.max(1, locucion.sampleRate)) * 1000,
+      minNuevaVozMs: config.minNuevaVozMs?.() ?? 0,
+      palabras: String(locucion.texto || '').trim().split(/\s+/).filter(Boolean).length,
+      minNuevaVozPalabras: config.minNuevaVozPalabras?.() ?? 0,
+      umbralExistente: config.umbralExistenteVoz?.() ?? config.umbralContinuidadVoz(),
       // Perezoso: la plantilla SOLO se resuelve si la voz es nueva (Caso 10).
       etiquetaNueva: () => config.etiquetaAnonima(estado.contadorVoces + 1),
       comparar: embebedor.comparar,
@@ -368,6 +375,33 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
       if (etiqueta && fila.etiqueta === etiqueta) return fila
     }
     return reciente
+  }
+
+  function filaMasReciente(): Fila | null {
+    let reciente: Fila | null = null
+    for (const fila of estado.filas.values()) {
+      if (fila.sessionId !== estado.sessionId) continue
+      if (fila.deleted) continue
+      if (!reciente || fila.tramo.fin > reciente.tramo.fin) reciente = fila
+    }
+    return reciente
+  }
+
+  /**
+   * UNICA escritura de fila del cierre: upsert, estado, ultima etiqueta y
+   * aprendizaje de la plantilla. Las ramas normal y fusionada la comparten;
+   * antes cada una llamaba a `almacen.guardar` por su cuenta.
+   */
+  async function guardarFila(filaNueva: FilaNueva, vozId: string): Promise<Fila> {
+    const fila = await almacen.guardar(filaNueva)
+    estado.filas.set(fila.locutionId, fila)
+    estado.ultimaEtiqueta = fila.etiqueta
+    const idVoz = String(vozId || '').trim()
+    if (idVoz) {
+      const plantilla = estado.plantillasVoz.get(idVoz)
+      if (plantilla) plantilla.etiqueta = fila.etiqueta
+    }
+    return fila
   }
 
   /**
@@ -503,9 +537,80 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
     // se ignora sin tocar la fila (descarte contado, nunca una segunda fila).
     // Caso 1+3: una voz distinta medida (continuidad false) SÍ inserta SU fila
     // — dos voces sin pausa son DOS filas del mismo turno.
-    const previaDelTurno = filaDelTurno(cierre.turnId)
+    // Una ORDEN DE CONTROL ("cerrando escucha", "cerrar escucha", ...) no es
+    // conversacion: el hook la ejecuta; el modulo no debe crear otra fila.
+    if (config.esComandoDeControl?.(cierre.texto)) {
+      emitir({
+        tipo: 'locution.closed',
+        sessionId: sesion,
+        locutionId: locucion.locutionId,
+        tramo,
+        motivo,
+        causa,
+        medida,
+      })
+      contarDescarte('control', locucion.locutionId, tramo)
+      registro.registrar('conversacion.locucion.cerrada', {
+        sessionId: sesion,
+        locutionId: locucion.locutionId,
+        tramo,
+        motivo,
+        causa,
+        descarte: 'control',
+      })
+      return
+    }
     const vozDistintaMedida =
       String(vozCerrada.vozId || '').trim() !== '' && !continuidadVoz
+    // DUPLICADOS/CONTINUACIONES (auditoria 2026-11-01): la misma frase o su
+    // revision con audio contiguo se FUNDE con la fila anterior (upsert por su
+    // id). Antes cada `row.committed` insertaba otra fila y la conversacion
+    // duplicaba lo mismo dos veces. Una voz distinta medida NO se funde.
+    const decision = decidirFusion(filaMasReciente(), resultado.fila, {
+      vozDistinta: vozDistintaMedida,
+    })
+    if (decision.tipo === 'fusionar') {
+      const guardada = await guardarFila(decision.fila, String(vozCerrada.vozId || ''))
+      emitir({
+        tipo: 'locution.closed',
+        sessionId: sesion,
+        locutionId: locucion.locutionId,
+        tramo,
+        motivo,
+        causa,
+        medida,
+      })
+      commitar(guardada)
+      registro.registrar('conversacion.locucion.fusionada', {
+        sessionId: sesion,
+        locutionId: locucion.locutionId,
+        fila: guardada.locutionId,
+        revision: guardada.revision,
+      })
+      return
+    }
+    if (decision.tipo === 'descartar') {
+      emitir({
+        tipo: 'locution.closed',
+        sessionId: sesion,
+        locutionId: locucion.locutionId,
+        tramo,
+        motivo,
+        causa,
+        medida,
+      })
+      contarDescarte(decision.motivo, locucion.locutionId, tramo)
+      registro.registrar('conversacion.locucion.cerrada', {
+        sessionId: sesion,
+        locutionId: locucion.locutionId,
+        tramo,
+        motivo,
+        causa,
+        descarte: decision.motivo,
+      })
+      return
+    }
+    const previaDelTurno = filaDelTurno(cierre.turnId)
     // La reentrega es la MISMA locucion o una REVISION/continuacion de su texto.
     // Una frase NUEVA del mismo turno (p. ej. el comando commiteado por el hook
     // antes de que el modulo cierre) NO es reentrega: antes se descartaba y la
@@ -535,15 +640,7 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
       return
     }
 
-    const fila = await almacen.guardar(resultado.fila)
-    estado.filas.set(fila.locutionId, fila)
-    estado.ultimaEtiqueta = fila.etiqueta
-    // La plantilla de la voz aprende la etiqueta commiteada (nombre del bautizo).
-    const vozIdFila = String(vozCerrada.vozId || '').trim()
-    if (vozIdFila) {
-      const plantilla = estado.plantillasVoz.get(vozIdFila)
-      if (plantilla) plantilla.etiqueta = fila.etiqueta
-    }
+    const fila = await guardarFila(resultado.fila, String(vozCerrada.vozId || ''))
     emitir({
       tipo: 'locution.closed',
       sessionId: sesion,

@@ -52,6 +52,19 @@ export type EntradaIdentidad = Readonly<{
   plantillas: readonly PlantillaVozConId[]
   /** Umbral de continuidad resuelto por el puerto de config (0..1). */
   umbral: number
+  /**
+   * Duracion REAL de la evidencia de voz de esta locucion (ms). Un turno corto
+   * no basta para acunar una voz nueva: queda pendiente (auditoria 2026-11-01).
+   */
+  duracionMs?: number
+  /** Duracion minima para crear una voz nueva (ms); si falta, 0. */
+  minNuevaVozMs?: number
+  /** Palabras del texto: una exclamacion corta no acuna voz nueva. */
+  palabras?: number
+  /** Palabras minimas para crear una voz nueva; si falta, 0. */
+  minNuevaVozPalabras?: number
+  /** Piso para casar con una voz YA existente (turnos cortos no huerfanos). */
+  umbralExistente?: number
   /** Etiqueta anónima de una voz nueva (`Hablante N`); se resuelve SOLO si la voz es nueva. */
   etiquetaNueva: () => string
   /** Comparador de coseno inyectado (dueño único fuera del módulo). */
@@ -94,6 +107,24 @@ export function decidirIdentidad(entrada: EntradaIdentidad): IdentidadDecidida {
   }
   if (mejor && mejorCoseno >= entrada.umbral) {
     return { vozId: mejor.vozId, continuidad: true, hablante: mejor.etiqueta }
+  }
+  // Un turno corto de una voz YA conocida no debe quedar pendiente: casa con
+  // el mejor existente desde un piso inferior al de acunar voz nueva.
+  const umbralExistente = Number(entrada.umbralExistente) || entrada.umbral
+  if (mejor && mejorCoseno >= umbralExistente) {
+    return { vozId: mejor.vozId, continuidad: true, hablante: mejor.etiqueta }
+  }
+  const duracion = Number(entrada.duracionMs)
+  const minimo = Number(entrada.minNuevaVozMs) || 0
+  const palabras = Number(entrada.palabras)
+  const minimoPalabras = Number(entrada.minNuevaVozPalabras) || 0
+  if (
+    (Number.isFinite(duracion) && duracion < minimo) ||
+    (Number.isFinite(palabras) && palabras < minimoPalabras)
+  ) {
+    // Turno corto: no hay evidencia suficiente para ACUNAR una voz nueva.
+    // La fila nace PENDIENTE y la medida tardia la resolvera.
+    return { vozId: '', continuidad: false, hablante: '' }
   }
   return {
     vozId: entrada.id(),

@@ -58,7 +58,9 @@ export const TECHOS: Record<string, number> = {
   // stripPriorTurns* y transcriptSettle* (lectores en la tuberia retirada).
   // -6 mas (2026-10-26, misma pasada): soloSpeakerSticky/diarizeIntervalMs/turnAudioOverlapMs
   // se fueron con sus unicos lectores (retirados por deadExportsGuard).
-  'src/voice/lib/fluConfig.js': 2557,
+  // +2 (2026-11-01): minNewSpeakerWords y cosineExistingMatch; la grabacion
+  // corta confirmo que con solo 8 s el hombre quedaba `Hablante ?`.
+  'src/voice/lib/fluConfig.js': 2559,
   'src/voice/lib/gemini.js': 1848,
 }
 

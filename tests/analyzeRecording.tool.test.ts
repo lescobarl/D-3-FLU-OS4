@@ -168,19 +168,44 @@ function normalizeText(text: string): string {
     .trim();
 }
 
+function readPcm(path: string, sampleRate: number): Wav {
+  const buf = readFileSync(path);
+  const total = Math.floor(buf.length / 2);
+  const pcm = new Float32Array(total);
+  for (let i = 0; i < total; i += 1) pcm[i] = buf.readInt16LE(i * 2) / 32768;
+  return { pcm, sampleRate, channels: 1, bits: 16 };
+}
+
+function readRecording(path: string): Wav {
+  if (path.toLowerCase().endsWith('.wav')) return readWav(path);
+  const metaPath = join(dirname(path), 'meta.json');
+  const meta = existsSync(metaPath)
+    ? (JSON.parse(readFileSync(metaPath, 'utf8')) as { sampleRate?: number })
+    : {};
+  return readPcm(path, Number(meta.sampleRate) || 48000);
+}
+
 function findRecording(): string | null {
   const direct = process.env.FLU_RECORDING_WAV;
   if (direct && existsSync(direct)) return direct;
   const root = process.env.FLU_RECORDING_DIR;
   if (!root) return null;
-  const candidate = join(root, 'audio.wav');
-  if (existsSync(candidate)) return candidate;
+  for (const name of ['audio.wav', 'audio.pcm']) {
+    const candidate = join(root, name);
+    if (existsSync(candidate)) return candidate;
+  }
   if (!existsSync(root)) return null;
   const dirs = readdirSync(root)
     .map((name) => join(root, name))
-    .filter((path) => statSync(path).isDirectory() && existsSync(join(path, 'audio.wav')))
+    .filter((path) => statSync(path).isDirectory())
     .sort((a, b) => statSync(b).mtimeMs - statSync(a).mtimeMs);
-  return dirs[0] ? join(dirs[0], 'audio.wav') : null;
+  for (const dir of dirs) {
+    for (const name of ['audio.wav', 'audio.pcm']) {
+      const candidate = join(dir, name);
+      if (existsSync(candidate)) return candidate;
+    }
+  }
+  return null;
 }
 
 const recordingPath = findRecording();
@@ -189,7 +214,7 @@ const hasRecording = Boolean(recordingPath);
 describe.skipIf(!hasRecording)('analisis WAV-only de la grabacion', () => {
   it('extrae segmentos, texto, voces, comandos y comparacion', async () => {
     if (!recordingPath) throw new Error('sin grabacion');
-    const wav = readWav(recordingPath);
+    const wav = readRecording(recordingPath);
     const segments = segmentBySilence(wav);
     expect(segments.length, 'el WAV no tiene segmentos de voz por encima del piso').toBeGreaterThan(0);
 

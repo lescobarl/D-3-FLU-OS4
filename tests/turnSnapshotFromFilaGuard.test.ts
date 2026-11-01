@@ -55,8 +55,8 @@ describe('grabador — tramo y firma canonicos de la fila', () => {
     expect(cierre).toContain('fila: actualizada');
     expect(cierre).toContain('revision: true');
     const motor = source('src/voice/compose/conversationMotorProducto.js');
-    expect(motor).toContain('recordSessionTurn');
-    expect(motor).toContain('revision: true');
+    expect(motor).toContain('grabarRevisionDeFila');
+    expect(motor).toContain('evento.fila.revision');
   });
 
   it('el detector no es decorativo', () => {

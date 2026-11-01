@@ -58,10 +58,10 @@ const MOTIVOS_DESCARTE = ['tramoInvalido', 'sinTexto', 'eco', 'huerfano'] as con
 const fuenteDe = (ruta: string): string =>
   readFileSync(join(process.cwd(), ruta), 'utf8')
 
-/** ¿Los TRES emits de locution.closed de cierre.ts llevan motivo y causa? */
+/** ¿Los emits de locution.closed de cierre.ts llevan motivo y causa? */
 export function cierreSiempreMotivoYCausa(src: string): boolean {
   const bloques = src.split("tipo: 'locution.closed'")
-  if (bloques.length !== 4) return false
+  if (bloques.length < 4) return false
   return bloques.slice(1).every((bloque) => /motivo,/.test(bloque) && /causa,/.test(bloque))
 }
 
@@ -79,7 +79,7 @@ export function descarteNullSoloConFilaCommiteada(src: string): boolean {
 /** ¿Los motivos del descarte viven tipados y no nulables (tipos.ts)? */
 export function motivosDeDescarteTipados(src: string): boolean {
   const union =
-    /export type MotivoDescarteConversacion =[\s\S]{0,200}?'tramoInvalido'[\s\S]{0,200}?'sinTexto'[\s\S]{0,200}?'eco'[\s\S]{0,200}?'huerfano'/.test(
+    /export type MotivoDescarteConversacion =[\s\S]{0,300}?'tramoInvalido'[\s\S]{0,300}?'sinTexto'[\s\S]{0,300}?'eco'[\s\S]{0,300}?'huerfano'[\s\S]{0,300}?'control'/.test(
       src,
     )
   const campo = /motivo: MotivoDescarteConversacion(?!\s*\|\s*null)/.test(src)
@@ -450,7 +450,7 @@ describe('Caso 9 — la caja de última frase == última fila commiteada al dete
 })
 
 describe('Caso 9 — los dueños viven en el archivo real', () => {
-  it('los TRES emits de locution.closed llevan motivo y causa (cierre.ts)', () => {
+  it('los emits de locution.closed llevan motivo y causa (cierre.ts)', () => {
     expect(cierreSiempreMotivoYCausa(fuenteDe('src/voice/conversation/cierre.ts'))).toBe(true)
   })
 
@@ -484,13 +484,14 @@ describe('Caso 9 — PRUEBA DE DETECTOR (el detector no es decorativo)', () => {
     expect(descarteNullSoloConFilaCommiteada(sano.replace('descarte: null', "descarte: 'sinTexto'"))).toBe(false)
   })
 
-  it('una union sin eco o un campo nulable => rojo; con los 4 y no nulable => verde', () => {
+  it('una union sin eco o un campo nulable => rojo; con los 5 y no nulable => verde', () => {
     const union = [
       "export type MotivoDescarteConversacion =",
       "  | 'tramoInvalido'",
       "  | 'sinTexto'",
       "  | 'eco'",
       "  | 'huerfano'",
+      "  | 'control'",
       '',
       'type DescarteConversacion = Readonly<{',
       '  motivo: MotivoDescarteConversacion',

@@ -396,6 +396,12 @@ export const VOICE_DIARIZATION_DEFAULTS = {
      */
     cosineConversationContinuity: 0.72,
     cosineNewVoice: 0.64,
+    /** Duracion minima para ACUNAR una voz nueva; los turnos cortos quedan pendientes. */
+    minNewSpeakerMs: 8000,
+    /** Palabras minimas para acunar una voz nueva: una exclamacion corta no es un hablante. */
+    minNewSpeakerWords: 8,
+    /** Piso para CASAR con una voz ya existente (los turnos cortos no quedan huerfanos). */
+    cosineExistingMatch: 0.64,
     classroomReuseRelax: 0.03,
     classroomNewVoiceRelax: 0.04,
     classroomLastSpeakerSwitchMargin: 0.06,

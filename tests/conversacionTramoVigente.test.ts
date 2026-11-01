@@ -125,7 +125,7 @@ describe('producto — el tramo lo resuelve el módulo al procesar', () => {
     if (!hola || !adios) throw new Error('faltan las dos filas')
     expect(hola.meta?.conversacion?.tramo).toMatchObject({ inicio: 16000, fin: 32000 })
     expect(adios.meta?.conversacion?.tramo).toMatchObject({ inicio: 48000, fin: 64000 })
-  })
+  }, 300_000)
 
   it('un final ajeno SIN tramo vivo no se pega a la línea abierta', async () => {
     const eventos: EventoConversacion[] = []

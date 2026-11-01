@@ -71,6 +71,8 @@ describe('configuración del plan — una sola fuente', () => {
       asr: { engine: 'auto', lang: 'es' },
       maxRetentionMin: 120,
       minSegundosVozMedida: 1.5,
+      minSegundosNuevaVoz: 8,
+      minPalabrasNuevaVoz: 8,
       maxSegundosVozRetenida: 60,
       overlapMargin: null,
     })

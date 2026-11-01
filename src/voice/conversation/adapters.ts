@@ -195,6 +195,33 @@ export function crearConfigFlu(): ConfigPort {
         ? valor
         : VOICE_DIARIZATION_DEFAULTS.cosineConversationContinuity
     },
+    minNuevaVozMs: () => {
+      const umbrales = FLU_CONFIG.voiceIdentity?.capture?.conversationSpeakerThresholds
+      const valor = umbrales ? Number(umbrales.minNewSpeakerMs) : Number.NaN
+      return Number.isFinite(valor) && valor > 0 ? valor : VOICE_DIARIZATION_DEFAULTS.minNewSpeakerMs
+    },
+    minNuevaVozPalabras: () => {
+      const umbrales = FLU_CONFIG.voiceIdentity?.capture?.conversationSpeakerThresholds
+      const valor = umbrales ? Number(umbrales.minNewSpeakerWords) : Number.NaN
+      return Number.isFinite(valor) && valor > 0
+        ? valor
+        : VOICE_DIARIZATION_DEFAULTS.minNewSpeakerWords
+    },
+    umbralExistenteVoz: () => {
+      const umbrales = FLU_CONFIG.voiceIdentity?.capture?.conversationSpeakerThresholds
+      const valor = umbrales ? Number(umbrales.cosineExistingMatch) : Number.NaN
+      return Number.isFinite(valor) && valor > 0
+        ? valor
+        : VOICE_DIARIZATION_DEFAULTS.cosineExistingMatch
+    },
+    esComandoDeControl: (texto) => {
+      const normal = normalizeForMatch(texto)
+      if (!normal) return false
+      return (FLU_CONFIG.voiceCommands.closeListening || []).some((frase) => {
+        const objetivo = normalizeForMatch(frase)
+        return objetivo.length > 0 && (normal === objetivo || normal.includes(objetivo))
+      })
+    },
     etiquetaAnonima: (indice) => autoSpeakerLabel(indice),
     // Etiqueta TEMPORAL mientras la medida de la voz no es fiable (mandato del
     // dueño 2026-10-30). Fuente única: `speakerAssignDefaults.pendingSpeaker`.

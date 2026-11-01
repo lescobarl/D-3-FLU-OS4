@@ -134,6 +134,9 @@ export function registrarMedidaVoz(
   vector: readonly number[],
   identidad: IdentidadDecidida,
 ): void {
+  // Sin vozId no hay identidad: turno corto pendiente. No se acuna plantilla
+  // ni se incrementa el contador de voces (auditoria 2026-11-01).
+  if (!String(identidad.vozId || '').trim()) return
   if (!identidad.continuidad) estado.contadorVoces += 1
   const existente = estado.plantillasVoz.get(identidad.vozId)
   if (existente) {

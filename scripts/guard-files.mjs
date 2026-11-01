@@ -21,4 +21,5 @@
   'tests/conversationLateSignatureGuard.test.ts',
   'tests/conversationRealVoiceThresholdGuard.test.ts',
   'tests/turnSnapshotFromFilaGuard.test.ts',
+  'tests/conversationRecordedSessionGuard.test.ts',
 ]
