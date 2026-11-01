@@ -63,6 +63,32 @@ export function findBrokenImports(files, readSource) {
   return out;
 }
 
+/**
+ * Skips INCONDICIONALES de test: `.skip('titulo', ...)`, `.skip()` y `.todo(...)`.
+ * NO marca `skipIf(cond)` ni `skip(condicion, motivo)`: esos son gates de entorno,
+ * no tests deshabilitados (V7 los contaba por error y daba 4 falsos positivos).
+ */
+const DISABLED_TEST_RE = /\b(?:describe|it|test)\.skip\s*\(\s*(?:['"`]|\))/;
+const TODO_TEST_RE = /\b(?:describe|it|test)\.todo\s*\(/;
+
+/**
+ * Dueno unico de la deteccion de tests deshabilitados.
+ * @param {Array<{ file: string, source: string }>} sources ficheros de test
+ * @returns {string[]} `archivo:linea:contenido` de cada skip/todo incondicional
+ */
+export function findDisabledTests(sources) {
+  const out = [];
+  for (const { file, source } of sources) {
+    source.split('\n').forEach((line, index) => {
+      if (isCommentLine(line)) return;
+      if (DISABLED_TEST_RE.test(line) || TODO_TEST_RE.test(line)) {
+        out.push(`${file}:${index + 1}:${line.trim().slice(0, 90)}`);
+      }
+    });
+  }
+  return out;
+}
+
 /** Configs de lint que el repo reconoce (misma lista que usaba V19 inline). */
 export const ESLINT_CONFIGS = [
   '.eslintrc',

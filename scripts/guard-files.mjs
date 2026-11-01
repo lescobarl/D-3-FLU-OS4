@@ -10,4 +10,5 @@
   'tests/hardcodeModelDetectorGuard.test.ts',
   'tests/searchOverridesStorage.test.ts',
   'tests/documentsHistoryPanel.test.tsx',
+  'tests/disabledTestsGuard.test.ts',
 ]

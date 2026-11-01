@@ -16,7 +16,7 @@ import { readFileSync, existsSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { spawnSync } from 'node:child_process'
 // Detectores reales de V6/V17 (dueno unico compartido con su guard de barrera).
-import { findBrokenImports, findLibraryMonkeyPatches, findMissingEslintConfig } from './audit-detectors.mjs'
+import { findBrokenImports, findDisabledTests, findLibraryMonkeyPatches, findMissingEslintConfig } from './audit-detectors.mjs'
 // A7: V18 delega en el dueno del detector (un solo criterio de "mismo cuerpo") y el
 // escaneo usa el dueno unico (fsScan).
 import { duplicateBodies } from './auditoria-codigo.mjs'
@@ -308,9 +308,10 @@ const FINDINGS = [
     note: 'Detector real (scripts/audit-detectors.mjs): antes miraba src/avatar/lib/masterBinding.ts, que NO existe => verde por ausencia (7.7.f(2)).',
   },
   {
-    id: 'V7', sev: 'baja', title: 'Tests deshabilitados (.skip/.todo)',
-    target: 0, detect: () => grep(testFiles, /describe\.skip|it\.skip|test\.skip|\.todo\(/),
-    note: 'Re-habilitar o borrar.',
+    id: 'V7', sev: 'baja', title: 'Tests deshabilitados (.skip/.todo incondicionales)',
+    target: 0,
+    detect: () => findDisabledTests(testFiles.map((f) => ({ file: rel(f), source: readFileSync(f, 'utf8') }))),
+    note: 'Solo skips incondicionales. `skipIf(cond)` y `skip(cond, motivo)` son gates de entorno y no cuentan.',
   },
   {
     id: 'V8', sev: 'baja', title: 'URLs de ejemplo hardcodeadas fuera de config',
