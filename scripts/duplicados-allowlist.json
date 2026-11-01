@@ -29,19 +29,19 @@
     },
     {
       "pair": "src/components/AmbienteEditorForm.tsx | src/components/PaletaEditorForm.tsx",
-      "reason": "pendiente de triaje (umbral 50 tokens)",
+      "reason": "dictaminado: esqueleto comun de formulario de ajustes (mismo contenedor; campos y testids propios de cada panel)",
       "owner": "@lescobarl",
       "date": "2026-11-01"
     },
     {
       "pair": "src/components/ContactsPanel.tsx | src/components/ParticipantsPanel.tsx",
-      "reason": "pendiente de triaje (umbral 50 tokens)",
+      "reason": "dictaminado: esqueleto comun de formulario de ajustes (mismo contenedor; campos y testids propios de cada panel)",
       "owner": "@lescobarl",
       "date": "2026-11-01"
     },
     {
       "pair": "src/components/ParticipantsPanel.tsx | src/components/ShoppingPanel.tsx",
-      "reason": "pendiente de triaje (umbral 50 tokens)",
+      "reason": "dictaminado: esqueleto comun de formulario de ajustes (mismo contenedor; campos y testids propios de cada panel)",
       "owner": "@lescobarl",
       "date": "2026-11-01"
     },
