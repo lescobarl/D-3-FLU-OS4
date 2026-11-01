@@ -42,7 +42,11 @@ export const TECHOS: Record<string, number> = {
   // ingress/cola/consumidor y solo conserva captura + el motor del producto.
   // -1263 (2026-10-26): el commit de la fila de usuario y la diarizacion pasaron al
   // modulo (commitUserTurnRow, decidirIdentidad); el hook solo orquesta captura.
-  'src/voice/hooks/useFluVoiceAssistant.js': 2606,
+  // +15 (2026-11-01): el snapshot del turno usa el tramo/firma canonicos de la
+  // fila (`turnSnapshot.js`) y deduplica por `locutionId`. El buffer circular
+  // dejaba `audioStart==audioEnd` y `signature:null` pasados 30 s; el hook
+  // conserva solo el cableado y su dedupe. El cuerpo vive en el helper.
+  'src/voice/hooks/useFluVoiceAssistant.js': 2621,
   // -66: 49 claves de config SIN lector (prometian comportamiento sin efecto) se borraron,
   // con su barrera (configConEfectoGuard).
   // -50 al cortar la tuberia vieja de conversacion (2026-10-25): el tracer, la

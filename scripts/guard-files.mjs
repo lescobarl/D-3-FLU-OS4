@@ -20,4 +20,5 @@
   'tests/conversationTurnNewPhraseGuard.test.ts',
   'tests/conversationLateSignatureGuard.test.ts',
   'tests/conversationRealVoiceThresholdGuard.test.ts',
+  'tests/turnSnapshotFromFilaGuard.test.ts',
 ]

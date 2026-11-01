@@ -28,6 +28,7 @@ import { crearMotorConversacionProducto, traeFinal } from '../conversation/index
 import { resolveEchoContext } from '../lib/conversationDialogue.js'
 import { labelToSpeakerId } from '../lib/conversationRow.js'
 import { autoSpeakerIndexFromKey } from '../lib/speakerCore.js'
+import { recordSessionTurn } from '../lib/sessionRecorder.js'
 import { voiceKeyFor } from '../lib/speakerDirectory.js'
 import { getLastCompletedSpeechAt } from '../lib/fluSpeech.js'
 import { getSessionRecordingStatus } from '../lib/sessionRecorder.js'
@@ -101,6 +102,27 @@ export function crearMotorConversacionHook({
         useIntegrationStore
           .getState()
           .setEntrySpeakerName(evento.locutionId, evento.etiqueta, { resolved: true, persist: false })
+      }
+      // Revisión de la MISMA locución: el snapshot inicial pudo nacer con
+      // signature null; aquí el grabador recibe la firma/tramo finales.
+      if (evento.revision === true && evento.fila) {
+        const fila = evento.fila
+        const tramo = fila.tramo || null
+        const inicio = Number(tramo?.inicio)
+        const fin = Number(tramo?.fin)
+        recordSessionTurn({
+          kind: 'commit',
+          revision: true,
+          text: fila.texto || '',
+          speaker: evento.etiqueta || '',
+          signature: Array.isArray(fila.firma) && fila.firma.length ? fila.firma : null,
+          audioStartSample: Number.isFinite(inicio) ? inicio : 0,
+          audioEndSample: Number.isFinite(fin) ? fin : 0,
+          tramoValido: Number.isFinite(inicio) && Number.isFinite(fin) && fin > inicio,
+          sampleRate: Number(tramo?.sampleRate) || 0,
+          sessionTurnId: fila.turnId,
+          locutionId: fila.locutionId,
+        })
       }
       return
     }

@@ -29,35 +29,39 @@ export function regionDelHandler(src: string): string {
     return '';
 }
 
-/** ¿Cuántas llamadas a recordSessionTurn hay en el callback? Debe ser UNA. */
+/** ¿Cuántas llamadas al dueño del snapshot hay en el callback? Debe ser UNA. */
 export function llamadasSnapshot(src: string): number {
     const region = regionDelHandler(src);
-    return region ? (region.match(/recordSessionTurn\(/g) || []).length : -1;
+    return region ? (region.match(/grabarSnapshotDeTurno\(/g) || []).length : -1;
 }
 
 /** ¿El snapshot usa los campos REALES de la fila (no inventa)? */
 export function tieneCamposDeFila(src: string): boolean {
     const region = regionDelHandler(src);
+    const helper = readFileSync(join(process.cwd(), 'src/voice/conversation/turnSnapshot.js'), 'utf8');
     return (
-        region.includes('sessionTurnId: turnId') &&
-        region.includes('text: fila?.texto') &&
-        region.includes('speaker: fila?.etiqueta') &&
-        region.includes('locutionId: fila?.locutionId')
+        region.includes('grabarSnapshotDeTurno(fila') &&
+        region.includes('turnId') &&
+        region.includes('locutionId') &&
+        helper.includes('text: fila?.texto') &&
+        helper.includes('speaker: fila?.etiqueta') &&
+        helper.includes('sessionTurnId: ctx.turnId') &&
+        helper.includes('locutionId: ctx.locutionId')
     );
 }
 
-/** ¿La revisión del mismo turnId NO añade snapshot (dedupe por ref)? */
+/** ¿La revisión de la MISMA locución NO añade snapshot (dedupe por ref)? */
 export function evitaRevisiones(src: string): boolean {
     const region = regionDelHandler(src);
-    return (
-        region.includes('sessionTurnRecordedRef.current = turnId') &&
-        /if \(turnId && turnId !== sessionTurnRecordedRef\.current\)/.test(region)
-    );
+    return region.includes('sessionLocutionsRecordedRef.current.has(locutionId)');
 }
 
 /** Total de llamadas en TODO el archivo: 2 dueños, ninguno duplicado. */
 export function totalLlamadasHook(src: string): number {
-    return (src.match(/recordSessionTurn\(/g) || []).length;
+    return (
+        (src.match(/recordSessionTurn\(/g) || []).length +
+        (src.match(/grabarSnapshotDeTurno\(/g) || []).length
+    );
 }
 
 describe('Paso 0a — UNA instantánea por locución commiteada', () => {
@@ -84,27 +88,17 @@ describe('Paso 0a — el detector no es decorativo', () => {
 
     it('sin la llamada => rojo; con dos => rojo; con una => verde', () => {
         expect(llamadasSnapshot(handlerSano('          activeTurnIdRef.current += 1'))).toBe(0);
-        expect(
-            llamadasSnapshot(handlerSano('          recordSessionTurn({})\n          recordSessionTurn({})')),
-        ).toBe(2);
-        expect(llamadasSnapshot(handlerSano('          recordSessionTurn({ kind: \'commit\', text: fila?.texto || \'\', speaker: fila?.etiqueta || \'\', sessionTurnId: turnId, locutionId: fila?.locutionId || \'\' })'))).toBe(1);
+        expect(llamadasSnapshot(handlerSano('          grabarSnapshotDeTurno({})\n          grabarSnapshotDeTurno({})'))).toBe(2);
+        expect(llamadasSnapshot(handlerSano('          grabarSnapshotDeTurno(fila, { turnId, locutionId })'))).toBe(1);
     });
 
     it('snapshot sin campos reales de la fila => rojo', () => {
-        expect(
-            tieneCamposDeFila(handlerSano('          recordSessionTurn({ kind: \'commit\', text: capture, sessionTurnId: activeTurnIdRef.current })')),
-        ).toBe(false);
-        expect(
-            tieneCamposDeFila(handlerSano('          recordSessionTurn({ kind: \'commit\', text: fila?.texto || \'\', speaker: fila?.etiqueta || \'\', sessionTurnId: turnId, locutionId: fila?.locutionId || \'\' })')),
-        ).toBe(true);
+        expect(tieneCamposDeFila(handlerSano('          recordSessionTurn({ kind: \'commit\', text: capture, sessionTurnId: activeTurnIdRef.current })'))).toBe(false);
+        expect(tieneCamposDeFila(handlerSano('          grabarSnapshotDeTurno(fila, { turnId, locutionId })'))).toBe(true);
     });
 
-    it('revisión sin dedupe => rojo; con dedupe => verde', () => {
-        expect(
-            evitaRevisiones(handlerSano('          recordSessionTurn({ kind: \'commit\', text: fila?.texto || \'\', sessionTurnId: turnId, locutionId: fila?.locutionId || \'\' })')),
-        ).toBe(false);
-        expect(
-            evitaRevisiones(handlerSano('          if (turnId && turnId !== sessionTurnRecordedRef.current) {\n            sessionTurnRecordedRef.current = turnId\n            recordSessionTurn({ kind: \'commit\', text: fila?.texto || \'\', sessionTurnId: turnId, locutionId: fila?.locutionId || \'\' })\n          }')),
-        ).toBe(true);
+    it('revision sin dedupe => rojo; con dedupe => verde', () => {
+        expect(evitaRevisiones(handlerSano('          grabarSnapshotDeTurno(fila, { turnId, locutionId })'))).toBe(false);
+        expect(evitaRevisiones(handlerSano('          if (!locutionId || !sessionLocutionsRecordedRef.current.has(locutionId)) {\n            grabarSnapshotDeTurno(fila, { turnId, locutionId })\n          }'))).toBe(true);
     });
 });

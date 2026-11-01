@@ -29,6 +29,7 @@ import { noteGameTurn } from '../../core/games/gameSessionStore'
 import { consumesGameTurn, isCatalogLevelGameAction } from '../lib/gameCommands'
 import { relayLog } from '../../lib/clientLogRelay'
 import { recordSessionTurn } from '../lib/sessionRecorder.js'
+import { grabarSnapshotDeTurno } from '../conversation/turnSnapshot.js'
 import { captureTurnAudioSnapshot, probePcmBlock, turnAudioForDiarize } from '../lib/turnAudioSnapshot.js'
 import { useIntegrationStore } from '../../store/integrationStore'
 import { fluAsyncErrorHandler } from '../lib/fluAsyncError.js'
@@ -163,6 +164,7 @@ export function useFluVoiceAssistant({
   const resolvedWakeWords = resolveWakeWords(wakeWords)
   const activeTurnIdRef = useRef(0)
   const sessionTurnRecordedRef = useRef('') // ultimo turnId de fila ya registrado (Paso 0: sin snapshots duplicados)
+  const sessionLocutionsRecordedRef = useRef(new Set())
   const lastEmittedTurnRef = useRef(0) // turno de la ultima locucion emitida: resolucion tardia idempotente
   // §9 par ÚNICO `commit + resolución`: TODAS las ramas cierran aquí; la fila
   // es SIEMPRE el valor commiteado y el display no diverge.
@@ -395,10 +397,23 @@ export function useFluVoiceAssistant({
           // Paso 0: UNA instantánea por locución commiteada, con los campos
           // REALES de la fila; la revisión del mismo turnId no añade snapshot.
           const turnId = String(fila?.turnId ?? '').trim()
-          if (turnId && turnId !== sessionTurnRecordedRef.current) {
+          const locutionId = String(fila?.locutionId ?? '').trim()
+          const yaRegistrada = locutionId
+            ? sessionLocutionsRecordedRef.current.has(locutionId)
+            : turnId !== '' && turnId === sessionTurnRecordedRef.current
+          if (!yaRegistrada) {
+            if (locutionId) sessionLocutionsRecordedRef.current.add(locutionId)
             sessionTurnRecordedRef.current = turnId
-            const tramoFila = tramoDelTurno({ chunks: chunksRef.current, totalSamples: chunkTotalSamplesRef.current, sinceSample: turnAudioStartSampleRef.current, sampleRate: sampleRateRef.current })
-            recordSessionTurn({ kind: 'commit', text: fila?.texto || '', speaker: fila?.etiqueta || '', signature: lastTurnSignatureRef.current, clusters: speakerClustersRef.current, lastSpeaker: lastSpeakerRef.current, primary: sessionPrimarySpeakerRef.current, audioStartSample: tramoFila.audioStartSample, audioEndSample: tramoFila.audioEndSample, tramoValido: tramoFila.tramoValido, sessionTurnId: turnId, locutionId: fila?.locutionId || '' })
+            grabarSnapshotDeTurno(fila, {
+              fallback: tramoDelTurno({ chunks: chunksRef.current, totalSamples: chunkTotalSamplesRef.current, sinceSample: turnAudioStartSampleRef.current, sampleRate: sampleRateRef.current }),
+              signature: lastTurnSignatureRef.current,
+              clusters: speakerClustersRef.current,
+              lastSpeaker: lastSpeakerRef.current,
+              primary: sessionPrimarySpeakerRef.current,
+              turnId,
+              locutionId,
+              sampleRate: sampleRateRef.current,
+            })
           }
           activeTurnIdRef.current += 1
           lastModuleLabelRef.current = String(fila?.etiqueta || '')

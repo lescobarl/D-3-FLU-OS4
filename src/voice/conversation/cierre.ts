@@ -617,6 +617,10 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
       locutionId: fila.locutionId,
       etiqueta,
       evidencia,
+      // Revision de la MISMA fila: el grabador actualiza el snapshot del turno
+      // con la firma/tramo finales (auditoria 2026-11-01: signature:null).
+      fila: actualizada,
+      revision: true,
     })
     recordSessionEvent('conversacion', 'fila.reetiquetada', {
       sessionId: fila.sessionId,

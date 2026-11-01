@@ -145,6 +145,9 @@ export type EventoConversacion =
       locutionId: string
       etiqueta: string
       evidencia: EvidenciaEtiqueta
+      /** Revision de la MISMA fila (medida tardia): snapshot de grabacion completo. */
+      fila?: Fila
+      revision?: boolean
     }>
   | Readonly<{
       tipo: 'box.updated'
