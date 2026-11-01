@@ -38,7 +38,6 @@
     "/api/search/images",
     "/api/workspace-image",
     "1 entrada detectada",
-    ">{ui.participantEmpty || ",
     "Agenda de contactos",
     "Agregar un sitio aprobado lo hace aparecer en voz, barra, tiles y resultados sin tocar código.",
     "Alcanzaste el límite diario de búsquedas. Volvé mañana.",
@@ -412,6 +411,7 @@
     "¿Qué querés que busque?",
     "¿como voy en ingles?",
     "¿qué hay para hoy?",
+    "— Elegir participante —",
     "⚠️ No se pudo leer la imagen. Verifica que sea un archivo JPG o PNG e inténtalo de nuevo.",
     "📄 Analizar documento",
     "🔍 Analizando con IA..."

@@ -17,6 +17,7 @@ import type { FormEvent } from 'react';
 import { FLU_CONFIG } from '../voice/api/config';
 import { configText } from './configText';
 import { useAsyncAction } from '../hooks/useAsyncAction';
+import { ParticipantSelect } from './ParticipantSelect';
 import type { MateriaGrisRecord, ParticipantRecord } from '../core/db/fluDatabase';
 import type { AwardInput, LeaderboardRow } from '../core/multiuser/materiaGrisService';
 
@@ -70,23 +71,15 @@ export function MateriaGrisPanel({
         {/* Entrega de puntos */}
         <form className="flu-settings-section" onSubmit={handleSubmit}>
           <div className="flu-settings-section__body">
-            <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked">
-              <span>{ui.participantLabel || 'Participante'}</span>
-              <select
-                value={participantId}
-                onChange={(event) => setParticipantId(event.target.value)}
-                aria-label={ui.participantLabel || 'Participante'}
-                data-testid="materiagris-award-participant"
-                disabled={busy}
-              >
-                <option value="">{ui.participantEmpty || '— Elegir participante —'}</option>
-                {participants.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <ParticipantSelect
+              value={participantId}
+              onChange={setParticipantId}
+              participants={participants}
+              ui={ui}
+              testId="materiagris-award-participant"
+              disabled={busy}
+              emptyFallback="— Elegir participante —"
+            />
             <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked">
               <span>{ui.actionLabel || 'Acción'}</span>
               <select

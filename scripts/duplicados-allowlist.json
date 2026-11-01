@@ -1,7 +1,7 @@
 {
   "_nota": "Pares de archivos que HOY comparten un bloque clonado. Cada uno declara motivo, dueno y fecha. Solo se quitan: el par arreglado se borra aqui en el mismo commit. maxPairs es el techo y solo baja; anadir una excepcion exige aprobacion del dueno (CODEOWNERS).",
   "minTokens": 50,
-  "maxPairs": 39,
+  "maxPairs": 38,
   "allowedPairs": [
     {
       "pair": "src/avatar/App.css | src/avatar/App.css",
@@ -35,12 +35,6 @@
     },
     {
       "pair": "src/components/AppAnalysisPanel.tsx | src/components/DocumentResultPanel.tsx",
-      "reason": "pendiente de triaje (umbral 50 tokens)",
-      "owner": "@lescobarl",
-      "date": "2026-11-01"
-    },
-    {
-      "pair": "src/components/ContactsPanel.tsx | src/components/MateriaGrisPanel.tsx",
       "reason": "pendiente de triaje (umbral 50 tokens)",
       "owner": "@lescobarl",
       "date": "2026-11-01"

@@ -20,6 +20,7 @@ import { FLU_CONFIG } from '../voice/api/config';
 import type { ContactRecord, ParticipantRecord } from '../core/db/fluDatabase';
 import type { BirthdayContact, ContactInput } from '../core/contacts/contactService';
 import { useAsyncAction } from '../hooks/useAsyncAction';
+import { ParticipantSelect } from './ParticipantSelect';
 
 export interface ContactsPanelProps {
   participants: ParticipantRecord[];
@@ -157,23 +158,15 @@ export function ContactsPanel({
                 disabled={busy}
               />
             </label>
-            <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked">
-              <span>{ui.participantLabel || 'Participante'}</span>
-              <select
-                value={participantId}
-                onChange={(event) => setParticipantId(event.target.value)}
-                aria-label={ui.participantLabel || 'Participante'}
-                data-testid="contacts-add-participant"
-                disabled={busy}
-              >
-                <option value="">{ui.participantEmpty || '— Ninguno —'}</option>
-                {participants.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <ParticipantSelect
+              value={participantId}
+              onChange={setParticipantId}
+              participants={participants}
+              ui={ui}
+              testId="contacts-add-participant"
+              disabled={busy}
+              emptyFallback="— Ninguno —"
+            />
             <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked">
               <span>{ui.notesLabel || 'Notas'}</span>
               <textarea
