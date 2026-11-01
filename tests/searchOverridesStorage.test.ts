@@ -62,7 +62,20 @@ describe('searchConfigOverrides — persistencia con respaldo', () => {
     it('con localStorage sano, save→load conserva el valor', () => {
         expect(saveSearchConfigOverrides(withKey('sk-or-v1-AAA'))).toBe(true);
         expect(readKey(window.localStorage)).toBe('sk-or-v1-AAA');
+        expect(window.sessionStorage.getItem(KEY)).toBeNull();
         expect(loadSearchConfigOverrides().providers?.web?.openrouter?.key).toBe('sk-or-v1-AAA');
+    });
+
+    it('si localStorage vuelve, el respaldo no queda como copia vieja', () => {
+        const { store } = makeQuotaFullLocalStorage();
+        vi.stubGlobal('localStorage', store);
+        expect(saveSearchConfigOverrides(withKey('sk-or-v1-FALLBACK'))).toBe(true);
+        expect(readKey(window.sessionStorage)).toBe('sk-or-v1-FALLBACK');
+
+        vi.unstubAllGlobals();
+        expect(saveSearchConfigOverrides(withKey('sk-or-v1-REAL'))).toBe(true);
+        expect(readKey(window.localStorage)).toBe('sk-or-v1-REAL');
+        expect(window.sessionStorage.getItem(KEY)).toBeNull();
     });
 
     it('si localStorage falla, persiste en sessionStorage y load lo devuelve', () => {

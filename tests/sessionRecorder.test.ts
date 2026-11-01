@@ -32,8 +32,10 @@ import {
     pushSessionAudio,
     recordSessionEvent,
     recordSessionTurn,
+    resolveRecorderFlag,
 } from '../src/voice/lib/sessionRecorder.js';
 import { FLU_CONFIG } from '../src/voice/lib/fluConfig.js';
+import { STORAGE_KEYS } from '../src/core/config/appConfig';
 import { localGet } from '../src/core/storage/localStore';
 
 const RECORDER_SRC = join(process.cwd(), 'src', 'voice', 'lib', 'sessionRecorder.js');
@@ -46,6 +48,14 @@ function ascii(bytes: Uint8Array, offset: number, length: number): string {
 }
 
 describe('sessionRecorder — bandera de encendido/apagado', () => {
+    it('la clave nueva manda y la legacy solo se usa si la nueva no existe', () => {
+        expect(resolveRecorderFlag('1', '0')).toBe(true);
+        expect(resolveRecorderFlag('0', '1')).toBe(false);
+        expect(resolveRecorderFlag(undefined, '1')).toBe(true);
+        expect(resolveRecorderFlag(undefined, '0')).toBe(false);
+        expect(resolveRecorderFlag(undefined, undefined)).toBeNull();
+    });
+
     beforeEach(() => {
         clearSessionRecording();
         disableSessionRecorder();
@@ -65,13 +75,13 @@ describe('sessionRecorder — bandera de encendido/apagado', () => {
         const snapshot = getSessionRecordingSnapshot();
         expect(snapshot.audio.samples).toBe(0);
         expect(snapshot.events).toEqual([]);
-        expect(localGet('flu.recorder')).toBe('0');
+        expect(localGet(STORAGE_KEYS.RECORDER_ENABLED)).toBe('0');
     });
 
     it('encender la enciende y persistir la bandera; apagarla conserva lo grabado', () => {
         expect(enableSessionRecorder()).toBe(true);
         expect(isSessionRecordingEnabled()).toBe(true);
-        expect(localGet('flu.recorder')).toBe('1');
+        expect(localGet(STORAGE_KEYS.RECORDER_ENABLED)).toBe('1');
         pushSessionAudio(new Float32Array(16), 48000);
         recordSessionEvent('listen', 'final', { text: 'hola' });
         disableSessionRecorder();

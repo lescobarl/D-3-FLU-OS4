@@ -110,7 +110,7 @@ const POLITE_STRIP = /\b(?:por\s+favor|please)\s*$/i;
 // ------------------------------------------------------------
 
 /** Normaliza el label del contacto: espacios, cortesía y puntuación final. */
-function cleanLabel(text: string): string {
+function cleanContactLabel(text: string): string {
   return text
     .replace(/\s{2,}/g, ' ')
     .replace(POLITE_STRIP, '')
@@ -142,10 +142,10 @@ function splitContactAndMessage(rest: string): {
   const sepEn = rest.search(MESSAGE_SEP_EN);
   const indexes = [sepEs, sepEn].filter((i) => i >= 0);
   if (indexes.length === 0) {
-    return { contactName: cleanLabel(rest) };
+    return { contactName: cleanContactLabel(rest) };
   }
   const sep = Math.min(...indexes);
-  const contactName = cleanLabel(rest.slice(0, sep));
+  const contactName = cleanContactLabel(rest.slice(0, sep));
   const message = cleanMessage(rest.slice(sep)) || undefined;
   return message ? { contactName, message } : { contactName };
 }

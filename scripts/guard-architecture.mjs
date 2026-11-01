@@ -71,6 +71,13 @@ const OWNER_SYMBOLS = [
 
 const IGNORED_DIRS = new Set(['node_modules', 'dist', 'coverage', 'backups', 'test-results', '.git'])
 
+/**
+ * Unico fichero que puede nombrar el almacenamiento del navegador: es la
+ * puerta que el resto importa. `localStorageGatewayGuard` ya impone ese
+ * contrato; el chequeo staged no debe marcar a la propia puerta.
+ */
+const STORAGE_GATEWAY = 'src/core/storage/localStore.ts'
+
 function walk(dir) {
   const out = []
   for (const entry of readdirSync(dir)) {
@@ -113,12 +120,20 @@ function oldImportNames(text) {
 function checkStaged() {
   const errors = []
   const diff = execFileSync('git', ['diff', '--cached', '--unified=0', '--no-color', '--', 'src'], { encoding: 'utf8' })
-  const added = diff.split('\n').filter((line) => line.startsWith('+') && !line.startsWith('+++'))
-  for (const line of added) {
+  let currentFile = ''
+  for (const raw of diff.split('\n')) {
+    if (raw.startsWith('+++ b/')) {
+      currentFile = raw.slice(6).trim()
+      continue
+    }
+    if (!raw.startsWith('+') || raw.startsWith('+++')) continue
+    const line = raw
     const imports = oldImportNames(line)
-    if (imports.length) errors.push(`import viejo en línea añadida: ${line.trim()}`)
+    if (imports.length) errors.push(`import viejo en lÃ­nea aÃ±adida: ${line.trim()}`)
     if (/\bas any\b|@ts-ignore|@ts-expect-error/.test(line)) errors.push(`escape de tipos: ${line.trim()}`)
-    if (/\b(?:localStorage|sessionStorage)\b/.test(line)) errors.push(`almacén directo: ${line.trim()}`)
+    if (currentFile !== STORAGE_GATEWAY && /\b(?:localStorage|sessionStorage)\b/.test(line)) {
+      errors.push(`almacÃ©n directo: ${line.trim()}`)
+    }
   }
   const names = execFileSync('git', ['diff', '--cached', '--name-status', '--', 'src'], { encoding: 'utf8' })
   for (const row of names.split('\n').filter(Boolean)) {

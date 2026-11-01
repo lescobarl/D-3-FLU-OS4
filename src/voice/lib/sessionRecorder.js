@@ -33,11 +33,15 @@ import { DEFAULT_SAMPLE_RATE } from './audioConstants.js'
 import { float32ToInt16, resampleLinear } from './pcmAudio.js'
 import { logCaughtError } from '../../lib/caughtError.ts'
 import { hasLocalStorage, localGet, localSet } from '../../core/storage/localStore.ts'
+import { downloadBlob } from '../../lib/downloadFile.ts'
+import { STORAGE_KEYS } from '../../core/config/appConfig.ts'
 import { writeAscii } from '../../lib/dataViewAscii.ts'
 import { v4 as uuidv4 } from 'uuid'
 
 const IS_DEV = Boolean(import.meta.env?.DEV)
-const STORAGE_KEY = 'flu.recorder'
+const STORAGE_KEY = STORAGE_KEYS.RECORDER_ENABLED
+/** Clave anterior; se lee una vez para migrar el override sin perderlo. */
+const LEGACY_STORAGE_KEY = 'flu.recorder'
 const DEFAULT_MAX_MINUTES = 10
 const DEFAULT_MAX_EVENTS = 20000
 const MARKER_INTERVAL_MS = 1000
@@ -138,8 +142,9 @@ function readStorageFlag() {
   if (!IS_DEV || !hasLocalStorage()) return
   try {
     const value = localGet(STORAGE_KEY)
-    if (value === '1') enabled = true
-    if (value === '0') enabled = false
+    const legacy = value == null ? localGet(LEGACY_STORAGE_KEY) : null
+    const resolved = resolveRecorderFlag(value, legacy)
+    if (resolved !== null) enabled = resolved
   } catch (error) {
     logCaughtError('sessionRecorder.readStorageFlag', error)
   }
@@ -813,13 +818,23 @@ export function getSessionRecordingSnapshot() {
   }
 }
 
-function downloadBlob(blob, filename) {
-  const url = URL.createObjectURL(blob)
-  const anchor = document.createElement('a')
-  anchor.href = url
-  anchor.download = filename
-  anchor.click()
-  URL.revokeObjectURL(url)
+function buildSessionJsonBlob(snapshot) {
+  return new Blob([JSON.stringify(snapshot, null, 2)], { type: 'application/json' })
+}
+
+/**
+ * Resuelve la bandera persistida. La clave nueva manda; la legacy se lee solo
+ * si la nueva no existe (migracion sin perder overrides anteriores).
+ * @param {string|null|undefined} value valor de RECORDER_ENABLED
+ * @param {string|null|undefined} legacy valor de 'flu.recorder'
+ * @returns {boolean|null} estado, o null si no hay override
+ */
+export function resolveRecorderFlag(value, legacy) {
+  if (value === '1') return true
+  if (value === '0') return false
+  if (legacy === '1') return true
+  if (legacy === '0') return false
+  return null
 }
 
 /**
@@ -836,8 +851,7 @@ export function downloadSessionRecording(filenameBase) {
     const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
     const base = filenameBase || `flu-session-${stamp}`
     if (audioSamples > 0) downloadBlob(buildSessionWavBlob(), `${base}.wav`)
-    const json = new Blob([JSON.stringify(snapshot, null, 2)], { type: 'application/json' })
-    downloadBlob(json, `${base}.json`)
+    downloadBlob(buildSessionJsonBlob(snapshot), `${base}.json`)
     console.info('[Flu][recorder] Descargado', { base, events: events.length, seconds: snapshot.audio.seconds })
   } catch (error) {
     logCaughtError('sessionRecorder.download', error)

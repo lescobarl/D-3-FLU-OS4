@@ -14,7 +14,7 @@ import { STORAGE_KEYS, resolveTextApiKey } from '../config/appConfig';
 import type { SearchProviderConfig, SearchResultType } from './searchSession';
 import { logCaughtError } from '../../lib/caughtError';
 import { AI_PROVIDER_IDS } from '../config/sharedConfig'
-import { localGet, localRemove, localSet, localStorePort } from '../storage/localStore';
+import { localGet, localRemove, localSet, localStorePort, sessionRemove, sessionSet, sessionStorePort } from '../storage/localStore';
 
 /** Overrides de un proveedor individual (por id). */
 export interface SearchProviderOverride {
@@ -284,7 +284,7 @@ function readRawOverrides(): string | null {
   if (typeof window === 'undefined') return null;
   const ls = safeGet(localStorePort(), OVERRIDES_STORAGE_KEY);
   if (ls) return ls;
-  return safeGet(window.sessionStorage, OVERRIDES_STORAGE_KEY);
+  return safeGet(sessionStorePort(), OVERRIDES_STORAGE_KEY);
 }
 
 /** Escribe con respaldo. Devuelve true si algo persistió. */
@@ -295,30 +295,37 @@ function writeRawOverrides(value: string): boolean {
     localSet(OVERRIDES_STORAGE_KEY, value);
     lastStorageError = '';
     ok = true;
+    // Una sola copia activa: si el almacen principal acepto, el respaldo no
+    // puede conservar un valor viejo que la lectura usaria si se limpia.
+    try {
+      sessionRemove(OVERRIDES_STORAGE_KEY);
+    } catch (e) {
+      logCaughtError('[catch] src/core/search/searchConfigOverrides.ts', e);
+    }
   } catch (error) {
-    lastStorageError = (error as Error)?.name || 'localStorage error';
+    lastStorageError = (error as Error)?.name || 'almacen principal error';
     logCaughtError(
-      `[searchConfig] localStorage no disponible (${lastStorageError}); se usa respaldo en sessionStorage.`,
+      `[searchConfig] almacen principal no disponible (${lastStorageError}); se usa respaldo de sesion.`,
      error);
     // Cuota llena/bloqueada: quitar el valor VIEJO para que no opaque al nuevo
-    // (removeItem no consume cuota), así la lectura cae a sessionStorage.
+    // (removeItem no consume cuota), así la lectura cae al almacen de sesion.
     try {
       localRemove(OVERRIDES_STORAGE_KEY);
     } catch (e) {
         logCaughtError('[catch] src/core/search/searchConfigOverrides.ts', e);
-      /* si tampoco se puede, la lectura usa sessionStorage */
+      /* si tampoco se puede, la lectura usa el almacen de sesion */
     }
-  }
-  try {
-    window.sessionStorage.setItem(OVERRIDES_STORAGE_KEY, value);
-    ok = true;
-  } catch (error) {
+    try {
+      sessionSet(OVERRIDES_STORAGE_KEY, value);
+      ok = true;
+    } catch (error) {
         logCaughtError('[catch] src/core/search/searchConfigOverrides.ts', error);
-    lastStorageError = `${lastStorageError}/${(error as Error)?.name || 'sessionStorage error'}`;
+      lastStorageError = `${lastStorageError}/${(error as Error)?.name || 'almacen de sesion error'}`;
+    }
   }
   if (!ok) {
     console.error(
-      '[searchConfig] No se pudo persistir la configuración del buscador (localStorage y sessionStorage llenos o bloqueados).',
+      '[searchConfig] No se pudo persistir la configuración del buscador (almacen principal y de sesion llenos o bloqueados).',
       lastStorageError,
     );
   }
@@ -356,7 +363,7 @@ export function clearSearchConfigOverrides(): void {
     /* ignorar */
   }
   try {
-    window.sessionStorage.removeItem(OVERRIDES_STORAGE_KEY);
+    sessionRemove(OVERRIDES_STORAGE_KEY);
   } catch (e) {
         logCaughtError('[catch] src/core/search/searchConfigOverrides.ts', e);
     /* ignorar */

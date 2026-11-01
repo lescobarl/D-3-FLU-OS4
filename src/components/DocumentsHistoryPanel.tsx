@@ -5,6 +5,7 @@
 // `useDocuments`). Etiquetas vía FLU_CONFIG (sin hardcode).
 // ============================================================
 import { pickLabel } from '../lib/textUtils';
+import { downloadBlob, downloadUrl } from '../lib/downloadFile';
 import { TIMEOUT_POLICY_MS } from '../core/config/appConfig';
 import { FLU_CONFIG } from '../voice/api/config';
 import type { DocumentRecord } from '../core/db/fluDatabase';
@@ -28,25 +29,21 @@ export function downloadDocumentContent(doc: DocumentRecord): void {
   const content = String(doc.contenido || '');
   const source = pointer || content;
   if (!source) return;
+  const fileName = doc.nombre || doc.titulo || 'documento';
   // URL remota (video/imagen): se abre/descarga directo.
   if (/^https?:/i.test(source)) {
-    const anchor = document.createElement('a');
-    anchor.href = source;
-    anchor.download = doc.nombre || doc.titulo || 'documento';
-    anchor.target = '_blank';
-    anchor.rel = 'noopener noreferrer';
-    anchor.click();
+    downloadUrl(source, fileName, { newTab: true });
     return;
   }
-  const isDataUrl = /^data:/i.test(source);
-  const href = isDataUrl
-    ? source
-    : URL.createObjectURL(new Blob([source], { type: doc.mime || 'text/plain;charset=utf-8' }));
-  const anchor = document.createElement('a');
-  anchor.href = href;
-  anchor.download = doc.nombre || doc.titulo || 'documento';
-  anchor.click();
-  if (!isDataUrl) setTimeout(() => URL.revokeObjectURL(href), TIMEOUT_POLICY_MS.documentObjectUrlRevoke);
+  if (/^data:/i.test(source)) {
+    downloadUrl(source, fileName);
+    return;
+  }
+  downloadBlob(
+    new Blob([source], { type: doc.mime || 'text/plain;charset=utf-8' }),
+    fileName,
+    TIMEOUT_POLICY_MS.documentObjectUrlRevoke,
+  );
 }
 
 export function DocumentsHistoryPanel({

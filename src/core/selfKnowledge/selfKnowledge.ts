@@ -125,7 +125,7 @@ function humanizeKey(key: string): string {
 }
 
 /** Label es/en con fallback seguro (regla anti-hardcode §10). */
-function pickLabel(es?: string, en?: string, fallback = ''): { labelEs: string; labelEn: string } {
+function pickBilingualPair(es?: string, en?: string, fallback = ''): { labelEs: string; labelEn: string } {
     return {
         labelEs: es && es.trim().length > 0 ? es.trim() : fallback,
         labelEn: en && en.trim().length > 0 ? en.trim() : fallback,
@@ -183,7 +183,7 @@ function buildPaginaEntries(config: SelfKnowledgeConfig): FluCapability[] {
     return items
         .filter((tab) => tab && typeof tab.id === 'string' && tab.id.trim().length > 0)
         .map((tab): FluCapability => {
-            const { labelEs, labelEn } = pickLabel(tab.label, undefined, tab.id);
+            const { labelEs, labelEn } = pickBilingualPair(tab.label, undefined, tab.id);
             return {
                 id: `pagina:${tab.id}`,
                 categoria: 'pagina',
@@ -275,7 +275,7 @@ function buildWorkspaceEntries(config: SelfKnowledgeConfig): FluCapability[] {
     const typeLabels = (config.ui?.workspace?.typeLabels as Record<string, string> | undefined) || {};
     return WORKSPACE_TIPOS.filter((tipo) => typeof tipo === 'string' && tipo.length > 0).map(
         (tipo): FluCapability => {
-            const { labelEs, labelEn } = pickLabel(typeLabels[tipo], undefined, tipo);
+            const { labelEs, labelEn } = pickBilingualPair(typeLabels[tipo], undefined, tipo);
             return {
                 id: `workspace:${tipo}`,
                 categoria: 'workspace',

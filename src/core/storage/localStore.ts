@@ -34,22 +34,32 @@ export interface LocalStorePort {
 
 /** Respaldo en memoria: UNO por modulo, no uno por acceso. */
 const MEMORY = new Map<string, string>();
+/** Respaldo del almacen de sesion: mapa separado del principal. */
+const SESSION_MEMORY = new Map<string, string>();
 
 let memory: LocalStorePort | null = null;
+let sessionMemory: LocalStorePort | null = null;
+
+function makeMemoryPort(store: Map<string, string>): LocalStorePort {
+  return {
+    getItem: (key) => store.get(key) ?? null,
+    setItem: (key, value) => {
+      store.set(key, value);
+    },
+    removeItem: (key) => {
+      store.delete(key);
+    },
+  };
+}
 
 function memoryPort(): LocalStorePort {
-  if (!memory) {
-    memory = {
-      getItem: (key) => MEMORY.get(key) ?? null,
-      setItem: (key, value) => {
-        MEMORY.set(key, value);
-      },
-      removeItem: (key) => {
-        MEMORY.delete(key);
-      },
-    };
-  }
+  if (!memory) memory = makeMemoryPort(MEMORY);
   return memory;
+}
+
+function sessionMemoryPort(): LocalStorePort {
+  if (!sessionMemory) sessionMemory = makeMemoryPort(SESSION_MEMORY);
+  return sessionMemory;
 }
 
 /** El almacen del navegador, o null si no hay (Node/SSR, o acceso bloqueado). */
@@ -77,6 +87,29 @@ export function localStorePort(): LocalStorePort {
 /** true si detras hay almacenamiento del navegador (no el respaldo en memoria). */
 export function hasLocalStorage(): boolean {
   return browserStorage() !== null;
+}
+
+/** El almacen de sesion del navegador, o null si no hay (Node/SSR, bloqueado). */
+function browserSessionStorage(): LocalStorePort | null {
+  try {
+    if (typeof window !== 'undefined' && window.sessionStorage) return window.sessionStorage;
+  } catch (e) {
+    logCaughtError('[catch] src/core/storage/localStore.ts', e);
+  }
+  return null;
+}
+
+/** Puerta del almacen de sesion; mismo contrato que la principal. */
+export function sessionStorePort(): LocalStorePort {
+  return browserSessionStorage() ?? sessionMemoryPort();
+}
+
+export function sessionSet(key: string, value: string | number | boolean): void {
+  sessionStorePort().setItem(key, String(value));
+}
+
+export function sessionRemove(key: string): void {
+  sessionStorePort().removeItem(key);
 }
 
 export function localGet(key: string): string | null {

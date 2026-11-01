@@ -5,4 +5,9 @@
   'tests/conversacionTrazaDeFilaGuard.test.ts',
   'tests/conversacionUnCicloDeEscuchaGuard.test.ts',
   'tests/sessionRecorder.test.ts',
+  'tests/downloadSingleOwnerGuard.test.ts',
+  'tests/homonymBaselineGuard.test.ts',
+  'tests/hardcodeModelDetectorGuard.test.ts',
+  'tests/searchOverridesStorage.test.ts',
+  'tests/documentsHistoryPanel.test.tsx',
 ]

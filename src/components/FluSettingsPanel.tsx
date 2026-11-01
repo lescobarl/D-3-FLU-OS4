@@ -12,7 +12,7 @@
 
 import React from 'react';
 import type { FluProfile } from '../types/bridge';
-import { FLU_PROFILES, AVAILABLE_TRAITS, AVAILABLE_TONES } from '../core/config/appConfig';
+import { FLU_PROFILES, AVAILABLE_TRAITS, AVAILABLE_TONES, FALAI_CONFIG } from '../core/config/appConfig';
 import { OPENROUTER_DEFAULTS, POLLINATIONS_DEFAULTS, AI_PROVIDER_IDS, DEFAULT_AI_PROVIDER } from '../core/config/sharedConfig';
 import { useIntegrationStore } from '../store/integrationStore';
 import FluParticipantSettingsPanel from '../voice/components/FluParticipantSettingsPanel';
@@ -469,7 +469,7 @@ export function FluSettingsPanel({
                                     <input
                                         type="text"
                                         className="flu-settings-image-config__input flu-settings-input-mono"
-                                        placeholder="fal-ai/wan-25-preview/text-to-video"
+                                        placeholder={FALAI_CONFIG.VIDEO_MODEL}
                                         defaultValue={falVideoModel || ''}
                                         data-testid="video-falai-model"
                                         onChange={(e) => handleFalVideoModelCommit?.(e.target.value)}

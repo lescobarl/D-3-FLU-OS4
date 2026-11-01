@@ -12,6 +12,7 @@
 /scripts/literales-allowlist.json @lescobarl
 /scripts/guard-hardcodes.mjs @lescobarl
 /scripts/hardcode-dictamen.json @lescobarl
+/tests/searchOverridesStorage.test.ts @lescobarl
 
 # Guards de comportamiento (tests/*Guard*)
 /tests/*Guard*.test.ts        @lescobarl

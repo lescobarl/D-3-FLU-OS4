@@ -161,7 +161,7 @@ export function hardcodedOutsideConfig(sources, isConfigPath) {
     source.split('\n').forEach((line, index) => {
       if (isComment(line)) return;
       if (/['"]https?:\/\/[a-z]/i.test(line)) out.push(`${file}:${index + 1}: URL: ${line.trim().slice(0, 80)}`);
-      if (/['"](?:google|anthropic|openai)\/[a-z0-9.-]+['"]/i.test(line)) out.push(`${file}:${index + 1}: modelo: ${line.trim().slice(0, 80)}`);
+      if (/['"](?:google|anthropic|openai|fal-ai|meta-llama|mistralai|qwen|x-ai|deepseek)\/[a-z0-9./_-]+['"]/i.test(line)) out.push(`${file}:${index + 1}: modelo: ${line.trim().slice(0, 80)}`);
     });
   }
   return out;
@@ -194,6 +194,12 @@ export function runSelfTest() {
   }
   if (hardcodedOutsideConfig([{ file: 'src/a.ts', source: "const u = 'https://no-config.example';" }], () => false).length !== 1) {
     failures.push('hardcodedOutsideConfig no dispara con URL fuera de config');
+  }
+  if (hardcodedOutsideConfig([{ file: 'src/a.ts', source: "const m = 'fal-ai/wan-25-preview/text-to-video';" }], () => false).length !== 1) {
+    failures.push('hardcodedOutsideConfig no dispara con un modelo fal-ai fuera de config');
+  }
+  if (hardcodedOutsideConfig([{ file: 'src/core/config/a.ts', source: "const m = 'fal-ai/wan-25-preview/text-to-video';" }], () => true).length !== 0) {
+    failures.push('hardcodedOutsideConfig marca un modelo declarado en config');
   }
   // Y no debe marcar lo legitimo.
   if (duplicateBodies([{ file: 'src/a.ts', source: 'export function a() {\n  return 1;\n}' }]).length !== 0) {

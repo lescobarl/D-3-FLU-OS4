@@ -12,7 +12,7 @@ import { dataUrlToBlob, isDataUrl } from '../lib/formatAdapters';
 import type { GenerationJob } from '../types/documentContracts';
 import type { GeneratedDocumentResult } from '../core/ai/IAIService';
 import type { VideoAssemblyResult } from '../services/videoAssembler';
-import { downloadBlob } from '../lib/downloadFile';
+import { downloadBlob, downloadUrl } from '../lib/downloadFile';
 import {
     buildLocalNarrationSegments,
     isLocalTtsAvailable,
@@ -36,10 +36,7 @@ function triggerDownload(result: GeneratedDocumentResult): void {
     const text = result.text || result.content || '';
     // URL remota/blob válida (no un data URL): se descarga tal cual.
     if (result.url && !isDataUrl(result.url)) {
-        const a = document.createElement('a');
-        a.href = result.url;
-        a.download = result.nombre;
-        a.click();
+        downloadUrl(result.url, result.nombre);
         return;
     }
     // Descarga binaria (PDF/DOCX/…): decodifica el data URL a Blob real.

@@ -121,6 +121,8 @@ export const STORAGE_KEYS = {
     // Wake words & debug logs (persistentes vía useConfigPersistence)
     WAKE_WORDS: 'flu-wake-words',
     DEBUG_LOGS_ENABLED: 'flu-debug-logs-enabled',
+    /** Bandera de la grabación de sesión (dev); la legacy `flu.recorder` se migra. */
+    RECORDER_ENABLED: 'flu-recorder-enabled',
     // UI preferences
     UI_THEME: 'flu-ui-theme',
     UI_FONT_SIZE: 'flu-ui-font-size',

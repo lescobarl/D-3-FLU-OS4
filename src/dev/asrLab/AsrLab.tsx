@@ -12,6 +12,7 @@
  */
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { OPENROUTER_DEFAULTS } from '../../core/config/sharedConfig'
+import { fetchTextEngine } from '../../core/ai/httpClient'
 import { concatFloat32, downsample, loadWhisperRecognitionEngine, loadWhisperWasmTranscriber } from '../../voice/api/audio'
 import { acquireSpeechRecognition } from '../../voice/api/speech'
 import { logCaughtError } from '../../lib/caughtError';
@@ -161,7 +162,7 @@ async function runGemini(pcm: Float32Array): Promise<ProbeResult> {
       import.meta.env.VITE_OPENROUTER_AUDIO_MODEL || 'google/gemini-2.5-flash'
     const data = encodeWav16(pcm, RATE)
     const started = Date.now()
-    const res = await fetch(`${OPENROUTER_DEFAULTS.API_URL}/chat/completions`, {
+    const res = await fetchTextEngine(`${OPENROUTER_DEFAULTS.API_URL}/chat/completions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify({
