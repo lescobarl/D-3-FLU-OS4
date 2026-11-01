@@ -198,8 +198,10 @@ export interface IntegrationActions {
     /** Detectar sentimiento de un texto y añadirlo al historial */
     addUserMessage: (text: string, speakerName?: string) => void;
     addFluMessage: (text: string, meta?: ConversationEntry['meta']) => void;
+    /** Dueno unico de una fila de FLU completa (id/timestamp/sentiment/phase/meta). */
+    addFluEntry: (entry: ConversationEntry) => void;
     /** Añadir un mensaje de sistema al historial de conversación */
-    addSystemMessage: (text: string) => void;
+    addSystemMessage: (text: string, meta?: ConversationEntry['meta']) => void;
     /** Cargar historial completo desde DB (sin side effects) */
     batchLoadHistory: (entries: ConversationEntry[]) => void;
     /**
@@ -611,36 +613,33 @@ export const useIntegrationStore = create<IntegrationStore>()(
                 void speakerName; // la fila la escribe el dueno, no este metodo
             },
             
-addSystemMessage: (text: string) => {
+            addSystemMessage: (text: string, meta?: ConversationEntry['meta']) => {
                 const entry: ConversationEntry = withActivePersonId({
                     role: 'system',
                     text,
                     timestamp: Date.now(),
                     id: nextId(),
                     speakerName: '⚙️ Sistema',
+                    ...(meta ? { meta } : {}),
                 }, get().activePersonId);
                 set((current) => ({
                     conversationHistory: capConversationHistory([...current.conversationHistory, entry]),
                 }));
             },
 
-            addFluMessage: (text: string, meta?: ConversationEntry['meta']) => {
-                const entry: ConversationEntry = withActivePersonId({
+            /**
+             * DUENO UNICO de una fila de FLU completa (id/timestamp/sentiment/phase/meta).
+             * `addFluMessage` es el atajo de texto; los eventos de sistema usan este
+             * metodo para no perder el contador `totalFluMessages`.
+             */
+            addFluEntry: (entry: ConversationEntry) => {
+                const normalizada: ConversationEntry = withActivePersonId({
+                    ...entry,
                     role: 'flu',
-                    text,
-                    timestamp: Date.now(),
-                    id: nextId(),
                     speakerName: 'FLU',
-                    ...(meta ? { meta } : {}),
                 }, get().activePersonId);
-                // UN ESCRITOR POR FILA (P9.82): la respuesta de FLU es ESTA entrada
-                // (`role='flu'`, la que escribe `logFluReply`). Antes ADEMAS se adjuntaba
-                // al ultimo turno del usuario (`response` / `meta.response`): el MISMO texto
-                // dos veces en el mismo store, tapado por un parche de PRESENTACION en
-                // ConversationLog.jsx. Mismo arreglo que ya tiene `addUserMessage` (duenio de
-                // la fila del usuario: el MODULO de conversacion).
                 set((current) => ({
-                    conversationHistory: capConversationHistory([...current.conversationHistory, entry]),
+                    conversationHistory: capConversationHistory([...current.conversationHistory, normalizada]),
                     sessionStats: {
                         ...current.sessionStats,
                         totalFluMessages: current.sessionStats.totalFluMessages + 1,
@@ -648,6 +647,16 @@ addSystemMessage: (text: string) => {
                 }));
             },
 
+            addFluMessage: (text: string, meta?: ConversationEntry['meta']) => {
+                get().addFluEntry({
+                    role: 'flu',
+                    text,
+                    timestamp: Date.now(),
+                    id: nextId(),
+                    speakerName: 'FLU',
+                    ...(meta ? { meta } : {}),
+                });
+            },
             setEmotionalState: (state: EmotionalState) => {
                 set({ emotionalState: state });
             },

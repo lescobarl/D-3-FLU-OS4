@@ -146,6 +146,12 @@ export interface ConversationEntry {
      */
     speakerPending?: boolean;
     /**
+     * SOLO store, no se persiste: una actualizacion de nombre marcada `false` viene del
+     * reetiquetado tardio del modulo, que YA escribio la fila canonica. El hook de
+     * persistencia no debe reescribirla desde la vista parcial del store.
+     */
+    persistSpeakerName?: boolean;
+    /**
      * VENTANA DE AUDIO DEL TURNO (muestras absolutas): dato informativo. NO es identidad:
      * dos locuciones del MISMO turno comparten esta ventana, y por eso no puede decidir la
      * reutilizacion/creacion de fila. La identidad de la fila es el TURNO (`turnId`); la

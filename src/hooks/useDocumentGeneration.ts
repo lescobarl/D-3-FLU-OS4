@@ -170,14 +170,7 @@ export function useDocumentGeneration(language: string): DocumentGenerationState
                     language,
                 );
                 if (insumoGenerado) {
-                    const { addConversationEntry } = useIntegrationStore.getState();
-                    addConversationEntry({
-                        id: uuidv4(),
-                        role: 'system' as const,
-                        text: insumoGenerado,
-                        timestamp: Date.now(),
-                        speakerName: 'system',
-                    });
+                    useIntegrationStore.getState().addSystemMessage(insumoGenerado);
                 }
 
                 if (formato === 'video') {

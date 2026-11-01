@@ -100,7 +100,7 @@ export function crearMotorConversacionHook({
       if (evento.evidencia !== 'pendiente') {
         useIntegrationStore
           .getState()
-          .setEntrySpeakerName(evento.locutionId, evento.etiqueta, { resolved: true })
+          .setEntrySpeakerName(evento.locutionId, evento.etiqueta, { resolved: true, persist: false })
       }
       return
     }

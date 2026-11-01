@@ -73,7 +73,7 @@ import { buildFluSpeechAuditRows, createConversationModeController, deriveUserLa
 import { applyKnownVoiceName, forgetVoiceName, isAutoSpeakerLabel, participantVoiceAnchorsForDiarization, resolveVoiceIdentity, resolveVoiceParticipants } from './voice/api/identity'
 import { resolveGeminiErrorPresentation } from './voice/api/media'
 import { cancelSpeech, isSpeechBusy, speakResponse, waitForSpeechIdle } from './voice/api/speech'
-import { deleteAuditLogsBySpeaker, deleteVoiceProfile, findVoiceProfileByLabel } from './voice/api/storage'
+import { deleteVoiceProfile, findVoiceProfileByLabel } from './voice/api/storage'
 import { formatStreamSttUiStatus, getFluParticipantConfig, isFluParticipantEnabled, setFluParticipantOverrides } from './voice/api/uiConfig';
 import { createMediaRequestGate } from './core/media/mediaRequestGate';
 import { buildResponseKey, isDuplicateResponseIn, pushResponseState } from './core/voice/responseGate';
@@ -363,6 +363,8 @@ function App() {
     const savedSession = useRef(defaultSessionState());
     const conversationActiveRef = useRef(false);
     const resumeListeningTimerRef = useRef<number | null>(null);
+    /** Dueno unico de "iniciar conversacion" (reset + audit + modo + escucha). */
+    const startConversationRef = useRef<((options?: { announce?: boolean }) => Promise<void>) | null>(null);
     // Indica si FLU ya produjo una respuesta sustantiva en ESTA carga de página.
     // Se usa para que latestResponse NO resucite una respuesta vieja del historial
     // persistido (IndexedDB) al recargar, antes de que FLU responda de nuevo.
@@ -909,9 +911,9 @@ function App() {
                         dedupCacheLastPruneRef.current = now;
                     }
                     const entry = buildSystemConversationEntry(systemEvent, normalizeLang(language));
-                    // Store único (§9): el evento entra al historial (única fuente de
-                    // verdad) y Gemini lo ve por derivación; no hay canal lateral.
-                    integrationStore.addConversationEntry(entry);
+                    // Store Ãºnico (Â§9): el evento entra al historial (Ãºnica fuente de
+                    // verdad) y Gemini lo ve por derivaciÃ³n; no hay canal lateral.
+                    integrationStore.addFluEntry(entry);
                     // P9.83: NO se fuerza el tema del turno siguiente. Antes se inyectaba
                     // aqui un prompt HARDCODEADO ("Estas enojado por eso: debes decirlo ...
                     // ANTES de continuar con cualquier otro tema") via setRecentMemory, y FLU
@@ -2238,6 +2240,7 @@ function App() {
         os2SuspendRecognition,
         os2StartListening,
         voiceStatus,
+        startConversationRef,
     );
     const {
         speakFlu,
@@ -3033,14 +3036,7 @@ function App() {
                     // 1. El contexto entra al historial (única fuente de verdad); Gemini
                     //    lo ve por derivación del store, sin canal lateral.
                     const contextLabel = insumoImagen;
-                    const entry = {
-                        id: uuidv4(),
-                        role: 'system' as const,
-                        text: contextLabel,
-                        timestamp: Date.now(),
-                        speakerName: 'system',
-                    };
-                    integrationStore.addConversationEntry(entry);
+                    integrationStore.addSystemMessage(contextLabel);
 
                     // 2. Store analysis in workspaceArtifact for persistence across
                     //    conversation turns (so the Pizarrón tab shows the analysis
@@ -3220,13 +3216,7 @@ function App() {
         });
         const insumo = buildDocumentInsumo(contract, language);
         if (!insumo) return;
-        integrationStore.addConversationEntry({
-            id: uuidv4(),
-            role: 'system' as const,
-            text: insumo,
-            timestamp: Date.now(),
-            speakerName: 'system',
-        });
+        integrationStore.addSystemMessage(insumo);
     }, [documentAnalysis, language, integrationStore, documentHistory]);
 
     // Ruta genérica de archivo: imagen → OCR (processImageFile); documento → análisis F1.
@@ -3547,6 +3537,11 @@ const {
         await conversationMode.open({ resume: true }).catch((err) => logCaughtError('[App] fallo al reiniciar la escucha', err));
     }, [language, voiceStatus, integrationStore, auditLog, conversationMode, os2StopListening]);
 
+    // El comando de navegacion delega en el MISMO dueno de "iniciar conversacion".
+    useEffect(() => {
+        startConversationRef.current = handleStartConversation;
+    }, [handleStartConversation]);
+
     // ============================================================
     // OS2 parity: handleRemoveParticipant (Gap G)
     // FluShell.jsx lines 1216-1232: handleRemoveParticipant
@@ -3571,28 +3566,15 @@ const {
         // 2) Historial de conversación en memoria (Zustand) — quitar entradas del hablante.
         integrationStore.removeConversationEntriesBySpeaker(label);
 
-        // 3) Filas de conversación persistidas en fluDb.conversations (flu-os3 DB).
-        //    Esta es la causa raíz de que "conejo" reaparezca al recargar:
-        //    useConversationPersistence las restaura vía batchLoadHistory.
-        //    entryToRow mapea speakerId = speakerName para entradas de usuario,
-        //    así que el índice 'speakerId' cubre las filas del hablante.
-        const speakerRows = await fluDb.conversations
-            .where('speakerId')
-            .equals(label)
+        // 3) Filas de conversacion persistidas: UN solo barrido por el dueno del borrado logico.
+        const participantRows = await fluDb.conversations
+            .filter((r) => !r.sync?.deleted && String(resolveRowSpeakerLabel(r) || '').trim() === label)
             .primaryKeys()
             .catch((e) => { logCaughtError('src/App.tsx', e); return [] as string[]; });
-        if (speakerRows.length > 0) {
-            await softDeleteConversationRows(speakerRows).catch((e) => logCaughtError('src/App.tsx: softDeleteConversationRows', e));
+        if (participantRows.length > 0) {
+            await softDeleteConversationRows(participantRows).catch((e) => logCaughtError('src/App.tsx: softDeleteConversationRows', e));
         }
-        // Barrido defensivo para filas legacy cuyo speakerId quedó en 'usuario'
-        // pero speakerName coincide con el label (speakerName no es índice).
-        const legacyRows = await fluDb.conversations
-            .filter((r) => String(resolveRowSpeakerLabel(r) || '').trim() === label)
-            .primaryKeys()
-            .catch((e) => { logCaughtError('src/App.tsx', e); return [] as string[]; });
-        if (legacyRows.length > 0) {
-            await softDeleteConversationRows(legacyRows).catch((e) => logCaughtError('src/App.tsx: softDeleteConversationRows', e));
-        }
+
 
         // 4) Perfil de voz en la DB de voz local (flu-voz-local) — borrado lógico.
         const localProfile = await findVoiceProfileByLabel(label).catch((e) => { logCaughtError('src/App.tsx', e); return null; });
@@ -3603,8 +3585,6 @@ const {
         // 5) Speaker de sesión en memoria (diarización) + auditoría.
         os2RemoveSessionSpeaker(label);
         forgetVoiceName(label); // el directorio de sesion tambien guarda el nombre por VOZ
-        // OS2 parity: delete audit logs for the removed speaker (FluShell.jsx lines 1226-1228)
-        deleteAuditLogsBySpeaker(label).catch((e) => logCaughtError('src/App.tsx: deleteAuditLogsBySpeaker', e));
         auditLog.logEvent('participant:removed', 'config', uuidv4(), {
             label,
         }, 'Participant removed').catch((e) => logCaughtError('src/App.tsx: auditLog.logEvent', e));

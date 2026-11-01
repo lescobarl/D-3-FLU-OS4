@@ -4,6 +4,7 @@
 #   "Require a pull request before merging" + "Require review from Code Owners".
 
 # Criterio: qué cuenta como duplicado y qué guards corren
+/AGENTS.md                    @lescobarl
 /scripts/auditoria.mjs        @lescobarl
 /scripts/guard-files.mjs      @lescobarl
 /scripts/guard-duplicados.mjs @lescobarl

@@ -156,6 +156,24 @@ function mismaFilaPersistida(entry: ConversationEntry, row: ConversationRow): bo
 }
 
 /**
+ * Decide si el hook debe persistir una entrada de usuario. Las filas del MODULO
+ * ya las escribio `cierre.ts` (fila completa); el store solo refleja el nombre
+ * cuando llega `speaker.labeled` con `persistSpeakerName=false`. Reescribirlas
+ * desde la vista parcial borraba meta/evidencia/timestamp (auditoria 2026-11-01).
+ * El renombre externo (`renombrarFilaDeUsuario`) llega con `persist` distinto de
+ * `false`, asi que sigue persistiendo.
+ */
+export function debePersistirEntrada(
+    entry: Pick<ConversationEntry, 'role' | 'persistSpeakerName'>,
+    row: { meta?: { origin?: string } | null } | null | undefined,
+): boolean {
+    if (!row) return true;
+    if (entry.role !== 'user') return true;
+    if (row.meta?.origin !== 'conversation-module') return true;
+    return entry.persistSpeakerName !== false;
+}
+
+/**
  * Hook that persists conversation entries to IndexedDB and loads
  * history on mount. Works with integrationStore.addUserMessage
  * and addFluMessage.
@@ -296,8 +314,9 @@ export function useConversationPersistence(participantId?: string) {
                 for (const entry of cambiadas) {
                     const id = String(entry.id);
                     const existente = existentes.get(id) || null;
-                    if (entry.role === 'user' && existente && mismaFilaPersistida(entry, existente)) {
-                        continue;
+                    if (entry.role === 'user' && existente) {
+                        if (!debePersistirEntrada(entry, existente)) continue;
+                        if (mismaFilaPersistida(entry, existente)) continue;
                     }
                     const previa = syncPorFila.get(id) || existente?.sync || null;
                     const fila = entryToRow(entry, scope, previa, existente);

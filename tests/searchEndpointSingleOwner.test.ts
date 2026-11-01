@@ -15,6 +15,7 @@ import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { SEARCH_ENDPOINT_DEFAULTS } from '../src/core/search/searchConfigOverrides'
+import { SEARCH_PROXY_ENDPOINTS } from '../src/core/config/sharedConfig'
 import { FLU_CONFIG } from '../src/voice/lib/fluConfig'
 
 const LITERAL_RE = /['"`]\/api\//
@@ -65,27 +66,31 @@ describe('C63 - rutas del proxy de busqueda con dueno unico', () => {
   })
 })
 
-describe('C64 - el alias search.endpoint no duplica la ruta en la config', () => {
+describe('C64 - una sola declaracion de las rutas (sharedConfig)', () => {
+  const SHARED = 'src/core/config/sharedConfig.ts'
   const CONFIG = 'src/voice/lib/fluConfig.js'
 
-  it('cada ruta del proxy se declara UNA sola vez en la config', () => {
-    const src = readFileSync(join(process.cwd(), CONFIG), 'utf8')
+  it('las rutas viven UNA vez en sharedConfig y ninguna en fluConfig', () => {
+    const shared = readFileSync(join(process.cwd(), SHARED), 'utf8')
+    const config = readFileSync(join(process.cwd(), CONFIG), 'utf8')
     const dup: string[] = []
     for (const route of ['/api/search/web', '/api/search/images', '/api/search/video']) {
-      const n = src.split(route).length - 1
-      if (n !== 1) dup.push(`${route} x${n}`)
+      const nShared = shared.split(route).length - 1
+      const nConfig = config.split(route).length - 1
+      if (nShared !== 1) dup.push(`${route} en sharedConfig x${nShared}`)
+      if (nConfig !== 0) dup.push(`${route} en fluConfig x${nConfig}`)
     }
-    expect(
-      dup,
-      'Rutas declaradas mas de una vez en fluConfig.js (el alias duplica el literal):\n  ' +
-        dup.join('\n  '),
-    ).toEqual([])
+    expect(dup, 'Rutas duplicadas:\n  ' + dup.join('\n  ')).toEqual([])
   })
 
-  it('search.endpoint, si existe, coincide con endpoints.web (sin deriva)', () => {
-    const s = FLU_CONFIG.browser.search as { endpoint?: string; endpoints?: Record<string, string> }
-    if (s.endpoint === undefined) return
-    expect(s.endpoints?.web, 'hay alias search.endpoint pero no endpoints.web').toBe(s.endpoint)
+  it('runtime, fallback y dueno declaran exactamente las MISMAS rutas', () => {
+    const s = FLU_CONFIG.browser.search as { endpoints?: Record<string, string> }
+    expect(s.endpoints).toEqual(SEARCH_PROXY_ENDPOINTS)
+    expect(SEARCH_ENDPOINT_DEFAULTS).toEqual(SEARCH_PROXY_ENDPOINTS)
+  })
+
+  it('el comparador no es decorativo', () => {
+    expect({ ...SEARCH_PROXY_ENDPOINTS, web: '/api/search/otra' }).not.toEqual(SEARCH_PROXY_ENDPOINTS)
   })
 })
 

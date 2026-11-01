@@ -4,4 +4,4 @@
  * `tests/voiceFacadeGuard.test.ts` lo prohibe.
  */
 
-export { clearUiSessionState, deleteAuditLogsBySpeaker, deleteVoiceProfile, findVoiceProfileByLabel, loadUiSessionState, saveUiSessionState } from '../lib/fluStorage.js'
+export { clearUiSessionState, deleteVoiceProfile, findVoiceProfileByLabel, loadUiSessionState, saveUiSessionState } from '../lib/fluStorage.js'

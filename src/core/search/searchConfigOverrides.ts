@@ -13,7 +13,7 @@
 import { STORAGE_KEYS, resolveTextApiKey } from '../config/appConfig';
 import type { SearchProviderConfig, SearchResultType } from './searchSession';
 import { logCaughtError } from '../../lib/caughtError';
-import { AI_PROVIDER_IDS } from '../config/sharedConfig'
+import { AI_PROVIDER_IDS, SEARCH_PROXY_ENDPOINTS } from '../config/sharedConfig'
 import { localGet, localRemove, localSet, localStorePort, sessionRemove, sessionSet, sessionStorePort } from '../storage/localStore';
 
 /** Overrides de un proveedor individual (por id). */
@@ -52,9 +52,7 @@ export interface SearchConfigOverrides {
  * searchEndpointSingleOwner existe para que esa copia no vuelva.
  */
 export const SEARCH_ENDPOINT_DEFAULTS: Record<SearchResultType, string> = {
-  web: '/api/search/web',
-  images: '/api/search/images',
-  video: '/api/search/video',
+  ...SEARCH_PROXY_ENDPOINTS,
 }
 
 /** Config de búsqueda resuelta (la forma que consume el hook). */

@@ -116,6 +116,17 @@ export function isGenerationWorkspaceTipo(tipo: unknown): boolean {
 // -----------------------------------------------------------
 
 /** Defaults del motor de texto (OpenRouter → Gemini 2.5 Flash Lite). */
+/**
+ * Rutas del proxy de busqueda: DUENO UNICO de los literales de ruta.
+ * `fluConfig` (runtime) y `searchConfigOverrides` (fallback) las importan.
+ * Antes cada una tenia su copia y podian derivar en silencio (auditoria 2026-11-01).
+ */
+export const SEARCH_PROXY_ENDPOINTS = Object.freeze({
+  web: '/api/search/web',
+  images: '/api/search/images',
+  video: '/api/search/video',
+} as const)
+
 export const OPENROUTER_DEFAULTS = {
     MODEL: 'google/gemini-2.5-flash-lite',
     API_URL: 'https://openrouter.ai/api/v1',

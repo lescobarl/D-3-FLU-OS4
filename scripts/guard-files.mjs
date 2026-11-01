@@ -11,4 +11,8 @@
   'tests/searchOverridesStorage.test.ts',
   'tests/documentsHistoryPanel.test.tsx',
   'tests/disabledTestsGuard.test.ts',
+  'tests/relabelLateSingleWriterGuard.test.ts',
+  'tests/participantDeleteSingleOwnerGuard.test.ts',
+  'tests/startConversationSingleOwnerGuard.test.ts',
+  'tests/conversationEntrySingleOwnerGuard.test.ts',
 ]

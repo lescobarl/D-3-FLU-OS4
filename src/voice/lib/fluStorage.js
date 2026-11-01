@@ -1,7 +1,6 @@
 import { fluDb } from '../../core/db/fluDatabase'
 import { buildSyncTuple } from '../../core/db/syncTuple'
 import { persistVoiceProfile } from '../../hooks/useVoiceProfiles'
-import { putConversationRecord } from '../../core/db/conversationRowWriter'
 
 
 function voiceRecordToProfile(record) {
@@ -38,30 +37,6 @@ export async function deleteVoiceProfile(profileId) {
     sync: { ...buildSyncTuple(existing.sync, Date.now()), deleted: true },
   })
   return true
-}
-
-export async function deleteAuditLogsBySpeaker(speaker, { speakerId } = {}) {
-  const label = String(speaker || '').trim()
-  const sid = String(speakerId || '').trim()
-  if (!label && !sid) return []
-
-  const rows = await fluDb.conversations.toArray()
-  const updated = []
-
-  for (const row of rows) {
-    if (row.sync?.deleted) continue
-    const nameMatch = label && row.speakerName === label
-    const idMatch = sid && row.speakerId === sid
-    if (!nameMatch && !idMatch) continue
-    const next = {
-      ...row,
-      sync: { ...buildSyncTuple(row.sync, Date.now()), deleted: true },
-    }
-    await putConversationRecord(next)
-    updated.push(next)
-  }
-
-  return updated
 }
 
 async function persistSessionState(session = {}) {

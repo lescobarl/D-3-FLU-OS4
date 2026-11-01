@@ -261,6 +261,38 @@ El pre-commit ejecuta `lint + typecheck` y nunca la suite completa.
 
 ---
 
+## 8. BARRERA CONTRA RUTAS DOBLES (constraints obligatorios)
+
+Estas reglas son duras y aplican a toda tarea, no solo a las de refactor.
+
+1. **Dueño declarado antes de escribir.** Antes de crear o tocar código, grep del
+   símbolo o responsabilidad y declarar el dueño `archivo:línea`. Si no existe,
+   declarar el nuevo dueño y su consumidor ANTES de crear el archivo. Sin ese dato no
+   se escribe.
+2. **Un dueño por responsabilidad.** Lo demás importa o delega. Prohibido crear una
+   segunda implementación de la misma responsabilidad.
+3. **Baseline solo baja.** Cada lista de excepciones y su techo se congelan en un
+   archivo versionado. Una excepción nueva exige motivo, dueño y fecha; no se añade sin
+   aprobación del dueño (CODEOWNERS). Si un caso se arregla, se borra su excepción y se
+   baja el techo en el mismo commit; el guard debe fallar si una entrada queda muerta.
+4. **Caso nuevo, guard + infractor.** Toda categoría nueva necesita un guard que falle y
+   una prueba con un caso infractor real: se inyecta, se pega el fallo y se borra. Un
+   guard verde por no mirar no cuenta.
+5. **UI/3D no se unifica sin test.** Un componente o módulo 3D solo se unifica si existe
+   una prueba del archivo que cubra el flujo afectado; si no, se dictamina y se deja.
+6. **No commit salvo pedido explícito.** No se hace commit, amend, push ni PR por
+   iniciativa propia. Solo cuando el usuario lo pida en ese turno.
+7. **No merge sin barrera.** No se mergea sin check verde y revisión del dueño; no se
+   usa bypass ni se desactiva la protección. La configuración de GitHub (PR obligatorio,
+   aprobaciones, Code Owners, status checks, sin bypass) es parte del contrato.
+8. **Cierre con evidencia literal.** Se cierra con `Cambios aplicados · Validado contra ·
+   No validado` y la salida literal del gate. No se resume el gate ni se presenta como
+   validado lo que no se ejecutó.
+9. **La suite completa no se corre en local.** Se valida con `test:file` / `test:grep` /
+   `npm test`, `lint`, `typecheck` y `gate` (§1.15).
+
+---
+
 
 ## Anexo B — Invariantes de dominio (FLU OS · adaptar/borrar por proyecto)
 

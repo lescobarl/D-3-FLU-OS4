@@ -1,5 +1,5 @@
 /** Configuración central de FLU. */
-import { OPENROUTER_DEFAULTS, AI_PROVIDER_IDS, SEARCH_PROVIDER_IDS, VOICE_DIARIZATION_DEFAULTS } from '../../core/config/sharedConfig.ts'
+import { OPENROUTER_DEFAULTS, AI_PROVIDER_IDS, SEARCH_PROVIDER_IDS, SEARCH_PROXY_ENDPOINTS, VOICE_DIARIZATION_DEFAULTS } from '../../core/config/sharedConfig.ts'
 import { SPEECH_LOCALES, DEFAULT_SPEECH_LOCALE, BILINGUAL_LOCALES } from '../../core/config/localeConfig.ts'
 import { DEFAULT_SAMPLE_RATE } from './audioConstants.js'
 import { RESET_AVATAR_COLOR_PHRASES } from './voiceCommandPhrases.js'
@@ -42,10 +42,7 @@ const CURATED_ALLOWLIST = ['wikipedia.org', 'educ.ar']
 /** Variante Familiar: la allowlist curada mas video. */
 const CURATED_ALLOWLIST_FAMILIAR = [...CURATED_ALLOWLIST, 'youtube.com']
 
-// Rutas del proxy de busqueda: fuente UNICA de los literales de ruta (C64).
-const SEARCH_PROXY_ENDPOINTS = {
-  web: '/api/search/web', images: '/api/search/images', video: '/api/search/video',
-};
+// Rutas del proxy de busqueda: importadas del dueno UNICO (sharedConfig).
 
 export const FLU_CONFIG = {
   sessionDefaults: {

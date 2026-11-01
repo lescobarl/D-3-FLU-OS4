@@ -93,6 +93,9 @@ export function useNavigationCommands(
     os2SuspendRecognition: (() => Promise<void>) | undefined,
     os2StartListening: (opts?: { resume?: boolean }) => Promise<void>,
     voiceStatus: string,
+    startConversationRef: React.MutableRefObject<
+        ((options?: { announce?: boolean }) => Promise<void>) | null
+    >,
 ): NavigationCommands {
     // ============================================================
     // clearResumeListeningTimer
@@ -403,7 +406,6 @@ export function useNavigationCommands(
                 // IA clasifique por error como INICIAR_CONVERSACION NO debe
                 // reiniciar la conversación ni hablar el comando tras responder.
                 if (!userRequested) break;
-                conversationActiveRef.current = true;
                 fluParticipant.resetParticipant();
                 if (commandSpeech) {
                     try {
@@ -411,6 +413,10 @@ export function useNavigationCommands(
                     } catch (speechErr) {
                         logCaughtError('[useNavigationCommands] INICIAR_CONVERSACION command speech failed', speechErr);
                     }
+                }
+                // UN dueno: App.handleStartConversation hace reset + audit + modo + escucha.
+                if (isResetCmd) {
+                    await startConversationRef.current?.({ announce: false });
                 }
                 if (transcript) {
                     auditLog.logEvent('command:iniciar_conversacion', 'navigation', uuidv4(), {
@@ -421,10 +427,6 @@ export function useNavigationCommands(
                         phase,
                     }, 'INICIAR_CONVERSACION command executed').catch((e) => logCaughtError('src/hooks/useNavigationCommands.ts: auditLog.logEvent', e));
                 }
-                if (isResetCmd) {
-                    integrationStore.resetConversationHistory();
-                }
-                scheduleResumeListening(commandSpeech?.length ?? 0);
                 break;
             }
             case COMMAND_IDS.CERRAR_ESCUCHA: {
@@ -665,7 +667,7 @@ export function useNavigationCommands(
                 break;
             }
         }
-    }, [speakFlu, scheduleResumeListening, conversationActiveRef, scheduleNavSettle]);
+    }, [speakFlu, scheduleResumeListening, conversationActiveRef, scheduleNavSettle, startConversationRef]);
 
     return {
         speakFlu,
