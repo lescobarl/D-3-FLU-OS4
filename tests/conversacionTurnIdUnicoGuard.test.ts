@@ -226,7 +226,7 @@ describe('Caso 8 — un turnId => una fila inmutable (módulo real)', () => {
     )
   })
 
-  it('continuación del MISMO turno tras pausa: la fila NO crece ni se completa (inmutable)', async () => {
+  it('frase NUEVA del MISMO turno tras pausa: escribe SU fila (no se pierde)', async () => {
     const escenario = crearEscenario()
     await escenario.api.start({ turnId: 'T5' })
     await locucion(escenario, 'ok flu crea una cita', { turnId: 'T5', final: false })
@@ -237,12 +237,16 @@ describe('Caso 8 — un turnId => una fila inmutable (módulo real)', () => {
     await locucion(escenario, 'con el doctor', { turnId: 'T5', final: true })
 
     const filas = filasDe(escenario.api)
-    expect(filas).toHaveLength(1)
+    // No es reentrega: el texto es OTRA frase. La regla del producto es
+    // silencio o cambio de hablante, no "un turnId => una fila"; descartarla
+    // era la conversacion perdida (auditoria 2026-11-01).
+    expect(filas).toHaveLength(2)
     expect(filas[0]!.turnId).toBe('T5')
     expect(filas[0]!.texto).toBe('ok flu crea una cita')
     expect(filas[0]!.provisional).toBe(true)
     expect(filas[0]!.tramo.fin).toBe(previa.tramo.fin)
-    expect(descartesDe(escenario.api)).toContainEqual(
+    expect(filas[1]!.texto).toBe('con el doctor')
+    expect(descartesDe(escenario.api)).not.toContainEqual(
       expect.objectContaining({ motivo: 'turnoYaEscrito' }),
     )
   })

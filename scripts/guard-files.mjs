@@ -15,4 +15,7 @@
   'tests/participantDeleteSingleOwnerGuard.test.ts',
   'tests/startConversationSingleOwnerGuard.test.ts',
   'tests/conversationEntrySingleOwnerGuard.test.ts',
+  'tests/conversationEntryIdempotentGuard.test.ts',
+  'tests/conversationIdentityThresholdGuard.test.ts',
+  'tests/conversationTurnNewPhraseGuard.test.ts',
 ]

@@ -143,20 +143,22 @@ describe('Caso 13 — un ciclo de escucha no reinicia sesión ni turno (motor re
     // La conversación sigue: el turno es el MISMO. La segunda locución del mismo
     // turno es una REENTREGA (insert-only): cierra, se cuenta como descarte y NO
     // inserta otra fila. base 120000: el cierre de 5 s anterior acaba en 112000.
+    // La conversación sigue: el turno es el MISMO, pero "adios" es una frase
+    // NUEVA tras 5 s de silencio. Debe escribir SU fila; antes se descartaba
+    // como `turnoYaEscrito` y la conversación se perdía (auditoría 2026-11-01).
     const segundoCierre = await locucionProducto(motor, 'adios', 120000, 'locution.closed')
     expect(segundoCierre.sessionId).toBe(sessionIdVigente)
     expect(primerCommit.fila.turnId).toBe('T-uno')
     const trasSegundo = motor.instantanea()
-    // El descarte es la prueba de que la reentrega cayó en el MISMO turno: solo
-    // se descarta `turnoYaEscrito` cuando el turnId coincide con la fila ya
-    // commiteada (el turno sobrevivió al reinicio de la escucha).
-    expect(trasSegundo.descartes.map((descarte) => descarte.motivo)).toEqual(['turnoYaEscrito'])
+    expect(trasSegundo.descartes.map((descarte) => descarte.motivo)).not.toContain('turnoYaEscrito')
     const filas = trasSegundo.filas
-    expect(filas).toHaveLength(1)
+    expect(filas).toHaveLength(2)
+    expect(filas.map((fila) => fila.texto)).toEqual(['hola', 'adios'])
     expect(filas[0]!.turnId).toBe('T-uno')
     expect(new Set(filas.map((fila) => fila.sessionId))).toEqual(new Set([sessionIdVigente]))
     const persistidas = await fluDb.conversations.toArray()
-    expect(persistidas).toHaveLength(1)
+    expect(persistidas).toHaveLength(2)
+    expect(new Set(persistidas.map((fila) => fila.sessionId))).toEqual(new Set([sessionIdVigente]))
     expect(persistidas[0]!.sessionId).toBe(sessionIdVigente)
   })
 })

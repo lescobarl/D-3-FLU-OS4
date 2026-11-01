@@ -388,6 +388,12 @@ export const AUTONOMY_THRESHOLD_DEFAULTS = {
  */
 export const VOICE_DIARIZATION_DEFAULTS = {
     cosineContinuity: 0.80,
+    /**
+     * Piso del modulo CONVERSACION para afirmar continuidad de voz. Medido en el
+     * repo: MISMA voz 0.69-0.74, DISTINTA 0.58. 0.80 dejaba fuera a la misma voz
+     * y creaba un `Hablante N` por turno; 0.66 separa ambas poblaciones.
+     */
+    cosineConversationContinuity: 0.66,
     cosineNewVoice: 0.64,
     classroomReuseRelax: 0.03,
     classroomNewVoiceRelax: 0.04,

@@ -185,10 +185,15 @@ export function crearConfigFlu(): ConfigPort {
     esEtiquetaAnonima: (etiqueta) => isAutoSpeakerLabel(etiqueta),
     umbralContinuidadVoz: () => {
       const umbrales = FLU_CONFIG.voiceIdentity?.capture?.conversationSpeakerThresholds
-      const valor = umbrales ? Number(umbrales.cosineContinuityThreshold) : Number.NaN
+      // El modulo comparaba con `cosineContinuity` (0.80): por encima de la MISMA
+      // voz medida (0.69-0.74), asi que cada turno acunaba un `Hablante N`.
+      // Piso propio del modulo, medido: 0.66 separa misma voz de distinta (0.58).
+      const valor = umbrales
+        ? Number(umbrales.cosineConversationContinuityThreshold ?? umbrales.cosineContinuityThreshold)
+        : Number.NaN
       return Number.isFinite(valor) && valor > 0
         ? valor
-        : VOICE_DIARIZATION_DEFAULTS.cosineContinuity
+        : VOICE_DIARIZATION_DEFAULTS.cosineConversationContinuity
     },
     etiquetaAnonima: (indice) => autoSpeakerLabel(indice),
     // Etiqueta TEMPORAL mientras la medida de la voz no es fiable (mandato del

@@ -12,6 +12,7 @@
  * inserta SU fila. El estado lo posee la sesión, que lo entrega como contexto.
  */
 import { construirFila, fusionarVoz } from './fila.ts'
+import { continuaLaFrase } from '../core/locucion.js'
 import type { CierreLocucion, VozEtiqueta } from './fila.ts'
 import { decidirRevision } from './revision.ts'
 import { decidirIdentidad, plantillasDe } from './identidad.ts'
@@ -135,6 +136,20 @@ export type ReglasCierre = Readonly<{
  * @param plantillasVoz Plantillas de las voces medidas en la sesión.
  * @returns La voz resuelta que consume `resolverEtiqueta`.
  */
+/**
+ * ¿La locucion nueva es reentrega del turno ya commiteado? Es reentrega si
+ * repite el texto o si lo CONTINUA/revisa (`continuaLaFrase`). Una frase NUEVA
+ * del mismo turno no lo es y debe escribir su fila (antes se perdia).
+ * @param previo Texto de la fila ya commiteada del turno.
+ * @param texto Texto de la locucion que cierra.
+ */
+export function esReentregaDeTurno(previo: string, texto: string): boolean {
+  const anterior = String(previo || '').trim()
+  const actual = String(texto || '').trim()
+  if (!anterior || !actual) return false
+  return anterior === actual || continuaLaFrase(anterior, actual)
+}
+
 export function resolverVoz(
   voz: EvidenciaVoz,
   continuidadVoz: boolean,
@@ -491,7 +506,14 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
     const previaDelTurno = filaDelTurno(cierre.turnId)
     const vozDistintaMedida =
       String(vozCerrada.vozId || '').trim() !== '' && !continuidadVoz
-    if (previaDelTurno && !vozDistintaMedida) {
+    // La reentrega es la MISMA locucion o una REVISION/continuacion de su texto.
+    // Una frase NUEVA del mismo turno (p. ej. el comando commiteado por el hook
+    // antes de que el modulo cierre) NO es reentrega: antes se descartaba y la
+    // conversacion perdia la ultima frase (auditoria 2026-11-01).
+    const esReentrega = previaDelTurno
+      ? esReentregaDeTurno(previaDelTurno.texto, cierre.texto)
+      : false
+    if (previaDelTurno && !vozDistintaMedida && esReentrega) {
       emitir({
         tipo: 'locution.closed',
         sessionId: sesion,

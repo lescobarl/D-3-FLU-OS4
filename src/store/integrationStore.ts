@@ -497,9 +497,21 @@ export const useIntegrationStore = create<IntegrationStore>()(
                     ...tagged,
                     epoch: Number.isFinite(Number(tagged.epoch)) ? Number(tagged.epoch) : get().conversationEpoch,
                 };
-                set((current) => ({
-                    conversationHistory: capConversationHistory([...current.conversationHistory, conEpoch]),
-                }));
+                set((current) => {
+                    // IDEMPOTENCIA POR ID (auditoria 2026-11-01): `row.committed` puede
+                    // repetirse al promover la MISMA locucion. Antes se anadia otra vez y
+                    // la conversacion salia duplicada. El id es el locutionId: misma fila
+                    // => reemplazo en su sitio; id nuevo => append.
+                    const index = current.conversationHistory.findIndex((e) => e.id === conEpoch.id);
+                    const conversationHistory = index >= 0
+                        ? current.conversationHistory.map((e, i) =>
+                            i === index
+                                ? { ...e, ...conEpoch, persistSpeakerName: conEpoch.persistSpeakerName }
+                                : e,
+                        )
+                        : [...current.conversationHistory, conEpoch];
+                    return { conversationHistory: capConversationHistory(conversationHistory) };
+                });
             },
 
             /**
