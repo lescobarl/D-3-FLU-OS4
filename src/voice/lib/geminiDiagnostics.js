@@ -47,6 +47,20 @@ function pickLang(language = defaultLanguage()) {
 const GENERIC_FAILURE_ES = 'Gemini no respondió.'
 const GENERIC_FAILURE_EN = 'Gemini did not respond.'
 
+/**
+ * Señales de fallo normalizadas (texto, evento y codigo). Dueno unico del
+ * sondeo: la deteccion y la presentacion leen la MISMA terna.
+ * @param {{ error?: string, diagnostics?: object|null, lastErrorEvent?: object|null }} input
+ * @returns {{ errorText: string, eventError: string, diagCode: string }}
+ */
+function readFailureSignal({ error = '', diagnostics = null, lastErrorEvent = null } = {}) {
+  return {
+    errorText: String(error || '').trim(),
+    eventError: String(lastErrorEvent?.error || '').trim(),
+    diagCode: String(diagnostics?.code || lastErrorEvent?.code || '').trim(),
+  }
+}
+
 /** Señal explícita de fallo — evita mensajes por defecto en estado idle. */
 export function hasGeminiFailureSignal({
   error = '',
@@ -59,9 +73,7 @@ export function hasGeminiFailureSignal({
     const raw = String(failure?.message || failure?.error || '').trim()
     if (code || raw) return true
   }
-  const errorText = String(error || '').trim()
-  const eventError = String(lastErrorEvent?.error || '').trim()
-  const diagCode = String(diagnostics?.code || lastErrorEvent?.code || '').trim()
+  const { errorText, eventError, diagCode } = readFailureSignal({ error, diagnostics, lastErrorEvent })
   return (
     Boolean(errorText) ||
     Boolean(eventError) ||
@@ -165,9 +177,7 @@ export function resolveGeminiErrorPresentation({
     return { message: '', hint: '', detail: '', code: '', show: false }
   }
 
-  const errorText = String(error || '').trim()
-  const eventError = String(lastErrorEvent?.error || '').trim()
-  const diagCode = String(diagnostics?.code || lastErrorEvent?.code || '').trim()
+  const { errorText, eventError, diagCode } = readFailureSignal({ error, diagnostics, lastErrorEvent })
 
   const syntheticError = {
     message: errorText || eventError,

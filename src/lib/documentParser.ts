@@ -173,6 +173,15 @@ interface ParsedPayload {
   warnings: string[];
 }
 
+/**
+ * Payload vacio con el warning del fallo. Dueno unico de la degradacion:
+ * todos los parsers devuelven la MISMA forma cuando la libreria falla.
+ * @param warning mensaje accionable para el usuario
+ */
+function failedPayload(warning: string): ParsedPayload {
+  return { rawText: '', errores: [], qa_context: '', warnings: [warning] };
+}
+
 function buildQaContext(hojas: DocumentSheetInfo[] | undefined, errores: string[]): string {
   const lines: string[] = [];
   if (hojas && hojas.length) {
@@ -276,12 +285,7 @@ async function parseExcel(data: ArrayBuffer): Promise<ParsedPayload> {
     XLSX = await import('xlsx');
   } catch (e) {
         logCaughtError('[catch] src/lib/documentParser.ts', e);
-    return {
-      rawText: '',
-      errores: [],
-      qa_context: '',
-      warnings: ['No se pudo cargar el lector de Excel (xlsx). Análisis de estructura omitido.'],
-    };
+    return failedPayload('No se pudo cargar el lector de Excel (xlsx). Análisis de estructura omitido.');
   }
   try {
     const wb = (XLSX as XlsxModule).read(new Uint8Array(data), { type: 'array' });
@@ -311,12 +315,7 @@ async function parseExcel(data: ArrayBuffer): Promise<ParsedPayload> {
     };
   } catch (e) {
         logCaughtError('[catch] src/lib/documentParser.ts', e);
-    return {
-      rawText: '',
-      errores: [],
-      qa_context: '',
-      warnings: [`No se pudo analizar el Excel: ${errMsg(e)}`],
-    };
+    return failedPayload(`No se pudo analizar el Excel: ${errMsg(e)}`);
   }
 }
 
@@ -353,12 +352,7 @@ async function parsePdf(data: ArrayBuffer): Promise<ParsedPayload> {
     return { rawText: pages.join('\n'), errores: [], qa_context: '', warnings: [] };
   } catch (e) {
         logCaughtError('[catch] src/lib/documentParser.ts', e);
-    return {
-      rawText: '',
-      errores: [],
-      qa_context: '',
-      warnings: [`No se pudo analizar el PDF: ${errMsg(e)}`],
-    };
+    return failedPayload(`No se pudo analizar el PDF: ${errMsg(e)}`);
   }
 }
 
@@ -373,12 +367,7 @@ async function parseDocx(data: ArrayBuffer): Promise<ParsedPayload> {
     return { rawText, errores: [], qa_context: '', warnings: [] };
   } catch (e) {
         logCaughtError('[catch] src/lib/documentParser.ts', e);
-    return {
-      rawText: '',
-      errores: [],
-      qa_context: '',
-      warnings: [`No se pudo analizar el documento de Word: ${errMsg(e)}`],
-    };
+    return failedPayload(`No se pudo analizar el documento de Word: ${errMsg(e)}`);
   }
 }
 
@@ -422,12 +411,7 @@ async function parsePptx(data: ArrayBuffer): Promise<ParsedPayload> {
     return { rawText: lines.join('\n'), errores: [], qa_context: '', warnings: [] };
   } catch (e) {
         logCaughtError('[catch] src/lib/documentParser.ts', e);
-    return {
-      rawText: '',
-      errores: [],
-      qa_context: '',
-      warnings: [`No se pudo analizar la presentación: ${errMsg(e)}`],
-    };
+    return failedPayload(`No se pudo analizar la presentación: ${errMsg(e)}`);
   }
 }
 
@@ -437,12 +421,7 @@ async function parseText(data: ArrayBuffer, _mime: string): Promise<ParsedPayloa
     return { rawText: text, errores: [], qa_context: '', warnings: [] };
   } catch (e) {
         logCaughtError('[catch] src/lib/documentParser.ts', e);
-    return {
-      rawText: '',
-      errores: [],
-      qa_context: '',
-      warnings: [`No se pudo leer el texto: ${errMsg(e)}`],
-    };
+    return failedPayload(`No se pudo leer el texto: ${errMsg(e)}`);
   }
 }
 

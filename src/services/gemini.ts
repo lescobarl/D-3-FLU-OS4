@@ -72,6 +72,30 @@ function resolveGeminiKeyForRequest(apiKey: string = ''): { apiKey: string; apiK
     return resolveApiKey(apiKey, resolveTextApiKey);
 }
 
+/**
+ * Construye el objeto `personality` del contrato. Dueno unico de la traduccion
+ * traits/tone/explanationLevel -> payload del proxy: response y contract la
+ * consumen (el proxy reconstruye el prompt desde `personality`).
+ * @param options opciones de la peticion
+ * @returns payload de personalidad o null si no hay ajustes activos
+ */
+function buildPersonalityPayload(options: AIRequestOptions): {
+    traits: string[];
+    tone: string;
+    explanationLevel: string;
+    name: string;
+    profile: string;
+} | null {
+    if (!(options.traits || options.tone || options.explanationLevel)) return null;
+    return {
+        traits: options.traits || [],
+        tone: options.tone || '',
+        explanationLevel: options.explanationLevel || '',
+        name: '',
+        profile: options.role || '',
+    };
+}
+
 // -----------------------------------------------------------
 // GeminiService — Adapter de transporte (proxy Gemini)
 // -----------------------------------------------------------
@@ -237,15 +261,7 @@ No uses markdown ni formato especial. Solo texto plano.`;
         // `personality` object. The proxy's handleResponseMode rebuilds the prompt
         // server-side from `personality` (it ignores the client's local systemPrompt),
         // so the personality object is the only channel that works in response mode.
-        const personality = (options.traits || options.tone || options.explanationLevel)
-            ? {
-                traits: options.traits || [],
-                tone: options.tone || '',
-                explanationLevel: options.explanationLevel || '',
-                name: '',
-                profile: options.role || '',
-            }
-            : null;
+        const personality = buildPersonalityPayload(options);
 
         const userMessage = isEnglish
             ? `Recent history:
@@ -458,15 +474,7 @@ Responde como ${botName}:`;
         // Build personality object from traits/tone/explanationLevel (OS2 parity + FASE P)
         // generateFluContract() in gemini.js expects a `personality` object
         // with traits, tone and explanationLevel sub-properties, not flat fields.
-        const personality = (options.traits || options.tone || options.explanationLevel)
-            ? {
-                traits: options.traits || [],
-                tone: options.tone || '',
-                explanationLevel: options.explanationLevel || '',
-                name: '',
-                profile: options.role || '',
-            }
-            : null;
+        const personality = buildPersonalityPayload(options);
 
         // Delegate to proxy
         const response = await postGeminiContract({

@@ -519,6 +519,80 @@ export function advanceRound(
 }
 
 /**
+ * Avanza ronda y cursor sin rendir prompt: devuelve el cierre si la ronda era la
+ * ultima, o null con el cursor ya en el siguiente item. Dueno unico del par
+ * `advanceRound + state.cursor += 1` (antes copiado en los motores de item).
+ * @param session sesion con ronda y score
+ * @param state estado con cursor/rondas
+ * @returns el resultado final si la partida termino, o null para seguir
+ */
+export function advanceCursorAfterSkip(
+    session: { round: number; score: number },
+    state: { cursor: number; maxRounds: number; order: readonly unknown[]; phase: string },
+): GameTurnResult | null {
+    const final = advanceRound(session, state);
+    if (final) return final;
+    state.cursor += 1;
+    return null;
+}
+
+/**
+ * Salto de turno completo: avanza ronda y cursor y rinde el prompt del motor.
+ * Dueno unico del flujo `advanceRound + cursor++ + turnResult`; el texto es DATO
+ * del motor y viaja como callback.
+ * @param session sesion con ronda y score
+ * @param state estado con cursor/rondas
+ * @param render prompt del siguiente item
+ * @returns el resultado final (cierre) o el turno con el siguiente prompt
+ */
+export function skipTurn<S extends { cursor: number; maxRounds: number; order: readonly unknown[]; phase: string }>(
+    session: { round: number; score: number },
+    state: S,
+    render: (state: S) => string,
+): GameTurnResult {
+    const final = advanceCursorAfterSkip(session, state);
+    if (final) return final;
+    return turnResult(render(state), session.score);
+}
+
+/**
+ * Prompt de salto compartido por los motores que dicen "aquí va otra". Dueno
+ * unico del literal: antes repetido en `repiteTraduce` y `trivia`.
+ * @param prompt prompt del siguiente item
+ */
+export function skipNextPrompt(prompt: string): string {
+    return `¡Claro! Aquí va otra: ${prompt}`;
+}
+
+/**
+ * Compuerta de turno: cierra si la partida ya termino y, si el banco se agoto,
+ * marca `done` y devuelve el game over de agotamiento. Dueno unico del par
+ * `phase === 'done'` + `!item` (antes copiado en los motores de item). El item
+ * se resuelve con un thunk para no tocar el banco cuando la partida ya cerro.
+ * @param session sesion con score
+ * @param state estado con phase
+ * @param item resolvedor del item del cursor (null si no hay)
+ * @param messages textos de fin por partida cerrada y por banco agotado
+ * @returns `{ ok: true, item }` o `{ ok: false, result }`
+ */
+export function openTurn<S extends { phase: string }, T>(
+    session: { score: number },
+    state: S,
+    item: () => T | null,
+    messages: { done: string; exhausted: string },
+): { ok: true; item: T } | { ok: false; result: GameTurnResult } {
+    if (state.phase === 'done') {
+        return { ok: false, result: gameOverResult(messages.done, session.score) };
+    }
+    const value = item();
+    if (!value) {
+        state.phase = 'done';
+        return { ok: false, result: gameOverResult(messages.exhausted, session.score, { animation: 'Dance' }) };
+    }
+    return { ok: true, item: value };
+}
+
+/**
  * Item del banco que apunta el cursor del estado. DUENO UNICO (auditoria
  * 2026-10-02): estaba copiado con el mismo cuerpo en 6 motores.
  */
@@ -672,13 +746,4 @@ export function readLongMaxCfg(
     ceiling: number,
 ): number {
     return readNumberCfg(cfg, ['longMax', 'longitudMax'], fallback, ceiling);
-}
-
-/** Item del cursor actual: `bank[state.order[state.cursor]]` o null. Dueno unico. */
-export function itemAtCursor<S extends { order: readonly number[]; cursor: number }, T>(
-    state: S,
-    bank: readonly T[],
-): T | null {
-    const index = state.order[state.cursor];
-    return index === undefined ? null : bank[index];
 }

@@ -20,7 +20,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine.ts';
 import type { GameSession, GameTurnResult } from './types.ts';
-import { END_GAME_FRAMES, HELP_CORE_FRAMES, SKIP_CORE_FRAMES, adoptRandom, advanceRound, bankItemAt, baseSession, beginGame, gameOverResult, gamePrompt, hasAnyToken, hasToken, isEngineCommand, isLastRound, normalizeForMatch, readRounds, resetGameSession, shuffleOrder, turnResult } from './gameUtils.ts';
+import { END_GAME_FRAMES, HELP_CORE_FRAMES, SKIP_CORE_FRAMES, adoptRandom, bankItemAt, baseSession, beginGame, gameOverResult, gamePrompt, hasAnyToken, hasToken, isEngineCommand, isLastRound, normalizeForMatch, openTurn, readRounds, resetGameSession, shuffleOrder, skipTurn, turnResult } from './gameUtils.ts';
 import {
     PRONUNCIACION_BANK,
     pronunciacionWordsByLevel,
@@ -129,19 +129,12 @@ export function createPronunciacionEngine(options?: { random?: RandomSource }): 
         turn(session: GameSession, text = ''): GameTurnResult {
             const state = session.state as PronunciacionState;
 
-            if (state.phase === 'done') {
-                return gameOverResult('Ya terminamos de practicar. ¿Jugamos otra vez?', session.score);
-            }
-
-            const item = itemAt(state);
-            if (!item) {
-                state.phase = 'done';
-                return gameOverResult(
-                    `¡Se acabaron las palabras! Tu puntaje fue ${session.score}. ¡Muy bien!`,
-                    session.score,
-                    { animation: 'Dance' },
-                );
-            }
+            const gate = openTurn(session, state, () => itemAt(state), {
+                done: 'Ya terminamos de practicar. ¿Jugamos otra vez?',
+                exhausted: `¡Se acabaron las palabras! Tu puntaje fue ${session.score}. ¡Muy bien!`,
+            });
+            if (!gate.ok) return gate.result;
+            const item = gate.item;
 
             const normalized = normalizeForMatch(text);
 
@@ -165,10 +158,7 @@ export function createPronunciacionEngine(options?: { random?: RandomSource }): 
             }
 
             if (hasAnyToken(normalized, SKIP_FRAMES)) {
-                const finRonda = advanceRound(session, state);
-                if (finRonda) return finRonda;
-                state.cursor += 1;
-                return turnResult(`¡Claro! Aqui va otra: ${currentPrompt(state)}`, session.score);
+                return skipTurn(session, state, (nextState) => `¡Claro! Aqui va otra: ${currentPrompt(nextState)}`);
             }
 
             return turnResult(`¡Casi! Escucha: "${item.word}". ${item.pista} Intentalo otra vez.`, session.score, { emotion: 'encouraging', error: 'pronunciacion por mejorar' });

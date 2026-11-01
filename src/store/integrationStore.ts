@@ -914,16 +914,9 @@ addSystemMessage: (text: string) => {
                 // Log startupPrompt as system message in conversation history
                 if (profile.startupPrompt) {
                     const label = profile.label || profile.id;
-                    const entry: ConversationEntry = withActivePersonId({
-                        role: 'system',
-                        text: `🧠 Perfil "${label}" activado — ${profile.startupPrompt}`,
-                        timestamp: Date.now(),
-                        id: nextId(),
-                        speakerName: '⚙️ Sistema',
-                    }, get().activePersonId);
-                    set((current) => ({
-                        conversationHistory: capConversationHistory([...current.conversationHistory, entry]),
-                    }));
+                    get().addSystemMessage(
+                        `🧠 Perfil "${label}" activado — ${profile.startupPrompt}`,
+                    );
                 }
             },
 

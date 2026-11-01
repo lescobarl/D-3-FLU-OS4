@@ -403,19 +403,28 @@ async function handleResponseMode(body: ProxyBody | null): Promise<{ respuesta_v
 }
 
 /**
- * Genera un resumen de conversación estilo minuta (modo `minute`).
- * Usado por GeminiService.generateMinute().
- * @param body — Cuerpo de la petición con history, language, role, theme, model.
+ * Peticion de resumen a partir del cuerpo HTTP. Dueno unico de la lista de
+ * campos que viajan a `generateConversationSummary` (minuta y resumen la usan).
+ * @param body cuerpo ya resuelto por `resolveServerApiKey`
  */
-async function handleMinuteMode(body: ProxyBody | null): Promise<unknown> {
-    const summaryResult = await generateConversationSummary({
+function summaryRequestFromBody(body: ProxyBody | null) {
+    return {
         apiKey: body?.apiKey,
         history: body?.history || [],
         language: normalizeLang(body?.language),
         role: body?.role || '',
         theme: body?.theme || '',
         model: body?.model || undefined,
-    });
+    };
+}
+
+/**
+ * Genera un resumen de conversación estilo minuta (modo `minute`).
+ * Usado por GeminiService.generateMinute().
+ * @param body — Cuerpo de la petición con history, language, role, theme, model.
+ */
+async function handleMinuteMode(body: ProxyBody | null): Promise<unknown> {
+    const summaryResult = await generateConversationSummary(summaryRequestFromBody(body));
     return summaryResult?.summary || summaryResult;
 }
 
@@ -530,14 +539,7 @@ async function handleSummary(req: IncomingMessage, res: ServerResponse) {
     try {
         let body = await parseBody(req);
         body = resolveServerApiKey(body);
-        const result = await generateConversationSummary({
-            apiKey: body?.apiKey,
-            history: body?.history || [],
-            language: normalizeLang(body?.language),
-            role: body?.role || '',
-            theme: body?.theme || '',
-            model: body?.model || undefined,
-        });
+        const result = await generateConversationSummary(summaryRequestFromBody(body));
 
         // OS2 returns { summary: { titulo, ... }, diagnostics: {...} }
         // Normalize: flatten summary if nested

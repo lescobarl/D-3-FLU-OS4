@@ -13,7 +13,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine.ts';
 import type { GameSession, GameTurnResult } from './types.ts';
-import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, advanceRound, bankItemAt, baseSession, beginGame, buildShuffledState, gameOverResult, gamePrompt, hasAnyToken, hasToken, isEngineCommand, isLastRound, normalizeForMatch, resetGameSession, turnResult } from './gameUtils.ts';
+import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, bankItemAt, baseSession, beginGame, buildShuffledState, gameOverResult, gamePrompt, hasAnyToken, hasToken, isEngineCommand, isLastRound, normalizeForMatch, resetGameSession, skipTurn, turnResult } from './gameUtils.ts';
 
 export interface TrabalenguasItem {
     texto: string;
@@ -136,10 +136,7 @@ export function createTrabalenguasEngine(options?: { random?: RandomSource }): G
 
             // ¿Salta?
             if (hasAnyToken(normalized, SKIP_FRAMES)) {
-                const finRonda = advanceRound(session, state);
-                if (finRonda) return finRonda;
-                state.cursor += 1;
-                return turnResult(`¡Claro! Aquí va otro: ${currentPrompt(state)}`, session.score);
+                return skipTurn(session, state, (nextState) => `¡Claro! Aquí va otro: ${currentPrompt(nextState)}`);
             }
 
             // Reintenta el mismo trabalenguas.

@@ -17,7 +17,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine.ts';
 import type { GameSession, GameTurnResult } from './types.ts';
-import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, baseSession, clamp, gameOverResult, hasAnyToken, isEngineCommand, normalizeForMatch, resolveNumericAnswer, turnResult } from './gameUtils.ts';
+import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, baseSession, beginGame, clamp, gameOverResult, hasAnyToken, isEngineCommand, normalizeForMatch, resetGameSession, resolveNumericAnswer, turnResult } from './gameUtils.ts';
 
 const DEFAULT_MIN = 1;
 const DEFAULT_MAX = 20;
@@ -95,6 +95,9 @@ export function createAdivinaNumeroEngine(options?: { random?: RandomSource }): 
         };
     };
 
+    const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): AdivinaNumeroState =>
+        resetGameSession(session, cfg, buildState);
+
     return {
         id: 'adivina_numero',
 
@@ -103,11 +106,10 @@ export function createAdivinaNumeroEngine(options?: { random?: RandomSource }): 
         },
 
         start(session: GameSession, optionsConfig: Record<string, unknown> = {}): GameTurnResult {
-            const state = buildState(optionsConfig);
-            session.state = state;
-            session.score = 0;
-            session.round = 1;
-            return turnResult(`¡Vamos a jugar a adivinar el número! Estoy pensando en un número entre ${state.min} y ${state.max}. ¿Cuál es?`, session.score, { emotion: 'excited' });
+            return beginGame(session, optionsConfig, reset, (raw) => {
+                const state = raw as AdivinaNumeroState;
+                return `¡Vamos a jugar a adivinar el número! Estoy pensando en un número entre ${state.min} y ${state.max}. ¿Cuál es?`;
+            }, { emotion: 'excited' });
         },
 
         turn(session: GameSession, text = ''): GameTurnResult {

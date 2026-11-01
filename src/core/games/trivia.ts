@@ -15,7 +15,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine.ts';
 import type { GameSession, GameTurnResult } from './types.ts';
-import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, advanceRound, baseSession, beginGame, buildShuffledState, gameOverResult, gamePrompt, hasAnyToken, hasToken, isEngineCommand, isLastRound, itemAtCursor, normalizeForMatch, resetGameSession, resolveNumericAnswer, turnResult } from './gameUtils.ts';
+import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, bankItemAt, baseSession, beginGame, buildShuffledState, gameOverResult, gamePrompt, hasAnyToken, hasToken, isEngineCommand, isLastRound, normalizeForMatch, resetGameSession, resolveNumericAnswer, skipNextPrompt, skipTurn, turnResult } from './gameUtils.ts';
 
 export interface TriviaQuestion {
     pregunta: string;
@@ -75,7 +75,7 @@ interface TriviaState {
 }
 
 function questionAt(state: TriviaState): TriviaQuestion | null {
-    return itemAtCursor(state, TRIVIA_BANK);
+    return bankItemAt(state, TRIVIA_BANK);
 }
 
 function optionsPrompt(question: TriviaQuestion): string {
@@ -203,10 +203,7 @@ export function createTriviaEngine(options?: { random?: RandomSource }): GameEng
 
             // ¿Salta?
             if (hasAnyToken(normalized, SKIP_FRAMES)) {
-                const finRonda = advanceRound(session, state);
-                if (finRonda) return finRonda;
-                state.cursor += 1;
-                return turnResult(`¡Claro! Aquí va otra: ${currentPrompt(state)}`, session.score);
+                return skipTurn(session, state, (nextState) => skipNextPrompt(currentPrompt(nextState)));
             }
 
             return turnResult(`No te escuché bien. Dime el número, la letra o el nombre. ${currentPrompt(state)}`, session.score, { error: 'sin opción reconocida' });

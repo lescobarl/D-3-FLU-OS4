@@ -184,6 +184,38 @@ function askContactReply(lang: 'es' | 'en'): string {
     : 'Who would you like me to contact?';
 }
 
+/** Canal de envío: su par de regex es/en, acción y texto de confirmación. */
+interface SendChannelSpec {
+  es: RegExp;
+  en: RegExp;
+  action: 'whatsapp.send' | 'sms.send' | 'email.send';
+  reply: (name: string, lang: 'es' | 'en') => string;
+}
+
+/**
+ * Dueño unico del turno "canal + destinatario + mensaje opcional": WhatsApp,
+ * SMS y correo solo aportan su par de patrones, su accion y su confirmacion.
+ * @param text frase ya normalizada
+ * @param spec canal a intentar
+ * @returns intención resuelta, o null si el canal no casa
+ */
+function parseSendChannel(text: string, spec: SendChannelSpec): DeviceActionIntent | null {
+  const match = spec.es.exec(text) || spec.en.exec(text);
+  if (!match) return null;
+  const lang = spec.es.test(text) ? 'es' : 'en';
+  const rest = text.slice(match[0].length).trim();
+  const { contactName, message } = splitContactAndMessage(rest);
+  if (!contactName) {
+    return { handled: true, action: null, reply: askContactReply(lang) };
+  }
+  return {
+    handled: true,
+    action: spec.action,
+    reply: spec.reply(contactName, lang),
+    data: message ? { contactName, message } : { contactName },
+  };
+}
+
 // ------------------------------------------------------------
 // Parser principal
 // ------------------------------------------------------------
@@ -217,56 +249,30 @@ export function parseDeviceActionIntent(input: string): DeviceActionIntent {
     };
   }
 
-  // WhatsApp.
-  const whatsappMatch = WHATSAPP_ES.exec(text) || WHATSAPP_EN.exec(text);
-  if (whatsappMatch) {
-    const lang = WHATSAPP_ES.test(text) ? 'es' : 'en';
-    const rest = text.slice(whatsappMatch[0].length).trim();
-    const { contactName, message } = splitContactAndMessage(rest);
-    if (!contactName) {
-      return { handled: true, action: null, reply: askContactReply(lang) };
-    }
-    return {
-      handled: true,
-      action: 'whatsapp.send',
-      reply: whatsappReply(contactName, lang),
-      data: message ? { contactName, message } : { contactName },
-    };
-  }
+  // WhatsApp, SMS y correo: mismo turno con el canal como dato.
+  const whatsapp = parseSendChannel(text, {
+    es: WHATSAPP_ES,
+    en: WHATSAPP_EN,
+    action: 'whatsapp.send',
+    reply: whatsappReply,
+  });
+  if (whatsapp) return whatsapp;
 
-  // SMS.
-  const smsMatch = SMS_ES.exec(text) || SMS_EN.exec(text);
-  if (smsMatch) {
-    const lang = SMS_ES.test(text) ? 'es' : 'en';
-    const rest = text.slice(smsMatch[0].length).trim();
-    const { contactName, message } = splitContactAndMessage(rest);
-    if (!contactName) {
-      return { handled: true, action: null, reply: askContactReply(lang) };
-    }
-    return {
-      handled: true,
-      action: 'sms.send',
-      reply: smsReply(contactName, lang),
-      data: message ? { contactName, message } : { contactName },
-    };
-  }
+  const sms = parseSendChannel(text, {
+    es: SMS_ES,
+    en: SMS_EN,
+    action: 'sms.send',
+    reply: smsReply,
+  });
+  if (sms) return sms;
 
-  // Correo.
-  const emailMatch = EMAIL_ES.exec(text) || EMAIL_EN.exec(text);
-  if (emailMatch) {
-    const lang = EMAIL_ES.test(text) ? 'es' : 'en';
-    const rest = text.slice(emailMatch[0].length).trim();
-    const { contactName, message } = splitContactAndMessage(rest);
-    if (!contactName) {
-      return { handled: true, action: null, reply: askContactReply(lang) };
-    }
-    return {
-      handled: true,
-      action: 'email.send',
-      reply: emailReply(contactName, lang),
-      data: message ? { contactName, message } : { contactName },
-    };
-  }
+  const email = parseSendChannel(text, {
+    es: EMAIL_ES,
+    en: EMAIL_EN,
+    action: 'email.send',
+    reply: emailReply,
+  });
+  if (email) return email;
 
   return { handled: false, action: null, reply: '' };
 }

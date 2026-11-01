@@ -82,6 +82,24 @@ function spanishWeekdayName(day: number): string {
   return WEEKDAYS.find((w) => w.day === day)?.name ?? '';
 }
 
+/**
+ * Resuelve el día de la semana a partir de las capturas es/en de un match.
+ * Dueno unico de la busqueda: las ramas "próximo" y "llano" comparten la tabla.
+ * @param nameEs captura es (puede venir vacía)
+ * @param nameEn captura en (puede venir vacía)
+ * @returns entrada `{name, day}` o undefined si no casa
+ */
+function findWeekdayEntry(
+  nameEs?: string,
+  nameEn?: string,
+): { name: string; day: number } | undefined {
+  if (nameEs) {
+    const spanish = WEEKDAYS.find((w) => w.name === nameEs);
+    if (spanish) return spanish;
+  }
+  return nameEn ? WEEKDAYS_EN.find((w) => w.name === nameEn) : undefined;
+}
+
 /** Unidades de desplazamiento ('en N unidades'). */
 const OFFSET_UNITS: ReadonlyArray<{ pattern: RegExp; ms: number; label: string }> =
   Object.freeze([
@@ -261,9 +279,7 @@ export function parseNlDateTime(
   if (weekdayNext) {
     const nameEs = weekdayNext[1];
     const nameEn = weekdayNext[2];
-    const entry =
-      (nameEs && WEEKDAYS.find((w) => w.name === nameEs)) ||
-      (nameEn && WEEKDAYS_EN.find((w) => w.name === nameEn));
+    const entry = findWeekdayEntry(nameEs, nameEn);
     if (entry) {
       const base = nextWeekday(nowDate, entry.day, 1);
       const time = extractTime(text);
@@ -283,9 +299,7 @@ export function parseNlDateTime(
   if (weekdayPlain) {
     const nameEs = weekdayPlain[1];
     const nameEn = weekdayPlain[2];
-    const entry =
-      (nameEs && WEEKDAYS.find((w) => w.name === nameEs)) ||
-      (nameEn && WEEKDAYS_EN.find((w) => w.name === nameEn));
+    const entry = findWeekdayEntry(nameEs, nameEn);
     if (entry) {
       const base = nextWeekday(nowDate, entry.day, 0);
       const time = extractTime(text);

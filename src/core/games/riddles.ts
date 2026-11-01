@@ -16,7 +16,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine.ts';
 import type { GameSession, GameTurnResult } from './types.ts';
-import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, baseSession, buildShuffledState, gamePrompt, hasAnyToken, isEngineCommand, itemAtCursor, resetGameSession, runGuessTurn, turnResult } from './gameUtils.ts';
+import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, bankItemAt, baseSession, buildShuffledState, gamePrompt, hasAnyToken, isEngineCommand, resetGameSession, runGuessTurn, turnResult } from './gameUtils.ts';
 
 export interface Riddle {
     pregunta: string;
@@ -111,7 +111,7 @@ interface RiddlesState {
 type RandomSource = () => number;
 
 function riddleAt(state: RiddlesState): Riddle | null {
-    return itemAtCursor(state, RIDDLE_BANK);
+    return bankItemAt(state, RIDDLE_BANK);
 }
 
 const currentPrompt = (state: RiddlesState) =>

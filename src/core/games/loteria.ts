@@ -16,7 +16,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine.ts';
 import type { GameSession, GameTurnContext, GameTurnResult } from './types.ts';
-import { BARE_AFFIRMATION_FRAMES, END_GAME_FRAMES, HELP_CORE_FRAMES, RandomSource, adoptRandom, baseSession, gameOverResult, hasAnyToken, hasGameOrderFrame, hasToken, isBareAffirmation, itemAtCursor, matchesEndGameFrames, normalizeForMatch, shuffleOrder, turnResult } from './gameUtils.ts';
+import { BARE_AFFIRMATION_FRAMES, END_GAME_FRAMES, HELP_CORE_FRAMES, RandomSource, adoptRandom, bankItemAt, baseSession, beginGame, gameOverResult, hasAnyToken, hasGameOrderFrame, hasToken, isBareAffirmation, matchesEndGameFrames, normalizeForMatch, resetGameSession, shuffleOrder, turnResult } from './gameUtils.ts';
 
 export interface LoteriaCard {
     id: string;
@@ -109,7 +109,7 @@ interface LoteriaState {
 }
 
 function cardAt(state: LoteriaState): LoteriaCard | null {
-    return itemAtCursor(state, LOTERIA_BANK);
+    return bankItemAt(state, LOTERIA_BANK);
 }
 
 function cantarPrompt(state: LoteriaState, intro = 'Siguiente carta: '): string {
@@ -130,6 +130,9 @@ export function createLoteriaEngine(options?: { random?: RandomSource }): GameEn
             phase: 'announce',
         };
     };
+
+    const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): LoteriaState =>
+        resetGameSession(session, cfg, buildState);
 
     const advanceFrom = (state: LoteriaState, session: GameSession): GameTurnResult => {
         state.cursor += 1;
@@ -152,12 +155,11 @@ export function createLoteriaEngine(options?: { random?: RandomSource }): GameEn
         },
 
         start(session: GameSession, optionsConfig: Record<string, unknown> = {}): GameTurnResult {
-            const state = buildState(optionsConfig);
-            session.state = state;
-            session.score = 0;
-            session.round = 1;
-            const first = cardAt(state);
-            return turnResult(`¡Vamos a jugar a la lotería! Yo canto las cartas y cada quien marca su cartón. Primera carta: ${first ? first.copla : ''}`, session.score, { emotion: 'excited' });
+            return beginGame(session, optionsConfig, reset, (raw) => {
+                const state = raw as LoteriaState;
+                const first = cardAt(state);
+                return `¡Vamos a jugar a la lotería! Yo canto las cartas y cada quien marca su cartón. Primera carta: ${first ? first.copla : ''}`;
+            }, { emotion: 'excited' });
         },
 
         turn(session: GameSession, text = '', context?: GameTurnContext): GameTurnResult {

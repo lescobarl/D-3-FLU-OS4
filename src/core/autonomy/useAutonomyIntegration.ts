@@ -145,6 +145,16 @@ export interface AutonomyActions {
 // Hook principal
 // -----------------------------------------------------------
 
+/**
+ * Detiene los sistemas autonomos con referencia viva. Dueno unico de la parada:
+ * el cleanup del montaje y `stopAllSystems` recorren la MISMA lista (no se
+ * incluye recoverySystemRef porque ninguno de los dos lo detenia).
+ * @param refs referencias de los sistemas a detener
+ */
+function stopSystems(refs: ReadonlyArray<{ current: { stop: () => void } | null }>): void {
+    for (const ref of refs) ref.current?.stop();
+}
+
 export function useAutonomyIntegration(): [AutonomyState, AutonomyActions] {
     const [state, setState] = useState<AutonomyState>({
         status: 'initializing',
@@ -297,18 +307,7 @@ export function useAutonomyIntegration(): [AutonomyState, AutonomyActions] {
 
         // Cleanup
         return () => {
-            if (healthMonitorRef.current) {
-                healthMonitorRef.current.stop();
-            }
-            if (decisionEngineRef.current) {
-                decisionEngineRef.current.stop();
-            }
-            if (optimizationSystemRef.current) {
-                optimizationSystemRef.current.stop();
-            }
-            if (backupSystemRef.current) {
-                backupSystemRef.current.stop();
-            }
+            stopSystems([healthMonitorRef, decisionEngineRef, optimizationSystemRef, backupSystemRef]);
         };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- efecto de montaje: los helpers (addNotification, mapHealthStatusToAutonomyStatus, updateBackupStats) se declaran DEBAJO (L326+) y listarlos aqui seria un TDZ (tsc lo confirmo); moverlos cambiaria el orden de hooks.
     }, []);
@@ -436,18 +435,7 @@ export function useAutonomyIntegration(): [AutonomyState, AutonomyActions] {
     }, [addNotification]);
 
     const stopAllSystems = useCallback(() => {
-        if (healthMonitorRef.current) {
-            healthMonitorRef.current.stop();
-        }
-        if (decisionEngineRef.current) {
-            decisionEngineRef.current.stop();
-        }
-        if (optimizationSystemRef.current) {
-            optimizationSystemRef.current.stop();
-        }
-        if (backupSystemRef.current) {
-            backupSystemRef.current.stop();
-        }
+        stopSystems([healthMonitorRef, decisionEngineRef, optimizationSystemRef, backupSystemRef]);
 
         // Idempotente: el setState/addNotification solo se ejecuta UNA vez.
         // Evita el bucle de updates que React detecta como

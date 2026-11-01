@@ -275,6 +275,15 @@ export function AgendaPanel({
         setEditingNoteBody('');
     };
 
+    // Boton de edicion compartido por la fila de lista y la columna de semana.
+    const renderEditAction = (item: AgendaItem) => (
+        onEdit ? (
+            <button className="agenda-item__edit" type="button" aria-label="Editar" onClick={() => startEdit(item)}>
+                ✎
+            </button>
+        ) : null
+    );
+
     // Fila de item (agenda y próximos): bolita de color por tipo + hora + texto.
     const renderRow = (
         item: AgendaItem,
@@ -289,11 +298,7 @@ export function AgendaPanel({
             <span className="agenda-item__time">{timeText}</span>
             <span className="agenda-item__label">{item.label}</span>
             <div className="agenda-item__actions">
-                {onEdit ? (
-                    <button className="agenda-item__edit" type="button" aria-label="Editar" onClick={() => startEdit(item)}>
-                        ✎
-                    </button>
-                ) : null}
+                {renderEditAction(item)}
                 {onCancel ? (
                     <button
                         className="agenda-item__cancel"
@@ -433,11 +438,7 @@ export function AgendaPanel({
                                             <span className="agenda-week__item-time">{itemTimeText(item)}</span>
                                             <span className="agenda-week__item-label">{item.label}</span>
                                             <div className="agenda-item__actions">
-                                                {onEdit ? (
-                                                    <button className="agenda-item__edit" type="button" aria-label="Editar" onClick={() => startEdit(item)}>
-                                                        ✎
-                                                    </button>
-                                                ) : null}
+                                                {renderEditAction(item)}
                                                 {onCancel ? (
                                                     <button className="agenda-item__cancel" type="button" aria-label="Cancelar" onClick={() => onCancel(item.id)}>
                                                         ×

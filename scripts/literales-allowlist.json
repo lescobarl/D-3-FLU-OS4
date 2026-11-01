@@ -403,7 +403,6 @@
     "workspace-search__grid-fallback",
     "{ name, vector, model }",
     "{n} entradas detectadas",
-    "¡Claro! Aquí va otra: ${currentPrompt(state)}",
     "¡Se acabaron las palabras! Tu puntaje fue ${session.score}. ¡Muy bien!",
     "¿Eliminar este sitio del catálogo?",
     "¿Eres niño o adulto?",

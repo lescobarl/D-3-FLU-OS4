@@ -16,7 +16,7 @@
 // F1/F2/F3 en modo 100% local (isLocalTextEndpoint), sin requerir clave API.
 // ============================================================
 
-import { OPENROUTER_CONFIG, STORAGE_KEYS, TEXT_TEMPERATURE_DEFAULT, TEXT_TOKEN_LIMITS, buildTextApiUrl, isLocalTextEndpoint, readStorage, resolveTextApiKey } from '../core/config/appConfig';import { resolveApiKey } from '../core/config/sharedConfig';
+import { OPENROUTER_CONFIG, STORAGE_KEYS, TEXT_TOKEN_LIMITS, buildTextApiUrl, isLocalTextEndpoint, readStorage, resolveTextApiKey } from '../core/config/appConfig';import { resolveApiKey } from '../core/config/sharedConfig';
 import { buildPollinationsImageResult } from './pollinationsImage';
 import { fetchTextEngine } from '../core/ai/httpClient';
 import { logCaughtError } from '../lib/caughtError';
@@ -158,19 +158,14 @@ class DeepSeekService extends BaseAIService {
         ];
 
         try {
-            const response = await fetchTextEngine(url, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${apiKey}`,
-                },
-                body: JSON.stringify({
-                    model,
-                    messages,
-                    temperature: temperature ?? TEXT_TEMPERATURE_DEFAULT,
-                    max_tokens: TEXT_TOKEN_LIMITS.json,
-                    response_format: { type: 'json_object' }
-                }),
+            const response = await this.fetchTextCompletion({
+                apiKey,
+                url,
+                model,
+                messages,
+                temperature,
+                maxTokens: TEXT_TOKEN_LIMITS.json,
+                jsonMode: true,
             });
 
             const parsed = await this.readJsonResponse<Record<string, unknown>>(response, {}, 'Text API error');
@@ -271,18 +266,14 @@ class DeepSeekService extends BaseAIService {
         ];
 
         try {
-            const response = await fetchTextEngine(url, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${apiKey}`,
-                },
-                body: JSON.stringify({
-                    model,
-                    messages,
-                    temperature: temperature ?? TEXT_TEMPERATURE_DEFAULT,
-                    max_tokens: TEXT_TOKEN_LIMITS.chat,
-                }),
+            const response = await this.fetchTextCompletion({
+                apiKey,
+                url,
+                model,
+                messages,
+                temperature,
+                maxTokens: TEXT_TOKEN_LIMITS.chat,
+                jsonMode: false,
             });
 
             if (!response.ok) {
@@ -337,19 +328,14 @@ Formato de respuesta (JSON):
         ];
 
         try {
-            const response = await fetchTextEngine(url, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${apiKey}`,
-                },
-                body: JSON.stringify({
-                    model,
-                    messages,
-                    temperature: temperature ?? TEXT_TEMPERATURE_DEFAULT,
-                    max_tokens: TEXT_TOKEN_LIMITS.brief,
-                    response_format: { type: 'json_object' }
-                }),
+            const response = await this.fetchTextCompletion({
+                apiKey,
+                url,
+                model,
+                messages,
+                temperature,
+                maxTokens: TEXT_TOKEN_LIMITS.brief,
+                jsonMode: true,
             });
 
             const parsed = await this.readJsonResponse(
@@ -479,6 +465,38 @@ Formato de respuesta (JSON):
     }
 
     /**
+     * POST unico al endpoint OpenAI-compatible. Dueno del cuerpo de red
+     * (headers + model/messages/temperature/max_tokens + json mode): `postJson`,
+     * minuta, respuesta y evaluacion lo consumen. `jsonMode: false` NO fuerza
+     * response_format (endpoints locales la rechazan).
+     */
+    private async fetchTextCompletion(args: {
+        apiKey: string;
+        url: string;
+        model: string;
+        messages: Array<{ role: string; content: string }>;
+        temperature?: number;
+        maxTokens?: number;
+        jsonMode?: boolean;
+        timeoutMs?: number;
+    }): Promise<Response> {
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (args.apiKey) headers.Authorization = `Bearer ${args.apiKey}`;
+        const body: Record<string, unknown> = {
+            model: args.model,
+            messages: args.messages,
+            max_tokens: args.maxTokens ?? OPENROUTER_CONFIG.DEFAULT_MAX_TOKENS,
+            temperature: args.temperature ?? resolveConfiguredTemperature(),
+        };
+        if (args.jsonMode !== false) body.response_format = { type: 'json_object' };
+        return fetchTextEngine(
+            args.url,
+            { method: 'POST', headers, body: JSON.stringify(body) },
+            args.timeoutMs,
+        );
+    }
+
+    /**
      * POST a chat completion y devuelve el contenido crudo (JSON-object mode).
      */
     private async postJson(
@@ -490,26 +508,19 @@ Formato de respuesta (JSON):
         const { apiKey } = resolveDeepSeekApiKey();
         if (!apiKey && !local) throw new Error('API key de texto no configurada (OpenRouter/Gemini)');
 
-        const model = readStorage(STORAGE_KEYS.TEXT_MODEL, OPENROUTER_CONFIG.MODEL);
-        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-        if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
-
-        const body: Record<string, unknown> = {
-            model,
+        const response = await this.fetchTextCompletion({
+            apiKey,
+            url,
+            model: readStorage(STORAGE_KEYS.TEXT_MODEL, OPENROUTER_CONFIG.MODEL),
             messages,
-            max_tokens: options.maxTokens ?? OPENROUTER_CONFIG.DEFAULT_MAX_TOKENS,
-            temperature: options.temperature ?? resolveConfiguredTemperature(),
-        };
-        // Local endpoints (Ollama, LM Studio) may not support OpenAI JSON mode.
-        // jsonMode=false (generación de documentos/guiones) pide markdown/texto libre,
-        // por lo que NO se fuerza response_format json_object (rompía el contenido).
-        if (!local && options.jsonMode !== false) body.response_format = { type: 'json_object' };
-
-        const response = await fetchTextEngine(url, {
-            method: 'POST',
-            headers,
-            body: JSON.stringify(body),
-        }, options.timeoutMs);
+            maxTokens: options.maxTokens,
+            temperature: options.temperature,
+            // Local endpoints (Ollama, LM Studio) may not support OpenAI JSON mode.
+            // jsonMode=false (generación de documentos/guiones) pide markdown/texto libre,
+            // por lo que NO se fuerza response_format json_object (rompía el contenido).
+            jsonMode: !local && options.jsonMode !== false,
+            timeoutMs: options.timeoutMs,
+        });
         if (!response.ok) {
             throw new Error(`Text API error: ${response.status} ${response.statusText}`);
         }

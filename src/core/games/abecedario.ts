@@ -15,7 +15,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine.ts';
 import type { GameSession, GameTurnResult } from './types.ts';
-import { END_GAME_FRAMES, HELP_CORE_FRAMES, STOPWORDS_ES, adoptRandom, advanceRound, bankItemAt, baseSession, beginGame, buildShuffledState, gameOverResult, hasAnyToken, isEngineCommand, isLastRound, normalizeForMatch, resetGameSession, stripDiacritics, turnResult } from './gameUtils.ts';
+import { END_GAME_FRAMES, HELP_CORE_FRAMES, STOPWORDS_ES, adoptRandom, bankItemAt, baseSession, beginGame, buildShuffledState, gameOverResult, hasAnyToken, isEngineCommand, isLastRound, normalizeForMatch, resetGameSession, skipTurn, stripDiacritics, turnResult } from './gameUtils.ts';
 
 export interface AbecedarioItem {
     letra: string;
@@ -177,11 +177,10 @@ export function createAbecedarioEngine(options?: { random?: RandomSource }): Gam
 
             // ¿Salta?
             if (hasAnyToken(normalized, SKIP_FRAMES)) {
-                const finRonda = advanceRound(session, state);
-                if (finRonda) return finRonda;
-                state.cursor += 1;
-                const next = itemAt(state);
-                return turnResult(`¡Claro! Ahora dime una palabra que empiece con la letra "${next ? next.letra : ''}".`, session.score);
+                return skipTurn(session, state, (nextState) => {
+                    const next = itemAt(nextState);
+                    return `¡Claro! Ahora dime una palabra que empiece con la letra "${next ? next.letra : ''}".`;
+                });
             }
 
             // No acierta → reintenta la misma letra.

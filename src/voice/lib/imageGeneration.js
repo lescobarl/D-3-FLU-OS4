@@ -46,6 +46,31 @@ async function postJsonToProxy(url, body, timeoutMs) {
   )
 }
 
+/**
+ * Lee el detalle del cuerpo de un proxy visual fallido. Dueno unico: imagen de
+ * workspace, fallback OpenRouter y video fal comparten el manejo del error.
+ * @param {Response} response respuesta HTTP no ok
+ * @returns {Promise<string>} cuerpo del error, o '' si no se pudo leer
+ */
+async function readProxyErrorDetail(response) {
+  return response.text().catch((e) => { logCaughtError('[catch] src/voice/lib/imageGeneration.js', e); return ''; })
+}
+
+/**
+ * POST a un proxy visual con el idioma y la apiKey opcional. Dueno unico del
+ * contrato de esas llamadas: el deadline es el configurado para imagen.
+ * @param {string} url endpoint del proxy
+ * @param {Record<string, unknown>} payload campos propios del proveedor
+ * @param {string} apiKey clave opcional del usuario
+ */
+function postVisualProxy(url, payload, apiKey = '') {
+  return postJsonToProxy(
+    url,
+    { ...payload, ...(apiKey ? { apiKey } : {}) },
+    Number(VISUAL_CONFIG.image?.clientFetchTimeoutMs),
+  )
+}
+
 function escapeXml(value = '') {
   return String(value || '')
     .replace(/&/g, '&amp;')
@@ -177,18 +202,14 @@ export async function fetchWorkspaceImageSource({ workspace = {}, language = def
 
   const promise = (async () => {
     try {
-      const response = await postJsonToProxy(
+      const response = await postVisualProxy(
         VISUAL_CONFIG.image.proxies.workspaceImage,
-        {
-          workspace,
-          language,
-          ...(apiKey ? { apiKey } : {}),
-        },
-        Number(VISUAL_CONFIG.image?.clientFetchTimeoutMs),
+        { workspace, language },
+        apiKey,
       )
 
       if (!response.ok) {
-        const detail = await response.text().catch((e) => { logCaughtError('[catch] src/voice/lib/imageGeneration.js', e); return ''; })
+        const detail = await readProxyErrorDetail(response)
         return resolveErrorFallback(
           workspace,
           language,
@@ -268,18 +289,14 @@ export async function fetchOpenRouterImageFallback({
 } = {}) {
   const prompt = buildVisualGenerationPrompt(workspace, language)
   try {
-    const response = await postJsonToProxy(
+    const response = await postVisualProxy(
       VISUAL_CONFIG.image.proxies.openrouterImage,
-      {
-        prompt,
-        language,
-        ...(apiKey ? { apiKey } : {}),
-      },
-      Number(VISUAL_CONFIG.image?.clientFetchTimeoutMs),
+      { prompt, language },
+      apiKey,
     )
 
     if (!response.ok) {
-      const detail = await response.text().catch((e) => { logCaughtError('[catch] src/voice/lib/imageGeneration.js', e); return ''; })
+      const detail = await readProxyErrorDetail(response)
       return {
         image_url: '',
         trace: {
@@ -358,7 +375,7 @@ export async function fetchFalVideo({ prompt = '', language = defaultLanguage(),
       TIMEOUT_POLICY_MS.falVideoFetchAbort,
     )
     if (!response.ok) {
-      const detail = await response.text().catch((e) => { logCaughtError('[catch] src/voice/lib/imageGeneration.js', e); return ''; })
+      const detail = await readProxyErrorDetail(response)
       return {
         video_url: '',
         trace: {
