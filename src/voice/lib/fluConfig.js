@@ -118,7 +118,7 @@ export const FLU_CONFIG = {
         /** Re-identificación room-rematch estricta (512-D L2 + coseno). */
         roomRematchThreshold: VOICE_DIARIZATION_DEFAULTS.roomRematch,
         cosineContinuityThreshold: VOICE_DIARIZATION_DEFAULTS.cosineContinuity,
-        /** Piso EFECTIVO del modulo conversacion (misma voz 0.69-0.74 / distinta 0.58). */
+        /** Piso EFECTIVO del modulo conversacion (WAV 6c71d867: 0.66 une, 0.72 separa). */
         cosineConversationContinuityThreshold: VOICE_DIARIZATION_DEFAULTS.cosineConversationContinuity,
         cosineNewVoiceThreshold: VOICE_DIARIZATION_DEFAULTS.cosineNewVoice, // medido 2026-10-07: MISMA voz 0.69-0.74, DISTINTA 0.58; con 0.70 (dentro de la misma voz) cada turno abria un 'Hablante N'
         cosineRegisteredMatchThreshold: VOICE_DIARIZATION_DEFAULTS.cosineRegisteredMatch,

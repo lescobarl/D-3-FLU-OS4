@@ -16,20 +16,20 @@ import { VOICE_DIARIZATION_DEFAULTS } from '../src/core/config/sharedConfig';
 const source = (path: string) => readFileSync(join(process.cwd(), path), 'utf8');
 
 describe('identidad — piso de continuidad del modulo', () => {
-  it('el piso es 0.66 y el adaptador lo usa', () => {
-    expect(VOICE_DIARIZATION_DEFAULTS.cosineConversationContinuity).toBe(0.66);
-    expect(source('src/core/config/sharedConfig.ts')).toContain('cosineConversationContinuity: 0.66');
+  it('el piso es 0.72 (WAV real: 0.66 une, 0.72 separa) y el adaptador lo usa', () => {
+    expect(VOICE_DIARIZATION_DEFAULTS.cosineConversationContinuity).toBe(0.72);
+    expect(source('src/core/config/sharedConfig.ts')).toContain('cosineConversationContinuity: 0.72');
     expect(source('src/voice/conversation/adapters.ts')).toContain('cosineConversationContinuityThreshold');
   });
 
-  it('0.70 (misma voz medida) es continuidad; 0.58 (distinta) es voz nueva', () => {
+  it('0.78 es continuidad; 0.70 y 0.58 no alcanzan el piso 0.72', () => {
     const plantilla = { vozId: 'v1', vector: [1, 0], etiqueta: 'Hablante 1' };
     const misma = decidirIdentidad({
       vector: [1, 0],
       plantillas: [plantilla],
-      umbral: 0.66,
+      umbral: 0.72,
       etiquetaNueva: () => 'Hablante 2',
-      comparar: () => 0.70,
+      comparar: () => 0.78,
       id: () => 'v2',
     });
     expect(misma).toEqual({ vozId: 'v1', continuidad: true, hablante: 'Hablante 1' });
@@ -37,9 +37,9 @@ describe('identidad — piso de continuidad del modulo', () => {
     const distinta = decidirIdentidad({
       vector: [1, 0],
       plantillas: [plantilla],
-      umbral: 0.66,
+      umbral: 0.72,
       etiquetaNueva: () => 'Hablante 2',
-      comparar: () => 0.58,
+      comparar: () => 0.70,
       id: () => 'v2',
     });
     expect(distinta).toEqual({ vozId: 'v2', continuidad: false, hablante: 'Hablante 2' });

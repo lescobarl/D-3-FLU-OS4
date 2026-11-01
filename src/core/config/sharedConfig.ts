@@ -389,11 +389,12 @@ export const AUTONOMY_THRESHOLD_DEFAULTS = {
 export const VOICE_DIARIZATION_DEFAULTS = {
     cosineContinuity: 0.80,
     /**
-     * Piso del modulo CONVERSACION para afirmar continuidad de voz. Medido en el
-     * repo: MISMA voz 0.69-0.74, DISTINTA 0.58. 0.80 dejaba fuera a la misma voz
-     * y creaba un `Hablante N` por turno; 0.66 separa ambas poblaciones.
+     * Piso del modulo CONVERSACION para afirmar continuidad de voz. Medido en
+     * el WAV real 6c71d867 (71 ventanas de 4 s, Xenova/wavlm-base-plus-sv):
+     * a 0.66 las dos voces forman UN solo cluster (mezcla hombre/mujer);
+     * a 0.72 se separan en DOS (48/23). Fixture: tests/fixtures/realVoiceVectors.json.
      */
-    cosineConversationContinuity: 0.66,
+    cosineConversationContinuity: 0.72,
     cosineNewVoice: 0.64,
     classroomReuseRelax: 0.03,
     classroomNewVoiceRelax: 0.04,
