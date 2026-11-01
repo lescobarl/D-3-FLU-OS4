@@ -6,6 +6,7 @@
 // Componente puramente presentacional — los datos vienen del store.
 // ============================================================
 
+import { AnalysisErrorBlock } from './AnalysisErrorBlock';
 import type { DocumentContract } from '../types/documentContracts';
 
 export interface DocumentResultPanelProps {
@@ -59,18 +60,14 @@ export default function DocumentResultPanel({
 
     if (error) {
         return (
-            <div
+            <AnalysisErrorBlock
+                message={error}
+                onClear={onClear}
+                isEn={isEn}
                 className="frame-content__document-analysis frame-content__document-analysis--error"
-                data-testid="document-analysis"
-                data-state="error"
-            >
-                <p className="frame-content__document-error">{error}</p>
-                {onClear && (
-                    <button type="button" className="flu-btn flu-btn--small" onClick={onClear}>
-                        {isEn ? 'Clear' : 'Limpiar'}
-                    </button>
-                )}
-            </div>
+                testId="document-analysis"
+                dataState="error"
+            />
         );
     }
 

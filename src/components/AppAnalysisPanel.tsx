@@ -5,6 +5,7 @@
 // flujos funcionales y errores detectados. Presentacional puro.
 // ============================================================
 
+import { AnalysisErrorBlock } from './AnalysisErrorBlock';
 import type { AppAnalysisContract } from '../types/documentContracts';
 
 export interface AppAnalysisPanelProps {
@@ -37,16 +38,12 @@ export default function AppAnalysisPanel({
     }
 
     if (error) {
-        return (
-            <div className="frame-content__app-analysis">
-                <p className="frame-content__document-error">{error}</p>
-                {onClear && (
-                    <button type="button" className="flu-btn flu-btn--small" onClick={onClear}>
-                        {isEn ? 'Clear' : 'Limpiar'}
-                    </button>
-                )}
-            </div>
-        );
+            <AnalysisErrorBlock
+                message={error}
+                onClear={onClear}
+                isEn={isEn}
+                className="frame-content__app-analysis"
+            />
     }
 
     if (!analysis) return null;
