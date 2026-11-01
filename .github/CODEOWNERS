@@ -8,6 +8,8 @@
 /scripts/guard-files.mjs      @lescobarl
 /scripts/guard-duplicados.mjs @lescobarl
 /scripts/duplicados-allowlist.json @lescobarl
+/scripts/guard-literales.mjs @lescobarl
+/scripts/literales-allowlist.json @lescobarl
 
 # Guards de comportamiento (tests/*Guard*)
 /tests/*Guard*.test.ts        @lescobarl
