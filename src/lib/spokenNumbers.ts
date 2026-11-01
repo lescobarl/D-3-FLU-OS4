@@ -14,11 +14,9 @@
 // ============================================================
 import { normalizeForMatch } from './textUtils.ts';
 
-/** Números hablados en español (0-30, sin acentos: se normaliza antes de buscar). */
-export const SPOKEN_NUMBERS_ES: Readonly<Record<string, number>> = Object.freeze({
+/** Números del 1 al 20 en español (base compartida, sin acentos). */
+export const NUMEROS_ES_BASE: Readonly<Record<string, number>> = Object.freeze({
   uno: 1,
-  // Femenino de 1: la hora usa "a la una".
-  una: 1,
   dos: 2,
   tres: 3,
   cuatro: 4,
@@ -38,6 +36,13 @@ export const SPOKEN_NUMBERS_ES: Readonly<Record<string, number>> = Object.freeze
   dieciocho: 18,
   diecinueve: 19,
   veinte: 20,
+});
+
+/** Números hablados en español (0-30, sin acentos: se normaliza antes de buscar). */
+export const SPOKEN_NUMBERS_ES: Readonly<Record<string, number>> = Object.freeze({
+  ...NUMEROS_ES_BASE,
+  // Femenino de 1: la hora usa "a la una".
+  una: 1,
   veintiuno: 21,
   veintidos: 22,
   veintitres: 23,

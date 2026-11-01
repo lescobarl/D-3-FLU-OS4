@@ -1,7 +1,7 @@
 {
   "_nota": "Pares de archivos que HOY comparten un bloque clonado. Cada uno declara motivo, dueno y fecha. Solo se quitan: el par arreglado se borra aqui en el mismo commit. maxPairs es el techo y solo baja; anadir una excepcion exige aprobacion del dueno (CODEOWNERS).",
   "minTokens": 50,
-  "maxPairs": 41,
+  "maxPairs": 39,
   "allowedPairs": [
     {
       "pair": "src/avatar/App.css | src/avatar/App.css",
@@ -100,12 +100,6 @@
       "date": "2026-11-01"
     },
     {
-      "pair": "src/core/games/gameUtils.ts | src/lib/spokenNumbers.ts",
-      "reason": "pendiente de triaje (umbral 50 tokens)",
-      "owner": "@lescobarl",
-      "date": "2026-11-01"
-    },
-    {
       "pair": "src/core/games/karaoke.ts | src/core/games/respiracion.ts",
       "reason": "pendiente de triaje (umbral 50 tokens)",
       "owner": "@lescobarl",
@@ -167,7 +161,7 @@
     },
     {
       "pair": "src/core/multiuser/participantRegistry.ts | src/core/reminders/shoppingService.ts",
-      "reason": "pendiente de triaje (umbral 50 tokens)",
+      "reason": "dictaminado: mismo patrón get de registro vivo; cada servicio posee su tabla y su copyRecord (no se unifica)",
       "owner": "@lescobarl",
       "date": "2026-11-01"
     },
@@ -185,18 +179,12 @@
     },
     {
       "pair": "src/hooks/useBrowserProfiles.ts | src/hooks/useCommunicationProfiles.ts",
-      "reason": "pendiente de triaje (umbral 50 tokens)",
+      "reason": "dictaminado: construcción del servicio (tabla y adaptador distintos); la carga ya vive en useListReload",
       "owner": "@lescobarl",
       "date": "2026-11-01"
     },
     {
       "pair": "src/hooks/useNavigationCommands.ts | src/hooks/useNavigationCommands.ts",
-      "reason": "pendiente de triaje (umbral 50 tokens)",
-      "owner": "@lescobarl",
-      "date": "2026-11-01"
-    },
-    {
-      "pair": "src/hooks/useNotes.ts | src/hooks/useShoppingList.ts",
       "reason": "pendiente de triaje (umbral 50 tokens)",
       "owner": "@lescobarl",
       "date": "2026-11-01"
@@ -209,7 +197,7 @@
     },
     {
       "pair": "src/server/browserProxy.ts | src/server/searchProxy.ts",
-      "reason": "pendiente de triaje (umbral 50 tokens)",
+      "reason": "dictaminado: imports + wrapper sendJson con prefijo y timeout propios de cada proxy (no es responsabilidad compartida)",
       "owner": "@lescobarl",
       "date": "2026-11-01"
     },

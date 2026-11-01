@@ -16,6 +16,7 @@
 // ============================================================
 import { useCallback, useEffect, useState } from 'react';
 import { useServiceRef } from './useServiceRef';
+import { removeAndRefresh } from '../lib/removeAndRefresh';
 import { type ShoppingItemRecord } from '../core/db/fluDatabase';
 import {
   createShoppingService,
@@ -144,11 +145,7 @@ export function useShoppingList({
 
   /** Elimina un ítem y refresca. */
   const remove = useCallback(
-    async (id: string): Promise<boolean> => {
-      const removed = await service.remove(id);
-      if (removed) await refresh();
-      return removed;
-    },
+    async (id: string): Promise<boolean> => removeAndRefresh((rowId) => service.remove(rowId), refresh, id),
     [service, refresh],
   );
 

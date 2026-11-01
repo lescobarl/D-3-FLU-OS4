@@ -117,9 +117,15 @@ export function repeatedLiterals(sources, minChars = 18) {
   const map = new Map();
   const re = new RegExp(`['"\`]([^'"\`\\n]{${minChars},})['"\`]`, 'g');
   for (const { file, source } of sources) {
+    // Las rutas de import/require no son contenido duplicado: se descartan
+    // antes de buscar (un modulo compartido debe importarse desde varios sitios).
+    const contenido = source
+      .replace(/\bfrom\s*['"][^'"]*['"]/g, '')
+      .replace(/\bimport\s*\(\s*['"][^'"]*['"]\s*\)/g, '')
+      .replace(/\brequire\s*\(\s*['"][^'"]*['"]\s*\)/g, '');
     let m;
     re.lastIndex = 0;
-    while ((m = re.exec(source))) {
+    while ((m = re.exec(contenido))) {
       const lit = m[1];
       if (/^\s*$/.test(lit) || /^[\s\W]*$/.test(lit)) continue;
       if (!map.has(lit)) map.set(lit, new Set());

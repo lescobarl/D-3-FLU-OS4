@@ -15,11 +15,11 @@
 //     sesión del Pizarrón-navegador curado
 //   - DI: now inyectable para pruebas deterministas
 // ============================================================
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback } from 'react';
+import { useListReload } from './useListReload';
 import { useServiceRef } from './useServiceRef';
 import { FLU_CONFIG } from '../voice/api/config';
 import { fluDb, type BrowserProfileRecord } from '../core/db/fluDatabase';
-import { logCaughtError } from '../lib/caughtError';
 import {
   createBrowserProfileService,
   type BrowserProfileConfig,
@@ -91,25 +91,10 @@ export function useBrowserProfiles({ now }: UseBrowserProfilesOptions = {}): Use
     }),
   );
 
-  const [profiles, setProfiles] = useState<BrowserProfileRecord[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  /** Recarga los perfiles desde IndexedDB (ordenados por nombre). */
-  const refresh = useCallback(async (): Promise<void> => {
-    try {
-      const all = await service.list();
-      setProfiles(all);
-    } catch (err) {
-      logCaughtError('[useBrowserProfiles] refresh error', err);
-    } finally {
-      setLoading(false);
-    }
-  }, [service]);
-
-  // Carga inicial.
-  useEffect(() => {
-    refresh().catch((e) => logCaughtError('src/hooks/useBrowserProfiles.ts: refresh', e));
-  }, [refresh]);
+  const { items: profiles, loading, refresh } = useListReload(
+    useCallback(() => service.list(), [service]),
+    'useBrowserProfiles',
+  );
 
   /** Asegura el perfil de una persona (defaults de config) y refresca. */
   const ensure = useCallback(

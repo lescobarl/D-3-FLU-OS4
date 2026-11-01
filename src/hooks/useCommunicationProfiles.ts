@@ -13,11 +13,11 @@
 //   - FASE P: manual > auto > default en cada turno
 //   - DI: now inyectable para pruebas deterministas
 // ============================================================
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback } from 'react';
+import { useListReload } from './useListReload';
 import { useServiceRef } from './useServiceRef';
 import { FLU_CONFIG } from '../voice/api/config';
 import { fluDb, type CommunicationProfileRecord } from '../core/db/fluDatabase';
-import { logCaughtError } from '../lib/caughtError';
 import {
   createCommunicationProfileService,
   type CommunicationProfileConfig,
@@ -96,25 +96,10 @@ export function useCommunicationProfiles({
     }),
   );
 
-  const [profiles, setProfiles] = useState<CommunicationProfileRecord[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  /** Recarga los perfiles desde IndexedDB (ordenados por nombre). */
-  const refresh = useCallback(async (): Promise<void> => {
-    try {
-      const all = await service.list();
-      setProfiles(all);
-    } catch (err) {
-      logCaughtError('[useCommunicationProfiles] refresh error', err);
-    } finally {
-      setLoading(false);
-    }
-  }, [service]);
-
-  // Carga inicial.
-  useEffect(() => {
-    refresh().catch((e) => logCaughtError('src/hooks/useCommunicationProfiles.ts: refresh', e));
-  }, [refresh]);
+  const { items: profiles, loading, refresh } = useListReload(
+    useCallback(() => service.list(), [service]),
+    'useCommunicationProfiles',
+  );
 
   /** Asegura el perfil de una persona y refresca el listado. */
   const ensure = useCallback(
