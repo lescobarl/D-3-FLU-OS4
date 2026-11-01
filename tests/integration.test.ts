@@ -2274,12 +2274,13 @@ describe('🎭 Pipeline Emoción/Animación — Validación Funcional', () => {
         // en 'crossFadeTo(name:' (el metodo siguiente en OS1); aqui no hay metodo despues, asi
         // que devolvia cadena vacia y el test fallaba aunque el invariante SI se cumple.
         const blendedSection = src.split('crossFadeToBlended(anims:')[1]?.split('this.blendActions = newBlendActions;')[0] || '';
-        // Verificar que stop ocurre ANTES de crear nuevas acciones
+        // Verificar que stop ocurre ANTES de crear nuevas acciones. La creación
+        // vive en el dueño único `buildBlendActions` (reset/play dentro de él).
         const stopIndex = blendedSection.indexOf('action.stop()');
-        const resetIndex = blendedSection.indexOf('action.reset()');
+        const createIndex = blendedSection.indexOf('this.buildBlendActions(anims, 1)');
         expect(stopIndex).toBeGreaterThan(-1);
-        expect(resetIndex).toBeGreaterThan(-1);
-        expect(stopIndex).toBeLessThan(resetIndex);
+        expect(createIndex).toBeGreaterThan(-1);
+        expect(stopIndex).toBeLessThan(createIndex);
     });
 
     // ============================================================

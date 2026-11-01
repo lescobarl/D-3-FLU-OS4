@@ -167,6 +167,57 @@ export class BunnyAnimator {
     }
 
     /**
+     * Resuelve el clip de una animación sin lanzar (sintética o FBX precargada).
+     * Dueño unico de esa resolución: play/crossFadeTo/validación lo consumen.
+     * @param name Animación pedida.
+     * @returns Clip o null si no existe.
+     */
+    private findClip(name: BunnyAnimation): THREE.AnimationClip | null {
+        return this.isSynthetic(name)
+            ? (name === 'MouthMove' ? this.ensureMouthClip() : this.ensurePalabraClip())
+            : this.clips.get(name) ?? null;
+    }
+
+    /**
+     * Valida que todos los clips de la lista existan, avisando igual que antes.
+     * @param anims Animaciones a validar.
+     * @returns true si todas están disponibles.
+     */
+    private validateAnimations(anims: BunnyAnimation[]): boolean {
+        for (const name of anims) {
+            const sintetica = this.isSynthetic(name);
+            const disponible = sintetica ? this.findClip(name) !== null : this.clips.has(name);
+            if (!disponible) {
+                console.warn(sintetica
+                    ? `[Animator] Cannot create synthetic clip: ${name}`
+                    : `[Animator] Clip not preloaded: ${name}`);
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Crea las acciones de blend de `anims` desde `from`. Dueño unico del lazo.
+     * @param anims Animaciones ya validadas.
+     * @param from Índice desde el que se crean acciones de blend.
+     * @returns Acciones creadas y en reproducción.
+     */
+    private buildBlendActions(anims: BunnyAnimation[], from: number): THREE.AnimationAction[] {
+        const actions: THREE.AnimationAction[] = [];
+        for (let i = from; i < anims.length; i++) {
+            const clip = this.resolveClip(anims[i]);
+            const action = this.mixer.clipAction(clip);
+            action.reset();
+            action.setLoop(THREE.LoopRepeat, Infinity);
+            action.setEffectiveWeight(1.0);
+            action.play();
+            actions.push(action);
+        }
+        return actions;
+    }
+
+    /**
      * Creates the synthetic MouthMove clip if poses are available.
      * The clip oscillates jaw_01.quaternion between closed (Idle_2)
      * and open (Emo_blink) poses using a sinusoidal wave.
@@ -435,17 +486,7 @@ export class BunnyAnimator {
      * Los IK/FK bones se agregan desde el caché.
      */
     play(name: BunnyAnimation): boolean {
-        let clip: THREE.AnimationClip | null = null;
-
-        if (this.isSynthetic(name)) {
-            if (name === 'MouthMove') {
-                clip = this.ensureMouthClip();
-            } else if (name === 'Palabra') {
-                clip = this.ensurePalabraClip();
-            }
-        } else {
-            clip = this.clips.get(name) || null;
-        }
+        const clip = this.findClip(name);
 
         if (!clip) {
             console.warn(`[Animator] Clip not available: ${name}`);
@@ -491,25 +532,7 @@ export class BunnyAnimator {
     playBlendedList(anims: BunnyAnimation[]): boolean {
         if (anims.length === 0) return false;
 
-        // Validate all clips are available
-        for (const name of anims) {
-            if (this.isSynthetic(name)) {
-                if (name === 'MouthMove') {
-                    if (!this.ensureMouthClip()) {
-                        console.warn(`[Animator] Cannot create synthetic clip: ${name}`);
-                        return false;
-                    }
-                } else if (name === 'Palabra') {
-                    if (!this.ensurePalabraClip()) {
-                        console.warn(`[Animator] Cannot create synthetic clip: ${name}`);
-                        return false;
-                    }
-                }
-            } else if (!this.clips.has(name)) {
-                console.warn(`[Animator] Clip not preloaded: ${name}`);
-                return false;
-            }
-        }
+        if (!this.validateAnimations(anims)) return false;
 
         // Stop all current actions
         this.stopAllActions();
@@ -530,16 +553,7 @@ export class BunnyAnimator {
         this.currentAction = mainAction;
 
         // --- Remaining animations: blend actions ---
-        this.blendActions = [];
-        for (let i = 1; i < anims.length; i++) {
-            const clip = this.resolveClip(anims[i]);
-            const action = this.mixer.clipAction(clip);
-            action.reset();
-            action.setLoop(THREE.LoopRepeat, Infinity);
-            action.setEffectiveWeight(1.0);
-            action.play();
-            this.blendActions.push(action);
-        }
+        this.blendActions = this.buildBlendActions(anims, 1);
 
         this.onLog(`[Animator] Blended: ${anims.join(' + ')}` +
             (this.animBones.length > 0 ? `, ${this.animBones.length} IK/FK bones added` : ''));
@@ -553,17 +567,7 @@ export class BunnyAnimator {
      * over `fadeDuration` seconds using THREE.AnimationMixer cross-fade.
      */
     crossFadeTo(name: BunnyAnimation, fadeDuration: number = 0.3): boolean {
-        let clip: THREE.AnimationClip | null = null;
-
-        if (this.isSynthetic(name)) {
-            if (name === 'MouthMove') {
-                clip = this.ensureMouthClip();
-            } else if (name === 'Palabra') {
-                clip = this.ensurePalabraClip();
-            }
-        } else {
-            clip = this.clips.get(name) || null;
-        }
+        const clip = this.findClip(name);
 
         if (!clip) {
             console.warn(`[Animator] Clip not available for cross-fade: ${name}`);
@@ -603,25 +607,7 @@ export class BunnyAnimator {
     crossFadeToBlended(anims: BunnyAnimation[], fadeDuration: number = 0.3): boolean {
         if (anims.length === 0) return false;
 
-        // Validate all clips are available
-        for (const name of anims) {
-            if (this.isSynthetic(name)) {
-                if (name === 'MouthMove') {
-                    if (!this.ensureMouthClip()) {
-                        console.warn(`[Animator] Cannot create synthetic clip: ${name}`);
-                        return false;
-                    }
-                } else if (name === 'Palabra') {
-                    if (!this.ensurePalabraClip()) {
-                        console.warn(`[Animator] Cannot create synthetic clip: ${name}`);
-                        return false;
-                    }
-                }
-            } else if (!this.clips.has(name)) {
-                console.warn(`[Animator] Clip not preloaded: ${name}`);
-                return false;
-            }
-        }
+        if (!this.validateAnimations(anims)) return false;
 
         // Stop old blend actions FIRST to avoid Three.js clipAction() cache conflict.
         // Three.js AnimationMixer.clipAction() returns a CACHED AnimationAction for the
@@ -653,16 +639,7 @@ export class BunnyAnimator {
         mainAction.play();
 
         // --- Remaining animations: blend actions ---
-        const newBlendActions: THREE.AnimationAction[] = [];
-        for (let i = 1; i < anims.length; i++) {
-            const clip = this.resolveClip(anims[i]);
-            const action = this.mixer.clipAction(clip);
-            action.reset();
-            action.setLoop(THREE.LoopRepeat, Infinity);
-            action.setEffectiveWeight(1.0);
-            action.play();
-            newBlendActions.push(action);
-        }
+        const newBlendActions = this.buildBlendActions(anims, 1);
 
         this.currentAction = mainAction;
         this.blendActions = newBlendActions;
