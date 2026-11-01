@@ -761,6 +761,84 @@ export function WorkspaceHub({
     const pendingHorarioImport =
         horarioImport?.pending && horarioImport.pending.length > 0 ? horarioImport.pending : null;
 
+    // Contenido principal (feed + zona de cargas): dueño único, se pinta igual
+    // con y sin agenda. Antes estaba copiado en las dos ramas del ternario.
+    const mainContent = (
+        <>
+            {/* Feed de resultados consolidado (columna principal) */}
+            <ResultFeed items={feedItems} language={language} focusKind={turnFocus?.kind ?? focusKind} focusSeq={turnFocus?.seq} key={documents?.loading ? 'feed-loading' : 'feed-ready'} />
+
+            {/* Sección 3 — cargas (región permanente) */}
+            <div className="frame-content__upload-zone">
+                {upload.error && (
+                    <div className="flu-error-box" role="alert">{upload.error}</div>
+                )}
+                {!upload.uploadedImage ? (
+                    <div
+                        className="flu-upload-zone__drop"
+                        onDragOver={(e) => e.preventDefault()}
+                        onDrop={upload.onFileDrop}
+                    >
+                        <p className="flu-upload-zone__hint">{pickLabel(ws.uploadDropHint, language, 'Arrastra tu documento aquí')}</p>
+                        <div className="flu-upload-zone__buttons">
+                            <button
+                                type="button"
+                                className="flu-btn"
+                                onClick={() => upload.fileInputRef.current?.click()}
+                            >
+                                {pickLabel(ws.uploadSelectLabel, language, '📁 Subir imagen')}
+                            </button>
+                            <button
+                                type="button"
+                                className="flu-btn"
+                                onClick={() => upload.docInputRef.current?.click()}
+                            >
+                                {pickLabel(ws.uploadDocumentLabel, language, '📄 Analizar documento')}
+                            </button>
+                        </div>
+                        <input
+                            ref={upload.fileInputRef}
+                            type="file"
+                            accept="image/*"
+                            hidden
+                            onChange={upload.onFileSelected}
+                        />
+                        <input
+                            ref={upload.docInputRef}
+                            type="file"
+                            accept=".xlsx,.xlsm,.pdf,.docx,.pptx,.csv,.txt,.md,text/*,application/pdf"
+                            hidden
+                            data-testid="doc-input"
+                            onChange={upload.onDocumentFileSelected}
+                        />
+                    </div>
+                ) : (
+                    <div className="flu-upload-zone__preview">
+                        <img
+                            className="flu-upload-zone__img"
+                            src={upload.uploadedImage.dataUrl}
+                            alt="Tarea subida"
+                        />
+                        <div className="flu-upload-zone__actions">
+                            {upload.isAnalyzing && (
+                                <span className="flu-upload-zone__analyzing">
+                                    {pickLabel(ws.uploadAnalyzingLabel, language, '🔍 Analizando con IA...')}
+                                </span>
+                            )}
+                            <button
+                                type="button"
+                                className="flu-btn flu-btn--danger"
+                                onClick={upload.onClearImage}
+                            >
+                                {pickLabel(ws.uploadRemoveLabel, language, '✕ Quitar')}
+                            </button>
+                        </div>
+                    </div>
+                )}
+            </div>
+        </>
+    );
+
     return (
         <div className="workspace-hub" data-testid="workspace-hub">
             {/* Sección 1 — barra de comandos (región permanente, ancho completo).
@@ -790,77 +868,7 @@ export function WorkspaceHub({
                 {agenda ? (
                     <div className="workspace-hub__columns" data-testid="workspace-hub-columns">
                         <div className="workspace-hub__main" data-testid="workspace-hub-main">
-                            {/* Feed de resultados consolidado (columna principal) */}
-                            <ResultFeed items={feedItems} language={language} focusKind={turnFocus?.kind ?? focusKind} focusSeq={turnFocus?.seq} key={documents?.loading ? 'feed-loading' : 'feed-ready'} />
-
-                            {/* Sección 3 — cargas (región permanente) */}
-                            <div className="frame-content__upload-zone">
-                                {upload.error && (
-                                    <div className="flu-error-box" role="alert">{upload.error}</div>
-                                )}
-                                {!upload.uploadedImage ? (
-                                    <div
-                                        className="flu-upload-zone__drop"
-                                        onDragOver={(e) => e.preventDefault()}
-                                        onDrop={upload.onFileDrop}
-                                    >
-                                        <p className="flu-upload-zone__hint">{pickLabel(ws.uploadDropHint, language, 'Arrastra tu documento aquí')}</p>
-                                        <div className="flu-upload-zone__buttons">
-                                            <button
-                                                type="button"
-                                                className="flu-btn"
-                                                onClick={() => upload.fileInputRef.current?.click()}
-                                            >
-                                                {pickLabel(ws.uploadSelectLabel, language, '📁 Subir imagen')}
-                                            </button>
-                                            <button
-                                                type="button"
-                                                className="flu-btn"
-                                                onClick={() => upload.docInputRef.current?.click()}
-                                            >
-                                                {pickLabel(ws.uploadDocumentLabel, language, '📄 Analizar documento')}
-                                            </button>
-                                        </div>
-                                        <input
-                                            ref={upload.fileInputRef}
-                                            type="file"
-                                            accept="image/*"
-                                            hidden
-                                            onChange={upload.onFileSelected}
-                                        />
-                                        <input
-                                            ref={upload.docInputRef}
-                                            type="file"
-                                            accept=".xlsx,.xlsm,.pdf,.docx,.pptx,.csv,.txt,.md,text/*,application/pdf"
-                                            hidden
-                                            data-testid="doc-input"
-                                            onChange={upload.onDocumentFileSelected}
-                                        />
-                                    </div>
-                                ) : (
-                                    <div className="flu-upload-zone__preview">
-                                        <img
-                                            className="flu-upload-zone__img"
-                                            src={upload.uploadedImage.dataUrl}
-                                            alt="Tarea subida"
-                                        />
-                                        <div className="flu-upload-zone__actions">
-                                            {upload.isAnalyzing && (
-                                                <span className="flu-upload-zone__analyzing">
-                                                    {pickLabel(ws.uploadAnalyzingLabel, language, '🔍 Analizando con IA...')}
-                                                </span>
-                                            )}
-                                            <button
-                                                type="button"
-                                                className="flu-btn flu-btn--danger"
-                                                onClick={upload.onClearImage}
-                                            >
-                                                {pickLabel(ws.uploadRemoveLabel, language, '✕ Quitar')}
-                                            </button>
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
+                            {mainContent}
                         </div>
 
                         <aside className="workspace-hub__side" data-testid="workspace-hub-side">
@@ -879,73 +887,7 @@ export function WorkspaceHub({
                     </div>
                 ) : (
                     <div className="workspace-hub__main" data-testid="workspace-hub-main">
-                        <ResultFeed items={feedItems} language={language} focusKind={turnFocus?.kind ?? focusKind} focusSeq={turnFocus?.seq} key={documents?.loading ? 'feed-loading' : 'feed-ready'} />
-                        <div className="frame-content__upload-zone">
-                            {upload.error && (
-                                <div className="flu-error-box" role="alert">{upload.error}</div>
-                            )}
-                            {!upload.uploadedImage ? (
-                                <div
-                                    className="flu-upload-zone__drop"
-                                    onDragOver={(e) => e.preventDefault()}
-                                    onDrop={upload.onFileDrop}
-                                >
-                                    <p className="flu-upload-zone__hint">{pickLabel(ws.uploadDropHint, language, 'Arrastra tu documento aquí')}</p>
-                                    <div className="flu-upload-zone__buttons">
-                                        <button
-                                            type="button"
-                                            className="flu-btn"
-                                            onClick={() => upload.fileInputRef.current?.click()}
-                                        >
-                                            {pickLabel(ws.uploadSelectLabel, language, '📁 Subir imagen')}
-                                        </button>
-                                        <button
-                                            type="button"
-                                            className="flu-btn"
-                                            onClick={() => upload.docInputRef.current?.click()}
-                                        >
-                                            {pickLabel(ws.uploadDocumentLabel, language, '📄 Analizar documento')}
-                                        </button>
-                                    </div>
-                                    <input
-                                        ref={upload.fileInputRef}
-                                        type="file"
-                                        accept="image/*"
-                                        hidden
-                                        onChange={upload.onFileSelected}
-                                    />
-                                    <input
-                                        ref={upload.docInputRef}
-                                        type="file"
-                                        accept=".xlsx,.xlsm,.pdf,.docx,.pptx,.csv,.txt,.md,text/*,application/pdf"
-                                        hidden
-                                        onChange={upload.onDocumentFileSelected}
-                                    />
-                                </div>
-                            ) : (
-                                <div className="flu-upload-zone__preview">
-                                    <img
-                                        className="flu-upload-zone__img"
-                                        src={upload.uploadedImage.dataUrl}
-                                        alt="Tarea subida"
-                                    />
-                                    <div className="flu-upload-zone__actions">
-                                        {upload.isAnalyzing && (
-                                            <span className="flu-upload-zone__analyzing">
-                                                {pickLabel(ws.uploadAnalyzingLabel, language, '🔍 Analizando con IA...')}
-                                            </span>
-                                        )}
-                                        <button
-                                            type="button"
-                                            className="flu-btn flu-btn--danger"
-                                            onClick={upload.onClearImage}
-                                        >
-                                            {pickLabel(ws.uploadRemoveLabel, language, '✕ Quitar')}
-                                        </button>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
+                        {mainContent}
                     </div>
                 )}
             </div>
