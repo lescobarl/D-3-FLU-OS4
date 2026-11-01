@@ -1,0 +1,17 @@
+{
+  "_nota": "URLs/modelos fuera de /config que NO son hardcode: cada uno declara por que es legitimo. Solo se quitan (o se arregla el codigo y se borra la entrada). Anadir uno exige aprobacion del dueno (CODEOWNERS).",
+  "aceptados": [
+    {
+      "clave": "src/dev/asrLab/AsrLab.tsx: modelo: import.meta.env.VITE_OPENROUTER_AUDIO_MODEL || 'google/gemini-2.5-flash'",
+      "motivo": "laboratorio de ASR (dev): el valor se inyecta por variable de entorno y el literal es solo el fallback local"
+    },
+    {
+      "clave": "src/server/requestUrl.ts: URL: const PARSE_BASE_URL = 'http://localhost';",
+      "motivo": "base para parsear rutas relativas del dev-server; no es un destino de red"
+    },
+    {
+      "clave": "src/voice/lib/imageGeneration.js: URL: <svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 1024 576\" role=\"img\" aria-l",
+      "motivo": "namespace XML del SVG de respaldo: no es configurable, lo exige el formato"
+    }
+  ]
+}

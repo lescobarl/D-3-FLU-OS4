@@ -10,6 +10,8 @@
 /scripts/duplicados-allowlist.json @lescobarl
 /scripts/guard-literales.mjs @lescobarl
 /scripts/literales-allowlist.json @lescobarl
+/scripts/guard-hardcodes.mjs @lescobarl
+/scripts/hardcode-dictamen.json @lescobarl
 
 # Guards de comportamiento (tests/*Guard*)
 /tests/*Guard*.test.ts        @lescobarl
