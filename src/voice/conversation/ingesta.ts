@@ -370,6 +370,16 @@ export function crearIngesta({
     // atribución va PRIMERO: un texto de la frase abierta no puede verificar el
     // cambio de voz de un tramo ajeno.
     const tramoAtribuido = tramoDestinoDeTexto(tramoId, entrada.texto)
+    // Cambio de hablante DECLARADO por el ASR: si la evidencia entrante trae
+    // otra voz que la abierta, la anterior cierra por 'voz' y el texto abre la
+    // nueva. Es una de las DOS puertas del producto (silencio o cambio de
+    // hablante); el texto ajeno por sí solo ya no cierra (auditoría 2026-11-01).
+    const abiertaParaVoz = estado.abierta
+    const vozEntrante = String(entrada.voz?.vozId || '').trim()
+    const vozAbierta = String(abiertaParaVoz?.voz.vozId || '').trim()
+    if (abiertaParaVoz && vozEntrante && vozAbierta && vozEntrante !== vozAbierta) {
+      await sesion.cerrarLocucion(abiertaParaVoz, 'system', 'voz', abiertaParaVoz.final)
+    }
     const tramoDestino = (await verificarCambioVoz(tramoAtribuido)) ?? tramoAtribuido
     await flujo.procesarResultadoAsr({ ...entrada, tramoId: tramoDestino })
     return sesion.snapshot()

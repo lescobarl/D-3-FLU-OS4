@@ -31,12 +31,12 @@ const entrada = (
 const decidir = (e: EntradaFrontera, u: UmbralesFrontera = UMBRALES): DecisionFrontera =>
   decidirFrontera(e, u)
 
-describe('regla 2 — frontera por texto ajeno', () => {
-  it('silencio justo en el umbral con texto ajeno cierra por frontera', () => {
-    expect(decidir(entrada(900, true))).toEqual({ cerrar: true, causa: 'frontera' })
+describe('regla 2 — texto ajeno NO cierra por sí solo', () => {
+  it('texto ajeno con 900 ms NO cierra: no es silencio ni cambio de hablante', () => {
+    expect(decidir(entrada(900, true))).toEqual({ cerrar: false, causa: null })
   })
 
-  it('un milisegundo menos no cierra', () => {
+  it('un milisegundo menos tampoco cierra', () => {
     expect(decidir(entrada(899, true))).toEqual({ cerrar: false, causa: null })
   })
 
@@ -78,7 +78,8 @@ describe('regla 2 — los umbrales salen de la tabla, no de literales', () => {
   it('con umbrales inyectados el borde se mueve con ellos', () => {
     const cortos: UmbralesFrontera = { minSilenceMs: 100, silenceCloseMs: 200 }
     expect(decidir(entrada(99, true), cortos)).toEqual({ cerrar: false, causa: null })
-    expect(decidir(entrada(100, true), cortos)).toEqual({ cerrar: true, causa: 'frontera' })
+    expect(decidir(entrada(100, true), cortos)).toEqual({ cerrar: false, causa: null })
+    expect(decidir(entrada(200, true), cortos)).toEqual({ cerrar: true, causa: 'frontera' })
     expect(decidir(entrada(200, false), cortos)).toEqual({ cerrar: true, causa: 'silencio' })
   })
 
@@ -89,7 +90,7 @@ describe('regla 2 — los umbrales salen de la tabla, no de literales', () => {
 
   it('no muta la entrada', () => {
     const e = Object.freeze({
-      medida: Object.freeze({ hayVoz: false, silencioMs: 900 }),
+      medida: Object.freeze({ hayVoz: false, silencioMs: 5000 }),
       textoAjeno: true,
       abierta: true,
     })

@@ -145,6 +145,7 @@ export function crearAlmacenDexie({
             ...anterior,
             etiqueta: cambios.etiqueta ?? anterior.etiqueta,
             evidencia: cambios.evidencia ?? anterior.evidencia,
+            firma: cambios.firma ?? anterior.firma,
           },
           sincronizar(previo.sync, reloj.ahora()),
         )

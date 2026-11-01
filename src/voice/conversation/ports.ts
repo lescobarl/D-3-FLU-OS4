@@ -88,7 +88,7 @@ export type FilaNueva = Omit<Fila, 'revision' | 'updated_at' | 'deleted'>
  * de la conversación que se puede actualizar». Texto, tramo, firma, idioma,
  * estado y borrado son INMUTABLES (insert-only).
  */
-export type CambiosFila = Readonly<Partial<Pick<Fila, 'etiqueta' | 'evidencia'>>>
+export type CambiosFila = Readonly<Partial<Pick<Fila, 'etiqueta' | 'evidencia' | 'firma'>>>
 
 /** Reloj inyectado: dentro del módulo no se llama `Date.now()`. */
 export interface RelojPort {

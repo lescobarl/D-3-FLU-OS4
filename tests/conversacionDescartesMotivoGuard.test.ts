@@ -52,7 +52,7 @@ const UUID_A = '11111111-1111-4111-8111-111111111111'
 const UUID_B = '22222222-2222-4222-8222-222222222222'
 
 const MOTIVOS_CIERRE: readonly MotivoCierre[] = ['user', 'system', 'watchdog']
-const CAUSAS_CIERRE = ['frontera', 'silencio', 'stop', 'asr', 'voz'] as const
+const CAUSAS_CIERRE = ['silencio', 'stop', 'asr', 'voz'] as const
 const MOTIVOS_DESCARTE = ['tramoInvalido', 'sinTexto', 'eco', 'huerfano'] as const
 
 const fuenteDe = (ruta: string): string =>
@@ -237,7 +237,7 @@ describe('Caso 9 — cada cierre declara motivo y causa (5 causas con el módulo
     expect(cerrados[0]).toMatchObject({ motivo: 'system', causa: 'silencio' })
   })
 
-  it('frontera: el texto ajeno con pausa cierra la locución anterior', async () => {
+  it('silencio: el texto ajeno + 5 s de pausa cierra la locución anterior', async () => {
     const { api, eventos } = crearEscenario()
     await api.start()
     const tramoUno = await abrirConVoz(api)
@@ -260,10 +260,18 @@ describe('Caso 9 — cada cierre declara motivo y causa (5 causas con el módulo
         sampleRate: SAMPLE_RATE,
       },
     })
+    // El texto ajeno por sí solo NO cierra; la puerta es el silencio de 5 s.
+    await api.ingestAudio({
+      muestras: new Float32Array(SAMPLE_RATE * 5),
+      sampleRate: SAMPLE_RATE,
+      inicio: 2 * SAMPLE_RATE + MUESTRAS_CORTE,
+      fin: 7 * SAMPLE_RATE + MUESTRAS_CORTE,
+      medida: SILENCIO(5000),
+    })
 
     const cerrados = cierresDe(eventos)
     expect(cerrados).toHaveLength(1)
-    expect(cerrados[0]).toMatchObject({ motivo: 'system', causa: 'frontera' })
+    expect(cerrados[0]).toMatchObject({ motivo: 'system', causa: 'silencio' })
   })
 
   it('stop: el cierre de usuario declara su motivo', async () => {

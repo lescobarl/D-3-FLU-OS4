@@ -598,7 +598,15 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
     const plantilla = estado.plantillasVoz.get(String(vozId || '').trim())
     if (plantilla) plantilla.etiqueta = etiqueta
     const evidencia = nombreRegistrado ? 'nombre' : 'medida'
-    const actualizada = await almacen.actualizar(fila.locutionId, { etiqueta, evidencia })
+    // La medida tardía trae el TIMBRE de la voz. Persistirlo en la fila es lo
+    // que evita que `voiceKeyFor` caiga a la etiqueta y abra hablantes nuevos
+    // (auditoría 2026-11-01: commits con signature:null tras vozMedida ok).
+    const firma = plantilla?.vector ?? fila.firma
+    const actualizada = await almacen.actualizar(fila.locutionId, {
+      etiqueta,
+      evidencia,
+      ...(firma ? { firma } : {}),
+    })
     if (!actualizada) return false
     estado.filas.set(fila.locutionId, actualizada)
     // La continuidad de la sesión sigue a la fila más reciente ya etiquetada.

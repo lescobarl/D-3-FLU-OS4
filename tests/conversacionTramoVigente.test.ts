@@ -57,7 +57,7 @@ beforeEach(async () => {
 })
 
 describe('producto — el tramo lo resuelve el módulo al procesar', () => {
-  it('cada fila lleva su tramo de audio y el texto ajeno cierra por frontera', async () => {
+  it('cada fila lleva su tramo de audio y el texto ajeno se retiene hasta el silencio', async () => {
     const eventos: EventoConversacion[] = []
     // Caso 8: un turnId => una fila. El hook real avanza el turno con cada commit;
     // sin proveedor, las dos locuciones compartirían el turno de sesión y la
@@ -83,8 +83,11 @@ describe('producto — el tramo lo resuelve el módulo al procesar', () => {
     for (let i = 0; i < 10; i += 1) emitir(motor, silencio(100), 32000 + i * BLOQUE)
     // 1 s de voz nueva: tramo T2 arranca en la muestra 48000.
     for (let i = 0; i < 10; i += 1) emitir(motor, tono(100), 48000 + i * BLOQUE)
-    // El texto del tramo NUEVO es el que dispara la frontera (regla 2).
+    // El texto del tramo NUEVO NO cierra por sí solo: se retiene como pendiente.
     await motor.evento(eventoAsr('adios'))
+    // 5 s de silencio: única puerta de cierre sin cambio de hablante medido.
+    for (let i = 0; i < 50; i += 1) emitir(motor, silencio(100), 64000 + i * BLOQUE)
+    await motor.evento(eventoAsr('', false))
 
     const filas = eventos.filter(
       (evento): evento is Extract<EventoConversacion, { tipo: 'row.committed' }> =>
@@ -104,7 +107,7 @@ describe('producto — el tramo lo resuelve el módulo al procesar', () => {
         evento.tipo === 'locution.closed',
     )
     expect(cierres).toHaveLength(1)
-    expect(cierres[0].causa).toBe('frontera')
+    expect(cierres[0].causa).toBe('silencio')
 
     // Cierre real de la sesión: la segunda locución nace en T2 (muestra 48000).
     const dosFilas = new Promise<void>((resolver) => {
@@ -155,29 +158,23 @@ describe('producto — el tramo lo resuelve el módulo al procesar', () => {
         (evento): evento is Extract<EventoConversacion, { tipo: 'row.committed' }> =>
           evento.tipo === 'row.committed',
       )
-    expect(filas()).toHaveLength(1)
-    expect(filas()[0].fila.texto).toBe(primera)
-    expect(motor.instantanea().locucionAbierta).toBeNull()
-    turnoVigente = 'turno-dos'
+    // Sin cambio de hablante ni silencio, el final ajeno NO se pega ni se
+    // commitea: queda pendiente y la línea abierta conserva SU texto.
+    // Sin cambio de hablante ni silencio, el final ajeno NO se pega ni se
+    // commitea: la línea abierta conserva SU texto.
+    expect(filas()).toHaveLength(0)
+    expect(motor.instantanea().locucionAbierta?.texto).toBe(primera)
 
-    // La continuación de esa frase llega CON su tramo: es SU audio y su fila.
-    for (let i = 0; i < 10; i += 1) emitir(motor, tono(100), 48000 + i * BLOQUE)
-    const completa = 'voy a poner a la mujer hablar para que no digan que no hago mi tarea'
-    await motor.evento(eventoAsr(completa, true))
-    // 5 s de silencio: cierre por la puerta de abajo (silencio de cierre). La
-    // cadena de audio es asíncrona: el commit de la segunda fila se espera.
-    for (let i = 0; i < 55; i += 1) emitir(motor, silencio(100), 64000 + i * BLOQUE)
-    const segundaFila = new Promise<void>((resolver) => {
+    const cerrada = new Promise<void>((resolver) => {
       motor.suscribir((evento) => {
-        if (evento.tipo === 'row.committed' && evento.fila.texto === completa) resolver()
+        if (evento.tipo === 'row.committed') resolver()
       })
     })
-    motor.cerrar('user')
-    await segundaFila
-
-    expect(filas().map((evento) => evento.fila.texto)).toEqual([primera, completa])
+    await motor.cerrar('user')
+    await cerrada
     const persistidas = await fluDb.conversations.toArray()
-    expect(persistidas).toHaveLength(2)
+    expect(persistidas).toHaveLength(1)
+    expect(persistidas[0]!.text).toBe(primera)
     expect(persistidas.some((fila) => fila.text.includes(primera) && fila.text !== primera)).toBe(false)
   })
 })

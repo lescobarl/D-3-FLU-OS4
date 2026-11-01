@@ -109,6 +109,10 @@ describe('la frontera no es decorativa', () => {
       causa: null,
     })
     expect(decidirFrontera({ medida: { hayVoz: false, silencioMs: 900 }, textoAjeno: true, abierta: true })).toEqual({
+      cerrar: false,
+      causa: null,
+    })
+    expect(decidirFrontera({ medida: { hayVoz: false, silencioMs: 5000 }, textoAjeno: true, abierta: true })).toEqual({
       cerrar: true,
       causa: 'frontera',
     })

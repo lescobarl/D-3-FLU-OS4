@@ -18,4 +18,5 @@
   'tests/conversationEntryIdempotentGuard.test.ts',
   'tests/conversationIdentityThresholdGuard.test.ts',
   'tests/conversationTurnNewPhraseGuard.test.ts',
+  'tests/conversationLateSignatureGuard.test.ts',
 ]

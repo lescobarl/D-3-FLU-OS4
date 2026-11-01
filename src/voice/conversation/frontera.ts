@@ -55,11 +55,13 @@ export function decidirFrontera(
   const silencioMs = Math.max(0, Number(entrada.medida.silencioMs) || 0)
   if (entrada.medida.hayVoz) return { cerrar: false, causa: null }
 
-  if (entrada.textoAjeno && silencioMs >= umbrales.minSilenceMs) {
-    return { cerrar: true, causa: 'frontera' }
-  }
-  if (!entrada.textoAjeno && silencioMs >= umbrales.silenceCloseMs) {
-    return { cerrar: true, causa: 'silencio' }
+  // REGLA DEL PRODUCTO (auditoría 2026-11-01): una locución solo pasa a
+  // conversación con SILENCIO o CAMBIO DE HABLANTE. El texto ajeno por sí solo
+  // NO es cambio de hablante: cerraba a los 900 ms y partía frases de la misma
+  // voz (duplicados/pérdidas). La voz distinta se detecta antes, con medida
+  // (`verificarCambioVoz`, causa 'voz'). Aquí solo queda la puerta de silencio.
+  if (silencioMs >= umbrales.silenceCloseMs) {
+    return { cerrar: true, causa: entrada.textoAjeno ? 'frontera' : 'silencio' }
   }
   return { cerrar: false, causa: null }
 }

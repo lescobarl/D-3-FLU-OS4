@@ -91,18 +91,20 @@ describe('almacén Dexie de filas de conversación', () => {
     expect(await fluDb.conversations.count()).toBe(1)
   })
 
-  it('actualizar SOLO reetiqueta el hablante y el resto de la fila queda inmutable', async () => {
+  it('actualizar reetiqueta el hablante y su firma; texto y tramo quedan inmutables', async () => {
     const almacen = crearAlmacenDexieProducto({ reloj: crearReloj() })
     const original = await almacen.guardar(filaNueva())
     // Mandato del dueño 2026-10-30: el único campo actualizable es el hablante.
     const actualizada = await almacen.actualizar(LOCUTION_ID, {
       etiqueta: 'Luis',
       evidencia: 'medida',
+      firma: [0.5, 0.25, 0.75],
     })
 
     expect(actualizada).toMatchObject({
       etiqueta: 'Luis',
       evidencia: 'medida',
+      firma: [0.5, 0.25, 0.75],
       revision: 2,
     })
     expect(actualizada).toMatchObject({
@@ -115,6 +117,7 @@ describe('almacén Dexie de filas de conversación', () => {
     expect(crudo?.sync.revision).toBe(2)
     expect(crudo?.sync.deleted).toBe(false)
     expect(crudo?.text).toBe('hola flu')
+    expect(crudo?.signature).toEqual([0.5, 0.25, 0.75])
   })
 
   it('sessionId indexado separa las filas de cada sesión', async () => {

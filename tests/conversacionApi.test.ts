@@ -283,7 +283,7 @@ describe('regla 1 y 3 — el audio abre el tramo y el texto lo revisa', () => {
 })
 
 describe('regla 2 — el texto se aplica primero y después decide la frontera', () => {
-  it('silencio ≥900 + texto ajeno cierra la anterior y abre la siguiente', async () => {
+  it('texto ajeno a 900 ms NO cierra; se retiene y se abre al silencio (sin perderlo)', async () => {
     const { api, eventos } = crearEscenario()
     await api.start()
     const tramoUno = await abrirConVoz(api, 0)
@@ -296,19 +296,21 @@ describe('regla 2 — el texto se aplica primero y después decide la frontera',
     expect(estadoDos.locucionAbierta?.locutionId).toBe(tramoUno)
 
     await api.ingestAsr(asr(tramoDos, { texto: 'dos', final: true }))
-    // Mandato 2026-10-30: el final marca la locución abierta; el silencio de 5 s
-    // (puerta de abajo) la cierra.
-    const cerradas = await cerrarPorSilencio(api, SAMPLE_RATE * 3)
-    expect(cerradas.filas.map((fila) => fila.texto)).toEqual(['uno', 'dos'])
-    expect(cerradas.filas[0]).toMatchObject({ reason: 'system', provisional: true })
-    expect(cerradas.filas[1]).toMatchObject({ provisional: false })
+    // 900 ms + texto ajeno NO es silencio ni cambio de hablante: no cierra.
+    const primera = await cerrarPorSilencio(api, SAMPLE_RATE * 3)
+    expect(primera.filas.map((fila) => fila.texto)).toEqual(['uno'])
     expect(eventos).toContainEqual(
       expect.objectContaining({
         tipo: 'locution.closed',
         locutionId: tramoUno,
-        causa: 'frontera',
+        causa: 'silencio',
       }),
     )
+    // La frase nueva quedó ABIERTA (no perdida); su propio silencio la cierra.
+    const segunda = await cerrarPorSilencio(api, SAMPLE_RATE * 8)
+    expect(segunda.filas.map((fila) => fila.texto)).toEqual(['uno', 'dos'])
+    expect(segunda.filas[0]).toMatchObject({ reason: 'system', provisional: true })
+    expect(segunda.filas[1]).toMatchObject({ provisional: false })
   })
 
   it('texto ajeno sin silencio se retiene y no se mezcla; se abre al cerrar', async () => {

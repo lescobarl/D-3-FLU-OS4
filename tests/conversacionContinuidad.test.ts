@@ -168,6 +168,7 @@ function crearProbePendiente() {
           ...previa,
           etiqueta: cambios.etiqueta ?? previa.etiqueta,
           evidencia: cambios.evidencia ?? previa.evidencia,
+          firma: cambios.firma ?? previa.firma,
           revision: previa.revision + 1,
           updated_at: 1,
         }
@@ -280,8 +281,10 @@ describe('continuidad de voz — decisión de la sesión', () => {
  * etiqueta temporal.
  */
 describe('el hablante es el ÚNICO campo actualizable de una fila commiteada', () => {
-  it('la fila nace TEMPORAL y la medida tardía reemplaza SOLO el hablante', async () => {
+  it('la fila nace TEMPORAL y la medida tardía reemplaza hablante y firma', async () => {
     const { estado, reglas, guardadas, actualizaciones, eventos } = crearProbePendiente()
+    // La medida tardía ya registró su plantilla (vector) antes de reetiquetar.
+    estado.plantillasVoz.set('voz-1', { vector: [1, 0], etiqueta: 'Hablante 2' })
     const locutionId = UUIDS[0]!
     reglas.abrirLocucion({
       tramoId: locutionId,
@@ -305,13 +308,14 @@ describe('el hablante es el ÚNICO campo actualizable de una fila commiteada', (
     expect(actualizada).toMatchObject({
       etiqueta: 'Hablante 2',
       evidencia: 'medida',
+      firma: [1, 0],
       texto: pendiente.texto,
       tramo: pendiente.tramo,
       revision: 2,
     })
-    // El almacén recibió SOLO los dos campos del hablante: ni texto ni tramo.
+    // El almacén recibió hablante y su TIMBRE; ni texto ni tramo.
     expect(actualizaciones).toHaveLength(1)
-    expect(Object.keys(actualizaciones[0]!.cambios).sort()).toEqual(['etiqueta', 'evidencia'])
+    expect(Object.keys(actualizaciones[0]!.cambios).sort()).toEqual(['etiqueta', 'evidencia', 'firma'])
     expect(eventos.at(-1)).toMatchObject({
       tipo: 'speaker.labeled',
       locutionId,
