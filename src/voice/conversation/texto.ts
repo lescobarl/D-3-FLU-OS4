@@ -11,8 +11,13 @@ import { ventanaDentroDe } from './fila.ts'
 import type { Pendientes } from './cola.ts'
 import type { RegistroTramos } from './tramos.ts'
 import type { Sesion } from './sesion.ts'
-import type { AsrIngestado, DependenciasConversacion } from './tipos.ts'
-import type { IdiomaLocucion, MotivoCierre } from './ports.ts'
+import type { AsrIngestado, DependenciasConversacion, EvidenciaVoz } from './tipos.ts'
+import type {
+  IdiomaLocucion,
+  MedidaMotor,
+  MotivoCierre,
+  TramoMuestreado,
+} from './ports.ts'
 
 /** Superficie del flujo de texto que compone la ingesta. */
 export type FlujoTexto = Readonly<{
@@ -38,6 +43,73 @@ export function crearFlujoTexto({
   pendientes: Pendientes
 }): FlujoTexto {
   const estado = sesion.estado
+
+  /**
+   * Abre la locución con los datos ya resueltos por el flujo de texto. Es el
+   * ÚNICO ensamblado de `DatosApertura` en este flujo: los caminos aportan sus
+   * datos y el dueño de la apertura aplica defaults y normaliza.
+   * @param datos Campos resueltos por el llamador.
+   */
+  function abrirDesde(datos: {
+    tramoId: string
+    texto: string
+    tramo: TramoMuestreado
+    turnId: string
+    idioma: IdiomaLocucion
+    voz: EvidenciaVoz
+    finalLlego: boolean
+    medidaMotor?: MedidaMotor
+    muestrasIniciales?: readonly Float32Array[] | null
+  }): void {
+    sesion.abrirLocucion({
+      tramoId: datos.tramoId,
+      texto: datos.texto,
+      tramo: datos.tramo,
+      turnId: datos.turnId,
+      idioma: datos.idioma,
+      voz: datos.voz,
+      finalLlego: datos.finalLlego,
+      medidaMotor: datos.medidaMotor,
+      ...(datos.muestrasIniciales ? { muestrasIniciales: datos.muestrasIniciales } : {}),
+    })
+  }
+
+  /** Datos de apertura de un pendiente (dueño único del literal). */
+  function datosPendiente(
+    p: {
+      tramoId: string
+      texto: string
+      idioma: Parameters<typeof abrirDesde>[0]['idioma']
+      voz: Parameters<typeof abrirDesde>[0]['voz']
+      final: boolean
+      medida?: Parameters<typeof abrirDesde>[0]['medidaMotor']
+    },
+    tramo: Parameters<typeof abrirDesde>[0]['tramo'],
+    muestrasIniciales: Parameters<typeof abrirDesde>[0]['muestrasIniciales'],
+    turnId: string,
+  ): Parameters<typeof abrirDesde>[0] {
+    return {
+      tramoId: p.tramoId,
+      texto: p.texto,
+      tramo,
+      turnId,
+      idioma: p.idioma,
+      voz: p.voz,
+      finalLlego: p.final,
+      medidaMotor: p.medida,
+      muestrasIniciales,
+    }
+  }
+
+  /** Cierra la locución abierta si la frontera lo pide. */
+  async function cerrarPorFrontera(
+    frontera: { cerrar: boolean },
+    causa: Parameters<typeof sesion.cerrarLocucion>[2],
+  ): Promise<void> {
+    if (!frontera.cerrar) return
+    const locucion = estado.abierta
+    if (locucion) await sesion.cerrarLocucion(locucion, 'system', causa, locucion.final)
+  }
 
   /** Idioma de la locución: la nube queda fija al arrancar; local autodetecta. */
   function idiomaDe(entrada: AsrIngestado): IdiomaLocucion {
@@ -73,20 +145,10 @@ export function crearFlujoTexto({
       // El pendiente nace DESPUÉS de su habla: se siembra con SU audio retenido
       // para que la identidad de voz no se mida sobre el silencio o la voz ajena.
       const muestrasIniciales = tramos.muestras(siguiente.tramoId, tramo)
-      sesion.abrirLocucion({
-        tramoId: siguiente.tramoId,
-        texto: siguiente.texto,
-        tramo,
-        // El turno VIGENTE manda: el pendiente esperó al commit de la locución
-        // anterior y el hook ya avanzó el turno. El de llegada solo respalda una
-        // sesión sin turno propio (tests del módulo puro).
-        turnId: estado.turnoActual || siguiente.turnId,
-        idioma: siguiente.idioma,
-        voz: siguiente.voz,
-        finalLlego: siguiente.final,
-        medidaMotor: siguiente.medida,
-        ...(muestrasIniciales ? { muestrasIniciales } : {}),
-      })
+      // El turno VIGENTE manda: el pendiente esperó al commit de la locución
+      // anterior y el hook ya avanzó el turno. El de llegada solo respalda una
+      // sesión sin turno propio (tests del módulo puro).
+      abrirDesde(datosPendiente(siguiente, tramo, muestrasIniciales, estado.turnoActual || siguiente.turnId))
       // MANDATO DEL DUEÑO (2026-10-30): el final NO cierra por contenido. La
       // locución abierta cierra por silencio (5 s), cambio de voz, texto ajeno
       // o fin de sesión; aquí solo se abre y el bucle se detiene (una abierta).
@@ -111,17 +173,7 @@ export function crearFlujoTexto({
         await sesion.cerrarLocucion(previa, motivo, 'stop', previa.final)
       }
       const muestrasIniciales = tramos.muestras(siguiente.tramoId, tramo)
-      sesion.abrirLocucion({
-        tramoId: siguiente.tramoId,
-        texto: siguiente.texto,
-        tramo,
-        turnId: siguiente.turnId,
-        idioma: siguiente.idioma,
-        voz: siguiente.voz,
-        finalLlego: siguiente.final,
-        medidaMotor: siguiente.medida,
-        ...(muestrasIniciales ? { muestrasIniciales } : {}),
-      })
+      abrirDesde(datosPendiente(siguiente, tramo, muestrasIniciales, siguiente.turnId))
       const locucion = estado.abierta
       if (locucion) await sesion.cerrarLocucion(locucion, motivo, 'stop', locucion.final)
     }
@@ -194,11 +246,8 @@ export function crearFlujoTexto({
         textoAjeno: false,
         abierta: true,
       })
-      if (frontera.cerrar) {
-        const locucion = estado.abierta
-        if (locucion) await sesion.cerrarLocucion(locucion, 'system', 'silencio', locucion.final)
-        // Sin flush aquí: ver la nota de `flushPendientes` (turno vigente).
-      }
+      await cerrarPorFrontera(frontera, 'silencio')
+      // Sin flush aquí: ver la nota de `flushPendientes` (turno vigente).
       return
     }
 
@@ -212,13 +261,10 @@ export function crearFlujoTexto({
         textoAjeno: true,
         abierta: true,
       })
-      if (frontera.cerrar) {
-        const locucion = estado.abierta
-        if (locucion) await sesion.cerrarLocucion(locucion, 'system', 'frontera', locucion.final)
-        // Sin flush aquí: el pendiente NO puede nacer con el turno que acaba de
-        // commitear la fila anterior. Lo abre el siguiente evento, cuyo turno ya
-        // es el vigente (el hook lo avanza con ese commit).
-      }
+      await cerrarPorFrontera(frontera, 'frontera')
+      // Sin flush aquí: el pendiente NO puede nacer con el turno que acaba de
+      // commitear la fila anterior. Lo abre el siguiente evento, cuyo turno ya
+      // es el vigente (el hook lo avanza con ese commit).
       return
     }
 
@@ -230,7 +276,7 @@ export function crearFlujoTexto({
     // El final puede llegar después de sonar su tramo: se siembra su audio
     // retenido (si lo hay) para que la voz de la fila sea la de SU hablante.
     const muestrasIniciales = tramos.muestras(tramoId, tramo)
-    sesion.abrirLocucion({
+    abrirDesde({
       tramoId,
       texto,
       tramo,
@@ -239,7 +285,7 @@ export function crearFlujoTexto({
       voz,
       finalLlego: Boolean(entrada.final),
       medidaMotor: entrada.medida,
-      ...(muestrasIniciales ? { muestrasIniciales } : {}),
+      muestrasIniciales,
     })
     // MANDATO DEL DUEÑO (2026-10-30): el final MARCA la frase completa pero NO
     // cierra; la locución abierta espera la frontera (silencio, voz, ajeno, fin).

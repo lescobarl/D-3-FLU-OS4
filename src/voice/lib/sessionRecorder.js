@@ -29,6 +29,7 @@
  * recibe la sesión COMPLETA (audio con silencios), sin el tope de memoria.
  */
 import { FLU_CONFIG } from './fluConfig.js'
+import { isLiveRecord } from '../../core/db/recordCopy.ts'
 import { DEFAULT_SAMPLE_RATE } from './audioConstants.js'
 import { float32ToInt16, resampleLinear } from './pcmAudio.js'
 import { logCaughtError } from '../../lib/caughtError.ts'
@@ -470,7 +471,7 @@ export async function captureBaseSnapshot(reason = 'manual') {
     ])
     const rows = await fluDb.participants.toArray()
     const participants = rows
-      .filter((row) => !row.sync?.deleted)
+      .filter((row) => isLiveRecord(row))
       .map((row) => ({
         id: row.id,
         name: row.name,

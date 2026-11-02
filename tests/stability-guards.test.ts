@@ -142,8 +142,6 @@ describe('🧪 Guard de estabilidad — Bug C: el proxy no puede tumbar Vite', (
     it('todos los middleware handlers de IA están envueltos en try/catch exterior', () => {
         const routes = [
             '/api/gemini/contract',
-            '/api/gemini/summary',
-            '/api/gemini/participant-eval',
             '/api/gemini/vision',
             '/api/gemini/text',
             '/api/workspace-image',

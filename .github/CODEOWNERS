@@ -11,8 +11,16 @@
 /scripts/duplicados-allowlist.json @lescobarl
 /scripts/guard-literales.mjs @lescobarl
 /scripts/literales-allowlist.json @lescobarl
-/scripts/guard-hardcodes.mjs @lescobarl
+/scripts/guard-hardcodes.mjs   @lescobarl
 /scripts/hardcode-dictamen.json @lescobarl
+/scripts/rutas-dobles.mjs     @lescobarl
+/scripts/rutas-dobles-baseline.json @lescobarl
+/scripts/guard-duplicados25.mjs @lescobarl
+/scripts/duplicados25-baseline.json @lescobarl
+/scripts/persist-row-baseline.json @lescobarl
+/scripts/participant-remove-baseline.json @lescobarl
+/scripts/voice-profile-owner-baseline.json @lescobarl
+/scripts/baja-rutas-baseline.json @lescobarl
 /scripts/audit-detectors.mjs @lescobarl
 /tests/searchOverridesStorage.test.ts @lescobarl
 

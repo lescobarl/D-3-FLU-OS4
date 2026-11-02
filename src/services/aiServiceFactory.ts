@@ -17,61 +17,19 @@
 import { geminiService } from './gemini';
 import { deepseekService } from './deepseek';
 import type { IAIService } from '../core/ai/IAIService';
-import { STORAGE_KEYS } from '../core/config/appConfig';
 import { logCaughtError } from '../lib/caughtError';
+import { AI_PROVIDER_ROUTES, type AIProvider } from '../core/config/sharedConfig';
 import {
-    AI_PROVIDER_ROUTES,
-    DEFAULT_AI_PROVIDER,
-    isAIProvider,
-    type AIProvider,
-} from '../core/config/sharedConfig';
-import { localGet, localSetSafe } from '../core/storage/localStore';
+    getPreferredAIProvider,
+    setPreferredAIProvider,
+} from '../core/ai/providerPreference';
 
 // Re-export del tipo canónico (fuente única: sharedConfig.ts) para no romper
 // a los importadores históricos de aiServiceFactory.
 export type { AIProvider };
 
-// Storage key for AI provider preference (fuente única: STORAGE_KEYS)
-const AI_PROVIDER_KEY = STORAGE_KEYS.AI_PROVIDER;
-
-// Available AI providers — identidad, default y rutas viven en
-// sharedConfig.ts (AI_PROVIDERS / AI_PROVIDER_ROUTES). No se repiten aquí.
-
-/**
- * Get the preferred AI provider from configuration.
- * Priority:
- * 1. localStorage preference
- * 2. Environment variable (VITE_PREFERRED_AI_PROVIDER)
- * 3. Default to 'openrouter' (Gemini 2.5 Flash Lite via OpenRouter)
- */
-export function getPreferredAIProvider(): AIProvider {
-    try {
-        // Check localStorage
-        const stored = localGet(AI_PROVIDER_KEY);
-        if (isAIProvider(stored)) {
-            return stored;
-        }
-    } catch (e) {
-        logCaughtError('[catch] src/services/aiServiceFactory.ts', e);
-        // ignore
-    }
-
-    // Check environment variable
-    const envProvider = import.meta.env.VITE_PREFERRED_AI_PROVIDER;
-    if (isAIProvider(envProvider)) {
-        return envProvider;
-    }
-
-    // Default desde la fuente única (sharedConfig.DEFAULT_AI_PROVIDER).
-    return DEFAULT_AI_PROVIDER;
-}
-
-/**
- * Set the preferred AI provider.
- */
-export function setPreferredAIProvider(provider: AIProvider): void {
-    localSetSafe(AI_PROVIDER_KEY, provider, '[catch] src/services/aiServiceFactory.ts');
-}
+// Re-export del dueño único de la preferencia del proveedor.
+export { getPreferredAIProvider, setPreferredAIProvider };
 
 /**
  * Get the appropriate AI service instance based on configuration.

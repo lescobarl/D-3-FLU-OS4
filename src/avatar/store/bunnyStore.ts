@@ -41,6 +41,42 @@ const makeLog = (
     detail,
 });
 
+/**
+ * Añade una entrada al log si los logs están activos.
+ * Dueño único del append que repetían todas las acciones del store.
+ * @param state Estado con logs y su interruptor.
+ * @param type Categoría del log.
+ * @param action Acción registrada.
+ * @param detail Detalle legible.
+ * @returns Lista de logs resultante.
+ */
+const withLog = (
+    state: Pick<BunnyControlState, 'logs' | 'logsEnabled'>,
+    type: BunnyLogEntry['type'],
+    action: string,
+    detail: string,
+): BunnyLogEntry[] => (
+    state.logsEnabled ? [...state.logs, makeLog(type, action, detail)] : state.logs
+);
+
+/**
+ * Entradas de log tras cambiar la visibilidad de un componente.
+ * Dueño único del append que compartían toggle y visibilidad fija.
+ * @param state Estado con logs y su interruptor.
+ * @param component Componente afectado.
+ * @param visible Visibilidad resultante.
+ * @returns Lista de logs resultante.
+ */
+const withComponentLog = (
+    state: Pick<BunnyControlState, 'logs' | 'logsEnabled'>,
+    component: BunnyComponent,
+    visible: boolean,
+): BunnyLogEntry[] => (
+    withLog(state, 'component',
+                visible ? 'SHOW' : 'HIDE',
+                `${component} → ${visible ? 'visible' : 'oculto'}`)
+);
+
 // -----------------------------------------------------------
 // Estado inicial
 // -----------------------------------------------------------
@@ -130,6 +166,16 @@ interface BunnyStoreActions {
 
 export type BunnyStore = BunnyControlState & BunnyStoreActions;
 
+/** Cambio de visibilidad con su log (dueño único del par components/logs). */
+const withComponentVisibility = (
+    state: Pick<BunnyControlState, 'components' | 'logs' | 'logsEnabled'>,
+    component: BunnyComponent,
+    visible: boolean,
+): Pick<BunnyControlState, 'components' | 'logs'> => ({
+    components: { ...state.components, [component]: visible },
+    logs: withComponentLog(state, component, visible),
+});
+
 export const useBunnyStore = create<BunnyStore>((set, _get) => ({
     // --- Estado ---
     ...initialState,
@@ -139,78 +185,35 @@ export const useBunnyStore = create<BunnyStore>((set, _get) => ({
     toggleComponent: (component: BunnyComponent) => {
         set((state) => {
             const visible = !state.components[component];
-            const newComponents = { ...state.components, [component]: visible };
-
-            // Log si está habilitado
-            const logs = state.logsEnabled
-                ? [
-                    ...state.logs,
-                    makeLog(
-                        'component',
-                        visible ? 'SHOW' : 'HIDE',
-                        `${component} → ${visible ? 'visible' : 'oculto'}`,
-                    ),
-                ]
-                : state.logs;
-
-            return { components: newComponents, logs };
+            return withComponentVisibility(state, component, visible);
         });
     },
 
     setComponentVisibility: (component: BunnyComponent, visible: boolean) => {
-        set((state) => {
-            const newComponents = { ...state.components, [component]: visible };
-            const logs = state.logsEnabled
-                ? [
-                    ...state.logs,
-                    makeLog(
-                        'component',
-                        visible ? 'SHOW' : 'HIDE',
-                        `${component} → ${visible ? 'visible' : 'oculto'}`,
-                    ),
-                ]
-                : state.logs;
-            return { components: newComponents, logs };
-        });
+        set((state) => withComponentVisibility(state, component, visible));
     },
 
     setComponentColor: (component: BunnyComponent, color: string) => {
         set((state) => {
             const newComponentColors = { ...state.componentColors, [component]: color };
-            const logs = state.logsEnabled
-                ? [
-                    ...state.logs,
-                    makeLog(
-                        'component',
+            const logs = withLog(state, 'component',
                         'COLOR',
-                        `${component} → ${color}`,
-                    ),
-                ]
-                : state.logs;
+                        `${component} → ${color}`);
             return { componentColors: newComponentColors, logs };
         });
     },
     resetComponentColors: () => {
         set((state) => ({
             componentColors: initialComponentColors(),
-            logs: state.logsEnabled
-                ? [...state.logs, makeLog('component', 'RESET_COLORS', 'Todos los colores restablecidos')]
-                : state.logs,
+            logs: withLog(state, 'component', 'RESET_COLORS', 'Todos los colores restablecidos'),
         }));
     },
 
     playAnimation: (animation: BunnyAnimation) => {
         set((state) => {
-            const logs = state.logsEnabled
-                ? [
-                    ...state.logs,
-                    makeLog(
-                        'animation',
+            const logs = withLog(state, 'animation',
                         'PLAY',
-                        `Reproduciendo: ${animation}`,
-                    ),
-                ]
-                : state.logs;
+                        `Reproduciendo: ${animation}`);
             // La animación única es autoritativa: se limpia cualquier blend/expresión
             // residual para que la ruta SINGLE del efecto de reproducción tenga prioridad
             // (evita que un blendQueue del sistema de expresiones silencie la animación).
@@ -226,36 +229,21 @@ export const useBunnyStore = create<BunnyStore>((set, _get) => ({
 
     stopAnimation: () => {
         set((state) => {
-            const logs = state.logsEnabled
-                ? [
-                    ...state.logs,
-                    makeLog('animation', 'STOP', 'Animación detenida'),
-                ]
-                : state.logs;
+            const logs = withLog(state, 'animation', 'STOP', 'Animación detenida');
             return { currentAnimation: null, isPlaying: false, logs };
         });
     },
 
     setSignal: (signal: AvatarSignal) => {
         set((state) => {
-            const logs = state.logsEnabled
-                ? [
-                    ...state.logs,
-                    makeLog('signal', 'SET', `Señal: ${signal}`),
-                ]
-                : state.logs;
+            const logs = withLog(state, 'signal', 'SET', `Señal: ${signal}`);
             return { currentSignal: signal, logs };
         });
     },
 
     setDecoration: (decoration: string | null) => {
         set((state) => {
-            const logs = state.logsEnabled
-                ? [
-                    ...state.logs,
-                    makeLog('decoration', 'SET', `Decoración: ${decoration ?? 'ninguna'}`),
-                ]
-                : state.logs;
+            const logs = withLog(state, 'decoration', 'SET', `Decoración: ${decoration ?? 'ninguna'}`);
             return { activeDecoration: decoration, logs };
         });
     },
@@ -273,17 +261,19 @@ export const useBunnyStore = create<BunnyStore>((set, _get) => ({
     },
 
     toggleLogs: () => {
-        set((state) => ({
-            logsEnabled: !state.logsEnabled,
-            logs: [
-                ...state.logs,
-                makeLog(
+        set((state) => {
+            const enabled = !state.logsEnabled;
+            return {
+                logsEnabled: enabled,
+                // El toggle SIEMPRE asienta el cambio, incluso al apagar.
+                logs: withLog(
+                    { logs: state.logs, logsEnabled: true },
                     'system',
                     'LOGS_TOGGLE',
-                    `Logs ${!state.logsEnabled ? 'activados' : 'desactivados'}`,
+                    `Logs ${enabled ? 'activados' : 'desactivados'}`,
                 ),
-            ],
-        }));
+            };
+        });
     },
 
     clearLogs: () => {
@@ -311,12 +301,7 @@ export const useBunnyStore = create<BunnyStore>((set, _get) => ({
             if (state.currentExpression === expression) {
                 return {}; // ← no-op: evita re-render y recarga de animación
             }
-            const logs = state.logsEnabled
-                ? [
-                    ...state.logs,
-                    makeLog('animation', 'EXPRESSION', `Expresión: ${expression}`),
-                ]
-                : state.logs;
+            const logs = withLog(state, 'animation', 'EXPRESSION', `Expresión: ${expression}`);
             // Look up expression in EXPRESSION_MAP to set currentAnimation
             // so BunnyViewer can pick it up via its subscription
             const anims = EXPRESSION_MAP[expression];
@@ -338,12 +323,7 @@ export const useBunnyStore = create<BunnyStore>((set, _get) => ({
 
     clearExpression: () => {
         set((state) => {
-            const logs = state.logsEnabled
-                ? [
-                    ...state.logs,
-                    makeLog('animation', 'CLEAR_EXPRESSION', 'Expresión limpiada'),
-                ]
-                : state.logs;
+            const logs = withLog(state, 'animation', 'CLEAR_EXPRESSION', 'Expresión limpiada');
             return { currentExpression: null, logs };
         });
     },
@@ -358,12 +338,7 @@ export const useBunnyStore = create<BunnyStore>((set, _get) => ({
             if (currentQueueStr === newQueueStr && state.isPlaying) {
                 return {}; // ← no-op: misma cola de animaciones, no recargar
             }
-            const logs = state.logsEnabled
-                ? [
-                    ...state.logs,
-                    makeLog('animation', 'BLEND', `Mezcla: [${anims.join(', ')}]`),
-                ]
-                : state.logs;
+            const logs = withLog(state, 'animation', 'BLEND', `Mezcla: [${anims.join(', ')}]`);
             const animsStr = anims.join(', ');
             relayLog('LOG', 'bunnyStore', `blendAnimation([${animsStr}]) → currentAnimation=${anims.length > 0 ? anims[0] : state.currentAnimation}`);
             return {
@@ -377,12 +352,7 @@ export const useBunnyStore = create<BunnyStore>((set, _get) => ({
 
     setAnimationSpeed: (speed: number) => {
         set((state) => {
-            const logs = state.logsEnabled
-                ? [
-                    ...state.logs,
-                    makeLog('animation', 'SPEED', `Velocidad: ${speed}`),
-                ]
-                : state.logs;
+            const logs = withLog(state, 'animation', 'SPEED', `Velocidad: ${speed}`);
             return { ...state, animationSpeed: speed, logs };
         });
     },

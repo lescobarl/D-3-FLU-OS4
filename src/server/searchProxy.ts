@@ -12,7 +12,7 @@ import { normalizeLang } from '../core/config/localeConfig.ts'
 //  /api/search/video  (GET) — cuadrícula de vídeo (F4)
 // ============================================================
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { sendJson as sendJsonShared, type MiddlewareHost } from './httpJson.ts';
+import { createSendJson, type MiddlewareHost } from './httpJson.ts';
 import {
   buildProviderRequest,
   capResults,
@@ -26,12 +26,7 @@ import {
   type SearchResultType,
 } from '../core/search/searchSession.ts';
 import type { ResolvedLanguage } from '../core/search/searchLanguage.ts';
-import { acceptLanguageHeader } from '../core/search/searchLanguage.ts';
-import { REQUEST_TIMEOUT_DEFAULTS } from '../core/config/sharedConfig.ts';
-import { logCaughtError } from '../lib/caughtError.ts';
-import { parseAllowlist } from './allowlist.ts';
-import { proxyFetchError, type ProxyFetchError } from './proxyFetchError.ts';
-import { parseRequestUrl } from './requestUrl.ts';
+import { acceptLanguageHeader, REQUEST_TIMEOUT_DEFAULTS, logCaughtError, parseAllowlist, proxyFetchError, parseRequestUrl, type ProxyFetchError } from './proxyDeps.ts';
 
 
 const defaultProxyMs = REQUEST_TIMEOUT_DEFAULTS.SEARCH_PROXY_MS;
@@ -39,8 +34,7 @@ const DEFAULT_MAX_RESULTS = 8;
 const USER_AGENT = 'FLU-OS4-Curaduria/1.0 (modo lectura curada)';
 
 /** Envía JSON preservando el prefijo de log de este proxy (dueño único en httpJson). */
-const sendJson = (res: ServerResponse, status: number, data: unknown) =>
-  sendJsonShared(res, status, data, '[searchProxy] sendJson failed:');
+const sendJson = createSendJson('[searchProxy] sendJson failed:');
 
 
 /**

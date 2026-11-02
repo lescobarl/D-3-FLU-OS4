@@ -8,21 +8,15 @@ import { normalizeLang } from '../core/config/localeConfig.ts'
 // Registrado como /api/browser/fetch (GET)
 // ============================================================
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { sendJson as sendJsonShared, type MiddlewareHost } from './httpJson.ts';
+import { createSendJson, type MiddlewareHost } from './httpJson.ts';
 import { buildBrowserUrl } from '../core/browser/browserSession.ts';
-import { acceptLanguageHeader } from '../core/search/searchLanguage.ts';
-import { REQUEST_TIMEOUT_DEFAULTS } from '../core/config/sharedConfig.ts';
-import { logCaughtError } from '../lib/caughtError.ts';
-import { parseAllowlist } from './allowlist.ts';
-import { proxyFetchError, type ProxyFetchError } from './proxyFetchError.ts';
-import { parseRequestUrl } from './requestUrl.ts';
+import { acceptLanguageHeader, REQUEST_TIMEOUT_DEFAULTS, logCaughtError, parseAllowlist, proxyFetchError, parseRequestUrl, type ProxyFetchError } from './proxyDeps.ts';
 
 
 const defaultProxyMs = REQUEST_TIMEOUT_DEFAULTS.BROWSER_PROXY_MS;
 
 /** Envía JSON preservando el prefijo de log de este proxy (dueño único en httpJson). */
-const sendJson = (res: ServerResponse, status: number, data: unknown) =>
-  sendJsonShared(res, status, data, '[browserProxy] sendJson failed:');
+const sendJson = createSendJson('[browserProxy] sendJson failed:');
 
 
 interface FetchOk {

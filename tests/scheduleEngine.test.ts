@@ -12,9 +12,9 @@ import {
   formatTimeOfDay,
   isDue,
   nextOccurrence,
-  parseTimeOfDayToMs,
   timerRemainingMs,
 } from '../src/core/temporal/scheduleEngine';
+import { parseTimeOfDayToMs } from '../src/lib/timeOfDay';
 import {
   dailyRecurrence,
   intervalRecurrence,

@@ -1,4 +1,6 @@
+import { SettingsPanelShell } from './SettingsPanelShell';
 import { normalizeLang } from '../core/config/localeConfig'
+import { languageLabel } from '../lib/languageLabel'
 // ============================================================
 // SearchControlCenter — Fase 5: Centro de Control del Buscador
 // ------------------------------------------------------------
@@ -91,6 +93,35 @@ interface PreviewState {
 }
 
 const PREVIEW_IDLE: PreviewState = { state: 'idle', results: [], ai: '' };
+
+/** Campo numérico de proveedor (dueño único del input repetido). */
+function ProviderNumberField({
+  label,
+  value,
+  placeholder,
+  testId,
+  onChange,
+}: {
+  label: string
+  value: string
+  placeholder: string
+  testId: string
+  onChange: (value: string) => void
+}) {
+  return (
+    <label className="flu-browser-profile__field">
+      <span className="flu-settings-image-config__hint">{label}</span>
+      <input
+        type="number"
+        min={1}
+        value={value}
+        placeholder={placeholder}
+        data-testid={testId}
+        onChange={(e) => onChange(e.target.value)}
+      />
+    </label>
+  )
+}
 
 export function SearchControlCenter({
   overrides,
@@ -287,14 +318,10 @@ export function SearchControlCenter({
     return label(key, type);
   };
 
-  const languageLabel = (lang: string): string => browserCatalog[`lang_${lang}`] || lang;
+  const languageLabelFor = (lang: string): string => languageLabel(browserCatalog, lang);
 
   return (
-    <details className="flu-settings-image-config">
-      <summary className="flu-settings-image-config__summary">
-        {label('searchControlTitle', 'Buscador y catálogo')}
-      </summary>
-      <div className="flu-settings-image-config__group">
+    <SettingsPanelShell title={label('searchControlTitle', 'Buscador y catálogo')}>
         <div className="flu-settings-section">
           <div className="flu-settings-section__body">
             <p className="flu-settings-image-config__hint">
@@ -346,7 +373,7 @@ export function SearchControlCenter({
               {Object.entries(defaultsByRole).map(([role, roleCfg]) => {
                 const lang = normalizeLang(roleCfg.language as string | undefined);
                 const level = String(roleCfg.readingLevel || 'simple');
-                const langText = languageLabel(lang);
+                const langText = languageLabelFor(lang);
                 const levelText = browserUi[`level_${level}`] || level;
                 return (
                   <div key={role} className="flu-reminders-item flu-reminders-item--with-profile">
@@ -433,36 +460,20 @@ export function SearchControlCenter({
                                 />
                               </label>
                             )}
-                            <label className="flu-browser-profile__field">
-                              <span className="flu-settings-image-config__hint">
-                                {label('providerMaxResults', 'Máx. resultados')}
-                              </span>
-                              <input
-                                type="number"
-                                min={1}
-                                value={numText(ov.maxResults)}
-                                placeholder={numText(provider.maxResults)}
-                                data-testid={`search-provider-max-${type}-${id}`}
-                                onChange={(e) =>
-                                  setProviderField(type, id, 'maxResults', e.target.value)
-                                }
-                              />
-                            </label>
-                            <label className="flu-browser-profile__field">
-                              <span className="flu-settings-image-config__hint">
-                                {label('providerTimeout', 'Timeout (ms)')}
-                              </span>
-                              <input
-                                type="number"
-                                min={1}
-                                value={numText(ov.timeoutMs)}
-                                placeholder={numText(provider.timeoutMs)}
-                                data-testid={`search-provider-timeout-${type}-${id}`}
-                                onChange={(e) =>
-                                  setProviderField(type, id, 'timeoutMs', e.target.value)
-                                }
-                              />
-                            </label>
+                            <ProviderNumberField
+                              label={label('providerMaxResults', 'Máx. resultados')}
+                              value={numText(ov.maxResults)}
+                              placeholder={numText(provider.maxResults)}
+                              testId={`search-provider-max-${type}-${id}`}
+                              onChange={(value) => setProviderField(type, id, 'maxResults', value)}
+                            />
+                            <ProviderNumberField
+                              label={label('providerTimeout', 'Timeout (ms)')}
+                              value={numText(ov.timeoutMs)}
+                              placeholder={numText(provider.timeoutMs)}
+                              testId={`search-provider-timeout-${type}-${id}`}
+                              onChange={(value) => setProviderField(type, id, 'timeoutMs', value)}
+                            />
                           </div>
                         </div>
                       );
@@ -594,7 +605,6 @@ export function SearchControlCenter({
             )}
           </div>
         </div>
-      </div>
-    </details>
+      </SettingsPanelShell>
   );
 }

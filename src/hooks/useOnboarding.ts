@@ -31,7 +31,6 @@ import {
   DEFAULT_ONBOARDING_USER,
   type OnboardingService,
 } from '../core/onboarding/onboardingService';
-import { localRemove, localSet } from '../core/storage/localStore';
 
 import { normalizeLang } from '../core/config/localeConfig';
 export interface UseOnboardingOptions {
@@ -70,6 +69,8 @@ export interface UseOnboardingResult {
   completeWithName: (name: string) => void;
   skip: () => void;
   reset: () => void;
+  /** Limpia solo la sesión visible (la cascada de borrado ya limpió el per-user). */
+  resetSession: () => void;
   /** Siembra el estado actual en el onboarding de un participante. */
   persistForParticipant: (participantId: string, state?: OnboardingState) => Promise<void>;
 }
@@ -204,15 +205,8 @@ export function useOnboarding({
       setState(result.state);
       persistState(result.state);
       notifyCompleted(result.state);
-      // Persistir el nombre capturado en la clave de almacenamiento
-      // config-driven (config.nameKey → STORAGE_KEYS.USER_NAME).
-      // Solo en la ruta legacy: en la per-user el nombre vive en el
-      // registro Dexie de ese participante (captured), no en global.
-      if (!isPerUser && typeof window !== 'undefined' && config.nameKey) {
-        const nameKey = nameCaptureKey(config.steps);
-        const name = nameKey ? result.state.captured[nameKey] : undefined;
-        if (name) localSet(config.nameKey, name);
-      }
+      // El nombre canónico vive en onboardingStates (captured). No hay clave
+      // global `flu-user-name`: escribirla sin lector era una ruta muerta.
       if (result.action.type === 'requestNotifications') {
         handleAction(result);
       }
@@ -220,7 +214,7 @@ export function useOnboarding({
         speak(result.speech, lang).catch((e) => { logCaughtError('[catch] src/hooks/useOnboarding.ts', e); });
       }
     },
-    [state, config, lang, speak, persistState, handleAction, isPerUser, notifyCompleted],
+    [state, config, lang, speak, persistState, handleAction, notifyCompleted],
   );
 
   /**
@@ -245,13 +239,8 @@ export function useOnboarding({
       setState(next);
       persistState(next);
       notifyCompleted(next);
-      // Ruta legacy: persistir también el nombre capturado en la clave global
-      // (misma lógica que answer()).
-      if (!isPerUser && typeof window !== 'undefined' && config.nameKey) {
-        localSet(config.nameKey, trimmed);
-      }
     },
-    [state, config, persistState, isPerUser, notifyCompleted],
+    [state, config, persistState, notifyCompleted],
   );
 
   const skip = useCallback(() => {
@@ -266,17 +255,19 @@ export function useOnboarding({
     notifyCompleted(next);
   }, [state, persistState, notifyCompleted]);
 
-  const reset = useCallback(() => {
+  /** Limpia SOLO la sesión visible del onboarding (sin tocar el estado per-user). */
+  const resetSession = useCallback(() => {
     const next = createInitialState();
+    setState(next);
+    speak(initialSpeech(config.steps, lang, next.captured), lang).catch((e) => { logCaughtError('[catch] src/hooks/useOnboarding.ts', e); });
+  }, [config, lang, speak]);
+
+  const reset = useCallback(() => {
     if (isPerUser && participantId) {
       serviceRef.current?.reset(participantId).catch((e) => { logCaughtError('[catch] src/hooks/useOnboarding.ts', e); });
     }
-    if (typeof window !== 'undefined' && config.nameKey) {
-      localRemove(config.nameKey);
-    }
-    setState(next);
-    speak(initialSpeech(config.steps, lang, next.captured), lang).catch((e) => { logCaughtError('[catch] src/hooks/useOnboarding.ts', e); });
-  }, [config, lang, speak, isPerUser, participantId]);
+    resetSession();
+  }, [isPerUser, participantId, resetSession]);
 
   /** Siembra el onboarding de un participante con un estado dado (o el más
       reciente conocido). Se pasa el estado EXPLÍCITO al sembrar el onboarding
@@ -307,6 +298,7 @@ export function useOnboarding({
     completeWithName,
     skip,
     reset,
+    resetSession,
     persistForParticipant,
   };
 }

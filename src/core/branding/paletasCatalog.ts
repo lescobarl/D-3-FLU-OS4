@@ -15,17 +15,9 @@ import {
     setMergedPalettes,
     type PaletteDefinition,
 } from './seasonalPalettes';
-import { createCatalogDb, createCatalogMutations, createCatalogRegistry, type CatalogRecord } from '../catalogs/catalogRegistry';
+import { createCatalogDb, createCatalogMutations, createCatalogRegistry, catalogRecordFromRow as toCatalogRecord, type CatalogRecord } from '../catalogs/catalogRegistry';
 import { paletaSchema } from '../catalogs/catalogSchema';
 import { mergeCatalog } from '../catalogs/mergeCatalog';
-
-const toCatalogRecord = (row: PaletaCatalogRecord): CatalogRecord<PaletteDefinition> => ({
-    id: row.id,
-    data: row.data,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
-    sync: row.sync,
-});
 
 const toPaletaRecord = (record: CatalogRecord<PaletteDefinition>): PaletaCatalogRecord => ({
     id: record.id,

@@ -15,7 +15,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine.ts';
 import type { GameSession, GameTurnResult } from './types.ts';
-import { END_GAME_FRAMES, HELP_CORE_FRAMES, baseSession, beginGame, gameOverResult, hasAnyToken, isEngineCommand, normalizeForMatch, readNumberCfg, resetGameSession, resolveNumericAnswer, turnResult } from './gameUtils.ts';
+import { END_GAME_FRAMES, HELP_CORE_FRAMES, baseSession, beginGame, gameOverResult, hasAnyToken, engineCommandGuard, normalizeForMatch, readNumberCfg, resetGameSession, resolveNumericAnswer, turnResult } from './gameUtils.ts';
 
 const DEFAULT_RONDAS = 4;
 const MAX_RONDAS = 6;
@@ -109,9 +109,7 @@ export function createRespiracionEngine(_options?: { random?: RandomSource }): G
             return turnResult(`Concéntrate en tu respiración. ${stepPrompt(state.step)} Dime "listo" cuando termines.`, session.score, { emotion: 'encouraging' });
         },
 
-        isGameCommand(text = ''): boolean {
-            return isEngineCommand(text, { end: END_FRAMES, hint: HINT_FRAMES, skip: SKIP_FRAMES });
-        },
+        isGameCommand: engineCommandGuard({ end: END_FRAMES, hint: HINT_FRAMES, skip: SKIP_FRAMES }),
     };
 }
 export const RESPIRACION_COMMAND_FRAMES = Object.freeze({ HINT_FRAMES, SKIP_FRAMES, END_FRAMES })

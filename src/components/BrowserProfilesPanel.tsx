@@ -15,8 +15,10 @@
 //     (allowlist.join(', ')) para no pisar la escritura en curso del
 //     usuario con referencias de array.
 // ============================================================
+import { SettingsPanelShell } from './SettingsPanelShell';
 import { useEffect, useState } from 'react';
 import { FLU_CONFIG } from '../voice/api/config';
+import { findProfileByParticipant } from '../lib/profileLookup';
 import { logCaughtError } from '../lib/caughtError';
 import type { BrowserProfileRecord, ParticipantRecord } from '../core/db/fluDatabase';
 import type {
@@ -229,14 +231,10 @@ export function BrowserProfilesPanel({
   const ui = config.ui || {};
 
   const profileFor = (participantId: string): BrowserProfileRecord | undefined =>
-    profiles.find((profile) => profile.participantId === participantId);
+    findProfileByParticipant(profiles, participantId);
 
   return (
-    <details className="flu-settings-image-config">
-      <summary className="flu-settings-image-config__summary">
-        {ui.panelTitle || 'Navegador curado'}
-      </summary>
-      <div className="flu-settings-image-config__group">
+    <SettingsPanelShell title={ui.panelTitle || 'Navegador curado'}>
         <div className="flu-settings-section">
           <div className="flu-settings-section__body">
             <h4 className="flu-reminders__heading">
@@ -275,7 +273,6 @@ export function BrowserProfilesPanel({
             )}
           </div>
         </div>
-      </div>
-    </details>
+      </SettingsPanelShell>
   );
 }

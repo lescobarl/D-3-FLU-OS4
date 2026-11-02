@@ -184,6 +184,16 @@ export function useMinuteHandlers(deps: MinuteHandlersDeps): MinuteHandlers {
     // `save: true` persiste la minuta (cierre de día). Devuelve true
     // sólo si se guardó, para que el llamante marque el día con evidencia.
     // ============================================================
+    /** Genera el resumen de conversación con el payload único del motor. */
+    const generateSummary = useCallback(
+        (history: Parameters<typeof aiService.generateConversationSummary>[1]) =>
+            aiService.generateConversationSummary(
+                { apiKey, language, role: sessionRole, temperature: resolveConfiguredTemperature() },
+                history,
+            ),
+        [apiKey, language, sessionRole],
+    );
+
     const handleGenerateSummary = useCallback(async ({ announce = false, save = false }: { announce?: boolean; save?: boolean } = {}): Promise<boolean> => {
         const history = integrationStore.conversationHistory;
         if (history.length === 0 || isSummarizing) return false;
@@ -213,10 +223,7 @@ export function useMinuteHandlers(deps: MinuteHandlersDeps): MinuteHandlers {
         setIsSummarizing(true);
         let saved = false;
         try {
-            const result = await aiService.generateConversationSummary(
-                { apiKey, language, role: sessionRole, temperature: resolveConfiguredTemperature() },
-                history,
-            );
+            const result = await generateSummary(history);
 
             if (result) {
                 const draft = createMinuteDraftFromSummary(result, sessionRole);
@@ -280,7 +287,7 @@ export function useMinuteHandlers(deps: MinuteHandlersDeps): MinuteHandlers {
             }
         }
         return saved;
-    }, [apiKey, integrationStore, minuteKnowledge, language, sessionRole, voiceStatus, os2StartListening, os2StopListening, auditLog, isSummarizing, setMinuteDraft, setSelectedMinuteId, getCommandSpeech]);
+    }, [integrationStore, minuteKnowledge, language, sessionRole, voiceStatus, os2StartListening, os2StopListening, auditLog, isSummarizing, setMinuteDraft, setSelectedMinuteId, getCommandSpeech, generateSummary]);
 
     // ============================================================
     // handleSaveMinute
@@ -339,10 +346,7 @@ export function useMinuteHandlers(deps: MinuteHandlersDeps): MinuteHandlers {
         if (history.length === 0) return;
 
         try {
-            const result = await aiService.generateConversationSummary(
-                { apiKey, language, role: sessionRole, temperature: resolveConfiguredTemperature() },
-                history,
-            );
+            const result = await generateSummary(history);
             if (!result) return;
 
             const snapshot = buildMinuteSnapshot(result, 'Conversación', sessionRole);
@@ -371,7 +375,7 @@ export function useMinuteHandlers(deps: MinuteHandlersDeps): MinuteHandlers {
                 error: String(error),
             }, 'Conversation summary save failed').catch((e) => reportAuditWriteFailure('conversation:summary-save-error', e));
         }
-    }, [integrationStore, minuteKnowledge, auditLog, language, apiKey, sessionRole, getCommandSpeech]);
+    }, [integrationStore, minuteKnowledge, auditLog, language, sessionRole, getCommandSpeech, generateSummary]);
 
     // ============================================================
     // handleSelectMinuteHistory

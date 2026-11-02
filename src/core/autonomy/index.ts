@@ -1,12 +1,10 @@
 // ============================================================
 // Autonomy Systems Index — Exportación Unificada
-// ============================================================
-// Exporta todos los sistemas de autonomía para facilitar
-// la integración con la aplicación principal.
+// ------------------------------------------------------------
+// Una sola re-exportación por módulo: sin listas de import repetidas.
 // ============================================================
 
-// Health Monitor
-import {
+export {
     HealthMonitor,
     getHealthMonitor,
     startGlobalHealthMonitoring,
@@ -19,8 +17,7 @@ import {
     DEFAULT_HEALTH_CONFIG,
 } from './healthMonitor';
 
-// Auto Recovery
-import {
+export {
     AutoRecoverySystem,
     getAutoRecoverySystem,
     startGlobalAutoRecovery,
@@ -31,8 +28,7 @@ import {
     DEFAULT_RECOVERY_CONFIG,
 } from './autoRecovery';
 
-// Decision Engine
-import {
+export {
     DecisionEngine,
     getDecisionEngine,
     startGlobalDecisionEngine,
@@ -44,8 +40,7 @@ import {
     DEFAULT_DECISION_CONFIG,
 } from './decisionEngine';
 
-// Auto Optimization
-import {
+export {
     AutoOptimizationSystem,
     getAutoOptimizationSystem,
     startGlobalAutoOptimization,
@@ -57,8 +52,7 @@ import {
     DEFAULT_OPTIMIZATION_CONFIG,
 } from './autoOptimization';
 
-// Backup System
-import {
+export {
     BackupSystem,
     getBackupSystem,
     startGlobalBackupSystem,
@@ -71,69 +65,6 @@ import {
     DEFAULT_BACKUP_CONFIG,
 } from './backupSystem';
 
-// Re-export everything
-export {
-    HealthMonitor,
-    getHealthMonitor,
-    startGlobalHealthMonitoring,
-    stopGlobalHealthMonitoring,
-    getSystemHealth,
-    type SystemHealth,
-    type HealthStatus,
-    type ComponentHealth,
-    type HealthMonitorConfig,
-    DEFAULT_HEALTH_CONFIG,
-};
-
-export {
-    AutoRecoverySystem,
-    getAutoRecoverySystem,
-    startGlobalAutoRecovery,
-    type RecoveryResult,
-    type RecoveryAction,
-    type RecoveryRule,
-    type AutoRecoveryConfig,
-    DEFAULT_RECOVERY_CONFIG,
-};
-
-export {
-    DecisionEngine,
-    getDecisionEngine,
-    startGlobalDecisionEngine,
-    stopGlobalDecisionEngine,
-    getRecentAutonomousDecisions,
-    type AutonomousDecision,
-    type DecisionType,
-    type DecisionEngineConfig,
-    DEFAULT_DECISION_CONFIG,
-};
-
-export {
-    AutoOptimizationSystem,
-    getAutoOptimizationSystem,
-    startGlobalAutoOptimization,
-    stopGlobalAutoOptimization,
-    getCurrentParameterValues,
-    type OptimizableParameter,
-    type OptimizationResult,
-    type AutoOptimizationConfig,
-    DEFAULT_OPTIMIZATION_CONFIG,
-};
-
-export {
-    BackupSystem,
-    getBackupSystem,
-    startGlobalBackupSystem,
-    stopGlobalBackupSystem,
-    createEmergencyBackup,
-    restoreFromLatestBackup,
-    type BackupMetadata,
-    type RestoreResult,
-    type BackupSystemConfig,
-    DEFAULT_BACKUP_CONFIG,
-};
-
-// Integration Hook
 export {
     useAutonomyIntegration,
     type AutonomyState,
@@ -141,5 +72,4 @@ export {
     type AutonomyActions,
 } from './useAutonomyIntegration';
 
-// UI Components
 export { AutonomyStatusPanel } from './AutonomyStatusPanel';

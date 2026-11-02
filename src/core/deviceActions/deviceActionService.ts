@@ -18,6 +18,7 @@
 import type { ContactRecord } from '../db/fluDatabase';
 import { DEVICE_ACTIONS_CONFIG } from '../config/appConfig';
 import { logCaughtError } from '../../lib/caughtError';
+import { normalizeLookupText } from '../../lib/lookupText';
 
 // ------------------------------------------------------------
 // Tipos
@@ -126,15 +127,10 @@ export function matchContactName(
   contacts: ContactRecord[],
   rawName: string
 ): ContactRecord | undefined {
-  const norm = (value: string): string =>
-    String(value ?? '')
-      .toLowerCase()
-      .replace(/\s+/g, ' ')
-      .trim();
-  const target = norm(rawName);
+  const target = normalizeLookupText(rawName);
   if (!target) return undefined;
   return contacts.find((contact) => {
-    const name = norm(contact.name);
+    const name = normalizeLookupText(contact.name);
     return (
       name === target ||
       (name.includes(target) && target.length > 1) ||

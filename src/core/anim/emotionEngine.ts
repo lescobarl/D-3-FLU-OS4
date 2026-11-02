@@ -24,6 +24,7 @@ import {
     getTriggerExpressions,
     getMicroExpressions,
     pickBestExpressionForPersonality,
+    type ExpressionDef,
 } from './expressionRegistry.ts';
 
 // ── Types ──
@@ -74,43 +75,38 @@ const STATE_TO_AVATAR_STATE: Record<ConversationState, AvatarState> = {
  * @param options - Engine options (traits, reactivity, debug)
  * @returns ResolvedExpression with expression, anims, and avatarState
  */
-export function resolveStateExpression(
-    state: ConversationState,
-    options: EmotionEngineOptions = {}
-): ResolvedExpression {
-    const { traits = [], reactivity = 1.0, debug = false } = options;
-    const avatarState = STATE_TO_AVATAR_STATE[state];
+/**
+ * Expresión vacía para un estado del avatar (fallback común).
+ * @param avatarState Estado del avatar.
+ * @returns Expresión sin animación.
+ */
+function emptyResolved(avatarState: AvatarState): ResolvedExpression {
+    return { expression: null, anims: [], avatarState, intensity: 0.5 };
+}
 
-    // Get all expressions mapped to this state
-    const candidates = getStateExpressions(state);
-
-    if (candidates.length === 0) {
-        // Fallback: no expression defined for this state
-        if (debug) {
-        }
-        return {
-            expression: null,
-            anims: [],
-            avatarState,
-            intensity: 0.5,
-        };
-    }
-
-    // Pick the best expression based on personality traits
+/**
+ * Resuelve la mejor expresión de un conjunto de candidatos y escala su
+ * animación por reactividad. Dueño único del cierre que compartían estado,
+ * emoción y disparador.
+ * @param candidates Expresiones del registro.
+ * @param avatarState Estado del avatar resultante.
+ * @param options Rasgos y reactividad.
+ * @returns Expresión resuelta, o null si no hay candidatos.
+ */
+function resolveFromCandidates(
+    candidates: ExpressionDef[],
+    avatarState: AvatarState,
+    options: EmotionEngineOptions,
+): ResolvedExpression | null {
+    if (candidates.length === 0) return null;
+    const { traits = [], reactivity = 1.0 } = options;
     const best = pickBestExpressionForPersonality(candidates, traits);
-
-    if (!best) {
-        return {
-            expression: null,
-            anims: [],
-            avatarState,
-            intensity: 0.5,
-        };
-    }
-
-    // Apply reactivity scaling to animations
-    const scaledAnims = applyReactivityToAnims(best.anims, reactivity, best.intensity ?? 0.5);
-
+    if (!best) return null;
+    const scaledAnims = applyReactivityToAnims(
+        best.anims,
+        reactivity,
+        best.intensity ?? 0.5,
+    );
     return {
         expression: best.expression as AvatarExpression,
         anims: scaledAnims,
@@ -118,6 +114,17 @@ export function resolveStateExpression(
         micro: best.micro,
         intensity: best.intensity ?? 0.5,
     };
+}
+
+export function resolveStateExpression(
+    state: ConversationState,
+    options: EmotionEngineOptions = {}
+): ResolvedExpression {
+    const avatarState = STATE_TO_AVATAR_STATE[state];
+    return (
+        resolveFromCandidates(getStateExpressions(state), avatarState, options) ??
+        emptyResolved(avatarState)
+    );
 }
 
 /**
@@ -135,44 +142,10 @@ export function resolveEmotionExpression(
     emotion: EmotionalState,
     options: EmotionEngineOptions = {}
 ): ResolvedExpression {
-    const { traits = [], reactivity = 1.0, debug = false } = options;
-
-    // Get all expressions mapped to this emotion
-    const candidates = getEmotionExpressions(emotion);
-
-    if (candidates.length === 0) {
-        if (debug) {
-        }
-        return {
-            expression: null,
-            anims: [],
-            avatarState: 'IDLE',
-            intensity: 0.5,
-        };
-    }
-
-    // Pick the best expression based on personality traits
-    const best = pickBestExpressionForPersonality(candidates, traits);
-
-    if (!best) {
-        return {
-            expression: null,
-            anims: [],
-            avatarState: 'IDLE',
-            intensity: 0.5,
-        };
-    }
-
-    // Apply reactivity scaling to animations
-    const scaledAnims = applyReactivityToAnims(best.anims, reactivity, best.intensity ?? 0.5);
-
-    return {
-        expression: best.expression as AvatarExpression,
-        anims: scaledAnims,
-        avatarState: 'IDLE',
-        micro: best.micro,
-        intensity: best.intensity ?? 0.5,
-    };
+    return (
+        resolveFromCandidates(getEmotionExpressions(emotion), 'IDLE', options) ??
+        emptyResolved('IDLE')
+    );
 }
 
 /**
@@ -249,28 +222,7 @@ export function resolveTriggerExpression(
     trigger: 'granted' | 'ignored' | 'rejected' | 'error' | 'success' | 'thinking' | 'celebrate',
     options: EmotionEngineOptions = {}
 ): ResolvedExpression | null {
-    const { traits = [], reactivity = 1.0, debug = false } = options;
-
-    const candidates = getTriggerExpressions(trigger);
-
-    if (candidates.length === 0) {
-        if (debug) {
-        }
-        return null;
-    }
-
-    const best = pickBestExpressionForPersonality(candidates, traits);
-
-    if (!best) return null;
-
-    const scaledAnims = applyReactivityToAnims(best.anims, reactivity, best.intensity ?? 0.5);
-
-    return {
-        expression: best.expression as AvatarExpression,
-        anims: scaledAnims,
-        avatarState: 'IDLE',
-        intensity: best.intensity ?? 0.5,
-    };
+    return resolveFromCandidates(getTriggerExpressions(trigger), 'IDLE', options);
 }
 
 /**
@@ -509,6 +461,16 @@ export function getDefaultExpression(): ResolvedExpression {
  * @param suggestedEmotion - Emotion suggested by Gemini (optional)
  * @returns ResolvedExpression suitable for applyResolved()
  */
+/** Animaciones de habla: sugerida o por defecto + MouthMove (dueño único). */
+function speakingAnims(
+    suggestedAnim: string | undefined,
+    defaultExpr: ResolvedExpression,
+): BunnyAnimation[] {
+    return suggestedAnim && isValidAnimation(suggestedAnim)
+        ? [suggestedAnim as BunnyAnimation, 'MouthMove' as BunnyAnimation]
+        : [...defaultExpr.anims, 'MouthMove' as BunnyAnimation];
+}
+
 export function resolveSpeakingExpression(
     suggestedAnim?: string,
     suggestedEmotion?: string,
@@ -517,9 +479,7 @@ export function resolveSpeakingExpression(
 
     // If Gemini suggested a valid emotion, use it
     if (suggestedEmotion && isValidExpression(suggestedEmotion)) {
-        const anims: BunnyAnimation[] = suggestedAnim && isValidAnimation(suggestedAnim)
-            ? [suggestedAnim as BunnyAnimation, 'MouthMove' as BunnyAnimation]
-            : [...defaultExpr.anims, 'MouthMove' as BunnyAnimation];
+        const anims: BunnyAnimation[] = speakingAnims(suggestedAnim, defaultExpr);
 
         return {
             expression: suggestedEmotion as AvatarExpression,
@@ -530,9 +490,7 @@ export function resolveSpeakingExpression(
     }
 
     // Fallback: use default expression with MouthMove for speaking
-    const anims: BunnyAnimation[] = suggestedAnim && isValidAnimation(suggestedAnim)
-        ? [suggestedAnim as BunnyAnimation, 'MouthMove' as BunnyAnimation]
-        : [...defaultExpr.anims, 'MouthMove' as BunnyAnimation];
+    const anims: BunnyAnimation[] = speakingAnims(suggestedAnim, defaultExpr);
 
     return {
         expression: defaultExpr.expression,

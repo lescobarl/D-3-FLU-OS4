@@ -10,6 +10,7 @@
 //   - FluParticipantSettingsPanel
 // ============================================================
 
+import { SettingsPanelShell } from './SettingsPanelShell';
 import React from 'react';
 import type { FluProfile } from '../types/bridge';
 import { FLU_PROFILES, AVAILABLE_TRAITS, AVAILABLE_TONES, FALAI_CONFIG } from '../core/config/appConfig';
@@ -219,11 +220,8 @@ export function FluSettingsPanel({
     return (
         <section className="flu-settings-panel">
             {/* ---- 🔌 Servicios Externos (APIs/llaves) — sección principal ---- */}
-            <details className="flu-settings-image-config" open>
-                <summary className="flu-settings-image-config__summary">
-                    <span className="flu-settings-image-config__icon">🔌</span>
-                    <span>Configuración de Servicios Externos</span>
-                </summary>
+            <SettingsPanelShell title={<><span className="flu-settings-image-config__icon">🔌</span>
+                    <span>Configuración de Servicios Externos</span></>} open bare>
                 <div className="flu-settings-image-config__body">
                     <div className="flu-settings-image-config__group">
                         {/* Proveedor de IA */}
@@ -585,19 +583,14 @@ export function FluSettingsPanel({
                         )}
                     </div>
                 </div>
-            </details>
+            </SettingsPanelShell>
 
             {/* ---- 🤖 Gobernado por IA (personalidad + branding estacional) ---- */}
-            <details className="flu-settings-image-config">
-                <summary className="flu-settings-image-config__summary">
-                    <span className="flu-settings-image-config__icon">🤖</span>
-                    <span>Gobernado por IA</span>
-                </summary>
+            <SettingsPanelShell title={<><span className="flu-settings-image-config__icon">🤖</span>
+                    <span>Gobernado por IA</span></>} bare>
                 <div className="flu-settings-image-config__body">
                     {/* ---- 🎭 Configurador de FLU ---- */}
-            <details className="flu-settings-image-config">
-                <summary className="flu-settings-image-config__summary flu-settings-image-config__summary--with-profile">
-                    <span className="flu-settings-image-config__icon">🎭</span>
+            <SettingsPanelShell title={<><span className="flu-settings-image-config__icon">🎭</span>
                     <span>Configurador de FLU</span>
                     <span className="flu-settings-summary-spacer" />
                     <span className="flu-settings-profile-inline">👤</span>
@@ -612,8 +605,7 @@ export function FluSettingsPanel({
                                 {p.id === 'profesor' ? 'Asistente del Maestro' : p.label}
                             </option>
                         ))}
-                    </select>
-                </summary>
+                    </select></>} summaryClassName="flu-settings-image-config__summary flu-settings-image-config__summary--with-profile" bare>
                 <div className="flu-settings-image-config__body flu-settings-image-config__body--flu-config">
 
                     <div className="flu-settings-section">
@@ -932,13 +924,10 @@ export function FluSettingsPanel({
                         </div>
                     </div>
                 </div>
-            </details>
+            </SettingsPanelShell>
 
             {/* ---- Branding Inteligente por Temporalidad ---- */}
-            <details className="flu-settings-image-config">
-                <summary className="flu-settings-image-config__summary">
-                    🎨 Branding por Temporalidad
-                </summary>
+            <SettingsPanelShell title="🎨 Branding por Temporalidad" bare>
                 <div className="flu-settings-image-config__group">
                     {/* Modo */}
                     <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked">
@@ -1018,16 +1007,13 @@ export function FluSettingsPanel({
                         </div>
                     )}
                 </div>
-            </details>
+            </SettingsPanelShell>
                 </div>
-            </details>
+            </SettingsPanelShell>
 
             {/* ---- 🎤 Palabras de Activación ---- */}
-            <details className="flu-settings-image-config">
-                <summary className="flu-settings-image-config__summary">
-                    <span className="flu-settings-image-config__icon">🎤</span>
-                    <span>Palabras de Activación</span>
-                </summary>
+            <SettingsPanelShell title={<><span className="flu-settings-image-config__icon">🎤</span>
+                    <span>Palabras de Activación</span></>} bare>
                 <div className="flu-settings-image-config__body">
                     <div className="flu-settings-image-config__group">
                         {/* Palabras de activación */}
@@ -1047,14 +1033,11 @@ export function FluSettingsPanel({
 
                     </div>
                 </div>
-            </details>
+            </SettingsPanelShell>
 
             {/* ---- 📊 Gestión de Logs y Auditoría ---- */}
-            <details className="flu-settings-image-config">
-                <summary className="flu-settings-image-config__summary">
-                    <span className="flu-settings-image-config__icon">📊</span>
-                    <span>Gestión de Logs y Auditoría</span>
-                </summary>
+            <SettingsPanelShell title={<><span className="flu-settings-image-config__icon">📊</span>
+                    <span>Gestión de Logs y Auditoría</span></>} bare>
                 <div className="flu-settings-image-config__body">
                     <div className="flu-settings-image-config__group">
                         {/* Acciones de auditoría */}
@@ -1117,14 +1100,11 @@ export function FluSettingsPanel({
                         </div>
                     </div>
                 </div>
-            </details>
+            </SettingsPanelShell>
 
             {/* ---- 🎨 Personalización del Avatar ---- */}
-            <details className="flu-settings-image-config">
-                <summary className="flu-settings-image-config__summary">
-                    <span className="flu-settings-image-config__icon">🎨</span>
-                    <span>Personalización del Avatar</span>
-                </summary>
+            <SettingsPanelShell title={<><span className="flu-settings-image-config__icon">🎨</span>
+                    <span>Personalización del Avatar</span></>} bare>
                 <div className="flu-settings-image-config__body">
                     <div className="flu-settings-image-config__group">
                         {/* Selectores de color por componente */}
@@ -1191,7 +1171,7 @@ export function FluSettingsPanel({
                         </div>
                     </div>
                 </div>
-            </details>
+            </SettingsPanelShell>
 
             <FluParticipantSettingsPanel
                 language={language}

@@ -139,7 +139,9 @@ describe('Gemini Service — IAIService Implementation [Obligación #1]', () => 
         // Should use appConfig for configuration (2-API architecture:
         // texto vía resolveTextApiKey + proxy, imágenes vía Pollinations)
         expect(src).toContain("from '../core/config/appConfig'");
-        expect(src).toContain('resolveTextApiKey');
+        // La clave de texto se resuelve en el dueño único `core/ai/textKey`;
+        // el adapter delega en él (no la relee por su cuenta).
+        expect(src.includes('resolveTextRequestKey') || src.includes('resolveTextApiKey')).toBe(true);
         expect(src).toContain('buildPollinationsUrl');
     });
 

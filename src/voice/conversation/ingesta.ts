@@ -21,7 +21,12 @@ import { logCaughtError } from '../../lib/caughtError.ts'
 // Dueño único de «¿este texto continúa la locución o abre otra?»: el módulo no
 // reimplementa la comparación de palabras ni la revisión del ASR.
 import { continuaLaFrase } from '../core/locucion.js'
-import type { ConfiguracionConversacion, MotivoCierre } from './ports.ts'
+import type {
+  ConfiguracionConversacion,
+  IdiomaLocucion,
+  MotivoCierre,
+  TramoMuestreado,
+} from './ports.ts'
 import type {
   AsrIngestado,
   BloqueAudio,
@@ -30,6 +35,19 @@ import type {
   LocucionAbierta,
   TramoAudio,
 } from './tipos.ts'
+
+/** Aplica la identidad de voz a la locución abierta (dueño único del payload). */
+function conIdentidadVoz(locucion: LocucionAbierta, identidad: IdentidadDecidida): LocucionAbierta {
+  return {
+    ...locucion,
+    voz: fusionarVoz(locucion.voz, {
+      vozId: identidad.vozId,
+      hablante: identidad.hablante,
+      continuidad: identidad.continuidad,
+    }),
+    continuidadVoz: identidad.continuidad,
+  }
+}
 
 /** Superficie de ingesta que consume el motor. */
 export type Ingesta = Readonly<{
@@ -86,6 +104,24 @@ export function crearIngesta({
       estado.ultimoTramoId ||
       ''
     )
+  }
+
+  /**
+   * Abre una locución vacía sobre un tramo ya sonoro (caparazón de ruido).
+   * Es el ÚNICO ensamblado de apertura de este flujo; el dueño
+   * (`abrirLocucion` en el módulo de cierre) aplica los defaults.
+   * @param tramoId Id del tramo.
+   * @param tramo Ventana medida del tramo.
+   * @param turnId Turno vigente.
+   * @param idioma Idioma del tramo.
+   */
+  function abrirCaparazon(
+    tramoId: string,
+    tramo: Pick<TramoMuestreado, 'inicio' | 'fin' | 'sampleRate'>,
+    turnId: string,
+    idioma: IdiomaLocucion,
+  ): void {
+    sesion.abrirLocucion({ tramoId, texto: '', tramo, turnId, idioma, voz: {} })
   }
 
   /** Retiene el PCM del tramo para la voz de un pendiente que abre tarde. */
@@ -277,14 +313,12 @@ export function crearIngesta({
           await sesion.cerrarLocucion(estado.abierta, 'system', 'voz', false)
         }
         if (!estado.abierta) {
-          sesion.abrirLocucion({
+          abrirCaparazon(
             tramoId,
-            texto: '',
-            tramo: { inicio, fin, sampleRate },
-            turnId: estado.turnoActual,
-            idioma: estado.idiomaActual,
-            voz: {},
-          })
+            { inicio, fin, sampleRate },
+            estado.turnoActual,
+            estado.idiomaActual,
+          )
         }
         if (dependencias.asr && asrEmpujaAudio(estado.motorAsr)) {
           dependencias.asr.empujarAudio(bloque.muestras, sampleRate)
@@ -535,15 +569,7 @@ export function crearIngesta({
       String(abierta.texto || '').trim().split(/\s+/).filter(Boolean).length,
     )
     registrarMedidaVoz(estado, vector, identidad)
-    estado.abierta = {
-      ...abierta,
-      voz: fusionarVoz(abierta.voz, {
-        vozId: identidad.vozId,
-        hablante: identidad.hablante,
-        continuidad: identidad.continuidad,
-      }),
-      continuidadVoz: identidad.continuidad,
-    }
+    estado.abierta = conIdentidadVoz(abierta, identidad)
   }
 
   /**
@@ -645,14 +671,7 @@ export function crearIngesta({
     // La ventana medida ES el audio de este tramo: si un pendiente lo abre
     // después, su voz se mide sobre su propia evidencia.
     retenerTramo(tramoId, limite, finAlMedir, ventana, sampleRate)
-    sesion.abrirLocucion({
-      tramoId,
-      texto: '',
-      tramo: { inicio: limite, fin: finAlMedir, sampleRate },
-      turnId: turno,
-      idioma,
-      voz: {},
-    })
+    abrirCaparazon(tramoId, { inicio: limite, fin: finAlMedir, sampleRate }, turno, idioma)
     // 3. Identidad de la voz nueva con el MISMO vector (etiqueta perezosa, Caso 10).
     const embebedor = dependencias.embebedor
     const recien = estado.abierta
@@ -664,15 +683,7 @@ export function crearIngesta({
       String(recien.texto || '').trim().split(/\s+/).filter(Boolean).length,
     )
     registrarMedidaVoz(estado, vector, identidad)
-    estado.abierta = {
-      ...recien,
-      voz: fusionarVoz(recien.voz, {
-        vozId: identidad.vozId,
-        hablante: identidad.hablante,
-        continuidad: identidad.continuidad,
-      }),
-      continuidadVoz: identidad.continuidad,
-    }
+    estado.abierta = conIdentidadVoz(recien, identidad)
     // 4. La ventana medida ES el audio de la voz nueva (la anterior se descartó
     //    con su cierre); el contador del cambio arranca al fin medido.
     estado.muestrasAbierta = [ventana]

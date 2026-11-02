@@ -320,25 +320,19 @@ class RecoveryActionExecutor {
         
         const history = this.executionHistory.get(incident.id);
         if (history && Date.now() - history.lastExecution < delay) {
-            return {
-                success: false,
-                action: 'retry_with_backoff',
-                message: `Esperando delay de backoff: ${delay}ms`,
-                durationMs: Date.now() - startTime,
-            };
+            return this.finishRecovery(
+                incident,
+                'retry_with_backoff',
+                startTime,
+                false,
+                `Esperando delay de backoff: ${delay}ms`,
+            );
         }
         
         // Simular reintento (en implementación real, esto ejecutaría la operación fallida)
         await new Promise(resolve => setTimeout(resolve, SIMULATED_RETRY_MS));
         
-        this.recordExecution(incident.id, 'retry_with_backoff');
-        
-        return {
-            success: true,
-            action: 'retry_with_backoff',
-            message: `Reintento con backoff ejecutado (delay: ${delay}ms, intento: ${attemptCount + 1})`,
-            durationMs: Date.now() - startTime,
-        };
+        return this.finishRecovery(incident, 'retry_with_backoff', startTime, true, `Reintento con backoff ejecutado (delay: ${delay}ms, intento: ${attemptCount + 1})`);
     }
     
     async executeSwitchAIProvider(params: RecoveryActionParams, incident: RecoveryIncident): Promise<RecoveryResult> {
@@ -359,23 +353,10 @@ class RecoveryActionExecutor {
             
             // Forzar recarga del servicio
             
-            this.recordExecution(incident.id, 'switch_ai_provider');
-            
-            return {
-                success: true,
-                action: 'switch_ai_provider',
-                message: `Proveedor de IA cambiado de ${currentProvider} a ${nextProvider}`,
-                newStatus: `using-${nextProvider}`,
-                durationMs: Date.now() - startTime,
-            };
+            return this.finishRecovery(incident, 'switch_ai_provider', startTime, true, `Proveedor de IA cambiado de ${currentProvider} a ${nextProvider}`, { newStatus: `using-${nextProvider}` });
         } catch (error) {
-        logCaughtError('[catch] src/core/autonomy/autoRecovery.ts', error);
-            return {
-                success: false,
-                action: 'switch_ai_provider',
-                message: `Error cambiando proveedor de IA: ${error instanceof Error ? error.message : 'Error desconocido'}`,
-                durationMs: Date.now() - startTime,
-            };
+            logCaughtError('[catch] src/core/autonomy/autoRecovery.ts', error);
+            return this.finishRecovery(incident, 'switch_ai_provider', startTime, false, `Error cambiando proveedor de IA: ${error instanceof Error ? error.message : 'Error desconocido'}`);
         }
     }
     
@@ -410,22 +391,10 @@ class RecoveryActionExecutor {
                 default:
             }
             
-            this.recordExecution(incident.id, 'restart_component');
-            
-            return {
-                success: true,
-                action: 'restart_component',
-                message: `Componente ${component} reiniciado usando método ${method}`,
-                durationMs: Date.now() - startTime,
-            };
+            return this.finishRecovery(incident, 'restart_component', startTime, true, `Componente ${component} reiniciado usando método ${method}`);
         } catch (error) {
-        logCaughtError('[catch] src/core/autonomy/autoRecovery.ts', error);
-            return {
-                success: false,
-                action: 'restart_component',
-                message: `Error reiniciando componente ${component}: ${error instanceof Error ? error.message : 'Error desconocido'}`,
-                durationMs: Date.now() - startTime,
-            };
+            logCaughtError('[catch] src/core/autonomy/autoRecovery.ts', error);
+            return this.finishRecovery(incident, 'restart_component', startTime, false, `Error reiniciando componente ${component}: ${error instanceof Error ? error.message : 'Error desconocido'}`);
         }
     }
     
@@ -446,23 +415,10 @@ class RecoveryActionExecutor {
                 detail: { mode, features },
             });
             
-            this.recordExecution(incident.id, 'enable_degraded_mode');
-            
-            return {
-                success: true,
-                action: 'enable_degraded_mode',
-                message: `Modo degradado activado: ${mode}. Características: ${features.join(', ')}`,
-                newStatus: `degraded-${mode}`,
-                durationMs: Date.now() - startTime,
-            };
+            return this.finishRecovery(incident, 'enable_degraded_mode', startTime, true, `Modo degradado activado: ${mode}. Características: ${features.join(', ')}`, { newStatus: `degraded-${mode}` });
         } catch (error) {
-        logCaughtError('[catch] src/core/autonomy/autoRecovery.ts', error);
-            return {
-                success: false,
-                action: 'enable_degraded_mode',
-                message: `Error activando modo degradado: ${error instanceof Error ? error.message : 'Error desconocido'}`,
-                durationMs: Date.now() - startTime,
-            };
+            logCaughtError('[catch] src/core/autonomy/autoRecovery.ts', error);
+            return this.finishRecovery(incident, 'enable_degraded_mode', startTime, false, `Error activando modo degradado: ${error instanceof Error ? error.message : 'Error desconocido'}`);
         }
     }
     
@@ -488,22 +444,10 @@ class RecoveryActionExecutor {
                 default:
             }
             
-            this.recordExecution(incident.id, 'restore_from_backup');
-            
-            return {
-                success: true,
-                action: 'restore_from_backup',
-                message: `Restauración desde ${backupSource} completada`,
-                durationMs: Date.now() - startTime,
-            };
+            return this.finishRecovery(incident, 'restore_from_backup', startTime, true, `Restauración desde ${backupSource} completada`);
         } catch (error) {
-        logCaughtError('[catch] src/core/autonomy/autoRecovery.ts', error);
-            return {
-                success: false,
-                action: 'restore_from_backup',
-                message: `Error restaurando desde backup: ${error instanceof Error ? error.message : 'Error desconocido'}`,
-                durationMs: Date.now() - startTime,
-            };
+            logCaughtError('[catch] src/core/autonomy/autoRecovery.ts', error);
+            return this.finishRecovery(incident, 'restore_from_backup', startTime, false, `Error restaurando desde backup: ${error instanceof Error ? error.message : 'Error desconocido'}`);
         }
     }
     
@@ -521,22 +465,10 @@ class RecoveryActionExecutor {
                 detail: { component: incident.component },
             });
 
-            this.recordExecution(incident.id, 'notify_user');
-            
-            return {
-                success: true,
-                action: 'notify_user',
-                message: `Usuario notificado: ${message}`,
-                durationMs: Date.now() - startTime,
-            };
+            return this.finishRecovery(incident, 'notify_user', startTime, true, `Usuario notificado: ${message}`);
         } catch (error) {
-        logCaughtError('[catch] src/core/autonomy/autoRecovery.ts', error);
-            return {
-                success: false,
-                action: 'notify_user',
-                message: `Error notificando al usuario: ${error instanceof Error ? error.message : 'Error desconocido'}`,
-                durationMs: Date.now() - startTime,
-            };
+            logCaughtError('[catch] src/core/autonomy/autoRecovery.ts', error);
+            return this.finishRecovery(incident, 'notify_user', startTime, false, `Error notificando al usuario: ${error instanceof Error ? error.message : 'Error desconocido'}`);
         }
     }
     
@@ -564,22 +496,10 @@ class RecoveryActionExecutor {
                 }
             });
             
-            this.recordExecution(incident.id, 'escalate_to_admin');
-            
-            return {
-                success: true,
-                action: 'escalate_to_admin',
-                message: `Incidente escalado a administrador a través de: ${channels.join(', ')}`,
-                durationMs: Date.now() - startTime,
-            };
+            return this.finishRecovery(incident, 'escalate_to_admin', startTime, true, `Incidente escalado a administrador a través de: ${channels.join(', ')}`);
         } catch (error) {
-        logCaughtError('[catch] src/core/autonomy/autoRecovery.ts', error);
-            return {
-                success: false,
-                action: 'escalate_to_admin',
-                message: `Error escalando a administrador: ${error instanceof Error ? error.message : 'Error desconocido'}`,
-                durationMs: Date.now() - startTime,
-            };
+            logCaughtError('[catch] src/core/autonomy/autoRecovery.ts', error);
+            return this.finishRecovery(incident, 'escalate_to_admin', startTime, false, `Error escalando a administrador: ${error instanceof Error ? error.message : 'Error desconocido'}`);
         }
     }
     
@@ -588,6 +508,36 @@ class RecoveryActionExecutor {
         return this.executionHistory.get(key)?.count || 0;
     }
     
+    /**
+     * Cierra una acción de recuperación: registra la ejecución en éxito y
+     * construye el resultado. Dueño único del cierre que repetían las siete
+     * acciones.
+     * @param incident Incidente activo.
+     * @param action Acción ejecutada.
+     * @param startTime Inicio de la acción.
+     * @param success ¿Terminó bien?
+     * @param message Mensaje del resultado.
+     * @param extra Campos adicionales del resultado.
+     * @returns Resultado de la recuperación.
+     */
+    private finishRecovery(
+        incident: RecoveryIncident,
+        action: RecoveryAction,
+        startTime: number,
+        success: boolean,
+        message: string,
+        extra: Partial<RecoveryResult> = {},
+    ): RecoveryResult {
+        if (success) this.recordExecution(incident.id, action);
+        return {
+            success,
+            action,
+            message,
+            durationMs: Date.now() - startTime,
+            ...extra,
+        };
+    }
+
     private recordExecution(incidentId: string, action: RecoveryAction): void {
         const key = `${incidentId}-${action}`;
         const current = this.executionHistory.get(key) || { count: 0, lastExecution: 0 };

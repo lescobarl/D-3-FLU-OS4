@@ -1,0 +1,1294 @@
+{
+  "_nota": "Linea base del barrido de clones a 25 tokens. Cada par declara su motivo y dueno. Un par NUEVO es ROJO; un par que deja de existir se recorta aqui. Solo baja.",
+  "minPairs": 143,
+  "minSources": 400,
+  "pairs": [
+    {
+      "a": "src/app/appDispatchHelpers.ts",
+      "b": "src/app/appDispatchHelpers.ts",
+      "key": "src/app/appDispatchHelpers.ts|src/app/appDispatchHelpers.ts",
+      "lines": 6,
+      "fragments": 1,
+      "reason": "interno: bloque repetido dentro del mismo modulo (medido)",
+      "owner": "src/app/appDispatchHelpers.ts"
+    },
+    {
+      "a": "src/app/appTypeGuards.ts",
+      "b": "src/avatar/store/bunnyStore.ts",
+      "key": "src/app/appTypeGuards.ts|src/avatar/store/bunnyStore.ts",
+      "lines": 8,
+      "fragments": 1,
+      "reason": "medido: patron de servicio/entidad distinta",
+      "owner": "src/app/appTypeGuards.ts"
+    },
+    {
+      "a": "src/avatar/components/AnimationPanel.tsx",
+      "b": "src/avatar/components/SignalPanel.tsx",
+      "key": "src/avatar/components/AnimationPanel.tsx|src/avatar/components/SignalPanel.tsx",
+      "lines": 6,
+      "fragments": 1,
+      "reason": "llamada al dueno compartido / forma de props",
+      "owner": "src/avatar/components/AnimationPanel.tsx"
+    },
+    {
+      "a": "src/avatar/components/ComponentPanel.tsx",
+      "b": "src/avatar/components/SignalPanel.tsx",
+      "key": "src/avatar/components/ComponentPanel.tsx|src/avatar/components/SignalPanel.tsx",
+      "lines": 6,
+      "fragments": 1,
+      "reason": "llamada al dueno compartido / forma de props",
+      "owner": "src/avatar/components/ComponentPanel.tsx"
+    },
+    {
+      "a": "src/avatar/components/ControlsPanel.tsx",
+      "b": "src/avatar/components/SignalPanel.tsx",
+      "key": "src/avatar/components/ControlsPanel.tsx|src/avatar/components/SignalPanel.tsx",
+      "lines": 6,
+      "fragments": 1,
+      "reason": "llamada al dueno compartido / forma de props",
+      "owner": "src/avatar/components/ControlsPanel.tsx"
+    },
+    {
+      "a": "src/avatar/decorations/DecorationsRenderer.tsx",
+      "b": "src/avatar/decorations/DecorationsRenderer.tsx",
+      "key": "src/avatar/decorations/DecorationsRenderer.tsx|src/avatar/decorations/DecorationsRenderer.tsx",
+      "lines": 6,
+      "fragments": 1,
+      "reason": "interno: bloque repetido dentro del mismo modulo (medido)",
+      "owner": "src/avatar/decorations/DecorationsRenderer.tsx"
+    },
+    {
+      "a": "src/components/AmbienteEditorForm.tsx",
+      "b": "src/components/PaletaEditorForm.tsx",
+      "key": "src/components/AmbienteEditorForm.tsx|src/components/PaletaEditorForm.tsx",
+      "lines": 18,
+      "fragments": 2,
+      "reason": "llamada al dueno compartido / forma de props",
+      "owner": "src/components/AmbienteEditorForm.tsx"
+    },
+    {
+      "a": "src/components/AmbientesPanel.tsx",
+      "b": "src/components/PaletasPanel.tsx",
+      "key": "src/components/AmbientesPanel.tsx|src/components/PaletasPanel.tsx",
+      "lines": 12,
+      "fragments": 1,
+      "reason": "llamada al dueno compartido / forma de props",
+      "owner": "src/components/AmbientesPanel.tsx"
+    },
+    {
+      "a": "src/components/AppAnalysisPanel.tsx",
+      "b": "src/components/DocumentResultPanel.tsx",
+      "key": "src/components/AppAnalysisPanel.tsx|src/components/DocumentResultPanel.tsx",
+      "lines": 20,
+      "fragments": 2,
+      "reason": "llamada al dueno compartido / forma de props",
+      "owner": "src/components/AppAnalysisPanel.tsx"
+    },
+    {
+      "a": "src/components/BrowserProfilesPanel.tsx",
+      "b": "src/components/ParticipantsPanel.tsx",
+      "key": "src/components/BrowserProfilesPanel.tsx|src/components/ParticipantsPanel.tsx",
+      "lines": 14,
+      "fragments": 2,
+      "reason": "llamada al dueno compartido / forma de props",
+      "owner": "src/components/BrowserProfilesPanel.tsx"
+    },
+    {
+      "a": "src/components/BrowserProfilesPanel.tsx",
+      "b": "src/components/SearchControlCenter.tsx",
+      "key": "src/components/BrowserProfilesPanel.tsx|src/components/SearchControlCenter.tsx",
+      "lines": 7,
+      "fragments": 1,
+      "reason": "llamada al dueno compartido / forma de props",
+      "owner": "src/components/BrowserProfilesPanel.tsx"
+    },
+    {
+      "a": "src/components/catalogPanelEditors.ts",
+      "b": "src/components/catalogPanelEditors.ts",
+      "key": "src/components/catalogPanelEditors.ts|src/components/catalogPanelEditors.ts",
+      "lines": 8,
+      "fragments": 1,
+      "reason": "interno: bloque repetido dentro del mismo modulo (medido)",
+      "owner": "src/components/catalogPanelEditors.ts"
+    },
+    {
+      "a": "src/components/catalogPanelEditors.ts",
+      "b": "src/core/catalogs/catalogEditorSave.ts",
+      "key": "src/components/catalogPanelEditors.ts|src/core/catalogs/catalogEditorSave.ts",
+      "lines": 8,
+      "fragments": 1,
+      "reason": "medido: patron de servicio/entidad distinta",
+      "owner": "src/components/catalogPanelEditors.ts"
+    },
+    {
+      "a": "src/components/ContactsPanel.tsx",
+      "b": "src/components/ContactsPanel.tsx",
+      "key": "src/components/ContactsPanel.tsx|src/components/ContactsPanel.tsx",
+      "lines": 9,
+      "fragments": 1,
+      "reason": "interno: bloque repetido dentro del mismo modulo (medido)",
+      "owner": "src/components/ContactsPanel.tsx"
+    },
+    {
+      "a": "src/components/ContactsPanel.tsx",
+      "b": "src/components/ParticipantsPanel.tsx",
+      "key": "src/components/ContactsPanel.tsx|src/components/ParticipantsPanel.tsx",
+      "lines": 17,
+      "fragments": 2,
+      "reason": "llamada al dueno compartido / forma de props",
+      "owner": "src/components/ContactsPanel.tsx"
+    },
+    {
+      "a": "src/components/ContactsPanel.tsx",
+      "b": "src/components/ShoppingPanel.tsx",
+      "key": "src/components/ContactsPanel.tsx|src/components/ShoppingPanel.tsx",
+      "lines": 17,
+      "fragments": 2,
+      "reason": "llamada al dueno compartido / forma de props",
+      "owner": "src/components/ContactsPanel.tsx"
+    },
+    {
+      "a": "src/components/ImageGrid.tsx",
+      "b": "src/components/VideoGrid.tsx",
+      "key": "src/components/ImageGrid.tsx|src/components/VideoGrid.tsx",
+      "lines": 38,
+      "fragments": 2,
+      "reason": "llamada al dueno compartido / forma de props",
+      "owner": "src/components/ImageGrid.tsx"
+    },
+    {
+      "a": "src/components/MediaResultItem.tsx",
+      "b": "src/components/MediaResultItem.tsx",
+      "key": "src/components/MediaResultItem.tsx|src/components/MediaResultItem.tsx",
+      "lines": 7,
+      "fragments": 1,
+      "reason": "interno: bloque repetido dentro del mismo modulo (medido)",
+      "owner": "src/components/MediaResultItem.tsx"
+    },
+    {
+      "a": "src/components/OnboardingOverlay.tsx",
+      "b": "src/components/OnboardingOverlay.tsx",
+      "key": "src/components/OnboardingOverlay.tsx|src/components/OnboardingOverlay.tsx",
+      "lines": 12,
+      "fragments": 1,
+      "reason": "interno: bloque repetido dentro del mismo modulo (medido)",
+      "owner": "src/components/OnboardingOverlay.tsx"
+    },
+    {
+      "a": "src/components/ParticipantsPanel.tsx",
+      "b": "src/components/ParticipantsPanel.tsx",
+      "key": "src/components/ParticipantsPanel.tsx|src/components/ParticipantsPanel.tsx",
+      "lines": 9,
+      "fragments": 1,
+      "reason": "interno: bloque repetido dentro del mismo modulo (medido)",
+      "owner": "src/components/ParticipantsPanel.tsx"
+    },
+    {
+      "a": "src/components/ParticipantsPanel.tsx",
+      "b": "src/components/ShoppingPanel.tsx",
+      "key": "src/components/ParticipantsPanel.tsx|src/components/ShoppingPanel.tsx",
+      "lines": 18,
+      "fragments": 2,
+      "reason": "llamada al dueno compartido / forma de props",
+      "owner": "src/components/ParticipantsPanel.tsx"
+    },
+    {
+      "a": "src/components/SearchCatalogPanel.tsx",
+      "b": "src/components/SearchCatalogPanel.tsx",
+      "key": "src/components/SearchCatalogPanel.tsx|src/components/SearchCatalogPanel.tsx",
+      "lines": 13,
+      "fragments": 1,
+      "reason": "interno: bloque repetido dentro del mismo modulo (medido)",
+      "owner": "src/components/SearchCatalogPanel.tsx"
+    },
+    {
+      "a": "src/components/SearchCatalogPanel.tsx",
+      "b": "src/components/SearchControlCenter.tsx",
+      "key": "src/components/SearchCatalogPanel.tsx|src/components/SearchControlCenter.tsx",
+      "lines": 14,
+      "fragments": 2,
+      "reason": "llamada al dueno compartido / forma de props",
+      "owner": "src/components/SearchCatalogPanel.tsx"
+    },
+    {
+      "a": "src/components/ThinkingIndicator.tsx",
+      "b": "src/components/ThinkingIndicator.tsx",
+      "key": "src/components/ThinkingIndicator.tsx|src/components/ThinkingIndicator.tsx",
+      "lines": 6,
+      "fragments": 1,
+      "reason": "interno: bloque repetido dentro del mismo modulo (medido)",
+      "owner": "src/components/ThinkingIndicator.tsx"
+    },
+    {
+      "a": "src/components/WorkspaceHub.tsx",
+      "b": "src/components/WorkspaceHub.tsx",
+      "key": "src/components/WorkspaceHub.tsx|src/components/WorkspaceHub.tsx",
+      "lines": 8,
+      "fragments": 1,
+      "reason": "interno: bloque repetido dentro del mismo modulo (medido)",
+      "owner": "src/components/WorkspaceHub.tsx"
+    },
+    {
+      "a": "src/components/WorkspaceSearch.tsx",
+      "b": "src/components/WorkspaceSearch.tsx",
+      "key": "src/components/WorkspaceSearch.tsx|src/components/WorkspaceSearch.tsx",
+      "lines": 9,
+      "fragments": 1,
+      "reason": "interno: bloque repetido dentro del mismo modulo (medido)",
+      "owner": "src/components/WorkspaceSearch.tsx"
+    },
+    {
+      "a": "src/core/ai/IAIService.ts",
+      "b": "src/core/db/fluDatabase.ts",
+      "key": "src/core/ai/IAIService.ts|src/core/db/fluDatabase.ts",
+      "lines": 16,
+      "fragments": 2,
+      "reason": "medido: patron de servicio/entidad distinta",
+      "owner": "src/core/ai/IAIService.ts"
+    },
+    {
+      "a": "src/core/autonomy/autoOptimization.ts",
+      "b": "src/core/autonomy/autoOptimization.ts",
+      "key": "src/core/autonomy/autoOptimization.ts|src/core/autonomy/autoOptimization.ts",
+      "lines": 6,
+      "fragments": 1,
+      "reason": "interno: bloque repetido dentro del mismo modulo (medido)",
+      "owner": "src/core/autonomy/autoOptimization.ts"
+    },
+    {
+      "a": "src/core/autonomy/autoOptimization.ts",
+      "b": "src/core/autonomy/decisionEngine.ts",
+      "key": "src/core/autonomy/autoOptimization.ts|src/core/autonomy/decisionEngine.ts",
+      "lines": 8,
+      "fragments": 1,
+      "reason": "medido: patron de servicio/entidad distinta",
+      "owner": "src/core/autonomy/autoOptimization.ts"
+    },
+    {
+      "a": "src/core/autonomy/autoRecovery.ts",
+      "b": "src/core/autonomy/autoRecovery.ts",
+      "key": "src/core/autonomy/autoRecovery.ts|src/core/autonomy/autoRecovery.ts",
+      "lines": 7,
+      "fragments": 1,
+      "reason": "interno: bloque repetido dentro del mismo modulo (medido)",
+      "owner": "src/core/autonomy/autoRecovery.ts"
+    },
+    {
+      "a": "src/core/branding/paletasCatalog.ts",
+      "b": "src/core/search/searchCatalog.ts",
+      "key": "src/core/branding/paletasCatalog.ts|src/core/search/searchCatalog.ts",
+      "lines": 8,
+      "fragments": 1,
+      "reason": "medido: patron de servicio/entidad distinta",
+      "owner": "src/core/branding/paletasCatalog.ts"
+    },
+    {
+      "a": "src/core/catalogs/catalogRegistry.ts",
+      "b": "src/core/multiuser/participantRegistry.ts",
+      "key": "src/core/catalogs/catalogRegistry.ts|src/core/multiuser/participantRegistry.ts",
+      "lines": 6,
+      "fragments": 1,
+      "reason": "medido: patron de servicio/entidad distinta",
+      "owner": "src/core/catalogs/catalogRegistry.ts"
+    },
+    {
+      "a": "src/core/catalogs/catalogRegistry.ts",
+      "b": "src/core/reminders/shoppingService.ts",
+      "key": "src/core/catalogs/catalogRegistry.ts|src/core/reminders/shoppingService.ts",
+      "lines": 7,
+      "fragments": 1,
+      "reason": "medido: patron de servicio/entidad distinta",
+      "owner": "src/core/catalogs/catalogRegistry.ts"
+    },
+    {
+      "a": "src/core/config/sharedConfig.ts",
+      "b": "src/core/config/sharedConfig.ts",
+      "key": "src/core/config/sharedConfig.ts|src/core/config/sharedConfig.ts",
+      "lines": 9,
+      "fragments": 1,
+      "reason": "interno: bloque repetido dentro del mismo modulo (medido)",
+      "owner": "src/core/config/sharedConfig.ts"
+    },
+    {
+      "a": "src/core/contacts/contactService.ts",
+      "b": "src/core/contacts/contactService.ts",
+      "key": "src/core/contacts/contactService.ts|src/core/contacts/contactService.ts",
+      "lines": 8,
+      "fragments": 1,
+      "reason": "interno: bloque repetido dentro del mismo modulo (medido)",
+      "owner": "src/core/contacts/contactService.ts"
+    },
+    {
+      "a": "src/core/contacts/contactService.ts",
+      "b": "src/core/diary/diaryService.ts",
+      "key": "src/core/contacts/contactService.ts|src/core/diary/diaryService.ts",
+      "lines": 11,
+      "fragments": 1,
+      "reason": "medido: patron de servicio/entidad distinta",
+      "owner": "src/core/contacts/contactService.ts"
+    },
+    {
+      "a": "src/core/contacts/contactService.ts",
+      "b": "src/core/multiuser/materiaGrisService.ts",
+      "key": "src/core/contacts/contactService.ts|src/core/multiuser/materiaGrisService.ts",
+      "lines": 8,
+      "fragments": 1,
+      "reason": "medido: patron de servicio/entidad distinta",
+      "owner": "src/core/contacts/contactService.ts"
+    },
+    {
+      "a": "src/core/contacts/contactService.ts",
+      "b": "src/core/reminders/shoppingService.ts",
+      "key": "src/core/contacts/contactService.ts|src/core/reminders/shoppingService.ts",
+      "lines": 6,
+      "fragments": 1,
+      "reason": "medido: patron de servicio/entidad distinta",
+      "owner": "src/core/contacts/contactService.ts"
+    },
+    {
+      "a": "src/core/diary/diaryService.ts",
+      "b": "src/core/multiuser/materiaGrisService.ts",
+      "key": "src/core/diary/diaryService.ts|src/core/multiuser/materiaGrisService.ts",
+      "lines": 8,
+      "fragments": 1,
+      "reason": "medido: patron de servicio/entidad distinta",
+      "owner": "src/core/diary/diaryService.ts"
+    },
+    {
+      "a": "src/core/diary/diaryService.ts",
+      "b": "src/core/reminders/shoppingService.ts",
+      "key": "src/core/diary/diaryService.ts|src/core/reminders/shoppingService.ts",
+      "lines": 6,
+      "fragments": 1,
+      "reason": "medido: patron de servicio/entidad distinta",
+      "owner": "src/core/diary/diaryService.ts"
+    },
+    {
+      "a": "src/core/environments/ambientesCatalog.ts",
+      "b": "src/core/search/searchCatalog.ts",
+      "key": "src/core/environments/ambientesCatalog.ts|src/core/search/searchCatalog.ts",
+      "lines": 8,
+      "fragments": 1,
+      "reason": "medido: patron de servicio/entidad distinta",
+      "owner": "src/core/environments/ambientesCatalog.ts"
+    },
+    {
+      "a": "src/core/games/abecedario.ts",
+      "b": "src/core/games/cuentaConmigo.ts",
+      "key": "src/core/games/abecedario.ts|src/core/games/cuentaConmigo.ts",
+      "lines": 8,
+      "fragments": 1,
+      "reason": "forma: esqueleto comun de motores; reglas propias por juego",
+      "owner": "src/core/games/"
+    },
+    {
+      "a": "src/core/games/abecedario.ts",
+      "b": "src/core/games/trabalenguas.ts",
+      "key": "src/core/games/abecedario.ts|src/core/games/trabalenguas.ts",
+      "lines": 22,
+      "fragments": 3,
+      "reason": "forma: esqueleto comun de motores; reglas propias por juego",
+      "owner": "src/core/games/"
+    },
+    {
+      "a": "src/core/games/abecedario.ts",
+      "b": "src/core/games/trivia.ts",
+      "key": "src/core/games/abecedario.ts|src/core/games/trivia.ts",
+      "lines": 34,
+      "fragments": 4,
+      "reason": "forma: esqueleto comun de motores; reglas propias por juego",
+      "owner": "src/core/games/"
+    },
+    {
+      "a": "src/core/games/abecedario.ts",
+      "b": "src/core/games/veoVeo.ts",
+      "key": "src/core/games/abecedario.ts|src/core/games/veoVeo.ts",
+      "lines": 15,
+      "fragments": 2,
+      "reason": "forma: esqueleto comun de motores; reglas propias por juego",
+      "owner": "src/core/games/"
+    },
+    {
+      "a": "src/core/games/adivinaCancion.ts",
+      "b": "src/core/games/pronunciacion.ts",
+      "key": "src/core/games/adivinaCancion.ts|src/core/games/pronunciacion.ts",
+      "lines": 6,
+      "fragments": 1,
+      "reason": "forma: esqueleto comun de motores; reglas propias por juego",
+      "owner": "src/core/games/"
+    },
+    {
+      "a": "src/core/games/adivinaCancion.ts",
+      "b": "src/core/games/repiteTraduce.ts",
+      "key": "src/core/games/adivinaCancion.ts|src/core/games/repiteTraduce.ts",
+      "lines": 8,
+      "fragments": 1,
+      "reason": "forma: esqueleto comun de motores; reglas propias por juego",
+      "owner": "src/core/games/"
+    },
+    {
+      "a": "src/core/games/adivinaCancion.ts",
+      "b": "src/core/games/riddles.ts",
+      "key": "src/core/games/adivinaCancion.ts|src/core/games/riddles.ts",
+      "lines": 8,
+      "fragments": 1,
+      "reason": "forma: esqueleto comun de motores; reglas propias por juego",
+      "owner": "src/core/games/"
+    },
+    {
+      "a": "src/core/games/adivinaCancion.ts",
+      "b": "src/core/games/storyteller.ts",
+      "key": "src/core/games/adivinaCancion.ts|src/core/games/storyteller.ts",
+      "lines": 6,
+      "fragments": 1,
+      "reason": "forma: esqueleto comun de motores; reglas propias por juego",
+      "owner": "src/core/games/"
+    },
+    {
+      "a": "src/core/games/adivinaCancion.ts",
+      "b": "src/core/games/trivia.ts",
+      "key": "src/core/games/adivinaCancion.ts|src/core/games/trivia.ts",
+      "lines": 18,
+      "fragments": 2,
+      "reason": "forma: esqueleto comun de motores; reglas propias por juego",
+      "owner": "src/core/games/"
+    },
+    {
+      "a": "src/core/games/adivinaCancion.ts",
+      "b": "src/core/games/veoVeo.ts",
+      "key": "src/core/games/adivinaCancion.ts|src/core/games/veoVeo.ts",
+      "lines": 9,
+      "fragments": 1,
+      "reason": "forma: esqueleto comun de motores; reglas propias por juego",
+      "owner": "src/core/games/"
+    },
+    {
+      "a": "src/core/games/adivinaNumero.ts",
+      "b": "src/core/games/loteria.ts",
+      "key": "src/core/games/adivinaNumero.ts|src/core/games/loteria.ts",
+      "lines": 6,
+      "fragments": 1,
+      "reason": "forma: esqueleto comun de motores; reglas propias por juego",
+      "owner": "src/core/games/"
+    },
+    {
+      "a": "src/core/games/adivinaNumero.ts",
+      "b": "src/core/games/respiracion.ts",
+      "key": "src/core/games/adivinaNumero.ts|src/core/games/respiracion.ts",
+      "lines": 13,
+      "fragments": 2,
+      "reason": "forma: esqueleto comun de motores; reglas propias por juego",
+      "owner": "src/core/games/"
+    },
+    {
+      "a": "src/core/games/adivinaNumero.ts",
+      "b": "src/core/games/storyteller.ts",
+      "key": "src/core/games/adivinaNumero.ts|src/core/games/storyteller.ts",
+      "lines": 6,
+      "fragments": 1,
+      "reason": "forma: esqueleto comun de motores; reglas propias por juego",
+      "owner": "src/core/games/"
+    },
+    {
+      "a": "src/core/games/ahorcado.ts",
+      "b": "src/core/games/memoriaSecuencias.ts",
+      "key": "src/core/games/ahorcado.ts|src/core/games/memoriaSecuencias.ts",
+      "lines": 8,
+      "fragments": 1,
+      "reason": "forma: esqueleto comun de motores; reglas propias por juego",
+      "owner": "src/core/games/"
+    },
+    {
+      "a": "src/core/games/ahorcado.ts",
+      "b": "src/core/games/respiracion.ts",
+      "key": "src/core/games/ahorcado.ts|src/core/games/respiracion.ts",
+      "lines": 6,
+      "fragments": 1,
+      "reason": "forma: esqueleto comun de motores; reglas propias por juego",
+      "owner": "src/core/games/"
+    },
+    {
+      "a": "src/core/games/ahorcado.ts",
+      "b": "src/core/games/storyteller.ts",
+      "key": "src/core/games/ahorcado.ts|src/core/games/storyteller.ts",
+      "lines": 6,
+      "fragments": 1,
+      "reason": "forma: esqueleto comun de motores; reglas propias por juego",
+      "owner": "src/core/games/"
+    },
+    {
+      "a": "src/core/games/ahorcado.ts",
+      "b": "src/core/games/veoVeo.ts",
+      "key": "src/core/games/ahorcado.ts|src/core/games/veoVeo.ts",
+      "lines": 9,
+      "fragments": 1,
+      "reason": "forma: esqueleto comun de motores; reglas propias por juego",
+      "owner": "src/core/games/"
+    },
+    {
+      "a": "src/core/games/calculoMental.ts",
+      "b": "src/core/games/calculoMental.ts",
+      "key": "src/core/games/calculoMental.ts|src/core/games/calculoMental.ts",
+      "lines": 6,
+      "fragments": 1,
+      "reason": "interno: bloque repetido dentro del mismo modulo (medido)",
+      "owner": "src/core/games/calculoMental.ts"
+    },
+    {
+      "a": "src/core/games/calculoMental.ts",
+      "b": "src/core/games/ordenaSecuencia.ts",
+      "key": "src/core/games/calculoMental.ts|src/core/games/ordenaSecuencia.ts",
+      "lines": 9,
+      "fragments": 1,
+      "reason": "forma: esqueleto comun de motores; reglas propias por juego",
+      "owner": "src/core/games/"
+    },
+    {
+      "a": "src/core/games/calculoMental.ts",
+      "b": "src/core/games/palabrasEncadenadas.ts",
+      "key": "src/core/games/calculoMental.ts|src/core/games/palabrasEncadenadas.ts",
+      "lines": 23,
+      "fragments": 3,
+      "reason": "forma: esqueleto comun de motores; reglas propias por juego",
+      "owner": "src/core/games/"
+    },
+    {
+      "a": "src/core/games/calculoMental.ts",
+      "b": "src/core/games/pronunciacion.ts",
+      "key": "src/core/games/calculoMental.ts|src/core/games/pronunciacion.ts",
+      "lines": 6,
+      "fragments": 1,
+      "reason": "forma: esqueleto comun de motores; reglas propias por juego",
+      "owner": "src/core/games/"
+    },
+    {
+      "a": "src/core/games/calculoMental.ts",
+      "b": "src/core/games/storyteller.ts",
+      "key": "src/core/games/calculoMental.ts|src/core/games/storyteller.ts",
+      "lines": 6,
+      "fragments": 1,
+      "reason": "forma: esqueleto comun de motores; reglas propias por juego",
+      "owner": "src/core/games/"
+    },
+    {
+      "a": "src/core/games/cuentaConmigo.ts",
+      "b": "src/core/games/cuentaConmigo.ts",
+      "key": "src/core/games/cuentaConmigo.ts|src/core/games/cuentaConmigo.ts",
+      "lines": 6,
+      "fragments": 1,
+      "reason": "interno: bloque repetido dentro del mismo modulo (medido)",
+      "owner": "src/core/games/cuentaConmigo.ts"
+    },
+    {
+      "a": "src/core/games/cuentaConmigo.ts",
+      "b": "src/core/games/memoriaSecuencias.ts",
+      "key": "src/core/games/cuentaConmigo.ts|src/core/games/memoriaSecuencias.ts",
+      "lines": 6,
+      "fragments": 1,
+      "reason": "forma: esqueleto comun de motores; reglas propias por juego",
+      "owner": "src/core/games/"
+    },
+    {
+      "a": "src/core/games/cuentaConmigo.ts",
+      "b": "src/core/games/respiracion.ts",
+      "key": "src/core/games/cuentaConmigo.ts|src/core/games/respiracion.ts",
+      "lines": 12,
+      "fragments": 2,
+      "reason": "forma: esqueleto comun de motores; reglas propias por juego",
+      "owner": "src/core/games/"
+    },
+    {
+      "a": "src/core/games/cuentaConmigo.ts",
+      "b": "src/core/games/storyteller.ts",
+      "key": "src/core/games/cuentaConmigo.ts|src/core/games/storyteller.ts",
+      "lines": 6,
+      "fragments": 1,
+      "reason": "forma: esqueleto comun de motores; reglas propias por juego",
+      "owner": "src/core/games/"
+    },
+    {
+      "a": "src/core/games/cuentaConmigo.ts",
+      "b": "src/core/games/trabalenguas.ts",
+      "key": "src/core/games/cuentaConmigo.ts|src/core/games/trabalenguas.ts",
+      "lines": 7,
+      "fragments": 1,
+      "reason": "forma: esqueleto comun de motores; reglas propias por juego",
+      "owner": "src/core/games/"
+    },
+    {
+      "a": "src/core/games/cuentaConmigo.ts",
+      "b": "src/core/games/trivia.ts",
+      "key": "src/core/games/cuentaConmigo.ts|src/core/games/trivia.ts",
+      "lines": 8,
+      "fragments": 1,
+      "reason": "forma: esqueleto comun de motores; reglas propias por juego",
+      "owner": "src/core/games/"
+    },
+    {
+      "a": "src/core/games/cuentaConmigo.ts",
+      "b": "src/core/games/veoVeo.ts",
+      "key": "src/core/games/cuentaConmigo.ts|src/core/games/veoVeo.ts",
+      "lines": 9,
+      "fragments": 1,
+      "reason": "forma: esqueleto comun de motores; reglas propias por juego",
+      "owner": "src/core/games/"
+    },
+    {
+      "a": "src/core/games/cuentoColaborativo.ts",
+      "b": "src/core/games/memoriaSecuencias.ts",
+      "key": "src/core/games/cuentoColaborativo.ts|src/core/games/memoriaSecuencias.ts",
+      "lines": 6,
+      "fragments": 1,
+      "reason": "forma: esqueleto comun de motores; reglas propias por juego",
+      "owner": "src/core/games/"
+    },
+    {
+      "a": "src/core/games/cuentoColaborativo.ts",
+      "b": "src/core/games/respiracion.ts",
+      "key": "src/core/games/cuentoColaborativo.ts|src/core/games/respiracion.ts",
+      "lines": 6,
+      "fragments": 1,
+      "reason": "forma: esqueleto comun de motores; reglas propias por juego",
+      "owner": "src/core/games/"
+    },
+    {
+      "a": "src/core/games/cuentoColaborativo.ts",
+      "b": "src/core/games/storyteller.ts",
+      "key": "src/core/games/cuentoColaborativo.ts|src/core/games/storyteller.ts",
+      "lines": 6,
+      "fragments": 1,
+      "reason": "forma: esqueleto comun de motores; reglas propias por juego",
+      "owner": "src/core/games/"
+    },
+    {
+      "a": "src/core/games/cuentoColaborativo.ts",
+      "b": "src/core/games/veoVeo.ts",
+      "key": "src/core/games/cuentoColaborativo.ts|src/core/games/veoVeo.ts",
+      "lines": 9,
+      "fragments": 1,
+      "reason": "forma: esqueleto comun de motores; reglas propias por juego",
+      "owner": "src/core/games/"
+    },
+    {
+      "a": "src/core/games/gameUtils.ts",
+      "b": "src/core/games/gameUtils.ts",
+      "key": "src/core/games/gameUtils.ts|src/core/games/gameUtils.ts",
+      "lines": 6,
+      "fragments": 1,
+      "reason": "interno: bloque repetido dentro del mismo modulo (medido)",
+      "owner": "src/core/games/gameUtils.ts"
+    },
+    {
+      "a": "src/core/games/gameUtils.ts",
+      "b": "src/core/games/quienSoy.ts",
+      "key": "src/core/games/gameUtils.ts|src/core/games/quienSoy.ts",
+      "lines": 6,
+      "fragments": 1,
+      "reason": "forma: esqueleto comun de motores; reglas propias por juego",
+      "owner": "src/core/games/"
+    },
+    {
+      "a": "src/core/games/karaoke.ts",
+      "b": "src/core/games/pronunciacion.ts",
+      "key": "src/core/games/karaoke.ts|src/core/games/pronunciacion.ts",
+      "lines": 6,
+      "fragments": 1,
+      "reason": "forma: esqueleto comun de motores; reglas propias por juego",
+      "owner": "src/core/games/"
+    },
+    {
+      "a": "src/core/games/karaoke.ts",
+      "b": "src/core/games/respiracion.ts",
+      "key": "src/core/games/karaoke.ts|src/core/games/respiracion.ts",
+      "lines": 19,
+      "fragments": 3,
+      "reason": "forma: esqueleto comun de motores; reglas propias por juego",
+      "owner": "src/core/games/"
+    },
+    {
+      "a": "src/core/games/karaoke.ts",
+      "b": "src/core/games/storyteller.ts",
+      "key": "src/core/games/karaoke.ts|src/core/games/storyteller.ts",
+      "lines": 6,
+      "fragments": 1,
+      "reason": "forma: esqueleto comun de motores; reglas propias por juego",
+      "owner": "src/core/games/"
+    },
+    {
+      "a": "src/core/games/loteria.ts",
+      "b": "src/core/games/pronunciacion.ts",
+      "key": "src/core/games/loteria.ts|src/core/games/pronunciacion.ts",
+      "lines": 6,
+      "fragments": 1,
+      "reason": "forma: esqueleto comun de motores; reglas propias por juego",
+      "owner": "src/core/games/"
+    },
+    {
+      "a": "src/core/games/loteria.ts",
+      "b": "src/core/games/simonDice.ts",
+      "key": "src/core/games/loteria.ts|src/core/games/simonDice.ts",
+      "lines": 6,
+      "fragments": 1,
+      "reason": "forma: esqueleto comun de motores; reglas propias por juego",
+      "owner": "src/core/games/"
+    },
+    {
+      "a": "src/core/games/loteria.ts",
+      "b": "src/core/games/storyteller.ts",
+      "key": "src/core/games/loteria.ts|src/core/games/storyteller.ts",
+      "lines": 6,
+      "fragments": 1,
+      "reason": "forma: esqueleto comun de motores; reglas propias por juego",
+      "owner": "src/core/games/"
+    },
+    {
+      "a": "src/core/games/memoriaSecuencias.ts",
+      "b": "src/core/games/pronunciacion.ts",
+      "key": "src/core/games/memoriaSecuencias.ts|src/core/games/pronunciacion.ts",
+      "lines": 6,
+      "fragments": 1,
+      "reason": "forma: esqueleto comun de motores; reglas propias por juego",
+      "owner": "src/core/games/"
+    },
+    {
+      "a": "src/core/games/memoriaSecuencias.ts",
+      "b": "src/core/games/repiteTraduce.ts",
+      "key": "src/core/games/memoriaSecuencias.ts|src/core/games/repiteTraduce.ts",
+      "lines": 10,
+      "fragments": 1,
+      "reason": "forma: esqueleto comun de motores; reglas propias por juego",
+      "owner": "src/core/games/"
+    },
+    {
+      "a": "src/core/games/memoriaSecuencias.ts",
+      "b": "src/core/games/respiracion.ts",
+      "key": "src/core/games/memoriaSecuencias.ts|src/core/games/respiracion.ts",
+      "lines": 6,
+      "fragments": 1,
+      "reason": "forma: esqueleto comun de motores; reglas propias por juego",
+      "owner": "src/core/games/"
+    },
+    {
+      "a": "src/core/games/memoriaSecuencias.ts",
+      "b": "src/core/games/storyteller.ts",
+      "key": "src/core/games/memoriaSecuencias.ts|src/core/games/storyteller.ts",
+      "lines": 6,
+      "fragments": 1,
+      "reason": "forma: esqueleto comun de motores; reglas propias por juego",
+      "owner": "src/core/games/"
+    },
+    {
+      "a": "src/core/games/memoriaSecuencias.ts",
+      "b": "src/core/games/trabalenguas.ts",
+      "key": "src/core/games/memoriaSecuencias.ts|src/core/games/trabalenguas.ts",
+      "lines": 12,
+      "fragments": 2,
+      "reason": "forma: esqueleto comun de motores; reglas propias por juego",
+      "owner": "src/core/games/"
+    },
+    {
+      "a": "src/core/games/memoriaSecuencias.ts",
+      "b": "src/core/games/veoVeo.ts",
+      "key": "src/core/games/memoriaSecuencias.ts|src/core/games/veoVeo.ts",
+      "lines": 9,
+      "fragments": 1,
+      "reason": "forma: esqueleto comun de motores; reglas propias por juego",
+      "owner": "src/core/games/"
+    },
+    {
+      "a": "src/core/games/ordenaSecuencia.ts",
+      "b": "src/core/games/quienSoy.ts",
+      "key": "src/core/games/ordenaSecuencia.ts|src/core/games/quienSoy.ts",
+      "lines": 7,
+      "fragments": 1,
+      "reason": "forma: esqueleto comun de motores; reglas propias por juego",
+      "owner": "src/core/games/"
+    },
+    {
+      "a": "src/core/games/ordenaSecuencia.ts",
+      "b": "src/core/games/repiteTraduce.ts",
+      "key": "src/core/games/ordenaSecuencia.ts|src/core/games/repiteTraduce.ts",
+      "lines": 6,
+      "fragments": 1,
+      "reason": "forma: esqueleto comun de motores; reglas propias por juego",
+      "owner": "src/core/games/"
+    },
+    {
+      "a": "src/core/games/ordenaSecuencia.ts",
+      "b": "src/core/games/respiracion.ts",
+      "key": "src/core/games/ordenaSecuencia.ts|src/core/games/respiracion.ts",
+      "lines": 6,
+      "fragments": 1,
+      "reason": "forma: esqueleto comun de motores; reglas propias por juego",
+      "owner": "src/core/games/"
+    },
+    {
+      "a": "src/core/games/ordenaSecuencia.ts",
+      "b": "src/core/games/riddles.ts",
+      "key": "src/core/games/ordenaSecuencia.ts|src/core/games/riddles.ts",
+      "lines": 9,
+      "fragments": 1,
+      "reason": "forma: esqueleto comun de motores; reglas propias por juego",
+      "owner": "src/core/games/"
+    },
+    {
+      "a": "src/core/games/ordenaSecuencia.ts",
+      "b": "src/core/games/trabalenguas.ts",
+      "key": "src/core/games/ordenaSecuencia.ts|src/core/games/trabalenguas.ts",
+      "lines": 16,
+      "fragments": 2,
+      "reason": "forma: esqueleto comun de motores; reglas propias por juego",
+      "owner": "src/core/games/"
+    },
+    {
+      "a": "src/core/games/ordenaSecuencia.ts",
+      "b": "src/core/games/trivia.ts",
+      "key": "src/core/games/ordenaSecuencia.ts|src/core/games/trivia.ts",
+      "lines": 19,
+      "fragments": 2,
+      "reason": "forma: esqueleto comun de motores; reglas propias por juego",
+      "owner": "src/core/games/"
+    },
+    {
+      "a": "src/core/games/ordenaSecuencia.ts",
+      "b": "src/core/games/veoVeo.ts",
+      "key": "src/core/games/ordenaSecuencia.ts|src/core/games/veoVeo.ts",
+      "lines": 16,
+      "fragments": 2,
+      "reason": "forma: esqueleto comun de motores; reglas propias por juego",
+      "owner": "src/core/games/"
+    },
+    {
+      "a": "src/core/games/palabrasEncadenadas.ts",
+      "b": "src/core/games/pronunciacion.ts",
+      "key": "src/core/games/palabrasEncadenadas.ts|src/core/games/pronunciacion.ts",
+      "lines": 6,
+      "fragments": 1,
+      "reason": "forma: esqueleto comun de motores; reglas propias por juego",
+      "owner": "src/core/games/"
+    },
+    {
+      "a": "src/core/games/palabrasEncadenadas.ts",
+      "b": "src/core/games/respiracion.ts",
+      "key": "src/core/games/palabrasEncadenadas.ts|src/core/games/respiracion.ts",
+      "lines": 6,
+      "fragments": 1,
+      "reason": "forma: esqueleto comun de motores; reglas propias por juego",
+      "owner": "src/core/games/"
+    },
+    {
+      "a": "src/core/games/palabrasEncadenadas.ts",
+      "b": "src/core/games/storyteller.ts",
+      "key": "src/core/games/palabrasEncadenadas.ts|src/core/games/storyteller.ts",
+      "lines": 6,
+      "fragments": 1,
+      "reason": "forma: esqueleto comun de motores; reglas propias por juego",
+      "owner": "src/core/games/"
+    },
+    {
+      "a": "src/core/games/pronunciacion.ts",
+      "b": "src/core/games/quienSoy.ts",
+      "key": "src/core/games/pronunciacion.ts|src/core/games/quienSoy.ts",
+      "lines": 13,
+      "fragments": 2,
+      "reason": "forma: esqueleto comun de motores; reglas propias por juego",
+      "owner": "src/core/games/"
+    },
+    {
+      "a": "src/core/games/pronunciacion.ts",
+      "b": "src/core/games/repiteTraduce.ts",
+      "key": "src/core/games/pronunciacion.ts|src/core/games/repiteTraduce.ts",
+      "lines": 19,
+      "fragments": 2,
+      "reason": "forma: esqueleto comun de motores; reglas propias por juego",
+      "owner": "src/core/games/"
+    },
+    {
+      "a": "src/core/games/pronunciacion.ts",
+      "b": "src/core/games/storyteller.ts",
+      "key": "src/core/games/pronunciacion.ts|src/core/games/storyteller.ts",
+      "lines": 6,
+      "fragments": 1,
+      "reason": "forma: esqueleto comun de motores; reglas propias por juego",
+      "owner": "src/core/games/"
+    },
+    {
+      "a": "src/core/games/pronunciacion.ts",
+      "b": "src/core/games/trivia.ts",
+      "key": "src/core/games/pronunciacion.ts|src/core/games/trivia.ts",
+      "lines": 7,
+      "fragments": 1,
+      "reason": "forma: esqueleto comun de motores; reglas propias por juego",
+      "owner": "src/core/games/"
+    },
+    {
+      "a": "src/core/games/pronunciacion.ts",
+      "b": "src/core/games/veoVeo.ts",
+      "key": "src/core/games/pronunciacion.ts|src/core/games/veoVeo.ts",
+      "lines": 10,
+      "fragments": 1,
+      "reason": "forma: esqueleto comun de motores; reglas propias por juego",
+      "owner": "src/core/games/"
+    },
+    {
+      "a": "src/core/games/quienSoy.ts",
+      "b": "src/core/games/respiracion.ts",
+      "key": "src/core/games/quienSoy.ts|src/core/games/respiracion.ts",
+      "lines": 6,
+      "fragments": 1,
+      "reason": "forma: esqueleto comun de motores; reglas propias por juego",
+      "owner": "src/core/games/"
+    },
+    {
+      "a": "src/core/games/quienSoy.ts",
+      "b": "src/core/games/storyteller.ts",
+      "key": "src/core/games/quienSoy.ts|src/core/games/storyteller.ts",
+      "lines": 6,
+      "fragments": 1,
+      "reason": "forma: esqueleto comun de motores; reglas propias por juego",
+      "owner": "src/core/games/"
+    },
+    {
+      "a": "src/core/games/quienSoy.ts",
+      "b": "src/core/games/trabalenguas.ts",
+      "key": "src/core/games/quienSoy.ts|src/core/games/trabalenguas.ts",
+      "lines": 18,
+      "fragments": 2,
+      "reason": "forma: esqueleto comun de motores; reglas propias por juego",
+      "owner": "src/core/games/"
+    },
+    {
+      "a": "src/core/games/quienSoy.ts",
+      "b": "src/core/games/trivia.ts",
+      "key": "src/core/games/quienSoy.ts|src/core/games/trivia.ts",
+      "lines": 16,
+      "fragments": 2,
+      "reason": "forma: esqueleto comun de motores; reglas propias por juego",
+      "owner": "src/core/games/"
+    },
+    {
+      "a": "src/core/games/quienSoy.ts",
+      "b": "src/core/games/veoVeo.ts",
+      "key": "src/core/games/quienSoy.ts|src/core/games/veoVeo.ts",
+      "lines": 15,
+      "fragments": 2,
+      "reason": "forma: esqueleto comun de motores; reglas propias por juego",
+      "owner": "src/core/games/"
+    },
+    {
+      "a": "src/core/games/repiteTraduce.ts",
+      "b": "src/core/games/trabalenguas.ts",
+      "key": "src/core/games/repiteTraduce.ts|src/core/games/trabalenguas.ts",
+      "lines": 25,
+      "fragments": 3,
+      "reason": "forma: esqueleto comun de motores; reglas propias por juego",
+      "owner": "src/core/games/"
+    },
+    {
+      "a": "src/core/games/repiteTraduce.ts",
+      "b": "src/core/games/trivia.ts",
+      "key": "src/core/games/repiteTraduce.ts|src/core/games/trivia.ts",
+      "lines": 15,
+      "fragments": 2,
+      "reason": "forma: esqueleto comun de motores; reglas propias por juego",
+      "owner": "src/core/games/"
+    },
+    {
+      "a": "src/core/games/repiteTraduce.ts",
+      "b": "src/core/games/veoVeo.ts",
+      "key": "src/core/games/repiteTraduce.ts|src/core/games/veoVeo.ts",
+      "lines": 16,
+      "fragments": 2,
+      "reason": "forma: esqueleto comun de motores; reglas propias por juego",
+      "owner": "src/core/games/"
+    },
+    {
+      "a": "src/core/games/riddles.ts",
+      "b": "src/core/games/veoVeo.ts",
+      "key": "src/core/games/riddles.ts|src/core/games/veoVeo.ts",
+      "lines": 35,
+      "fragments": 4,
+      "reason": "forma: esqueleto comun de motores; reglas propias por juego",
+      "owner": "src/core/games/"
+    },
+    {
+      "a": "src/core/games/storyteller.ts",
+      "b": "src/core/games/storyteller.ts",
+      "key": "src/core/games/storyteller.ts|src/core/games/storyteller.ts",
+      "lines": 6,
+      "fragments": 1,
+      "reason": "interno: bloque repetido dentro del mismo modulo (medido)",
+      "owner": "src/core/games/storyteller.ts"
+    },
+    {
+      "a": "src/core/games/storyteller.ts",
+      "b": "src/core/games/veoVeo.ts",
+      "key": "src/core/games/storyteller.ts|src/core/games/veoVeo.ts",
+      "lines": 9,
+      "fragments": 1,
+      "reason": "forma: esqueleto comun de motores; reglas propias por juego",
+      "owner": "src/core/games/"
+    },
+    {
+      "a": "src/core/games/trabalenguas.ts",
+      "b": "src/core/games/trivia.ts",
+      "key": "src/core/games/trabalenguas.ts|src/core/games/trivia.ts",
+      "lines": 39,
+      "fragments": 5,
+      "reason": "forma: esqueleto comun de motores; reglas propias por juego",
+      "owner": "src/core/games/"
+    },
+    {
+      "a": "src/core/games/trabalenguas.ts",
+      "b": "src/core/games/veoVeo.ts",
+      "key": "src/core/games/trabalenguas.ts|src/core/games/veoVeo.ts",
+      "lines": 16,
+      "fragments": 2,
+      "reason": "forma: esqueleto comun de motores; reglas propias por juego",
+      "owner": "src/core/games/"
+    },
+    {
+      "a": "src/core/games/trivia.ts",
+      "b": "src/core/games/veoVeo.ts",
+      "key": "src/core/games/trivia.ts|src/core/games/veoVeo.ts",
+      "lines": 16,
+      "fragments": 2,
+      "reason": "forma: esqueleto comun de motores; reglas propias por juego",
+      "owner": "src/core/games/"
+    },
+    {
+      "a": "src/core/multiuser/materiaGrisService.ts",
+      "b": "src/core/reminders/shoppingService.ts",
+      "key": "src/core/multiuser/materiaGrisService.ts|src/core/reminders/shoppingService.ts",
+      "lines": 8,
+      "fragments": 1,
+      "reason": "medido: patron de servicio/entidad distinta",
+      "owner": "src/core/multiuser/materiaGrisService.ts"
+    },
+    {
+      "a": "src/core/notes/notesService.ts",
+      "b": "src/core/reminders/shoppingService.ts",
+      "key": "src/core/notes/notesService.ts|src/core/reminders/shoppingService.ts",
+      "lines": 26,
+      "fragments": 3,
+      "reason": "medido: patron de servicio/entidad distinta",
+      "owner": "src/core/notes/notesService.ts"
+    },
+    {
+      "a": "src/core/voice/responseGate.ts",
+      "b": "src/core/voice/responseGate.ts",
+      "key": "src/core/voice/responseGate.ts|src/core/voice/responseGate.ts",
+      "lines": 7,
+      "fragments": 1,
+      "reason": "interno: bloque repetido dentro del mismo modulo (medido)",
+      "owner": "src/core/voice/responseGate.ts"
+    },
+    {
+      "a": "src/hooks/useAppAnalysis.ts",
+      "b": "src/hooks/useDocumentAnalysis.ts",
+      "key": "src/hooks/useAppAnalysis.ts|src/hooks/useDocumentAnalysis.ts",
+      "lines": 14,
+      "fragments": 2,
+      "reason": "forma: wrapper delegado en refreshOnOk/refreshOnValue",
+      "owner": "src/hooks/useAppAnalysis.ts"
+    },
+    {
+      "a": "src/hooks/useBrowserProfiles.ts",
+      "b": "src/hooks/useCommunicationProfiles.ts",
+      "key": "src/hooks/useBrowserProfiles.ts|src/hooks/useCommunicationProfiles.ts",
+      "lines": 8,
+      "fragments": 1,
+      "reason": "forma: wrapper delegado en refreshOnOk/refreshOnValue",
+      "owner": "src/hooks/useBrowserProfiles.ts"
+    },
+    {
+      "a": "src/hooks/useCommunicationProfiles.ts",
+      "b": "src/core/personalization/communicationProfileService.ts",
+      "key": "src/core/personalization/communicationProfileService.ts|src/hooks/useCommunicationProfiles.ts",
+      "lines": 6,
+      "fragments": 1,
+      "reason": "forma: wrapper delegado en refreshOnOk/refreshOnValue",
+      "owner": "src/hooks/useCommunicationProfiles.ts"
+    },
+    {
+      "a": "src/hooks/useContacts.ts",
+      "b": "src/hooks/useMateriaGris.ts",
+      "key": "src/hooks/useContacts.ts|src/hooks/useMateriaGris.ts",
+      "lines": 9,
+      "fragments": 1,
+      "reason": "forma: wrapper delegado en refreshOnOk/refreshOnValue",
+      "owner": "src/hooks/useContacts.ts"
+    },
+    {
+      "a": "src/hooks/useContacts.ts",
+      "b": "src/hooks/useParticipants.ts",
+      "key": "src/hooks/useContacts.ts|src/hooks/useParticipants.ts",
+      "lines": 7,
+      "fragments": 1,
+      "reason": "forma: wrapper delegado en refreshOnOk/refreshOnValue",
+      "owner": "src/hooks/useContacts.ts"
+    },
+    {
+      "a": "src/hooks/useDiary.ts",
+      "b": "src/hooks/useMateriaGris.ts",
+      "key": "src/hooks/useDiary.ts|src/hooks/useMateriaGris.ts",
+      "lines": 9,
+      "fragments": 1,
+      "reason": "forma: wrapper delegado en refreshOnOk/refreshOnValue",
+      "owner": "src/hooks/useDiary.ts"
+    },
+    {
+      "a": "src/hooks/useDiary.ts",
+      "b": "src/hooks/useParticipants.ts",
+      "key": "src/hooks/useDiary.ts|src/hooks/useParticipants.ts",
+      "lines": 7,
+      "fragments": 1,
+      "reason": "forma: wrapper delegado en refreshOnOk/refreshOnValue",
+      "owner": "src/hooks/useDiary.ts"
+    },
+    {
+      "a": "src/hooks/useDocumentGeneration.ts",
+      "b": "src/hooks/useMinuteHandlers.ts",
+      "key": "src/hooks/useDocumentGeneration.ts|src/hooks/useMinuteHandlers.ts",
+      "lines": 6,
+      "fragments": 1,
+      "reason": "forma: wrapper delegado en refreshOnOk/refreshOnValue",
+      "owner": "src/hooks/useDocumentGeneration.ts"
+    },
+    {
+      "a": "src/hooks/useMateriaGris.ts",
+      "b": "src/hooks/useParticipants.ts",
+      "key": "src/hooks/useMateriaGris.ts|src/hooks/useParticipants.ts",
+      "lines": 6,
+      "fragments": 1,
+      "reason": "forma: wrapper delegado en refreshOnOk/refreshOnValue",
+      "owner": "src/hooks/useMateriaGris.ts"
+    },
+    {
+      "a": "src/hooks/useMinuteKnowledge.ts",
+      "b": "src/core/db/fluDatabase.ts",
+      "key": "src/core/db/fluDatabase.ts|src/hooks/useMinuteKnowledge.ts",
+      "lines": 9,
+      "fragments": 1,
+      "reason": "forma: wrapper delegado en refreshOnOk/refreshOnValue",
+      "owner": "src/hooks/useMinuteKnowledge.ts"
+    },
+    {
+      "a": "src/hooks/useMinuteKnowledge.ts",
+      "b": "src/types/bridge.ts",
+      "key": "src/hooks/useMinuteKnowledge.ts|src/types/bridge.ts",
+      "lines": 8,
+      "fragments": 1,
+      "reason": "forma: imports/tipos compartidos",
+      "owner": "src/hooks/useMinuteKnowledge.ts"
+    },
+    {
+      "a": "src/hooks/useNotes.ts",
+      "b": "src/hooks/useShoppingList.ts",
+      "key": "src/hooks/useNotes.ts|src/hooks/useShoppingList.ts",
+      "lines": 20,
+      "fragments": 3,
+      "reason": "forma: wrapper delegado en refreshOnOk/refreshOnValue",
+      "owner": "src/hooks/useNotes.ts"
+    },
+    {
+      "a": "src/lib/documentParser.ts",
+      "b": "src/services/ocrService.ts",
+      "key": "src/lib/documentParser.ts|src/services/ocrService.ts",
+      "lines": 6,
+      "fragments": 1,
+      "reason": "medido: patron de servicio/entidad distinta",
+      "owner": "src/lib/documentParser.ts"
+    },
+    {
+      "a": "src/lib/minuteKnowledgeHelpers.ts",
+      "b": "src/core/db/fluDatabase.ts",
+      "key": "src/core/db/fluDatabase.ts|src/lib/minuteKnowledgeHelpers.ts",
+      "lines": 9,
+      "fragments": 1,
+      "reason": "medido: patron de servicio/entidad distinta",
+      "owner": "src/lib/minuteKnowledgeHelpers.ts"
+    },
+    {
+      "a": "src/lib/minuteKnowledgeHelpers.ts",
+      "b": "src/types/bridge.ts",
+      "key": "src/lib/minuteKnowledgeHelpers.ts|src/types/bridge.ts",
+      "lines": 9,
+      "fragments": 1,
+      "reason": "forma: imports/tipos compartidos",
+      "owner": "src/lib/minuteKnowledgeHelpers.ts"
+    },
+    {
+      "a": "src/server/browserProxy.ts",
+      "b": "src/server/searchProxy.ts",
+      "key": "src/server/browserProxy.ts|src/server/searchProxy.ts",
+      "lines": 6,
+      "fragments": 1,
+      "reason": "medido: patron de servicio/entidad distinta",
+      "owner": "src/server/browserProxy.ts"
+    },
+    {
+      "a": "src/server/geminiProxy.ts",
+      "b": "src/server/geminiProxy.ts",
+      "key": "src/server/geminiProxy.ts|src/server/geminiProxy.ts",
+      "lines": 6,
+      "fragments": 1,
+      "reason": "interno: bloque repetido dentro del mismo modulo (medido)",
+      "owner": "src/server/geminiProxy.ts"
+    },
+    {
+      "a": "src/services/videoAssembler.ts",
+      "b": "src/types/documentContracts.ts",
+      "key": "src/services/videoAssembler.ts|src/types/documentContracts.ts",
+      "lines": 8,
+      "fragments": 1,
+      "reason": "forma: imports/tipos compartidos",
+      "owner": "src/services/videoAssembler.ts"
+    },
+    {
+      "a": "src/types/bridge.ts",
+      "b": "src/core/db/fluDatabase.ts",
+      "key": "src/core/db/fluDatabase.ts|src/types/bridge.ts",
+      "lines": 9,
+      "fragments": 1,
+      "reason": "forma: imports/tipos compartidos",
+      "owner": "src/types/bridge.ts"
+    },
+    {
+      "a": "src/voice/lib/configCommands.js",
+      "b": "src/voice/lib/configCommands.js",
+      "key": "src/voice/lib/configCommands.js|src/voice/lib/configCommands.js",
+      "lines": 9,
+      "fragments": 1,
+      "reason": "interno: bloque repetido dentro del mismo modulo (medido)",
+      "owner": "src/voice/lib/configCommands.js"
+    },
+    {
+      "a": "src/voice/lib/fluDebug.js",
+      "b": "src/voice/lib/fluDebug.js",
+      "key": "src/voice/lib/fluDebug.js|src/voice/lib/fluDebug.js",
+      "lines": 6,
+      "fragments": 1,
+      "reason": "interno: bloque repetido dentro del mismo modulo (medido)",
+      "owner": "src/voice/lib/fluDebug.js"
+    },
+    {
+      "a": "src/voice/lib/sessionRecorder.js",
+      "b": "src/voice/lib/sessionRecorder.js",
+      "key": "src/voice/lib/sessionRecorder.js|src/voice/lib/sessionRecorder.js",
+      "lines": 6,
+      "fragments": 1,
+      "reason": "interno: bloque repetido dentro del mismo modulo (medido)",
+      "owner": "src/voice/lib/sessionRecorder.js"
+    },
+    {
+      "a": "src/voice/workers/voiceId.worker.js",
+      "b": "src/voice/workers/whisperAsr.worker.js",
+      "key": "src/voice/workers/voiceId.worker.js|src/voice/workers/whisperAsr.worker.js",
+      "lines": 16,
+      "fragments": 2,
+      "reason": "forma: bootstrap comun de workers",
+      "owner": "src/voice/workers/voiceId.worker.js"
+    }
+  ]
+}

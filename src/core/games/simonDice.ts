@@ -15,7 +15,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine.ts';
 import type { AvatarAnimation, GameSession, GameTurnResult } from './types.ts';
-import { END_GAME_FRAMES, adoptRandom, baseSession, clamp, gameOverResult, matchesEndGameFrames, normalizeForMatch, pickRandom, turnResult } from './gameUtils.ts';
+import { END_GAME_FRAMES, adoptRandom, baseSession, readNumberCfg, readLongMaxCfg, gameOverResult, matchesEndGameFrames, normalizeForMatch, pickRandom, turnResult } from './gameUtils.ts';
 
 export const VERB_ALIASES: Record<AvatarAnimation, readonly string[]> = {
     Dance: ['baila', 'bailar', 'baile', 'dance', 'bailemos'],
@@ -114,8 +114,8 @@ export function createSimonDiceEngine(options?: { random?: RandomSource }): Game
             ? (cfg.verbos as unknown[]).filter((verb): verb is AvatarAnimation =>
                   typeof verb === 'string' && verb in VERB_DISPLAY)
             : [...DEFAULT_VERBOS];
-        const rounds = clamp(Number(cfg?.rounds) || DEFAULT_ROUNDS, 1, MAX_ROUNDS);
-        const longMax = clamp(Number(cfg?.longMax) || DEFAULT_LONG_MAX, 1, MAX_LONG);
+        const rounds = readNumberCfg(cfg, ['rounds'], DEFAULT_ROUNDS, MAX_ROUNDS, 1);
+        const longMax = readLongMaxCfg(cfg, DEFAULT_LONG_MAX, MAX_LONG);
         return {
             verbos: verbos.length > 0 ? verbos : [...DEFAULT_VERBOS],
             rounds,

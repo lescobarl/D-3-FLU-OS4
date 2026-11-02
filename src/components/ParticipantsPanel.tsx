@@ -17,6 +17,9 @@ import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { FLU_CONFIG } from '../voice/api/config';
 import { useAsyncAction } from '../hooks/useAsyncAction';
+import { findProfileByParticipant } from '../lib/profileLookup';
+import { SettingsPanelShell } from './SettingsPanelShell';
+import { SettingsTextField } from './SettingsTextField';
 import type { CommunicationProfileRecord, ParticipantRecord } from '../core/db/fluDatabase';
 import type { ParticipantInput, ParticipantRegisterResult } from '../core/multiuser/participantRegistry';
 import {
@@ -67,7 +70,7 @@ export function ParticipantsPanel({
     item.name.trim().toLowerCase() === anonymousName.toLowerCase();
 
   const profileFor = (participantId: string): CommunicationProfileRecord | undefined =>
-    profiles.find((profile) => profile.participantId === participantId);
+    findProfileByParticipant(profiles, participantId);
 
   const [name, setName] = useState('');
   const [role, setRole] = useState('');
@@ -122,25 +125,18 @@ export function ParticipantsPanel({
   };
 
   return (
-    <details className="flu-settings-image-config">
-      <summary className="flu-settings-image-config__summary">
-        {ui.panelTitle || 'Participantes'}
-      </summary>
-      <div className="flu-settings-image-config__group">
+    <SettingsPanelShell title={ui.panelTitle || 'Participantes'}>
         {/* Alta */}
         <form className="flu-settings-section" onSubmit={handleSubmit}>
           <div className="flu-settings-section__body">
-            <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked">
-              <span>{ui.nameLabel || 'Nombre'}</span>
-              <input
-                type="text"
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-                placeholder={ui.namePlaceholder || 'Ej: Mamá, Luis, Ana…'}
-                data-testid="participants-add-name"
-                disabled={busy}
-              />
-            </label>
+            <SettingsTextField
+              label={ui.nameLabel || 'Nombre'}
+              value={name}
+              onChange={setName}
+              placeholder={ui.namePlaceholder || 'Ej: Mamá, Luis, Ana…'}
+              testId="participants-add-name"
+              disabled={busy}
+            />
             <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked">
               <span>{ui.roleLabel || 'Rol'}</span>
               <select
@@ -301,7 +297,6 @@ export function ParticipantsPanel({
             )}
           </div>
         </div>
-      </div>
-    </details>
+    </SettingsPanelShell>
   );
 }

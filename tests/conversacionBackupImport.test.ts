@@ -26,7 +26,7 @@ import {
 import { STORAGE_KEYS } from '../src/core/config/appConfig'
 import { localSet } from '../src/core/storage/localStore'
 import { fluDb } from '../src/core/db/fluDatabase'
-import { putConversationRecord } from '../src/core/db/conversationRowWriter'
+import { bulkPutConversationRecords } from '../src/core/db/conversationRowWriter'
 import { useConversationPersistence } from '../src/hooks/useConversationPersistence'
 import { useIntegrationStore } from '../src/store/integrationStore'
 import type { ConversationEntry } from '../src/types/bridge'
@@ -85,7 +85,7 @@ function restaurarUltimoBackup(sistema: BackupSystem): void {
 
 /** Fila ya persistida que la importación NO debe reescribir. */
 async function sembrarFilaExistente(entrada: ConversationEntry): Promise<void> {
-  await putConversationRecord({
+  await bulkPutConversationRecords([{
     id: entrada.id,
     role: 'user',
     text: entrada.text,
@@ -96,7 +96,7 @@ async function sembrarFilaExistente(entrada: ConversationEntry): Promise<void> {
     participantId: PARTICIPANTE,
     sessionId: entrada.sessionId,
     sync: { revision: 1, updated_at: UPDATED_AT, deleted: false },
-  })
+  }])
 }
 
 beforeEach(async () => {

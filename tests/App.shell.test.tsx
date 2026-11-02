@@ -721,7 +721,7 @@ describe('App shell - selector de usuario', () => {
         await act(async () => {
             await Promise.resolve();
         });
-        expect(H.spy.participants.remove).toHaveBeenCalledWith('p1');
+        expect(H.spy.participants.remove).toHaveBeenCalledWith('p1', 'p1');
     });
 
     it('elegir "+ Nuevo" reinicia el onboarding cuando no hay perfil activo', async () => {

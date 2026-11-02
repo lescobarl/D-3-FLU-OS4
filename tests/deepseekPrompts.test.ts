@@ -7,7 +7,7 @@
  * se fija su contrato, incluido el caso por defecto (sin personalizacion = '').
  */
 import { describe, expect, it } from 'vitest';
-import { buildPersonalizationRule } from '../src/services/deepseek';
+import { buildPersonalizationRule } from '../src/core/ai/personalization';
 import type { AIRequestOptions } from '../src/core/ai/IAIService';
 
 /** Opciones minimas validas (solo `apiKey` es obligatoria) + overrides. */

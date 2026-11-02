@@ -1191,36 +1191,6 @@ export async function generateParticipantEvaluation({
   }
 }
 
-/** Cliente: evaluación participante proactivo. */
-export async function requestParticipantEvaluation(params) {
-  let savedModel = ''
-  let savedApiKey = ''
-  try {
-    savedModel = String(localGet(STORAGE_KEYS.TEXT_MODEL) ?? '').trim()
-    // Lectura fresca de la key en el momento de la llamada: defiende contra
-    // estado React obsoleto (desync prop↔storage) — Fix "API key no configurada".
-    savedApiKey = resolveTextApiKey()
-  } catch (e) {
-        logCaughtError('src/voice/lib/gemini.js', e);
-    // Sin acceso a localStorage
-  }
-  const body = {
-    ...(params ?? {}),
-    model: savedModel || undefined,
-    apiKey: String(params?.apiKey ?? '').trim() || savedApiKey || undefined,
-  }
-  const response = await fetchTextEngineResilient(
-    '/api/gemini/participant-eval',
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    },
-    { timeoutMs: resolveClientRequestTimeout(params) },
-  )
-  return parseGeminiApiResponse(response)
-}
-
 /** Cliente: contrato vía API del servidor (sin llamada directa a Google). */
 export async function requestFluContract(params) {
   // Incluir el modelo guardado en localStorage (OS3 parity) para que el proxy lo use
@@ -1243,31 +1213,6 @@ export async function requestFluContract(params) {
   const response = await postGeminiContractResilient(body, {
     timeoutMs: resolveClientRequestTimeout(params),
   })
-  return parseGeminiApiResponse(response)
-}
-
-/** Cliente: minuta vía API del servidor. */
-export async function requestConversationSummary(params) {
-  let savedModel = ''
-  let savedApiKey = ''
-  try {
-    savedModel = String(localGet(STORAGE_KEYS.TEXT_MODEL) ?? '').trim()
-    savedApiKey = resolveTextApiKey()
-  } catch (err) { logCaughtError('src/voice/lib/gemini.js', err) }
-  const body = {
-    ...(params ?? {}),
-    model: savedModel || undefined,
-    apiKey: String(params?.apiKey ?? '').trim() || savedApiKey || undefined,
-  }
-  const response = await fetchTextEngineResilient(
-    '/api/gemini/summary',
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    },
-    { timeoutMs: resolveClientRequestTimeout(params) },
-  )
   return parseGeminiApiResponse(response)
 }
 

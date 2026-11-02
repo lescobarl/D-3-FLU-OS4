@@ -14,6 +14,8 @@
 
 import { useMemo } from 'react';
 import { FLU_CONFIG } from '../voice/api/config';
+import { sourceLabelFor } from '../lib/sourceLabel';
+import { MediaResultItem } from './MediaResultItem';
 import { SEARCH_PROVIDER_IDS } from '../core/config/sharedConfig';
 import { configLabel } from './configText';
 import { pickLabel } from '../lib/textUtils';
@@ -72,14 +74,11 @@ function useImageGridUi(language: string): ImageGridUi {
     }, [language]);
 }
 
-/** Etiqueta legible por proveedor (config-driven). */
-function sourceLabel(source: string | undefined, ui: ImageGridUi): string {
-    if (source === SEARCH_PROVIDER_IDS.COMMONS) return ui.sourceCommons;
-    return source || '';
-}
-
 export function ImageGrid({ results, loading, generated, language = 'es' }: ImageGridProps) {
     const ui = useImageGridUi(language);
+    const sourceLabels: Record<string, string> = {
+        [SEARCH_PROVIDER_IDS.COMMONS]: ui.sourceCommons,
+    };
 
     if (loading && !generated?.imageUrl) return null;
 
@@ -161,35 +160,18 @@ export function ImageGrid({ results, loading, generated, language = 'es' }: Imag
                 const thumb = item.thumbnail || '';
                 const title = item.title || '';
                 return (
-                    <li key={`${item.host}-${index}-${href}`} className="workspace-search__grid-item">
-                        <a
-                            className="workspace-search__grid-link"
+                        <MediaResultItem
+                            key={`${item.host}-${index}-${href}`}
+                            kind="image"
                             href={href}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            title={`${ui.openImageLabel}: ${title}`}
-                        >
-                            {thumb ? (
-                                <img
-                                    className="workspace-search__grid-img"
-                                    src={thumb}
-                                    alt={title}
-                                    loading="lazy"
-                                />
-                            ) : (
-                                <span className="workspace-search__grid-fallback" aria-hidden="true">
-                                    🖼️
-                                </span>
-                            )}
-                            <span className="workspace-search__grid-caption">
-                                <span className="workspace-search__grid-title">{title}</span>
-                                <span className="workspace-search__grid-source">
-                                    {sourceLabel(item.source, ui)}
-                                </span>
-                            </span>
-                        </a>
-                    </li>
-                );
+                            thumb={thumb}
+                            title={title}
+                            label={ui.openImageLabel}
+                            sourceText={sourceLabelFor(item.source, sourceLabels)}
+                            imageClassName="workspace-search__grid-img"
+                            fallback="🖼️"
+                        />
+                    );
             })}
         </ul>
     );

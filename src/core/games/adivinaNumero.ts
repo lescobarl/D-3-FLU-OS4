@@ -17,7 +17,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine.ts';
 import type { GameSession, GameTurnResult } from './types.ts';
-import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, baseSession, beginGame, clamp, gameOverResult, hasAnyToken, isEngineCommand, normalizeForMatch, resetGameSession, resolveNumericAnswer, turnResult } from './gameUtils.ts';
+import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, baseSession, beginGame, readNumberCfg, gameOverResult, hasAnyToken, engineCommandGuard, normalizeForMatch, resetGameSession, resolveNumericAnswer, turnResult } from './gameUtils.ts';
 
 const DEFAULT_MIN = 1;
 const DEFAULT_MAX = 20;
@@ -70,9 +70,9 @@ export function createAdivinaNumeroEngine(options?: { random?: RandomSource }): 
     let rng: RandomSource = options?.random ?? Math.random;
 
     const readConfig = (cfg: Record<string, unknown> | undefined): AdivinaNumeroConfig => {
-        const min = clamp(Number(cfg?.min) || DEFAULT_MIN, 1, MAX_RANGE);
-        const max = clamp(Number(cfg?.max) || DEFAULT_MAX, 1, MAX_RANGE);
-        const pistasMax = clamp(Number(cfg?.pistasMax) || DEFAULT_PISTAS_MAX, 0, 10);
+        const min = readNumberCfg(cfg, ['min'], DEFAULT_MIN, MAX_RANGE, 1);
+        const max = readNumberCfg(cfg, ['max'], DEFAULT_MAX, MAX_RANGE, 1);
+        const pistasMax = readNumberCfg(cfg, ['pistasMax'], DEFAULT_PISTAS_MAX, 10, 0);
         return {
             min: Math.min(min, max),
             max: Math.max(min, max),
@@ -180,9 +180,7 @@ export function createAdivinaNumeroEngine(options?: { random?: RandomSource }): 
             return turnResult(`Mi número es más pequeño que ${guess}. ${heat} Sigue intentando.`, session.score, { emotion: 'encouraging' });
         },
 
-        isGameCommand(text = ''): boolean {
-            return isEngineCommand(text, { end: END_FRAMES, hint: HINT_FRAMES, skip: SKIP_FRAMES });
-        },
+        isGameCommand: engineCommandGuard({ end: END_FRAMES, hint: HINT_FRAMES, skip: SKIP_FRAMES }),
     };
 }
 export const ADIVINA_NUMERO_COMMAND_FRAMES = Object.freeze({ HINT_FRAMES, SKIP_FRAMES, END_FRAMES })

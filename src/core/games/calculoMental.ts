@@ -15,7 +15,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine.ts';
 import type { GameSession, GameTurnResult } from './types.ts';
-import { END_GAME_FRAMES, adoptRandom, baseSession, beginGame, clamp, gameOverResult, hasAnyToken, isStopOrSkipCommand, normalizeForMatch, pickRandom, readRounds, resetGameSession, resolveNumericAnswer, roundsOverMessage, turnResult } from './gameUtils.ts';
+import { END_GAME_FRAMES, adoptRandom, baseSession, beginGame, readNumberCfg, gameOverResult, hasAnyToken, isStopOrSkipCommand, normalizeForMatch, pickRandom, readRounds, resetGameSession, resolveNumericAnswer, roundsOverMessage, turnResult } from './gameUtils.ts';
 
 const DEFAULT_ROUNDS = 3;
 const MAX_ROUNDS = 10;
@@ -83,7 +83,7 @@ export function createCalculoMentalEngine(options?: { random?: RandomSource }): 
     let rng: RandomSource = options?.random ?? Math.random;
 
     const readConfig = (cfg: Record<string, unknown> | undefined): CalculoMentalConfig => {
-        const maxSuma = clamp(Number(cfg?.maxSuma) || DEFAULT_MAX_SUMA, 2, MAX_SUMA);
+        const maxSuma = readNumberCfg(cfg, ['maxSuma'], DEFAULT_MAX_SUMA, MAX_SUMA, 2);
         const operaciones = Array.isArray(cfg?.operaciones)
             ? (cfg.operaciones as unknown[]).filter((op): op is string =>
                   typeof op === 'string' && op in OP_WORD)

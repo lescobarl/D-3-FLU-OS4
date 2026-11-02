@@ -16,8 +16,8 @@
 //   - DI: now inyectable para pruebas deterministas
 // ============================================================
 import { useCallback } from 'react';
-import { useListReload } from './useListReload';
-import { useServiceRef } from './useServiceRef';
+import { refreshOnOk } from './refreshOnOk';
+import { useProfileList } from './useProfileList';
 import { FLU_CONFIG } from '../voice/api/config';
 import { fluDb, type BrowserProfileRecord } from '../core/db/fluDatabase';
 import {
@@ -76,32 +76,32 @@ export function useBrowserProfiles({ now }: UseBrowserProfilesOptions = {}): Use
   // estado o los callbacks referencian `service`, y una referencia en
   // la zona muerta temporal (TDZ) rompería el arranque con
   // "Cannot access 'service' before initialization".
-  const service = useServiceRef<BrowserProfileService>(() =>
-    createBrowserProfileService({
-      // Adaptador de la tabla Dexie a BrowserProfilesDb: la clave física
-      // y lógica es participantId (el id del registro ES el participante).
-      db: {
-        add: (record) => fluDb.browserProfiles.add(record),
-        put: (record) => fluDb.browserProfiles.put(record),
-        get: (id) => fluDb.browserProfiles.get(id),
-        toArray: () => fluDb.browserProfiles.toArray(),
-      },
-      config,
-      now: now || (() => Date.now()),
-    }),
-  );
-
-  const { items: profiles, loading, refresh } = useListReload(
-    useCallback(() => service.list(), [service]),
-    'useBrowserProfiles',
-  );
+  const { service, items: profiles, loading, refresh } = useProfileList<
+    BrowserProfileRecord,
+    BrowserProfileService
+  >({
+    create: (nowFn) =>
+      createBrowserProfileService({
+        // Adaptador de la tabla Dexie a BrowserProfilesDb: la clave física
+        // y lógica es participantId (el id del registro ES el participante).
+        db: {
+          add: (record) => fluDb.browserProfiles.add(record),
+          put: (record) => fluDb.browserProfiles.put(record),
+          get: (id) => fluDb.browserProfiles.get(id),
+          toArray: () => fluDb.browserProfiles.toArray(),
+        },
+        config,
+        now: nowFn,
+      }),
+    now,
+    errorLabel: 'useBrowserProfiles',
+    list: (s) => s.list(),
+  });
 
   /** Asegura el perfil de una persona (defaults de config) y refresca. */
   const ensure = useCallback(
     async (participantId: string, participantName?: string): Promise<SaveResult> => {
-      const result = await service.ensure(participantId, participantName);
-      if (result.ok) await refresh();
-      return result;
+      return refreshOnOk(() => service.ensure(participantId, participantName), refresh);
     },
     [service, refresh],
   );
@@ -126,9 +126,7 @@ export function useBrowserProfiles({ now }: UseBrowserProfilesOptions = {}): Use
       };
       // El rol se reenvía para que ensure siembre los escalares desde los
       // defaults por rol cuando aún no existe registro (primer edit manual).
-      const result = await service.ensure(participantId, participantName, input, role);
-      if (result.ok) await refresh();
-      return result;
+      return refreshOnOk(() => service.ensure(participantId, participantName, input, role), refresh);
     },
     [service, refresh],
   );

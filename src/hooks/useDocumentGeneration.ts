@@ -26,6 +26,13 @@ import type { GeneratedDocumentResult } from '../core/ai/IAIService';
 import { safeFileName } from '../lib/formatAdapters';
 import { buildGeneratedInsumo } from '../core/documents/generatedInsumo';
 
+/** Opciones de generación (dueño único de la firma). */
+export interface GenerateOptions {
+    parametros?: GenerationParams;
+    fuentes?: GenerationSource[];
+    contenido?: string;
+}
+
 export interface DocumentGenerationState {
     isGenerating: boolean;
     error: string | null;
@@ -35,11 +42,7 @@ export interface DocumentGenerationState {
     /** Generar un documento (F3) o guion+video (F4). */
     generate: (
         formato: GenerationFormato,
-        opts?: {
-            parametros?: GenerationParams;
-            fuentes?: GenerationSource[];
-            contenido?: string;
-        },
+        opts?: GenerateOptions,
     ) => Promise<GeneratedDocumentResult | null>;
     clear: () => void;
 }
@@ -105,11 +108,7 @@ export function useDocumentGeneration(language: string): DocumentGenerationState
     const generate = useCallback(
         async (
             formato: GenerationFormato,
-            opts?: {
-                parametros?: GenerationParams;
-                fuentes?: GenerationSource[];
-                contenido?: string;
-            },
+            opts?: GenerateOptions,
         ): Promise<GeneratedDocumentResult | null> => {
             setIsGenerating(true);
             setError(null);

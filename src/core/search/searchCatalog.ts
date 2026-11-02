@@ -12,21 +12,13 @@
 // ============================================================
 
 import { fluDb, type SearchSiteRecord } from '../db/fluDatabase';
-import { createCatalogDb, createCatalogMutations, createCatalogRegistry, type CatalogRecord } from '../catalogs/catalogRegistry';
+import { createCatalogDb, createCatalogMutations, createCatalogRegistry, catalogRecordFromRow as toCatalogRecord, type CatalogRecord } from '../catalogs/catalogRegistry';
 import { searchSiteSchema } from '../catalogs/catalogSchema';
 import { mergeCatalog } from '../catalogs/mergeCatalog';
 import {
     BUILTIN_SEARCH_SITES,
     type SearchSite,
 } from './searchSiteTypes';
-
-const toCatalogRecord = (row: SearchSiteRecord): CatalogRecord<SearchSite> => ({
-    id: row.id,
-    data: row.data,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
-    sync: row.sync,
-});
 
 const toSearchSiteRecord = (record: CatalogRecord<SearchSite>): SearchSiteRecord => ({
     id: record.id,

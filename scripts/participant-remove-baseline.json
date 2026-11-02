@@ -1,0 +1,5 @@
+{
+  "_nota": "Barrera del borrado de participante: una sola cascada. Solo useParticipants.remove puede tocar onboardingStates, ACTIVE_USER y decidir wasActive; App solo limpia su estado React cuando el dueno lo dice. cleanupSites debe ser 0 y solo baja.",
+  "cleanupSites": 0,
+  "minSources": 2
+}

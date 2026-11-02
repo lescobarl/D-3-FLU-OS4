@@ -9,6 +9,7 @@
 // ============================================================
 
 import Dexie, { type EntityTable } from 'dexie';
+import { isLiveRecord } from './recordCopy.ts';
 import { v4 as uuidv4 } from 'uuid';
 import type { EnvironmentDefinition } from '../environments/environmentRegistry.ts';
 import type { PaletteDefinition } from '../branding/seasonalPalettes.ts';
@@ -751,7 +752,7 @@ export async function getAuditLogs(limit: number = 100): Promise<AuditLogEntry[]
         .orderBy('timestamp')
         .reverse()
         .toArray();
-    return rows.filter((row) => !row.sync?.deleted).slice(0, limit);
+    return rows.filter((row) => isLiveRecord(row)).slice(0, limit);
 }
 
 /**

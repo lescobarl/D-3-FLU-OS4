@@ -18,7 +18,7 @@ import { isDayKey } from '../../lib/dateKey';
 import { v4 as uuidv4 } from 'uuid';
 import { addAuditLog, type DiaryEntryRecord } from '../db/fluDatabase';
 import { buildSyncTuple, makeTupleTimestamp } from '../db/syncTuple';
-import { copyRecord } from '../db/recordCopy';
+import { copyRecord, isLiveRecord } from '../db/recordCopy';
 import { createGetRow, createSoftDelete } from '../db/entityMutations';
 import { INVALID_INPUT } from '../../lib/resultReasons';
 import type { InvalidInput } from '../../lib/resultReasons';
@@ -194,7 +194,7 @@ export function createDiaryService({
   const listEntries = async (date?: string): Promise<DiaryEntryRecord[]> => {
     const all = await db.diaryEntries.toArray();
     const filtered = (date ? all.filter((e) => e.date === date) : all).filter(
-      (e) => !e.sync?.deleted,
+      (e) => isLiveRecord(e),
     );
     return filtered
       .slice()

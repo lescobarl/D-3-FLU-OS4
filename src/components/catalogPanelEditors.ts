@@ -77,3 +77,96 @@ export async function submitCatalogPanel<T>(
     args.close();
     return null;
 }
+
+/**
+ * Crea el `save` de `useCatalogPanel` para un panel de catálogo.
+ * Dueño único del envoltorio editor/payload/registro/actualización.
+ * @param register Alta del registro.
+ * @param update Actualización del registro.
+ * @param mapReason Traducción del motivo de error.
+ * @returns Guardado listo para el hook.
+ */
+export function catalogPanelSave<T>(
+    register: (payload: T) => Promise<RegisterResult<T>>,
+    update: (id: string, payload: T) => Promise<UpdateResult<T>>,
+    mapReason: (reason: CatalogReason<T>) => string,
+): (editor: CatalogEditorState<T, unknown> | null, payload: T) => Promise<string | null> {
+    return (editor, payload) =>
+        submitCatalogPanel({ editor, payload, register, update, mapReason, close: () => {} });
+}
+
+/**
+ * Propiedades comunes de un formulario de catálogo SIN plantilla (solo seed).
+ * Dueño único de los textos/props del editor de sitios.
+ * @param editor Editor abierto.
+ * @param ui Textos del panel (cancelar).
+ * @param labels Textos según el modo.
+ * @param onCancel Cancelación.
+ * @param onSubmit Envío.
+ * @returns Props para el formulario.
+ */
+export function catalogSeedEditorProps<S>(
+    editor: { mode: 'create' | 'edit'; seed: S },
+    ui: { createLabel?: string; saveLabel?: string; cancelLabel?: string },
+    labels: CatalogEditorLabels,
+    onCancel: () => void,
+    onSubmit: (payload: S) => Promise<string | null>,
+): {
+    seed: S;
+    submitLabel: string;
+    cancelLabel: string;
+    onCancel: () => void;
+    onSubmit: (payload: S) => Promise<string | null>;
+} {
+    return {
+        seed: editor.seed,
+        submitLabel:
+            editor.mode === 'create' ? ui.createLabel || labels.create : ui.saveLabel || labels.save,
+        cancelLabel: ui.cancelLabel || 'Cancelar',
+        onCancel,
+        onSubmit,
+    };
+}
+
+/** Textos del editor de catálogo según el modo. */
+export interface CatalogEditorLabels {
+    /** Etiqueta al crear. */
+    create: string;
+    /** Etiqueta al guardar cambios. */
+    save: string;
+}
+
+/**
+ * Propiedades comunes del formulario de catálogo.
+ * Dueño único de los textos/props que repetían los paneles.
+ * @param editor Editor abierto.
+ * @param ui Textos del panel (cancelar).
+ * @param labels Textos según el modo.
+ * @param onCancel Cancelación.
+ * @param onSubmit Envío.
+ * @returns Props para el formulario.
+ */
+export function catalogEditorProps<T, S>(
+    editor: CatalogEditorState<T, S>,
+    ui: { createLabel?: string; saveLabel?: string; cancelLabel?: string },
+    labels: CatalogEditorLabels,
+    onCancel: () => void,
+    onSubmit: (payload: T) => Promise<string | null>,
+): {
+    template: T;
+    seed: S;
+    submitLabel: string;
+    cancelLabel: string;
+    onCancel: () => void;
+    onSubmit: (payload: T) => Promise<string | null>;
+} {
+    return {
+        template: editor.template,
+        seed: editor.seed,
+        submitLabel:
+            editor.mode === 'create' ? ui.createLabel || labels.create : ui.saveLabel || labels.save,
+        cancelLabel: ui.cancelLabel || 'Cancelar',
+        onCancel,
+        onSubmit,
+    };
+}

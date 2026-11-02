@@ -46,34 +46,34 @@ import {
 } from '../core/anim/emotionEngine';
 
 /**
- * DATA-DRIVEN: Alternativas para LISTENING desde el expressionRegistry.
- * Se turnan en cada transición a LISTENING.
+ * Alternativas de un grupo de expresiones, derivadas del registro.
+ * Dueño único de la derivación que repetían listening/speaking/participant.
+ * @param group Grupo del registro.
+ * @returns Expresiones con sus animaciones.
  */
-const LISTENING_ALTERNATIVES: { expression: AvatarExpression; anims: BunnyAnimation[] }[] =
-    getGroupExpressions('listening').map((def) => ({
+const alternativesFor = (group: 'listening' | 'speaking' | 'participant'): { expression: AvatarExpression; anims: BunnyAnimation[] }[] =>
+    getGroupExpressions(group).map((def) => ({
         expression: def.expression as AvatarExpression,
         anims: def.anims as BunnyAnimation[],
     }));
+
+/**
+ * DATA-DRIVEN: Alternativas para LISTENING desde el expressionRegistry.
+ * Se turnan en cada transición a LISTENING.
+ */
+const LISTENING_ALTERNATIVES = alternativesFor('listening');
 
 /**
  * DATA-DRIVEN: Alternativas para SPEAKING desde el expressionRegistry.
  * Se turnan en cada transición a SPEAKING.
  */
-const SPEAKING_ALTERNATIVES: { expression: AvatarExpression; anims: BunnyAnimation[] }[] =
-    getGroupExpressions('speaking').map((def) => ({
-        expression: def.expression as AvatarExpression,
-        anims: def.anims as BunnyAnimation[],
-    }));
+const SPEAKING_ALTERNATIVES = alternativesFor('speaking');
 
 /**
  * DATA-DRIVEN: Alternativas para PARTICIPANT (queriendo participar) desde el expressionRegistry.
  * Se turnan mientras el participante tiene la mano levantada.
  */
-const PARTICIPANT_ALTERNATIVES: { expression: AvatarExpression; anims: BunnyAnimation[] }[] =
-    getGroupExpressions('participant').map((def) => ({
-        expression: def.expression as AvatarExpression,
-        anims: def.anims as BunnyAnimation[],
-    }));
+const PARTICIPANT_ALTERNATIVES = alternativesFor('participant');
 
 /**
  * Duración de la acción de cuerpo completo ordenada por el USUARIO
@@ -174,20 +174,31 @@ export function useAvatarVoiceSync() {
      * Apply a resolved expression to the avatar store.
      * Shared helper used by all sync functions.
      */
+    /** Fija o limpia la expresión del avatar (dueño único del if/else). */
+    const setExpressionOnly = useCallback(
+        (
+            store: { setExpression: (expression: AvatarExpression) => void; clearExpression: () => void },
+            resolved: ResolvedExpression,
+        ) => {
+            if (resolved.expression) {
+                store.setExpression(resolved.expression);
+            } else {
+                store.clearExpression();
+            }
+        },
+        [],
+    );
+
     const applyResolved = useCallback((resolved: ResolvedExpression) => {
         const store = bunnyActionsRef.current;
         // Cualquier expresión nueva reemplaza el reset de 7s pendiente: no debe
         // dispararse más tarde en un flujo que ya cambió (participante, etc.).
         clearEmotionReset();
-        if (resolved.expression) {
-            store.setExpression(resolved.expression);
-        } else {
-            store.clearExpression();
-        }
+        setExpressionOnly(store, resolved);
         if (resolved.anims.length > 0) {
             store.blendAnimation(resolved.anims);
         }
-    }, [clearEmotionReset]);
+    }, [clearEmotionReset, setExpressionOnly]);
 
     /**
      * Reset de emoción a los 7s SOLO para la emoción que vino del RETORNO DE LA IA
@@ -383,18 +394,11 @@ export function useAvatarVoiceSync() {
 
         // For non-toggle states (IDLE, ERROR, CELEBRATING, SLEEPING), use applyResolved
         // which also bypasses reactivity for these simple states
-        if (resolved.expression) {
-            store.setExpression(resolved.expression);
-        } else {
-            store.clearExpression();
-        }
-        if (resolved.anims.length > 0) {
-            store.blendAnimation(resolved.anims);
-        }
+        applyResolved(resolved);
 
         if (options.debug) {
         }
-    }, [getEngineOptions]);
+    }, [getEngineOptions, applyResolved]);
 
     /**
      * Cancela la acción sostenida (comando del usuario) y su timer.
@@ -485,6 +489,18 @@ export function useAvatarVoiceSync() {
      * DATA-DRIVEN: usa el EmotionEngine en lugar de EMOTION_TO_GESTURE hardcodeado.
      * NO tiene IFs de reactividad — el engine escala según intensity + reactivity.
      */
+    /** Aplica la expresión resuelta si existe (dueño único del guard). */
+    const applyIfExpression = useCallback(
+        (resolved: ResolvedExpression, options: { debug?: boolean }) => {
+            if (resolved.expression) {
+                applyResolved(resolved);
+                if (options.debug) {
+                }
+            }
+        },
+        [applyResolved],
+    );
+
     const applyEmotion = useCallback((emotion: EmotionalState) => {
         const options = getEngineOptions();
 
@@ -492,13 +508,8 @@ export function useAvatarVoiceSync() {
         if (conversationState === 'SPEAKING') return;
 
         const resolved = resolveEmotionExpression(emotion, options);
-
-        if (resolved.expression) {
-            applyResolved(resolved);
-            if (options.debug) {
-            }
-        }
-    }, [conversationState, getEngineOptions, applyResolved]);
+        applyIfExpression(resolved, options);
+    }, [conversationState, getEngineOptions, applyIfExpression]);
 
     /**
      * Aplica una expresión contextual basada en el sentimiento del mensaje del usuario.
@@ -512,12 +523,8 @@ export function useAvatarVoiceSync() {
 
         const options = getEngineOptions();
         const resolved = resolveContextualExpression(sentiment, options);
-        if (resolved.expression) {
-            applyResolved(resolved);
-            if (options.debug) {
-            }
-        }
-    }, [conversationState, getEngineOptions, applyResolved]);
+        applyIfExpression(resolved, options);
+    }, [conversationState, getEngineOptions, applyIfExpression]);
 
     /**
      * Participant emotion trigger — DATA-DRIVEN desde el expressionRegistry.
@@ -589,17 +596,13 @@ export function useAvatarVoiceSync() {
             // NO incluyen 'Palabra' → la mano se baja al instante. Se conserva el
             // guardado en el canal para que, si FLU llega a hablar, la emoción se
             // mezcle con MouthMove como antes (S1).
-            if (resolved.expression) {
-                store.setExpression(resolved.expression);
-            } else {
-                store.clearExpression();
-            }
+            setExpressionOnly(store, resolved);
             setPendingEmotionAnimsAction(resolved.anims, 'participant');
         }
 
         if (options.debug) {
         }
-    }, [getEngineOptions, conversationState, setPendingEmotionAnimsAction]);
+    }, [getEngineOptions, conversationState, setPendingEmotionAnimsAction, setExpressionOnly]);
 
     /**
      * Muestra una micro-expresión aleatoria para dar vida al avatar en estado idle.

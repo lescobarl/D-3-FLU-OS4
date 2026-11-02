@@ -12,10 +12,12 @@
 // FLU_CONFIG.browser.search.ui con fallback || '...'.
 // ============================================================
 
+import { MediaResultItem } from './MediaResultItem';
 import { useMemo } from 'react';
 import { FLU_CONFIG } from '../voice/api/config';
 import { SEARCH_PROVIDER_IDS } from '../core/config/sharedConfig';
 import type { SearchResult } from '../core/search/searchSession';
+import { sourceLabelFor } from '../lib/sourceLabel';
 
 export interface VideoGridProps {
     /** Resultados de vídeo ya normalizados por el proxy. */
@@ -48,16 +50,13 @@ function useVideoGridUi(): VideoGridUi {
     }, []);
 }
 
-/** Etiqueta legible por proveedor (config-driven). */
-function sourceLabel(source: string | undefined, ui: VideoGridUi): string {
-    if (source === SEARCH_PROVIDER_IDS.YOUTUBE) return ui.sourceYouTube;
-    if (source === SEARCH_PROVIDER_IDS.COMMONS_VIDEO) return ui.sourceCommons;
-    if (source === SEARCH_PROVIDER_IDS.INVIDIOUS) return ui.sourceInvidious;
-    return source || '';
-}
-
 export function VideoGrid({ results, loading }: VideoGridProps) {
     const ui = useVideoGridUi();
+    const sourceLabels: Record<string, string> = {
+        [SEARCH_PROVIDER_IDS.YOUTUBE]: ui.sourceYouTube,
+        [SEARCH_PROVIDER_IDS.COMMONS_VIDEO]: ui.sourceCommons,
+        [SEARCH_PROVIDER_IDS.INVIDIOUS]: ui.sourceInvidious,
+    };
 
     if (loading) return null;
 
@@ -72,42 +71,18 @@ export function VideoGrid({ results, loading }: VideoGridProps) {
                 const thumb = item.thumbnail || '';
                 const title = item.title || '';
                 return (
-                    <li
+                    <MediaResultItem
                         key={`${item.host}-${index}-${href}`}
-                        className="workspace-search__video-item"
-                    >
-                        <a
-                            className="workspace-search__video-link"
-                            href={href}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            title={`${ui.openVideoLabel}: ${title}`}
-                        >
-                            <span className="workspace-search__video-thumb">
-                                {thumb ? (
-                                    <img
-                                        className="workspace-search__video-img"
-                                        src={thumb}
-                                        alt={title}
-                                        loading="lazy"
-                                    />
-                                ) : (
-                                    <span className="workspace-search__grid-fallback" aria-hidden="true">
-                                        🎬
-                                    </span>
-                                )}
-                                <span className="workspace-search__video-play" aria-hidden="true">
-                                    ▶
-                                </span>
-                            </span>
-                            <span className="workspace-search__video-caption">
-                                <span className="workspace-search__video-title">{title}</span>
-                                <span className="workspace-search__video-source">
-                                    {sourceLabel(item.source, ui)} · {ui.playLabel}
-                                </span>
-                            </span>
-                        </a>
-                    </li>
+                        kind="video"
+                        href={href}
+                        thumb={thumb}
+                        title={title}
+                        label={ui.openVideoLabel}
+                        sourceText={sourceLabelFor(item.source, sourceLabels)}
+                        suffix={ui.playLabel}
+                        imageClassName="workspace-search__video-img"
+                        fallback="🎬"
+                    />
                 );
             })}
         </ul>

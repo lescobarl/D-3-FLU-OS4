@@ -17,7 +17,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine.ts';
 import type { GameSession, GameTurnResult } from './types.ts';
-import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, bankItemAt, baseSession, beginGame, buildShuffledState, hasAnyToken, isEngineCommand, resetGameSession, runGuessTurn, stripDiacritics } from './gameUtils.ts';
+import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, createShuffledAnnounceStateBuilder, createShuffledAnnounceSurface, bankItemAt, hasAnyToken, isEngineCommand, runGuessTurn, stripDiacritics } from './gameUtils.ts';
 
 export interface VeoVeoItem {
     nombre: string;
@@ -131,36 +131,21 @@ function itemPrompt(item: VeoVeoItem): string {
 
 export function createVeoVeoEngine(options?: { random?: RandomSource }): GameEngine<VeoVeoState> {
     let rng: RandomSource = options?.random ?? Math.random;
-    const buildState = (cfg: Record<string, unknown> | undefined): VeoVeoState =>
-        buildShuffledState({
-            cfg,
-            bankLength: VEO_VEO_BANK.length,
-            defaultRounds: DEFAULT_ROUNDS,
-            maxRounds: MAX_ROUNDS,
-            adopt: (cfg2) => {
-                rng = adoptRandom(rng, cfg2);
-                return rng;
-            },
-            build: ({ order, maxRounds }) => ({ order, cursor: 0, maxRounds, phase: 'announce' }),
-        });
+    const buildState = createShuffledAnnounceStateBuilder({
+        bankLength: VEO_VEO_BANK.length,
+        defaultRounds: DEFAULT_ROUNDS,
+        maxRounds: MAX_ROUNDS,
+        adopt: (cfg2) => (rng = adoptRandom(rng, cfg2)),
+    });
 
-    const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): VeoVeoState =>
-        resetGameSession(session, cfg, buildState);
+    const surface = createShuffledAnnounceSurface('veo_veo', buildState, (raw) => {
+        const state = raw as VeoVeoState;
+        const item = itemAt(state);
+        return `¡Vamos a jugar a veo veo! ${item ? itemPrompt(item) : ''}`;
+    });
 
     return {
-        id: 'veo_veo',
-
-        createSession(optionsConfig: Record<string, unknown> = {}): GameSession<VeoVeoState> {
-            return baseSession('veo_veo', buildState(optionsConfig));
-        },
-
-        start(session: GameSession, optionsConfig: Record<string, unknown> = {}): GameTurnResult {
-            return beginGame(session, optionsConfig, reset, (raw) => {
-                const state = raw as VeoVeoState;
-                const item = itemAt(state);
-                return `¡Vamos a jugar a veo veo! ${item ? itemPrompt(item) : ''}`;
-            }, { emotion: 'excited' });
-        },
+        ...surface,
 
         turn(session: GameSession, text = ''): GameTurnResult {
             return runGuessTurn<VeoVeoState, NonNullable<ReturnType<typeof itemAt>>>({

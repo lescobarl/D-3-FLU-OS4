@@ -47,6 +47,8 @@ import type {
     AppAnalysisInput,
     GenerationInput,
     GeneratedDocumentResult,
+    FetchResponseArgs,
+    FetchVisionArgs,
 } from './IAIService';
 import type { DocumentContract, AppAnalysisContract } from '../../types/documentContracts';
 import { logCaughtError } from '../../lib/caughtError';
@@ -215,12 +217,7 @@ export abstract class BaseAIService implements IAIService {
     ): Promise<AISummaryResult>;
 
     /** Obtiene la respuesta conversacional. */
-    protected abstract fetchResponse(
-        options: AIRequestOptions,
-        userText: string,
-        botName: string,
-        history: AIHistoryEntry[],
-    ): Promise<string>;
+    protected abstract fetchResponse(...args: FetchResponseArgs): Promise<string>;
 
     /** Evalúa si FLU debe intervenir. */
     protected abstract fetchEvaluation(
@@ -237,12 +234,7 @@ export abstract class BaseAIService implements IAIService {
     ): Promise<AIWorkspaceImageResult>;
 
     /** Analiza una imagen (visión multimodal). */
-    protected abstract fetchVision(
-        imageBase64: string,
-        mimeType: string,
-        language: string,
-        profile: string,
-    ): Promise<AIVisionAnalysisResult>;
+    protected abstract fetchVision(...args: FetchVisionArgs): Promise<AIVisionAnalysisResult>;
 
     /**
      * Generate an AI-powered minute from conversation history.
@@ -271,13 +263,8 @@ export abstract class BaseAIService implements IAIService {
     /**
      * Generate an AI-powered contextual response.
      */
-    async generateResponse(
-        options: AIRequestOptions,
-        userText: string,
-        botName: string,
-        history: AIHistoryEntry[],
-    ): Promise<string> {
-        return this.fetchResponse(options, userText, botName, history);
+    async generateResponse(...args: FetchResponseArgs): Promise<string> {
+        return this.fetchResponse(...args);
     }
 
     /**

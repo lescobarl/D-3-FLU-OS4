@@ -7,6 +7,8 @@
 // ventana. Fuente única del criterio (los consumidores no lo reimplementan).
 // ============================================================
 
+import { normalizeLookupText } from '../../lib/lookupText';
+
 export interface ResponseGateState {
   key: string;
   at: number;
@@ -14,12 +16,7 @@ export interface ResponseGateState {
 
 /** Clave canónica de un turno: texto del usuario + respuesta, normalizados. */
 export function buildResponseKey(userText: string, responseText: string): string {
-  const norm = (value: string): string =>
-    String(value || '')
-      .trim()
-      .toLowerCase()
-      .replace(/\s+/g, ' ');
-  const key = `${norm(userText)}|${norm(responseText)}`;
+  const key = `${normalizeLookupText(userText)}|${normalizeLookupText(responseText)}`;
   return key === '|' ? '' : key;
 }
 

@@ -155,16 +155,28 @@ function stopSystems(refs: ReadonlyArray<{ current: { stop: () => void } | null 
     for (const ref of refs) ref.current?.stop();
 }
 
+/** Sistemas apagados (estado inicial y parada). */
+const NO_SYSTEMS: AutonomyState['activeSystems'] = {
+    healthMonitor: false,
+    autoRecovery: false,
+    decisionEngine: false,
+    autoOptimization: false,
+    backupSystem: false,
+};
+
+/** Sistemas encendidos (arranque). */
+const ALL_SYSTEMS: AutonomyState['activeSystems'] = {
+    healthMonitor: true,
+    autoRecovery: true,
+    decisionEngine: true,
+    autoOptimization: true,
+    backupSystem: true,
+};
+
 export function useAutonomyIntegration(): [AutonomyState, AutonomyActions] {
     const [state, setState] = useState<AutonomyState>({
         status: 'initializing',
-        activeSystems: {
-            healthMonitor: false,
-            autoRecovery: false,
-            decisionEngine: false,
-            autoOptimization: false,
-            backupSystem: false,
-        },
+        activeSystems: { ...NO_SYSTEMS },
         healthMetrics: null,
         activeIncidents: [],
         recentDecisions: [],
@@ -181,6 +193,12 @@ export function useAutonomyIntegration(): [AutonomyState, AutonomyActions] {
     const decisionEngineRef = useRef<DecisionEngine | null>(null);
     const optimizationSystemRef = useRef<AutoOptimizationSystem | null>(null);
     const backupSystemRef = useRef<BackupSystem | null>(null);
+
+    /** Aplica estado + sistemas activos (dueño único del bloque setState). */
+    const applySystems = (
+        status: AutonomyState['status'],
+        activeSystems: AutonomyState['activeSystems'],
+    ): void => setState((prev) => ({ ...prev, status, activeSystems: { ...activeSystems } }));
     // FIX estabilidad: guard idempotente. stopAllSystems se invoca en el cleanup
     // del efecto de App (durante unmount). Sin este guard, su setState repetido
     // en cascada producía "Maximum update depth exceeded" y tumbaba <App>.
@@ -263,17 +281,7 @@ export function useAutonomyIntegration(): [AutonomyState, AutonomyActions] {
                 backupSystemRef.current = backupSystem;
 
                 // Actualizar estado con sistemas activos
-                setState(prev => ({
-                    ...prev,
-                    status: 'active',
-                    activeSystems: {
-                        healthMonitor: true,
-                        autoRecovery: true,
-                        decisionEngine: true,
-                        autoOptimization: true,
-                        backupSystem: true,
-                    },
-                }));
+                applySystems('active', ALL_SYSTEMS);
 
                 // Cargar estadísticas iniciales de backup
                 updateBackupStats();
@@ -415,17 +423,7 @@ export function useAutonomyIntegration(): [AutonomyState, AutonomyActions] {
             backupSystemRef.current.start();
         }
 
-        setState(prev => ({
-            ...prev,
-            status: 'active',
-            activeSystems: {
-                healthMonitor: true,
-                autoRecovery: true,
-                decisionEngine: true,
-                autoOptimization: true,
-                backupSystem: true,
-            },
-        }));
+        applySystems('active', ALL_SYSTEMS);
 
         addNotification({
             type: 'info',
@@ -444,17 +442,7 @@ export function useAutonomyIntegration(): [AutonomyState, AutonomyActions] {
         systemsStoppedRef.current = true;
 
         try {
-            setState(prev => ({
-                ...prev,
-                status: 'disabled',
-                activeSystems: {
-                    healthMonitor: false,
-                    autoRecovery: false,
-                    decisionEngine: false,
-                    autoOptimization: false,
-                    backupSystem: false,
-                },
-            }));
+            applySystems('disabled', NO_SYSTEMS);
 
             addNotification({
                 type: 'info',

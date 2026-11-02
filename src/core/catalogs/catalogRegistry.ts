@@ -12,6 +12,7 @@
 // ============================================================
 
 import { v4 as uuidv4 } from 'uuid';
+import { isLiveRecord } from '../db/recordCopy';
 import { addAuditLog, type SyncTuple } from '../db/fluDatabase';
 import { buildSyncTuple, makeTupleTimestamp } from '../db/syncTuple';
 import { INVALID_INPUT } from '../../lib/resultReasons';
@@ -27,6 +28,28 @@ export interface CatalogRecord<T> {
     createdAt: number;
     updatedAt: number;
     sync: SyncTuple;
+}
+
+/**
+ * Proyecta una fila persistida al registro canónico del catálogo.
+ * Dueño único de la proyección que repetían paletas, ambientes y búsqueda.
+ * @param row Fila con id, data, marcas temporales y tupla de sincronización.
+ * @returns Registro canónico del catálogo.
+ */
+export function catalogRecordFromRow<T>(row: {
+    id: string;
+    data: T;
+    createdAt: number;
+    updatedAt: number;
+    sync: SyncTuple;
+}): CatalogRecord<T> {
+    return {
+        id: row.id,
+        data: row.data,
+        createdAt: row.createdAt,
+        updatedAt: row.updatedAt,
+        sync: row.sync,
+    };
 }
 
 /** Contrato mínimo de persistencia (compatible con una EntityTable de Dexie). */
@@ -87,10 +110,12 @@ export function createCatalogRegistry<T>({
 
     const isReserved = (id: string): boolean => schema.reservedIds.has(id);
 
+    /** Valida los datos con el esquema (dueño único del chequeo). */
+    const isValidData = (data: T): boolean => !schema.validate(data);
+
     const register = async (data: T): Promise<RegisterResult<T>> => {
         if (!data) return { ok: false, reason: INVALID_INPUT };
-        const error = schema.validate(data);
-        if (error) return { ok: false, reason: INVALID_INPUT };
+        if (!isValidData(data)) return { ok: false, reason: INVALID_INPUT };
 
         const canonicalId = schema.idOf(data);
         if (!canonicalId) return { ok: false, reason: INVALID_INPUT };
@@ -118,8 +143,7 @@ export function createCatalogRegistry<T>({
         if (!canonicalId || !data) return { ok: false, reason: INVALID_INPUT };
         if (isReserved(canonicalId)) return { ok: false, reason: 'reserved' };
 
-        const error = schema.validate(data);
-        if (error) return { ok: false, reason: INVALID_INPUT };
+        if (!isValidData(data)) return { ok: false, reason: INVALID_INPUT };
 
         const targetId = schema.idOf(data);
         if (!targetId || isReserved(targetId)) return { ok: false, reason: 'reserved' };
@@ -146,20 +170,20 @@ export function createCatalogRegistry<T>({
     const get = async (canonicalId: string): Promise<T | undefined> => {
         if (!canonicalId) return undefined;
         const all = await db.toArray();
-        const found = all.find((r) => !r.sync?.deleted && schema.idOf(r.data) === canonicalId);
+        const found = all.find((r) => isLiveRecord(r) && schema.idOf(r.data) === canonicalId);
         return found ? toRecord(found).data : undefined;
     };
 
     const list = async (): Promise<T[]> => {
         const all = await db.toArray();
-        return all.filter((r) => !r.sync?.deleted).map((r) => toRecord(r).data);
+        return all.filter((r) => isLiveRecord(r)).map((r) => toRecord(r).data);
     };
 
     const remove = async (canonicalId: string): Promise<boolean> => {
         if (!canonicalId) return false;
         if (isReserved(canonicalId)) return false;
         const all = await db.toArray();
-        const found = all.find((r) => !r.sync?.deleted && schema.idOf(r.data) === canonicalId);
+        const found = all.find((r) => isLiveRecord(r) && schema.idOf(r.data) === canonicalId);
         if (!found) return false;
         const updated: CatalogRecord<T> = {
             ...found,

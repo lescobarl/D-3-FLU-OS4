@@ -15,17 +15,9 @@ import {
     setMergedAmbientes,
     type EnvironmentDefinition,
 } from './environmentRegistry';
-import { createCatalogDb, createCatalogMutations, createCatalogRegistry, type CatalogRecord } from '../catalogs/catalogRegistry';
+import { createCatalogDb, createCatalogMutations, createCatalogRegistry, catalogRecordFromRow as toCatalogRecord, type CatalogRecord } from '../catalogs/catalogRegistry';
 import { ambienteSchema } from '../catalogs/catalogSchema';
 import { mergeCatalog } from '../catalogs/mergeCatalog';
-
-const toCatalogRecord = (row: AmbienteCatalogRecord): CatalogRecord<EnvironmentDefinition> => ({
-    id: row.id,
-    data: row.data,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
-    sync: row.sync,
-});
 
 const toAmbienteRecord = (record: CatalogRecord<EnvironmentDefinition>): AmbienteCatalogRecord => ({
     id: record.id,

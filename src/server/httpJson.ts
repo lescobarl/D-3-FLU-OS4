@@ -53,3 +53,14 @@ export function sendJson(
         logCaughtError(label, message, err);
     }
 }
+
+/**
+ * Crea el respondedor JSON de un proxy con su prefijo de log propio.
+ * @param label Prefijo de log si la escritura falla.
+ * @returns Función `(res, status, data)` lista para el middleware.
+ */
+export function createSendJson(
+    label: string,
+): (res: ServerResponse, status: number, data: unknown) => void {
+    return (res, status, data) => sendJson(res, status, data, label);
+}

@@ -61,6 +61,33 @@ export const PALETTE_COLOR_KEYS = [
     '--border-color',
 ] as const;
 
+/** Colores compartidos de las paletas cálidas (muertos/madres). */
+const WARM_SHARED = {
+    '--bg-secondary': '#2e1a2e',
+    '--bg-tertiary': '#1a0f1a',
+    '--bg-card': '#362036',
+    '--text-primary': '#e0e0e0',
+    '--text-secondary': '#aa88aa',
+    '--text-muted': '#553355',
+    '--accent-orange': '#ffaa00',
+    '--accent-red': '#ff4444',
+} satisfies Partial<Palette['colors']>;
+
+/** Colores compartidos de las paletas verdes (patrio/san patricio). */
+const GREEN_SHARED = {
+    '--bg-secondary': '#1a2e1a',
+    '--bg-tertiary': '#0f1a0f',
+    '--bg-card': '#1e361e',
+    '--text-primary': '#e0e0e0',
+    '--text-secondary': '#88aa88',
+    '--text-muted': '#335533',
+    '--accent-cyan': '#00ff88',
+    '--accent-orange': '#ffaa00',
+    '--accent-red': '#ff4444',
+    '--accent-pink': '#ff66ff',
+    '--border-color': '#2a4a2a',
+} satisfies Partial<Palette['colors']>;
+
 // ============================================================
 // Paletas predefinidas
 // ============================================================
@@ -119,16 +146,9 @@ export const PALETTES: Record<string, Palette> = {
         name: 'Día de Muertos',
         colors: {
             '--bg-primary': '#0f0f1a',
-            '--bg-secondary': '#2e1a2e',
-            '--bg-tertiary': '#1a0f1a',
-            '--bg-card': '#362036',
-            '--text-primary': '#e0e0e0',
-            '--text-secondary': '#aa88aa',
-            '--text-muted': '#553355',
+            ...WARM_SHARED,
             '--accent-cyan': '#ff6600',
             '--accent-green': '#ff8800',
-            '--accent-orange': '#ffaa00',
-            '--accent-red': '#ff4444',
             '--accent-pink': '#ff66ff',
             '--border-color': '#4a2a4a',
         },
@@ -143,18 +163,8 @@ export const PALETTES: Record<string, Palette> = {
         name: 'Patrio',
         colors: {
             '--bg-primary': '#0f1a0f',
-            '--bg-secondary': '#1a2e1a',
-            '--bg-tertiary': '#0f1a0f',
-            '--bg-card': '#1e361e',
-            '--text-primary': '#e0e0e0',
-            '--text-secondary': '#88aa88',
-            '--text-muted': '#335533',
-            '--accent-cyan': '#00ff88',
+            ...GREEN_SHARED,
             '--accent-green': '#ff4444',
-            '--accent-orange': '#ffaa00',
-            '--accent-red': '#ff4444',
-            '--accent-pink': '#ff66ff',
-            '--border-color': '#2a4a2a',
         },
         decoration: 'flag',
         cssClass: 'season-patrio',
@@ -333,18 +343,8 @@ export const PALETTES: Record<string, Palette> = {
         name: 'San Patricio',
         colors: {
             '--bg-primary': '#0f1a0f',
-            '--bg-secondary': '#1a2e1a',
-            '--bg-tertiary': '#0f1a0f',
-            '--bg-card': '#1e361e',
-            '--text-primary': '#e0e0e0',
-            '--text-secondary': '#88aa88',
-            '--text-muted': '#335533',
-            '--accent-cyan': '#00ff88',
+            ...GREEN_SHARED,
             '--accent-green': '#ffd700',
-            '--accent-orange': '#ffaa00',
-            '--accent-red': '#ff4444',
-            '--accent-pink': '#ff66ff',
-            '--border-color': '#2a4a2a',
         },
         decoration: 'clover',
         cssClass: 'season-san-patricio',
@@ -404,16 +404,9 @@ export const PALETTES: Record<string, Palette> = {
         name: 'Día de las Madres',
         colors: {
             '--bg-primary': '#1a0f1a',
-            '--bg-secondary': '#2e1a2e',
-            '--bg-tertiary': '#1a0f1a',
-            '--bg-card': '#362036',
-            '--text-primary': '#e0e0e0',
-            '--text-secondary': '#aa88aa',
-            '--text-muted': '#553355',
+            ...WARM_SHARED,
             '--accent-cyan': '#ff88cc',
             '--accent-green': '#ff69b4',
-            '--accent-orange': '#ffaa00',
-            '--accent-red': '#ff4444',
             '--accent-pink': '#ff99ff',
             '--border-color': '#4a2a4a',
         },

@@ -14,7 +14,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine.ts';
 import type { GameSession, GameTurnResult } from './types.ts';
-import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, advanceCursorAfterSkip, bankItemAt, baseSession, buildShuffledState, findTokenIndex, gameOverResult, hasAnyToken, isEngineCommand, isLastRound, normalizeForMatch, resetGameSession, roundsOverMessage, shuffleOrder, turnResult } from './gameUtils.ts';
+import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, advanceCursorAfterSkip, createShuffledAnnounceStateBuilder, createShuffledAnnounceSurfaceBase, bankItemAt, findTokenIndex, gameOverResult, hasAnyToken, isEngineCommand, isLastRound, normalizeForMatch, roundsOverMessage, shuffleOrder, turnResult } from './gameUtils.ts';
 
 export interface OrdenaPaso {
     texto: string;
@@ -162,28 +162,18 @@ function countRecognized(normalized: string, item: OrdenaSecuenciaItem): number 
 
 export function createOrdenaSecuenciaEngine(options?: { random?: RandomSource }): GameEngine<OrdenaSecuenciaState> {
     let rng: RandomSource = options?.random ?? Math.random;
-    const buildState = (cfg: Record<string, unknown> | undefined): OrdenaSecuenciaState =>
-        buildShuffledState({
-            cfg,
-            bankLength: ORDENA_BANK.length,
-            defaultRounds: DEFAULT_ROUNDS,
-            maxRounds: MAX_ROUNDS,
-            adopt: (cfg2) => {
-                rng = adoptRandom(rng, cfg2);
-                return rng;
-            },
-            build: ({ order, maxRounds }) => ({ order, cursor: 0, maxRounds, phase: 'announce' }),
-        });
+    const buildState = createShuffledAnnounceStateBuilder({
+        bankLength: ORDENA_BANK.length,
+        defaultRounds: DEFAULT_ROUNDS,
+        maxRounds: MAX_ROUNDS,
+        adopt: (cfg2) => (rng = adoptRandom(rng, cfg2)),
+    });
 
-    const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): OrdenaSecuenciaState =>
-        resetGameSession(session, cfg, buildState);
+    const surface = createShuffledAnnounceSurfaceBase('ordena_secuencia', buildState);
+    const reset = surface.reset;
 
     return {
-        id: 'ordena_secuencia',
-
-        createSession(optionsConfig: Record<string, unknown> = {}): GameSession<OrdenaSecuenciaState> {
-            return baseSession('ordena_secuencia', buildState(optionsConfig));
-        },
+        ...surface,
 
         start(session: GameSession, optionsConfig: Record<string, unknown> = {}): GameTurnResult {
             reset(session, optionsConfig);

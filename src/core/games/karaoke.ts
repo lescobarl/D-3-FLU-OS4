@@ -18,7 +18,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine.ts';
 import type { GameSession, GameTurnResult } from './types.ts';
-import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, baseSession, beginGame, gameOverResult, hasAnyToken, isEngineCommand, normalizeForMatch, resetGameSession, turnResult } from './gameUtils.ts';
+import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, baseSession, beginGame, gameOverResult, hasAnyToken, engineCommandGuard, normalizeForMatch, resetGameSession, turnResult } from './gameUtils.ts';
 
 export interface KaraokeSong {
     id: string;          // id espejo de FLU_PLAYLIST (musicPlayer.ts)
@@ -213,9 +213,7 @@ export function createKaraokeEngine(options?: { random?: RandomSource }): GameEn
             return turnResult(`¡Canta conmigo! "${lineaActual}" Cuando la cantes, dime "sigue" para la siguiente línea.`, session.score, { emotion: 'encouraging' });
         },
 
-        isGameCommand(text = ''): boolean {
-            return isEngineCommand(text, { end: END_FRAMES, hint: HINT_FRAMES, skip: SKIP_FRAMES });
-        },
+        isGameCommand: engineCommandGuard({ end: END_FRAMES, hint: HINT_FRAMES, skip: SKIP_FRAMES }),
     };
 }
 export const KARAOKE_COMMAND_FRAMES = Object.freeze({ HINT_FRAMES, SKIP_FRAMES, END_FRAMES })

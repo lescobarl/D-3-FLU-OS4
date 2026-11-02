@@ -28,6 +28,7 @@ import type {
   EventoConversacion,
   EvidenciaVoz,
   LocucionAbierta,
+  MotivoDescarteConversacion,
 } from './tipos.ts'
 import type {
   AlmacenPort,
@@ -99,16 +100,19 @@ export type DatosApertura = Readonly<{
   muestrasIniciales?: readonly Float32Array[]
 }>
 
+/** Firma de la revisión de una locución (dueño único de la firma). */
+export type AplicarRevision = (
+  locucion: LocucionAbierta,
+  texto: string,
+  final: boolean,
+  voz: EvidenciaVoz,
+  medida?: MedidaMotor,
+) => boolean
+
 /** Reglas de cierre que la sesión publica en su superficie. */
 export type ReglasCierre = Readonly<{
   abrirLocucion(datos: DatosApertura): void
-  aplicarRevision(
-    locucion: LocucionAbierta,
-    texto: string,
-    final: boolean,
-    voz: EvidenciaVoz,
-    medida?: MedidaMotor,
-  ): boolean
+  aplicarRevision: AplicarRevision
   cerrarLocucion(
     locucion: LocucionAbierta,
     motivo: MotivoCierre,
@@ -251,13 +255,7 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
   }
 
   /** Aplica texto a la locución abierta ANTES de evaluar la frontera (regla 2). */
-  function aplicarRevision(
-    locucion: LocucionAbierta,
-    texto: string,
-    final: boolean,
-    voz: EvidenciaVoz,
-    medida?: MedidaMotor,
-  ): boolean {
+  const aplicarRevision: AplicarRevision = (locucion, texto, final, voz, medida) => {
     const decision = decidirRevision({
       tramoAbierto: { id: locucion.locutionId, texto: locucion.texto },
       tramoId: locucion.locutionId,
@@ -282,6 +280,22 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
     estado.abierta = siguiente
     if (siguiente.texto !== locucion.texto) emitirCaja()
     return siguiente.final
+  };
+
+  /** Registra un evento de medida de voz con el payload común. */
+  function registrarEventoVoz(
+    tipo: string,
+    locucion: LocucionAbierta,
+    muestras: number,
+    extra: Record<string, unknown> = {},
+  ): void {
+    registro.registrar(tipo, {
+      sessionId: estado.sessionId,
+      locutionId: locucion.locutionId,
+      muestras,
+      sampleRate: locucion.sampleRate,
+      ...extra,
+    })
   }
 
   /**
@@ -319,12 +333,7 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
     if (!vector) {
       // Traza MEDIDA (Caso 12): la fila nace TEMPORAL y esta es la razón del
       // audio que se midió (el piso de VOZ lo aplica el embebedor del adaptador).
-      registro.registrar('conversacion.voz.medida.sinVector', {
-        sessionId: estado.sessionId,
-        locutionId: locucion.locutionId,
-        muestras: muestras.length,
-        sampleRate: locucion.sampleRate,
-      })
+      registrarEventoVoz('conversacion.voz.medida.sinVector', locucion, muestras.length)
       return locucion.voz
     }
     const identidad = decidirIdentidad({
@@ -342,11 +351,7 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
       id: id.uuid,
     })
     registrarMedidaVoz(estado, vector, identidad)
-    registro.registrar('conversacion.voz.medida.cerrada', {
-      sessionId: estado.sessionId,
-      locutionId: locucion.locutionId,
-      muestras: muestras.length,
-      sampleRate: locucion.sampleRate,
+    registrarEventoVoz('conversacion.voz.medida.cerrada', locucion, muestras.length, {
       vozId: identidad.vozId,
       hablante: identidad.hablante,
       continuidad: identidad.continuidad,
@@ -423,7 +428,74 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
     })
   }
 
-  /** Cierra la locución abierta: una fila o un descarte contado (regla 4). */
+  /** Datos comunes de un cierre de locución. */
+  type CierreComun = {
+    sessionId: string
+    locucion: LocucionAbierta
+    tramo: TramoMuestreado
+    motivo: MotivoCierre
+    causa: CausaCierre
+    medida: MedidaFinal
+  }
+
+  /**
+   * Emite el cierre de la locución con su medida y metadatos.
+   * Dueño único del payload de `locution.closed`.
+   * @param c Datos del cierre.
+   */
+  function emitirCierre({ sessionId, locucion, tramo, motivo, causa, medida }: CierreComun): void {
+    emitir({
+      tipo: 'locution.closed',
+      sessionId,
+      locutionId: locucion.locutionId,
+      tramo,
+      motivo,
+      causa,
+      medida,
+    })
+  }
+
+  /**
+   * Registra el cierre de una locución. Dueño único del asiento de cierre.
+   * @param sessionId Sesión de la conversación.
+   * @param locutionId Locución cerrada.
+   * @param tramo Tramo medido.
+   * @param motivo Motivo de cierre.
+   * @param causa Causa del cierre.
+   * @param descarte Descarte contado, o null si se commiteó.
+   */
+  function registrarCierre(
+    sessionId: string,
+    locutionId: string,
+    tramo: TramoMuestreado,
+    motivo: MotivoCierre,
+    causa: CausaCierre,
+    descarte: MotivoDescarteConversacion | null,
+  ): void {
+    registro.registrar('conversacion.locucion.cerrada', {
+      sessionId,
+      locutionId,
+      tramo,
+      motivo,
+      causa,
+      descarte,
+    })
+  }
+
+  /**
+   * Cierra una locución descartada: emite, cuenta el descarte y lo registra.
+   * Dueño único de esa secuencia.
+   * @param c Datos del cierre y descarte.
+   */
+  function cerrarDescartada({
+    descarte,
+    ...comun
+  }: CierreComun & { descarte: MotivoDescarteConversacion }): void {
+    emitirCierre(comun)
+    contarDescarte(descarte, comun.locucion.locutionId, comun.tramo)
+    registrarCierre(comun.sessionId, comun.locucion.locutionId, comun.tramo, comun.motivo, comun.causa, descarte)
+  }
+
   async function cerrarLocucion(
     locucion: LocucionAbierta,
     motivo: MotivoCierre,
@@ -509,24 +581,7 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
 
     const resultado = construirFila(cierre)
     if (!resultado.fila) {
-      emitir({
-        tipo: 'locution.closed',
-        sessionId: sesion,
-        locutionId: locucion.locutionId,
-        tramo,
-        motivo,
-        causa,
-        medida,
-      })
-      contarDescarte(resultado.descarte, locucion.locutionId, tramo)
-      registro.registrar('conversacion.locucion.cerrada', {
-        sessionId: sesion,
-        locutionId: locucion.locutionId,
-        tramo,
-        motivo,
-        causa,
-        descarte: resultado.descarte,
-      })
+      cerrarDescartada({ sessionId: sesion, locucion, tramo, motivo, causa, medida, descarte: resultado.descarte })
       return
     }
 
@@ -540,24 +595,7 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
     // Una ORDEN DE CONTROL ("cerrando escucha", "cerrar escucha", ...) no es
     // conversacion: el hook la ejecuta; el modulo no debe crear otra fila.
     if (config.esComandoDeControl?.(cierre.texto)) {
-      emitir({
-        tipo: 'locution.closed',
-        sessionId: sesion,
-        locutionId: locucion.locutionId,
-        tramo,
-        motivo,
-        causa,
-        medida,
-      })
-      contarDescarte('control', locucion.locutionId, tramo)
-      registro.registrar('conversacion.locucion.cerrada', {
-        sessionId: sesion,
-        locutionId: locucion.locutionId,
-        tramo,
-        motivo,
-        causa,
-        descarte: 'control',
-      })
+      cerrarDescartada({ sessionId: sesion, locucion, tramo, motivo, causa, medida, descarte: 'control' })
       return
     }
     const vozDistintaMedida =
@@ -571,15 +609,7 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
     })
     if (decision.tipo === 'fusionar') {
       const guardada = await guardarFila(decision.fila, String(vozCerrada.vozId || ''))
-      emitir({
-        tipo: 'locution.closed',
-        sessionId: sesion,
-        locutionId: locucion.locutionId,
-        tramo,
-        motivo,
-        causa,
-        medida,
-      })
+      emitirCierre({ sessionId: sesion, locucion, tramo, motivo, causa, medida })
       commitar(guardada)
       registro.registrar('conversacion.locucion.fusionada', {
         sessionId: sesion,
@@ -590,24 +620,7 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
       return
     }
     if (decision.tipo === 'descartar') {
-      emitir({
-        tipo: 'locution.closed',
-        sessionId: sesion,
-        locutionId: locucion.locutionId,
-        tramo,
-        motivo,
-        causa,
-        medida,
-      })
-      contarDescarte(decision.motivo, locucion.locutionId, tramo)
-      registro.registrar('conversacion.locucion.cerrada', {
-        sessionId: sesion,
-        locutionId: locucion.locutionId,
-        tramo,
-        motivo,
-        causa,
-        descarte: decision.motivo,
-      })
+      cerrarDescartada({ sessionId: sesion, locucion, tramo, motivo, causa, medida, descarte: decision.motivo })
       return
     }
     const previaDelTurno = filaDelTurno(cierre.turnId)
@@ -619,37 +632,12 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
       ? esReentregaDeTurno(previaDelTurno.texto, cierre.texto)
       : false
     if (previaDelTurno && !vozDistintaMedida && esReentrega) {
-      emitir({
-        tipo: 'locution.closed',
-        sessionId: sesion,
-        locutionId: locucion.locutionId,
-        tramo,
-        motivo,
-        causa,
-        medida,
-      })
-      contarDescarte('turnoYaEscrito', locucion.locutionId, tramo)
-      registro.registrar('conversacion.locucion.cerrada', {
-        sessionId: sesion,
-        locutionId: locucion.locutionId,
-        tramo,
-        motivo,
-        causa,
-        descarte: 'turnoYaEscrito',
-      })
+      cerrarDescartada({ sessionId: sesion, locucion, tramo, motivo, causa, medida, descarte: 'turnoYaEscrito' })
       return
     }
 
     const fila = await guardarFila(resultado.fila, String(vozCerrada.vozId || ''))
-    emitir({
-      tipo: 'locution.closed',
-      sessionId: sesion,
-      locutionId: fila.locutionId,
-      tramo,
-      motivo,
-      causa,
-      medida,
-    })
+    emitirCierre({ sessionId: sesion, locucion, tramo, motivo, causa, medida })
     commitar(fila)
     emitir({
       tipo: 'speaker.labeled',
@@ -658,14 +646,7 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
       etiqueta: fila.etiqueta,
       evidencia: fila.evidencia,
     })
-    registro.registrar('conversacion.locucion.cerrada', {
-      sessionId: sesion,
-      locutionId: fila.locutionId,
-      tramo,
-      motivo,
-      causa,
-      descarte: null,
-    })
+    registrarCierre(sesion, fila.locutionId, tramo, motivo, causa, null)
   }
 
   /**

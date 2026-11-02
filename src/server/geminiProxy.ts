@@ -2,8 +2,7 @@ import { normalizeLang } from '../core/config/localeConfig.ts'
 // ============================================================
 // Gemini API Proxy — OS2 parity middleware for Vite
 // OS2's useFluVoiceAssistant calls requestFluContract(),
-// requestParticipantEvaluation(), requestConversationSummary()
-// which POST to /api/gemini/* endpoints.
+// que POSTea a /api/gemini/contract (la minuta va con mode:"minute").
 // In OS2 there's a backend Express server; in OS3 we proxy
 // directly to Gemini API via Vite middleware.
 //
@@ -131,6 +130,14 @@ function errorField(err: unknown, key: string): unknown {
     return undefined;
 }
 
+
+
+/**
+ * Responde un error del proxy solo con su mensaje. Dueño unico de la forma breve.
+ * El `logCaughtError` lo hace cada `catch` (catchSilenciosoGuard).
+ * @param res Respuesta HTTP del middleware.
+ * @param error Error capturado.
+ */
 /**
  * Responde un error del proxy con el diagnostico completo. Dueño unico de esa
  * forma. El `logCaughtError` lo hace cada `catch` (catchSilenciosoGuard).
@@ -148,12 +155,6 @@ function sendProxyErrorFull(res: ServerResponse, error: unknown): void {
     });
 }
 
-/**
- * Responde un error del proxy solo con su mensaje. Dueño unico de la forma breve.
- * El `logCaughtError` lo hace cada `catch` (catchSilenciosoGuard).
- * @param res Respuesta HTTP del middleware.
- * @param error Error capturado.
- */
 function sendProxyErrorBrief(res: ServerResponse, error: unknown): void {
     sendJson(res, Number(errorField(error, 'status')) || 500, { error: errorField(error, 'message') });
 }
@@ -165,11 +166,11 @@ interface CacheEntry {
 
 const CONTRACT_CACHE = new Map<string, CacheEntry>();
 const CONTRACT_CACHE_TTL_MS = 30_000;                 // Fase 6: 60s → 30s (conversación dinámica)
-const CONTRACT_CACHE_MAX = 100;                       // OPTIMIZATION E: 50 → 100
+const CONTRACT_CACHE_MAX = 100;
 
 const EVAL_CACHE = new Map<string, CacheEntry>();
 const EVAL_CACHE_TTL_MS = 30_000;           // 30s (OPTIMIZATION C)
-const EVAL_CACHE_MAX = 50;
+const EVAL_CACHE_MAX = 50;                       // OPTIMIZATION E: 50 → 100
 
 const VISION_CACHE = new Map<string, CacheEntry>();
 const VISION_CACHE_TTL_MS = 300_000;        // 5 min (imagen repetida = mismo análisis)
@@ -227,6 +228,10 @@ function buildContractCacheKey(body: ProxyBody | null): string {
     return `${mode}|${simpleHash(JSON.stringify(payload))}`;
 }
 
+
+
+// ─── Shared helpers ──────────────────────────────────────────
+
 /**
  * Build a hash key for participant evaluation caching (OPTIMIZATION C).
  * The evaluation depends on the conversation log content and config.
@@ -237,8 +242,6 @@ function buildEvalCacheKey(body: ProxyBody | null): string {
     const logFingerprint = (conversationLog || '').slice(0, 200);
     return `${logFingerprint}|${normalizeLang(body?.language)}|${body?.role || ''}|${body?.theme || ''}|${body?.maxDraftChars || 420}`;
 }
-
-// ─── Shared helpers ──────────────────────────────────────────
 
 function parseBody<T = ProxyBody>(req: IncomingMessage): Promise<T | null> {
     return new Promise<T | null>((resolve, reject) => {
@@ -535,27 +538,7 @@ async function handleContract(req: IncomingMessage, res: ServerResponse) {
     }
 }
 
-async function handleSummary(req: IncomingMessage, res: ServerResponse) {
-    try {
-        let body = await parseBody(req);
-        body = resolveServerApiKey(body);
-        const result = await generateConversationSummary(summaryRequestFromBody(body));
 
-        // OS2 returns { summary: { titulo, ... }, diagnostics: {...} }
-        // Normalize: flatten summary if nested
-        const normalized = result?.summary
-            ? {
-                ...result.summary,
-                diagnostics: result.diagnostics || null,
-            }
-            : result;
-
-        sendJson(res, 200, normalized);
-    } catch (error: unknown) {
-        logCaughtError('[geminiProxy] /api/gemini/summary error', errorField(error, 'message'));
-        sendProxyErrorFull(res, error);
-    }
-}
 
 async function handleParticipantEval(req: IncomingMessage, res: ServerResponse) {
     try {
@@ -763,17 +746,7 @@ export function createGeminiMiddleware({ env = {} }: { env?: Record<string, stri
                     sendJson(res, 500, { error: 'internal_error', detail: errorField(err, 'message') || 'Unknown error' });
                 }
             });
-            // POST /api/gemini/summary — OS2's requestConversationSummary()
-            server.middlewares.use('/api/gemini/summary', async (req: IncomingMessage, res: ServerResponse, next: () => void) => {
-                if (req.method !== 'POST') return next();
-                try {
-                    await handleSummary(req, res);
-                } catch (err: unknown) {
-                    logCaughtError('[geminiProxy] Unhandled error in /api/gemini/summary', errorField(err, 'message') || err);
-                    sendJson(res, 500, { error: 'internal_error', detail: errorField(err, 'message') || 'Unknown error' });
-                }
-            });
-            // POST /api/gemini/participant-eval — OS2's requestParticipantEvaluation()
+            // POST /api/gemini/participant-eval — evaluacion del participante proactivo
             server.middlewares.use('/api/gemini/participant-eval', async (req: IncomingMessage, res: ServerResponse, next: () => void) => {
                 if (req.method !== 'POST') return next();
                 try {

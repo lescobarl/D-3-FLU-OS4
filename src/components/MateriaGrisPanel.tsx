@@ -12,6 +12,7 @@
 //     y tabla de acciones de FLU_CONFIG.materiaGris.actions
 //   - F5: puntos, leaderboard e historial visibles en la UI
 // ============================================================
+import { SettingsPanelShell } from './SettingsPanelShell';
 import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { FLU_CONFIG } from '../voice/api/config';
@@ -63,11 +64,7 @@ export function MateriaGrisPanel({
   };
 
   return (
-    <details className="flu-settings-image-config">
-      <summary className="flu-settings-image-config__summary">
-        {ui.panelTitle || 'Materia gris'}
-      </summary>
-      <div className="flu-settings-image-config__group">
+    <SettingsPanelShell title={ui.panelTitle || 'Materia gris'}>
         {/* Entrega de puntos */}
         <form className="flu-settings-section" onSubmit={handleSubmit}>
           <div className="flu-settings-section__body">
@@ -151,7 +148,6 @@ export function MateriaGrisPanel({
             </div>
           </div>
         )}
-      </div>
-    </details>
+      </SettingsPanelShell>
   );
 }

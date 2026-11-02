@@ -14,7 +14,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine.ts';
 import type { GameSession, GameTurnResult } from './types.ts';
-import { END_GAME_FRAMES, HELP_CORE_FRAMES, SKIP_CORE_FRAMES, adoptRandom, bankItemAt, baseSession, beginGame, buildShuffledState, gameOverResult, gamePrompt, hasAnyToken, hasToken, isEngineCommand, isLastRound, normalizeForMatch, openTurn, resetGameSession, skipNextPrompt, skipTurn, turnResult } from './gameUtils.ts';
+import { END_GAME_FRAMES, HELP_CORE_FRAMES, SKIP_CORE_FRAMES, adoptRandom, createShuffledAnnounceStateBuilder, createShuffledAnnounceSurface, bankItemAt, gameOverResult, gamePrompt, hasAnyToken, hasToken, isEngineCommand, isLastRound, normalizeForMatch, openTurn, skipNextPrompt, skipTurn, turnResult } from './gameUtils.ts';
 
 export interface RepiteTraduceItem {
     es: string;              // palabra en español
@@ -68,35 +68,20 @@ const currentPrompt = (state: RepiteTraduceState) =>
 
 export function createRepiteTraduceEngine(options?: { random?: RandomSource }): GameEngine<RepiteTraduceState> {
     let rng: RandomSource = options?.random ?? Math.random;
-    const buildState = (cfg: Record<string, unknown> | undefined): RepiteTraduceState =>
-        buildShuffledState({
-            cfg,
-            bankLength: REPITE_BANK.length,
-            defaultRounds: DEFAULT_ROUNDS,
-            maxRounds: MAX_ROUNDS,
-            adopt: (cfg2) => {
-                rng = adoptRandom(rng, cfg2);
-                return rng;
-            },
-            build: ({ order, maxRounds }) => ({ order, cursor: 0, maxRounds, phase: 'announce' }),
-        });
+    const buildState = createShuffledAnnounceStateBuilder({
+        bankLength: REPITE_BANK.length,
+        defaultRounds: DEFAULT_ROUNDS,
+        maxRounds: MAX_ROUNDS,
+        adopt: (cfg2) => (rng = adoptRandom(rng, cfg2)),
+    });
 
-    const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): RepiteTraduceState =>
-        resetGameSession(session, cfg, buildState);
+    const surface = createShuffledAnnounceSurface('repite_traduce', buildState, (raw) => {
+        const state = raw as RepiteTraduceState;
+        return `¡Vamos a practicar inglés! ${currentPrompt(state)}`;
+    });
 
     return {
-        id: 'repite_traduce',
-
-        createSession(optionsConfig: Record<string, unknown> = {}): GameSession<RepiteTraduceState> {
-            return baseSession('repite_traduce', buildState(optionsConfig));
-        },
-
-        start(session: GameSession, optionsConfig: Record<string, unknown> = {}): GameTurnResult {
-            return beginGame(session, optionsConfig, reset, (raw) => {
-                const state = raw as RepiteTraduceState;
-                return `¡Vamos a practicar inglés! ${currentPrompt(state)}`;
-            }, { emotion: 'excited' });
-        },
+        ...surface,
 
         turn(session: GameSession, text = ''): GameTurnResult {
             const state = session.state as RepiteTraduceState;

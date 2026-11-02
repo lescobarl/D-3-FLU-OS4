@@ -17,6 +17,8 @@
 //   - ringing: item que está sonando ahora (para ofrecer "Detener").
 // ============================================================
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { refreshOnOk } from './refreshOnOk';
+import { useCountedMutation } from './pendingListCore';
 import { runAgendaCycle, type AgendaFireAction } from '../core/agenda/agendaMotor';
 import type { AgendaService, AgendaCreateInput, AgendaTargetSelector } from '../core/agenda/agendaService';
 import type { AgendaItem, AgendaKind, AgendaStatus } from '../core/agenda/agendaModel';
@@ -196,49 +198,41 @@ export function useAgenda({
         [service],
     );
 
+    const runCounted = useCountedMutation(async () => {
+        refresh();
+    });
+
     const create = useCallback<AgendaService['create']>(
         async (input: AgendaCreateInput) => {
-            const result = await service.create(input);
-            if (result.ok) refresh();
-            return result;
+            return refreshOnOk(() => service.create(input), refresh);
         },
         [service, refresh],
     );
 
     const update = useCallback<AgendaService['update']>(
         async (id, patch) => {
-            const result = await service.update(id, patch);
-            if (result.ok) refresh();
-            return result;
+            return refreshOnOk(() => service.update(id, patch), refresh);
         },
         [service, refresh],
     );
 
     const cancel = useCallback<AgendaService['cancel']>(
         async (id) => {
-            const result = await service.cancel(id);
-            if (result.ok) refresh();
-            return result;
+            return refreshOnOk(() => service.cancel(id), refresh);
         },
         [service, refresh],
     );
 
     const cancelByTarget = useCallback<AgendaService['cancelByTarget']>(
-        async (selector: AgendaTargetSelector) => {
-            const count = await service.cancelByTarget(selector);
-            if (count > 0) refresh();
-            return count;
-        },
-        [service, refresh],
+        async (selector: AgendaTargetSelector) =>
+            runCounted(() => service.cancelByTarget(selector)),
+        [service, runCounted],
     );
 
     const updateByTarget = useCallback<AgendaService['updateByTarget']>(
-        async (selector: AgendaTargetSelector, patch) => {
-            const count = await service.updateByTarget(selector, patch);
-            if (count > 0) refresh();
-            return count;
-        },
-        [service, refresh],
+        async (selector: AgendaTargetSelector, patch) =>
+            runCounted(() => service.updateByTarget(selector, patch)),
+        [service, runCounted],
     );
 
     /**

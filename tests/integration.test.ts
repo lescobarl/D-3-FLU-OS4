@@ -449,13 +449,6 @@ describe('💬 Conversation Memory', () => {
         expect(useIntegrationStore.getState().sessionStats.totalInteractions).toBe(1);
     });
 
-    it('debe limpiar historial con clearHistory', () => {
-        addUserRow('Hola');
-        useIntegrationStore.getState().addFluMessage('¡Hola!');
-        useIntegrationStore.getState().clearHistory();
-        expect(useIntegrationStore.getState().conversationHistory).toEqual([]);
-    });
-
     it('debe resetear conversación con resetConversationHistory', () => {
         addUserRow('Hola');
         useIntegrationStore.getState().addFluMessage('¡Hola!');

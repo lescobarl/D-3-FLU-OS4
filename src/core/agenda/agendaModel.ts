@@ -18,8 +18,8 @@ import {
     localDayDiff,
     dayOfWeek,
     MS_DAY,
-    parseTimeOfDayToMs,
 } from '../temporal/scheduleEngine.ts';
+import { parseTimeOfDayToMs } from '../../lib/timeOfDay.ts';
 import type { SyncTuple } from '../db/fluDatabase.ts';
 import { stripDiacriticsLower } from '../../lib/textUtils.ts';
 

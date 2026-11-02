@@ -18,7 +18,6 @@ import { readSources } from '../scripts/fsScan.mjs';
 /** Homónimos revisados: mismo nombre en dominios distintos, contratos distintos. */
 export const ALLOWED_HOMONYMS = new Set([
   'runMainThreadFallback',
-  'sourceLabel',
   'toUI',
   'flush',
   'resetTurn',

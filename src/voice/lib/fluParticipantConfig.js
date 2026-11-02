@@ -137,7 +137,9 @@ export function getFluParticipantConfig(config = FLU_CONFIG) {
       merged[key] = coerceParticipantValue(key, overrides[key])
     }
   }
-  if (hasLocalStorage()) {
+  // El JSON es la fuente canónica. La clave heredada solo RELLENA si el JSON no
+  // trae `enabled` (instalaciones antiguas); nunca lo pisa.
+  if (hasLocalStorage() && !('enabled' in overrides)) {
     const legacy = localGet(LEGACY_ENABLED_KEY)
     if (legacy === '0') merged.enabled = false
     if (legacy === '1') merged.enabled = true
@@ -158,7 +160,6 @@ export function setFluParticipantOverrides(partial = {}) {
     next[key] = coerceParticipantValue(key, value)
   }
   localSet(FLU_PARTICIPANT_STORAGE_KEY, JSON.stringify(next))
-  localSet(LEGACY_ENABLED_KEY, next.enabled === false ? '0' : '1')
   return getFluParticipantConfig()
 }
 

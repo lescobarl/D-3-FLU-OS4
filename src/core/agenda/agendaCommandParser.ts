@@ -14,7 +14,8 @@ import {
     parseNlDateTime,
 } from '../reminders/nlDateParser.ts';
 import { pickTimeOfDay, scanTimesOfDay, stripTimesOfDay } from '../temporal/timeOfDay.ts';
-import { parseTimeOfDayToMs, MS_DAY } from '../temporal/scheduleEngine.ts';
+import { MS_DAY } from '../temporal/scheduleEngine.ts';
+import { parseTimeOfDayToMs } from '../../lib/timeOfDay.ts';
 import { WEEKDAYS_ES } from '../temporal/calendarNames.ts';
 import { normalizeSpokenCommand } from '../../voice/api/audio.ts';
 import type { AgendaKind, AgendaTrigger } from './agendaModel.ts';

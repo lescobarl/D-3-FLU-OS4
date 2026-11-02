@@ -61,7 +61,10 @@ export const TECHOS: Record<string, number> = {
   // +2 (2026-11-01): minNewSpeakerWords y cosineExistingMatch; la grabacion
   // corta confirmo que con solo 8 s el hombre quedaba `Hablante ?`.
   'src/voice/lib/fluConfig.js': 2559,
-  'src/voice/lib/gemini.js': 1848,
+  // -62 (2026-11-02): se eliminaron los clientes muertos
+  // requestParticipantEvaluation/requestConversationSummary (la via viva es
+  // services/gemini.ts por /contract y mode:minute).
+  'src/voice/lib/gemini.js': 1786,
 }
 
 /** Lineas de un texto, con el mismo criterio con que se midieron los techos. */

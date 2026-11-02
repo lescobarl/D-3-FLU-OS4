@@ -12,6 +12,7 @@ import { useEnhancedBranding } from '../core/branding/useEnhancedBranding';
 import { AI_PROVIDERS, BRANDING_MODES, FLU_PROFILE_IDS, UI_LANGUAGES, VOICE_CONFIG_CATALOG } from '../core/config/voiceConfigCatalog';
 import type { ConfigCatalogEntry } from '../core/config/voiceConfigCatalog';
 import { relayLog } from '../lib/clientLogRelay';
+import { normalizeLookupText } from '../lib/lookupText';
 import { useIntegrationStore } from '../store/integrationStore';
 import type { AdvancedConfig, FluProfile, ImageConfig, PersonalityConfig, VoiceConfig } from '../types/bridge';
 import type React from 'react';
@@ -181,8 +182,7 @@ export async function applyConfigAction(
             } else if (mode === 'remove' || mode === 'quitar' || mode === 'eliminar') {
                 const targetName = parts[0] || '';
                 const events = ctx.branding.config.customEvents ?? [];
-                const norm = (s: string) => s.toLowerCase().replace(/\s+/g, ' ').trim();
-                const match = events.find((e) => norm(e.name) === norm(targetName));
+                const match = events.find((e) => normalizeLookupText(e.name) === normalizeLookupText(targetName));
                 if (match) {
                     await ctx.branding.seasonalActions.removeCustomEvent(match.id);
                 } else {

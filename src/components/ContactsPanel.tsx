@@ -21,6 +21,8 @@ import type { ContactRecord, ParticipantRecord } from '../core/db/fluDatabase';
 import type { BirthdayContact, ContactInput } from '../core/contacts/contactService';
 import { useAsyncAction } from '../hooks/useAsyncAction';
 import { ParticipantSelect } from './ParticipantSelect';
+import { SettingsPanelShell } from './SettingsPanelShell';
+import { SettingsTextField } from './SettingsTextField';
 
 export interface ContactsPanelProps {
   participants: ParticipantRecord[];
@@ -91,26 +93,19 @@ export function ContactsPanel({
   };
 
   return (
-    <details className="flu-settings-image-config">
-      <summary className="flu-settings-image-config__summary">
-        {ui.panelTitle || 'Agenda de contactos'}
-      </summary>
-      <div className="flu-settings-image-config__group">
+    <SettingsPanelShell title={ui.panelTitle || 'Agenda de contactos'}>
         {/* Alta de contacto */}
         <form className="flu-settings-section" onSubmit={handleSubmit}>
           <div className="flu-settings-section__body">
-            <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked">
-              <span>{ui.nameLabel || 'Nombre'}</span>
-              <input
-                type="text"
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-                placeholder={ui.namePlaceholder || 'Nombre del contacto'}
-                aria-label={ui.nameLabel || 'Nombre'}
-                data-testid="contacts-add-name"
-                disabled={busy}
-              />
-            </label>
+            <SettingsTextField
+              label={ui.nameLabel || 'Nombre'}
+              value={name}
+              onChange={setName}
+              placeholder={ui.namePlaceholder || 'Nombre del contacto'}
+              ariaLabel={ui.nameLabel || 'Nombre'}
+              testId="contacts-add-name"
+              disabled={busy}
+            />
             <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked">
               <span>{ui.phoneLabel || 'Teléfono'}</span>
               <input
@@ -280,7 +275,6 @@ export function ContactsPanel({
             )}
           </div>
         </div>
-      </div>
-    </details>
+    </SettingsPanelShell>
   );
 }

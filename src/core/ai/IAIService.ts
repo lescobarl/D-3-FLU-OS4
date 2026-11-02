@@ -165,6 +165,22 @@ export interface GeneratedDocumentResult {
     text?: string;
 }
 
+/** Argumentos de `generateResponse` (dueño único de la firma). */
+export type FetchResponseArgs = [
+    options: AIRequestOptions,
+    userText: string,
+    botName: string,
+    history: AIHistoryEntry[],
+];
+
+/** Argumentos de `fetchVision` (dueño único de la firma). */
+export type FetchVisionArgs = [
+    imageBase64: string,
+    mimeType: string,
+    language: string,
+    profile: string,
+];
+
 /**
  * AI Service Interface — all AI operations.
  * Implementations: GeminiService, FallbackService, MockService
@@ -186,12 +202,7 @@ export interface IAIService {
     ): Promise<AIMinuteResult>;
 
     /** Generate a contextual response */
-    generateResponse(
-        options: AIRequestOptions,
-        userText: string,
-        botName: string,
-        history: AIHistoryEntry[],
-    ): Promise<string>;
+    generateResponse(...args: FetchResponseArgs): Promise<string>;
 
     /** Evaluate whether FLU should intervene */
     generateParticipantEvaluation(

@@ -292,10 +292,13 @@ describe('D5 - una sola resolucion de la key de texto', () => {
         const offenders = findTextKeyOwnerOffenders(content, 'src/services/deepseek.ts');
         expect(
             offenders,
-            `Lecturas propias de la key de texto (N=${offenders.length}); usa resolveApiKey(apiKey, ` +
-                `resolveTextApiKey):\n  ${offenders.join('\n  ')}`,
+            `Lecturas propias de la key de texto (N=${offenders.length}); usa resolveTextRequestKey ` +
+                `(dueno core/ai/textKey):\n  ${offenders.join('\n  ')}`,
         ).toEqual([]);
-        expect(content).toContain('resolveApiKey(');
+        expect(content).toContain('resolveTextRequestKey');
+        const owner = read('src/core/ai/textKey.ts');
+        expect(owner).toContain('resolveApiKey(');
+        expect(owner).toContain('resolveTextApiKey');
     });
     it('el detector no es decorativo: marca la lectura propia y perdona la delegacion', () => {
         expect(findTextKeyOwnerOffenders(`const k = localGet(STORAGE_KEYS.TEXT_API_KEY)`)).toHaveLength(1);

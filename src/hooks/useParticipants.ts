@@ -15,6 +15,7 @@
 //   - DI: now inyectable para pruebas deterministas
 // ============================================================
 import { useCallback, useEffect, useState } from 'react';
+import { refreshOnOk } from './refreshOnOk';
 import { useServiceRef } from './useServiceRef';
 import { FLU_CONFIG } from '../voice/api/config'
 import { renameRowSpeakerName, speakerIdToDefaultName } from '../voice/api/conversation'
@@ -59,7 +60,7 @@ export interface ParticipantsActions {
   refresh: () => Promise<void>;
   register: (input: ParticipantInput) => Promise<ParticipantRegisterResult>;
   upsert: (id: string, patch: ParticipantPatch) => Promise<UpsertResult>;
-  remove: (id: string) => Promise<boolean>;
+  remove: (id: string, activeId?: string) => Promise<{ removed: boolean; wasActive: boolean }>;
   /** Siembra el perfil anónimo por defecto si aún no existe (idempotente). */
   seedAnonymous: () => Promise<ParticipantRecord | undefined>;
   /** Devuelve el perfil anónimo por defecto si existe. */
@@ -208,9 +209,7 @@ export function useParticipants({ now }: UseParticipantsOptions = {}): UsePartic
   /** Registra un participante y refresca el listado. */
   const register = useCallback(
     async (input: ParticipantInput): Promise<ParticipantRegisterResult> => {
-      const result = await service.register(input);
-      if (result.ok) await refresh();
-      return result;
+      return refreshOnOk(() => service.register(input), refresh);
     },
     [service, refresh],
   );
@@ -218,25 +217,26 @@ export function useParticipants({ now }: UseParticipantsOptions = {}): UsePartic
   /** Actualiza un participante existente y refresca el listado. */
   const upsert = useCallback(
     async (id: string, patch: ParticipantPatch): Promise<UpsertResult> => {
-      const result = await service.upsert(id, patch);
-      if (result.ok) await refresh();
-      return result;
+      return refreshOnOk(() => service.upsert(id, patch), refresh);
     },
     [service, refresh],
   );
 
-  /** Elimina un participante y refresca el listado. */
+  /**
+   * ÚNICA cascada de borrado de un participante: registro, onboarding per-user,
+   * ACTIVE_USER y aviso de si era el activo. App solo limpia su estado React si
+   * `wasActive` (un solo criterio: el dueño).
+   * @param id Participante a borrar.
+   * @param activeId Participante activo según el estado React (se suma al de storage).
+   * @returns Si se borró y si era el activo.
+   */
   const remove = useCallback(
-    async (id: string): Promise<boolean> => {
+    async (id: string, activeId?: string): Promise<{ removed: boolean; wasActive: boolean }> => {
       const removed = await service.remove(id);
+      let wasActive = false;
       if (removed) {
-        // Limpieza de estado huérfano (bug "usuarios borrados que reaparecen"):
-        // al eliminar un participante también se borra su onboarding per-user
-        // (Dexie v14 onboardingStates) y, si era el usuario activo, se limpia
-        // ACTIVE_USER. Sin esto, en la siguiente carga el id eliminado seguía
-        // activo y su onboarding completado hacía que el perfil reapareciera.
+        // Borrado lógico vía gateway (C44: un solo escritor de onboardingStates).
         try {
-          // Borrado lógico vía gateway (C44: un solo escritor de onboardingStates).
           await onboardingGateway.reset(id);
         } catch (err) {
           logCaughtError('[useParticipants] onboarding cleanup error', err);
@@ -244,14 +244,18 @@ export function useParticipants({ now }: UseParticipantsOptions = {}): UsePartic
         try {
           if (typeof window !== 'undefined') {
             const active = localGet(STORAGE_KEYS.ACTIVE_USER);
+            // Un solo criterio: storage o estado React, decidido aquí.
+            wasActive = active === id || activeId === id;
             if (active === id) localRemove(STORAGE_KEYS.ACTIVE_USER);
+          } else {
+            wasActive = activeId === id;
           }
         } catch (err) {
           logCaughtError('[useParticipants] active-user cleanup error', err);
         }
         await refresh();
       }
-      return removed;
+      return { removed, wasActive };
     },
     [service, refresh],
   );

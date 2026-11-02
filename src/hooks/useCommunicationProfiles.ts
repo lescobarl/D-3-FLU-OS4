@@ -14,8 +14,7 @@
 //   - DI: now inyectable para pruebas deterministas
 // ============================================================
 import { useCallback } from 'react';
-import { useListReload } from './useListReload';
-import { useServiceRef } from './useServiceRef';
+import { useProfileList } from './useProfileList';
 import { FLU_CONFIG } from '../voice/api/config';
 import { fluDb, type CommunicationProfileRecord } from '../core/db/fluDatabase';
 import {
@@ -80,26 +79,28 @@ export function useCommunicationProfiles({
   // estado o los callbacks referencian `service`, y una referencia en
   // la zona muerta temporal (TDZ) rompería el arranque con
   // "Cannot access 'service' before initialization".
-  const service = useServiceRef<CommunicationProfileService>(() =>
-    createCommunicationProfileService({
-      // Adaptador de la tabla Dexie a CommunicationProfilesDb: la clave
-      // lógica es participantId (el id físico es un UUIDv4).
-      db: {
-        add: (record) => fluDb.communicationProfiles.add(record),
-        put: (record) => fluDb.communicationProfiles.put(record),
-        getByParticipant: (participantId) =>
-          fluDb.communicationProfiles.where('participantId').equals(participantId).first(),
-        toArray: () => fluDb.communicationProfiles.toArray(),
-      },
-      config,
-      now: now || (() => Date.now()),
-    }),
-  );
-
-  const { items: profiles, loading, refresh } = useListReload(
-    useCallback(() => service.list(), [service]),
-    'useCommunicationProfiles',
-  );
+  const { service, items: profiles, loading, refresh } = useProfileList<
+    CommunicationProfileRecord,
+    CommunicationProfileService
+  >({
+    create: (nowFn) =>
+      createCommunicationProfileService({
+        // Adaptador de la tabla Dexie a CommunicationProfilesDb: la clave
+        // lógica es participantId (el id físico es un UUIDv4).
+        db: {
+          add: (record) => fluDb.communicationProfiles.add(record),
+          put: (record) => fluDb.communicationProfiles.put(record),
+          getByParticipant: (participantId) =>
+            fluDb.communicationProfiles.where('participantId').equals(participantId).first(),
+          toArray: () => fluDb.communicationProfiles.toArray(),
+        },
+        config,
+        now: nowFn,
+      }),
+    now,
+    errorLabel: 'useCommunicationProfiles',
+    list: (s) => s.list(),
+  });
 
   /** Asegura el perfil de una persona y refresca el listado. */
   const ensure = useCallback(

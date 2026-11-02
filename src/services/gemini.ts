@@ -1,3 +1,4 @@
+import { resolveTextRequestKey } from '../core/ai/textKey';
 import { normalizeLang } from '../core/config/localeConfig'
 // ============================================================
 // GeminiService — Adapter de transporte (proxy Gemini) sobre el motor único
@@ -17,7 +18,7 @@ import { normalizeLang } from '../core/config/localeConfig'
 //   - §8.6/§10.2: implementación única (guard aiServiceSingleImplGuard)
 // ============================================================
 
-import { GEMINI_CONFIG, STORAGE_KEYS, isWorkspaceTipo, buildPollinationsUrl, readStorage, resolveTextApiKey } from '../core/config/appConfig';
+import { GEMINI_CONFIG, STORAGE_KEYS, isWorkspaceTipo, buildPollinationsUrl, readStorage } from '../core/config/appConfig';
 import type { VisualTipo } from '../core/config/appConfig';
 import { buildMinuteSystemPrompt } from '../core/ai/prompts';
 import { asMusicAction } from '../core/media/musicActions';
@@ -28,14 +29,17 @@ import type {
     AISummaryResult,
     AIParticipantEvaluation,
     AIWorkspaceImageResult,
+    FetchResponseArgs,
+    FetchVisionArgs,
 } from '../core/ai/IAIService';
 import type { FluAccion, FluContract, FluDiagnostics } from '../types/bridge';
 import { postGeminiContract } from './geminiContractClient';
 import { logCaughtError } from '../lib/caughtError';
-import { POLLINATIONS_DEFAULTS, resolveApiKey } from '../core/config/sharedConfig';
+import { POLLINATIONS_DEFAULTS } from '../core/config/sharedConfig';
 import { buildPollinationsImageResult } from './pollinationsImage';
 import { fetchTextEngineResilient, REQUEST_TIMEOUT_PRESETS } from '../core/ai/httpClient';
 import { resolveConfiguredTemperature } from './aiTemperature';
+import { buildPersonalityPayload } from '../core/ai/personalization';
 import { VISUAL_CONFIG } from '../voice/api/uiConfig';
 import {
     BaseAIService,
@@ -46,13 +50,16 @@ import {
 } from '../core/ai/aiServiceBase';
 
 import { pickText } from '../lib/uiStrings';
-import { GENERATION_FAILED_SOURCE } from '../lib/generationTrace';
+import { imageGenerationFailure } from '../core/ai/imageFailure';
 // -----------------------------------------------------------
 // Helpers específicos del transporte Gemini
 // -----------------------------------------------------------
 
 /**
  * Build diagnostics metadata for a Gemini response.
+ * @param apiKeySource Origen de la clave.
+ * @param model Modelo explícito.
+ * @returns Metadatos de diagnóstico.
  */
 export function buildDiagnostics(apiKeySource: string, model?: string): FluDiagnostics {
     const savedModel = readStorage<string | null>(STORAGE_KEYS.TEXT_MODEL, null);
@@ -60,39 +67,6 @@ export function buildDiagnostics(apiKeySource: string, model?: string): FluDiagn
         provider: 'google-gemini',
         model: model || savedModel || GEMINI_CONFIG.MODEL,
         apiKeySource,
-    };
-}
-
-/**
- * Resolve Gemini API key from direct param or centralized config.
- * Usa resolveTextApiKey() desde appConfig:
- *   localStorage (flu-text-api-key) > env var > empty. Sin legado.
- */
-function resolveGeminiKeyForRequest(apiKey: string = ''): { apiKey: string; apiKeySource: string } {
-    return resolveApiKey(apiKey, resolveTextApiKey);
-}
-
-/**
- * Construye el objeto `personality` del contrato. Dueno unico de la traduccion
- * traits/tone/explanationLevel -> payload del proxy: response y contract la
- * consumen (el proxy reconstruye el prompt desde `personality`).
- * @param options opciones de la peticion
- * @returns payload de personalidad o null si no hay ajustes activos
- */
-function buildPersonalityPayload(options: AIRequestOptions): {
-    traits: string[];
-    tone: string;
-    explanationLevel: string;
-    name: string;
-    profile: string;
-} | null {
-    if (!(options.traits || options.tone || options.explanationLevel)) return null;
-    return {
-        traits: options.traits || [],
-        tone: options.tone || '',
-        explanationLevel: options.explanationLevel || '',
-        name: '',
-        profile: options.role || '',
     };
 }
 
@@ -104,11 +78,25 @@ function buildPersonalityPayload(options: AIRequestOptions): {
  * Adapter que implementa IAIService delegando la orquestación en
  * BaseAIService y todo el transporte en el proxy Vite (geminiProxy.ts).
  */
+/**
+ * Envoltura del contrato devuelto por el proxy: campos que consume el adapter.
+ */
+type ContractEnvelope = {
+    respuesta_voz?: unknown;
+    navegacion?: unknown;
+    workspace?: unknown;
+    animacion?: unknown;
+    emocion?: unknown;
+    musica?: unknown;
+    acciones?: unknown;
+    contract?: unknown;
+};
+
 class GeminiService extends BaseAIService implements IAIService {
     protected readonly engineLabel = 'Gemini';
 
     canUseTextBackend(): boolean {
-        return Boolean(resolveGeminiKeyForRequest().apiKey);
+        return Boolean(resolveTextRequestKey().apiKey);
     }
 
     protected documentAnalysisSystem(language: string): string {
@@ -124,24 +112,72 @@ class GeminiService extends BaseAIService implements IAIService {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                apiKey: resolveGeminiKeyForRequest().apiKey,
+                apiKey: resolveTextRequestKey().apiKey,
                 system: request.system,
                 prompt: request.prompt,
                 maxTokens: request.maxTokens,
             }),
         }, { timeoutMs: REQUEST_TIMEOUT_PRESETS.conversation });
-        if (!response.ok) {
-            throw new Error(`Proxy returned ${response.status}`);
-        }
-        const data = await response.json();
+        const data = await this.readProxyJson<{ text?: string }>(response);
         return String(data?.text || '');
     }
 
     /**
      * Minuta vía proxy (mode='minute'). Devuelve el JSON OS2 ya parseado.
      */
+    /**
+     * Payload común del contrato Gemini (dueño único de los campos repetidos).
+     * @param options Opciones de la petición.
+     * @param payload Campos específicos de la operación.
+     * @returns Payload del contrato.
+     */
+    private contractRequest(
+        options: AIRequestOptions,
+        payload: {
+            mode: string;
+            transcript?: string;
+            history: AIHistoryEntry[];
+            personality?: unknown;
+            systemPrompt: string;
+            userMessage: string;
+        },
+    ): Record<string, unknown> {
+        const request: Record<string, unknown> = {
+            mode: payload.mode,
+            apiKey: resolveTextRequestKey(options.apiKey).apiKey,
+            language: normalizeLang(options.language),
+            role: options.role || '',
+            theme: options.theme || '',
+            history: payload.history,
+            systemPrompt: payload.systemPrompt,
+            userMessage: payload.userMessage,
+            temperature: options.temperature ?? resolveConfiguredTemperature(),
+        };
+        if (payload.transcript) request.transcript = payload.transcript;
+        if (payload.personality) request.personality = payload.personality;
+        return request;
+    }
+
+    /**
+     * POST JSON al motor de texto (dueño único del RequestInit).
+     * @param url Endpoint.
+     * @param body Cuerpo serializable.
+     * @param timeoutMs Tiempo máximo.
+     * @returns Respuesta cruda.
+     */
+    private postJson(url: string, body: unknown, timeoutMs: number): Promise<Response> {
+        return fetchTextEngineResilient(
+            url,
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+            },
+            { timeoutMs },
+        );
+    }
+
     protected async fetchMinute(request: MinuteRequest): Promise<Record<string, unknown>> {
-        const temperature = request.options.temperature ?? resolveConfiguredTemperature();
         const userMessage = request.isEnglish
             ? `Session emotional state: ${request.emotionalState}
 
@@ -156,24 +192,16 @@ ${request.conversationLog}
 
 Genera la minuta en formato JSON.`;
 
-        const response = await postGeminiContract({
-            mode: 'minute',
-            apiKey: resolveGeminiKeyForRequest(request.options.apiKey).apiKey,
-            language: normalizeLang(request.options.language),
-            role: request.options.role || '',
-            theme: request.options.theme || '',
-            history: request.history,
-            systemPrompt: request.systemPrompt,
-            userMessage,
-            temperature,
-        });
+        const response = await postGeminiContract(
+            this.contractRequest(request.options, {
+                mode: 'minute',
+                history: request.history,
+                systemPrompt: request.systemPrompt,
+                userMessage,
+            }),
+        );
 
-        if (!response.ok) {
-            const errorData = await response.json().catch((e) => { logCaughtError('src/services/gemini.ts', e); return { error: 'Proxy error' }; });
-            throw new Error(errorData.error || `Proxy returned ${response.status}`);
-        }
-
-        return await response.json();
+        return this.readProxyJson(response);
     }
 
     /**
@@ -205,17 +233,14 @@ ${conversationLog}
 Genera la minuta en formato JSON.`;
 
         // Delegate to proxy with mode='minute' (same route as generateMinute)
-        const response = await postGeminiContract({
-            mode: 'minute',
-            apiKey: resolveGeminiKeyForRequest(options.apiKey).apiKey,
-            language: normalizeLang(options.language),
-            role: options.role || '',
-            theme: options.theme || '',
-            history: history,
-            systemPrompt,
-            userMessage,
-            temperature: options.temperature ?? resolveConfiguredTemperature(),
-        });
+        const response = await postGeminiContract(
+            this.contractRequest(options, {
+                mode: 'minute',
+                history,
+                systemPrompt,
+                userMessage,
+            }),
+        );
 
         const data = await this.readProxyJson(response);
 
@@ -234,12 +259,8 @@ Genera la minuta en formato JSON.`;
     /**
      * Respuesta contextual vía proxy (mode='response').
      */
-    protected async fetchResponse(
-        options: AIRequestOptions,
-        userText: string,
-        botName: string,
-        history: AIHistoryEntry[],
-    ): Promise<string> {
+    protected async fetchResponse(...args: FetchResponseArgs): Promise<string> {
+        const [options, userText, botName, history] = args;
         const isEnglish = options.language === 'en';
         const conversationLog = history
             .slice(-10)
@@ -278,19 +299,16 @@ Mensaje del usuario: ${userText}
 Responde como ${botName}:`;
 
         // Delegate to proxy with mode='response'
-        const response = await postGeminiContract({
-            mode: 'response',
-            apiKey: resolveGeminiKeyForRequest(options.apiKey).apiKey,
-            transcript: userText,
-            language: normalizeLang(options.language),
-            role: options.role || '',
-            theme: options.theme || '',
-            history: history,
-            personality,
-            systemPrompt,
-            userMessage,
-            temperature: options.temperature ?? resolveConfiguredTemperature(),
-        });
+        const response = await postGeminiContract(
+            this.contractRequest(options, {
+                mode: 'response',
+                transcript: userText,
+                history,
+                personality,
+                systemPrompt,
+                userMessage,
+            }),
+        );
 
         const data = await this.readProxyJson<{ respuesta_voz?: string; text?: string }>(response);
         return String(data.respuesta_voz || data.text || '').trim();
@@ -298,17 +316,33 @@ Responde como ${botName}:`;
 
     /**
      * Valida la respuesta del proxy y devuelve su JSON. Dueño único del manejo
-     * de error del contrato Gemini: las tres llamadas lo consumen.
+     * de error del contrato Gemini: todas las llamadas lo consumen.
      * @param response Respuesta cruda del proxy.
      * @returns JSON de la respuesta.
      */
     private async readProxyJson<T = Record<string, unknown>>(response: Response): Promise<T> {
         if (!response.ok) {
-            const errorData = await response.json().catch((e) => {
+            const errorData = (await response.json().catch((e) => {
                 logCaughtError('src/services/gemini.ts', e);
-                return { error: 'Proxy error' };
-            });
-            throw new Error(String(errorData?.error || `Proxy returned ${response.status}`));
+                return {};
+            })) as Record<string, unknown>;
+            const error = new Error(
+                String(errorData.error || `Proxy returned ${response.status}`),
+            ) as Error & {
+                code?: string;
+                status?: number;
+                detail?: string;
+                model?: string;
+                apiKeySource?: string;
+                bodyPreview?: string;
+            };
+            error.code = typeof errorData.code === 'string' ? errorData.code : `proxy_${response.status}`;
+            error.status = response.status;
+            error.detail = typeof errorData.detail === 'string' ? errorData.detail : '';
+            error.model = typeof errorData.model === 'string' ? errorData.model : '';
+            error.apiKeySource = typeof errorData.apiKeySource === 'string' ? errorData.apiKeySource : '';
+            error.bodyPreview = typeof errorData.bodyPreview === 'string' ? errorData.bodyPreview : '';
+            throw error;
         }
         return (await response.json()) as T;
     }
@@ -326,7 +360,7 @@ Responde como ${botName}:`;
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                apiKey: resolveGeminiKeyForRequest(options.apiKey).apiKey,
+                apiKey: resolveTextRequestKey(options.apiKey).apiKey,
                 language: normalizeLang(options.language),
                 role: options.role || '',
                 theme: options.theme || '',
@@ -361,21 +395,16 @@ Responde como ${botName}:`;
         language: string,
     ): Promise<AIWorkspaceImageResult> {
         try {
-            const response = await fetchTextEngineResilient(VISUAL_CONFIG.image.proxies.workspaceImage, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    apiKey: '',
-                    language,
-                    workspace: { prompt_visual: prompt, tipo: tipoStr },
-                }),
-            }, { timeoutMs: REQUEST_TIMEOUT_PRESETS.image });
+            const response = await this.postJson(
+                VISUAL_CONFIG.image.proxies.workspaceImage,
+                { apiKey: '', language, workspace: { prompt_visual: prompt, tipo: tipoStr } },
+                REQUEST_TIMEOUT_PRESETS.image,
+            );
 
-            if (!response.ok) {
-                throw new Error(`Proxy returned ${response.status}`);
-            }
-
-            const data = await response.json();
+            const data = await this.readProxyJson<{
+                imageUrl?: string;
+                trace?: AIWorkspaceImageResult['trace'];
+            }>(response);
 
             // generateWorkspaceImage() returns { imageUrl, trace } (camelCase)
             if (data?.imageUrl) {
@@ -409,16 +438,10 @@ Responde como ${botName}:`;
                 };
             } catch (e) {
                 logCaughtError('src/services/gemini.ts', e);
-                return {
-                    image_url: '',
-                    trace: {
-                        provider: 'error',
-                        hasImage: false,
-                        source: GENERATION_FAILED_SOURCE,
-                        error: (error && typeof error === 'object' && 'message' in error ? error.message : undefined) || 'unknown',
-                        prompt,
-                    },
-                };
+                return imageGenerationFailure(
+                    prompt,
+                    String((error && typeof error === 'object' && 'message' in error ? error.message : '') || ''),
+                );
             }
         }
     }
@@ -426,34 +449,20 @@ Responde como ${botName}:`;
     /**
      * Visión multimodal vía proxy /api/gemini/vision (OCR/digitalización).
      */
-    protected async fetchVision(
-        imageBase64: string,
-        mimeType: string,
-        language: string,
-        profile: string,
-    ): Promise<AIVisionAnalysisResult> {
+    protected async fetchVision(...args: FetchVisionArgs): Promise<AIVisionAnalysisResult> {
+        const [imageBase64, mimeType, language, profile] = args;
         if (!imageBase64) {
             return { materia: '', problemas: [], instrucciones: '', nivel: '', texto_extraido: '' };
         }
 
         try {
-            const response = await fetchTextEngineResilient('/api/gemini/vision', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    apiKey: '',
-                    imageBase64,
-                    mimeType,
-                    language,
-                    profile,
-                }),
-            }, { timeoutMs: REQUEST_TIMEOUT_PRESETS.image });
+            const response = await this.postJson(
+                '/api/gemini/vision',
+                { apiKey: '', imageBase64, mimeType, language, profile },
+                REQUEST_TIMEOUT_PRESETS.image,
+            );
 
-            if (!response.ok) {
-                throw new Error(`Proxy returned ${response.status}`);
-            }
-
-            return await response.json();
+            return this.readProxyJson<AIVisionAnalysisResult>(response);
         } catch (error: unknown) {
             const detail = error && typeof error === 'object' && 'message' in error ? error.message : error;
             logCaughtError('[Gemini] Vision analysis failed', detail || error);
@@ -479,7 +488,7 @@ Responde como ${botName}:`;
         // Delegate to proxy
         const response = await postGeminiContract({
             mode: 'contract',
-            apiKey: resolveGeminiKeyForRequest(options.apiKey).apiKey,
+            apiKey: resolveTextRequestKey(options.apiKey).apiKey,
             transcript,
             language: normalizeLang(options.language),
             role: options.role || '',
@@ -488,30 +497,11 @@ Responde como ${botName}:`;
             personality,
         });
 
-        if (!response.ok) {
-            const errorData = await response.json().catch((e) => { logCaughtError('src/services/gemini.ts', e); return { error: 'Proxy error' }; });
-            const error = new Error(errorData.error || `Proxy returned ${response.status}`) as Error & {
-                code?: string;
-                status?: number;
-                detail?: string;
-                model?: string;
-                apiKeySource?: string;
-                bodyPreview?: string;
-            };
-            error.code = errorData.code || `proxy_${response.status}`;
-            error.status = response.status;
-            error.detail = errorData.detail || '';
-            error.model = errorData.model || '';
-            error.apiKeySource = errorData.apiKeySource || '';
-            error.bodyPreview = errorData.bodyPreview || '';
-            throw error;
-        }
-
-        const data = await response.json();
+        const data = await this.readProxyJson<ContractEnvelope>(response);
 
         // The proxy returns the full contract from generateFluContract()
         // Normalize to FluContract format
-        const contract = data?.contract || data;
+        const contract = (data.contract || data) as ContractEnvelope;
 
         const respuesta_voz = String(contract.respuesta_voz || '').trim();
         if (!respuesta_voz) {
@@ -553,7 +543,7 @@ Responde como ${botName}:`;
             return parsed.length > 0 ? parsed : undefined;
         })();
 
-        const resolved = resolveGeminiKeyForRequest(options.apiKey);
+        const resolved = resolveTextRequestKey(options.apiKey);
 
         return {
             respuesta_voz,

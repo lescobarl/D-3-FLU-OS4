@@ -176,16 +176,21 @@ export function useNavigationCommands(
     const pendingNavRef = useRef<{ query: string; run: () => void } | null>(null);
     const navSettleTimerRef = useRef<number | null>(null);
 
-    const flushNavSettle = useCallback(() => {
+    /** Limpia timer y bandera del asentamiento de navegación (dueño único). */
+    const clearNavSettle = useCallback(() => {
         if (navSettleTimerRef.current !== null) {
             window.clearTimeout(navSettleTimerRef.current);
             navSettleTimerRef.current = null;
         }
-        const pending = pendingNavRef.current;
         pendingNavRef.current = null;
         setNavSettlePending(false);
-        if (pending) pending.run();
     }, []);
+
+    const flushNavSettle = useCallback(() => {
+        const pending = pendingNavRef.current;
+        clearNavSettle();
+        if (pending) pending.run();
+    }, [clearNavSettle]);
 
     const scheduleNavSettle = useCallback((query: string, run: () => void) => {
         if (typeof window === 'undefined') {
@@ -221,14 +226,7 @@ export function useNavigationCommands(
 
     // Limpieza del timer de asentamiento al desmontar. También se limpia la
     // bandera global: antes se borraba el timer sin apagarla y quedaba pegada.
-    useEffect(() => () => {
-        if (navSettleTimerRef.current !== null) {
-            window.clearTimeout(navSettleTimerRef.current);
-            navSettleTimerRef.current = null;
-        }
-        pendingNavRef.current = null;
-        setNavSettlePending(false);
-    }, []);
+    useEffect(() => clearNavSettle, [clearNavSettle]);
 
     // ============================================================
     // handleNavigationCommand — unified navigation command handler
@@ -252,6 +250,52 @@ export function useNavigationCommands(
 
         const isResetCmd = isSessionResetCommand(navegacion.comando);
         const userRequested = userRequestedNavigationCommand(transcript, navegacion.comando);
+
+        /** Registra un evento de navegación con el contexto de log común. */
+        const logCommand = (action: string, label: string, datos: Record<string, unknown>): void => {
+            auditLog.logEvent(action, 'navigation', uuidv4(), datos, label)
+                .catch((e) => logCaughtError('src/hooks/useNavigationCommands.ts: auditLog.logEvent', e));
+        };
+
+        /** Habla una locución de comando y registra el fallo con su contexto. */
+        const speakCommand = async (speech: string | undefined, contexto: string): Promise<void> => {
+            if (!speech) return;
+            try {
+                await speakFlu(speech, resolvedLanguage);
+            } catch (speechErr) {
+                logCaughtError(contexto, speechErr);
+            }
+        };
+
+        /** Reinicia la respuesta y la visualización de voz (dueño único). */
+        const resetVoiceDisplay = (): void => {
+            integrationStore.setLastResponse('');
+            os2ResetVoiceDisplay?.();
+        };
+
+        /**
+         * Registra el comando (si trae datos), habla su respuesta y reanuda la
+         * escucha. Con `esperar` aguarda la locución (órdenes de medios); sin él
+         * la deja en segundo plano (navegación). Dueño único de esa secuencia.
+         */
+        const registrarYHablar = async (
+            registro: { action: string; label: string; datos: Record<string, unknown> } | null,
+            speech?: string,
+            opciones: { esperar?: boolean; contexto?: string } = {},
+        ): Promise<void> => {
+            if (registro) {
+                auditLog.logEvent(registro.action, 'navigation', uuidv4(), registro.datos, registro.label)
+                    .catch((e) => logCaughtError('src/hooks/useNavigationCommands.ts: auditLog.logEvent', e));
+            }
+            if (speech) {
+                if (opciones.esperar) {
+                    await speakCommand(speech, opciones.contexto || '[useNavigationCommands] speakFlu');
+                } else {
+                    speakFlu(speech, resolvedLanguage).catch((e) => logCaughtError('src/hooks/useNavigationCommands.ts: speakFlu', e));
+                }
+            }
+            scheduleResumeListening(speech?.length ?? 0);
+        };
 
         switch (navegacion.comando) {
             // RUTA UNICA del registro de nombre propio (A1): el MISMO dueno que la
@@ -277,13 +321,13 @@ export function useNavigationCommands(
                         registerParticipant: sesionIdentidad?.registerParticipant,
                     },
                 });
-                auditLog.logEvent('command:registrar_participante', 'navigation', uuidv4(), {
+                logCommand('command:registrar_participante', 'REGISTRAR_PARTICIPANTE command executed', {
                     speaker: registrado.name || speakerName || undefined,
                     transcript,
                     response: commandSpeech,
                     comando: COMMAND_IDS.REGISTRAR_PARTICIPANTE,
                     phase,
-                }, 'REGISTRAR_PARTICIPANTE command executed').catch((e) => logCaughtError('src/hooks/useNavigationCommands.ts: auditLog.logEvent', e));
+                });
                 break;
             }
             case COMMAND_IDS.GENERAR_RESUMEN:
@@ -294,107 +338,93 @@ export function useNavigationCommands(
                 break;
             case COMMAND_IDS.ANALIZAR_DOCUMENTO: {
                 dispatchFluEvent(FLU_EVENTS.ANALYZE_DOCUMENT);
-                if (transcript) {
-                    auditLog.logEvent('command:analizar_documento', 'navigation', uuidv4(), {
-                        speaker: speakerName || undefined,
-                        transcript,
-                        response: '',
-                        comando: COMMAND_IDS.ANALIZAR_DOCUMENTO,
-                        phase,
-                    }, 'ANALIZAR_DOCUMENTO command executed').catch((e) => logCaughtError('src/hooks/useNavigationCommands.ts: auditLog.logEvent', e));
-                }
-                if (commandSpeech) {
-                    try {
-                        await speakFlu(commandSpeech, resolvedLanguage);
-                    } catch (speechErr) {
-                        logCaughtError('[useNavigationCommands] ANALIZAR_DOCUMENTO command speech failed', speechErr);
-                    }
-                }
-                scheduleResumeListening(commandSpeech?.length ?? 0);
+                await registrarYHablar(
+                    transcript ? {
+                        action: 'command:analizar_documento',
+                        label: 'ANALIZAR_DOCUMENTO command executed',
+                        datos: {
+                            speaker: speakerName || undefined,
+                            transcript,
+                            response: '',
+                            comando: COMMAND_IDS.ANALIZAR_DOCUMENTO,
+                            phase,
+                        },
+                    } : null,
+                    commandSpeech,
+                    { esperar: true, contexto: '[useNavigationCommands] ANALIZAR_DOCUMENTO command speech failed' },
+                );
                 break;
             }
             case COMMAND_IDS.ANALIZAR_APP: {
                 dispatchFluEvent(FLU_EVENTS.ANALYZE_APP);
-                if (transcript) {
-                    auditLog.logEvent('command:analizar_app', 'navigation', uuidv4(), {
-                        speaker: speakerName || undefined,
-                        transcript,
-                        response: '',
-                        comando: COMMAND_IDS.ANALIZAR_APP,
-                        phase,
-                    }, 'ANALIZAR_APP command executed').catch((e) => logCaughtError('src/hooks/useNavigationCommands.ts: auditLog.logEvent', e));
-                }
-                if (commandSpeech) {
-                    try {
-                        await speakFlu(commandSpeech, resolvedLanguage);
-                    } catch (speechErr) {
-                        logCaughtError('[useNavigationCommands] ANALIZAR_APP command speech failed', speechErr);
-                    }
-                }
-                scheduleResumeListening(commandSpeech?.length ?? 0);
+                await registrarYHablar(
+                    transcript ? {
+                        action: 'command:analizar_app',
+                        label: 'ANALIZAR_APP command executed',
+                        datos: {
+                            speaker: speakerName || undefined,
+                            transcript,
+                            response: '',
+                            comando: COMMAND_IDS.ANALIZAR_APP,
+                            phase,
+                        },
+                    } : null,
+                    commandSpeech,
+                    { esperar: true, contexto: '[useNavigationCommands] ANALIZAR_APP command speech failed' },
+                );
                 break;
             }
             case COMMAND_IDS.GENERAR_DOCUMENTO: {
                 // RUTA ÚNICA: la puerta idempotente que provee App.
                 requestMedia?.('doc', transcript);
-                if (transcript) {
-                    auditLog.logEvent('command:generar_documento', 'navigation', uuidv4(), {
-                        speaker: speakerName || undefined,
-                        transcript,
-                        response: '',
-                        comando: COMMAND_IDS.GENERAR_DOCUMENTO,
-                        phase,
-                    }, 'GENERAR_DOCUMENTO command executed').catch((e) => logCaughtError('src/hooks/useNavigationCommands.ts: auditLog.logEvent', e));
-                }
-                if (commandSpeech) {
-                    try {
-                        await speakFlu(commandSpeech, resolvedLanguage);
-                    } catch (speechErr) {
-                        logCaughtError('[useNavigationCommands] GENERAR_DOCUMENTO command speech failed', speechErr);
-                    }
-                }
-                scheduleResumeListening(commandSpeech?.length ?? 0);
+                await registrarYHablar(
+                    transcript ? {
+                        action: 'command:generar_documento',
+                        label: 'GENERAR_DOCUMENTO command executed',
+                        datos: {
+                            speaker: speakerName || undefined,
+                            transcript,
+                            response: '',
+                            comando: COMMAND_IDS.GENERAR_DOCUMENTO,
+                            phase,
+                        },
+                    } : null,
+                    commandSpeech,
+                    { esperar: true, contexto: '[useNavigationCommands] GENERAR_DOCUMENTO command speech failed' },
+                );
                 break;
             }
             case COMMAND_IDS.GENERAR_VIDEO: {
                 // RUTA ÚNICA: la puerta idempotente que provee App.
                 requestMedia?.('video', transcript);
-                if (transcript) {
-                    auditLog.logEvent('command:generar_video', 'navigation', uuidv4(), {
-                        speaker: speakerName || undefined,
-                        transcript,
-                        response: '',
-                        comando: COMMAND_IDS.GENERAR_VIDEO,
-                        phase,
-                    }, 'GENERAR_VIDEO command executed').catch((e) => logCaughtError('src/hooks/useNavigationCommands.ts: auditLog.logEvent', e));
-                }
-                if (commandSpeech) {
-                    try {
-                        await speakFlu(commandSpeech, resolvedLanguage);
-                    } catch (speechErr) {
-                        logCaughtError('[useNavigationCommands] GENERAR_VIDEO command speech failed', speechErr);
-                    }
-                }
-                scheduleResumeListening(commandSpeech?.length ?? 0);
+                await registrarYHablar(
+                    transcript ? {
+                        action: 'command:generar_video',
+                        label: 'GENERAR_VIDEO command executed',
+                        datos: {
+                            speaker: speakerName || undefined,
+                            transcript,
+                            response: '',
+                            comando: COMMAND_IDS.GENERAR_VIDEO,
+                            phase,
+                        },
+                    } : null,
+                    commandSpeech,
+                    { esperar: true, contexto: '[useNavigationCommands] GENERAR_VIDEO command speech failed' },
+                );
                 break;
             }
             case COMMAND_IDS.FLU_WAKE: {
                 showListeningAck?.();
-                if (commandSpeech) {
-                    try {
-                        await speakFlu(commandSpeech, resolvedLanguage);
-                    } catch (speechErr) {
-                        logCaughtError('[useNavigationCommands] FLU_WAKE command speech failed', speechErr);
-                    }
-                }
+                await speakCommand(commandSpeech, '[useNavigationCommands] FLU_WAKE command speech failed');
                 if (transcript) {
-                    auditLog.logEvent('command:flu_wake', 'navigation', uuidv4(), {
+                    logCommand('command:flu_wake', 'FLU_WAKE command executed', {
                         speaker: speakerName || undefined,
                         transcript,
                         response: commandSpeech || '',
                         comando: COMMAND_IDS.FLU_WAKE,
                         phase,
-                    }, 'FLU_WAKE command executed').catch((e) => logCaughtError('src/hooks/useNavigationCommands.ts: auditLog.logEvent', e));
+                    });
                 }
                 scheduleResumeListening(commandSpeech?.length ?? 0);
                 break;
@@ -407,25 +437,19 @@ export function useNavigationCommands(
                 // reiniciar la conversación ni hablar el comando tras responder.
                 if (!userRequested) break;
                 fluParticipant.resetParticipant();
-                if (commandSpeech) {
-                    try {
-                        await speakFlu(commandSpeech, resolvedLanguage);
-                    } catch (speechErr) {
-                        logCaughtError('[useNavigationCommands] INICIAR_CONVERSACION command speech failed', speechErr);
-                    }
-                }
+                await speakCommand(commandSpeech, '[useNavigationCommands] INICIAR_CONVERSACION command speech failed');
                 // UN dueno: App.handleStartConversation hace reset + audit + modo + escucha.
                 if (isResetCmd) {
                     await startConversationRef.current?.({ announce: false });
                 }
                 if (transcript) {
-                    auditLog.logEvent('command:iniciar_conversacion', 'navigation', uuidv4(), {
+                    logCommand('command:iniciar_conversacion', 'INICIAR_CONVERSACION command executed', {
                         speaker: speakerName || undefined,
                         transcript,
                         response: commandSpeech || '',
                         comando: FLU_CONFIG.navigation.sessionResetCommand,
                         phase,
-                    }, 'INICIAR_CONVERSACION command executed').catch((e) => logCaughtError('src/hooks/useNavigationCommands.ts: auditLog.logEvent', e));
+                    });
                 }
                 break;
             }
@@ -435,24 +459,17 @@ export function useNavigationCommands(
                 // escucha por error tras una respuesta conversacional.
                 if (!userRequested) break;
                 conversationActiveRef.current = false;
-                if (commandSpeech) {
-                    try {
-                        await speakFlu(commandSpeech, resolvedLanguage);
-                    } catch (speechErr) {
-                        logCaughtError('[useNavigationCommands] CERRAR_ESCUCHA command speech failed', speechErr);
-                    }
-                }
+                await speakCommand(commandSpeech, '[useNavigationCommands] CERRAR_ESCUCHA command speech failed');
                 if (transcript) {
-                    auditLog.logEvent('command:cerrar_escucha', 'navigation', uuidv4(), {
+                    logCommand('command:cerrar_escucha', 'CERRAR_ESCUCHA command executed', {
                         speaker: speakerName || undefined,
                         transcript,
                         response: '',
                         comando: COMMAND_IDS.CERRAR_ESCUCHA,
                         phase,
-                    }, 'CERRAR_ESCUCHA command executed').catch((e) => logCaughtError('src/hooks/useNavigationCommands.ts: auditLog.logEvent', e));
+                    });
                 }
-                integrationStore.setLastResponse('');
-                os2ResetVoiceDisplay?.();
+                resetVoiceDisplay();
                 break;
             }
             case COMMAND_IDS.ABRIR_ESCUCHA: {
@@ -465,16 +482,15 @@ export function useNavigationCommands(
                     await speakFlu(commandSpeech, resolvedLanguage);
                 }
                 if (transcript) {
-                    auditLog.logEvent('command:abrir_escucha', 'navigation', uuidv4(), {
+                    logCommand('command:abrir_escucha', 'ABRIR_ESCUCHA command executed', {
                         speaker: speakerName || undefined,
                         transcript,
                         response: '',
                         comando: COMMAND_IDS.ABRIR_ESCUCHA,
                         phase,
-                    }, 'ABRIR_ESCUCHA command executed').catch((e) => logCaughtError('src/hooks/useNavigationCommands.ts: auditLog.logEvent', e));
+                    });
                 }
-                integrationStore.setLastResponse('');
-                os2ResetVoiceDisplay?.();
+                resetVoiceDisplay();
                 break;
             }
             case COMMAND_IDS.NAVEGAR: {
@@ -538,22 +554,23 @@ export function useNavigationCommands(
                     if (searchQuery) {
                         dispatchFluSearch({ query: searchQuery, lang: requestLang });
                     }
-                    if (transcript) {
-                        auditLog.logEvent('command:navegar', 'navigation', uuidv4(), {
-                            speaker: speakerName || undefined,
-                            transcript,
-                            response: searchQuery,
-                            comando: COMMAND_IDS.NAVEGAR,
-                            phase,
-                            url: result.url,
-                            host: result.host,
-                            lang: requestLang,
-                        }, 'NAVEGAR command executed').catch((e) => logCaughtError('src/hooks/useNavigationCommands.ts: auditLog.logEvent', e));
-                    }
-                    if (commandSpeech) {
-                        speakFlu(commandSpeech, resolvedLanguage).catch((e) => logCaughtError('src/hooks/useNavigationCommands.ts: speakFlu', e));
-                    }
-                    scheduleResumeListening(commandSpeech?.length ?? 0);
+                    void registrarYHablar(
+                        transcript ? {
+                            action: 'command:navegar',
+                            label: 'NAVEGAR command executed',
+                            datos: {
+                                speaker: speakerName || undefined,
+                                transcript,
+                                response: searchQuery,
+                                comando: COMMAND_IDS.NAVEGAR,
+                                phase,
+                                url: result.url,
+                                host: result.host,
+                                lang: requestLang,
+                            },
+                        } : null,
+                        commandSpeech,
+                    );
                 });
                 break;
             }
@@ -589,11 +606,7 @@ export function useNavigationCommands(
                     // SOLO en la pestaña Buscar).
                     const noQuerySpeech = searchUi.voiceNoQuery || '¿Qué querés que busque?';
                     if (noQuerySpeech) {
-                        try {
-                            await speakFlu(noQuerySpeech, resolvedLanguage);
-                        } catch (speechErr) {
-                            logCaughtError('[useNavigationCommands] BUSCAR no-query speech failed', speechErr);
-                        }
+                        await speakCommand(noQuerySpeech, '[useNavigationCommands] BUSCAR no-query speech failed');
                     }
                     scheduleResumeListening(noQuerySpeech?.length ?? 0);
                     break;
@@ -619,21 +632,22 @@ export function useNavigationCommands(
                             (pickText(resolvedLanguage, 'listo_ya_tengo_los_resultados_los_tenes_en'));
                         speakFlu(readyMsg, resolvedLanguage).catch((e) => logCaughtError('src/hooks/useNavigationCommands.ts: speakFlu', e));
                     });
-                    if (transcript) {
-                        auditLog.logEvent('command:buscar', 'navigation', uuidv4(), {
-                            speaker: speakerName || undefined,
-                            transcript,
-                            response: query,
-                            comando: COMMAND_IDS.BUSCAR,
-                            phase,
-                            query,
-                            lang: requestLang,
-                        }, 'BUSCAR command executed').catch((e) => logCaughtError('src/hooks/useNavigationCommands.ts: auditLog.logEvent', e));
-                    }
-                    if (commandSpeech) {
-                        speakFlu(commandSpeech, resolvedLanguage).catch((e) => logCaughtError('src/hooks/useNavigationCommands.ts: speakFlu', e));
-                    }
-                    scheduleResumeListening(commandSpeech?.length ?? 0);
+                    void registrarYHablar(
+                        transcript ? {
+                            action: 'command:buscar',
+                            label: 'BUSCAR command executed',
+                            datos: {
+                                speaker: speakerName || undefined,
+                                transcript,
+                                response: query,
+                                comando: COMMAND_IDS.BUSCAR,
+                                phase,
+                                query,
+                                lang: requestLang,
+                            },
+                        } : null,
+                        commandSpeech,
+                    );
                 });
                 break;
             }
@@ -644,11 +658,7 @@ export function useNavigationCommands(
                 const manifestoLang: 'es' | 'en' = normalizeLang(resolvedLanguage);
                 const manifesto = buildSelfManifesto(manifestoLang);
                 if (manifesto) {
-                    try {
-                        await speakFlu(manifesto, resolvedLanguage);
-                    } catch (speechErr) {
-                        logCaughtError('[useNavigationCommands] CONOCER_FLU speech failed', speechErr);
-                    }
+                    await speakCommand(manifesto, '[useNavigationCommands] CONOCER_FLU speech failed');
                 }
                 auditLog.logEvent(
                     'command:conocer_flu',

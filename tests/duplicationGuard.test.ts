@@ -84,8 +84,9 @@ describe('P4.3/P4.4/P4.5/P4.9/P4.13 duplicacion - un algoritmo, una copia', () =
     const defs = walkFiles(join(SRC, 'server'), /\.(ts|tsx|js|jsx|mjs)$/).filter((f) => allowlistDefinitions(readFileSync(f, 'utf8')) > 0).map(rel);
     expect(defs, 'parseAllowlist definida en varios sitios').toEqual(['src/server/allowlist.ts']);
     for (const p of ['src/server/searchProxy.ts', 'src/server/browserProxy.ts']) {
-      expect(readFileSync(join(ROOT, p), 'utf8'), p + ' no importa la allowlist compartida').toContain("from './allowlist.ts'");
+      expect(readFileSync(join(ROOT, p), 'utf8'), p + ' no importa la allowlist compartida').toContain("from './proxyDeps.ts'");
     }
+    expect(readFileSync(join(ROOT, 'src/server/proxyDeps.ts'), 'utf8'), 'proxyDeps no reexporta la allowlist').toContain("from './allowlist.ts'");
   });
   it('la allowlist curada de wikipedia/educ.ar se declara una sola vez', () => {
     const cfg = readFileSync(join(ROOT, 'src/voice/lib/fluConfig.js'), 'utf8');
@@ -97,8 +98,9 @@ describe('P4.3/P4.4/P4.5/P4.9/P4.13 duplicacion - un algoritmo, una copia', () =
       .flatMap((f) => requestUrlOffenders(readFileSync(f, 'utf8'), rel(f)));
     expect(offenders, 'parseo del URL del request copiado fuera de ' + REQUEST_URL_OWNER + ':\n  ' + offenders.join('\n  ')).toEqual([]);
     for (const p of ['src/server/searchProxy.ts', 'src/server/browserProxy.ts']) {
-      expect(readFileSync(join(ROOT, p), 'utf8'), p + ' no importa el parseo compartido').toContain("from './requestUrl.ts'");
+      expect(readFileSync(join(ROOT, p), 'utf8'), p + ' no importa el parseo compartido').toContain("from './proxyDeps.ts'");
     }
+    expect(readFileSync(join(ROOT, 'src/server/proxyDeps.ts'), 'utf8'), 'proxyDeps no reexporta el parseo').toContain("from './requestUrl.ts'");
   });
   it('los sinonimos de proveedor cubren exactamente el catalogo', () => {
     expect(Object.keys(AI_PROVIDER_SYNONYMS).sort()).toEqual([...AI_PROVIDERS].sort());

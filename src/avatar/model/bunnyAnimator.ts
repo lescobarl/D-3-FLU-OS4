@@ -408,12 +408,7 @@ export class BunnyAnimator {
                             if (name === 'Idle_2' || name === 'Emo_blink') {
                                 for (const track of clip.tracks) {
                                     if (track.name === 'jaw_01.quaternion' && track.times.length > 0) {
-                                        const quat = new THREE.Quaternion(
-                                            track.values[0],
-                                            track.values[1],
-                                            track.values[2],
-                                            track.values[3],
-                                        );
+                                        const quat = this.quatFromTrack(track);
                                         if (name === 'Idle_2') {
                                             this.mouthClosedPose = { jawQuat: quat };
                                         } else {
@@ -435,12 +430,7 @@ export class BunnyAnimator {
                                 for (const track of clip.tracks) {
                                     for (const boneName of armBoneNames) {
                                         if (track.name === `${boneName}.quaternion` && track.times.length > 0) {
-                                            armQuats[boneName] = new THREE.Quaternion(
-                                                track.values[0],
-                                                track.values[1],
-                                                track.values[2],
-                                                track.values[3],
-                                            );
+                                            armQuats[boneName] = this.quatFromTrack(track);
                                         }
                                     }
                                 }
@@ -496,22 +486,14 @@ export class BunnyAnimator {
         // Stop all current actions (both main and blend)
         this.stopAllActions();
 
-        // Remove previously added animation bones
-        this.clearAnimBones();
-
-        // Add cached IK/FK bones to the model (instant, no FBX reload)
-        this.ensureAnimBones();
-
-        // Create and play action
-        const action = this.mixer.clipAction(clip);
-        action.reset();
-        action.setLoop(THREE.LoopRepeat, Infinity);
+        // Crea y prepara la acción con el dueño único (huesos + loop + peso)
+        const action = this.prepareMainAction([name]);
         action.play();
 
         this.currentAction = action;
 
         this.onLog(`[Animator] Playing: ${name} (${clip.duration.toFixed(2)}s, ${clip.tracks.length} tracks)` +
-            (this.animBones.length > 0 ? `, ${this.animBones.length} IK/FK bones added` : ''));
+            this.boneSuffix());
 
         return true;
     }
@@ -520,6 +502,49 @@ export class BunnyAnimator {
      * Reproduce 2 animaciones simultáneamente (blending).
      * Soporta animaciones FBX y sintéticas (MouthMove).
      */
+    /**
+     * Cuaternión a partir de los cuatro valores de una pista.
+     * @param track Pista de rotación.
+     * @returns Cuaternión de la pista.
+     */
+    private quatFromTrack(track: THREE.VectorKeyframeTrack): THREE.Quaternion {
+        return new THREE.Quaternion(track.values[0], track.values[1], track.values[2], track.values[3]);
+    }
+
+    /**
+     * Valida una lista de animaciones para blending.
+     * @param anims Lista de animaciones.
+     * @returns true si la lista es válida.
+     */
+    private validBlendList(anims: BunnyAnimation[]): boolean {
+        return anims.length > 0 && this.validateAnimations(anims);
+    }
+
+    /**
+     * Sufijo de log con el número de huesos animados.
+     * @returns Texto del sufijo.
+     */
+    private boneSuffix(): string {
+        return this.animBones.length > 0 ? `, ${this.animBones.length} IK/FK bones added` : '';
+    }
+
+    /**
+     * Prepara la acción principal de una lista: refresca huesos y crea/reinicia
+     * la acción del primer clip. Dueño único que comparten play y cross-fade.
+     * @param anims Animaciones ya validadas.
+     * @returns Acción principal lista para play/cross-fade.
+     */
+    private prepareMainAction(anims: BunnyAnimation[]): THREE.AnimationAction {
+        this.clearAnimBones();
+        this.ensureAnimBones();
+        const firstClip = this.resolveClip(anims[0]);
+        const mainAction = this.mixer.clipAction(firstClip);
+        mainAction.reset();
+        mainAction.setLoop(THREE.LoopRepeat, Infinity);
+        mainAction.setEffectiveWeight(1.0);
+        return mainAction;
+    }
+
     playBlended(bodyAnim: BunnyAnimation, faceAnim: BunnyAnimation): boolean {
         return this.playBlendedList([bodyAnim, faceAnim]);
     }
@@ -530,33 +555,19 @@ export class BunnyAnimator {
      * Cada animación se reproduce como una acción independiente en el mixer.
      */
     playBlendedList(anims: BunnyAnimation[]): boolean {
-        if (anims.length === 0) return false;
-
-        if (!this.validateAnimations(anims)) return false;
+        if (!this.validBlendList(anims)) return false;
 
         // Stop all current actions
         this.stopAllActions();
 
-        // Remove previously added animation bones
-        this.clearAnimBones();
-
-        // Add cached IK/FK bones to the model
-        this.ensureAnimBones();
-
-        // --- First animation: main action ---
-        const firstClip = this.resolveClip(anims[0]);
-        const mainAction = this.mixer.clipAction(firstClip);
-        mainAction.reset();
-        mainAction.setLoop(THREE.LoopRepeat, Infinity);
-        mainAction.setEffectiveWeight(1.0);
+        const mainAction = this.prepareMainAction(anims);
         mainAction.play();
         this.currentAction = mainAction;
 
         // --- Remaining animations: blend actions ---
         this.blendActions = this.buildBlendActions(anims, 1);
 
-        this.onLog(`[Animator] Blended: ${anims.join(' + ')}` +
-            (this.animBones.length > 0 ? `, ${this.animBones.length} IK/FK bones added` : ''));
+        this.onLog(`[Animator] Blended: ${anims.join(' + ')}` + this.boneSuffix());
 
         return true;
     }
@@ -574,11 +585,8 @@ export class BunnyAnimator {
             return false;
         }
 
-        // Create the new action
-        const newAction = this.mixer.clipAction(clip);
-        newAction.reset();
-        newAction.setLoop(THREE.LoopRepeat, Infinity);
-        newAction.setEffectiveWeight(1.0);
+        // Create the new action with the single owner (bones + loop + weight)
+        const newAction = this.prepareMainAction([name]);
 
         // If there's a current action, cross-fade from it
         if (this.currentAction) {
@@ -605,9 +613,7 @@ export class BunnyAnimator {
      * Smoothly transitions from current blend to the new blend.
      */
     crossFadeToBlended(anims: BunnyAnimation[], fadeDuration: number = 0.3): boolean {
-        if (anims.length === 0) return false;
-
-        if (!this.validateAnimations(anims)) return false;
+        if (!this.validBlendList(anims)) return false;
 
         // Stop old blend actions FIRST to avoid Three.js clipAction() cache conflict.
         // Three.js AnimationMixer.clipAction() returns a CACHED AnimationAction for the
@@ -620,16 +626,7 @@ export class BunnyAnimator {
         }
         this.blendActions = [];
 
-        // Remove previously added animation bones
-        this.clearAnimBones();
-        this.ensureAnimBones();
-
-        // --- First animation: main action ---
-        const firstClip = this.resolveClip(anims[0]);
-        const mainAction = this.mixer.clipAction(firstClip);
-        mainAction.reset();
-        mainAction.setLoop(THREE.LoopRepeat, Infinity);
-        mainAction.setEffectiveWeight(1.0);
+        const mainAction = this.prepareMainAction(anims);
 
         // Cross-fade main action if there's a current action
         if (this.currentAction) {

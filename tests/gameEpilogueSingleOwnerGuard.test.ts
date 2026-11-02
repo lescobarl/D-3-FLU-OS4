@@ -48,16 +48,21 @@ export function countInlineEpilogue(src: string): number {
 }
 
 function engines(): string[] {
-    // Un MOTOR es el que crea sesion (`createSession`): deja fuera el andamiaje
-    // del directorio (gameCatalog/gameSpeech/gameSessionStore), que no juega.
+    // Un MOTOR es el que crea sesion: deja fuera el andamiaje del directorio
+    // (gameCatalog/gameSpeech/gameSessionStore), que no juega. Los motores
+    // barajados declaran la sesion via la superficie unica
+    // (createShuffledAnnounceSurface), asi que esa forma tambien cuenta.
     return readdirSync(DIR)
         .filter((f) => f.endsWith('.ts') && f !== OWNER && f !== 'types.ts' && f !== 'gameEngine.ts')
-        .filter((f) => readFileSync(join(DIR, f), 'utf8').includes('createSession('));
+        .filter((f) => {
+            const src = readFileSync(join(DIR, f), 'utf8');
+            return src.includes('createSession(') || src.includes('createShuffledAnnounceSurface');
+        });
 }
 
 /** Definiciones del dueno del arranque. Debe haber EXACTAMENTE una por motor. */
 export function countBuildStateOwners(src: string): number {
-    return (src.match(/const buildState = \(/g) || []).length;
+    return (src.match(/const buildState = (?:\(|createShuffledAnnounceStateBuilder\()/g) || []).length;
 }
 
 /** Usos del dueno: la definicion + al menos un camino de arranque. */

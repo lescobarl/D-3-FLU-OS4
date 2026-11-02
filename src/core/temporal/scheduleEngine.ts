@@ -11,6 +11,7 @@
 // ============================================================
 
 import type { TemporalRecurrence, TemporalTrigger } from './temporalTypes.ts';
+import { parseTimeOfDayToMs } from '../../lib/timeOfDay.ts';
 
 // ------------------------------------------------------------
 // Constantes de tiempo
@@ -42,17 +43,6 @@ export function dayOfWeek(at: number): number {
  */
 export function localDayDiff(a: number, b: number): number {
   return Math.round((startOfLocalDay(b) - startOfLocalDay(a)) / MS_DAY);
-}
-
-/** 'HH:MM' local → ms desde medianoche; null si el formato es inválido. */
-export function parseTimeOfDayToMs(timeOfDay: string | undefined): number | null {
-  if (!timeOfDay) return null;
-  const m = /^(\d{1,2}):(\d{2})$/.exec(timeOfDay.trim());
-  if (!m) return null;
-  const h = Number(m[1]);
-  const min = Number(m[2]);
-  if (h < 0 || h > 23 || min < 0 || min > 59) return null;
-  return h * MS_HOUR + min * MS_MINUTE;
 }
 
 /** 'HH:MM' local a partir de un timestamp. */

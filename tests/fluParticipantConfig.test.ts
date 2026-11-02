@@ -149,13 +149,14 @@ describe('fluParticipantConfig - overrides del almacen', () => {
         expect(getFluParticipantConfig()).toEqual(getFluParticipantDefaults());
     });
 
-    it('la clave HEREDADA manda sobre el JSON', () => {
+    it('el JSON manda sobre la clave heredada; la heredada solo rellena si falta enabled', () => {
         localSet(FLU_PARTICIPANT_STORAGE_KEY, JSON.stringify({ enabled: true }));
         localSet(HEREDADA, '0');
-        expect(getFluParticipantConfig().enabled).toBe(false);
-
-        localSet(HEREDADA, '1');
         expect(getFluParticipantConfig().enabled).toBe(true);
+
+        localSet(FLU_PARTICIPANT_STORAGE_KEY, JSON.stringify({ minConfidence: 0.9 }));
+        localSet(HEREDADA, '0');
+        expect(getFluParticipantConfig().enabled).toBe(false);
     });
 });
 
@@ -166,7 +167,7 @@ describe('fluParticipantConfig - escritura y reinicio', () => {
         expect(cfg.minConfidence).toBe(0.93);
         expect(cfg.enabled).toBe(false);
         expect(JSON.parse(localGet(FLU_PARTICIPANT_STORAGE_KEY)!)).toEqual({ minConfidence: 0.93, enabled: false });
-        expect(localGet(HEREDADA)).toBe('0');
+        expect(localGet(HEREDADA)).toBeNull();
     });
 
     it('escribir NO pisa lo que ya habia', () => {
@@ -184,16 +185,18 @@ describe('fluParticipantConfig - escritura y reinicio', () => {
         expect(JSON.parse(localGet(FLU_PARTICIPANT_STORAGE_KEY)!)).toEqual({ minConfidence: 0.9 });
     });
 
-    it('encender y apagar deja la clave heredada en 1 y en 0', () => {
+    it('encender y apagar escribe solo el JSON canónico', () => {
         // P9.84 (decision del dueno): el participante (2.o consumidor del LLM) va APAGADO
         // por defecto; solo con encendido explicito. Antes el defecto era encendido.
         expect(isFluParticipantEnabled()).toBe(false);
         expect(setFluParticipantEnabled(false).enabled).toBe(false);
-        expect(localGet(HEREDADA)).toBe('0');
+        expect(JSON.parse(localGet(FLU_PARTICIPANT_STORAGE_KEY)!)).toEqual({ enabled: false });
+        expect(localGet(HEREDADA)).toBeNull();
         expect(isFluParticipantEnabled()).toBe(false);
 
         expect(setFluParticipantEnabled(true).enabled).toBe(true);
-        expect(localGet(HEREDADA)).toBe('1');
+        expect(JSON.parse(localGet(FLU_PARTICIPANT_STORAGE_KEY)!)).toEqual({ enabled: true });
+        expect(localGet(HEREDADA)).toBeNull();
         expect(isFluParticipantEnabled()).toBe(true);
     });
 

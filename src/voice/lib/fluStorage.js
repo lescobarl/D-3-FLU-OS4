@@ -1,6 +1,10 @@
 import { fluDb } from '../../core/db/fluDatabase'
 import { buildSyncTuple } from '../../core/db/syncTuple'
-import { persistVoiceProfile } from '../../hooks/useVoiceProfiles'
+import {
+  deleteVoiceProfile,
+  findVoiceProfileRecordByLabel,
+  listVoiceProfileRecords,
+} from '../../hooks/useVoiceProfiles'
 
 
 function voiceRecordToProfile(record) {
@@ -14,31 +18,29 @@ function voiceRecordToProfile(record) {
   }
 }
 
+/** Fila de sesión con borrado lógico (uso exclusivo de sessionState). */
+function softDeleted(record, at = Date.now()) {
+  return {
+    ...record,
+    timestamp: at,
+    sync: { ...buildSyncTuple(record.sync, at), deleted: true },
+  }
+}
+
+
+/** Fachada de lectura: el dueño único es useVoiceProfiles. */
 export async function listVoiceProfiles() {
-  const rows = await fluDb.voiceProfiles.toArray()
-  return rows.filter((row) => !row.sync?.deleted).map(voiceRecordToProfile)
+  const rows = await listVoiceProfileRecords()
+  return rows.map(voiceRecordToProfile)
 }
 
+/** Fachada de búsqueda: normaliza y decide el dueño (trim + más antiguo). */
 export async function findVoiceProfileByLabel(label) {
-  const normalized = String(label || '').trim()
-  if (!normalized) return null
-  const rows = await listVoiceProfiles()
-  return rows.find((row) => String(row?.label || '').trim() === normalized) || null
+  const record = await findVoiceProfileRecordByLabel(label)
+  return record ? voiceRecordToProfile(record) : null
 }
 
-export async function deleteVoiceProfile(profileId) {
-  const id = String(profileId || '').trim()
-  if (!id) return false
-  const existing = await fluDb.voiceProfiles.get(id)
-  if (!existing) return false
-  await persistVoiceProfile({
-    ...existing,
-    timestamp: Date.now(),
-    sync: { ...buildSyncTuple(existing.sync, Date.now()), deleted: true },
-  })
-  return true
-}
-
+export { deleteVoiceProfile }
 async function persistSessionState(session = {}) {
   // El HISTORIAL no se persiste aqui: su fuente canonica es fluDb.conversations
   // (useConversationPersistence). Esta copia no tenia lector y era la misma entidad
@@ -99,9 +101,5 @@ export async function saveUiSessionState(state = {}) {
 export async function clearUiSessionState() {
   const existing = await fluDb.sessionState.get(UI_SESSION_ID)
   if (!existing) return
-  await fluDb.sessionState.put({
-    ...existing,
-    timestamp: Date.now(),
-    sync: { ...buildSyncTuple(existing.sync, Date.now()), deleted: true },
-  })
+  await fluDb.sessionState.put(softDeleted(existing))
 }

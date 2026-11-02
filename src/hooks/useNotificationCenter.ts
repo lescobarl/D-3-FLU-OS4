@@ -34,6 +34,18 @@ export interface NotificationCenterItem extends NotificationToast {
   read: boolean;
 }
 
+/** Campos comunes de toast e historial (dueño único). */
+function notificationFields(n: NotificationToast): NotificationToast {
+  return {
+    id: n.id,
+    title: n.title,
+    body: n.body,
+    category: n.category,
+    urgent: n.urgent,
+    timestamp: n.timestamp,
+  };
+}
+
 export interface UseNotificationCenterOptions {
   speak: (text: string, lang: string) => Promise<void>;
   language?: string;
@@ -130,14 +142,7 @@ export function useNotificationCenter({
       const shouldSpeak = delivery === 'voice' || delivery === 'both';
 
       if (shouldToast) {
-        const toast: NotificationToast = {
-          id: notification.id,
-          title: notification.title,
-          body: notification.body,
-          category: notification.category,
-          urgent: notification.urgent,
-          timestamp: notification.timestamp,
-        };
+        const toast: NotificationToast = notificationFields(notification);
         setToasts((prev) => [toast, ...prev].slice(0, maxStack));
         const timer = window.setTimeout(() => dismissToast(notification.id), toastDurationMs);
         timers.set(notification.id, timer);
@@ -148,12 +153,7 @@ export function useNotificationCenter({
       // transitorio que desaparece).
       if (shouldToast || shouldSpeak) {
         const item: NotificationCenterItem = {
-          id: notification.id,
-          title: notification.title,
-          body: notification.body,
-          category: notification.category,
-          urgent: notification.urgent,
-          timestamp: notification.timestamp,
+          ...notificationFields(notification),
           read: false,
         };
         setHistory((prev) => [item, ...prev].slice(0, maxHistory));

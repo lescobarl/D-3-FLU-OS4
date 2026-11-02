@@ -95,15 +95,19 @@ export function useOnboardingVoiceCapture({
     }
   }, []);
 
-  const stop = useCallback(() => {
-    clearRestartTimer();
+  const resetCaptureState = useCallback(() => {
     activeRef.current = false;
     suspendedRef.current = false;
     deliveredRef.current = false;
     setListening(false);
     setInterim('');
+  }, []);
+
+  const stop = useCallback(() => {
+    clearRestartTimer();
+    resetCaptureState();
     if (recognitionRef.current) stopSpeechRecognition(recognitionRef.current);
-  }, [clearRestartTimer]);
+  }, [clearRestartTimer, resetCaptureState]);
 
   // Reintento suave para no-speech/aborted/network/audio-capture. Solo
   // reintenta si la sesión sigue ACTIVA, NO está suspendida (FLU hablando)
@@ -230,17 +234,13 @@ export function useOnboardingVoiceCapture({
 
     return () => {
       clearRestartTimer();
-      activeRef.current = false;
-      suspendedRef.current = false;
-      deliveredRef.current = false;
-      setListening(false);
-      setInterim('');
+      resetCaptureState();
       if (recognitionRef.current === recognition) {
         stopSpeechRecognition(recognition);
         recognitionRef.current = null;
       }
     };
-  }, [supported, clearRestartTimer, restartAfter, stop]);
+  }, [supported, clearRestartTimer, restartAfter, stop, resetCaptureState]);
 
   // `enabled` solo habilita el botón; NO abre el micrófono (tap-to-talk).
   // Al desactivarse el paso (o cerrarse el onboarding) se cierra el micrófono.

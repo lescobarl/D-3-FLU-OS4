@@ -16,8 +16,8 @@
 import { v4 as uuidv4 } from 'uuid';
 import { addAuditLog, type BrowserProfileRecord } from '../db/fluDatabase';
 import { buildSyncTuple, makeTupleTimestamp } from '../db/syncTuple';
-import { copyRecord } from '../db/recordCopy';
-import { createSoftDelete } from '../db/entityMutations';
+import { copyRecord, getAliveRecord, listAliveRecords } from '../db/recordCopy';
+import { createSoftDelete, SOFT_DELETE_FALSE_RESULT } from '../db/entityMutations';
 import { INVALID_INPUT } from '../../lib/resultReasons';
 import type { InvalidInput } from '../../lib/resultReasons';
 
@@ -40,13 +40,8 @@ export interface BrowserProfileInput {
   homeTiles?: string[];
 }
 
-export interface BrowserProfilePatch {
-  categories?: string[];
-  allowlist?: string[];
-  readingLevel?: BrowserReadingLevel;
-  language?: BrowserLanguage;
-  homeTiles?: string[];
-}
+/** Parche de perfil: misma forma que la entrada (dueño único). */
+export type BrowserProfilePatch = BrowserProfileInput;
 
 /** Defaults resolubles por rol (y default global). */
 export interface RoleBrowserDefaults {
@@ -123,6 +118,41 @@ export function createBrowserProfileService({
     return { ...config.defaultProfile };
   };
 
+  /**
+   * Persiste el perfil y asienta la auditoría.
+   * Dueño único del cierre de guardado (put + log + copia).
+   */
+  const persistAndAudit = async (
+    participantId: string,
+    previous: BrowserProfileRecord | null,
+    updated: BrowserProfileRecord,
+    action: string,
+  ): Promise<SaveResult> => {
+    await db.put(updated);
+    await addAuditLog(action, 'browserProfile', participantId, previous, { ...updated }, 'browserProfileService');
+    return { ok: true, record: copyRecord(updated) };
+  };
+
+  /**
+   * Aplica un parche de perfil manteniendo lo no provisto.
+   * Dueño único del mapeo de campos que compartían ensure/update.
+   */
+  const applyProfilePatch = (
+    record: BrowserProfileRecord,
+    patch: BrowserProfileInput,
+    at: number,
+    syncBase: BrowserProfileRecord['sync'] | undefined = record.sync,
+  ): BrowserProfileRecord => ({
+    ...record,
+    categories: patch.categories ?? record.categories,
+    allowlist: patch.allowlist ?? record.allowlist,
+    readingLevel: patch.readingLevel ?? record.readingLevel,
+    language: patch.language ?? record.language,
+    homeTiles: patch.homeTiles ?? record.homeTiles,
+    updatedAt: at,
+    sync: buildSyncTuple(syncBase, at),
+  });
+
   const ensure = async (
     participantId: string,
     participantName?: string,
@@ -151,27 +181,18 @@ export function createBrowserProfileService({
       updatedAt: t,
       sync: buildSyncTuple(undefined, timestamp()),
     };
-    const updated: BrowserProfileRecord = {
-      ...record,
-      participantName: participantName ?? record.participantName,
-      categories: overrides.categories ?? record.categories,
-      allowlist: overrides.allowlist ?? record.allowlist,
-      readingLevel: overrides.readingLevel ?? record.readingLevel,
-      language: overrides.language ?? record.language,
-      homeTiles: overrides.homeTiles ?? record.homeTiles,
-      updatedAt: t,
-      sync: buildSyncTuple(existing?.sync, timestamp()),
-    };
-    await db.put(updated);
-    await addAuditLog(
-      existing ? 'browser.profile.save' : 'browser.profile.create',
-      'browserProfile',
+    const updated = applyProfilePatch(
+      { ...record, participantName: participantName ?? record.participantName },
+      overrides,
+      t,
+      existing?.sync,
+    );
+    return persistAndAudit(
       participantId,
       previous,
-      { ...updated },
-      'browserProfileService',
+      updated,
+      existing ? 'browser.profile.save' : 'browser.profile.create',
     );
-    return { ok: true, record: copyRecord(updated) };
   };
 
   const update = async (participantId: string, patch: BrowserProfilePatch): Promise<SaveResult> => {
@@ -179,47 +200,22 @@ export function createBrowserProfileService({
     const row = await db.get(participantId);
     if (!row) return { ok: false, reason: 'not-found' };
     const previous = { ...row };
-    const updated: BrowserProfileRecord = {
-      ...row,
-      categories: patch.categories ?? row.categories,
-      allowlist: patch.allowlist ?? row.allowlist,
-      readingLevel: patch.readingLevel ?? row.readingLevel,
-      language: patch.language ?? row.language,
-      homeTiles: patch.homeTiles ?? row.homeTiles,
-      updatedAt: timestamp(),
-      sync: buildSyncTuple(row.sync, timestamp()),
-    };
-    await db.put(updated);
-    await addAuditLog(
-      'browser.profile.save',
-      'browserProfile',
-      participantId,
-      previous,
-      { ...updated },
-      'browserProfileService',
-    );
-    return { ok: true, record: copyRecord(updated) };
+    const updated = applyProfilePatch(row, patch, timestamp(), row.sync);
+    return persistAndAudit(participantId, previous, updated, 'browser.profile.save');
   };
   const reset = createSoftDelete<BrowserProfileRecord, boolean>({
     table: db,
     now: timestamp,
     copy: copyRecord,
     audit: { action: 'browser.profile.reset', entity: 'browserProfile', source: 'browserProfileService' },
-    onInvalid: () => false,
-    onMissing: () => false,
-    onDone: () => true,
+    ...SOFT_DELETE_FALSE_RESULT,
   });
 
-  const getForParticipant = async (participantId: string): Promise<BrowserProfileRecord | undefined> => {
-    if (!participantId) return undefined;
-    const row = await db.get(participantId);
-    return row && !row.sync?.deleted ? copyRecord(row) : undefined;
-  };
+  const getForParticipant = async (participantId: string): Promise<BrowserProfileRecord | undefined> =>
+    getAliveRecord(db, participantId);
 
   const list = async (): Promise<BrowserProfileRecord[]> => {
-    const all = await db.toArray();
-    return all
-      .filter((r) => !r.sync?.deleted)
+    return (await listAliveRecords(db))
       .slice()
       .sort((a, b) => (a.participantName ?? a.id).localeCompare(b.participantName ?? b.id, 'es'))
       .map(copyRecord);

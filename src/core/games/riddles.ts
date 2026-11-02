@@ -16,7 +16,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine.ts';
 import type { GameSession, GameTurnResult } from './types.ts';
-import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, bankItemAt, baseSession, buildShuffledState, gamePrompt, hasAnyToken, isEngineCommand, resetGameSession, runGuessTurn, turnResult } from './gameUtils.ts';
+import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, createShuffledAnnounceStateBuilder, createShuffledAnnounceSurfaceBase, bankItemAt, gamePrompt, hasAnyToken, isEngineCommand, runGuessTurn, turnResult } from './gameUtils.ts';
 
 export interface Riddle {
     pregunta: string;
@@ -119,28 +119,18 @@ const currentPrompt = (state: RiddlesState) =>
 
 export function createRiddlesEngine(options?: { random?: RandomSource }): GameEngine<RiddlesState> {
     let rng: RandomSource = options?.random ?? Math.random;
-    const buildState = (cfg: Record<string, unknown> | undefined): RiddlesState =>
-        buildShuffledState({
-            cfg,
-            bankLength: RIDDLE_BANK.length,
-            defaultRounds: DEFAULT_ROUNDS,
-            maxRounds: MAX_ROUNDS,
-            adopt: (cfg2) => {
-                rng = adoptRandom(rng, cfg2);
-                return rng;
-            },
-            build: ({ order, maxRounds }) => ({ order, cursor: 0, maxRounds, phase: 'announce' }),
-        });
+    const buildState = createShuffledAnnounceStateBuilder({
+        bankLength: RIDDLE_BANK.length,
+        defaultRounds: DEFAULT_ROUNDS,
+        maxRounds: MAX_ROUNDS,
+        adopt: (cfg2) => (rng = adoptRandom(rng, cfg2)),
+    });
 
-    const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): RiddlesState =>
-        resetGameSession(session, cfg, buildState);
+    const surface = createShuffledAnnounceSurfaceBase('adivinanzas', buildState);
+    const reset = surface.reset;
 
     return {
-        id: 'adivinanzas',
-
-        createSession(optionsConfig: Record<string, unknown> = {}): GameSession<RiddlesState> {
-            return baseSession('adivinanzas', buildState(optionsConfig));
-        },
+        ...surface,
 
         start(session: GameSession, optionsConfig: Record<string, unknown> = {}): GameTurnResult {
             reset(session, optionsConfig);

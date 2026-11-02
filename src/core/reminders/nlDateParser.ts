@@ -14,6 +14,7 @@
 import { pickTimeOfDay } from '../temporal/timeOfDay.ts';
 import { MONTH_NAMES_ES, WEEKDAYS_ES } from '../temporal/calendarNames.ts';
 import { normalizeForMatch } from '../../lib/textUtils.ts';
+import { startOfDay } from '../../lib/dayBoundary.ts';
 
 export interface NlDateTimeResult {
   /** Cómo se interpretó la expresión (para trazas/mensajes). */
@@ -128,12 +129,6 @@ const PART_OF_DAY: ReadonlyArray<{ pattern: RegExp; hour: number; label: string 
 
 /** Quita acentos y normaliza a minúsculas con espacios simples. */
 
-function startOfDay(date: Date): Date {
-  const d = new Date(date);
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
-
 function applyHourMinute(base: Date, hour: number, minute: number): Date {
   const d = new Date(base);
   d.setHours(hour, minute, 0, 0);
@@ -189,6 +184,16 @@ function extractTime(text: string): ParsedTime | null {
  * Resuelve una expresión temporal en lenguaje natural a un timestamp.
  * Devuelve null si no reconoce ninguna expresión.
  */
+/** Resultado absoluto (dueño único del literal). */
+function absoluteResult(at: number, matchedText: string, label: string) {
+  return { type: 'absolute' as const, at, matchedText, label };
+}
+
+/** Resultado de día de semana (dueño único del literal). */
+function weekdayResult(at: number, matchedText: string, label: string) {
+  return { type: 'weekday' as const, at, matchedText, label };
+}
+
 export function parseNlDateTime(
   input: string,
   options: NlDateParserOptions = {},
@@ -246,19 +251,13 @@ export function parseNlDateTime(
       if (at <= now) {
         // Fecha con hora ya pasada → pasa al año siguiente.
         const nextYear = new Date(nowDate.getFullYear() + 1, monthEntry.number - 1, day);
-        return {
-          type: 'absolute',
-          at: time ? applyHourMinute(nextYear, time.hour, time.minute).getTime() : nextYear.getTime(),
-          matchedText: absolute[0],
-          label: `el ${day} de ${monthEntry.name}`,
-        };
+        return absoluteResult(
+          time ? applyHourMinute(nextYear, time.hour, time.minute).getTime() : nextYear.getTime(),
+          absolute[0],
+          `el ${day} de ${monthEntry.name}`,
+        );
       }
-      return {
-        type: 'absolute',
-        at,
-        matchedText: absolute[0],
-        label: `el ${day} de ${monthEntry.name}`,
-      };
+      return absoluteResult(at, absolute[0], `el ${day} de ${monthEntry.name}`);
     }
   }
 
@@ -284,12 +283,7 @@ export function parseNlDateTime(
       const base = nextWeekday(nowDate, entry.day, 1);
       const time = extractTime(text);
       const at = time ? applyHourMinute(base, time.hour, time.minute).getTime() : base.getTime();
-      return {
-        type: 'weekday',
-        at,
-        matchedText: weekdayNext[0],
-        label: `el próximo ${spanishWeekdayName(entry.day)}`,
-      };
+      return weekdayResult(at, weekdayNext[0], `el próximo ${spanishWeekdayName(entry.day)}`);
     }
   }
 
@@ -304,12 +298,7 @@ export function parseNlDateTime(
       const base = nextWeekday(nowDate, entry.day, 0);
       const time = extractTime(text);
       const at = time ? applyHourMinute(base, time.hour, time.minute).getTime() : base.getTime();
-      return {
-        type: 'weekday',
-        at,
-        matchedText: weekdayPlain[0],
-        label: `el ${spanishWeekdayName(entry.day)}`,
-      };
+      return weekdayResult(at, weekdayPlain[0], `el ${spanishWeekdayName(entry.day)}`);
     }
   }
 

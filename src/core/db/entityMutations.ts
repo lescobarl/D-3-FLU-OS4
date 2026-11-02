@@ -10,8 +10,19 @@
  * forma sobre entidades distintas": era el mismo cuerpo.
  */
 import { buildSyncTuple } from './syncTuple';
+import { isLiveRecord } from './recordCopy';
 import { addAuditLog } from './fluDatabase';
 import type { SyncTuple } from './fluDatabase';
+
+/**
+ * Resultados por defecto de un borrado logico fallido.
+ * Dueño unico del bloque `onInvalid/onMissing/onDone` que repetian los servicios.
+ */
+export const SOFT_DELETE_FALSE_RESULT = {
+    onInvalid: (): boolean => false,
+    onMissing: (): boolean => false,
+    onDone: (): boolean => true,
+} as const;
 
 /** Fila con tupla de sincronizacion (todas las entidades del proyecto). */
 export interface SyncRow {
@@ -82,7 +93,7 @@ export function createGetRow<T extends SyncRow>(spec: {
         if (!id) return undefined;
         const row = await spec.table.get(id);
         if (!row) return undefined;
-        if (spec.excludeDeleted && row.sync?.deleted) return undefined;
+        if (spec.excludeDeleted && !isLiveRecord(row)) return undefined;
         return spec.copy(row);
     };
 }
@@ -120,7 +131,7 @@ export function createClearFlagged<T extends SyncRow>(
 ): () => Promise<number> {
     return async () => {
         const all = await spec.table.toArray();
-        const flagged = all.filter((row) => spec.isFlagged(row) && !row.sync?.deleted);
+        const flagged = all.filter((row) => spec.isFlagged(row) && isLiveRecord(row));
         const at = spec.now();
         const marked = flagged.map((row) => ({
             ...row,
@@ -144,7 +155,7 @@ export function createClearFlagged<T extends SyncRow>(
  */
 export function listAliveByName<T extends SyncRow & { name: string }>(rows: readonly T[], copy: (row: T) => T): T[] {
     return rows
-        .filter((row) => !row.sync?.deleted)
+        .filter((row) => isLiveRecord(row))
         .sort((a, b) => a.name.localeCompare(b.name, 'es'))
         .map(copy);
 }

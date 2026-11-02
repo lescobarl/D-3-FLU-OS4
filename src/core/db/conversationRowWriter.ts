@@ -151,14 +151,7 @@ export async function leerRegistroConversacion(
   return fila ? registroDesdeFilaConversacion(fila) : undefined
 }
 
-/**
- * Inserta o reemplaza una fila ya construida (tubería legacy y perfiles).
- * La tupla la calcula el llamador; el punto de escritura es este.
- * @param record Fila completa.
- */
-export async function putConversationRecord(record: ConversationRow): Promise<void> {
-  await fluDb.conversations.put(record)
-}
+
 
 /**
  * Consolida un lote de filas ya construidas (historial del store).

@@ -109,8 +109,8 @@ const POLITE_STRIP = /\b(?:por\s+favor|please)\s*$/i;
 // Helpers puros de limpieza
 // ------------------------------------------------------------
 
-/** Normaliza el label del contacto: espacios, cortesía y puntuación final. */
-function cleanContactLabel(text: string): string {
+/** Limpieza común de un label: espacios, cortesía y puntuación final. */
+function tidyLabel(text: string): string {
   return text
     .replace(/\s{2,}/g, ' ')
     .replace(POLITE_STRIP, '')
@@ -118,15 +118,34 @@ function cleanContactLabel(text: string): string {
     .trim();
 }
 
+/** Normaliza el label del contacto: espacios, cortesía y puntuación final. */
+function cleanContactLabel(text: string): string {
+  return tidyLabel(text);
+}
+
 /** Extrae solo el contenido del mensaje quitando el separador. */
 function cleanMessage(part: string): string {
-  return part
-    .replace(MESSAGE_SEP_ES, ' ')
-    .replace(MESSAGE_SEP_EN, ' ')
-    .replace(/\s{2,}/g, ' ')
-    .replace(POLITE_STRIP, '')
-    .replace(/[\s.,;:!?¿¡]+$/g, '')
-    .trim();
+  return tidyLabel(part.replace(MESSAGE_SEP_ES, ' ').replace(MESSAGE_SEP_EN, ' '));
+}
+
+/** Respuesta cuando falta el contacto (dueño único del literal). */
+function missingContactReply(lang: 'es' | 'en'): DeviceActionIntent {
+  return { handled: true, action: null, reply: askContactReply(lang) };
+}
+
+/** Intención resuelta con contacto (dueño único del objeto con data). */
+function resolvedIntent(
+  contactName: string,
+  message: string | undefined,
+  action: DeviceActionIntent['action'],
+  reply: string,
+): DeviceActionIntent {
+  return {
+    handled: true,
+    action,
+    reply,
+    data: message ? { contactName, message } : { contactName },
+  };
 }
 
 /**
@@ -206,14 +225,9 @@ function parseSendChannel(text: string, spec: SendChannelSpec): DeviceActionInte
   const rest = text.slice(match[0].length).trim();
   const { contactName, message } = splitContactAndMessage(rest);
   if (!contactName) {
-    return { handled: true, action: null, reply: askContactReply(lang) };
+    return missingContactReply(lang);
   }
-  return {
-    handled: true,
-    action: spec.action,
-    reply: spec.reply(contactName, lang),
-    data: message ? { contactName, message } : { contactName },
-  };
+  return resolvedIntent(contactName, message, spec.action, spec.reply(contactName, lang));
 }
 
 // ------------------------------------------------------------
@@ -239,14 +253,9 @@ export function parseDeviceActionIntent(input: string): DeviceActionIntent {
     const rest = text.slice(callMatch[0].length).trim();
     const { contactName } = splitContactAndMessage(rest);
     if (!contactName) {
-      return { handled: true, action: null, reply: askContactReply(lang) };
+      return missingContactReply(lang);
     }
-    return {
-      handled: true,
-      action: 'call.start',
-      reply: callReply(contactName, lang),
-      data: { contactName },
-    };
+    return resolvedIntent(contactName, undefined, 'call.start', callReply(contactName, lang));
   }
 
   // WhatsApp, SMS y correo: mismo turno con el canal como dato.

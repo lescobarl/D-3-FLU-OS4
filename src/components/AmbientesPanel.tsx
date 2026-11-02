@@ -25,7 +25,10 @@
 //   - Presentacional: sin acceso a stores; App inyecta estado y
 //     acciones (mismo patrón que ParticipantsPanel)
 // ============================================================
-import { useMemo, useState } from 'react';
+import { CatalogCardShell } from './CatalogCardShell';
+import { CatalogCardActions } from './CatalogCardActions';
+import { CatalogPanelShell } from './CatalogPanelShell';
+import { useMemo } from 'react';
 import type { CSSProperties } from 'react';
 import { FLU_CONFIG } from '../voice/api/config';
 import type {
@@ -45,11 +48,14 @@ import {
 } from '../core/environments/ambienteFactory';
 import { AmbienteEditorForm } from './AmbienteEditorForm';
 import { cloneSeedEntry } from './panelUtils';
+import { useCatalogPanel } from '../hooks/useCatalogPanel';
 import {
     catalogCreateValue,
     catalogEditValue,
     mapCatalogReason,
-    submitCatalogPanel,
+    catalogPanelSave,
+    catalogEditorProps,
+    type CatalogEditorState,
     type CatalogReason,
 } from './catalogPanelEditors';
 
@@ -80,19 +86,7 @@ interface TabItem {
     label?: string;
 }
 
-type EditorState =
-    | {
-          mode: 'create';
-          template: EnvironmentDefinition;
-          seed: EditableAmbienteFields;
-      }
-    | {
-          mode: 'edit';
-          id: string;
-          template: EnvironmentDefinition;
-          seed: EditableAmbienteFields;
-      }
-    | null;
+type AmbienteEditorState = CatalogEditorState<EnvironmentDefinition, EditableAmbienteFields>;
 
 /** Etiqueta legible de una pestaña desde FLU_CONFIG.ui.tabs.items. */
 function tabLabel(tabId: string): string {
@@ -128,7 +122,19 @@ export function AmbientesPanel({
     onRemove,
 }: AmbientesPanelProps) {
     const ui = FLU_CONFIG.ui?.ambientes ?? {};
-    const [editor, setEditor] = useState<EditorState>(null);
+
+    const mapReason = (reason: CatalogReason<EnvironmentDefinition>): string =>
+        mapCatalogReason(reason, ui, {
+            duplicate: 'Ya existe un ambiente con ese identificador.',
+            notFound: 'El ambiente ya no existe.',
+        });
+
+    const { editor, open: setEditor, cancel, submit } = useCatalogPanel<
+        AmbienteEditorState,
+        EnvironmentDefinition
+    >({
+        save: catalogPanelSave(onRegister, onUpdate, mapReason),
+    });
 
     const tabLabels = useMemo(() => {
         const labels: Record<string, string> = {};
@@ -137,12 +143,6 @@ export function AmbientesPanel({
         }
         return labels;
     }, []);
-
-    const mapReason = (reason: CatalogReason<EnvironmentDefinition>): string =>
-        mapCatalogReason(reason, ui, {
-            duplicate: 'Ya existe un ambiente con ese identificador.',
-            notFound: 'El ambiente ya no existe.',
-        });
 
     const startCreate = () =>
         setEditor(catalogCreateValue(structuredClone(ENVIRONMENTS[0]), emptyEnvironmentEditableFields));
@@ -153,76 +153,67 @@ export function AmbientesPanel({
     const startEdit = (ambiente: EnvironmentDefinition) =>
         setEditor(catalogEditValue(ambiente, editableFieldsOfEnvironment));
 
-    const handleEditorSubmit = async (payload: EnvironmentDefinition): Promise<string | null> =>
-        submitCatalogPanel({
-            editor,
-            payload,
-            register: onRegister,
-            update: onUpdate,
-            mapReason,
-            close: () => setEditor(null),
-        });
+    const handleEditorSubmit = (payload: EnvironmentDefinition): Promise<string | null> =>
+        submit(payload);
 
     const handleRemove = async (ambiente: EnvironmentDefinition) => {
         await onRemove(ambiente.id);
     };
 
     return (
-        <details className="flu-settings-image-config">
-            <summary className="flu-settings-image-config__summary">
-                {ui.panelTitle || 'Ambientes (rebranding por oficio)'}
-            </summary>
-            <div className="flu-settings-image-config__group">
-                {editor ? (
+        <CatalogPanelShell
+            title={ui.panelTitle || 'Ambientes (rebranding por oficio)'}
+            editor={editor ? (
                     <AmbienteEditorForm
-                        template={editor.template}
-                        seed={editor.seed}
+                        {...catalogEditorProps(
+                            editor,
+                            ui,
+                            { create: 'Crear ambiente', save: 'Guardar cambios' },
+                            cancel,
+                            handleEditorSubmit,
+                        )}
                         tabLabels={tabLabels}
-                        submitLabel={
-                            editor.mode === 'create'
-                                ? ui.createLabel || 'Crear ambiente'
-                                : ui.saveLabel || 'Guardar cambios'
-                        }
-                        cancelLabel={ui.cancelLabel || 'Cancelar'}
-                        onCancel={() => setEditor(null)}
-                        onSubmit={handleEditorSubmit}
                     />
-                ) : (
-                    <>
-                        <p className="flu-ambientes-panel__hint">
-                            {ui.panelHint ||
+            ) : null}
+            hint={ui.panelHint ||
                                 'FLU se rebrandea según el oficio: identidad, tema visual, avatar, voz y pestañas.'}
-                        </p>
-                        <button
-                            type="button"
-                            className="flu-ambientes-panel__create"
-                            data-testid="ambiente-create"
-                            onClick={startCreate}
-                        >
-                            {ui.createLabel || 'Nuevo ambiente'}
-                        </button>
-                        <div className="flu-ambientes-grid">
+            hintClassName="flu-ambientes-panel__hint"
+            createLabel={ui.createLabel || 'Nuevo ambiente'}
+            createClassName="flu-ambientes-panel__create"
+            createTestId="ambiente-create"
+            onCreate={startCreate}
+            gridClassName="flu-ambientes-grid"
+        >
                             {ambientes.map((ambiente) => {
                                 const isActive = ambiente.id === activeAmbienteId;
                                 const isFixed = !dynamicIds.has(ambiente.id);
                                 return (
-                                    <article
+                                    <CatalogCardShell
                                         key={ambiente.id}
-                                        className={`flu-ambientes-card${isActive ? ' is-active' : ''}`}
-                                        data-testid={`ambiente-card-${ambiente.id}`}
+                                        kind="ambientes"
+                                        id={ambiente.id}
+                                        active={isActive}
                                         style={buildThemeStyle(ambiente.tema.vars)}
-                                    >
-                                        <div
-                                            className="flu-ambientes-card__preview"
-                                            aria-label={ui.preview || 'Vista previa'}
-                                        >
-                                            <span className="flu-ambientes-card__swatch flu-ambientes-card__swatch--bg" />
+                                        previewAria={ui.preview || 'Vista previa'}
+                                        preview={<>
+<span className="flu-ambientes-card__swatch flu-ambientes-card__swatch--bg" />
                                             <span className="flu-ambientes-card__swatch flu-ambientes-card__swatch--bg-card" />
                                             <span className="flu-ambientes-card__swatch flu-ambientes-card__swatch--accent" />
                                             <span className="flu-ambientes-card__swatch flu-ambientes-card__swatch--accent-soft" />
-                                        </div>
-                                        <div className="flu-ambientes-card__body">
-                                            <h4 className="flu-ambientes-card__title">
+                                        </>}
+                                        actions={<CatalogCardActions
+                                            kind="ambientes"
+                                            id={ambiente.id}
+                                            active={isActive}
+                                            fixed={isFixed}
+                                            labels={{ active: ui.active, activate: ui.activate, clone: ui.cloneLabel, edit: ui.editLabel, remove: ui.removeLabel }}
+                                            onActivate={() => onActivate(ambiente.id)}
+                                            onClone={() => startClone(ambiente)}
+                                            onEdit={() => startEdit(ambiente)}
+                                            onRemove={() => handleRemove(ambiente)}
+                                        />}
+                                    >
+<h4 className="flu-ambientes-card__title">
                                                 <span className="flu-ambientes-card__icon" aria-hidden="true">
                                                     {ambiente.icono}
                                                 </span>
@@ -232,54 +223,9 @@ export function AmbientesPanel({
                                             <p className="flu-ambientes-card__tabs">
                                                 {ambiente.pestanas.mostrar.map(tabLabel).join(' · ')}
                                             </p>
-                                        </div>
-                                        <div className="flu-ambientes-card__actions">
-                                            <button
-                                                type="button"
-                                                className="flu-ambientes-card__activate"
-                                                data-testid={`ambiente-activate-${ambiente.id}`}
-                                                disabled={isActive}
-                                                onClick={() => onActivate(ambiente.id)}
-                                            >
-                                                {isActive ? ui.active || 'Activo' : ui.activate || 'Activar'}
-                                            </button>
-                                            {isFixed ? (
-                                                <button
-                                                    type="button"
-                                                    className="flu-ambientes-card__clone"
-                                                    data-testid={`ambiente-clone-${ambiente.id}`}
-                                                    onClick={() => startClone(ambiente)}
-                                                >
-                                                    {ui.cloneLabel || 'Clonar'}
-                                                </button>
-                                            ) : (
-                                                <>
-                                                    <button
-                                                        type="button"
-                                                        className="flu-ambientes-card__edit"
-                                                        data-testid={`ambiente-edit-${ambiente.id}`}
-                                                        onClick={() => startEdit(ambiente)}
-                                                    >
-                                                        {ui.editLabel || 'Editar'}
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        className="flu-ambientes-card__remove"
-                                                        data-testid={`ambiente-remove-${ambiente.id}`}
-                                                        onClick={() => handleRemove(ambiente)}
-                                                    >
-                                                        {ui.removeLabel || 'Eliminar'}
-                                                    </button>
-                                                </>
-                                            )}
-                                        </div>
-                                    </article>
+                                    </CatalogCardShell>
                                 );
                             })}
-                        </div>
-                    </>
-                )}
-            </div>
-        </details>
+                        </CatalogPanelShell>
     );
 }

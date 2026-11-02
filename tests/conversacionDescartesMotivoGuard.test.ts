@@ -59,10 +59,15 @@ const fuenteDe = (ruta: string): string =>
   readFileSync(join(process.cwd(), ruta), 'utf8')
 
 /** ¿Los emits de locution.closed de cierre.ts llevan motivo y causa? */
+/**
+ * Todo cierre pasa por el dueño único (`emitirCierre`/`cerrarDescartada`), que
+ * emite `locution.closed` con motivo y causa; no puede quedar ningún emit crudo.
+ */
 export function cierreSiempreMotivoYCausa(src: string): boolean {
-  const bloques = src.split("tipo: 'locution.closed'")
-  if (bloques.length < 4) return false
-  return bloques.slice(1).every((bloque) => /motivo,/.test(bloque) && /causa,/.test(bloque))
+  const crudos = (src.match(/tipo: 'locution\.closed'/g) || []).length
+  const bloque = /tipo: 'locution\.closed'[\s\S]*?motivo,[\s\S]*?causa,/.test(src)
+  const llamadas = (src.match(/emitirCierre\(|cerrarDescartada\(/g) || []).length
+  return crudos === 1 && bloque && llamadas >= 4
 }
 
 /**
@@ -468,12 +473,12 @@ describe('Caso 9 — los dueños viven en el archivo real', () => {
 })
 
 describe('Caso 9 — PRUEBA DE DETECTOR (el detector no es decorativo)', () => {
-  it('un emit de locution.closed sin causa => rojo; tres con motivo y causa => verde', () => {
-    const emite = "emitir({\n  tipo: 'locution.closed',\n  sessionId,\n  tramo,\n  motivo,\n  causa,\n  medida,\n})"
-    expect(cierreSiempreMotivoYCausa(emite.repeat(3))).toBe(true)
-    const sinCausa = emite.replace('\n  causa,', '')
-    expect(cierreSiempreMotivoYCausa(sinCausa + emite.repeat(2))).toBe(false)
-    expect(cierreSiempreMotivoYCausa(emite.repeat(2))).toBe(false)
+  it('un dueño de cierre sin causa => rojo; dueño con motivo/causa y 4 cierres => verde', () => {
+    const emite =
+      "function emitirCierre() {\n  emitir({\n    tipo: 'locution.closed',\n    motivo,\n    causa,\n  })\n}\nemitirCierre()\nemitirCierre()\nemitirCierre()\nemitirCierre()"
+    expect(cierreSiempreMotivoYCausa(emite)).toBe(true)
+    const sinCausa = emite.replace('\n    causa,', '')
+    expect(cierreSiempreMotivoYCausa(sinCausa)).toBe(false)
   })
 
   it('un descarte:null junto a fila:null => rojo; junto a la fila o ausente => verde/rojo', () => {

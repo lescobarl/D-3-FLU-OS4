@@ -12,6 +12,7 @@
 //   - DI: now inyectable para pruebas deterministas
 // ============================================================
 import { useCallback, useEffect, useState } from 'react';
+import { refreshOnOk } from './refreshOnOk';
 import { useServiceRef } from './useServiceRef';
 import { FLU_CONFIG } from '../voice/api/config';
 import { fluDb, type MateriaGrisRecord } from '../core/db/fluDatabase';
@@ -98,9 +99,7 @@ export function useMateriaGris({ now }: UseMateriaGrisOptions = {}): UseMateriaG
   /** Otorga puntos por una acción y refresca el leaderboard. */
   const awardPoints = useCallback(
     async (input: AwardInput): Promise<AwardResult> => {
-      const result = await service.awardPoints(input);
-      if (result.ok) await refresh();
-      return result;
+      return refreshOnOk(() => service.awardPoints(input), refresh);
     },
     [service, refresh],
   );

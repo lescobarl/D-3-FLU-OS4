@@ -18,6 +18,12 @@ import {
  * Hook para acceder al log de auditoría.
  * Proporciona funciones para registrar y consultar cambios.
  */
+/** Argumentos de un cambio de configuración. */
+type ChangeArgs = [entity: string, entityId: string, previous: unknown, next: unknown, context?: string];
+
+/** Argumentos de un evento del sistema. */
+type EventArgs = [action: string, entity: string, entityId: string, payload: unknown, context?: string];
+
 export function useAuditLog() {
     const [logs, setLogs] = useState<AuditLogEntry[]>([]);
     const [loading, setLoading] = useState(true);
@@ -48,37 +54,32 @@ export function useAuditLog() {
      * @param newValue — Valor nuevo
      * @param context — Contexto descriptivo
      */
+    /** Añade la entrada creada al estado y la devuelve (dueño único). */
+    const appendEntry = useCallback(async (created: Promise<AuditLogEntry>): Promise<AuditLogEntry> => {
+        const entry = await created;
+        setLogs((prev) => [entry, ...prev]);
+        return entry;
+    }, []);
+
     const logChange = useCallback(
-        async (
-            entity: string,
-            entityId: string,
-            previousValue: unknown,
-            newValue: unknown,
-            context: string = '',
-        ): Promise<AuditLogEntry> => {
-            const entry = await addAuditLog('config:change', entity, entityId, previousValue, newValue, context);
-            setLogs((prev) => [entry, ...prev]);
-            return entry;
+        async (...args: ChangeArgs): Promise<AuditLogEntry> => {
+            const [entity, entityId, previousValue, newValue, context = ''] = args;
+            return appendEntry(
+                addAuditLog('config:change', entity, entityId, previousValue, newValue, context),
+            );
         },
-        [],
+        [appendEntry],
     );
 
     /**
      * Registrar un evento del sistema.
      */
     const logEvent = useCallback(
-        async (
-            action: string,
-            entity: string,
-            entityId: string,
-            payload: unknown,
-            context: string = '',
-        ): Promise<AuditLogEntry> => {
-            const entry = await addAuditLog(action, entity, entityId, null, payload, context);
-            setLogs((prev) => [entry, ...prev]);
-            return entry;
+        async (...args: EventArgs): Promise<AuditLogEntry> => {
+            const [action, entity, entityId, payload, context = ''] = args;
+            return appendEntry(addAuditLog(action, entity, entityId, null, payload, context));
         },
-        [],
+        [appendEntry],
     );
 
     /**

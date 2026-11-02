@@ -40,11 +40,13 @@ describe('P7.82 catalogEditorSave - un solo dueno del flujo de guardado', () => 
         for (const f of PANELS) {
             const src = readFileSync(f, 'utf8');
         // El panel USA el dueno del flujo de guardado: llamandolo (`saveCatalogEntry`) o
-        // delegando el envoltorio entero (`submitCatalogPanel`, que vive en
-        // catalogPanelEditors.ts y es quien llama al dueno).
+        // delegando el envoltorio entero (`submitCatalogPanel`/`catalogPanelSave`, que
+        // viven en catalogPanelEditors.ts y llaman al dueno).
         expect(
-            src.includes('saveCatalogEntry') || src.includes('submitCatalogPanel'),
-            `${f} no usa el dueno del flujo de guardado (ni saveCatalogEntry ni submitCatalogPanel)`,
+            src.includes('saveCatalogEntry') ||
+                src.includes('submitCatalogPanel') ||
+                src.includes('catalogPanelSave'),
+            `${f} no usa el dueno del flujo de guardado (ni saveCatalogEntry ni submitCatalogPanel ni catalogPanelSave)`,
         ).toBe(true);
         }
     });

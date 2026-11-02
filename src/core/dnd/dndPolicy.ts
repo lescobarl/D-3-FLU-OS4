@@ -5,6 +5,7 @@
 // Regla #1: sin hardcode; la configuración vive en FLU_CONFIG.dnd
 // y los overrides del usuario en STORAGE_KEYS.DND_*.
 // ============================================================
+import { parseTimeOfDayToMinutes } from '../../lib/timeOfDay';
 
 export interface DndSchedule {
   /** Hora de inicio en formato 24h 'HH:mm'. */
@@ -22,17 +23,15 @@ export interface DndConfig {
   tickMs?: number;
 }
 
-const TIME_PATTERN = /^([01]?\d|2[0-3]):([0-5]\d)$/;
-
 /**
  * Convierte 'HH:mm' (24h) a minutos desde medianoche.
  * Devuelve null si el formato no es válido.
+ * @param value Hora en formato HH:MM.
+ * @returns Minutos desde medianoche, o null.
  */
 export function parseTimeToMinutes(value: string): number | null {
   if (typeof value !== 'string') return null;
-  const match = TIME_PATTERN.exec(value.trim());
-  if (!match) return null;
-  return parseInt(match[1], 10) * 60 + parseInt(match[2], 10);
+  return parseTimeOfDayToMinutes(value);
 }
 
 /**

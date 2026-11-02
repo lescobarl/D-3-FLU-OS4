@@ -15,7 +15,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { addAuditLog, fluDb, type NoteRecord } from '../db/fluDatabase';
 import { buildSyncTuple, makeTupleTimestamp } from '../db/syncTuple';
-import { copyRecord } from '../db/recordCopy';
+import { copyRecord, createFilteredAliveList, getAliveRecord, listAliveRecords } from '../db/recordCopy';
 import { createClearFlagged, createRename, createToggle } from '../db/entityMutations';
 import { filterNotes, matchNotesByTarget, notesRemaining, type NotesFilter, type NewNoteInput } from './notesList';
 import { INVALID_INPUT } from '../../lib/resultReasons';
@@ -79,9 +79,6 @@ export function createNotesService({
 }: NotesServiceOptions = {}) {
   const timestamp = makeTupleTimestamp(now);
 
-  /** Fila viva: no marcada como borrada lógica (§2.9). */
-  const isLive = (row: NoteRecord): boolean => !row.sync?.deleted;
-
   const add = async (input: NewNoteInput): Promise<AddNoteResult> => {
     const label = typeof input.label === 'string' ? input.label.trim() : '';
     if (!label) return { ok: false, reason: INVALID_INPUT };
@@ -102,21 +99,19 @@ export function createNotesService({
     return { ok: true, record };
   };
 
-  const get = async (id: string): Promise<NoteRecord | undefined> => {
-    if (!id) return undefined;
-    const row = await db.get(id);
-    return row ? copyRecord(row) : undefined;
-  };
+  const get = async (id: string): Promise<NoteRecord | undefined> =>
+    getAliveRecord(db, id);
 
   const list = async (): Promise<NoteRecord[]> => {
-    const all = await db.toArray();
-    return all.filter(isLive).map(copyRecord);
+    return (await listAliveRecords(db)).map(copyRecord);
   };
 
-  const listFiltered = async (filter: NotesFilter = 'all'): Promise<NoteRecord[]> => {
-    const all = await db.toArray();
-    return filterNotes(all.filter(isLive), filter).map(copyRecord);
-  };
+  const listFiltered = createFilteredAliveList<NoteRecord, NotesFilter>(
+    db,
+    copyRecord,
+    filterNotes,
+    'all',
+  );
 
   const toggle = createToggle({
     table: db,
@@ -174,8 +169,8 @@ export function createNotesService({
   const removeByTarget = async (target: string): Promise<number> => {
     const clean = typeof target === 'string' ? target.trim() : '';
     if (!clean) return 0;
-    const all = await db.toArray();
-    const matches = matchNotesByTarget(all.filter(isLive), clean);
+    const all = await listAliveRecords(db);
+    const matches = matchNotesByTarget(all, clean);
     let count = 0;
     for (const match of matches) {
       const updated = await softRemove(match.id);
@@ -214,10 +209,10 @@ export function createNotesService({
 
   /** Borrado LÓGICO de TODAS las notas (§2.9): devuelve cuántas se marcaron. */
   const clearAll = async (opts?: { personId?: string }): Promise<number> => {
-    const all = await db.toArray();
+    const all = await listAliveRecords(db);
     // Aislamiento: si viene personId, solo se vacían las notas de ESE usuario.
     const live = all.filter(
-      (note) => isLive(note) && (!opts?.personId || note.personId === opts.personId),
+      (note) => !opts?.personId || note.personId === opts.personId,
     );
     // Escritura en LOTE (bulkPut): una transacción en vez de N put secuenciales.
     const marked = live.map((note) => ({
@@ -233,8 +228,7 @@ export function createNotesService({
   };
 
   const remaining = async (): Promise<number> => {
-    const all = await db.toArray();
-    return notesRemaining(all.filter(isLive));
+    return notesRemaining(await listAliveRecords(db));
   };
 
   return {

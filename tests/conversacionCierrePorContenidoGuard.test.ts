@@ -51,11 +51,15 @@ export function cierreMideTramoCerrado(src: string): boolean {
   return /medirTramoCerrado\(/.test(src) && /medidor\.medir\(/.test(src)
 }
 
-/** Los emits de locution.closed llevan `medida` (consolidar/descarte/fila). */
+/**
+ * Los cierres llevan `medida` por el dueño único `emitirCierre`: no puede quedar
+ * ningún `locution.closed` crudo y los caminos de cierre deben usarlo.
+ */
 export function losTresCierresLlevanMedida(src: string): boolean {
-  const cierres = (src.match(/tipo: 'locution\.closed'/g) || []).length
-  const medidas = (src.match(/^\s*medida,$/gm) || []).length
-  return cierres >= 3 && medidas >= cierres
+  const crudos = (src.match(/tipo: 'locution\.closed'/g) || []).length
+  const conMedida = /function emitirCierre\([\s\S]*?tipo: 'locution\.closed'[\s\S]*?medida,/.test(src)
+  const llamadas = (src.match(/emitirCierre\(|cerrarDescartada\(/g) || []).length
+  return crudos === 1 && conMedida && llamadas >= 4
 }
 
 /** El producto pasa el final REAL del evento al módulo (dueño único traeFinal). */
@@ -329,11 +333,12 @@ describe('Caso 7+6 — PRUEBA DE DETECTOR (el detector no es decorativo)', () =>
     expect(cierreMideTramoCerrado(conMedida)).toBe(true)
   })
 
-  it('un emit de locution.closed sin medida => rojo; tres cierres con medida => verde', () => {
-    const sinMedida = "emitir({ tipo: 'locution.closed', tramo, motivo, causa })\n".repeat(3)
-    expect(losTresCierresLlevanMedida(sinMedida)).toBe(false)
-    const conMedida = "emitir({\n  tipo: 'locution.closed',\n  medida,\n})\n".repeat(3)
+  it('un dueño de cierre sin medida => rojo; dueño con medida y 4 cierres => verde', () => {
+    const conMedida =
+      "function emitirCierre() {\n  emitir({\n    tipo: 'locution.closed',\n    medida,\n  })\n}\nemitirCierre()\nemitirCierre()\nemitirCierre()\nemitirCierre()"
     expect(losTresCierresLlevanMedida(conMedida)).toBe(true)
+    const sinMedida = conMedida.replace('\n    medida,', '')
+    expect(losTresCierresLlevanMedida(sinMedida)).toBe(false)
   })
 
   it('un producto que hardcodea final:false => rojo; final:hayFinal => verde', () => {

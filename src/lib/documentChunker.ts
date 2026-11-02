@@ -52,6 +52,39 @@ function buildContextBlock(ctx: ChunkContext): string {
   return lines.join('\n');
 }
 
+/** Preámbulo común de los prompts de documento (dueño único). */
+function documentPromptPreamble(
+  ctx: ChunkContext,
+  language: string,
+  intro: string,
+): { langInstr: string; header: string[] } {
+  return {
+    langInstr: pickText(language, 'responde_unicamente_en_espanol'),
+    header: [intro, buildContextBlock(ctx), ''],
+  };
+}
+
+/** Construye un prompt de documento con preámbulo y cuerpo (dueño único). */
+function documentPrompt(
+  ctx: ChunkContext,
+  language: string,
+  intro: string,
+  body: (langInstr: string) => string[],
+): string {
+  const { langInstr, header } = documentPromptPreamble(ctx, language, intro);
+  return [...header, ...body(langInstr)].join('\n');
+}
+
+/** Prompt de análisis con el contexto de documento (dueño único del preámbulo). */
+function analysisPrompt(ctx: ChunkContext, language: string, body: string[]): string {
+  return documentPrompt(
+    ctx,
+    language,
+    `Eres un analista de documentos. Contexto del documento:`,
+    () => body,
+  );
+}
+
 /** Prompt de la fase map: lee UN chunk y extrae resumen + puntos clave. */
 export function buildMapPrompt(
   chunk: string,
@@ -60,20 +93,15 @@ export function buildMapPrompt(
   ctx: ChunkContext,
   language = 'es'
 ): string {
-  const langInstr =
-    pickText(language, 'responde_unicamente_en_espanol');
-  return [
-    `Eres un analista de documentos. Contexto del documento:`,
-    buildContextBlock(ctx),
-    ``,
+  return analysisPrompt(ctx, language, [
     `Fragmento ${index}/${total} del texto extraído:`,
     `"""`,
     chunk,
     `"""`,
     ``,
-    `Extrae SOLO de este fragmento: 1) un resumen breve (2-4 líneas) de lo que contiene, y 2) hasta 5 puntos clave con valor informativo. ${langInstr}`,
+    `Extrae SOLO de este fragmento: 1) un resumen breve (2-4 líneas) de lo que contiene, y 2) hasta 5 puntos clave con valor informativo. ${pickText(language, 'responde_unicamente_en_espanol')}`,
     `Devuelve JSON válido con el formato: {"resumen": string, "puntos_clave": string[]}. No inventes datos que no estén en el fragmento.`,
-  ].join('\n');
+  ]);
 }
 
 /** Prompt de la fase reduce: fusiona las lecturas parciales en el contrato final. */
@@ -82,22 +110,22 @@ export function buildReducePrompt(
   ctx: ChunkContext,
   language = 'es'
 ): string {
-  const langInstr =
-    pickText(language, 'responde_unicamente_en_espanol');
   const serialized = partials
     .map((p) => `--- Fragmento ${p.indice} ---\nResumen: ${p.resumen}\nPuntos: ${p.puntos_clave.join(' | ')}`)
     .join('\n\n');
-  return [
+  return documentPrompt(
+    ctx,
+    language,
     `Eres un analista de documentos. Recibiste lecturas parciales de un mismo documento:`,
-    buildContextBlock(ctx),
-    ``,
-    serialized,
-    ``,
-    `Genera el análisis final consolidado del documento completo. ${langInstr}`,
-    `Devuelve JSON válido con el formato:`,
-    `{"resumen": string (5-10 líneas, ejecutivo), "puntos_clave": string[] (5-10, no repetidos), "escenarios": [{"nombre": string, "descripcion": string}] (opcional, máx 3 si aplica)}.`,
-    `No inventes datos que no aparezcan en las lecturas parciales.`,
-  ].join('\n');
+    (langInstr) => [
+      serialized,
+      ``,
+      `Genera el análisis final consolidado del documento completo. ${langInstr}`,
+      `Devuelve JSON válido con el formato:`,
+      `{"resumen": string (5-10 líneas, ejecutivo), "puntos_clave": string[] (5-10, no repetidos), "escenarios": [{"nombre": string, "descripcion": string}] (opcional, máx 3 si aplica)}.`,
+      `No inventes datos que no aparezcan en las lecturas parciales.`,
+    ],
+  );
 }
 
 /** Prompt para análisis de documento corto: UNA sola llamada (sin map-reduce). */
@@ -106,22 +134,17 @@ export function buildSingleAnalysisPrompt(
   ctx: ChunkContext,
   language = 'es'
 ): string {
-  const langInstr =
-    pickText(language, 'responde_unicamente_en_espanol');
-  return [
-    `Eres un analista de documentos. Contexto del documento:`,
-    buildContextBlock(ctx),
-    ``,
+  return analysisPrompt(ctx, language, [
     `Texto extraído completo del documento:`,
     `"""`,
     text,
     `"""`,
     ``,
-    `Genera el análisis final del documento. ${langInstr}`,
+    `Genera el análisis final del documento. ${pickText(language, 'responde_unicamente_en_espanol')}`,
     `Devuelve JSON válido con el formato:`,
     `{"resumen": string (5-10 líneas, ejecutivo), "puntos_clave": string[] (5-10), "escenarios": [{"nombre": string, "descripcion": string}] (opcional, máx 3 si aplica)}.`,
     `No inventes datos que no aparezcan en el texto.`,
-  ].join('\n');
+  ]);
 }
 
 /**

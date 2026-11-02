@@ -14,6 +14,7 @@
 // ============================================================
 import { useMemo, useState } from 'react';
 import { summarizeAgenda } from '../core/agenda/agendaSummary';
+import { startOfDayMs } from '../lib/dayBoundary';
 import type { AgendaView } from '../core/agenda/agendaQuery';
 import type { AgendaColorMap, AgendaItem, AgendaKind, AgendaTrigger } from '../core/agenda/agendaModel';
 import { AGENDA_KINDS, nextAgendaDue } from '../core/agenda/agendaModel';
@@ -115,8 +116,7 @@ function itemTimeText(item: AgendaItem): string {
 function relativeDayLabel(ms: number, nowMs: number): string {
     const d = new Date(ms);
     const n = new Date(nowMs);
-    const startOfDay = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
-    const diffDays = Math.round((startOfDay(d) - startOfDay(n)) / 86400000);
+    const diffDays = Math.round((startOfDayMs(d) - startOfDayMs(n)) / 86400000);
     if (diffDays === 0) return 'hoy';
     if (diffDays === 1) return 'mañana';
     const days = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];

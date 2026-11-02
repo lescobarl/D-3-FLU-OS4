@@ -21,10 +21,14 @@
 //   - Presentacional: sin acceso a stores; App inyecta estado y
 //     acciones (mismo patrón que AmbientesPanel/BrowserProfilesPanel)
 // ============================================================
+import { SettingsPanelShell } from './SettingsPanelShell';
+import { catalogSeedEditorProps } from './catalogPanelEditors';
 import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { FLU_CONFIG } from '../voice/api/config';
 import { saveCatalogEntry } from '../core/catalogs/catalogEditorSave';
+import { useCatalogPanel } from '../hooks/useCatalogPanel';
+import { languageLabel } from '../lib/languageLabel';
 import type {
   SearchSite,
   SearchSiteLanguage,
@@ -75,11 +79,21 @@ function emptySeed(): SearchSite {
 }
 
 /** Etiqueta legible de un idioma (config-driven con fallback). */
-function languageLabel(labels: Record<string, string>, lang: string): string {
+interface ChipCheckboxProps {
+  checked: boolean
+  onToggle: () => void
+  testId: string
+  label: string
+}
+
+/** Chip de selección con checkbox (dueño único de categorías e idiomas). */
+function ChipCheckbox({ checked, onToggle, testId, label }: ChipCheckboxProps) {
   return (
-    labels[`lang_${lang}`] ||
-    (lang === 'es' ? 'Español' : pickText(lang, 'ambos'))
-  );
+    <label className={`flu-browser-profile__chip${checked ? ' flu-browser-profile__chip--active' : ''}`}>
+      <input type="checkbox" checked={checked} onChange={onToggle} data-testid={testId} />
+      <span>{label}</span>
+    </label>
+  )
 }
 
 interface SearchSiteEditorFormProps {
@@ -192,23 +206,15 @@ function SearchSiteEditorForm({
           {labels.categoriesLabel || 'Categorías'}
         </span>
         <div className="flu-browser-profile__chips">
-          {Object.entries(categories).map(([key, categoryLabel]) => {
-            const active = categorias.includes(key);
-            return (
-              <label
-                key={key}
-                className={`flu-browser-profile__chip${active ? ' flu-browser-profile__chip--active' : ''}`}
-              >
-                <input
-                  type="checkbox"
-                  checked={active}
-                  onChange={() => toggleCategoria(key)}
-                  data-testid={`search-site-categoria-${key}`}
-                />
-                <span>{categoryLabel}</span>
-              </label>
-            );
-          })}
+          {Object.entries(categories).map(([key, categoryLabel]) => (
+            <ChipCheckbox
+              key={key}
+              checked={categorias.includes(key)}
+              onToggle={() => toggleCategoria(key)}
+              testId={`search-site-categoria-${key}`}
+              label={categoryLabel}
+            />
+          ))}
         </div>
       </div>
 
@@ -217,23 +223,15 @@ function SearchSiteEditorForm({
           {labels.languagesLabel || 'Idiomas'}
         </span>
         <div className="flu-browser-profile__chips">
-          {languages.map((lang) => {
-            const active = idiomas.includes(lang as SearchSiteLanguage);
-            return (
-              <label
-                key={lang}
-                className={`flu-browser-profile__chip${active ? ' flu-browser-profile__chip--active' : ''}`}
-              >
-                <input
-                  type="checkbox"
-                  checked={active}
-                  onChange={() => toggleIdioma(lang)}
-                  data-testid={`search-site-idioma-${lang}`}
-                />
-                <span>{languageLabel(labels, lang)}</span>
-              </label>
-            );
-          })}
+          {languages.map((lang) => (
+            <ChipCheckbox
+              key={lang}
+              checked={idiomas.includes(lang as SearchSiteLanguage)}
+              onToggle={() => toggleIdioma(lang)}
+              testId={`search-site-idioma-${lang}`}
+              label={languageLabel(labels, lang, lang === 'es' ? 'Español' : pickText(lang, 'ambos'))}
+            />
+          ))}
         </div>
       </div>
 
@@ -316,7 +314,19 @@ export function SearchCatalogPanel({
 
   const config: CatalogConfig = { labels, categories, readingLevels, languages, levelLabels };
 
-  const [editor, setEditor] = useState<EditorState>(null);
+  const { editor, open: setEditor, cancel, submit } = useCatalogPanel<
+    NonNullable<EditorState>,
+    SearchSite
+  >({
+    save: (seleccion, payload) =>
+      saveCatalogEntry({
+        editor: seleccion,
+        payload,
+        register: onRegister,
+        update: onUpdate,
+        mapReason,
+      }),
+  });
 
   const mapReason = (
     reason:
@@ -347,18 +357,7 @@ export function SearchCatalogPanel({
     });
   };
 
-  const handleEditorSubmit = async (payload: SearchSite): Promise<string | null> => {
-    const error = await saveCatalogEntry({
-      editor,
-      payload,
-      register: onRegister,
-      update: onUpdate,
-      mapReason,
-    });
-    if (error) return error;
-    setEditor(null);
-    return null;
-  };
+  const handleEditorSubmit = (payload: SearchSite): Promise<string | null> => submit(payload);
 
   const handleRemove = async (site: SearchSite): Promise<void> => {
     if (!window.confirm(labels.removeConfirm || '¿Eliminar este sitio del catálogo?')) return;
@@ -366,25 +365,19 @@ export function SearchCatalogPanel({
   };
 
   return (
-    <details className="flu-settings-image-config">
-      <summary className="flu-settings-image-config__summary">
-        {labels.panelTitle || 'Catálogo de sitios'}
-      </summary>
-      <div className="flu-settings-image-config__group">
+    <SettingsPanelShell title={labels.panelTitle || 'Catálogo de sitios'}>
         <div className="flu-settings-section">
           <div className="flu-settings-section__body">
             {editor ? (
               <SearchSiteEditorForm
-                seed={editor.seed}
+                {...catalogSeedEditorProps(
+                  editor,
+                  labels,
+                  { create: 'Nuevo sitio', save: 'Guardar sitio' },
+                  cancel,
+                  handleEditorSubmit,
+                )}
                 config={config}
-                submitLabel={
-                  editor.mode === 'create'
-                    ? labels.createLabel || 'Nuevo sitio'
-                    : labels.saveLabel || 'Guardar sitio'
-                }
-                cancelLabel={labels.cancelLabel || 'Cancelar'}
-                onSubmit={handleEditorSubmit}
-                onCancel={() => setEditor(null)}
               />
             ) : (
               <>
@@ -418,7 +411,7 @@ export function SearchCatalogPanel({
                       const categoriesText =
                         site.categorias.map((cat) => categories[cat] || cat).join(', ') || '—';
                       const languagesText =
-                        site.idiomas.map((lang) => languageLabel(labels, lang)).join(', ') || '—';
+                        site.idiomas.map((lang) => languageLabel(labels, lang, lang === 'es' ? 'Español' : pickText(lang, 'ambos'))).join(', ') || '—';
                       const levelText = levelLabels[`level_${site.nivel}`] || site.nivel;
                       return (
                         <li
@@ -468,7 +461,6 @@ export function SearchCatalogPanel({
             )}
           </div>
         </div>
-      </div>
-    </details>
+      </SettingsPanelShell>
   );
 }

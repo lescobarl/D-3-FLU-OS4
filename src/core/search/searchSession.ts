@@ -453,31 +453,49 @@ function normalizeInvidious(raw: unknown, provider?: SearchProviderConfig): Sear
     return results;
 }
 
+/**
+ * Recorre la lista cruda de un proveedor y mapea cada objeto a un resultado.
+ * Dueño único del bucle de normalización (wikipedia/tavily).
+ * @param list Lista cruda (puede no ser array).
+ * @param map Mapeador; devuelve null para descartar el elemento.
+ * @returns Resultados válidos en orden.
+ */
+function mapProviderResults(
+    list: unknown,
+    map: (item: Record<string, unknown>) => SearchResult | null,
+): SearchResult[] {
+    if (!Array.isArray(list)) return [];
+    const results: SearchResult[] = [];
+    for (const item of list) {
+        if (!item || typeof item !== 'object') continue;
+        const mapped = map(item as Record<string, unknown>);
+        if (mapped) results.push(mapped);
+    }
+    return results;
+}
+
 /** Normaliza la respuesta de la API de Wikipedia (action=query&list=search). */
 function normalizeWikipedia(
     raw: unknown,
     lang: ResolvedLanguage,
     provider?: SearchProviderConfig,
 ): SearchResult[] {
-    const list = (raw as { query?: { search?: unknown[] } })?.query?.search;
-    if (!Array.isArray(list)) return [];
-    const results: SearchResult[] = [];
-    for (const item of list) {
-        if (!item || typeof item !== 'object') continue;
-        const record = item as { title?: string; snippet?: string };
-        const title = String(record.title || '').trim();
-        if (!title) continue;
-        const url = buildWikiArticleUrl(title, lang, provider);
-        results.push({
-            title,
-            snippet: stripHtml(String(record.snippet || '')),
-            url,
-            host: extractHost(url) || `${lang}.wikipedia.org`,
-            source: SEARCH_PROVIDER_IDS.WIKIPEDIA,
-            allowed: true,
-        });
-    }
-    return results;
+    return mapProviderResults(
+        (raw as { query?: { search?: unknown[] } })?.query?.search,
+        (record) => {
+            const title = String(record.title || '').trim();
+            if (!title) return null;
+            const url = buildWikiArticleUrl(title, lang, provider);
+            return {
+                title,
+                snippet: stripHtml(String(record.snippet || '')),
+                url,
+                host: extractHost(url) || `${lang}.wikipedia.org`,
+                source: SEARCH_PROVIDER_IDS.WIKIPEDIA,
+                allowed: true,
+            };
+        },
+    );
 }
 
 /** Empuja un tópico de DDG (directo o sub-tópico) al resultado. */
@@ -542,25 +560,19 @@ function normalizeDuckDuckGo(raw: unknown): SearchResult[] {
  * El contenido ya viene en texto; se limpia por si trae HTML residual.
  */
 function normalizeTavily(raw: unknown): SearchResult[] {
-    const list = (raw as { results?: unknown[] })?.results;
-    if (!Array.isArray(list)) return [];
-    const results: SearchResult[] = [];
-    for (const item of list) {
-        if (!item || typeof item !== 'object') continue;
-        const record = item as { title?: string; url?: string; content?: string };
+    return mapProviderResults((raw as { results?: unknown[] })?.results, (record) => {
         const url = String(record.url || '').trim();
-        if (!url) continue;
+        if (!url) return null;
         const title = String(record.title || '').trim() || url;
-        results.push({
+        return {
             title,
             snippet: stripHtml(String(record.content || '')),
             url,
             host: extractHost(url),
             source: SEARCH_PROVIDER_IDS.TAVILY,
             allowed: true,
-        });
-    }
-    return results;
+        };
+    });
 }
 
 /**

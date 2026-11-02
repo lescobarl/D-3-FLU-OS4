@@ -99,14 +99,7 @@ export async function clearSessionState(): Promise<void> {
  * Hook that auto-saves session state on changes.
  * Pass the current values and they'll be persisted automatically.
  */
-export function useSessionPersistence(state: {
-    activeTab: string;
-    expandedFrameId: string;
-    selectedMinuteId: string | null;
-    participantPhase: string;
-    participantTurnCount: number;
-    workspaceImageExpanded: boolean;
-}) {
+export function useSessionPersistence(state: SessionState) {
     const isInitialMount = useRef(true);
 
     useEffect(() => {

@@ -261,6 +261,41 @@ class HealthMetricTracker {
 // Verificadores de componentes
 // -----------------------------------------------------------
 
+/**
+ * Cierra un chequeo de componente con su contrato de salud.
+ * Dueño único del bloque que repetían los siete chequeos.
+ * @param name Nombre del componente.
+ * @param startTime Inicio de la medición.
+ * @param hasError ¿El chequeo falló?
+ * @param message Mensaje del chequeo.
+ * @param metrics Métricas medidas.
+ * @returns Salud del componente.
+ */
+function componentHealth(
+    name: string,
+    startTime: number,
+    hasError: boolean,
+    message: string,
+    metrics: Record<string, number | string | boolean>,
+): ComponentHealth {
+    const responseTime = Date.now() - startTime;
+    const thresholds = COMPONENT_THRESHOLDS[name];
+    const status = determineComponentStatus(responseTime, hasError, thresholds);
+
+    return {
+        name,
+        status,
+        lastCheck: Date.now(),
+        metrics: {
+            ...metrics,
+            responseTime,
+            hasError,
+        },
+        message,
+        thresholds,
+    };
+}
+
 async function checkAIService(): Promise<ComponentHealth> {
     const startTime = Date.now();
     let hasError = false;
@@ -315,22 +350,7 @@ async function checkAIService(): Promise<ComponentHealth> {
         message = `Error verificando servicio de IA: ${error instanceof Error ? error.message : 'Error desconocido'}`;
     }
 
-    const responseTime = Date.now() - startTime;
-    const thresholds = COMPONENT_THRESHOLDS['ai-service'];
-    const status = determineComponentStatus(responseTime, hasError, thresholds);
-
-    return {
-        name: 'ai-service',
-        status,
-        lastCheck: Date.now(),
-        metrics: {
-            ...metrics,
-            responseTime,
-            hasError,
-        },
-        message,
-        thresholds,
-    };
+    return componentHealth('ai-service', startTime, hasError, message, metrics);
 }
 
 async function checkSpeechRecognition(): Promise<ComponentHealth> {
@@ -379,22 +399,7 @@ async function checkSpeechRecognition(): Promise<ComponentHealth> {
         message = `Error verificando reconocimiento de voz: ${error instanceof Error ? error.message : 'Error desconocido'}`;
     }
 
-    const responseTime = Date.now() - startTime;
-    const thresholds = COMPONENT_THRESHOLDS['speech-recognition'];
-    const status = determineComponentStatus(responseTime, hasError, thresholds);
-
-    return {
-        name: 'speech-recognition',
-        status,
-        lastCheck: Date.now(),
-        metrics: {
-            ...metrics,
-            responseTime,
-            hasError,
-        },
-        message,
-        thresholds,
-    };
+    return componentHealth('speech-recognition', startTime, hasError, message, metrics);
 }
 
 async function checkSpeechSynthesis(): Promise<ComponentHealth> {
@@ -430,22 +435,7 @@ async function checkSpeechSynthesis(): Promise<ComponentHealth> {
         message = `Error verificando síntesis de voz: ${error instanceof Error ? error.message : 'Error desconocido'}`;
     }
 
-    const responseTime = Date.now() - startTime;
-    const thresholds = COMPONENT_THRESHOLDS['speech-synthesis'];
-    const status = determineComponentStatus(responseTime, hasError, thresholds);
-
-    return {
-        name: 'speech-synthesis',
-        status,
-        lastCheck: Date.now(),
-        metrics: {
-            ...metrics,
-            responseTime,
-            hasError,
-        },
-        message,
-        thresholds,
-    };
+    return componentHealth('speech-synthesis', startTime, hasError, message, metrics);
 }
 
 async function checkIndexedDB(): Promise<ComponentHealth> {
@@ -481,22 +471,7 @@ async function checkIndexedDB(): Promise<ComponentHealth> {
         message = `Error verificando IndexedDB: ${error instanceof Error ? error.message : 'Error desconocido'}`;
     }
 
-    const responseTime = Date.now() - startTime;
-    const thresholds = COMPONENT_THRESHOLDS['indexed-db'];
-    const status = determineComponentStatus(responseTime, hasError, thresholds);
-
-    return {
-        name: 'indexed-db',
-        status,
-        lastCheck: Date.now(),
-        metrics: {
-            ...metrics,
-            responseTime,
-            hasError,
-        },
-        message,
-        thresholds,
-    };
+    return componentHealth('indexed-db', startTime, hasError, message, metrics);
 }
 
 async function checkNetwork(): Promise<ComponentHealth> {
@@ -556,22 +531,7 @@ async function checkNetwork(): Promise<ComponentHealth> {
         message = `Error verificando red: ${error instanceof Error ? error.message : 'Error desconocido'}`;
     }
 
-    const responseTime = Date.now() - startTime;
-    const thresholds = COMPONENT_THRESHOLDS['network'];
-    const status = determineComponentStatus(responseTime, hasError, thresholds);
-
-    return {
-        name: 'network',
-        status,
-        lastCheck: Date.now(),
-        metrics: {
-            ...metrics,
-            responseTime,
-            hasError,
-        },
-        message,
-        thresholds,
-    };
+    return componentHealth('network', startTime, hasError, message, metrics);
 }
 
 /** performance.memory no está en el lib DOM (solo Chrome): tipo mínimo. */
@@ -618,22 +578,7 @@ async function checkMemory(): Promise<ComponentHealth> {
         message = `Error verificando memoria: ${error instanceof Error ? error.message : 'Error desconocido'}`;
     }
 
-    const responseTime = Date.now() - startTime;
-    const thresholds = COMPONENT_THRESHOLDS['memory'];
-    const status = determineComponentStatus(responseTime, hasError, thresholds);
-
-    return {
-        name: 'memory',
-        status,
-        lastCheck: Date.now(),
-        metrics: {
-            ...metrics,
-            responseTime,
-            hasError,
-        },
-        message,
-        thresholds,
-    };
+    return componentHealth('memory', startTime, hasError, message, metrics);
 }
 
 async function checkReactComponents(): Promise<ComponentHealth> {
@@ -662,22 +607,7 @@ async function checkReactComponents(): Promise<ComponentHealth> {
         message = `Error verificando componentes React: ${error instanceof Error ? error.message : 'Error desconocido'}`;
     }
 
-    const responseTime = Date.now() - startTime;
-    const thresholds = COMPONENT_THRESHOLDS['react-components'];
-    const status = determineComponentStatus(responseTime, hasError, thresholds);
-
-    return {
-        name: 'react-components',
-        status,
-        lastCheck: Date.now(),
-        metrics: {
-            ...metrics,
-            responseTime,
-            hasError,
-        },
-        message,
-        thresholds,
-    };
+    return componentHealth('react-components', startTime, hasError, message, metrics);
 }
 
 // -----------------------------------------------------------

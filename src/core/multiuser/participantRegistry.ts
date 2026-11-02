@@ -19,7 +19,7 @@ import { logCaughtError } from '../../lib/caughtError'
 import { v4 as uuidv4 } from 'uuid';
 import { addAuditLog, type ParticipantRecord } from '../db/fluDatabase';
 import { buildSyncTuple, makeTupleTimestamp } from '../db/syncTuple';
-import { copyRecord } from '../db/recordCopy';
+import { copyRecord, getAliveRecord, isLiveRecord } from '../db/recordCopy';
 import { stripDiacriticsLower } from '../../lib/textUtils';
 import { INVALID_INPUT } from '../../lib/resultReasons';
 import type { InvalidInput } from '../../lib/resultReasons';
@@ -64,16 +64,8 @@ function normalizeVoiceVector(vector?: number[]): number[] | undefined {
 // (fuente única de verdad — Regla de oro) y se re-exporta aquí.
 export type { ParticipantRecord } from '../db/fluDatabase';
 
-export interface ParticipantInput {
-  name: string;
-  role?: string;
-  birthday?: string;
-  speakerLabel?: string;
-  /** VECTOR de voz del participante (identidad de la voz; el nombre es su etiqueta). */
-  voiceVector?: number[];
-  /** MODELO que genero ese vector: sin el, el vector NO es comparable. */
-  voiceVectorModel?: string;
-  /** Marca el vector como ancla VERIFICADA (medida real con el modelo vigente). */
+/** Campos de voz/TTS comunes a alta y parche (dueño único de la forma). */
+export interface ParticipantVoiceFields {
   voiceAnchorVerified?: boolean;
   profileId?: string;
   ttsVoiceURI?: string;
@@ -83,7 +75,19 @@ export interface ParticipantInput {
   participationStyle?: string;
 }
 
-export interface ParticipantPatch {
+export interface ParticipantInput extends ParticipantVoiceFields {
+  name: string;
+  role?: string;
+  birthday?: string;
+  speakerLabel?: string;
+  /** VECTOR de voz del participante (identidad de la voz; el nombre es su etiqueta). */
+  voiceVector?: number[];
+  /** MODELO que genero ese vector: sin el, el vector NO es comparable. */
+  voiceVectorModel?: string;
+  /** Marca el vector como ancla VERIFICADA (medida real con el modelo vigente). */
+}
+
+export interface ParticipantPatch extends ParticipantVoiceFields {
   name?: string;
   role?: string;
   birthday?: string;
@@ -96,13 +100,6 @@ export interface ParticipantPatch {
   /** MODELO (modelo|dtype) que genero `voiceVector`. `null` lo borra. */
   voiceVectorModel?: string | null;
   /** Verificacion del ancla; sin vector o con vector sustituido, no sobrevive sola. */
-  voiceAnchorVerified?: boolean;
-  profileId?: string;
-  ttsVoiceURI?: string;
-  ttsVoiceName?: string;
-  ttsRate?: number;
-  ttsPitch?: number;
-  participationStyle?: string;
 }
 
 export interface ResolvedTtsVoice {
@@ -223,6 +220,27 @@ export function createParticipantRegistry({
 }: ParticipantRegistryOptions) {
   const timestamp = makeTupleTimestamp(now);
 
+  /** Campos de creación de un registro (createdAt/updatedAt/sync). */
+  const newRecordFields = (
+    t: number,
+  ): Pick<ParticipantRecord, 'createdAt' | 'updatedAt' | 'sync'> => ({
+    createdAt: t,
+    updatedAt: t,
+    sync: buildSyncTuple(undefined, timestamp()),
+  });
+
+  /** Campos de actualización (updatedAt + tupla) con un solo timestamp. */
+  const touchFields = (row: ParticipantRecord): Pick<ParticipantRecord, 'updatedAt' | 'sync'> => {
+    const at = timestamp();
+    return { updatedAt: at, sync: buildSyncTuple(row.sync, at) };
+  };
+
+  /** Alta de participante con su auditoría (dueño único del cierre). */
+  const addNewParticipant = async (record: ParticipantRecord, action: string): Promise<void> => {
+    await db.add(record);
+    await addAuditLog(action, 'participant', record.id, null, { name: record.name }, 'participantRegistry');
+  };
+
   const normalizeName = (name: string): string =>
     (name || '').trim().replace(/\s+/g, ' ');
 
@@ -251,7 +269,7 @@ export function createParticipantRegistry({
     const alta = (async (): Promise<ParticipantRegisterResult> => {
 
     const all = await db.toArray();
-    const duplicate = all.some((p) => !p.sync?.deleted && p.name.toLowerCase() === name.toLowerCase());
+    const duplicate = all.some((p) => isLiveRecord(p) && p.name.toLowerCase() === name.toLowerCase());
     if (duplicate) return { ok: false, reason: 'duplicate' };
 
     const id = newId();
@@ -274,12 +292,9 @@ export function createParticipantRegistry({
       ttsRate: input.ttsRate,
       ttsPitch: input.ttsPitch,
       participationStyle: input.participationStyle,
-      createdAt: t,
-      updatedAt: t,
-      sync: buildSyncTuple(undefined, timestamp()),
+      ...newRecordFields(t),
     };
-    await db.add(record);
-    await addAuditLog('participant.register', 'participant', id, null, { name: record.name }, 'participantRegistry');
+    await addNewParticipant(record, 'participant.register');
     notifyParticipantsChanged();
     return { ok: true, record };
     })();
@@ -299,7 +314,7 @@ export function createParticipantRegistry({
     if (!anon?.name) return undefined;
     const needle = anon.name.toLowerCase();
     const all = await db.toArray();
-    const found = all.find((p) => !p.sync?.deleted && p.name.toLowerCase() === needle);
+    const found = all.find((p) => isLiveRecord(p) && p.name.toLowerCase() === needle);
     return found ? copyRecord(found) : undefined;
   };
 
@@ -367,12 +382,9 @@ export function createParticipantRegistry({
           id,
           name: anon.name,
           role: anon.role,
-          createdAt: t,
-          updatedAt: t,
-          sync: buildSyncTuple(undefined, timestamp()),
+          ...newRecordFields(t),
         };
-        await db.add(record);
-        await addAuditLog('participant.seed-anonymous', 'participant', id, null, { name: record.name }, 'participantRegistry');
+        await addNewParticipant(record, 'participant.seed-anonymous');
         return copyRecord(record);
       } finally {
         anonymousSeedInFlight = undefined;
@@ -424,8 +436,7 @@ export function createParticipantRegistry({
       ttsRate: patch.ttsRate === undefined ? row.ttsRate : patch.ttsRate,
       ttsPitch: patch.ttsPitch === undefined ? row.ttsPitch : patch.ttsPitch,
       participationStyle: patch.participationStyle === undefined ? row.participationStyle : patch.participationStyle,
-      updatedAt: timestamp(),
-      sync: buildSyncTuple(row.sync, timestamp()),
+      ...touchFields(row),
     };
     await db.put(updated);
     await addAuditLog('participant.update', 'participant', id, previous, { name: updated.name }, 'participantRegistry');
@@ -445,7 +456,7 @@ export function createParticipantRegistry({
     const all = await db.toArray();
     let invalidated = 0;
     for (const row of all) {
-      if (row.sync?.deleted) continue;
+      if (!isLiveRecord(row)) continue;
       if (!Array.isArray(row.voiceVector) || row.voiceVector.length === 0) continue;
       const comparable = Boolean(model) && row.voiceVectorModel === model;
       if (comparable && row.voiceAnchorVerified === true) continue;
@@ -465,11 +476,8 @@ export function createParticipantRegistry({
     return invalidated;
   };
 
-  const get = async (id: string): Promise<ParticipantRecord | undefined> => {
-    if (!id) return undefined;
-    const row = await db.get(id);
-    return row && !row.sync?.deleted ? copyRecord(row) : undefined;
-  };
+  const get = async (id: string): Promise<ParticipantRecord | undefined> =>
+    getAliveRecord(db, id);
 
   const list = async (): Promise<ParticipantRecord[]> => {
     const all = await db.toArray();
@@ -483,10 +491,11 @@ export function createParticipantRegistry({
     // activo y la red de seguridad del dispositivo compartido.
     const anon = config.anonymous;
     if (anon?.name && row.name.toLowerCase() === anon.name.toLowerCase()) return false;
+    const touch = touchFields(row);
     const updated: ParticipantRecord = {
       ...row,
-      updatedAt: timestamp(),
-      sync: { ...buildSyncTuple(row.sync, timestamp()), deleted: true },
+      ...touch,
+      sync: { ...touch.sync, deleted: true },
     };
     await db.put(updated);
     await addAuditLog('participant.remove', 'participant', id, row, updated, 'participantRegistry');
@@ -502,7 +511,7 @@ export function createParticipantRegistry({
     const needle = speakerLabel.trim().toLowerCase();
     const all = await db.toArray();
     const found = all.find(
-      (p) => !p.sync?.deleted && p.speakerLabel && p.speakerLabel.trim().toLowerCase() === needle,
+      (p) => isLiveRecord(p) && p.speakerLabel && p.speakerLabel.trim().toLowerCase() === needle,
     );
     return found ? copyRecord(found) : undefined;
   };
@@ -513,7 +522,7 @@ export function createParticipantRegistry({
     const key = reference.length >= 5 ? reference.slice(5) : '';
     const all = await db.toArray();
     return all
-      .filter((p) => !p.sync?.deleted && p.birthday && p.birthday.slice(5) === key)
+      .filter((p) => isLiveRecord(p) && p.birthday && p.birthday.slice(5) === key)
       .map(copyRecord);
   };
 
@@ -544,7 +553,7 @@ export function createParticipantRegistry({
     const all = await db.toArray();
     const results: ParticipantRecord[] = [];
     for (const p of all) {
-      if (p.sync?.deleted) continue;
+      if (!isLiveRecord(p)) continue;
       const next = nextBirthday(p.birthday, reference);
       if (next && next.daysUntil <= config.birthdayAdvanceDays) results.push(copyRecord(p));
     }

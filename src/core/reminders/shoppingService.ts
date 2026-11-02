@@ -14,8 +14,8 @@ import { v4 as uuidv4 } from 'uuid';
 import { addAuditLog, type ShoppingItemRecord } from '../db/fluDatabase';
 import { shoppingItemsTable } from '../notes/notesService';
 import { buildSyncTuple, makeTupleTimestamp } from '../db/syncTuple';
-import { copyRecord } from '../db/recordCopy';
-import { createSoftDelete } from '../db/entityMutations';
+import { copyRecord, createFilteredAliveList, getAliveRecord, listAliveRecords } from '../db/recordCopy';
+import { createSoftDelete, SOFT_DELETE_FALSE_RESULT } from '../db/entityMutations';
 import { createClearFlagged, createRename, createToggle } from '../db/entityMutations';
 import { filterItems, itemsRemaining, type ShoppingListFilter, type NewShoppingItemInput } from './shoppingList';
 import { INVALID_INPUT } from '../../lib/resultReasons';
@@ -85,21 +85,19 @@ export function createShoppingService({
     return { ok: true, record };
   };
 
-  const get = async (id: string): Promise<ShoppingItemRecord | undefined> => {
-    if (!id) return undefined;
-    const row = await db.get(id);
-    return row && !row.sync?.deleted ? copyRecord(row) : undefined;
-  };
+  const get = async (id: string): Promise<ShoppingItemRecord | undefined> =>
+    getAliveRecord(db, id);
 
   const list = async (): Promise<ShoppingItemRecord[]> => {
-    const all = await db.toArray();
-    return all.filter((row) => !row.sync?.deleted).map(copyRecord);
+    return (await listAliveRecords(db)).map(copyRecord);
   };
 
-  const listFiltered = async (filter: ShoppingListFilter = 'all'): Promise<ShoppingItemRecord[]> => {
-    const all = (await db.toArray()).filter((row) => !row.sync?.deleted);
-    return filterItems(all, filter).map(copyRecord);
-  };
+  const listFiltered = createFilteredAliveList<ShoppingItemRecord, ShoppingListFilter>(
+    db,
+    copyRecord,
+    filterItems,
+    'all',
+  );
 
   const toggle = createToggle({
     table: db,
@@ -121,9 +119,7 @@ export function createShoppingService({
     now: timestamp,
     copy: copyRecord,
     audit: { action: 'shopping.remove', entity: 'shoppingItem', source: 'shoppingService' },
-    onInvalid: () => false,
-    onMissing: () => false,
-    onDone: () => true,
+    ...SOFT_DELETE_FALSE_RESULT,
   });
 
   /** Marca todos los ítems como no comprados (pendientes). */
@@ -156,8 +152,7 @@ export function createShoppingService({
   });
 
   const remaining = async (): Promise<number> => {
-    const all = (await db.toArray()).filter((row) => !row.sync?.deleted);
-    return itemsRemaining(all);
+    return itemsRemaining(await listAliveRecords(db));
   };
 
   return {

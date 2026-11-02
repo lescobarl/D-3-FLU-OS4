@@ -11,6 +11,7 @@
 // ============================================================
 
 import { useEffect, useRef } from 'react';
+import { isLiveRecord } from '../core/db/recordCopy';
 import { fluDb, type ConversationRow } from '../core/db/fluDatabase';
 import { buildSyncTuple } from '../core/db/syncTuple';
 import {
@@ -82,15 +83,15 @@ function entryToRow(
         id: entry.id,
         role: entry.role,
         text: entry.text,
-        timestamp: entry.timestamp,
+        timestamp: existente?.timestamp ?? entry.timestamp,
         sentiment: entry.sentiment || '',
         // La VOZ de la fila (el nombre se resuelve al MOSTRAR, no se persiste en el texto).
-        speakerId: entry.role === 'flu' ? 'flu' : (entry.speakerId || 'usuario'),
+        speakerId: entry.role === 'flu' ? 'flu' : (entry.speakerId || existente?.speakerId || 'usuario'),
         // FLU/Sistema se identifican; una fila de usuario NO lleva nombre inventado.
-        speakerName: entry.role === 'flu' ? 'FLU' : (entry.speakerName || ''),
+        speakerName: entry.role === 'flu' ? 'FLU' : (entry.speakerName || existente?.speakerName || ''),
 
         meta: entry.meta || null,
-        signature: entry.signature || null,
+        signature: entry.signature ?? existente?.signature ?? null,
         phase: entry.phase || '',
         navigation: entry.navigation || null,
         participantId: entry.personId || participantId,
@@ -105,7 +106,9 @@ function entryToRow(
     return {
         ...existente,
         ...fila,
-        meta: fila.meta ?? existente.meta ?? null,
+        // La fila del módulo es la fuente de verdad: la vista parcial del store
+        // no puede reponer evidencia/meta vieja sobre ella.
+        meta: existente?.meta ?? fila.meta ?? null,
         sessionId: fila.sessionId || existente.sessionId,
         sync: fila.sync,
     };
@@ -214,7 +217,7 @@ export function useConversationPersistence(participantId?: string) {
                     useIntegrationStore.getState().batchLoadHistory([]);
                 }
                 const rows = (await fluDb.conversations.toArray())
-                    .filter((row) => (row.participantId || 'global') === scope && !row.sync?.deleted)
+                    .filter((row) => (row.participantId || 'global') === scope && isLiveRecord(row))
                     .sort((a, b) => a.timestamp - b.timestamp)
                     .slice(-MAX_LOADED_ROWS);
 
@@ -355,7 +358,7 @@ export function useConversationPersistence(participantId?: string) {
             .toArray()
             .then((all) => {
                 const ids = all
-                    .filter((row) => (row.participantId || 'global') === scope && !row.sync?.deleted)
+                    .filter((row) => (row.participantId || 'global') === scope && isLiveRecord(row))
                     .map((row) => row.id);
                 return ids.length ? softDeleteConversationRows(ids) : undefined;
             })

@@ -23,9 +23,8 @@ import { createModuleSingleton } from './serviceSingleton';
 import { snapshotConfig } from './configSnapshot';
 import { copyList } from '../../lib/listOps';
 import { emitAutonomyEvent } from './autonomyEvents';
-import { STORAGE_KEYS } from '../config/appConfig';
-import { AUTONOMY_THRESHOLD_DEFAULTS, AI_PROVIDER_IDS, DEFAULT_AI_FALLBACK_ORDER, DEFAULT_AI_PROVIDER } from '../config/sharedConfig';
-import { setPreferredAIProvider, type AIProvider } from '../../services/aiServiceFactory';
+import { AUTONOMY_THRESHOLD_DEFAULTS, AI_PROVIDER_IDS, DEFAULT_AI_FALLBACK_ORDER, type AIProvider } from '../config/sharedConfig';
+import { getPreferredAIProvider, setPreferredAIProvider } from '../ai/providerPreference';
 import { logCaughtError } from '../../lib/caughtError';
 import { localGet, localSet } from '../storage/localStore';
 
@@ -661,7 +660,7 @@ export class DecisionEngine extends IntervalLifecycle<DecisionEngineConfig> {
         }
         
         // Obtener proveedor actual
-        const currentProvider = localGet(STORAGE_KEYS.AI_PROVIDER) || DEFAULT_AI_PROVIDER;
+        const currentProvider = getPreferredAIProvider();
         
         // Evaluar decisión de cambio de proveedor
         const decision = this.decisionMaker.evaluateAISwitchDecision(currentProvider);

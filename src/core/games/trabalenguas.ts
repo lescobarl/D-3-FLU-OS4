@@ -13,7 +13,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine.ts';
 import type { GameSession, GameTurnResult } from './types.ts';
-import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, bankItemAt, baseSession, beginGame, buildShuffledState, gameOverResult, gamePrompt, hasAnyToken, hasToken, isEngineCommand, isLastRound, normalizeForMatch, resetGameSession, skipTurn, turnResult } from './gameUtils.ts';
+import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, createShuffledAnnounceStateBuilder, createShuffledAnnounceSurface, bankItemAt, gameOverResult, gamePrompt, hasAnyToken, hasToken, isEngineCommand, isLastRound, normalizeForMatch, skipTurn, turnResult } from './gameUtils.ts';
 
 export interface TrabalenguasItem {
     texto: string;
@@ -62,35 +62,20 @@ const currentPrompt = (state: TrabalenguasState) =>
 
 export function createTrabalenguasEngine(options?: { random?: RandomSource }): GameEngine<TrabalenguasState> {
     let rng: RandomSource = options?.random ?? Math.random;
-    const buildState = (cfg: Record<string, unknown> | undefined): TrabalenguasState =>
-        buildShuffledState({
-            cfg,
-            bankLength: TRABALENGUAS_BANK.length,
-            defaultRounds: DEFAULT_ROUNDS,
-            maxRounds: MAX_ROUNDS,
-            adopt: (cfg2) => {
-                rng = adoptRandom(rng, cfg2);
-                return rng;
-            },
-            build: ({ order, maxRounds }) => ({ order, cursor: 0, maxRounds, phase: 'announce' }),
-        });
+    const buildState = createShuffledAnnounceStateBuilder({
+        bankLength: TRABALENGUAS_BANK.length,
+        defaultRounds: DEFAULT_ROUNDS,
+        maxRounds: MAX_ROUNDS,
+        adopt: (cfg2) => (rng = adoptRandom(rng, cfg2)),
+    });
 
-    const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): TrabalenguasState =>
-        resetGameSession(session, cfg, buildState);
+    const surface = createShuffledAnnounceSurface('trabalenguas', buildState, (raw) => {
+        const state = raw as TrabalenguasState;
+        return `¡Vamos a jugar con trabalenguas! ${currentPrompt(state)}`;
+    });
 
     return {
-        id: 'trabalenguas',
-
-        createSession(optionsConfig: Record<string, unknown> = {}): GameSession<TrabalenguasState> {
-            return baseSession('trabalenguas', buildState(optionsConfig));
-        },
-
-        start(session: GameSession, optionsConfig: Record<string, unknown> = {}): GameTurnResult {
-            return beginGame(session, optionsConfig, reset, (raw) => {
-                const state = raw as TrabalenguasState;
-                return `¡Vamos a jugar con trabalenguas! ${currentPrompt(state)}`;
-            }, { emotion: 'excited' });
-        },
+        ...surface,
 
         turn(session: GameSession, text = ''): GameTurnResult {
             const state = session.state as TrabalenguasState;

@@ -20,7 +20,7 @@ import {
   type ExplanationLevel,
 } from '../db/fluDatabase';
 import { buildSyncTuple, makeTupleTimestamp } from '../db/syncTuple';
-import { copyRecord } from '../db/recordCopy';
+import { copyRecord, isLiveRecord } from '../db/recordCopy';
 import type { PersonalityTone } from '../../lib/discourseMarkers';
 import { INVALID_INPUT } from '../../lib/resultReasons';
 
@@ -329,16 +329,25 @@ export function createCommunicationProfileService({
    * Fija manualmente el nivel de explicación y/o el tono de una persona
    * (prioridad máxima). Crea el registro si no existe.
    */
+  /** Carga el perfil vivo o crea el registro por defecto (dueño único). */
+  const loadOrCreateBase = async (
+    participantId: string,
+    participantName?: string,
+  ): Promise<{ existing: CommunicationProfileRecord | undefined; base: CommunicationProfileRecord }> => {
+    const existing = await getForPerson(participantId);
+    const base = existing
+      ? { ...existing }
+      : defaultRecord(participantId, participantName, config, timestamp(), newId());
+    return { existing, base };
+  };
+
   const setManual = async (
     participantId: string,
     patch: ManualProfilePatch,
     participantName?: string,
   ): Promise<CommunicationProfileRecord> => {
     if (!participantId) throw new Error(INVALID_INPUT);
-    const existing = await getForPerson(participantId);
-    const base = existing
-      ? { ...existing }
-      : defaultRecord(participantId, participantName, config, timestamp(), newId());
+    const { existing, base } = await loadOrCreateBase(participantId, participantName);
 
     if (patch.explanationLevel === undefined && patch.tone === undefined) {
       return copyRecord(base);
@@ -421,10 +430,7 @@ export function createCommunicationProfileService({
     participantName?: string,
   ): Promise<CommunicationProfileRecord | null> => {
     if (!participantId || !text || !text.trim()) return null;
-    const existing = await getForPerson(participantId);
-    const base = existing
-      ? { ...existing }
-      : defaultRecord(participantId, participantName, config, timestamp(), newId());
+    const { existing, base } = await loadOrCreateBase(participantId, participantName);
     const merged = mergeObservation(base, text, timestamp(), {
       explanationLevel: config.defaultExplanationLevel,
       tone: config.defaultTone,
@@ -475,7 +481,7 @@ export function createCommunicationProfileService({
   const list = async (): Promise<CommunicationProfileRecord[]> => {
     const all = await db.toArray();
     return all
-      .filter((r) => !r.sync?.deleted)
+      .filter((r) => isLiveRecord(r))
       .slice()
       .sort((a, b) => (a.participantName || '').localeCompare(b.participantName || '', 'es'))
       .map(copyRecord);

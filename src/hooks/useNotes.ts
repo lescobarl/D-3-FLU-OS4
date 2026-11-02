@@ -12,8 +12,10 @@
 //   - Obligación #6/#7: UUIDv4 + SyncTuple (los hace notesService)
 //   - DI: `now` inyectable para pruebas deterministas
 // ============================================================
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback } from 'react';
+import { refreshOnOk } from './refreshOnOk';
 import { useServiceRef } from './useServiceRef';
+import { usePendingList, useCountedMutation, addSequentially, cleanLabels, useRefreshAction } from './pendingListKit';
 import { removeAndRefresh } from '../lib/removeAndRefresh';
 import { type NoteRecord } from '../core/db/fluDatabase';
 import {
@@ -23,7 +25,6 @@ import {
   type NotesService,
 } from '../core/notes/notesService';
 import { filterNotesByScope, notesRemaining } from '../core/notes/notesList';
-import { logCaughtError } from '../lib/caughtError';
 import { INVALID_INPUT } from '../lib/resultReasons';
 
 // ------------------------------------------------------------
@@ -71,6 +72,10 @@ export interface UseNotesResult extends NotesState, NotesActions {
 // Hook
 // ------------------------------------------------------------
 
+/** Predicados estables: el núcleo de lista no debe recrear su refresco por render. */
+const NOTE_DONE = (note: NoteRecord): boolean => note.done === true;
+const NOTE_CREATED = (note: NoteRecord): number => note.createdAt ?? 0;
+
 export function useNotes({ now, participantId }: UseNotesOptions = {}): UseNotesResult {
   // Crear el servicio ANTES de cualquier useState: el inicializador de
   // estado o los callbacks referencian `service`, y una referencia en
@@ -78,42 +83,24 @@ export function useNotes({ now, participantId }: UseNotesOptions = {}): UseNotes
   // "Cannot access 'service' before initialization".
   const service = useServiceRef<NotesService>(() => createNotesService({ now: now || (() => Date.now()), }));
 
-  const [notes, setNotes] = useState<NoteRecord[]>([]);
-  const [remainingCount, setRemainingCount] = useState(0);
-  const [loading, setLoading] = useState(true);
-
-  /** Recarga la lista desde IndexedDB (cronológica, pendientes primero). */
-  const refresh = useCallback(async (): Promise<void> => {
-    // Sin usuario real NO hay alcance de notas (son por usuario). No se cae a
-    // 'global/legacy': eso mostraba notas en el onboarding, antes de elegir
-    // usuario.
-    if (!participantId) {
-      setNotes([]);
-      setRemainingCount(0);
-      setLoading(false);
-      return;
-    }
-    try {
-      const all = await service.list();
-      // Aislamiento por usuario: solo las notas de ESTE usuario.
-      const scoped = filterNotesByScope(all, participantId);
-      const sorted = scoped.slice().sort((a, b) => {
-        if (a.done !== b.done) return a.done ? 1 : -1;
-        return (a.createdAt ?? 0) - (b.createdAt ?? 0);
-      });
-      setNotes(sorted);
-      setRemainingCount(notesRemaining(sorted));
-    } catch (err) {
-      logCaughtError('[useNotes] refresh error', err);
-    } finally {
-      setLoading(false);
-    }
+  /**
+   * Carga las notas del usuario activo. Sin usuario real NO hay alcance: eso
+   * mostraba notas en el onboarding, antes de elegir usuario.
+   */
+  const load = useCallback(async (): Promise<NoteRecord[]> => {
+    if (!participantId) return [];
+    const all = await service.list();
+    return filterNotesByScope(all, participantId);
   }, [service, participantId]);
 
-  // Carga inicial.
-  useEffect(() => {
-    refresh().catch((e) => logCaughtError('src/hooks/useNotes.ts: refresh', e));
-  }, [refresh]);
+  const { rows: notes, loading, remainingCount, refresh } = usePendingList<NoteRecord>({
+    load,
+    isDone: NOTE_DONE,
+    createdAt: NOTE_CREATED,
+    remaining: notesRemaining,
+    errorContext: '[useNotes] refresh error',
+  });
+  const runCounted = useCountedMutation(refresh);
 
   /** Agrega una nota y refresca la lista. */
   const add = useCallback(
@@ -121,12 +108,10 @@ export function useNotes({ now, participantId }: UseNotesOptions = {}): UseNotes
       // Toda nota pertenece a un usuario: sin usuario real no se crea (una nota
       // sin personId quedaría en 'global' y se filtraría a otros contextos).
       if (!participantId) return { ok: false, reason: INVALID_INPUT };
-      const result = await service.add({
+      return refreshOnOk(() => service.add({
         ...input,
         personId: input.personId || participantId,
-      });
-      if (result.ok) await refresh();
-      return result;
+      }), refresh);
     },
     [service, refresh, participantId],
   );
@@ -135,13 +120,11 @@ export function useNotes({ now, participantId }: UseNotesOptions = {}): UseNotes
   const addMany = useCallback(
     async (labels: string[]): Promise<AddNoteResult[]> => {
       if (!participantId) return [];
-      const clean = (labels || []).map((l) => l.trim()).filter(Boolean);
+      const clean = cleanLabels(labels);
       if (clean.length === 0) return [];
-      const results: AddNoteResult[] = [];
-      for (const label of clean) {
-        const result = await service.add({ label, personId: participantId });
-        results.push(result);
-      }
+      const results = await addSequentially(clean, (label) =>
+        service.add({ label, personId: participantId }),
+      );
       if (results.some((r) => r.ok)) await refresh();
       return results;
     },
@@ -149,34 +132,13 @@ export function useNotes({ now, participantId }: UseNotesOptions = {}): UseNotes
   );
 
   /** Alterna el estado hecho/pendiente y refresca. */
-  const toggle = useCallback(
-    async (id: string): Promise<NoteRecord | null> => {
-      const updated = await service.toggle(id);
-      if (updated) await refresh();
-      return updated;
-    },
-    [service, refresh],
-  );
+  const toggle = useRefreshAction(service.toggle, refresh);
 
   /** Renombra una nota y refresca. */
-  const rename = useCallback(
-    async (id: string, label: string): Promise<NoteRecord | null> => {
-      const updated = await service.rename(id, label);
-      if (updated) await refresh();
-      return updated;
-    },
-    [service, refresh],
-  );
+  const rename = useRefreshAction(service.rename, refresh);
 
   /** Actualiza el contenido (body) de una nota y refresca. */
-  const setBody = useCallback(
-    async (id: string, body: string): Promise<NoteRecord | null> => {
-      const updated = await service.setBody(id, body);
-      if (updated) await refresh();
-      return updated;
-    },
-    [service, refresh],
-  );
+  const setBody = useRefreshAction(service.setBody, refresh);
 
   /** Elimina una nota y refresca. */
   const remove = useCallback(
@@ -196,35 +158,27 @@ export function useNotes({ now, participantId }: UseNotesOptions = {}): UseNotes
 
   /** Borrado lógico por destino (voz) y refresca. */
   const removeByTarget = useCallback(
-    async (target: string): Promise<number> => {
-      const count = await service.removeByTarget(target);
-      if (count > 0) await refresh();
-      return count;
-    },
-    [service, refresh],
+    async (target: string): Promise<number> => runCounted(() => service.removeByTarget(target)),
+    [service, runCounted],
   );
 
   /** Desmarca todas las notas pendientes y refresca. */
-  const uncheckAll = useCallback(async (): Promise<number> => {
-    const count = await service.uncheckAll();
-    if (count > 0) await refresh();
-    return count;
-  }, [service, refresh]);
+  const uncheckAll = useCallback(
+    async (): Promise<number> => runCounted(() => service.uncheckAll()),
+    [service, runCounted],
+  );
 
   /** Limpia las notas marcadas como hechas y refresca. */
-  const clearDone = useCallback(async (): Promise<number> => {
-    const count = await service.clearDone();
-    if (count > 0) await refresh();
-    return count;
-  }, [service, refresh]);
+  const clearDone = useCallback(
+    async (): Promise<number> => runCounted(() => service.clearDone()),
+    [service, runCounted],
+  );
 
   /** Borra (lógico) TODAS las notas del usuario y refresca. */
   const clearAll = useCallback(async (): Promise<number> => {
     if (!participantId) return 0;
-    const count = await service.clearAll({ personId: participantId });
-    if (count > 0) await refresh();
-    return count;
-  }, [service, refresh, participantId]);
+    return runCounted(() => service.clearAll({ personId: participantId }));
+  }, [service, runCounted, participantId]);
 
   return {
     service,

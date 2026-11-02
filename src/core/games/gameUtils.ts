@@ -22,27 +22,51 @@ import type { AvatarAnimation, GameSession, GameTurnResult } from './types.ts';
  * won:false, animation:'Idle', emotion:'happy'): el motor solo pasa lo que
  * difiere, y lo que no pasa es exactamente lo mismo que antes.
  */
-export function gameOverResult(
+/** Opciones de un resultado de turno (dueño único de la forma). */
+export interface TurnResultOptions {
+    valid?: boolean;
+    won?: boolean;
+    animation?: AvatarAnimation;
+    emotion?: string;
+    error?: string;
+}
+
+/**
+ * Resultado de turno común (dueño único de la forma repetida).
+ * @param prompt Texto de FLU.
+ * @param score Puntaje.
+ * @param options Variantes del turno.
+ * @param gameOver ¿Terminó la partida?
+ * @param won Desenlace (undefined = no aplica).
+ * @param emotionDefault Emoción por defecto.
+ * @returns Resultado del turno.
+ */
+function baseTurnResult(
     prompt: string,
     score: number,
-    options: {
-        won?: boolean;
-        valid?: boolean;
-        animation?: AvatarAnimation;
-        emotion?: string;
-        error?: string;
-    } = {},
+    options: TurnResultOptions,
+    gameOver: boolean,
+    won: boolean | undefined,
+    emotionDefault: string,
 ): GameTurnResult {
     return {
         prompt,
         valid: options.valid ?? false,
-        gameOver: true,
-        won: options.won ?? false,
+        gameOver,
+        ...(won === undefined ? {} : { won }),
         score,
         animation: options.animation ?? 'Idle',
-        emotion: options.emotion ?? 'happy',
+        emotion: options.emotion ?? emotionDefault,
         ...(options.error === undefined ? {} : { error: options.error }),
     };
+}
+
+export function gameOverResult(
+    prompt: string,
+    score: number,
+    options: TurnResultOptions = {},
+): GameTurnResult {
+    return baseTurnResult(prompt, score, options, true, options.won ?? false, 'happy');
 }
 
 /**
@@ -77,22 +101,9 @@ export const SKIP_CORE_FRAMES: readonly string[] = Object.freeze(['otra', 'sigui
 export function turnResult(
     prompt: string,
     score: number,
-    options: {
-        valid?: boolean;
-        animation?: AvatarAnimation;
-        emotion?: string;
-        error?: string;
-    } = {},
+    options: TurnResultOptions = {},
 ): GameTurnResult {
-    return {
-        prompt,
-        valid: options.valid ?? false,
-        gameOver: false,
-        score,
-        animation: options.animation ?? 'Idle',
-        emotion: options.emotion ?? 'neutral',
-        ...(options.error === undefined ? {} : { error: options.error }),
-    };
+    return baseTurnResult(prompt, score, options, false, undefined, 'neutral');
 }
 
 export function clamp(value: number, min: number, max: number): number {
@@ -476,6 +487,19 @@ export function isEngineCommand(
     frames: { end: readonly string[]; hint: readonly string[]; skip: readonly string[] },
 ): boolean {
     return isGameCommandSurface(normalizeForMatch(text), frames);
+}
+
+/**
+ * Crea el predicado de comandos de un motor con sus frames publicados.
+ * Dueño único del literal `isEngineCommand(text, { end, hint, skip })` que
+ * repetían los motores.
+ * @param frames Frames de fin, ayuda y salto del motor.
+ * @returns Predicado `isGameCommand`.
+ */
+export function engineCommandGuard(
+    frames: { end: readonly string[]; hint: readonly string[]; skip: readonly string[] },
+): (text?: string) => boolean {
+    return (text = '') => isEngineCommand(text, frames);
 }
 
 /**
@@ -707,6 +731,37 @@ export function buildShuffledState<S>(spec: {
     });
 }
 
+/** Estado base de un motor barajado en fase de anuncio. */
+export type ShuffledAnnounceState = Readonly<{
+    order: number[];
+    cursor: number;
+    maxRounds: number;
+    phase: 'announce' | 'done';
+}>;
+
+/**
+ * Construye el estado inicial barajado de un motor de anuncio.
+ * Dueño único del bloque cfg/adopt/build/createState que repetían los motores.
+ * @param spec Banco, rondas y adopción del RNG.
+ * @returns Constructor de estado para `createSession` y `reset`.
+ */
+export function createShuffledAnnounceStateBuilder(spec: {
+    bankLength: number;
+    defaultRounds: number;
+    maxRounds: number;
+    adopt: (cfg: Record<string, unknown> | undefined) => RandomSource;
+}): (cfg: Record<string, unknown> | undefined) => ShuffledAnnounceState {
+    return (cfg) =>
+        buildShuffledState({
+            cfg,
+            bankLength: spec.bankLength,
+            defaultRounds: spec.defaultRounds,
+            maxRounds: spec.maxRounds,
+            adopt: spec.adopt,
+            build: ({ order, maxRounds }) => ({ order, cursor: 0, maxRounds, phase: 'announce' }),
+        });
+}
+
 /** Reinicia la sesion: estado nuevo del motor + score 0 + ronda 1. Un solo dueno. */
 export function resetGameSession<S>(
     session: GameSession,
@@ -720,6 +775,45 @@ export function resetGameSession<S>(
     return state;
 }
 
+/** Superficie base de sesión de un motor barajado. */
+export type ShuffledSurfaceBase<S extends ShuffledAnnounceState> = {
+    id: GameSession<S>['id'];
+    reset: (session: GameSession, cfg: Record<string, unknown> | undefined) => S;
+    createSession: (options?: Record<string, unknown>) => GameSession<S>;
+};
+
+/** Superficie base de sesión de un motor barajado, sin `start` propio. */
+export function createShuffledAnnounceSurfaceBase<S extends ShuffledAnnounceState>(
+    id: GameSession<S>['id'],
+    buildState: (cfg: Record<string, unknown> | undefined) => S,
+): ShuffledSurfaceBase<S> {
+    const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): S =>
+        resetGameSession(session, cfg, buildState);
+    return {
+        id,
+        reset,
+        createSession: (options = {}) => baseSession(id, buildState(options)),
+    };
+}
+
+/** Superficie completa: base + `start` narrado (dueño único de ese pegamento). */
+export function createShuffledAnnounceSurface<S extends ShuffledAnnounceState>(
+    id: GameSession<S>['id'],
+    buildState: (cfg: Record<string, unknown> | undefined) => S,
+    narrate: (state: S) => string,
+): ShuffledSurfaceBase<S> & {
+    start: (session: GameSession, optionsConfig?: Record<string, unknown>) => GameTurnResult;
+} {
+    const base = createShuffledAnnounceSurfaceBase(id, buildState);
+    return {
+        ...base,
+        start: (session: GameSession, optionsConfig: Record<string, unknown> = {}) =>
+            beginGame(session, optionsConfig, base.reset, (raw) => narrate(raw as S), {
+                emotion: 'excited',
+            }),
+    };
+}
+
 /** Lee el maximo de longitud (cfg.longMax / cfg.longitudMax) con fallback y techo. */
 /** Lee el numero de config de la primera clave presente, con fallback y techo. Dueno unico. */
 export function readNumberCfg(
@@ -727,6 +821,7 @@ export function readNumberCfg(
     keys: readonly string[],
     fallback: number,
     ceiling: number,
+    floor = 1,
 ): number {
     let value = Number.NaN;
     for (const key of keys) {
@@ -736,7 +831,7 @@ export function readNumberCfg(
             break;
         }
     }
-    return clamp(Number.isFinite(value) ? value : fallback, 1, ceiling);
+    return clamp(Number.isFinite(value) ? value : fallback, floor, ceiling);
 }
 
 /** Lee el maximo de longitud (cfg.longMax / cfg.longitudMax) con fallback y techo. */

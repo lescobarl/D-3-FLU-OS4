@@ -12,6 +12,7 @@
 //   - DI: now inyectable para pruebas deterministas
 // ============================================================
 import { useCallback, useEffect, useState } from 'react';
+import { refreshOnOk } from './refreshOnOk';
 import { useServiceRef } from './useServiceRef';
 import { FLU_CONFIG } from '../voice/api/config';
 import { fluDb, type DiaryEntryRecord } from '../core/db/fluDatabase';
@@ -92,9 +93,7 @@ export function useDiary({ now }: UseDiaryOptions = {}): UseDiaryResult {
   /** Añade una entrada; refresca si fue exitoso. */
   const addEntry = useCallback(
     async (input: DiaryEntryInput): Promise<AddDiaryResult> => {
-      const result = await service.addEntry(input);
-      if (result.ok) await refresh();
-      return result;
+      return refreshOnOk(() => service.addEntry(input), refresh);
     },
     [service, refresh],
   );
@@ -102,9 +101,7 @@ export function useDiary({ now }: UseDiaryOptions = {}): UseDiaryResult {
   /** Actualiza una entrada; refresca si fue exitoso. */
   const updateEntry = useCallback(
     async (id: string, patch: DiaryEntryPatch): Promise<UpdateDiaryResult> => {
-      const result = await service.updateEntry(id, patch);
-      if (result.ok) await refresh();
-      return result;
+      return refreshOnOk(() => service.updateEntry(id, patch), refresh);
     },
     [service, refresh],
   );
@@ -130,9 +127,7 @@ export function useDiary({ now }: UseDiaryOptions = {}): UseDiaryResult {
   /** Elimina una entrada; refresca si fue exitoso. */
   const removeEntry = useCallback(
     async (id: string): Promise<RemoveDiaryResult> => {
-      const result = await service.removeEntry(id);
-      if (result.ok) await refresh();
-      return result;
+      return refreshOnOk(() => service.removeEntry(id), refresh);
     },
     [service, refresh],
   );

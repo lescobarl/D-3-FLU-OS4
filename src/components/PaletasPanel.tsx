@@ -23,7 +23,10 @@
 //   - Presentacional: sin acceso a stores; App inyecta estado y
 //     acciones (mismo patrón que AmbientesPanel)
 // ============================================================
-import { useState } from 'react';
+import { CatalogCardShell } from './CatalogCardShell';
+import { CatalogCardActions } from './CatalogCardActions';
+import { CatalogPanelShell } from './CatalogPanelShell';
+import { useCatalogPanel } from '../hooks/useCatalogPanel';
 import { FLU_CONFIG } from '../voice/api/config';
 import { configChild, configTextMap } from './configText';
 import type {
@@ -45,7 +48,9 @@ import {
     catalogCreateValue,
     catalogEditValue,
     mapCatalogReason,
-    submitCatalogPanel,
+    catalogPanelSave,
+    catalogEditorProps,
+    type CatalogEditorState,
     type CatalogReason,
 } from './catalogPanelEditors';
 
@@ -71,19 +76,7 @@ export interface PaletasPanelProps {
     onRemove: (id: string) => Promise<void>;
 }
 
-type EditorState =
-    | {
-          mode: 'create';
-          template: PaletteDefinition;
-          seed: EditablePaletteFields;
-      }
-    | {
-          mode: 'edit';
-          id: string;
-          template: PaletteDefinition;
-          seed: EditablePaletteFields;
-      }
-    | null;
+type PaletaEditorState = CatalogEditorState<PaletteDefinition, EditablePaletteFields>;
 
 export function PaletasPanel({
     paletas,
@@ -95,13 +88,19 @@ export function PaletasPanel({
     onRemove,
 }: PaletasPanelProps) {
     const ui = configTextMap(configChild(FLU_CONFIG.ui, 'paletas'));
-    const [editor, setEditor] = useState<EditorState>(null);
 
     const mapReason = (reason: CatalogReason<PaletteDefinition>): string =>
         mapCatalogReason(reason, ui, {
             duplicate: 'Ya existe una temporada con ese identificador.',
             notFound: 'La temporada ya no existe.',
         });
+
+    const { editor, open: setEditor, cancel, submit } = useCatalogPanel<
+        PaletaEditorState,
+        PaletteDefinition
+    >({
+        save: catalogPanelSave(onRegister, onUpdate, mapReason),
+    });
 
     const startCreate = () =>
         setEditor(catalogCreateValue(structuredClone(builtinPaletteEntries()[0]), emptyEditableFields));
@@ -112,68 +111,48 @@ export function PaletasPanel({
     const startEdit = (paleta: PaletteDefinition) =>
         setEditor(catalogEditValue(paleta, editableFieldsOf));
 
-    const handleEditorSubmit = async (payload: PaletteDefinition): Promise<string | null> =>
-        submitCatalogPanel({
-            editor,
-            payload,
-            register: onRegister,
-            update: onUpdate,
-            mapReason,
-            close: () => setEditor(null),
-        });
+    const handleEditorSubmit = (payload: PaletteDefinition): Promise<string | null> =>
+        submit(payload);
 
     const handleRemove = async (paleta: PaletteDefinition) => {
         await onRemove(paleta.id);
     };
 
     return (
-        <details className="flu-settings-image-config">
-            <summary className="flu-settings-image-config__summary">
-                {ui.panelTitle || 'Mis temporadas (paletas dinámicas)'}
-            </summary>
-            <div className="flu-settings-image-config__group">
-                {editor ? (
+        <CatalogPanelShell
+            title={ui.panelTitle || 'Mis temporadas (paletas dinámicas)'}
+            editor={editor ? (
                     <PaletaEditorForm
-                        template={editor.template}
-                        seed={editor.seed}
-                        submitLabel={
-                            editor.mode === 'create'
-                                ? ui.createLabel || 'Crear temporada'
-                                : ui.saveLabel || 'Guardar temporada'
-                        }
-                        cancelLabel={ui.cancelLabel || 'Cancelar'}
-                        onCancel={() => setEditor(null)}
-                        onSubmit={handleEditorSubmit}
+                        {...catalogEditorProps(
+                            editor,
+                            ui,
+                            { create: 'Crear temporada', save: 'Guardar temporada' },
+                            cancel,
+                            handleEditorSubmit,
+                        )}
                     />
-                ) : (
-                    <>
-                        <p className="flu-paletas-panel__hint">
-                            {ui.panelHint ||
+            ) : null}
+            hint={ui.panelHint ||
                                 'FLU se rebrandea por temporada: crea tus propias paletas de colores y actívalas manualmente.'}
-                        </p>
-                        <button
-                            type="button"
-                            className="flu-paletas-panel__create"
-                            data-testid="paleta-create"
-                            onClick={startCreate}
-                        >
-                            {ui.createLabel || 'Nueva temporada'}
-                        </button>
-                        <div className="flu-paletas-grid">
+            hintClassName="flu-paletas-panel__hint"
+            createLabel={ui.createLabel || 'Nueva temporada'}
+            createClassName="flu-paletas-panel__create"
+            createTestId="paleta-create"
+            onCreate={startCreate}
+            gridClassName="flu-paletas-grid"
+        >
                             {paletas.map((paleta) => {
                                 const isActive = paleta.id === activeSeason;
                                 const isFixed = !dynamicIds.has(paleta.id);
                                 return (
-                                    <article
+                                    <CatalogCardShell
                                         key={paleta.id}
-                                        className={`flu-paletas-card${isActive ? ' is-active' : ''}`}
-                                        data-testid={`paleta-card-${paleta.id}`}
-                                    >
-                                        <div
-                                            className="flu-paletas-card__preview"
-                                            aria-label={ui.preview || 'Vista previa'}
-                                        >
-                                            {Object.entries(paleta.colors)
+                                        kind="paletas"
+                                        id={paleta.id}
+                                        active={isActive}
+                                        previewAria={ui.preview || 'Vista previa'}
+                                        preview={<>
+{Object.entries(paleta.colors)
                                                 .slice(0, 6)
                                                 .map(([key, color]) => (
                                                     <span
@@ -183,64 +162,28 @@ export function PaletasPanel({
                                                         style={{ background: color }}
                                                     />
                                                 ))}
-                                        </div>
-                                        <div className="flu-paletas-card__body">
-                                            <h4 className="flu-paletas-card__title">
+                                        </>}
+                                        actions={<CatalogCardActions
+                                            kind="paletas"
+                                            id={paleta.id}
+                                            active={isActive}
+                                            fixed={isFixed}
+                                            labels={{ active: ui.active, activate: ui.activate, clone: ui.cloneLabel, edit: ui.editLabel, remove: ui.removeLabel }}
+                                            onActivate={() => onActivate(paleta.id)}
+                                            onClone={() => startClone(paleta)}
+                                            onEdit={() => startEdit(paleta)}
+                                            onRemove={() => handleRemove(paleta)}
+                                        />}
+                                    >
+<h4 className="flu-paletas-card__title">
                                                 {paleta.name}
                                             </h4>
                                             <p className="flu-paletas-card__meta">
                                                 <code>{paleta.id}</code>
                                             </p>
-                                        </div>
-                                        <div className="flu-paletas-card__actions">
-                                            <button
-                                                type="button"
-                                                className="flu-paletas-card__activate"
-                                                data-testid={`paleta-activate-${paleta.id}`}
-                                                disabled={isActive}
-                                                onClick={() => onActivate(paleta.id)}
-                                            >
-                                                {isActive
-                                                    ? ui.active || 'Activa'
-                                                    : ui.activate || 'Activar'}
-                                            </button>
-                                            {isFixed ? (
-                                                <button
-                                                    type="button"
-                                                    className="flu-paletas-card__clone"
-                                                    data-testid={`paleta-clone-${paleta.id}`}
-                                                    onClick={() => startClone(paleta)}
-                                                >
-                                                    {ui.cloneLabel || 'Clonar'}
-                                                </button>
-                                            ) : (
-                                                <>
-                                                    <button
-                                                        type="button"
-                                                        className="flu-paletas-card__edit"
-                                                        data-testid={`paleta-edit-${paleta.id}`}
-                                                        onClick={() => startEdit(paleta)}
-                                                    >
-                                                        {ui.editLabel || 'Editar'}
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        className="flu-paletas-card__remove"
-                                                        data-testid={`paleta-remove-${paleta.id}`}
-                                                        onClick={() => handleRemove(paleta)}
-                                                    >
-                                                        {ui.removeLabel || 'Eliminar'}
-                                                    </button>
-                                                </>
-                                            )}
-                                        </div>
-                                    </article>
+                                    </CatalogCardShell>
                                 );
                             })}
-                        </div>
-                    </>
-                )}
-            </div>
-        </details>
+                        </CatalogPanelShell>
     );
 }

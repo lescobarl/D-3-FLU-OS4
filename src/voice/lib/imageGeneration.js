@@ -24,6 +24,20 @@ export {
 
 const workspaceImageSourceCache = new Map()
 
+/** Traza de OpenRouter para un resultado de imagen (dueño único). */
+function openRouterTrace({ source, hasImage, prompt, error, language }) {
+  return {
+    provider: AI_PROVIDER_IDS.OPENROUTER,
+    model: '',
+    kind: 'images',
+    source,
+    hasImage,
+    ...(error ? { error } : {}),
+    prompt,
+    ...(language ? { language } : {}),
+  }
+}
+
 /**
  * Deadline UNICO de las llamadas al proxy local (`/api/*`). Antes cada funcion
  * repetia su propio `AbortController` + `setTimeout` + `clearTimeout` con el mismo
@@ -299,15 +313,12 @@ export async function fetchOpenRouterImageFallback({
       const detail = await readProxyErrorDetail(response)
       return {
         image_url: '',
-        trace: {
-          provider: AI_PROVIDER_IDS.OPENROUTER,
-          model: '',
-          kind: 'images',
+        trace: openRouterTrace({
           source: 'proxy_error',
           hasImage: false,
-          error: detail || `openrouter_image_http_${response.status}`,
           prompt,
-        },
+          error: detail || `openrouter_image_http_${response.status}`,
+        }),
       }
     }
 
@@ -315,42 +326,34 @@ export async function fetchOpenRouterImageFallback({
     if (!payload?.imageUrl) {
       return {
         image_url: '',
-        trace: payload?.trace || {
-          provider: AI_PROVIDER_IDS.OPENROUTER,
-          model: '',
-          kind: 'images',
-          source: 'empty_response',
-          hasImage: false,
-          prompt,
-        },
+        trace:
+          payload?.trace ||
+          openRouterTrace({ source: 'empty_response', hasImage: false, prompt }),
       }
     }
 
     return {
       image_url: payload.imageUrl,
-      trace: payload.trace || {
-        provider: AI_PROVIDER_IDS.OPENROUTER,
-        model: '',
-        kind: 'images',
-        source: 'openrouter_image_fallback',
-        hasImage: true,
-        prompt,
-        language,
-      },
+      trace:
+        payload.trace ||
+        openRouterTrace({
+          source: 'openrouter_image_fallback',
+          hasImage: true,
+          prompt,
+          language,
+        }),
     }
   } catch (error) {
         logCaughtError('[catch] src/voice/lib/imageGeneration.js', error);
     return {
       image_url: '',
-      trace: {
-        provider: AI_PROVIDER_IDS.OPENROUTER,
-        model: '',
-        kind: 'images',
-        source: error?.name === 'AbortError' ? 'openrouter_image_timeout' : GENERATION_FAILED_SOURCE,
+      trace: openRouterTrace({
+        source:
+          error?.name === 'AbortError' ? 'openrouter_image_timeout' : GENERATION_FAILED_SOURCE,
         hasImage: false,
-        error: error?.message || 'unknown',
         prompt,
-      },
+        error: error?.message || 'unknown',
+      }),
     }
   }
 }

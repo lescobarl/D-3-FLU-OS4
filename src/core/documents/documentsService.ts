@@ -6,6 +6,7 @@
 // alcance del usuario activo (`personId || 'global'`).
 // ============================================================
 import { newId, type DocumentRecord } from '../db/fluDatabase';
+import { isLiveRecord } from '../db/recordCopy';
 import { buildSyncTuple } from '../db/syncTuple';
 
 export interface NewDocumentInput {
@@ -69,7 +70,7 @@ export function createDocumentsService({
       const scope = participantId || 'global';
       const all = await db.toArray();
       return all
-        .filter((row) => (row.personId || 'global') === scope && !row.sync?.deleted)
+        .filter((row) => (row.personId || 'global') === scope && isLiveRecord(row))
         .sort((a, b) => b.createdAt - a.createdAt);
     },
     /** Borrado LÓGICO (§2.9): marca `sync.deleted`; `list` ya filtra borrados. */

@@ -16,6 +16,13 @@ import { formatLocalHHMM } from './timeFormat';
 import type { MinuteUIEntry } from '../hooks/useMinuteKnowledge';
 
 import { pickText } from './uiStrings';
+
+/** Normaliza una lista de textos de minuta (dueño único). */
+function normalizeItems(value: unknown): string[] {
+    return (Array.isArray(value) ? value : [])
+        .map((item: string) => normalizeSpaces(String(item)))
+        .filter(Boolean);
+}
 // -----------------------------------------------------------
 // Types
 // -----------------------------------------------------------
@@ -96,17 +103,8 @@ export function buildDailyAgenda(
 
     for (const record of records) {
         const snapshot = record?.summarySnapshot || record;
-        const pendingItems: string[] = (
-            Array.isArray(snapshot?.pendientes) ? snapshot.pendientes : []
-        )
-            .map((item: string) => normalizeSpaces(String(item)))
-            .filter(Boolean);
-
-        const nextSteps: string[] = (
-            Array.isArray(snapshot?.siguientes_pasos) ? snapshot.siguientes_pasos : []
-        )
-            .map((item: string) => normalizeSpaces(String(item)))
-            .filter(Boolean);
+        const pendingItems: string[] = normalizeItems(snapshot?.pendientes);
+        const nextSteps: string[] = normalizeItems(snapshot?.siguientes_pasos);
 
         // Solo incluir si hay al menos un pendiente o siguiente paso
         if (pendingItems.length === 0 && nextSteps.length === 0) continue;

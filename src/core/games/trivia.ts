@@ -15,7 +15,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine.ts';
 import type { GameSession, GameTurnResult } from './types.ts';
-import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, bankItemAt, baseSession, beginGame, buildShuffledState, gameOverResult, gamePrompt, hasAnyToken, hasToken, isEngineCommand, isLastRound, normalizeForMatch, resetGameSession, resolveNumericAnswer, skipNextPrompt, skipTurn, turnResult } from './gameUtils.ts';
+import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, createShuffledAnnounceStateBuilder, createShuffledAnnounceSurface, bankItemAt, gameOverResult, gamePrompt, hasAnyToken, hasToken, isEngineCommand, isLastRound, normalizeForMatch, resolveNumericAnswer, skipNextPrompt, skipTurn, turnResult } from './gameUtils.ts';
 
 export interface TriviaQuestion {
     pregunta: string;
@@ -127,35 +127,20 @@ function resolveOptionIndex(normalized: string, question: TriviaQuestion): numbe
 export function createTriviaEngine(options?: { random?: RandomSource }): GameEngine<TriviaState> {
     let rng: RandomSource = options?.random ?? Math.random;
 
-    const buildState = (cfg: Record<string, unknown> | undefined): TriviaState =>
-        buildShuffledState({
-            cfg,
-            bankLength: TRIVIA_BANK.length,
-            defaultRounds: DEFAULT_ROUNDS,
-            maxRounds: MAX_ROUNDS,
-            adopt: (cfg2) => {
-                rng = adoptRandom(rng, cfg2);
-                return rng;
-            },
-            build: ({ order, maxRounds }) => ({ order, cursor: 0, maxRounds, phase: 'announce' }),
-        });
+    const buildState = createShuffledAnnounceStateBuilder({
+        bankLength: TRIVIA_BANK.length,
+        defaultRounds: DEFAULT_ROUNDS,
+        maxRounds: MAX_ROUNDS,
+        adopt: (cfg2) => (rng = adoptRandom(rng, cfg2)),
+    });
 
-    const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): TriviaState =>
-        resetGameSession(session, cfg, buildState);
+    const surface = createShuffledAnnounceSurface('trivia', buildState, (raw) => {
+        const state = raw as TriviaState;
+        return `¡Vamos a jugar a la trivia! ${currentPrompt(state)}`;
+    });
 
     return {
-        id: 'trivia',
-
-        createSession(optionsConfig: Record<string, unknown> = {}): GameSession<TriviaState> {
-            return baseSession('trivia', buildState(optionsConfig));
-        },
-
-        start(session: GameSession, optionsConfig: Record<string, unknown> = {}): GameTurnResult {
-            return beginGame(session, optionsConfig, reset, (raw) => {
-                const state = raw as TriviaState;
-                return `¡Vamos a jugar a la trivia! ${currentPrompt(state)}`;
-            }, { emotion: 'excited' });
-        },
+        ...surface,
 
         turn(session: GameSession, text = ''): GameTurnResult {
             const state = session.state as TriviaState;

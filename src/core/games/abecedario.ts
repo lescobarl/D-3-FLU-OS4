@@ -15,7 +15,7 @@
 // ============================================================
 import type { GameEngine } from './gameEngine.ts';
 import type { GameSession, GameTurnResult } from './types.ts';
-import { END_GAME_FRAMES, HELP_CORE_FRAMES, STOPWORDS_ES, adoptRandom, bankItemAt, baseSession, beginGame, buildShuffledState, gameOverResult, hasAnyToken, isEngineCommand, isLastRound, normalizeForMatch, resetGameSession, skipTurn, stripDiacritics, turnResult } from './gameUtils.ts';
+import { END_GAME_FRAMES, HELP_CORE_FRAMES, STOPWORDS_ES, adoptRandom, createShuffledAnnounceStateBuilder, createShuffledAnnounceSurface, bankItemAt, gameOverResult, hasAnyToken, isEngineCommand, isLastRound, normalizeForMatch, skipTurn, stripDiacritics, turnResult } from './gameUtils.ts';
 
 export interface AbecedarioItem {
     letra: string;
@@ -103,35 +103,20 @@ function matchedWord(texto: string, normalized: string, item: AbecedarioItem): s
 
 export function createAbecedarioEngine(options?: { random?: RandomSource }): GameEngine<AbecedarioState> {
     let rng: RandomSource = options?.random ?? Math.random;
-    const buildState = (cfg: Record<string, unknown> | undefined): AbecedarioState =>
-        buildShuffledState({
-            cfg,
-            bankLength: ABECEDARIO_BANK.length,
-            defaultRounds: DEFAULT_ROUNDS,
-            maxRounds: MAX_ROUNDS,
-            adopt: (cfg2) => {
-                rng = adoptRandom(rng, cfg2);
-                return rng;
-            },
-            build: ({ order, maxRounds }) => ({ order, cursor: 0, maxRounds, phase: 'announce' }),
-        });
-    const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): AbecedarioState =>
-        resetGameSession(session, cfg, buildState);
+    const buildState = createShuffledAnnounceStateBuilder({
+        bankLength: ABECEDARIO_BANK.length,
+        defaultRounds: DEFAULT_ROUNDS,
+        maxRounds: MAX_ROUNDS,
+        adopt: (cfg2) => (rng = adoptRandom(rng, cfg2)),
+    });
+    const surface = createShuffledAnnounceSurface('abecedario', buildState, (raw) => {
+        const state = raw as AbecedarioState;
+        const item = itemAt(state);
+        return `¡Vamos a jugar con el abecedario! Dime una palabra que empiece con la letra "${item ? item.letra : ''}".`;
+    });
 
     return {
-        id: 'abecedario',
-
-        createSession(optionsConfig: Record<string, unknown> = {}): GameSession<AbecedarioState> {
-            return baseSession('abecedario', buildState(optionsConfig));
-        },
-
-        start(session: GameSession, optionsConfig: Record<string, unknown> = {}): GameTurnResult {
-            return beginGame(session, optionsConfig, reset, (raw) => {
-                const state = raw as AbecedarioState;
-                const item = itemAt(state);
-                return `¡Vamos a jugar con el abecedario! Dime una palabra que empiece con la letra "${item ? item.letra : ''}".`;
-            }, { emotion: 'excited' });
-        },
+        ...surface,
 
         turn(session: GameSession, text = ''): GameTurnResult {
             const state = session.state as AbecedarioState;

@@ -16,6 +16,8 @@ import type { FormEvent } from 'react';
 import { FLU_CONFIG } from '../voice/api/config';
 import type { ShoppingItemRecord } from '../core/db/fluDatabase';
 import { useAsyncAction } from '../hooks/useAsyncAction';
+import { SettingsPanelShell } from './SettingsPanelShell';
+import { SettingsTextField } from './SettingsTextField';
 
 export interface ShoppingPanelProps {
   items: ShoppingItemRecord[];
@@ -92,25 +94,18 @@ export function ShoppingPanel({
   };
 
   return (
-    <details className="flu-settings-image-config" open>
-      <summary className="flu-settings-image-config__summary">
-        {ui.panelTitle || 'Lista de compras'}
-      </summary>
-      <div className="flu-settings-image-config__group">
+    <SettingsPanelShell title={ui.panelTitle || 'Lista de compras'} open>
         {/* Alta */}
         <form className="flu-settings-section" onSubmit={handleSubmit}>
           <div className="flu-settings-section__body">
-            <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked">
-              <span>{ui.addHint || 'Escribe un ítem y presiona Enter'}</span>
-              <input
-                type="text"
-                value={label}
-                onChange={(event) => setLabel(event.target.value)}
-                placeholder={ui.placeholder || 'Ej: leche, huevos, pan'}
-                data-testid="shopping-add-input"
-                disabled={busy}
-              />
-            </label>
+            <SettingsTextField
+              label={ui.addHint || 'Escribe un ítem y presiona Enter'}
+              value={label}
+              onChange={setLabel}
+              placeholder={ui.placeholder || 'Ej: leche, huevos, pan'}
+              testId="shopping-add-input"
+              disabled={busy}
+            />
             <button
               type="submit"
               className="flu-settings-image-config__field--stacked"
@@ -160,7 +155,6 @@ export function ShoppingPanel({
             </div>
           </div>
         )}
-      </div>
-    </details>
+    </SettingsPanelShell>
   );
 }

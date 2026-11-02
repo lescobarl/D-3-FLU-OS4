@@ -12,6 +12,7 @@
 //   - DI: now inyectable para pruebas deterministas
 // ============================================================
 import { useCallback, useEffect, useState } from 'react';
+import { refreshOnOk } from './refreshOnOk';
 import { useServiceRef } from './useServiceRef';
 import { FLU_CONFIG } from '../voice/api/config';
 import { fluDb, type ContactRecord } from '../core/db/fluDatabase';
@@ -100,9 +101,7 @@ export function useContacts({ now }: UseContactsOptions = {}): UseContactsResult
   /** Añade un contacto; refresca si fue exitoso. */
   const addContact = useCallback(
     async (input: ContactInput): Promise<AddContactResult> => {
-      const result = await service.addContact(input);
-      if (result.ok) await refresh();
-      return result;
+      return refreshOnOk(() => service.addContact(input), refresh);
     },
     [service, refresh],
   );
@@ -110,9 +109,7 @@ export function useContacts({ now }: UseContactsOptions = {}): UseContactsResult
   /** Actualiza un contacto; refresca si fue exitoso. */
   const updateContact = useCallback(
     async (id: string, patch: ContactPatch): Promise<UpdateContactResult> => {
-      const result = await service.updateContact(id, patch);
-      if (result.ok) await refresh();
-      return result;
+      return refreshOnOk(() => service.updateContact(id, patch), refresh);
     },
     [service, refresh],
   );
@@ -126,9 +123,7 @@ export function useContacts({ now }: UseContactsOptions = {}): UseContactsResult
   /** Elimina un contacto; refresca si fue exitoso. */
   const removeContact = useCallback(
     async (id: string): Promise<RemoveContactResult> => {
-      const result = await service.removeContact(id);
-      if (result.ok) await refresh();
-      return result;
+      return refreshOnOk(() => service.removeContact(id), refresh);
     },
     [service, refresh],
   );

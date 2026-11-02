@@ -193,9 +193,10 @@ describe('useParticipants - mutaciones', () => {
             expect(result.current.loading).toBe(false);
         });
 
-        const borrado = await result.current.remove('p1');
+        const { removed: borrado, wasActive } = await result.current.remove('p1');
 
         expect(borrado).toBe(true);
+        expect(wasActive).toBe(true);
         expect(dobles.onboarding.reset).toHaveBeenCalledWith('p1');
         expect(localGet(STORAGE_KEYS.ACTIVE_USER)).not.toBe('p1');
         expect(dobles.registro.list).toHaveBeenCalled();
@@ -208,8 +209,9 @@ describe('useParticipants - mutaciones', () => {
             expect(result.current.loading).toBe(false);
         });
 
-        await result.current.remove('p1');
+        const { wasActive } = await result.current.remove('p1');
 
+        expect(wasActive).toBe(false);
         expect(localGet(STORAGE_KEYS.ACTIVE_USER)).toBe('p2');
     });
 
@@ -221,7 +223,7 @@ describe('useParticipants - mutaciones', () => {
         });
         const lecturas = dobles.registro.list.mock.calls.length;
 
-        const borrado = await result.current.remove('p1');
+        const { removed: borrado } = await result.current.remove('p1');
 
         expect(borrado).toBe(false);
         expect(dobles.onboarding.reset).not.toHaveBeenCalled();
@@ -235,7 +237,7 @@ describe('useParticipants - mutaciones', () => {
             expect(result.current.loading).toBe(false);
         });
 
-        const borrado = await result.current.remove('p1');
+        const { removed: borrado } = await result.current.remove('p1');
 
         expect(borrado).toBe(true);
         expect(console.error).toHaveBeenCalled();

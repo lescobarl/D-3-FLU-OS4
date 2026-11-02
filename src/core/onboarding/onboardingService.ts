@@ -16,6 +16,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { addAuditLog, type OnboardingStateRecord, type SyncTuple } from '../db/fluDatabase';
 import { buildSyncTuple } from '../db/syncTuple';
+import { isLiveRecord } from '../db/recordCopy';
 import { STORAGE_KEYS } from '../config/appConfig';
 import { localStorePort, type LocalStorePort } from '../storage/localStore';
 import { createInitialState, type OnboardingState } from './onboardingFlow';
@@ -116,7 +117,7 @@ export function createOnboardingService({
 }: OnboardingServiceOptions): OnboardingService {
   const load = async (id: string): Promise<OnboardingState> => {
     const record = await db.get(id);
-    if (record?.sync?.deleted) return onboardingStateFromRecord(undefined);
+    if (!isLiveRecord(record)) return onboardingStateFromRecord(undefined);
     return onboardingStateFromRecord(record);
   };
 

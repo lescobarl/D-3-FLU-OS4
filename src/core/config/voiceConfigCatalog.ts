@@ -135,6 +135,29 @@ export const FLU_PROFILE_IDS: readonly string[] = FLU_PROFILES.map((p) => p.id);
 // Catálogo de claves
 // ------------------------------------------------------------
 
+/** Entrada numérica de configuración (dueño único del bloque numérico). */
+const num = (
+    clave: string,
+    handler: ConfigHandlerKey,
+    min: number,
+    max: number,
+    step: number,
+    descripcionEs: string,
+    descripcionEn: string,
+    inputUnit?: ConfigInputUnit,
+): ConfigCatalogEntry => ({
+    clave,
+    accion: 'set_config',
+    handler,
+    tipo: 'number',
+    min,
+    max,
+    step,
+    ...(inputUnit ? { inputUnit } : {}),
+    descripcionEs,
+    descripcionEn,
+})
+
 export const VOICE_CONFIG_CATALOG: ConfigCatalogEntry[] = [
     // ============================================================
     // BRANDING (set_branding) — useSeasonalBranding
@@ -281,28 +304,8 @@ export const VOICE_CONFIG_CATALOG: ConfigCatalogEntry[] = [
         descripcionEs: 'Selecciona una voz TTS instalada por su nombre o URI.',
         descripcionEn: 'Selects an installed TTS voice by name or URI.',
     },
-    {
-        clave: 'pitch',
-        accion: 'set_config',
-        handler: 'voiceNumber',
-        tipo: 'number',
-        min: 0.5,
-        max: 2.0,
-        step: 0.1,
-        descripcionEs: 'Tono del TTS (0.5-2.0).',
-        descripcionEn: 'TTS pitch (0.5-2.0).',
-    },
-    {
-        clave: 'volume',
-        accion: 'set_config',
-        handler: 'voiceNumber',
-        tipo: 'number',
-        min: 0,
-        max: 1,
-        step: 0.1,
-        descripcionEs: 'Volumen del TTS (0.0-1.0).',
-        descripcionEn: 'TTS volume (0.0-1.0).',
-    },
+    num('pitch', 'voiceNumber', 0.5, 2.0, 0.1, 'Tono del TTS (0.5-2.0).', 'TTS pitch (0.5-2.0).'),
+    num('volume', 'voiceNumber', 0, 1, 0.1, 'Volumen del TTS (0.0-1.0).', 'TTS volume (0.0-1.0).'),
 
     // ============================================================
     // PERSONALIDAD (set_config → setPersonality)
@@ -334,17 +337,7 @@ export const VOICE_CONFIG_CATALOG: ConfigCatalogEntry[] = [
         descripcionEs: 'Instrucciones personalizadas de texto libre para el system prompt.',
         descripcionEn: 'Free-text custom instructions injected into the system prompt.',
     },
-    {
-        clave: 'proactivity',
-        accion: 'set_config',
-        handler: 'personalityNumber',
-        tipo: 'number',
-        min: 0,
-        max: 1,
-        step: 0.1,
-        descripcionEs: 'Nivel de proactividad de FLU (0-1).',
-        descripcionEn: 'FLU proactivity level (0-1).',
-    },
+    num('proactivity', 'personalityNumber', 0, 1, 0.1, 'Nivel de proactividad de FLU (0-1).', 'FLU proactivity level (0-1).'),
     {
         clave: 'defaultEmotion',
         accion: 'set_config',
@@ -358,163 +351,20 @@ export const VOICE_CONFIG_CATALOG: ConfigCatalogEntry[] = [
     // ============================================================
     // AVANZADO (set_config → setAdvancedConfig)
     // ============================================================
-    {
-        clave: 'animationSpeed',
-        accion: 'set_config',
-        handler: 'advancedNumber',
-        tipo: 'number',
-        min: 0.5,
-        max: 2.0,
-        step: 0.1,
-        descripcionEs: 'Velocidad de animación del avatar (0.5-2.0).',
-        descripcionEn: 'Avatar animation speed (0.5-2.0).',
-    },
-    {
-        clave: 'emotionalReactivity',
-        accion: 'set_config',
-        handler: 'advancedNumber',
-        tipo: 'number',
-        min: 0,
-        max: 1,
-        step: 0.1,
-        descripcionEs: 'Reactividad emocional del avatar (0-1).',
-        descripcionEn: 'Avatar emotional reactivity (0-1).',
-    },
-    {
-        clave: 'creativity',
-        accion: 'set_config',
-        handler: 'advancedNumber',
-        tipo: 'number',
-        min: 0,
-        max: 1,
-        step: 0.1,
-        descripcionEs: 'Creatividad de la IA (temperature) (0-1).',
-        descripcionEn: 'AI creativity (temperature) (0-1).',
-    },
-    {
-        clave: 'emotionMinConfidence',
-        accion: 'set_config',
-        handler: 'advancedNumber',
-        tipo: 'number',
-        min: 0,
-        max: 1,
-        step: 0.05,
-        descripcionEs: 'Confianza mínima para reportar una emoción del usuario (0-1).',
-        descripcionEn: 'Minimum confidence to report a user emotion (0-1).',
-    },
-    {
-        clave: 'emotionBaseDetectionConfidence',
-        accion: 'set_config',
-        handler: 'advancedNumber',
-        tipo: 'number',
-        min: 0,
-        max: 1,
-        step: 0.05,
-        descripcionEs: 'Confianza base para detección de elogios/críticas (0-1).',
-        descripcionEn: 'Base confidence for praise/criticism detection (0-1).',
-    },
-    {
-        clave: 'emotionTopicChangeOverlapRatio',
-        accion: 'set_config',
-        handler: 'advancedNumber',
-        tipo: 'number',
-        min: 0,
-        max: 0.5,
-        step: 0.01,
-        descripcionEs: 'Umbral de solapamiento de palabras para detectar cambio de tema (0-0.5).',
-        descripcionEn: 'Word overlap threshold to detect a topic change (0-0.5).',
-    },
-    {
-        clave: 'emotionTopicChangeMinWords',
-        accion: 'set_config',
-        handler: 'advancedNumber',
-        tipo: 'number',
-        min: 1,
-        max: 10,
-        step: 1,
-        descripcionEs: 'Palabras mínimas para considerar un cambio de tema (1-10).',
-        descripcionEn: 'Minimum words to consider a topic change (1-10).',
-    },
-    {
-        clave: 'emotionShortUtteranceWordCount',
-        accion: 'set_config',
-        handler: 'advancedNumber',
-        tipo: 'number',
-        min: 1,
-        max: 10,
-        step: 1,
-        descripcionEs: 'Umbral de palabras de una frase corta (1-10).',
-        descripcionEn: 'Short-utterance word count threshold (1-10).',
-    },
-    {
-        clave: 'tomMaxParticipants',
-        accion: 'set_config',
-        handler: 'advancedNumber',
-        tipo: 'number',
-        min: 2,
-        max: 50,
-        step: 1,
-        descripcionEs: 'Máximo de participantes que FLU rastrea a la vez (2-50).',
-        descripcionEn: 'Max participants FLU tracks at once (2-50).',
-    },
-    {
-        clave: 'tomMaxTopicsPerParticipant',
-        accion: 'set_config',
-        handler: 'advancedNumber',
-        tipo: 'number',
-        min: 5,
-        max: 100,
-        step: 1,
-        descripcionEs: 'Máximo de temas recordados por participante (5-100).',
-        descripcionEn: 'Max topics remembered per participant (5-100).',
-    },
-    {
-        clave: 'tomParticipantInactivityMs',
-        accion: 'set_config',
-        handler: 'advancedNumber',
-        tipo: 'number',
-        min: 1,
-        max: 120,
-        step: 1,
-        inputUnit: 'minutes',
-        descripcionEs: 'Minutos sin interactuar para considerar a un participante inactivo (1-120).',
-        descripcionEn: 'Minutes without interaction before a participant is "inactive" (1-120).',
-    },
-    {
-        clave: 'tomSummaryDisplayLimit',
-        accion: 'set_config',
-        handler: 'advancedNumber',
-        tipo: 'number',
-        min: 1,
-        max: 10,
-        step: 1,
-        descripcionEs: 'Máximo de ítems del resumen por categoría (1-10).',
-        descripcionEn: 'Max summary items per category (1-10).',
-    },
-    {
-        clave: 'systemEventWindowMs',
-        accion: 'set_config',
-        handler: 'advancedNumber',
-        tipo: 'number',
-        min: 1,
-        max: 30,
-        step: 1,
-        inputUnit: 'minutes',
-        descripcionEs: 'Ventana en minutos de eventos que se pasan a Gemini (1-30).',
-        descripcionEn: 'Event window in minutes passed to Gemini (1-30).',
-    },
-    {
-        clave: 'systemEventDedupBucketMs',
-        accion: 'set_config',
-        handler: 'advancedNumber',
-        tipo: 'number',
-        min: 1,
-        max: 30,
-        step: 1,
-        inputUnit: 'seconds',
-        descripcionEs: 'Ventana en segundos para deduplicar eventos (1-30).',
-        descripcionEn: 'Dedup bucket in seconds for events (1-30).',
-    },
+    num('animationSpeed', 'advancedNumber', 0.5, 2.0, 0.1, 'Velocidad de animación del avatar (0.5-2.0).', 'Avatar animation speed (0.5-2.0).'),
+    num('emotionalReactivity', 'advancedNumber', 0, 1, 0.1, 'Reactividad emocional del avatar (0-1).', 'Avatar emotional reactivity (0-1).'),
+    num('creativity', 'advancedNumber', 0, 1, 0.1, 'Creatividad de la IA (temperature) (0-1).', 'AI creativity (temperature) (0-1).'),
+    num('emotionMinConfidence', 'advancedNumber', 0, 1, 0.05, 'Confianza mínima para reportar una emoción del usuario (0-1).', 'Minimum confidence to report a user emotion (0-1).'),
+    num('emotionBaseDetectionConfidence', 'advancedNumber', 0, 1, 0.05, 'Confianza base para detección de elogios/críticas (0-1).', 'Base confidence for praise/criticism detection (0-1).'),
+    num('emotionTopicChangeOverlapRatio', 'advancedNumber', 0, 0.5, 0.01, 'Umbral de solapamiento de palabras para detectar cambio de tema (0-0.5).', 'Word overlap threshold to detect a topic change (0-0.5).'),
+    num('emotionTopicChangeMinWords', 'advancedNumber', 1, 10, 1, 'Palabras mínimas para considerar un cambio de tema (1-10).', 'Minimum words to consider a topic change (1-10).'),
+    num('emotionShortUtteranceWordCount', 'advancedNumber', 1, 10, 1, 'Umbral de palabras de una frase corta (1-10).', 'Short-utterance word count threshold (1-10).'),
+    num('tomMaxParticipants', 'advancedNumber', 2, 50, 1, 'Máximo de participantes que FLU rastrea a la vez (2-50).', 'Max participants FLU tracks at once (2-50).'),
+    num('tomMaxTopicsPerParticipant', 'advancedNumber', 5, 100, 1, 'Máximo de temas recordados por participante (5-100).', 'Max topics remembered per participant (5-100).'),
+    num('tomParticipantInactivityMs', 'advancedNumber', 1, 120, 1, 'Minutos sin interactuar para considerar a un participante inactivo (1-120).', 'Minutes without interaction before a participant is "inactive" (1-120).', 'minutes'),
+    num('tomSummaryDisplayLimit', 'advancedNumber', 1, 10, 1, 'Máximo de ítems del resumen por categoría (1-10).', 'Max summary items per category (1-10).'),
+    num('systemEventWindowMs', 'advancedNumber', 1, 30, 1, 'Ventana en minutos de eventos que se pasan a Gemini (1-30).', 'Event window in minutes passed to Gemini (1-30).', 'minutes'),
+    num('systemEventDedupBucketMs', 'advancedNumber', 1, 30, 1, 'Ventana en segundos para deduplicar eventos (1-30).', 'Dedup bucket in seconds for events (1-30).', 'seconds'),
 
     // ============================================================
     // IMAGEN DEL AVATAR (set_config → setImageConfig)
@@ -687,20 +537,27 @@ export const VOICE_CONFIG_CATALOG: ConfigCatalogEntry[] = [
 // Helpers de formato para el prompt
 // ------------------------------------------------------------
 
+function describeNumber(entry: ConfigCatalogEntry, isEs: boolean): string {
+    const unit =
+        entry.inputUnit === 'minutes'
+            ? isEs
+                ? ' minutos'
+                : ' minutes'
+            : entry.inputUnit === 'seconds'
+                ? isEs
+                    ? ' segundos'
+                    : ' seconds'
+                : '';
+    return ` (${entry.min}-${entry.max}${unit})`;
+}
+
 function formatValueEs(entry: ConfigCatalogEntry): string {
     switch (entry.tipo) {
         case 'select':
         case 'list':
             return ` (${(entry.opciones ?? []).join(', ')})${entry.requiereSubvalor ? '; usa subvalor "add" o "remove"' : ''}`;
-        case 'number': {
-            const unit =
-                entry.inputUnit === 'minutes'
-                    ? ' minutos'
-                    : entry.inputUnit === 'seconds'
-                        ? ' segundos'
-                        : '';
-            return ` (${entry.min}-${entry.max}${unit})`;
-        }
+        case 'number':
+            return describeNumber(entry, true);
         case 'boolean':
             return ' (true/false)';
         case 'text':
@@ -729,15 +586,8 @@ function formatValueEn(entry: ConfigCatalogEntry): string {
         case 'select':
         case 'list':
             return ` (${(entry.opciones ?? []).join(', ')})${entry.requiereSubvalor ? '; use subvalor "add" or "remove"' : ''}`;
-        case 'number': {
-            const unit =
-                entry.inputUnit === 'minutes'
-                    ? ' minutes'
-                    : entry.inputUnit === 'seconds'
-                        ? ' seconds'
-                        : '';
-            return ` (${entry.min}-${entry.max}${unit})`;
-        }
+        case 'number':
+            return describeNumber(entry, false);
         case 'boolean':
             return ' (true/false)';
         case 'text':

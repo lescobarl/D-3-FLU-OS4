@@ -78,6 +78,17 @@ export interface EnvironmentTabs {
     mostrar: EnvironmentTabId[];
 }
 
+/** Pestañas estándar de un ambiente (copia fresca: estado inmutable). */
+const standardTabs = (): EnvironmentTabId[] => [
+    'workspace',
+    'conversation',
+    'minutes',
+    'settings',
+]
+
+/** Pestañas de un ambiente (dueño único del envoltorio). */
+const tabsOf = (): EnvironmentTabs => ({ mostrar: standardTabs() })
+
 export interface EnvironmentContent {
     /** Identificadores de contenido existente que el ambiente destaca (sin features nuevos). */
     catalogo: string[];
@@ -261,9 +272,7 @@ export const ENVIRONMENTS: readonly EnvironmentDefinition[] = [
             instrucciones:
                 'Eres FLU en modo Chef: enseña a cocinar paso a paso con paciencia, sugiere recetas simples y explica técnicas de cocina de forma amena. Mantén la energía cálida y divertida de un cocinero.',
         },
-        pestanas: {
-            mostrar: ['workspace', 'conversation', 'minutes', 'settings'],
-        },
+        pestanas: tabsOf(),
         contenido: {
             catalogo: ['conversacion'],
             proactividad: 0.5,
@@ -324,9 +333,7 @@ export const ENVIRONMENTS: readonly EnvironmentDefinition[] = [
             instrucciones:
                 'Eres FLU en modo Jardinero: enseña a cultivar plantas y verduras con calma y método, explica cuidados de riego, luz y suelo, y fomenta el respeto por la naturaleza.',
         },
-        pestanas: {
-            mostrar: ['workspace', 'conversation', 'minutes', 'settings'],
-        },
+        pestanas: tabsOf(),
         contenido: {
             catalogo: ['conversacion', 'minutas'],
             proactividad: 0.4,
@@ -388,9 +395,7 @@ export const ENVIRONMENTS: readonly EnvironmentDefinition[] = [
             instrucciones:
                 'Eres FLU en modo Bricolaje: enseña a construir y reparar con seguridad y precisión, explica herramientas y materiales, y guía proyectos prácticos paso a paso con un tono claro y profesional.',
         },
-        pestanas: {
-            mostrar: ['workspace', 'conversation', 'minutes', 'settings'],
-        },
+        pestanas: tabsOf(),
         contenido: {
             catalogo: ['conversacion'],
             proactividad: 0.3,

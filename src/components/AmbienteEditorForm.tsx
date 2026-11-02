@@ -12,11 +12,11 @@
 // rangos de environmentRegistry (claves CSS, decoraciones, pestañas)
 // y etiquetas de pestaña inyectadas por el padre (tabLabels).
 // ============================================================
-import { useState } from 'react';
-import type { FormEvent } from 'react';
-import { FLU_CONFIG } from '../voice/api/config';
-import { setGroupedField, useEditableFields } from '../hooks/useEditableFields';
-import { submitCatalogEditor } from './editorSubmit';
+import { FLU_CONFIG, setGroupedField, useEditableFields, CatalogEditorFormShell } from './catalogEditorKit';
+import { useCatalogEditorForm } from '../hooks/useCatalogEditorForm';
+import { SettingsTextField } from './SettingsTextField';
+import { SettingsTextArea } from './SettingsTextArea';
+import { CatalogEditorNameField } from './CatalogEditorNameField';
 import {
     ENVIRONMENT_CSS_VAR_KEYS,
     ENVIRONMENT_DECORATIONS,
@@ -59,8 +59,6 @@ export function AmbienteEditorForm({
         vars: { ...s.vars },
         tabs: [...s.tabs],
     }));
-    const [busy, setBusy] = useState(false);
-    const [error, setError] = useState<string | null>(null);
 
     const setVar = (key: string, value: string) => setGroupedField(setFields, 'vars', key, value);
 
@@ -73,82 +71,74 @@ export function AmbienteEditorForm({
         }));
     };
 
-    const handleSubmit = (event: FormEvent<HTMLFormElement>) =>
-        submitCatalogEditor(event, {
-            busy,
-            setBusy,
-            setError,
-            slug: slugifyAmbiente(fields.nombre),
-            requiredMessage: ui.requiredError || 'El nombre es obligatorio para generar el identificador.',
-            build: () => buildAmbientePayload(template, fields),
-            onSubmit,
-        });
+    const { busy, error, handleSubmit } = useCatalogEditorForm({
+        slug: slugifyAmbiente(fields.nombre),
+        requiredMessage: ui.requiredError,
+        build: () => buildAmbientePayload(template, fields),
+        onSubmit,
+    });
 
     return (
-        <form className="flu-settings-section" onSubmit={handleSubmit} data-testid="ambiente-editor-form">
-            <div className="flu-settings-section__body">
-                <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked">
-                    <span>{ui.nombreLabel || 'Nombre'}</span>
-                    <input
-                        type="text"
-                        value={fields.nombre}
-                        onChange={(event) => setField({ nombre: event.target.value })}
-                        placeholder={ui.nombrePlaceholder || 'Ej: Modo Selva'}
-                        data-testid="ambiente-editor-nombre"
-                        disabled={busy}
-                    />
-                </label>
-                <p className="flu-settings-image-config__hint">
-                    {ui.idLabel || 'Identificador'}:
-                    <code className="flu-ambientes-editor__slug">
-                        {slugifyAmbiente(fields.nombre) || '—'}
-                    </code>
-                </p>
-                <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked">
-                    <span>{ui.taglineLabel || 'Frase descriptiva'}</span>
-                    <input
-                        type="text"
-                        value={fields.tagline}
-                        onChange={(event) => setField({ tagline: event.target.value })}
-                        placeholder={ui.taglinePlaceholder || 'Ej: Convierto tu espacio en una selva de aprendizaje'}
-                        data-testid="ambiente-editor-tagline"
-                        disabled={busy}
-                    />
-                </label>
-                <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked">
-                    <span>{ui.iconoLabel || 'Ícono'}</span>
-                    <input
-                        type="text"
-                        value={fields.icono}
-                        onChange={(event) => setField({ icono: event.target.value })}
-                        placeholder="🦁"
-                        data-testid="ambiente-editor-icono"
-                        disabled={busy}
-                    />
-                </label>
+        <CatalogEditorFormShell
+            testId="ambiente-editor-form"
+            submitTestId="ambiente-editor-submit"
+            cancelTestId="ambiente-editor-cancel"
+            errorTestId="ambiente-editor-error"
+            submitLabel={submitLabel}
+            cancelLabel={cancelLabel}
+            busy={busy}
+            canSubmit={fields.nombre.trim().length > 0}
+            error={error}
+            actionsClassName="flu-ambientes-editor__actions"
+            submitClassName="flu-ambientes-editor__submit"
+            cancelClassName="flu-ambientes-editor__cancel"
+            onSubmit={handleSubmit}
+            onCancel={onCancel}
+        >
+                <CatalogEditorNameField
+                    label={ui.nombreLabel || 'Nombre'}
+                    value={fields.nombre}
+                    onChange={(value) => setField({ nombre: value })}
+                    placeholder={ui.nombrePlaceholder || 'Ej: Modo Selva'}
+                    testId="ambiente-editor-nombre"
+                    disabled={busy}
+                    idLabel={ui.idLabel || 'Identificador'}
+                    slug={slugifyAmbiente(fields.nombre)}
+                    slugClassName="flu-ambientes-editor__slug"
+                />
+                <SettingsTextField
+                    label={ui.taglineLabel || 'Frase descriptiva'}
+                    value={fields.tagline}
+                    onChange={(value) => setField({ tagline: value })}
+                    placeholder={ui.taglinePlaceholder || 'Ej: Convierto tu espacio en una selva de aprendizaje'}
+                    testId="ambiente-editor-tagline"
+                    disabled={busy}
+                />
+                <SettingsTextField
+                    label={ui.iconoLabel || 'Ícono'}
+                    value={fields.icono}
+                    onChange={(value) => setField({ icono: value })}
+                    placeholder="🦁"
+                    testId="ambiente-editor-icono"
+                    disabled={busy}
+                />
 
-                <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked">
-                    <span>{ui.frasesEsLabel || 'Frases de activación (ES)'}</span>
-                    <textarea
-                        value={fields.frasesEs}
-                        onChange={(event) => setField({ frasesEs: event.target.value })}
-                        placeholder={ui.frasesPlaceholder || 'Una frase por línea'}
-                        rows={3}
-                        data-testid="ambiente-editor-frases-es"
-                        disabled={busy}
-                    />
-                </label>
-                <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked">
-                    <span>{ui.frasesEnLabel || 'Frases de activación (EN)'}</span>
-                    <textarea
-                        value={fields.frasesEn}
-                        onChange={(event) => setField({ frasesEn: event.target.value })}
-                        placeholder={ui.frasesPlaceholder || 'Una frase por línea'}
-                        rows={3}
-                        data-testid="ambiente-editor-frases-en"
-                        disabled={busy}
-                    />
-                </label>
+                <SettingsTextArea
+                    label={ui.frasesEsLabel || 'Frases de activación (ES)'}
+                    value={fields.frasesEs}
+                    onChange={(value) => setField({ frasesEs: value })}
+                    placeholder={ui.frasesPlaceholder || 'Una frase por línea'}
+                    testId="ambiente-editor-frases-es"
+                    disabled={busy}
+                />
+                <SettingsTextArea
+                    label={ui.frasesEnLabel || 'Frases de activación (EN)'}
+                    value={fields.frasesEn}
+                    onChange={(value) => setField({ frasesEn: value })}
+                    placeholder={ui.frasesPlaceholder || 'Una frase por línea'}
+                    testId="ambiente-editor-frases-en"
+                    disabled={busy}
+                />
                 <p className="flu-settings-image-config__hint">{ui.frasesHint || ''}</p>
 
                 <h4 className="flu-reminders__heading">{ui.varsLabel || 'Variables del tema'}</h4>
@@ -210,32 +200,6 @@ export function AmbienteEditorForm({
                     </label>
                 ))}
 
-                {error && (
-                    <p className="flu-settings-image-config__error" data-testid="ambiente-editor-error">
-                        {error}
-                    </p>
-                )}
-
-                <div className="flu-ambientes-editor__actions">
-                    <button
-                        type="submit"
-                        className="flu-ambientes-editor__submit"
-                        data-testid="ambiente-editor-submit"
-                        disabled={busy || !fields.nombre.trim()}
-                    >
-                        {submitLabel}
-                    </button>
-                    <button
-                        type="button"
-                        className="flu-ambientes-editor__cancel"
-                        data-testid="ambiente-editor-cancel"
-                        disabled={busy}
-                        onClick={onCancel}
-                    >
-                        {cancelLabel}
-                    </button>
-                </div>
-            </div>
-        </form>
+        </CatalogEditorFormShell>
     );
 }

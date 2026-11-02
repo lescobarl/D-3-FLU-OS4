@@ -14,8 +14,10 @@
 //     shoppingService)
 //   - DI: `now` inyectable para pruebas deterministas
 // ============================================================
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback } from 'react';
+import { refreshOnOk } from './refreshOnOk';
 import { useServiceRef } from './useServiceRef';
+import { usePendingList, useCountedMutation, addSequentially, cleanLabels, useRefreshAction } from './pendingListKit';
 import { removeAndRefresh } from '../lib/removeAndRefresh';
 import { type ShoppingItemRecord } from '../core/db/fluDatabase';
 import {
@@ -25,7 +27,6 @@ import {
   type ShoppingService,
 } from '../core/reminders/shoppingService';
 import { itemsRemaining } from '../core/reminders/shoppingList';
-import { logCaughtError } from '../lib/caughtError';
 
 // ------------------------------------------------------------
 // Tipos
@@ -62,6 +63,10 @@ export interface UseShoppingListResult extends ShoppingListState, ShoppingListAc
 // Hook
 // ------------------------------------------------------------
 
+/** Predicados estables: el núcleo de lista no debe recrear su refresco por render. */
+const ITEM_CHECKED = (item: ShoppingItemRecord): boolean => item.checked === true;
+const ITEM_CREATED = (item: ShoppingItemRecord): number => item.createdAt ?? 0;
+
 export function useShoppingList({
   now,
 }: UseShoppingListOptions = {}): UseShoppingListResult {
@@ -71,38 +76,21 @@ export function useShoppingList({
   // "Cannot access 'service' before initialization".
   const service = useServiceRef<ShoppingService>(() => createShoppingService({ now: now || (() => Date.now()), }));
 
-  const [items, setItems] = useState<ShoppingItemRecord[]>([]);
-  const [remainingCount, setRemainingCount] = useState(0);
-  const [loading, setLoading] = useState(true);
+  const load = useCallback(() => service.list(), [service]);
 
-  /** Recarga la lista desde IndexedDB (cronológica, pendientes primero). */
-  const refresh = useCallback(async (): Promise<void> => {
-    try {
-      const all = await service.list();
-      const sorted = all.slice().sort((a, b) => {
-        if (a.checked !== b.checked) return a.checked ? 1 : -1;
-        return (a.createdAt ?? 0) - (b.createdAt ?? 0);
-      });
-      setItems(sorted);
-      setRemainingCount(itemsRemaining(sorted));
-    } catch (err) {
-      logCaughtError('[useShoppingList] refresh error', err);
-    } finally {
-      setLoading(false);
-    }
-  }, [service]);
-
-  // Carga inicial.
-  useEffect(() => {
-    refresh().catch((e) => logCaughtError('src/hooks/useShoppingList.ts: refresh', e));
-  }, [refresh]);
+  const { rows: items, loading, remainingCount, refresh } = usePendingList<ShoppingItemRecord>({
+    load,
+    isDone: ITEM_CHECKED,
+    createdAt: ITEM_CREATED,
+    remaining: itemsRemaining,
+    errorContext: '[useShoppingList] refresh error',
+  });
+  const runCounted = useCountedMutation(refresh);
 
   /** Agrega un ítem y refresca la lista. */
   const add = useCallback(
     async (input: NewShoppingItemInput): Promise<AddShoppingItemResult> => {
-      const result = await service.add(input);
-      if (result.ok) await refresh();
-      return result;
+      return refreshOnOk(() => service.add(input), refresh);
     },
     [service, refresh],
   );
@@ -110,13 +98,9 @@ export function useShoppingList({
   /** Agrega varias etiquetas de una vez (multi-add del parser de intención). */
   const addMany = useCallback(
     async (labels: string[]): Promise<AddShoppingItemResult[]> => {
-      const clean = (labels || []).map((l) => l.trim()).filter(Boolean);
+      const clean = cleanLabels(labels);
       if (clean.length === 0) return [];
-      const results: AddShoppingItemResult[] = [];
-      for (const label of clean) {
-        const result = await service.add({ label });
-        results.push(result);
-      }
+      const results = await addSequentially(clean, (label) => service.add({ label }));
       if (results.some((r) => r.ok)) await refresh();
       return results;
     },
@@ -124,24 +108,10 @@ export function useShoppingList({
   );
 
   /** Alterna el estado marcado/desmarcado y refresca. */
-  const toggle = useCallback(
-    async (id: string): Promise<ShoppingItemRecord | null> => {
-      const updated = await service.toggle(id);
-      if (updated) await refresh();
-      return updated;
-    },
-    [service, refresh],
-  );
+  const toggle = useRefreshAction(service.toggle, refresh);
 
   /** Renombra un ítem y refresca. */
-  const rename = useCallback(
-    async (id: string, label: string): Promise<ShoppingItemRecord | null> => {
-      const updated = await service.rename(id, label);
-      if (updated) await refresh();
-      return updated;
-    },
-    [service, refresh],
-  );
+  const rename = useRefreshAction(service.rename, refresh);
 
   /** Elimina un ítem y refresca. */
   const remove = useCallback(
@@ -150,18 +120,16 @@ export function useShoppingList({
   );
 
   /** Desmarca todos los pendientes y refresca. */
-  const uncheckAll = useCallback(async (): Promise<number> => {
-    const count = await service.uncheckAll();
-    if (count > 0) await refresh();
-    return count;
-  }, [service, refresh]);
+  const uncheckAll = useCallback(
+    async (): Promise<number> => runCounted(() => service.uncheckAll()),
+    [service, runCounted],
+  );
 
   /** Limpia los ítems marcados y refresca. */
-  const clearChecked = useCallback(async (): Promise<number> => {
-    const count = await service.clearChecked();
-    if (count > 0) await refresh();
-    return count;
-  }, [service, refresh]);
+  const clearChecked = useCallback(
+    async (): Promise<number> => runCounted(() => service.clearChecked()),
+    [service, runCounted],
+  );
 
   return {
     service,

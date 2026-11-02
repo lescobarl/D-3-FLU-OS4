@@ -57,6 +57,16 @@ export interface NotificationServiceOptions {
   now?: () => Date;
 }
 
+/** Entrada de una notificación (dueño único de la forma). */
+export interface NotificationInput {
+  category: string;
+  title?: string;
+  body: string;
+  urgent?: boolean;
+  icon?: string;
+  action?: string;
+}
+
 export interface NotificationDispatch {
   notification: AppNotification;
   delivery: NotificationDelivery | null;
@@ -108,14 +118,7 @@ export interface NotificationService {
    * Emite una notificación. Devuelve el canal de entrega resuelto,
    * o null si está bloqueada (canal 'none', DND, categoría silenciada).
    */
-  notify(input: {
-    category: string;
-    title?: string;
-    body: string;
-    urgent?: boolean;
-    icon?: string;
-    action?: string;
-  }): NotificationDelivery | null;
+  notify(input: NotificationInput): NotificationDelivery | null;
   requestPermission(): Promise<NotificationPermission>;
   getChannel(): NotificationChannel;
   setChannel(channel: NotificationChannel): void;
@@ -169,14 +172,7 @@ export function createNotificationService(
   const muted = (category: string): boolean =>
     Array.isArray(config.mutedCategories) && config.mutedCategories.includes(category);
 
-  const notify = (input: {
-    category: string;
-    title?: string;
-    body: string;
-    urgent?: boolean;
-    icon?: string;
-    action?: string;
-  }): NotificationDelivery | null => {
+  const notify = (input: NotificationInput): NotificationDelivery | null => {
     if (!config.enabled) return null;
     const delivery = resolveDelivery(channel);
     if (!delivery) return null;

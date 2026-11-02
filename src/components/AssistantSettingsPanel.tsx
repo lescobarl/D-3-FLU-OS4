@@ -6,6 +6,7 @@
 // App (useDoNotDisturb + useNotificationCenter) y llega por props,
 // de modo que DND se comparte con el centro de notificaciones.
 // ============================================================
+import { SettingsPanelShell } from './SettingsPanelShell';
 import type { NotificationChannel } from '../core/notifications/notificationService';
 import type { DoNotDisturbState, DndSchedule } from '../hooks/useDoNotDisturb';
 
@@ -36,11 +37,7 @@ export function AssistantSettingsPanel({
   onReplayOnboarding,
 }: AssistantSettingsPanelProps) {
   return (
-    <details className="flu-settings-image-config">
-      <summary className="flu-settings-image-config__summary">
-        Asistente personal
-      </summary>
-      <div className="flu-settings-image-config__group">
+    <SettingsPanelShell title="Asistente personal">
         {/* Notificaciones */}
         <div className="flu-settings-section">
           <div className="flu-settings-section__body">
@@ -128,7 +125,6 @@ export function AssistantSettingsPanel({
             </button>
           </div>
         </div>
-      </div>
-    </details>
+      </SettingsPanelShell>
   );
 }

@@ -103,6 +103,13 @@ export interface UIState {
     isThinking: boolean;
 }
 
+/** Opciones del reetiquetado de una fila (dueño único de la forma). */
+export interface SetEntrySpeakerNameOptions {
+    resolved?: boolean;
+    /** `false` = el módulo ya escribió la fila; el hook no debe reescribirla. */
+    persist?: boolean;
+}
+
 export interface IntegrationState {
     /** Estado actual del ciclo de conversación */
     conversationState: ConversationState;
@@ -218,7 +225,7 @@ export interface IntegrationActions {
      * etiqueta reutilizada por otra voz no hereda el nombre (la mujer dejaba de salir "Luis").
      * Write-once: no pisa un nombre propio ya congelado.
      */
-    setEntrySpeakerName: (id: string, speakerName: string, options?: { resolved?: boolean }) => void;
+    setEntrySpeakerName: (id: string, speakerName: string, options?: SetEntrySpeakerNameOptions) => void;
     /**
      * Completa el texto de la fila que era FRAGMENTO de la locucion (misma fila, una entrada):
      * el texto consolidado entra UNA vez y no se reescribe despues.
@@ -242,8 +249,6 @@ export interface IntegrationActions {
     setConfig: (config: Partial<BridgeConfig>) => void;
     /** Limpiar el log de eventos */
     clearEventLog: () => void;
-    /** Limpiar el historial de conversación */
-    clearHistory: () => void;
     /** Resetear historial de conversación + stats (OS2 resetConversationUi) */
     resetConversationHistory: () => void;
     /** Resetear todo el estado */
@@ -422,6 +427,19 @@ const initialState: IntegrationState = {
     availableProfiles: [...FLU_PROFILES],
 };
 
+/** Reemplaza una entrada por id (dueño único del map del historial). */
+function withEntryPatch<T extends { conversationHistory: ConversationEntry[] }>(
+    state: T,
+    id: string,
+    patch: (entry: ConversationEntry) => ConversationEntry,
+): { conversationHistory: ConversationEntry[] } {
+    return {
+        conversationHistory: state.conversationHistory.map((entry) =>
+            entry.id === id ? patch(entry) : entry,
+        ),
+    };
+}
+
 export const useIntegrationStore = create<IntegrationStore>()(
     persist(
         (set, get) => ({
@@ -550,11 +568,11 @@ export const useIntegrationStore = create<IntegrationStore>()(
                     actual.signature.every((value, index) => value === signature[index])
                 );
                 if (sameSpeaker && sameSignature) return;
-                set((current) => ({
-                    conversationHistory: current.conversationHistory.map((e) =>
-                        e.id === id ? { ...e, speakerId, ...(signature ? { signature } : {}) } : e,
-                    ),
-                }));
+                set((current) => withEntryPatch(current, id, (e) => ({
+                    ...e,
+                    speakerId,
+                    ...(signature ? { signature } : {}),
+                })));
             },
 
             /**
@@ -562,18 +580,22 @@ export const useIntegrationStore = create<IntegrationStore>()(
              * resolutor: limpia la marca de continuidad aunque el texto no cambie (la fila
              * nacio con la etiqueta de continuidad, no con identidad propia).
              */
-            setEntrySpeakerName: (id: string, speakerName: string, options?: { resolved?: boolean }) => {
+            setEntrySpeakerName: (id: string, speakerName: string, options?: SetEntrySpeakerNameOptions) => {
                 const actual = get().conversationHistory.find((e) => e.id === id);
                 if (!actual) return;
                 const next = String(speakerName || '').trim();
                 const resolved = options?.resolved === true;
+                const persist = options?.persist !== false;
                 const mismoNombre = String(actual.speakerName || '').trim() === next;
                 if (!next || (mismoNombre && (!resolved || actual.speakerPending !== true))) return;
-                set((current) => ({
-                    conversationHistory: current.conversationHistory.map((e) =>
-                        e.id === id ? { ...e, speakerName: next, ...(resolved ? { speakerPending: false } : {}) } : e,
-                    ),
-                }));
+                set((current) => withEntryPatch(current, id, (e) => ({
+                    ...e,
+                    speakerName: next,
+                    ...(resolved ? { speakerPending: false } : {}),
+                    // SOLO store: el reetiquetado tardío del módulo YA
+                    // escribió la fila; el hook no debe reescribirla.
+                    ...(persist ? { persistSpeakerName: undefined } : { persistSpeakerName: false }),
+                })));
             },
 
             completeEntryFragment: (id: string, text: string) => {
@@ -703,15 +725,6 @@ export const useIntegrationStore = create<IntegrationStore>()(
 
             clearEventLog: () => {
                 set({ eventLog: [] });
-            },
-
-            clearHistory: () => {
-                set((current) => ({
-                    conversationHistory: [],
-                    conversationEpoch: current.conversationEpoch + 1,
-                    // Nuevo epoch = numeracion nueva: el high-water arranca en 0.
-                    speakerHighWater: 0,
-                }));
             },
 
             resetConversationHistory: () => {

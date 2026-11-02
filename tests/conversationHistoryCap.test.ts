@@ -21,7 +21,7 @@ function entry(index: number): ConversationEntry {
 
 describe('integrationStore — tope de historial de conversación', () => {
     beforeEach(() => {
-        useIntegrationStore.getState().clearHistory();
+        useIntegrationStore.getState().resetConversationHistory();
     });
 
     it('recorta al límite configurado y conserva los últimos', () => {

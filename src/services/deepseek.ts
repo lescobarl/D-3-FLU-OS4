@@ -16,7 +16,8 @@
 // F1/F2/F3 en modo 100% local (isLocalTextEndpoint), sin requerir clave API.
 // ============================================================
 
-import { OPENROUTER_CONFIG, STORAGE_KEYS, TEXT_TOKEN_LIMITS, buildTextApiUrl, isLocalTextEndpoint, readStorage, resolveTextApiKey } from '../core/config/appConfig';import { resolveApiKey } from '../core/config/sharedConfig';
+import { resolveTextRequestKey } from '../core/ai/textKey';
+import { OPENROUTER_CONFIG, STORAGE_KEYS, TEXT_TOKEN_LIMITS, buildTextApiUrl, isLocalTextEndpoint, readStorage } from '../core/config/appConfig';
 import { buildPollinationsImageResult } from './pollinationsImage';
 import { fetchTextEngine } from '../core/ai/httpClient';
 import { logCaughtError } from '../lib/caughtError';
@@ -26,6 +27,8 @@ import type {
     AIParticipantEvaluation,
     AIWorkspaceImageResult,
     AISummaryResult,
+    FetchResponseArgs,
+    FetchVisionArgs,
 } from '../core/ai/IAIService';
 import {
     BaseAIService,
@@ -34,24 +37,13 @@ import {
     type TextCompletionRequest,
 } from '../core/ai/aiServiceBase';
 import { resolveConfiguredTemperature } from './aiTemperature';
+import { buildPersonalizationRule } from '../core/ai/personalization';
 
 import { pickText } from '../lib/uiStrings';
-import { GENERATION_FAILED_SOURCE } from '../lib/generationTrace';
+import { imageGenerationFailure } from '../core/ai/imageFailure';
 // -----------------------------------------------------------
 // Helpers específicos del transporte de texto
 // -----------------------------------------------------------
-
-/**
- * Resolve the text engine API key. DELEGA en el resolver central (mismo par que
- * usa `services/gemini.ts`): `resolveApiKey` fija el orden (directa > central) y
- * `resolveTextApiKey` es la unica fuente de la clave (localStorage > env). Antes
- * esta funcion re-implementaba esa resolucion aqui — con su propio orden y sus
- * propias lecturas de localStorage — asi que un cambio en la prioridad dejaba a
- * este motor con otro criterio (ruta doble de secreto).
- */
-function resolveDeepSeekApiKey(apiKey: string = ''): { apiKey: string; apiKeySource: string } {
-    return resolveApiKey(apiKey, resolveTextApiKey);
-}
 
 /**
  * Determine whether a usable text backend is configured for F1/F2/F3 and for
@@ -60,43 +52,10 @@ function resolveDeepSeekApiKey(apiKey: string = ''): { apiKey: string; apiKeySou
  * local endpoint (Ollama / LM Studio / localhost) that does not need a key.
  */
 export function hasUsableTextBackend(): boolean {
-    const { apiKey } = resolveDeepSeekApiKey();
+    const { apiKey } = resolveTextRequestKey();
     if (apiKey) return true;
     const url = buildTextApiUrl('/chat/completions');
     return isLocalTextEndpoint(url);
-}
-
-/**
- * FASE P — Personalización profunda por persona.
- * El motor de texto (OpenRouter) se invoca directamente (sin proxy), así que el
- * nivel de explicación, el tono y los rasgos se inyectan en el systemPrompt local.
- * Devuelve una cadena vacía cuando no hay personalización activa (sin cambios de
- * comportamiento en el caso por defecto).
- */
-export function buildPersonalizationRule(options: AIRequestOptions, isEnglish: boolean): string {
-    const parts: string[] = [];
-    if (options.traits && options.traits.length > 0) {
-        parts.push(
-            isEnglish
-                ? `Your personality traits are: ${options.traits.join(', ')}.`
-                : `Tus rasgos de personalidad son: ${options.traits.join(', ')}.`,
-        );
-    }
-    if (options.tone) {
-        parts.push(
-            isEnglish
-                ? `Your communication tone is: ${options.tone}.`
-                : `Tu tono de comunicacion es: ${options.tone}.`,
-        );
-    }
-    if (options.explanationLevel) {
-        parts.push(
-            isEnglish
-                ? `Explanation level: ${options.explanationLevel}. Adjust the depth of your answers to match this level (simple = short and plain, detallado = thorough with steps and examples, avanzado = technical and advanced).`
-                : `Nivel de explicacion: ${options.explanationLevel}. Ajusta la profundidad de tus respuestas a ese nivel (simple = breve y claro, detallado = a fondo con pasos y ejemplos, avanzado = tecnico).`,
-        );
-    }
-    return parts.length > 0 ? `\n\n${parts.join(' ')}` : '';
 }
 
 // -----------------------------------------------------------
@@ -137,14 +96,7 @@ class DeepSeekService extends BaseAIService {
      * Minuta desde el motor de texto. Devuelve el JSON OS2 ya parseado.
      */
     protected async fetchMinute(request: MinuteRequest): Promise<Record<string, unknown>> {
-        const { apiKey } = resolveDeepSeekApiKey(request.options.apiKey);
-        if (!apiKey) {
-            throw new Error('API key de texto no configurada (OpenRouter/Gemini)');
-        }
-
-        const temperature = request.options.temperature ?? resolveConfiguredTemperature();
-        const model = readStorage(STORAGE_KEYS.TEXT_MODEL, OPENROUTER_CONFIG.MODEL);
-        const url = buildTextApiUrl('/chat/completions');
+        const engine = this.resolveTextCall(request.options);
 
         const messages = [
             {
@@ -159,11 +111,8 @@ class DeepSeekService extends BaseAIService {
 
         try {
             const response = await this.fetchTextCompletion({
-                apiKey,
-                url,
-                model,
+                ...engine,
                 messages,
-                temperature,
                 maxTokens: TEXT_TOKEN_LIMITS.json,
                 jsonMode: true,
             });
@@ -203,7 +152,7 @@ class DeepSeekService extends BaseAIService {
         url: string;
         isEnglish: boolean;
     } {
-        const { apiKey } = resolveDeepSeekApiKey(options.apiKey);
+        const { apiKey } = resolveTextRequestKey(options.apiKey);
         if (!apiKey) {
             throw new Error('API key de texto no configurada (OpenRouter/Gemini)');
         }
@@ -225,13 +174,23 @@ class DeepSeekService extends BaseAIService {
      * @param errorLabel Prefijo del error cuando la respuesta no es ok.
      * @returns JSON parseado o el respaldo.
      */
-    private async readJsonResponse<T>(response: Response, fallback: T, errorLabel: string): Promise<T> {
+    /**
+     * Lee el contenido de texto de una respuesta de completion.
+     * Dueño único del "chequeo ok + parseo + choices[0].message.content".
+     * @param response Respuesta cruda del API de texto.
+     * @param errorLabel Prefijo del error cuando la respuesta no es ok.
+     * @returns Contenido de texto de la primera opción.
+     */
+    private async readCompletionText(response: Response, errorLabel: string): Promise<string> {
         if (!response.ok) {
             throw new Error(`${errorLabel}: ${response.status} ${response.statusText}`);
         }
-
         const data = await response.json();
-        const responseText = data.choices[0]?.message?.content || '{}';
+        return String(data.choices?.[0]?.message?.content ?? '');
+    }
+
+    private async readJsonResponse<T>(response: Response, fallback: T, errorLabel: string): Promise<T> {
+        const responseText = (await this.readCompletionText(response, errorLabel)) || '{}';
 
         try {
             return JSON.parse(responseText) as T;
@@ -241,13 +200,9 @@ class DeepSeekService extends BaseAIService {
         }
     }
 
-    protected async fetchResponse(
-        options: AIRequestOptions,
-        userText: string,
-        botName: string,
-        history: AIHistoryEntry[],
-    ): Promise<string> {
-        const { apiKey, temperature, model, url, isEnglish } = this.resolveTextCall(options);
+    protected async fetchResponse(...args: FetchResponseArgs): Promise<string> {
+        const [options, userText, botName, history] = args;
+        const { isEnglish, ...engine } = this.resolveTextCall(options);
 
         // Format conversation context
         const messages = [
@@ -267,21 +222,13 @@ class DeepSeekService extends BaseAIService {
 
         try {
             const response = await this.fetchTextCompletion({
-                apiKey,
-                url,
-                model,
+                ...engine,
                 messages,
-                temperature,
                 maxTokens: TEXT_TOKEN_LIMITS.chat,
                 jsonMode: false,
             });
 
-            if (!response.ok) {
-                throw new Error(`Text API error: ${response.status} ${response.statusText}`);
-            }
-
-            const data = await response.json();
-            return data.choices[0]?.message?.content || '';
+            return (await this.readCompletionText(response, 'Text API error')) || '';
         } catch (error) {
             logCaughtError('src/services/deepseek.ts', error);
             throw error;
@@ -296,7 +243,7 @@ class DeepSeekService extends BaseAIService {
         conversationLog: string,
         maxDraftChars: number = 200,
     ): Promise<AIParticipantEvaluation> {
-        const { apiKey, temperature, model, url, isEnglish } = this.resolveTextCall(options);
+        const { isEnglish, ...engine } = this.resolveTextCall(options);
 
         const systemPrompt = isEnglish
             ? `You are FLU, an educational assistant. Analyze the conversation and decide if FLU should intervene.
@@ -329,11 +276,8 @@ Formato de respuesta (JSON):
 
         try {
             const response = await this.fetchTextCompletion({
-                apiKey,
-                url,
-                model,
+                ...engine,
                 messages,
-                temperature,
                 maxTokens: TEXT_TOKEN_LIMITS.brief,
                 jsonMode: true,
             });
@@ -371,29 +315,16 @@ Formato de respuesta (JSON):
         } catch (error: unknown) {
             const detail = error && typeof error === 'object' && 'message' in error ? error.message : error;
             logCaughtError('[Text engine] Workspace image generation failed', detail || error);
-            return {
-                image_url: '',
-                trace: {
-                    provider: 'error',
-                    hasImage: false,
-                    source: GENERATION_FAILED_SOURCE,
-                    error: detail || 'unknown',
-                    prompt,
-                },
-            };
+            return imageGenerationFailure(prompt, String(detail || ''));
         }
     }
 
     /**
      * Visión multimodal desde el motor de texto (Gemini 2.5 Flash Lite — OCR).
      */
-    protected async fetchVision(
-        imageBase64: string,
-        mimeType: string,
-        language: string,
-        profile: string,
-    ): Promise<AIVisionAnalysisResult> {
-        const { apiKey } = resolveDeepSeekApiKey();
+    protected async fetchVision(...args: FetchVisionArgs): Promise<AIVisionAnalysisResult> {
+        const [imageBase64, mimeType, language, profile] = args;
+        const { apiKey } = resolveTextRequestKey();
         if (!apiKey) {
             throw new Error('API key de texto no configurada (OpenRouter/Gemini)');
         }
@@ -505,7 +436,7 @@ Formato de respuesta (JSON):
     ): Promise<string> {
         const url = buildTextApiUrl('/chat/completions');
         const local = isLocalTextEndpoint(url);
-        const { apiKey } = resolveDeepSeekApiKey();
+        const { apiKey } = resolveTextRequestKey();
         if (!apiKey && !local) throw new Error('API key de texto no configurada (OpenRouter/Gemini)');
 
         const response = await this.fetchTextCompletion({
@@ -521,11 +452,7 @@ Formato de respuesta (JSON):
             jsonMode: !local && options.jsonMode !== false,
             timeoutMs: options.timeoutMs,
         });
-        if (!response.ok) {
-            throw new Error(`Text API error: ${response.status} ${response.statusText}`);
-        }
-        const data = await response.json();
-        return String(data.choices?.[0]?.message?.content || '{}');
+        return (await this.readCompletionText(response, 'Text API error')) || '{}';
     }
 }
 

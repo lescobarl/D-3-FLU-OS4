@@ -212,11 +212,16 @@ function tryAsrProgressiveMerge(prev = '', next = '') {
   return ''
 }
 
-/** Une fragmentos del mismo onresult (Chrome manda varios interinos/finales). */
-export function mergeMicChunks(chunks = []) {
-  const list = (Array.isArray(chunks) ? chunks : [])
+/** Limpia y normaliza los fragmentos de un onresult (dueño único). */
+function cleanChunks(chunks = []) {
+  return (Array.isArray(chunks) ? chunks : [])
     .map((chunk) => cleanForSpeech(chunk))
     .filter(Boolean)
+}
+
+/** Une fragmentos del mismo onresult (Chrome manda varios interinos/finales). */
+export function mergeMicChunks(chunks = []) {
+  const list = cleanChunks(chunks)
   if (!list.length) return ''
   return normalizeMicText(
     list.reduce((acc, cur) => resolveMicFragmentMerge(acc, cur), ''),
@@ -225,9 +230,7 @@ export function mergeMicChunks(chunks = []) {
 
 /** Elige el interino más completo; evita concatenar dos acumulativos de Chrome. */
 export function pickBestMicInterim(chunks = []) {
-  const list = (Array.isArray(chunks) ? chunks : [])
-    .map((chunk) => cleanForSpeech(chunk))
-    .filter(Boolean)
+  const list = cleanChunks(chunks)
   if (!list.length) return ''
   if (list.length === 1) return normalizeMicText(list[0])
 

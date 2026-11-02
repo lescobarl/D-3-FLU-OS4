@@ -21,6 +21,7 @@
 // ============================================================
 
 import React, { useState, useCallback, useRef, useMemo, useEffect, lazy, Suspense } from 'react';
+import { isLiveRecord } from './core/db/recordCopy';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useConfigPersistence } from './hooks/useConfigPersistence';
 import { useCatalogsSettings } from './hooks/useCatalogsSettings';
@@ -73,7 +74,6 @@ import { buildFluSpeechAuditRows, createConversationModeController, deriveUserLa
 import { applyKnownVoiceName, forgetVoiceName, isAutoSpeakerLabel, participantVoiceAnchorsForDiarization, resolveVoiceIdentity, resolveVoiceParticipants } from './voice/api/identity'
 import { resolveGeminiErrorPresentation } from './voice/api/media'
 import { cancelSpeech, isSpeechBusy, speakResponse, waitForSpeechIdle } from './voice/api/speech'
-import { deleteVoiceProfile, findVoiceProfileByLabel } from './voice/api/storage'
 import { formatStreamSttUiStatus, getFluParticipantConfig, isFluParticipantEnabled, setFluParticipantOverrides } from './voice/api/uiConfig';
 import { createMediaRequestGate } from './core/media/mediaRequestGate';
 import { buildResponseKey, isDuplicateResponseIn, pushResponseState } from './core/voice/responseGate';
@@ -180,7 +180,7 @@ import {
     type SystemEvent,
 } from './lib/systemEventLog';
 import { logCaughtError } from './lib/caughtError';
-import { localGet, localRemove, localSet } from './core/storage/localStore';
+import { localGet, localSet } from './core/storage/localStore';
 import { pathForTab, type RightTab, tabFromPath } from './app/tabRoutes';
 import { useFluBridgesLifecycle } from './app/fluBridges';
 import { registerParticipantVoice } from './app/registerParticipantVoice';
@@ -2413,21 +2413,13 @@ function App() {
         async (id: string): Promise<void> => {
             if (!id || id === DEFAULT_ONBOARDING_USER) return;
             await browserProfiles.reset(id);
-            const removed = await participants.remove(id);
-            const wasActive = activeParticipantId === id;
+            // ÚNICA cascada: el hook borra registro + onboarding per-user +
+            // ACTIVE_USER y decide si era el activo (storage o estado React).
+            const { removed, wasActive } = await participants.remove(id, activeParticipantId);
             if (removed && wasActive) {
-                // El participante borrado era el activo: salir a la ruta legacy
-                // y reiniciar el onboarding (borra estado legacy + per-user del id).
                 setActiveUser(undefined);
                 setActiveParticipantId(undefined);
-                if (typeof window !== 'undefined') {
-                    if (onboarding.config.nameKey)
-                        localRemove(onboarding.config.nameKey);
-                }
-                onboarding.reset();
-            } else if (removed) {
-                // Se borró otro participante distinto del activo: nada que limpiar
-                // del estado activo; el listado ya se refrescó en participants.remove.
+                onboarding.resetSession();
             }
         },
         [activeParticipantId, browserProfiles, participants, onboarding, setActiveParticipantId],
@@ -2444,9 +2436,6 @@ function App() {
         // para capturar el nombre; al completar se registra el participante.
         // Se limpia el estado legacy para que el onboarding de la persona nueva
         // arranque de cero y no herede la sesión anterior.
-        if (typeof window !== 'undefined') {
-            if (onboarding.config.nameKey) localRemove(onboarding.config.nameKey);
-        }
         const wasLegacy =
             !activeParticipantId || activeParticipantId === DEFAULT_ONBOARDING_USER;
         setActiveUser(undefined);
@@ -3568,19 +3557,15 @@ const {
 
         // 3) Filas de conversacion persistidas: UN solo barrido por el dueno del borrado logico.
         const participantRows = await fluDb.conversations
-            .filter((r) => !r.sync?.deleted && String(resolveRowSpeakerLabel(r) || '').trim() === label)
+            .filter((r) => isLiveRecord(r) && String(resolveRowSpeakerLabel(r) || '').trim() === label)
             .primaryKeys()
             .catch((e) => { logCaughtError('src/App.tsx', e); return [] as string[]; });
         if (participantRows.length > 0) {
             await softDeleteConversationRows(participantRows).catch((e) => logCaughtError('src/App.tsx: softDeleteConversationRows', e));
         }
 
-
-        // 4) Perfil de voz en la DB de voz local (flu-voz-local) — borrado lógico.
-        const localProfile = await findVoiceProfileByLabel(label).catch((e) => { logCaughtError('src/App.tsx', e); return null; });
-        if (localProfile?.id) {
-            await deleteVoiceProfile(localProfile.id).catch((e) => logCaughtError('src/App.tsx: deleteVoiceProfile', e));
-        }
+        // 4) Perfil de voz: la cascada de voz ya lo borró en el paso 1
+        //    (removeProfile/findProfileByLabel del hook, dueño único).
 
         // 5) Speaker de sesión en memoria (diarización) + auditoría.
         os2RemoveSessionSpeaker(label);
@@ -3600,15 +3585,11 @@ const {
             (p) => p.name.trim().toLowerCase() === label.trim().toLowerCase(),
         );
         if (participantMatch) {
-            await participants.remove(participantMatch.id);
-            if (activeParticipantId === participantMatch.id) {
+            const { removed, wasActive } = await participants.remove(participantMatch.id, activeParticipantId);
+            if (removed && wasActive) {
                 setActiveUser(undefined);
                 setActiveParticipantId(undefined);
-                if (typeof window !== 'undefined') {
-                    if (onboarding.config.nameKey)
-                        localRemove(onboarding.config.nameKey);
-                }
-                onboarding.reset();
+                onboarding.resetSession();
             }
         }
     }, [

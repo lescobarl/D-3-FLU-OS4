@@ -24,8 +24,8 @@ import {
     localDayDiff,
     dayOfWeek,
     MS_DAY,
-    parseTimeOfDayToMs,
 } from '../src/core/temporal/scheduleEngine';
+import { parseTimeOfDayToMs } from '../src/lib/timeOfDay';
 
 const COLORS: AgendaColorMap = {
     recordatorio: '#f59e0b',

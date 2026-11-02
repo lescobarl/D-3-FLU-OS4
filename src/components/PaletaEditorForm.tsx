@@ -11,11 +11,9 @@
 // Regla #1: NO HARDCODE — etiquetas de FLU_CONFIG.ui.paletas y las
 // claves CSS de PALETTE_COLOR_KEYS (seasonalPalettes).
 // ============================================================
-import { useState } from 'react';
-import type { FormEvent } from 'react';
-import { FLU_CONFIG } from '../voice/api/config';
-import { setGroupedField, useEditableFields } from '../hooks/useEditableFields';
-import { submitCatalogEditor } from './editorSubmit';
+import { FLU_CONFIG, setGroupedField, useEditableFields, CatalogEditorFormShell, SettingsTextField } from './catalogEditorKit';
+import { useCatalogEditorForm } from '../hooks/useCatalogEditorForm';
+import { CatalogEditorNameField } from './CatalogEditorNameField';
 import { configChild, configTextMap } from './configText';
 import {
     PALETTE_COLOR_KEYS,
@@ -54,42 +52,44 @@ export function PaletaEditorForm({
         ...s,
         colors: { ...s.colors },
     }));
-    const [busy, setBusy] = useState(false);
-    const [error, setError] = useState<string | null>(null);
 
     const setColor = (key: PaletteColorKey, value: string) => setGroupedField(setFields, 'colors', key, value);
 
-    const handleSubmit = (event: FormEvent<HTMLFormElement>) =>
-        submitCatalogEditor(event, {
-            busy,
-            setBusy,
-            setError,
-            slug: slugifyPalette(fields.name),
-            requiredMessage: ui.requiredError || 'El nombre es obligatorio para generar el identificador.',
-            build: () => buildPaletaPayload(template, fields),
-            onSubmit,
-        });
+    const { busy, error, handleSubmit } = useCatalogEditorForm({
+        slug: slugifyPalette(fields.name),
+        requiredMessage: ui.requiredError,
+        build: () => buildPaletaPayload(template, fields),
+        onSubmit,
+    });
 
     return (
-        <form className="flu-settings-section" onSubmit={handleSubmit} data-testid="paleta-editor-form">
-            <div className="flu-settings-section__body">
-                <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked">
-                    <span>{ui.nombreLabel || 'Nombre'}</span>
-                    <input
-                        type="text"
-                        value={fields.name}
-                        onChange={(event) => setField({ name: event.target.value })}
-                        placeholder={ui.nombrePlaceholder || 'Ej: Temporada Selva'}
-                        data-testid="paleta-editor-name"
-                        disabled={busy}
-                    />
-                </label>
-                <p className="flu-settings-image-config__hint">
-                    {ui.idLabel || 'Identificador'}:
-                    <code className="flu-paletas-editor__slug">
-                        {slugifyPalette(fields.name) || '—'}
-                    </code>
-                </p>
+        <CatalogEditorFormShell
+            testId="paleta-editor-form"
+            submitTestId="paleta-editor-submit"
+            cancelTestId="paleta-editor-cancel"
+            errorTestId="paleta-editor-error"
+            submitLabel={submitLabel}
+            cancelLabel={cancelLabel}
+            busy={busy}
+            canSubmit={fields.name.trim().length > 0}
+            error={error}
+            actionsClassName="flu-paletas-editor__actions"
+            submitClassName="flu-paletas-editor__submit"
+            cancelClassName="flu-paletas-editor__cancel"
+            onSubmit={handleSubmit}
+            onCancel={onCancel}
+        >
+                <CatalogEditorNameField
+                    label={ui.nombreLabel || 'Nombre'}
+                    value={fields.name}
+                    onChange={(value) => setField({ name: value })}
+                    placeholder={ui.nombrePlaceholder || 'Ej: Temporada Selva'}
+                    testId="paleta-editor-name"
+                    disabled={busy}
+                    idLabel={ui.idLabel || 'Identificador'}
+                    slug={slugifyPalette(fields.name)}
+                    slugClassName="flu-paletas-editor__slug"
+                />
 
                 <h4 className="flu-reminders__heading">{ui.colorsLabel || 'Colores de la paleta'}</h4>
                 {PALETTE_COLOR_KEYS.map((key) => (
@@ -111,55 +111,22 @@ export function PaletaEditorForm({
                     </label>
                 ))}
 
-                <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked">
-                    <span>{ui.decorationLabel || 'Decoración'}</span>
-                    <input
-                        type="text"
-                        value={fields.decoration}
-                        onChange={(event) => setField({ decoration: event.target.value })}
-                        placeholder={ui.decorationPlaceholder || 'Ej: santa-hat (vacío = sin decoración)'}
-                        data-testid="paleta-editor-decoration"
-                        disabled={busy}
-                    />
-                </label>
-                <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked">
-                    <span>{ui.cssClassLabel || 'Clase CSS'}</span>
-                    <input
-                        type="text"
-                        value={fields.cssClass}
-                        onChange={(event) => setField({ cssClass: event.target.value })}
-                        placeholder={ui.cssClassPlaceholder || 'Ej: seasonal-fall (vacío = sin clase)'}
-                        data-testid="paleta-editor-css-class"
-                        disabled={busy}
-                    />
-                </label>
-
-                {error && (
-                    <p className="flu-settings-image-config__error" data-testid="paleta-editor-error">
-                        {error}
-                    </p>
-                )}
-
-                <div className="flu-paletas-editor__actions">
-                    <button
-                        type="submit"
-                        className="flu-paletas-editor__submit"
-                        data-testid="paleta-editor-submit"
-                        disabled={busy || !fields.name.trim()}
-                    >
-                        {submitLabel}
-                    </button>
-                    <button
-                        type="button"
-                        className="flu-paletas-editor__cancel"
-                        data-testid="paleta-editor-cancel"
-                        disabled={busy}
-                        onClick={onCancel}
-                    >
-                        {cancelLabel}
-                    </button>
-                </div>
-            </div>
-        </form>
+                <SettingsTextField
+                    label={ui.decorationLabel || 'Decoración'}
+                    value={fields.decoration}
+                    onChange={(value) => setField({ decoration: value })}
+                    placeholder={ui.decorationPlaceholder || 'Ej: santa-hat (vacío = sin decoración)'}
+                    testId="paleta-editor-decoration"
+                    disabled={busy}
+                />
+                <SettingsTextField
+                    label={ui.cssClassLabel || 'Clase CSS'}
+                    value={fields.cssClass}
+                    onChange={(value) => setField({ cssClass: value })}
+                    placeholder={ui.cssClassPlaceholder || 'Ej: seasonal-fall (vacío = sin clase)'}
+                    testId="paleta-editor-css-class"
+                    disabled={busy}
+                />
+        </CatalogEditorFormShell>
     );
 }
