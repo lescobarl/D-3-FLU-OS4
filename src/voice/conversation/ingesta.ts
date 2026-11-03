@@ -6,6 +6,8 @@
  * el cierre a la sesión.
  */
 import { decidirFrontera } from './frontera.ts'
+import { perteneceALineaAbierta } from './fusion.ts'
+import { continuaLaFrase } from '../core/locucion.js'
 import { crearFlujoTexto } from './texto.ts'
 import type { FlujoTexto } from './texto.ts'
 import type { Pendientes } from './cola.ts'
@@ -18,9 +20,7 @@ import { fusionarVoz } from './fila.ts'
 import { registrarMedidaVoz } from './sesion.ts'
 import { asrEmpujaAudio } from './ports.ts'
 import { logCaughtError } from '../../lib/caughtError.ts'
-// Dueño único de «¿este texto continúa la locución o abre otra?»: el módulo no
-// reimplementa la comparación de palabras ni la revisión del ASR.
-import { continuaLaFrase } from '../core/locucion.js'
+import { DEFAULT_SAMPLE_RATE } from '../lib/audioConstants.js'
 import type {
   ConfiguracionConversacion,
   IdiomaLocucion,
@@ -87,6 +87,7 @@ export function crearIngesta({
   const estado = sesion.estado
   const flujo: FlujoTexto = crearFlujoTexto({
     dependencias,
+    configuracion,
     sesion,
     tramos,
     pendientes,
@@ -98,12 +99,34 @@ export function crearIngesta({
    * destina el final tardío del tramo ya cerrado.
    */
   function tramoVigente(): string {
-    return (
-      estado.tramoAudio?.tramoId ||
-      estado.abierta?.locutionId ||
-      estado.ultimoTramoId ||
-      ''
-    )
+    // El último tramo COMMITEADO no es "vigente": un final tardío atribuido a
+    // él se ignora por insert-only y la frase se pierde. Sin tramo vivo, el
+    // texto tardío recibe un tramo sintético y abre SU locución.
+    return estado.tramoAudio?.tramoId || estado.abierta?.locutionId || ''
+  }
+
+  /**
+   * Tramo sintético para un texto tardío cuya locución ya cerró: el ASR puede
+   * entregar el final después de que el VAD cortó y de que el tramo real venció.
+   * Sin él, el texto se atribuye a un tramo commiteado y se pierde.
+   */
+  function tramoSinteticoParaTexto(): string {
+    const ultimo = estado.ultimoTramoId ? tramos.vigente(estado.ultimoTramoId) : null
+    const sampleRate = ultimo?.sampleRate || DEFAULT_SAMPLE_RATE
+    const fin = Math.max(1, ultimo?.fin ?? 1)
+    const inicio = Math.max(0, fin - 512)
+    const tramoId = dependencias.id.uuid()
+    const nuevo: TramoAudio = {
+      tramoId,
+      inicio,
+      fin: Math.max(fin, inicio + 1),
+      sampleRate,
+      turnId: estado.turnoActual,
+      silencioPrevioMs: 0,
+    }
+    estado.ultimoTramoId = tramoId
+    tramos.registrar(nuevo)
+    return tramoId
   }
 
   /**
@@ -160,6 +183,233 @@ export function crearIngesta({
     for (const bloque of bloques) {
       estado.muestrasAbierta = retenerCola(estado.muestrasAbierta, bloque, tope)
     }
+    // El fin de la frase es el del ÚLTIMO audio atribuido: el hueco siguiente se
+    // mide contra lo que de verdad sonó, no contra el primer tramo (con
+    // `abierta.fin` viejo un tramo posterior daba un hueco falso de >5 s).
+    if (tramo.fin > abierta.fin) {
+      estado.abierta = { ...abierta, fin: tramo.fin }
+    }
+  }
+
+  /**
+   * Verifica el cambio de hablante MIDIENDO la cola de la locución abierta
+   * (`minSegundosVozMedida` de los últimos PCM retenidos) y la compara contra la
+   * plantilla de SU MISMA voz. Si no casa, parte el tramo en dos locuciones,
+   * cada una con su fila y su etiqueta. Síncrono y en la cola ÚNICA: el texto del
+   * evento se atribuye a la voz nueva.
+   *
+   * @param tramoId Tramo que destina el resultado (resuelto por el módulo).
+   * @returns El tramo de la voz nueva si hubo partición; null si no cambió.
+   */
+  async function verificarCambioVoz(tramoId: string): Promise<string | null> {
+    const embebedor = dependencias.embebedor
+    const abierta = estado.abierta
+    if (!embebedor || !abierta) return null
+    // Sin medida aplicada no hay qué comparar (la medida temprana sigue su curso).
+    const vozIdAbierta = String(abierta.voz.vozId || '').trim()
+    if (!vozIdAbierta) return null
+    // La ventana se compara contra la plantilla de la MISMA voz abierta (no
+    // contra la última voz de la sesión, que puede ser otra).
+    const plantillaAbierta = estado.plantillasVoz.get(vozIdAbierta)
+    if (!plantillaAbierta || plantillaAbierta.vector.length === 0) return null
+    const ventana = Math.round(configuracion.minSegundosVozMedida * abierta.sampleRate)
+    if (ventana <= 0) return null
+
+    // El audio de la voz entrante puede vivir en OTRO tramo: el VAD cortó y el
+    // hablante nuevo arrancó después del silencio. Se mide SU tramo retenido,
+    // no la cola de la locución abierta (que es la voz anterior).
+    const mismotramo = abierta.locutionId === tramoId
+    let retenidas: Float32Array
+    let finAlMedir: number
+    let sampleRate: number
+    if (mismotramo) {
+      if (abierta.fin - estado.medidoHastaFin < ventana) return null
+      retenidas = concatenarMuestras(estado.muestrasAbierta)
+      finAlMedir = abierta.fin
+      sampleRate = abierta.sampleRate
+    } else {
+      const entrante = tramos.resolver(tramoId)
+      if (!entrante) return null
+      retenidas = concatenarMuestras(tramos.muestras(tramoId, entrante) ?? [])
+      finAlMedir = entrante.fin
+      sampleRate = entrante.sampleRate
+    }
+    if (retenidas.length < ventana) return null
+    const cola = retenidas.slice(Math.max(0, retenidas.length - ventana))
+    let vector: readonly number[] | null = null
+    try {
+      vector = await embebedor.medir(cola, sampleRate)
+    } catch (error) {
+      logCaughtError('conversacion.voz.cambio.fallo', error, {
+        sessionId: estado.sessionId ?? '',
+        locutionId: abierta.locutionId,
+      })
+      return null
+    }
+    const vigente = estado.abierta
+    if (!vector || !vigente) return null
+    if (mismotramo && vigente.locutionId !== tramoId) return null
+    const previo = plantillaAbierta.vector
+    // La misma voz medida tiene banda 0.69–0.74: usar el piso de continuidad
+    // (0.80/0.72) la declaraba distinta. El piso de CASAR CON LA VOZ ABIERTA
+    // (ya existente) lo declara la config (`umbralExistenteVoz`, 0.64).
+    const umbral =
+      dependencias.config.umbralExistenteVoz?.() ??
+      dependencias.config.umbralContinuidadVoz()
+    const mismaVoz =
+      vector.length === previo.length &&
+      embebedor.comparar(vector, previo) >= umbral
+    if (mismaVoz) {
+      // Misma voz: la etiqueta se conserva y el tramo continuo NO cambia
+      // de etiqueta; el contador avanza hasta el fin medido.
+      if (mismotramo) estado.medidoHastaFin = Math.max(estado.medidoHastaFin, finAlMedir)
+      return null
+    }
+    if (mismotramo) {
+      const limite = finAlMedir - cola.length
+      if (limite <= abierta.inicio || limite >= abierta.fin) return null
+      return partirLocucionPorCambioDeVoz(
+        {
+          tramoId: dependencias.id.uuid(),
+          inicio: limite,
+          fin: finAlMedir,
+          sampleRate: abierta.sampleRate,
+          silencioPrevioMs: 0,
+          retenerVentana: true,
+          recortarAnterior: limite,
+        },
+        cola,
+        vector,
+      )
+    }
+    const entrante = tramos.resolver(tramoId)
+    if (!entrante) return null
+    const tramoRegistrado = tramos.vigente(tramoId)
+    return partirLocucionPorCambioDeVoz(
+      {
+        tramoId,
+        inicio: entrante.inicio,
+        fin: entrante.fin,
+        sampleRate: entrante.sampleRate,
+        silencioPrevioMs: tramoRegistrado?.silencioPrevioMs ?? 0,
+        retenerVentana: false,
+        recortarAnterior: null,
+      },
+      cola,
+      vector,
+    )
+  }
+
+  /** Decisión de la puerta de VOZ. El dueño de la condición es `frontera.ts`. */
+  function fronteraPorVoz() {
+    return decidirFrontera({
+      medida: { hayVoz: true, silencioMs: 0 },
+      textoAjeno: false,
+      abierta: true,
+      cambioVoz: true,
+    })
+  }
+
+  /**
+   * Aplica al tramo recién abierto la identidad de la voz medida.
+   * @param vector Vector que sostiene la voz nueva.
+   * @returns false si no hay embebedor o locución abierta.
+   */
+  function aplicarIdentidadAlTramoAbierto(vector: readonly number[]): boolean {
+    const embebedor = dependencias.embebedor
+    const recien = estado.abierta
+    if (!embebedor || !recien) return false
+    const identidad = decidirIdentidadSesion(
+      vector,
+      embebedor,
+      ((recien.fin - recien.inicio) / Math.max(1, recien.sampleRate)) * 1000,
+      String(recien.texto || '').trim().split(/\s+/).filter(Boolean).length,
+    )
+    registrarMedidaVoz(estado, vector, identidad)
+    estado.abierta = conIdentidadVoz(recien, identidad)
+    return true
+  }
+
+  /**
+   * Parte la locución abierta por cambio de voz (Caso 1+3): la anterior cierra
+   * con causa 'voz' (dueño `frontera.ts`) y la voz nueva abre SU locución.
+   *
+   * Sirve a los dos cortes reales:
+   *  - MISMA ventana (`recortarAnterior`): el VAD NO cortó; el tramo se parte en
+   *    el inicio de la cola medida y la voz nueva reusa esa ventana.
+   *  - TRAMO DISTINTO: el VAD cortó; la voz nueva ya tiene su tramo y su audio
+   *    retenido, así que se abre sobre él sin recortar la locución anterior.
+   *
+   * @param datos Tramo a abrir, ventana medida y si hay que recortar la anterior.
+   * @param vector Vector de la ventana (voz nueva).
+   * @returns El `tramoId` de la voz nueva si partió; null si no se pudo.
+   */
+  async function partirLocucionPorCambioDeVoz(
+    datos: Readonly<{
+      tramoId: string
+      inicio: number
+      fin: number
+      sampleRate: number
+      silencioPrevioMs: number
+      retenerVentana: boolean
+      recortarAnterior: number | null
+    }>,
+    ventana: Float32Array,
+    vector: readonly number[],
+  ): Promise<string | null> {
+    const abierta = estado.abierta
+    if (!abierta) return null
+    const frontera = fronteraPorVoz()
+    if (!frontera.cerrar) return null
+    const turno = abierta.turnId
+    const idioma = abierta.idioma
+    const finalAnterior = abierta.final
+    // 1. La locución anterior cierra: recortada a la ventana medida si el corte
+    //    ocurrió dentro de su audio; tal cual si el VAD ya la había cortado.
+    const anterior =
+      datos.recortarAnterior === null
+        ? abierta
+        : { ...abierta, fin: datos.recortarAnterior }
+    estado.abierta = anterior
+    await sesion.cerrarLocucion(
+      anterior,
+      'system',
+      frontera.causa ?? 'voz',
+      finalAnterior,
+    )
+    // 2. La voz nueva abre SU locución sobre su tramo y su audio.
+    const nuevo: TramoAudio = {
+      tramoId: datos.tramoId,
+      inicio: datos.inicio,
+      fin: datos.fin,
+      sampleRate: datos.sampleRate,
+      turnId: turno,
+      silencioPrevioMs: datos.silencioPrevioMs,
+    }
+    estado.tramoAudio = nuevo
+    estado.ultimoTramoId = datos.tramoId
+    tramos.registrar(nuevo)
+    if (datos.retenerVentana) {
+      retenerTramo(datos.tramoId, datos.inicio, datos.fin, ventana, datos.sampleRate)
+    }
+    abrirCaparazon(
+      datos.tramoId,
+      { inicio: datos.inicio, fin: datos.fin, sampleRate: datos.sampleRate },
+      turno,
+      idioma,
+    )
+    // 3. Identidad de la voz nueva con el MISMO vector (etiqueta perezosa).
+    if (!aplicarIdentidadAlTramoAbierto(vector)) return null
+    estado.muestrasAbierta = [ventana]
+    estado.medidoHastaFin = Math.max(estado.medidoHastaFin, datos.fin)
+    dependencias.registro.registrar('conversacion.locucion.partida', {
+      sessionId: estado.sessionId ?? '',
+      locutionId: datos.tramoId,
+      anterior: abierta.locutionId,
+      limite: datos.inicio,
+      turnId: turno,
+    })
+    return datos.tramoId
   }
 
   /**
@@ -170,48 +420,62 @@ export function crearIngesta({
    * El texto es de la locución ABIERTA cuando el tramo que trae no es el suyo
    * pero la frase sigue viva: el texto la CONTINÚA (dueño `continuaLaFrase`:
    * revisión del ASR o crecimiento; el reconocedor reemite la frase completa
-   * tras una pausa interna) y no la separa más que la ventana de CIERRE del
-   * plan (`silenceCloseMs`).
-   * Dentro de esa ventana la pausa del VAD no parte la frase: partirla por el
-   * silencio mínimo de 900 ms duplicaba la fila (medido en la sesión
-   * 89a0d948/263adae9: dos finales del mismo enunciado, 300 y 330 caracteres).
+   * tras una pausa interna) y NO hay silencio medido ≥ `silenceCloseMs` antes
+   * del tramo entrante.
+   * El hueco de índices no decide: con `abierta.fin` viejo un tramo posterior
+   * da un hueco grande aunque la frase siga y no haya pausa real. Dentro de la
+   * ventana medida la pausa del VAD no parte la frase: partirla por el silencio
+   * mínimo de 900 ms duplicaba la fila (medido en la sesión 89a0d948/263adae9:
+   * dos finales del mismo enunciado, 300 y 330 caracteres).
    * Sin texto previo manda el hueco mínimo (la locución aún no afirma nada) y,
    * fuera de la ventana de cierre, manda el tramo: el texto abre otra locución.
    * @param tramoId Tramo que declaró (o al que se destinó) el resultado.
    * @param texto Texto del resultado.
    * @returns El `tramoId` de destino, ya atribuido.
    */
-  function tramoDestinoDeTexto(tramoId: string, texto: string): string {
+  function tramoDestinoDeTexto(
+    tramoId: string,
+    texto: string,
+    silencioEntranteMs?: number,
+  ): string {
     const abierta = estado.abierta
     if (!abierta) return tramoId
     const previo = String(abierta.texto || '').trim()
     const textoLimpio = String(texto || '').trim()
-    const continua = previo !== '' && textoLimpio !== '' && continuaLaFrase(previo, textoLimpio)
-    if (abierta.locutionId === tramoId) {
-      // MISMO TRAMO: con su audio VIVO el texto es una revisión de la locución
-      // (el producto compone los fragmentos del reconocedor en una línea). SIN
-      // audio vivo, el id llegó del RESPALDO (locución abierta o último tramo):
-      // el texto solo entra si CONTINÚA la frase. Si no, es otra frase que el
-      // VAD no segmentó y va SIN tramo a la puerta de texto ajeno. Sin esta
-      // prueba un final ajeno reescribía la fila abierta (defecto medido en el
-      // playback 2026-10-31: 93 caracteres donde iban 41).
-      if (estado.tramoAudio?.tramoId === tramoId) return tramoId
-      if (!textoLimpio || previo === '' || continua) return tramoId
-      return ''
-    }
-    // Sin tramo vigente (silencio en curso): el texto que CONTINÚA la frase es
-    // de la locución abierta; sin esa prueba no hay a quién atribuirlo.
-    if (!tramoId) return continua ? abierta.locutionId : tramoId
-    const tramo = tramos.resolver(tramoId)
-    if (!tramo) return continua ? abierta.locutionId : tramoId
-    const huecoMs = ((tramo.inicio - abierta.fin) / abierta.sampleRate) * 1000
-    const destino = continua
-      ? huecoMs <= configuracion.silenceCloseMs
-        ? abierta.locutionId
-        : tramoId
-      : huecoMs > configuracion.minSilenceMs || previo
-        ? tramoId
-        : abierta.locutionId
+     if (abierta.locutionId === tramoId) {
+       // MISMO TRAMO con audio VIVO: es una revisión. Sin audio vivo, el VAD ya
+       // cortó pero la locución sigue ABIERTA: el texto solo pertenece a ella si
+       // la CONTINÚA; una frase ajena queda pendiente (no se pega ni la cierra).
+       if (estado.tramoAudio?.tramoId === tramoId) return tramoId
+       return textoLimpio && continuaLaFrase(previo, textoLimpio) ? tramoId : ''
+     }
+     // Sin tramo vigente: el texto entra en la abierta SOLO si la CONTINÚA. Un
+     // texto ajeno sin tramo se retiene como pendiente (no se pega a A ni la
+     // cierra): la frontera sigue siendo silencio o voz distinta.
+     if (!tramoId) {
+       return textoLimpio && continuaLaFrase(previo, textoLimpio)
+         ? abierta.locutionId
+         : ''
+     }
+     const tramo = tramos.resolver(tramoId)
+     // Tramo no registrado: el texto conserva SU id. Si no continúa la abierta,
+     // `procesarResultadoAsr` lo retiene como pendiente (no se pega ni se pierde).
+     if (!tramo) return textoLimpio ? tramoId : ''
+    // El silencio que decide la frontera es el MEDIDO antes del tramo entrante,
+    // no el hueco de índices: con `abierta.fin` viejo el hueco puede ser enorme
+    // aunque no haya pausa real (frase continua cruzando tramos).
+    const silencioPrevioMs =
+      tramos.vigente(tramoId)?.silencioPrevioMs ??
+      (Number.isFinite(silencioEntranteMs) ? Number(silencioEntranteMs) : 0)
+    const destino = perteneceALineaAbierta({
+      locucionId: abierta.locutionId,
+      textoAbierto: previo,
+      trozo: textoLimpio,
+      tramoVigente: { ...tramo, tramoId, silencioPrevioMs },
+      silenceCloseMs: configuracion.silenceCloseMs,
+    })
+      ? abierta.locutionId
+      : tramoId
     // El audio acompaña al texto: la evidencia de voz de la fila es la de TODO
     // el audio que produjo su frase, no solo el del primer tramo.
     if (destino === abierta.locutionId) sumarAudioAtribuido(tramoId)
@@ -221,9 +485,12 @@ export function crearIngesta({
   /** Drena los resultados del `AsrPort` en orden; el tramo se fija al drenar. */
   async function drenarResultadosAsr(): Promise<void> {
     for (const crudo of bufferAsr.drenar()) {
-      const tramoVigenteId = crudo.tramoId || tramoVigente()
-      const tramoId = tramoDestinoDeTexto(tramoVigenteId, crudo.texto)
-      await flujo.procesarResultadoAsr({ ...crudo, tramoId })
+      const tramoOrigen = crudo.tramoId || tramoVigente()
+      // La VOZ se verifica sobre el tramo ENTRANTE (su audio retenido), aunque
+      // sea otro tramo por corte del VAD. Si parte, el texto va a la voz nueva.
+      const tramoVoz = (await verificarCambioVoz(tramoOrigen)) ?? tramoOrigen
+      const tramoDestino = tramoDestinoDeTexto(tramoVoz, crudo.texto)
+      await flujo.procesarResultadoAsr({ ...crudo, tramoId: tramoDestino })
     }
   }
 
@@ -267,20 +534,17 @@ export function crearIngesta({
         `sampleRate inconsistente en el tramo ${estado.tramoAudio.tramoId}: ${estado.tramoAudio.sampleRate} != ${sampleRate}`,
       )
     }
-    if (bloque.turnId) estado.turnoActual = String(bloque.turnId).trim()
-    // El pendiente espera a este bloque para abrir: aquí el turno ya es el
-    // vigente DESPUÉS del commit que lo liberó (el hook lo avanza al commitear,
-    // y el siguiente bloque lo trae). Abrirlo dentro del cierre le pegaba el
-    // turno viejo y el gate `turnoYaEscrito` descartaba una fila legítima.
-    if (!estado.abierta) await flujo.flushPendientes()
+     if (bloque.turnId) estado.turnoActual = String(bloque.turnId).trim()
+     // El pendiente NO se abre al ingerir audio: espera al siguiente resultado
+     // del ASR (con el turno vigente) o al stop. Abrirlo aquí commiteaba una
+     // frase antes de que el usuario terminara la pausa.
 
-    const medida =
+     const medida =
       bloque.medida ??
       (dependencias.vad
         ? dependencias.vad.medir(bloque.muestras, sampleRate)
         : null)
     if (!medida) throw new Error('falta medida VAD: sin medida no hay frontera')
-    estado.ultimaMedida = medida
 
     if (!estado.tramoAudio) {
       if (medida.hayVoz) {
@@ -305,12 +569,22 @@ export function crearIngesta({
         // audio. Si el hueco es menor, se conserva (la frase sigue en curso).
         const huecoMs =
           ((inicio - (estado.abierta?.fin ?? inicio)) / sampleRate) * 1000
+        const fronteraCaparazon = decidirFrontera({
+          medida: { hayVoz: false, silencioMs: huecoMs },
+          textoAjeno: false,
+          abierta: true,
+        })
         if (
           estado.abierta &&
           !String(estado.abierta.texto).trim() &&
-          huecoMs >= configuracion.silenceCloseMs
+          fronteraCaparazon.cerrar
         ) {
-          await sesion.cerrarLocucion(estado.abierta, 'system', 'voz', false)
+          await sesion.cerrarLocucion(
+            estado.abierta,
+            'system',
+            fronteraCaparazon.causa ?? 'silencio',
+            false,
+          )
         }
         if (!estado.abierta) {
           abrirCaparazon(
@@ -393,28 +667,82 @@ export function crearIngesta({
     sesion.exigirActiva()
     await drenarResultadosAsr()
     await cerrarPendienteAsr()
-    const tramoId = String(entrada.tramoId || '').trim() || tramoVigente()
+     let tramoId = String(entrada.tramoId || '').trim() || tramoVigente()
+     // Texto VACÍO sin locución abierta: es el único huérfano real.
+     if (!String(entrada.texto || '').trim() && !estado.abierta) {
+       sesion.contarDescarte('huerfano', tramoId || null, entrada.tramo ?? null)
+       return sesion.snapshot()
+     }
+     // Un tramo COMMITEADO no es "vigente": el texto tardío se atribuiría a la
+    // fila ya escrita y se ignoraría. Se retiene con un tramo sintético.
+    if (tramoId && !estado.abierta && estado.filas.has(tramoId)) tramoId = ''
     if (!tramoId) {
-      // Sin audio medido no hay tramo: se cuenta, no se inventa uno.
-      sesion.contarDescarte('huerfano', null, entrada.tramo ?? null)
-      return sesion.snapshot()
+      const texto = String(entrada.texto || '').trim()
+      if (!texto) {
+        // Sin audio medido ni texto no hay tramo: se cuenta, no se inventa.
+        sesion.contarDescarte('huerfano', null, entrada.tramo ?? null)
+        return sesion.snapshot()
+      }
+      // Texto tardío de una locución nueva: el tramo real venció; se retiene
+      // con un tramo sintético para que abra SU locución. No se descarta por
+      // parecerse a la fila anterior: el único dedupe es por TRAMO
+      // (`tramoYaCommiteado`), no por prefijo de texto.
+      tramoId = tramoSinteticoParaTexto()
     }
-    // Caso 1+3: antes de atribuir el texto, ¿cambió la voz DENTRO del tramo
-    // abierto? Si partió, el texto es de la voz nueva y va a SU tramo. La
-    // atribución va PRIMERO: un texto de la frase abierta no puede verificar el
-    // cambio de voz de un tramo ajeno.
-    const tramoAtribuido = tramoDestinoDeTexto(tramoId, entrada.texto)
-    // Cambio de hablante DECLARADO por el ASR: si la evidencia entrante trae
-    // otra voz que la abierta, la anterior cierra por 'voz' y el texto abre la
-    // nueva. Es una de las DOS puertas del producto (silencio o cambio de
-    // hablante); el texto ajeno por sí solo ya no cierra (auditoría 2026-11-01).
+    // REENTREGA de una locución YA CERRADA: el mismo turno reemite la MISMA
+    // frase (continuación o texto idéntico) sobre una ventana que solapa. La
+    // fila commiteada es inmutable; se cuenta el descarte en vez de duplicarla.
+    // Una frase NUEVA (no continuada) NO entra aquí: escribe su fila. Un
+    // caparazón vacío del tramo entrante cuenta como "sin locución abierta".
+    const sinTextoAbierto = !estado.abierta || !String(estado.abierta.texto || '').trim()
+    if (sinTextoAbierto) {
+      const previa = [...estado.filas.values()].sort(
+        (a, b) => b.tramo.fin - a.tramo.fin,
+      )[0]
+      const textoEntrante = String(entrada.texto || '').trim()
+      if (previa && textoEntrante) {
+        const turno = entrada.turnId
+          ? String(entrada.turnId).trim()
+          : estado.turnoActual
+        const tramoEntrante = tramos.resolver(tramoId, entrada.tramo)
+        const solapa = Boolean(
+          tramoEntrante && tramoEntrante.inicio <= previa.tramo.fin,
+        )
+        const exacta = String(previa.texto || '').trim() === textoEntrante
+        if (
+          previa.turnId === turno &&
+          (solapa || exacta) &&
+          continuaLaFrase(previa.texto, textoEntrante)
+        ) {
+          sesion.contarDescarte('turnoYaEscrito', null, null)
+          return sesion.snapshot()
+        }
+      }
+    }
+    // Voz DECLARADA por el productor (si existe): la puerta sigue siendo
+    // `frontera.ts`; la partición REAL por medida vive en `verificarCambioVoz`.
     const abiertaParaVoz = estado.abierta
     const vozEntrante = String(entrada.voz?.vozId || '').trim()
     const vozAbierta = String(abiertaParaVoz?.voz.vozId || '').trim()
     if (abiertaParaVoz && vozEntrante && vozAbierta && vozEntrante !== vozAbierta) {
-      await sesion.cerrarLocucion(abiertaParaVoz, 'system', 'voz', abiertaParaVoz.final)
+      const fronteraDeclarada = fronteraPorVoz()
+      if (fronteraDeclarada.cerrar) {
+        await sesion.cerrarLocucion(
+          abiertaParaVoz,
+          'system',
+          fronteraDeclarada.causa ?? 'voz',
+          abiertaParaVoz.final,
+        )
+      }
     }
-    const tramoDestino = (await verificarCambioVoz(tramoAtribuido)) ?? tramoAtribuido
+    // La ATRIBUCIÓN va después de la VOZ: si el tramo entrante es otra voz, ya
+    // se abrió SU locución; si no, el texto decide continuación/pendiente.
+    const tramoVoz = (await verificarCambioVoz(tramoId)) ?? tramoId
+    const tramoDestino = tramoDestinoDeTexto(
+      tramoVoz,
+      entrada.texto,
+      entrada.silencioPrevioMs,
+    )
     await flujo.procesarResultadoAsr({ ...entrada, tramoId: tramoDestino })
     return sesion.snapshot()
   }
@@ -570,132 +898,6 @@ export function crearIngesta({
     )
     registrarMedidaVoz(estado, vector, identidad)
     estado.abierta = conIdentidadVoz(abierta, identidad)
-  }
-
-  /**
-   * CASO 1+3 (ETIQUETAS Y MEZCLA) — cambio de voz dentro del tramo abierto.
-   *
-   * Con la locución abierta YA medida (vozId), un resultado del ASR sobre su
-   * MISMO tramo comprueba si la voz cambió sin pausa: mide la VENTANA DE COLA
-   * (los últimos `minSegundosVozMedida` del PCM retenido) y la compara contra el
-   * último vector de la SESIÓN (DECISIÓN B: nada persiste entre sesiones). Si no
-   * casa, parte el tramo en dos locuciones, cada una con su fila y su etiqueta.
-   * Síncrono y en la cola ÚNICA: el texto del evento se atribuye a la voz nueva.
-   *
-   * @param tramoId Tramo que destina el resultado (resuelto por el módulo).
-   * @returns El tramo de la voz nueva si hubo partición; null si no cambió.
-   */
-  async function verificarCambioVoz(tramoId: string): Promise<string | null> {
-    const embebedor = dependencias.embebedor
-    const abierta = estado.abierta
-    if (!embebedor || !abierta || abierta.locutionId !== tramoId) return null
-    // Sin medida aplicada no hay qué comparar (la medida temprana sigue su curso).
-    const vozIdAbierta = String(abierta.voz.vozId || '').trim()
-    if (!vozIdAbierta) return null
-    // La ventana de cola se compara contra la plantilla de la MISMA voz abierta
-    // (no contra la última voz de la sesión, que puede ser otra).
-    const plantillaAbierta = estado.plantillasVoz.get(vozIdAbierta)
-    if (!plantillaAbierta || plantillaAbierta.vector.length === 0) return null
-    const ventana = Math.round(configuracion.minSegundosVozMedida * abierta.sampleRate)
-    if (ventana <= 0 || abierta.fin - estado.medidoHastaFin < ventana) return null
-    const retenidas = concatenarMuestras(estado.muestrasAbierta)
-    if (retenidas.length < ventana) return null
-    const cola = retenidas.slice(Math.max(0, retenidas.length - ventana))
-    const finAlMedir = abierta.fin
-    let vector: readonly number[] | null = null
-    try {
-      vector = await embebedor.medir(cola, abierta.sampleRate)
-    } catch (error) {
-      logCaughtError('conversacion.voz.cambio.fallo', error, {
-        sessionId: estado.sessionId ?? '',
-        locutionId: abierta.locutionId,
-      })
-      return null
-    }
-    const vigente = estado.abierta
-    if (!vector || !vigente || vigente.locutionId !== tramoId) return null
-    const previo = plantillaAbierta.vector
-    const mismaVoz =
-      vector.length === previo.length &&
-      embebedor.comparar(vector, previo) >= dependencias.config.umbralContinuidadVoz()
-    if (mismaVoz) {
-      // Misma voz: la etiqueta se conserva y el tramo continuo NO cambia
-      // de etiqueta; el contador avanza hasta el fin medido.
-      estado.medidoHastaFin = Math.max(estado.medidoHastaFin, finAlMedir)
-      return null
-    }
-    return partirLocucionPorVoz(cola, vector, finAlMedir)
-  }
-
-  /**
-   * Parte la locución abierta por cambio de voz (Caso 1+3): la actual cierra en
-   * el inicio de la ventana de cola medida (causa 'voz') y abre una locución
-   * nueva con ESA ventana, ya medida contra el último vector de la sesión.
-   * Dos voces sin pausa son DOS filas: el gate de consolidación no mezcla
-   * voces distintas (cierre.ts) y esta partición es su ÚNICO dueño.
-   *
-   * @param ventana Ventana de cola medida (el audio de la voz nueva).
-   * @param vector Vector de la ventana (voz nueva).
-   * @param finAlMedir Fin del tramo al medir la ventana.
-   * @returns El tramo nuevo si partió; null si la ventana no cabe en el tramo.
-   */
-  async function partirLocucionPorVoz(
-    ventana: Float32Array,
-    vector: readonly number[],
-    finAlMedir: number,
-  ): Promise<string | null> {
-    const abierta = estado.abierta
-    if (!abierta) return null
-    const limite = finAlMedir - ventana.length
-    if (limite <= abierta.inicio || limite >= abierta.fin) return null
-    const sampleRate = abierta.sampleRate
-    const turno = abierta.turnId
-    const idioma = abierta.idioma
-    const finalAnterior = abierta.final
-    // 1. La locución de la voz anterior cierra en el límite de la ventana medida.
-    estado.abierta = { ...abierta, fin: limite }
-    await sesion.cerrarLocucion(estado.abierta, 'system', 'voz', finalAnterior)
-    // 2. La voz nueva abre su locución sobre la MISMA ventana de audio.
-    const tramoId = dependencias.id.uuid()
-    const nuevo: TramoAudio = {
-      tramoId,
-      inicio: limite,
-      fin: finAlMedir,
-      sampleRate,
-      turnId: turno,
-      silencioPrevioMs: 0,
-    }
-    estado.tramoAudio = nuevo
-    estado.ultimoTramoId = tramoId
-    tramos.registrar(nuevo)
-    // La ventana medida ES el audio de este tramo: si un pendiente lo abre
-    // después, su voz se mide sobre su propia evidencia.
-    retenerTramo(tramoId, limite, finAlMedir, ventana, sampleRate)
-    abrirCaparazon(tramoId, { inicio: limite, fin: finAlMedir, sampleRate }, turno, idioma)
-    // 3. Identidad de la voz nueva con el MISMO vector (etiqueta perezosa, Caso 10).
-    const embebedor = dependencias.embebedor
-    const recien = estado.abierta
-    if (!embebedor || !recien) return null
-    const identidad = decidirIdentidadSesion(
-      vector,
-      embebedor,
-      ((recien.fin - recien.inicio) / Math.max(1, recien.sampleRate)) * 1000,
-      String(recien.texto || '').trim().split(/\s+/).filter(Boolean).length,
-    )
-    registrarMedidaVoz(estado, vector, identidad)
-    estado.abierta = conIdentidadVoz(recien, identidad)
-    // 4. La ventana medida ES el audio de la voz nueva (la anterior se descartó
-    //    con su cierre); el contador del cambio arranca al fin medido.
-    estado.muestrasAbierta = [ventana]
-    estado.medidoHastaFin = Math.max(estado.medidoHastaFin, finAlMedir)
-    dependencias.registro.registrar('conversacion.locucion.partida', {
-      sessionId: estado.sessionId ?? '',
-      locutionId: tramoId,
-      anterior: abierta.locutionId,
-      limite,
-      turnId: turno,
-    })
-    return tramoId
   }
 
   return {

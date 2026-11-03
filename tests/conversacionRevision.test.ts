@@ -10,6 +10,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import { decidirRevision, unirRevision } from '../src/voice/conversation/revision'
+import { isSameFragmentRevision } from '../src/voice/lib/speechMerge.js'
 import type {
   DecisionRevision,
   TramoAbierto,
@@ -34,11 +35,11 @@ describe('regla 3 — mismo tramo, revisa o extiende', () => {
     })
   })
 
-  it('las mismas palabras revisan y permiten reemplazar', () => {
+  it('una palabra distinta con las mismas palabras NO pisa la locución', () => {
     expect(decidir(abierto('t1', 'hola mundo'), 't1', 'hola amigo')).toEqual({
       tipo: 'revisa',
-      texto: 'hola amigo',
-      pintar: true,
+      texto: 'hola mundo',
+      pintar: false,
       completa: false,
     })
   })
@@ -98,10 +99,10 @@ describe('regla 3 — unirRevision, dueño único de la unión', () => {
     })
   })
 
-  it('las mismas palabras permiten la corrección explícita de la cola', () => {
+  it('una cola distinta con las mismas palabras NO pisa la locución', () => {
     expect(unirRevision('vamos a probar', 'vamos a revisar')).toEqual({
-      texto: 'vamos a revisar',
-      pintar: true,
+      texto: 'vamos a probar',
+      pintar: false,
       tipo: 'revisa',
     })
   })
@@ -177,5 +178,23 @@ describe('regla 3 — contrato de entrada', () => {
     const decision: DecisionRevision = decidirRevision(entrada)
     expect(JSON.stringify(entrada)).toBe(antes)
     expect(decision.texto).toBe('hola mundo')
+  })
+})
+
+describe('revision — una sola palabra exige raíz común, no "comparte cero"', () => {
+  it('"uno" → "dos" NO es la misma revisión; el texto abierto se conserva', () => {
+    expect(isSameFragmentRevision('uno', 'dos')).toBe(false)
+    expect(unirRevision('uno', 'dos')).toMatchObject({
+      texto: 'uno',
+      pintar: false,
+    })
+  })
+
+  it('"conversa" → "conversación" sí es la misma revisión por raíz', () => {
+    expect(isSameFragmentRevision('conversa', 'conversación')).toBe(true)
+    expect(unirRevision('conversa', 'conversación')).toMatchObject({
+      texto: 'conversación',
+      pintar: true,
+    })
   })
 })

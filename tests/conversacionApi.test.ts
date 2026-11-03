@@ -251,19 +251,20 @@ describe('regla 1 y 3 — el audio abre el tramo y el texto lo revisa', () => {
     expect(api.snapshot().box.texto).toBe('hola mundo entero')
   })
 
-  it('el final del mismo tramo cierra UNA fila con la mejor versión', async () => {
+  it('el final del mismo tramo cierra UNA fila con el texto CONFIRMADO', async () => {
     const { api } = crearEscenario()
     await api.start()
     const tramoId = await abrirConVoz(api)
     await api.ingestAsr(asr(tramoId, { texto: 'hola mundo entero' }))
     await api.ingestAsr(asr(tramoId, { texto: 'hola mundo', final: true }))
-    // Mandato 2026-10-30: el final MARCA la frase completa; el silencio de 5 s
-    // (puerta de abajo) cierra UNA fila con la mejor versión.
+    // Regla E: el final es la HIPÓTESIS CONFIRMADA y sustituye la línea
+    // acumulada (no se conserva una versión más larga con ruido). El silencio
+    // (puerta de abajo) cierra UNA fila.
     const estado = await cerrarPorSilencio(api, SAMPLE_RATE)
     expect(estado.filas).toHaveLength(1)
     expect(estado.filas[0]).toMatchObject({
       locutionId: tramoId,
-      texto: 'hola mundo entero',
+      texto: 'hola mundo',
       provisional: false,
     })
     expect(estado.box).toEqual({ texto: '', abierta: false })
@@ -282,59 +283,6 @@ describe('regla 1 y 3 — el audio abre el tramo y el texto lo revisa', () => {
   })
 })
 
-describe('regla 2 — el texto se aplica primero y después decide la frontera', () => {
-  it('texto ajeno a 900 ms NO cierra; se retiene y se abre al silencio (sin perderlo)', async () => {
-    const { api, eventos } = crearEscenario()
-    await api.start()
-    const tramoUno = await abrirConVoz(api, 0)
-    await api.ingestAsr(asr(tramoUno, { texto: 'uno' }))
-    await api.ingestAudio(bloque(SAMPLE_RATE, SAMPLE_RATE * 2, SILENCIO(900)))
-    await api.ingestAudio(bloque(SAMPLE_RATE * 2, SAMPLE_RATE * 3, VOZ()))
-    const estadoDos = api.snapshot()
-    const tramoDos = estadoDos.tramoAudio?.tramoId
-    if (!tramoDos) throw new Error('sin tramo de audio nuevo')
-    expect(estadoDos.locucionAbierta?.locutionId).toBe(tramoUno)
-
-    await api.ingestAsr(asr(tramoDos, { texto: 'dos', final: true }))
-    // 900 ms + texto ajeno NO es silencio ni cambio de hablante: no cierra.
-    const primera = await cerrarPorSilencio(api, SAMPLE_RATE * 3)
-    expect(primera.filas.map((fila) => fila.texto)).toEqual(['uno'])
-    expect(eventos).toContainEqual(
-      expect.objectContaining({
-        tipo: 'locution.closed',
-        locutionId: tramoUno,
-        causa: 'silencio',
-      }),
-    )
-    // La frase nueva quedó ABIERTA (no perdida); su propio silencio la cierra.
-    const segunda = await cerrarPorSilencio(api, SAMPLE_RATE * 8)
-    expect(segunda.filas.map((fila) => fila.texto)).toEqual(['uno', 'dos'])
-    expect(segunda.filas[0]).toMatchObject({ reason: 'system', provisional: true })
-    expect(segunda.filas[1]).toMatchObject({ provisional: false })
-  })
-
-  it('texto ajeno sin silencio se retiene y no se mezcla; se abre al cerrar', async () => {
-    const { api } = crearEscenario()
-    await api.start()
-    const tramoUno = await abrirConVoz(api)
-    await api.ingestAsr(asr(tramoUno, { texto: 'uno' }))
-
-    const sinPausa = await api.ingestAsr(
-      asr(UUID_B, {
-        texto: 'dos',
-        final: true,
-        tramo: { inicio: SAMPLE_RATE, fin: SAMPLE_RATE * 2, sampleRate: SAMPLE_RATE },
-      }),
-    )
-    expect(sinPausa.filas).toEqual([])
-    expect(sinPausa.box.texto).toBe('uno')
-
-    const cerrada = await api.stop('system')
-    expect(cerrada.filas.map((fila) => fila.texto)).toEqual(['uno', 'dos'])
-    expect(cerrada.filas[1]).toMatchObject({ locutionId: UUID_B, provisional: false })
-  })
-})
-
 describe('regla 4 y stop — provisional o descarte contado', () => {
   it('silencio 5000 sin texto ajeno cierra la fila provisional', async () => {
     const { api, eventos } = crearEscenario()
@@ -342,7 +290,7 @@ describe('regla 4 y stop — provisional o descarte contado', () => {
     const tramoId = await abrirConVoz(api)
     await api.ingestAsr(asr(tramoId, { texto: 'hola' }))
     const estado = await api.ingestAudio(
-      bloque(SAMPLE_RATE, SAMPLE_RATE * 2, SILENCIO(CONVERSACION_CONFIG.silenceCloseMs)),
+      bloque(SAMPLE_RATE, SAMPLE_RATE * 6, SILENCIO(CONVERSACION_CONFIG.silenceCloseMs)),
     )
     expect(estado.filas).toHaveLength(1)
     expect(estado.filas[0]).toMatchObject({ texto: 'hola', provisional: true, reason: 'system' })
@@ -395,7 +343,7 @@ describe('reentrega — el final tardío NO reescribe la fila (insert-only, mand
     const tramoId = await abrirConVoz(api)
     await api.ingestAsr(asr(tramoId, { texto: 'hola' }))
     await api.ingestAudio(
-      bloque(SAMPLE_RATE, SAMPLE_RATE * 2, SILENCIO(CONVERSACION_CONFIG.silenceCloseMs)),
+      bloque(SAMPLE_RATE, SAMPLE_RATE * 6, SILENCIO(CONVERSACION_CONFIG.silenceCloseMs)),
     )
     const reentrega = await api.ingestAsr(
       asr(tramoId, { texto: 'hola mundo', final: true }),
@@ -688,7 +636,7 @@ describe('ASR por puerto — un motor, estados y audio local', () => {
 })
 
 describe('huérfanos y descartes contados', () => {
-  it('un ASR sin tramo se retiene y expira como huérfano contado', async () => {
+  it('un ASR sin tramo con TEXTO no se pierde al expirar', async () => {
     const { api, reloj } = crearEscenario()
     await api.start()
     const antes = await api.ingestAsr(asr(UUID_A, { texto: 'viejo', final: true }))
@@ -703,13 +651,15 @@ describe('huérfanos y descartes contados', () => {
         tramo: { inicio: 0, fin: SAMPLE_RATE, sampleRate: SAMPLE_RATE },
       }),
     )
-    // El final solo MARCA la locución; la puerta de abajo (silencio de 5 s)
-    // cierra la fila de 'nuevo'.
+    // El pendiente con texto NO se tira. Sin tramo no se inventa durante la
+    // sesión: "nuevo" (con tramo) abre primero; "viejo" espera y sale al stop.
     const cerrada = await cerrarPorSilencio(api, SAMPLE_RATE)
     expect(cerrada.filas.map((fila) => fila.texto)).toEqual(['nuevo'])
-    expect(despues.descartes).toContainEqual(
-      expect.objectContaining({ motivo: 'huerfano', locutionId: UUID_A }),
-    )
+    expect(despues.descartes.filter((descarte) => descarte.motivo === 'huerfano')).toEqual([])
+
+    const detenida = await api.stop('system')
+    expect(detenida.filas.map((fila) => fila.texto)).toEqual(['nuevo', 'viejo'])
+    expect(detenida.descartes.filter((descarte) => descarte.motivo === 'huerfano')).toEqual([])
   })
 
   it('un ASR sin tramo ni audio se retiene, no inventa fila', async () => {
@@ -739,5 +689,122 @@ describe('eventos — los 6 del plan se emiten desde el flujo real', () => {
         'asr.status',
       ]),
     )
+  })
+})
+
+describe('cola — un texto de tramo nuevo abre su locución al cerrar la anterior', () => {
+  it('la caja pinta la frase nueva sin esperar al stop', async () => {
+    const { api } = crearEscenario()
+    await api.start()
+    const tramoA = await abrirConVoz(api, 0)
+    await api.ingestAsr(asr(tramoA, { texto: 'uno' }))
+
+    // B es un tramo REAL: A cierra por silencio y B abre con su propio audio.
+    await cerrarPorSilencio(api, SAMPLE_RATE)
+    const inicioB = SAMPLE_RATE * 6
+    const estadoB = await api.ingestAudio(
+      bloque(inicioB, inicioB + SAMPLE_RATE, VOZ()),
+    )
+    const tramoB = estadoB.tramoAudio?.tramoId
+    if (!tramoB) throw new Error('sin tramo B')
+    const estado = await api.ingestAsr(asr(tramoB, { texto: 'dos', final: true }))
+    expect(
+      estado.box.texto,
+      JSON.stringify({
+        abierta: estado.locucionAbierta,
+        tramo: estado.tramoAudio,
+        descartes: estado.descartes,
+        filas: estado.filas.map((fila) => fila.texto),
+      }),
+    ).toBe('dos')
+
+    const detenida = await api.stop('system')
+    expect(detenida.filas.map((fila) => fila.texto)).toEqual(['uno', 'dos'])
+  })
+})
+
+describe('stop — un pendiente con texto y sin tramo no se pierde', () => {
+  it('commitea el texto pendiente al parar', async () => {
+    const { api } = crearEscenario()
+    await api.start()
+    const tramoA = await abrirConVoz(api, 0)
+    await api.ingestAsr(asr(tramoA, { texto: 'uno' }))
+    await cerrarPorSilencio(api, SAMPLE_RATE)
+
+    // Llega texto de un tramo que el registro ya no resuelve, sin locución
+    // abierta: hoy queda pendiente y el stop lo descarta como huérfano.
+    await api.ingestAsr(asr(UUID_B, { texto: 'dos', final: true }))
+
+    const detenida = await api.stop('system')
+    expect(detenida.filas.map((fila) => fila.texto)).toEqual(['uno', 'dos'])
+    expect(detenida.descartes.filter((descarte) => descarte.motivo === 'huerfano')).toEqual([])
+  })
+})
+
+describe('stop — las parciales de la MISMA frase se funden en UNA fila', () => {
+  it('las hipótesis crecientes no crean una fila por parcial', async () => {
+    const { api } = crearEscenario()
+    await api.start()
+    const tramoId = await abrirConVoz(api, 0)
+    const parciales = [
+      'dice este cambio a la modalidad 40',
+      'dice este cambio a la modalidad 40 del IMSS',
+      'dice este cambio a la modalidad 40 del IMSS pensionados',
+      'dice este cambio a la modalidad 40 del IMSS pensionados salió en el diario oficial El día 22',
+      'dice este cambio a la modalidad 40 del IMSS pensionados salió en el diario oficial El día 22 a partir del día 22',
+      'dice este cambio a la modalidad 40 del IMSS pensionados salió en el diario oficial El día 22 a partir del día 22 es el jueves',
+      'dice este cambio a la modalidad 40 del IMSS pensionados salió en el diario oficial El día 22 a partir del día 22 es el jueves no este',
+      'dice este cambio a la modalidad 40 del IMSS pensionados salió en el diario oficial El día 22 a partir del día 22 es el jueves no este ya no se van a poder',
+    ]
+    for (const texto of parciales) {
+      await api.ingestAsr(asr(tramoId, { texto, final: true }))
+    }
+    // La caja sigue la hipótesis completa, no el primer trozo.
+    expect(api.snapshot().box.texto).toBe(parciales[parciales.length - 1])
+
+    await cerrarPorSilencio(api, SAMPLE_RATE)
+    await api.ingestAsr(asr(UUID_B, { texto: 'Sí pero te van a poner ese pero', final: true }))
+
+    const detenida = await api.stop('system')
+    expect(detenida.filas.map((fila) => fila.texto)).toEqual([
+      parciales[parciales.length - 1],
+      'Sí pero te van a poner ese pero',
+    ])
+    expect(detenida.descartes.filter((descarte) => descarte.motivo === 'huerfano')).toEqual([])
+  })
+})
+
+describe('frontera — una frase continua no se cierra por el hueco de índices', () => {
+  it('cruza tramos con abierta.fin viejo y queda en UNA fila sin causa frontera', async () => {
+    const { api, eventos } = crearEscenario()
+    await api.start()
+    const tramoA = await abrirConVoz(api, 0)
+    await api.ingestAsr(asr(tramoA, { texto: 'esto es' }))
+
+    // Pausa CORTA (900 ms): el VAD corta el tramo A pero NO hay silencio de
+    // cierre. El tramo B arranca muy lejos en índices: el hueco de índices
+    // contra `abierta.fin` (viejo) supera 5 s sin que exista pausa real.
+    await api.ingestAudio(bloque(SAMPLE_RATE, SAMPLE_RATE + 14_400, SILENCIO(900)))
+    const inicioB = SAMPLE_RATE * 12.5
+    const estadoB = await api.ingestAudio(
+      bloque(inicioB, inicioB + SAMPLE_RATE, VOZ()),
+    )
+    const tramoB = estadoB.tramoAudio?.tramoId
+    if (!tramoB) throw new Error('sin tramo B')
+
+    const estado = await api.ingestAsr(
+      asr(tramoB, { texto: 'esto es una prueba', final: true }),
+    )
+    // La frase sigue: NO se cerró A a mitad de frase.
+    expect(estado.filas).toEqual([])
+    expect(estado.locucionAbierta?.locutionId).toBe(tramoA)
+    expect(
+      eventos.filter(
+        (evento) => evento.tipo === 'locution.closed' && evento.causa === 'frontera',
+      ),
+    ).toEqual([])
+
+    const cerrada = await cerrarPorSilencio(api, inicioB + SAMPLE_RATE)
+    expect(cerrada.filas.map((fila) => fila.texto)).toEqual(['esto es una prueba'])
   })
 })

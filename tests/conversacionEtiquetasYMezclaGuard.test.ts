@@ -48,41 +48,47 @@ import type {
   MedidaVad,
 } from '../src/voice/conversation/ports'
 import { isAutoSpeakerLabel } from '../src/voice/lib/speakerCore.js'
+import { VOICE_DIARIZATION_DEFAULTS } from '../src/core/config/sharedConfig'
 
 const SAMPLE_RATE = 16000
 /** Vectores unitarios distintos: coseno 0 entre sí (por debajo del umbral 0,8). */
 const VECTOR_A = [1, 0] as const
 const VECTOR_B = [0, 1] as const
+/** Misma voz a 0.70 (banda medida 0.69–0.74) y voz distinta a 0.58. */
+const VECTOR_070 = [0.7, Math.sqrt(1 - 0.49)] as const
+const VECTOR_058 = [0.58, Math.sqrt(1 - 0.3364)] as const
 
 const fuenteDe = (ruta: string): string =>
   readFileSync(join(process.cwd(), ruta), 'utf8')
 
 /** ¿La partición por cambio de voz vive en la ingesta (dueño único)? */
 export function particionPorCambioDeVoz(src: string): boolean {
-  return /function partirLocucionPorVoz/.test(src) && /function verificarCambioVoz/.test(src)
+  return /function partirLocucionPorCambioDeVoz/.test(src) && /function verificarCambioVoz/.test(src)
 }
 
 /**
- * ¿El resultado ASR pasa por la atribución y por la verificación de cambio ANTES
- * del flujo de texto? La atribución va PRIMERA: un texto de la frase abierta no
- * puede verificar el cambio de voz de un tramo ajeno.
+ * ¿El resultado ASR verifica la VOZ del tramo entrante y DESPUÉS lo atribuye al
+ * flujo de texto? La voz va PRIMERA: si el tramo entrante es otra voz (aunque el
+ * VAD lo haya cortado), se parte ahí y el texto va a la voz nueva.
  */
 export function verificacionAntesDelFlujoDeTexto(src: string): boolean {
+  const voz = src.search(/const tramoVoz = \(await verificarCambioVoz\(/)
+  const atribucion = src.search(/const tramoDestino = tramoDestinoDeTexto\(/)
   return (
-    /const tramoAtribuido = tramoDestinoDeTexto\(tramoId, entrada\.texto\)/.test(src) &&
-    /verificarCambioVoz\(tramoAtribuido\)/.test(src) &&
+    voz >= 0 &&
+    atribucion > voz &&
     /procesarResultadoAsr\(\{ \.\.\.entrada, tramoId: tramoDestino \}\)/.test(src)
   )
 }
 
-/** ¿La puerta insert-only exige una voz DISTINTA medida para escribir una fila? */
-export function insertOnlyExigeVozDistinta(src: string): boolean {
-  return /const vozDistintaMedida =/.test(src) && /previaDelTurno && !vozDistintaMedida/.test(src)
+/** ¿La puerta insert-only es por TRAMO (no por turno ni por texto)? */
+export function insertOnlyEsPorTramo(src: string): boolean {
+  return /function tramoYaCommiteado/.test(src) && /estado\.filas\.has\(tramoId\)/.test(src)
 }
 
-/** ¿La voz que cierra consolida SU fila: casa por etiqueta y cae a la más reciente? */
-export function filaDelTurnoCasaEtiqueta(src: string): boolean {
-  return /fila\.etiqueta === etiqueta/.test(src) && /reciente = fila/.test(src)
+/** ¿Se retiró la consolidación por etiqueta? La fila es inmutable por tramo. */
+export function sinConsolidacionPorEtiqueta(src: string): boolean {
+  return !/filaDelTurno\(/.test(src) && !/reciente = fila/.test(src)
 }
 
 /** ¿La causa 'voz' existe en la unión de causas de cierre? */
@@ -115,7 +121,10 @@ let cursor = 0
 type Escenario = Readonly<{ api: ConversacionApi }>
 
 /** Monta el módulo REAL sobre el embebedor inyectado (la medida es del puerto). */
-function crearEscenarioConEmbebedor(embebedor: EmbebedorPort): Escenario {
+function crearEscenarioConEmbebedor(
+  embebedor: EmbebedorPort,
+  extraConfig: Partial<ConfigPort> = {},
+): Escenario {
   cursor = 0
   const reloj = { ahora: () => 1_700_000_000_000 }
   const config: ConfigPort = {
@@ -125,6 +134,7 @@ function crearEscenarioConEmbebedor(embebedor: EmbebedorPort): Escenario {
     umbralContinuidadVoz: () => 0.8,
     etiquetaAnonima: (indice) => `Hablante ${indice}`,
     echoMinPalabrasCola: () => 4,
+    ...extraConfig,
   }
   const dependencias: DependenciasConversacion = {
     reloj,
@@ -144,6 +154,14 @@ function crearEscenario(
   ...vectores: readonly (readonly number[])[]
 ): Escenario {
   return crearEscenarioConEmbebedor(crearEmbebedorFalso(...vectores))
+}
+
+/** Escenario con el umbral de continuidad que declara el dueño en config. */
+function crearEscenarioConConfig(
+  extraConfig: Partial<ConfigPort>,
+  ...vectores: readonly (readonly number[])[]
+): Escenario {
+  return crearEscenarioConEmbebedor(crearEmbebedorFalso(...vectores), extraConfig)
 }
 
 /** Filas de la instantánea (la retención no borra, solo oculta). */
@@ -421,23 +439,105 @@ describe('Caso 1+3 — dos voces SIN pausa (módulo real, embebedor falso)', () 
     await frase(escenario.api, 'con el doctor a las tres', 'T5')
     await cerrarPorSilencio(escenario.api)
 
-    // La voz B vuelve tras la pausa: misma voz => misma etiqueta, pero su fila
-    // es INMUTABLE (mandato insert-only): la continuación es reentrega del turno
-    // y se cuenta, nunca un UPDATE ni una tercera fila.
+    // La voz B vuelve tras la pausa: es una locución NUEVA (la anterior ya
+    // cerró por silencio). Su fila anterior es INMUTABLE; la frase nueva escribe
+    // SU fila, sin descartarse por "mismo turno" ni por prefijo de texto.
     await entregarAudio(escenario.api, VOZ(), cursor)
     await entregarAudio(escenario.api, VOZ(), cursor)
     await frase(escenario.api, 'con el doctor a las tres de la tarde', 'T5')
     await cerrarPorSilencio(escenario.api)
 
     const filas = filasDe(escenario.api)
-    expect(filas).toHaveLength(2)
+    expect(filas).toHaveLength(3)
     expect(filas[0]!.texto).toBe('ok flu crea una cita')
     expect(filas[0]!.etiqueta).toBe('Hablante 1')
     expect(filas[1]!.etiqueta).toBe('Hablante 2')
     expect(filas[1]!.texto).toBe('con el doctor a las tres')
-    expect(escenario.api.snapshot().descartes).toContainEqual(
+    expect(filas[2]!.texto).toBe('con el doctor a las tres de la tarde')
+    expect(escenario.api.snapshot().descartes).not.toContainEqual(
       expect.objectContaining({ motivo: 'turnoYaEscrito' }),
     )
+  })
+})
+
+describe('voz — corte de VAD y umbral de continuidad medido', () => {
+  /**
+   * A habla 2 s, el VAD corta con 1.5 s (< 5 s de cierre) y B arranca en OTRO
+   * tramo. El texto de B NO continúa la frase de A.
+   */
+  async function correrCorteDeVad(api: ConversacionApi) {
+    await api.start({ turnId: 'T5' })
+    await entregarAudio(api, VOZ(), cursor)
+    await entregarAudio(api, VOZ(), cursor)
+    await frase(api, 'necesito para mi', 'T5')
+    const tramoA = api.snapshot().locucionAbierta?.locutionId ?? ''
+    await entregarSilencio(api, cursor, 1500)
+    await entregarAudio(api, VOZ(), cursor)
+    await entregarAudio(api, VOZ(), cursor)
+    const durante = await api.ingestAsr({
+      tramoId: '',
+      texto: 'con el doctor',
+      final: true,
+      turnId: 'T5',
+    })
+    return { tramoA, durante }
+  }
+
+  it('cambio de voz en tramo NUEVO (corte de VAD) => dos filas con causa voz SIN esperar 5 s', async () => {
+    const escenario = crearEscenario(VECTOR_A, VECTOR_B)
+    const eventos: EventoConversacion[] = []
+    escenario.api.subscribe((evento) => eventos.push(evento))
+    const { tramoA, durante } = await correrCorteDeVad(escenario.api)
+
+    // La voz de A se midió ANTES del corte (la plantilla existe).
+    expect(tramoA).not.toBe('')
+    // La locución anterior ya cerró y SU fila está escrita: no se esperó el
+    // silencio de 5 s ni quedó el texto de B en pendientes como única salida.
+    expect(durante.filas).toHaveLength(1)
+    expect(durante.filas[0]).toMatchObject({
+      locutionId: tramoA,
+      texto: 'necesito para mi',
+    })
+    expect(durante.locucionAbierta?.texto).toBe('con el doctor')
+    expect(durante.locucionAbierta?.locutionId).not.toBe(tramoA)
+    expect(eventos).toContainEqual(
+      expect.objectContaining({ tipo: 'locution.closed', causa: 'voz' }),
+    )
+
+    await cerrarPorSilencio(escenario.api)
+    expect(filasDe(escenario.api).map((fila) => fila.texto)).toEqual([
+      'necesito para mi',
+      'con el doctor',
+    ])
+  })
+
+  it('0.70 de la MISMA voz NO parte; 0.58 (voz distinta) SÍ parte', async () => {
+    // El piso lo declara la config (umbral de casar con la voz abierta). El
+    // valor real del producto queda por debajo de la banda de la misma voz.
+    expect(VOICE_DIARIZATION_DEFAULTS.cosineExistingMatch).toBeLessThanOrEqual(0.7)
+    expect(VOICE_DIARIZATION_DEFAULTS.cosineExistingMatch).toBeGreaterThan(0.58)
+
+    const misma = crearEscenarioConConfig(
+      { umbralExistenteVoz: () => 0.66 },
+      VECTOR_A,
+      VECTOR_070,
+    )
+    const { tramoA: tramoMisma, durante: sinPartir } = await correrCorteDeVad(misma.api)
+    expect(sinPartir.filas).toHaveLength(0)
+    expect(sinPartir.locucionAbierta?.locutionId).toBe(tramoMisma)
+
+    const distinta = crearEscenarioConConfig(
+      { umbralExistenteVoz: () => 0.66 },
+      VECTOR_A,
+      VECTOR_058,
+    )
+    const { tramoA: tramoDistinta, durante: partida } = await correrCorteDeVad(distinta.api)
+    expect(partida.filas).toHaveLength(1)
+    expect(partida.filas[0]).toMatchObject({
+      locutionId: tramoDistinta,
+      texto: 'necesito para mi',
+    })
+    expect(partida.locucionAbierta?.texto).toBe('con el doctor')
   })
 })
 
@@ -452,12 +552,12 @@ describe('Caso 1+3 — los dueños viven en el archivo real', () => {
     )
   })
 
-  it('la puerta insert-only exige una voz DISTINTA medida para escribir (cierre.ts)', () => {
-    expect(insertOnlyExigeVozDistinta(fuenteDe('src/voice/conversation/cierre.ts'))).toBe(true)
+  it('la puerta insert-only es por TRAMO, no por turno (cierre.ts)', () => {
+    expect(insertOnlyEsPorTramo(fuenteDe('src/voice/conversation/cierre.ts'))).toBe(true)
   })
 
-  it('la voz que cierra consolida SU fila por etiqueta (cierre.ts)', () => {
-    expect(filaDelTurnoCasaEtiqueta(fuenteDe('src/voice/conversation/cierre.ts'))).toBe(true)
+  it('la consolidación por etiqueta se retiró; la fila es inmutable (cierre.ts)', () => {
+    expect(sinConsolidacionPorEtiqueta(fuenteDe('src/voice/conversation/cierre.ts'))).toBe(true)
   })
 
   it("la causa 'voz' existe en la unión de causas (tipos.ts)", () => {
@@ -470,8 +570,8 @@ describe('Caso 1+3 — PRUEBA DE DETECTOR (el detector no es decorativo)', () =>
     const sinParticion = 'async function ingestaAsr(entrada) {\n  await flujo.procesarResultadoAsr(entrada)\n}'
     expect(particionPorCambioDeVoz(sinParticion)).toBe(false)
     const conParticion =
-      'async function verificarCambioVoz(tramoId) {\n  return partirLocucionPorVoz(cola, vector, fin)\n}\n' +
-      'async function partirLocucionPorVoz(ventana, vector, finAlMedir) {}\n'
+      'async function verificarCambioVoz(tramoId) {\n  return partirLocucionPorCambioDeVoz(cola, vector, fin)\n}\n' +
+      'async function partirLocucionPorCambioDeVoz(ventana, vector, finAlMedir) {}\n'
     expect(particionPorCambioDeVoz(conParticion)).toBe(true)
   })
 
@@ -479,35 +579,34 @@ describe('Caso 1+3 — PRUEBA DE DETECTOR (el detector no es decorativo)', () =>
     const sinVerificacion = 'await flujo.procesarResultadoAsr({ ...entrada, tramoId })'
     expect(verificacionAntesDelFlujoDeTexto(sinVerificacion)).toBe(false)
     const conVerificacion =
-      'const tramoAtribuido = tramoDestinoDeTexto(tramoId, entrada.texto)\n' +
-      'const tramoDestino = (await verificarCambioVoz(tramoAtribuido)) ?? tramoAtribuido\n' +
+      'const tramoVoz = (await verificarCambioVoz(tramoId)) ?? tramoId\n' +
+      'const tramoDestino = tramoDestinoDeTexto(tramoVoz, entrada.texto)\n' +
       'await flujo.procesarResultadoAsr({ ...entrada, tramoId: tramoDestino })'
     expect(verificacionAntesDelFlujoDeTexto(conVerificacion)).toBe(true)
   })
 
-  it('un gate que reescribe sin voz distinta medida => rojo; exigida => verde', () => {
+  it('un gate que reescribe por turno => rojo; por tramo => verde', () => {
     const sinExigencia =
       'const previaDelTurno = filaDelTurno(cierre.turnId)\n' +
       'if (previaDelTurno) await actualizarFila(previaDelTurno, cierre)'
-    expect(insertOnlyExigeVozDistinta(sinExigencia)).toBe(false)
-    const conExigencia =
-      "const vozDistintaMedida = String(vozCerrada.vozId || '').trim() !== '' && !continuidadVoz\n" +
-      'if (previaDelTurno && !vozDistintaMedida) {\n' +
-      "  contarDescarte('turnoYaEscrito', locucion.locutionId, tramo)\n" +
+    expect(insertOnlyEsPorTramo(sinExigencia)).toBe(false)
+    const porTramo =
+      'function tramoYaCommiteado(tramoId) {\n' +
+      '  return estado.filas.has(tramoId)\n' +
       '}'
-    expect(insertOnlyExigeVozDistinta(conExigencia)).toBe(true)
+    expect(insertOnlyEsPorTramo(porTramo)).toBe(true)
   })
 
-  it('una búsqueda que devuelve la primera fila del turno => rojo; por etiqueta => verde', () => {
+  it('una búsqueda por etiqueta => rojo; sin consolidación => verde', () => {
     const primera =
       'for (const fila of estado.filas.values()) {\n' +
       '  if (fila.turnId === id) return fila\n' +
       '}'
-    expect(filaDelTurnoCasaEtiqueta(primera)).toBe(false)
+    expect(sinConsolidacionPorEtiqueta(primera)).toBe(true)
     const porEtiqueta =
       'let reciente = null\nfor (const fila of estado.filas.values()) {\n' +
       '  reciente = fila\n  if (etiqueta && fila.etiqueta === etiqueta) return fila\n}'
-    expect(filaDelTurnoCasaEtiqueta(porEtiqueta)).toBe(true)
+    expect(sinConsolidacionPorEtiqueta(porEtiqueta)).toBe(false)
   })
 
   it("una unión sin 'voz' => rojo; con la causa => verde", () => {

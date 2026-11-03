@@ -46,7 +46,7 @@ const fuenteDe = (ruta: string): string =>
 
 /** Gate INSERT-ONLY del Caso 8 en la puerta única de cierre (cierre.ts). */
 export function gateInsertoUnicoEnCierre(src: string): boolean {
-  return /filaDelTurno\(/.test(src) && /turnoYaEscrito/.test(src)
+  return /function tramoYaCommiteado\(/.test(src) && /estado\.filas\.has\(tramoId\)/.test(src)
 }
 
 /** Inmutabilidad de la fila en fila.ts: sin promotores ni consolidadores vivos. */
@@ -199,12 +199,12 @@ describe('Caso 8 — un turnId => una fila inmutable (módulo real)', () => {
     const filas = filasDe(escenario.api)
     expect(filas).toHaveLength(1)
     expect(filas[0]!.turnId).toBe('T5')
-    // La continuacion del MISMO turno se funde en la fila: no se pierde el
-    // texto nuevo ni aparece una segunda fila (auditoria 2026-11-01).
-    expect(filas[0]!.texto).toBe('ok flu crea una cita manana')
+    // Insert-only por TRAMO: la fila commiteada NO se reescribe con la
+    // reemisión de otro tramo; la reentrega se cuenta.
+    expect(filas[0]!.texto).toBe('ok flu crea una cita')
     expect(filas[0]!.provisional).toBe(false)
-    expect(filas[0]!.tramo.fin).toBeGreaterThanOrEqual(previa.tramo.fin)
-    expect(descartesDe(escenario.api)).not.toContainEqual(
+    expect(filas[0]!.tramo.fin).toBe(previa.tramo.fin)
+    expect(descartesDe(escenario.api)).toContainEqual(
       expect.objectContaining({ motivo: 'turnoYaEscrito' }),
     )
   })
@@ -383,7 +383,7 @@ describe('Caso 8 — PRUEBA DE DETECTOR (el detector no es decorativo)', () => {
     const sinGate = 'const fila = await almacen.guardar(resultado.fila)\n  estado.filas.set(fila.locutionId, fila)'
     expect(gateInsertoUnicoEnCierre(sinGate)).toBe(false)
     const conGate =
-      'const previaDelTurno = filaDelTurno(cierre.turnId)\nif (previaDelTurno && !vozDistintaMedida) { contarDescarte(\'turnoYaEscrito\', locucion.locutionId, tramo) }'
+      'function tramoYaCommiteado(tramoId) {\n  return estado.filas.has(tramoId)\n}'
     expect(gateInsertoUnicoEnCierre(conGate)).toBe(true)
   })
 

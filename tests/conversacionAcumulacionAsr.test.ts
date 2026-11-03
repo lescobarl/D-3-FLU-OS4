@@ -82,24 +82,30 @@ describe('producto — el texto del tramo se compone con los trozos del evento',
     })
     expect(motor.instantanea().locucionAbierta?.texto).toBe('bien Vamos a hacer')
 
-    // Dos finales del MISMO evento: son dos re-escuchas del mismo tramo y se unen
-    // conservando las palabras de ambas (medido: una trae "esto", otra "escucha").
+    // Dos finales del MISMO evento: el evento trae la HIPÓTESIS COMPLETA desde
+    // 0 (con el prefijo ya dicho); son dos re-escuchas y se unen conservando las
+    // palabras de ambas (medido: una trae "esto", otra "escucha").
     await motor.evento({
       resultIndex: 0,
-      results: [resultado('y esto es una prueba', true), resultado('y esto es una escucha', true)],
+      results: [
+        resultado('bien Vamos a hacer y esto es una prueba', true),
+        resultado('bien Vamos a hacer y esto es una escucha', true),
+      ],
     })
     const conFinales = motor.instantanea().locucionAbierta?.texto ?? ''
     expect(conFinales.startsWith('bien Vamos a hacer')).toBe(true)
     expect(conFinales).toContain('prueba')
     expect(conFinales).toContain('escucha')
 
-    // Evento con el final RETENIDO delante (`resultIndex=1`): solo entra el nuevo.
+    // Evento FINAL: la hipótesis completa viaja desde 0 (aunque el evento
+    // declare resultIndex=1); el final sustituye la línea y no la duplica.
+    const completo = `${conFinales} ahora si`
     await motor.evento({
-      resultIndex: 1,
-      results: [resultado(conFinales, true), resultado('ahora si', true)],
+      resultIndex: 0,
+      results: [resultado(completo, true)],
     })
     const conRetenido = motor.instantanea().locucionAbierta?.texto ?? ''
-    expect(conRetenido.startsWith(conFinales)).toBe(true)
+    expect(conRetenido).toBe(completo)
     expect(conRetenido.indexOf(conFinales)).toBe(conRetenido.lastIndexOf(conFinales))
 
     // La fila commiteada lleva la MISMA frase canónica del módulo (Anexo B 3).
@@ -119,5 +125,40 @@ describe('producto — el texto del tramo se compone con los trozos del evento',
     expect(persistidas).toHaveLength(1)
     expect(persistidas[0].text).toBe(conRetenido)
     expect(eventos.some((evento) => evento.tipo === 'row.committed')).toBe(true)
+  })
+
+  it('una corrección del mismo resultado no se concatena (conversa → conversación)', async () => {
+    const motor = crearMotorConversacionProducto({
+      idioma: 'es',
+      ultimoTextoDicho: () => '',
+    })
+    motor.abrir()
+    for (let i = 0; i < 10; i += 1) motor.audio(silencio(100), SR, i * BLOQUE)
+    for (let i = 0; i < 10; i += 1) motor.audio(tono(100), SR, 16000 + i * BLOQUE)
+
+    const base = 'bien vamos a hacer unas pruebas de diarización de'
+    // El contexto ya está en la línea abierta (evento previo).
+    await motor.evento({ resultIndex: 0, results: [resultado(base)] })
+    // Chrome corrige el MISMO resultado: " conversa" → " conversación".
+    await motor.evento({
+      resultIndex: 1,
+      results: [resultado(base), resultado(' conversa')],
+    })
+    await motor.evento({
+      resultIndex: 1,
+      results: [resultado(base), resultado(' conversación')],
+    })
+
+    // La caja es la frase viva que el usuario ve antes del final.
+    const caja = motor.instantanea().box.texto
+    expect(caja).toBe(`${base} conversación`)
+
+    await motor.evento({
+      resultIndex: 0,
+      results: [resultado(`${base} conversación`, true)],
+    })
+
+    const texto = motor.instantanea().locucionAbierta?.texto ?? ''
+    expect(texto).toBe(`${base} conversación`)
   })
 })

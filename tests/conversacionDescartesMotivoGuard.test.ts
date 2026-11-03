@@ -341,33 +341,33 @@ describe('Caso 9 — todo descarte se cuenta con su motivo, nunca null', () => {
     expect(registro.contextos).toContain('conversacion.descarte')
   })
 
-  it('huerfano: el texto sin tramo expira contado con motivo huerfano', async () => {
+  it('huerfano: solo el texto VACÍO expira contado; un texto con contenido se retiene', async () => {
     const { api, reloj } = crearEscenario()
     await api.start()
-    const antes = await api.ingestAsr({ tramoId: UUID_A, texto: 'viejo', final: true })
-    expect(antes.filas).toEqual([])
-    expect(antes.box.abierta).toBe(false)
+    const vacio = await api.ingestAsr({ tramoId: UUID_A, texto: '   ', final: true })
+    expect(vacio.filas).toEqual([])
+    expect(vacio.descartes).toContainEqual(
+      expect.objectContaining({ motivo: 'huerfano' }),
+    )
 
-    reloj.avanzar(CONVERSACION_CONFIG.orphanBufferMs + 1)
-    const despues = await api.ingestAsr({
+    // Un texto CON contenido no es huérfano: se retiene y escribe su fila al
+    // stop (regla: solo el texto vacío se descarta).
+    const conTexto = await api.ingestAsr({
       tramoId: UUID_B,
-      texto: 'nuevo',
+      texto: 'viejo con contenido',
       final: true,
       tramo: { inicio: 0, fin: SAMPLE_RATE, sampleRate: SAMPLE_RATE },
     })
-    expect(despues.descartes).toContainEqual(
-      expect.objectContaining({ motivo: 'huerfano', locutionId: UUID_A }),
-    )
-    // El final solo MARCA la locución; el silencio de 5 s (puerta de abajo)
-    // cierra la fila de 'nuevo'.
-    const cerrada = await api.ingestAudio({
-      muestras: new Float32Array(5 * SAMPLE_RATE),
-      sampleRate: SAMPLE_RATE,
-      inicio: SAMPLE_RATE,
-      fin: 6 * SAMPLE_RATE,
-      medida: SILENCIO(5000),
-    })
-    expect(cerrada.filas.map((fila) => fila.texto)).toEqual(['nuevo'])
+    // El huerfano previo (texto vacío) sigue contado; el texto con contenido no
+    // añade otro.
+    expect(
+      conTexto.descartes
+        .slice(vacio.descartes.length)
+        .filter((d) => d.motivo === 'huerfano'),
+    ).toEqual([])
+    reloj.avanzar(CONVERSACION_CONFIG.orphanBufferMs + 1)
+    const detenida = await api.stop('system')
+    expect(detenida.filas.map((fila) => fila.texto)).toContain('viejo con contenido')
   })
 
   it('sinTexto: el stop sin texto cuenta el descarte y no inventa fila', async () => {
@@ -449,7 +449,14 @@ describe('Caso 9 — la caja de última frase == última fila commiteada al dete
     expect(api.snapshot().box.texto).toBe('uno')
 
     const detenida = await api.stop('system')
-    expect(detenida.filas.map((fila) => fila.texto)).toEqual(['uno', 'dos'])
+    expect(
+      detenida.filas.map((fila) => fila.texto),
+      JSON.stringify({
+        descartes: detenida.descartes,
+        box: detenida.box,
+        abierta: detenida.locucionAbierta,
+      }),
+    ).toEqual(['uno', 'dos'])
     expect(detenida.descartes).toEqual([])
   })
 })

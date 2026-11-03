@@ -96,6 +96,11 @@ export type AsrIngestado = Readonly<{
   tramo?: TramoMuestreado
   /** Métricas acústicas del motor para el final (pueden faltar). */
   medida?: MedidaMotor
+  /**
+   * Silencio MEDIDO antes del tramo entrante (ms). Es la medida del bloque
+   * actual que consume la frontera; el producto la lee del tramo vigente.
+   */
+  silencioPrevioMs?: number
   /** Turno al que pertenece la locución; si falta, se conserva el actual. */
   turnId?: string
 }>
@@ -183,6 +188,8 @@ export type InstantaneaConversacion = Readonly<{
     inicio: number
     fin: number
     sampleRate: number
+    /** Silencio MEDIDO antes de abrir este tramo (frontera de la regla 2). */
+    silencioPrevioMs: number
   }> | null
   /** Muestras PCM entregadas a la ingesta en la sesión (Caso 5, sin tope). */
   totalMuestrasEntregadas: number
@@ -254,6 +261,12 @@ export type TramoAudio = Readonly<{
 export type LocucionAbierta = Readonly<{
   locutionId: string
   texto: string
+  /**
+   * Aporte de texto POR TRAMO, en orden de llegada. `texto` es la composición
+   * de esta lista. El final de un tramo sustituye SOLO su aporte: lo dicho en
+   * tramos anteriores no se pierde.
+   */
+  textoTramos: readonly Readonly<{ tramoId: string; texto: string }>[]
   inicio: number
   fin: number
   sampleRate: number

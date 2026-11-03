@@ -14,6 +14,7 @@ import type {
   UmbralesFrontera,
 } from '../src/voice/conversation/frontera'
 import { CONVERSACION_CONFIG } from '../src/voice/conversation/ports'
+import { getTranscriptPauseCfg } from '../src/voice/lib/fluTranscriptPause.js'
 
 const UMBRALES: UmbralesFrontera = { minSilenceMs: 900, silenceCloseMs: 5000 }
 
@@ -70,9 +71,11 @@ describe('regla 2 — sin locución abierta no hay cierre', () => {
 })
 
 describe('regla 2 — los umbrales salen de la tabla, no de literales', () => {
-  it('la config real expone los dos umbrales', () => {
+  it('la config real expone los dos umbrales y el tiempo sale de fluConfig', () => {
     expect(CONVERSACION_CONFIG.minSilenceMs).toBe(900)
-    expect(CONVERSACION_CONFIG.silenceCloseMs).toBe(5000)
+    expect(CONVERSACION_CONFIG.silenceCloseMs).toBe(
+      Number(getTranscriptPauseCfg().srGapCommitMs),
+    )
   })
 
   it('con umbrales inyectados el borde se mueve con ellos', () => {

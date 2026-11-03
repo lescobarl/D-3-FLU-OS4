@@ -27,6 +27,13 @@
 # Guards de comportamiento (tests/*Guard*)
 /tests/*Guard*.test.ts        @lescobarl
 /tests/*Guard*.test.tsx       @lescobarl
+/tests/conversacionApi.test.ts             @lescobarl
+/tests/conversacionAcumulacionAsr.test.ts  @lescobarl
+/tests/conversacionRevision.test.ts        @lescobarl
+/tests/conversacionContinuidad.test.ts     @lescobarl
+/tests/conversacionEtiquetasYMezclaGuard.test.ts @lescobarl
+/tests/conversacionRutasDoblesGuard.test.ts @lescobarl
+/scripts/conversacion-rutas-dobles-baseline.json @lescobarl
 
 # Gate y hooks
 /scripts/guard-architecture.mjs @lescobarl

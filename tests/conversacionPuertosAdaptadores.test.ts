@@ -25,6 +25,7 @@ import { getVadEnergyThreshold } from '../src/voice/lib/asr/asrConfig'
 import {
   CONVERSACION_CONFIG,
 } from '../src/voice/conversation/ports'
+import { getTranscriptPauseCfg } from '../src/voice/lib/fluTranscriptPause.js'
 import type {
   AsrPort,
   ConfigPort,
@@ -66,7 +67,7 @@ describe('configuración del plan — una sola fuente', () => {
   it('los defaults son exactamente los de la tabla', () => {
     expect(CONVERSACION_CONFIG).toEqual({
       minSilenceMs: 900,
-      silenceCloseMs: 5000,
+      silenceCloseMs: Number(getTranscriptPauseCfg().srGapCommitMs),
       orphanBufferMs: 8000,
       asr: { engine: 'auto', lang: 'es' },
       maxRetentionMin: 120,

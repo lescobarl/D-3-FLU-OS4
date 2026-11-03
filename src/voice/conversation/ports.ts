@@ -1,13 +1,16 @@
 /**
  * PUERTOS y CONFIGURACIÓN del módulo CONVERSACIÓN.
  *
- * Puro: no importa NADA de fuera del módulo. El acceso al navegador, a
- * `src/voice/api/**` y al resto del proyecto vive en `adapters.ts`.
+ * Puro: no importa NADA de fuera del módulo salvo el dueño ÚNICO del tiempo de
+ * silencio (`fluTranscriptPause`), que se consume para no duplicar el umbral.
+ * El acceso al navegador, a `src/voice/api/**` y al resto del proyecto vive en
+ * `adapters.ts`.
  *
- * La tabla de configuración se declara aquí, en un solo sitio: `fluConfig.js`
- * queda fuera del alcance de este módulo y el plan prohíbe inventar claves.
- * Los valores son los de `docs/LAE_MODULO_CONVERSACION.MD` (sección «Config»).
+ * La tabla de configuración se declara aquí, en un solo sitio: el umbral de
+ * tiempo NO se escribe a mano; se lee del bloque de pausa/cola del ASR a través
+ * de su dueño `getTranscriptPauseCfg()`.
  */
+import { getTranscriptPauseCfg } from '../lib/fluTranscriptPause.js'
 
 /** Idioma activo de la aplicación (`es` / `en` / `both`). */
 export type Idioma = 'es' | 'en' | 'both'
@@ -330,7 +333,12 @@ export interface ConfiguracionConversacion {
 /** Defaults del plan. Es la ÚNICA fuente de estos números dentro del módulo. */
 export const CONVERSACION_CONFIG: ConfiguracionConversacion = Object.freeze({
   minSilenceMs: 900,
-  silenceCloseMs: 5000,
+  // Dueño único del tiempo: el MISMO `srGapCommitMs` que consume la tubería de
+  // transcripción. Se lee PEREZOSAMENTE para no cerrar el ciclo de imports al
+  // cargar el módulo; el valor sigue viniendo de la fuente única.
+  get silenceCloseMs(): number {
+    return Number(getTranscriptPauseCfg()?.srGapCommitMs) || 0
+  },
   orphanBufferMs: 8000,
   asr: Object.freeze({ engine: 'auto', lang: 'es' }),
   maxRetentionMin: 120,

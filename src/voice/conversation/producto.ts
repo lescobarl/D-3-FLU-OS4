@@ -25,10 +25,9 @@
  * entrega FRAGMENTOS: re-emite delante el final retenido del enunciado anterior,
  * manda prefijo re-plegado + cola que crece y puede re-escuchar el mismo tramo dos
  * veces (medido 8f3112c2: patrones `10`/`11` y `"bien"` + `" vamos"`). Este límite
- * compone el trozo de cada evento (`componerFraseDelEvento`) y lo integra en la
- * línea con el libro de su último hueco (`fusionarEnLineaAbierta`, dueño único en
- * `speechMerge`), en UNA cadena serializada: cada evento se compone sobre la
- * instantánea que ya incluye el audio anterior, nunca sobre una foto atrasada.
+ * compone la HIPÓTESIS COMPLETA de cada evento (`componerFraseDelEvento` con
+ * `desde=0`) y la entrega al módulo, en UNA cadena serializada: el módulo decide
+ * la pertenencia y la revisión; el límite no pega deltas de eventos anteriores.
  */
 import {
   componerFraseDelEvento,
@@ -46,9 +45,8 @@ import {
   registrarFallo,
 } from './adapters.ts'
 import { crearConversacion } from './motor.ts'
-// Dueño único de «¿este texto continúa la frase abierta?»: el límite no
-// reimplementa la comparación (revisión del ASR o crecimiento del dictado).
-import { continuaLaFrase } from '../core/locucion.js'
+import { perteneceALineaAbierta } from './fusion.ts'
+import { CONVERSACION_CONFIG } from './ports.ts'
 import type { IdiomaLocucion, MotivoCierre } from './ports.ts'
 import type {
   ConversacionApi,
@@ -175,9 +173,9 @@ export function crearMotorConversacionProducto({
     const aportado = String(proveedorDeTurno?.() ?? '').trim()
     return aportado || turnoDeSesion || ''
   }
-  /** Libro del último hueco pegado a la línea abierta (dueño de la regla: speechMerge). */
+  /** Libro del último hueco de la frase NUEVA pegada a la línea abierta. */
   let libroDeLinea: LibroDeLinea | null = null
-  /** Locución DUEÑA del libro: si el tramo cambia, el libro no describe su texto. */
+  /** Locución dueña del libro: si cambia, el libro no describe su texto. */
   let locucionDelLibro = ''
   /**
    * Cadena del límite: cada paso lee la instantánea DESPUÉS de que el paso anterior
@@ -202,10 +200,6 @@ export function crearMotorConversacionProducto({
 
   return {
     abrir: () => {
-      // Cada `onstart` abre una sesión de resultados NUEVA del reconocedor: los
-      // índices de Chrome vuelven a empezar y sus trozos no son los del libro
-      // anterior, así que el libro se descarta. Si la locución sigue abierta, el
-      // módulo conserva su texto y la siguiente fusión parte de él.
       libroDeLinea = null
       locucionDelLibro = ''
       if (estadoMotor !== 'inactiva') return
@@ -237,34 +231,36 @@ export function crearMotorConversacionProducto({
         if (!turno) return
         const instantanea = api.snapshot()
         const abierta = instantanea.locucionAbierta
-        const tramoVigente = instantanea.tramoAudio?.tramoId ?? ''
-        const trozo = componerFraseDelEvento(evento.results, evento.resultIndex)
+        // El FINAL es la HIPÓTESIS COMPLETA del tramo (desde=0): sustituye la
+        // línea acumulada, no se concatena. Los interinos siguen usando
+        // `resultIndex` (solo los resultados NUEVOS).
+        const hayFinal = traeFinal(evento)
+        const trozo = componerFraseDelEvento(
+          evento.results,
+          hayFinal ? 0 : evento.resultIndex,
+        )
         if (!trozo) return
-        // La línea abierta SOLO recibe el trozo si es SU audio vivo o si el trozo
-        // la CONTINÚA (final tardío del mismo enunciado; dueño de la relación:
-        // `continuaLaFrase`). Sin tramo vivo y sin continuación el texto es de
-        // otra frase que el VAD no segmentó: se ingiere SOLO y el módulo lo abre
-        // por su puerta de texto ajeno. Sin esta prueba el trozo ajeno se pegaba
-        // a la línea y la fila commiteaba DOS frases (defecto medido en el
-        // playback 2026-10-31: 93 caracteres donde iban 41).
         const laContinua =
           abierta !== null &&
-          (tramoVigente === abierta.locutionId ||
-            (!tramoVigente && continuaLaFrase(abierta.texto, trozo)))
+          perteneceALineaAbierta({
+            locucionId: abierta.locutionId,
+            textoAbierto: abierta.texto,
+            trozo,
+            tramoVigente: instantanea.tramoAudio ?? null,
+            silenceCloseMs: CONVERSACION_CONFIG.silenceCloseMs,
+          })
         const clave = laContinua && abierta ? abierta.locutionId : ''
         if (clave !== locucionDelLibro) {
           libroDeLinea = null
           locucionDelLibro = clave
         }
-        const hayFinal = traeFinal(evento)
-        const lineaPrevia = laContinua && abierta ? abierta.texto : ''
-        const fusion = fusionarEnLineaAbierta(lineaPrevia, libroDeLinea, trozo)
-        libroDeLinea = fusion.libro
-        // Misma línea = síntoma de reentrega del MISMO tramo (Chrome repite el
-        // evento): no se reingiere, SALVO que el evento traiga el final (Caso 7+6:
-        // el final MARCA la frase completa y debe llegar al módulo).
+        const lineaPrevia = !hayFinal && laContinua && abierta ? abierta.texto : ''
+        const fusion = hayFinal
+          ? { linea: trozo, libro: null }
+          : fusionarEnLineaAbierta(lineaPrevia, libroDeLinea, trozo)
+        libroDeLinea = hayFinal ? null : fusion.libro
         if (!fusion.linea) return
-        if (fusion.linea === lineaPrevia && !hayFinal) return
+        if (!hayFinal && fusion.linea === lineaPrevia) return
         const metrics = evento.metrics
         await registrarFallo(
           'conversacion.producto.ingest.error',
@@ -279,6 +275,9 @@ export function crearMotorConversacionProducto({
             final: hayFinal,
             idioma,
             turnId: turno,
+            // Medida del BLOQUE actual: el silencio medido antes del tramo
+            // vigente. La frontera no relee una medida acumulada.
+            silencioPrevioMs: instantanea.tramoAudio?.silencioPrevioMs ?? 0,
             ...(metrics
               ? { medida: { speechLikeMs: metrics.speechLikeMs, rms: metrics.rms } }
               : {}),

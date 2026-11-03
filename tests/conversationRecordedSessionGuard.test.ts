@@ -13,7 +13,10 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { decidirIdentidad } from '../src/voice/conversation/identidad';
-import { decidirFusion } from '../src/voice/conversation/fusion';
+// `decidirFusion` se retiró con la ruta doble: la fusión de duplicados y
+// continuaciones vive en `continuaLaFrase` + `unirRevision` (dueños únicos).
+import { continuaLaFrase } from '../src/voice/core/locucion.js';
+import { unirRevision } from '../src/voice/conversation/revision';
 import type { Fila, FilaNueva } from '../src/voice/conversation/ports';
 
 interface Row {
@@ -107,17 +110,22 @@ function simularFusion(rows: Row[]) {
   for (let index = 1; index < rows.length; index += 1) {
     const nueva: FilaNueva = fila(rows[index]!, index);
     const anterior = merged[merged.length - 1]!;
-    const decision = decidirFusion(anterior, nueva);
-    if (decision.tipo === 'fusionar') {
-      merged[merged.length - 1] = {
-        ...decision.fila,
-        revision: anterior.revision + 1,
-        updated_at: index,
-        deleted: false,
-      };
-    } else if (decision.tipo === 'nueva') {
+    if (!continuaLaFrase(anterior.texto, nueva.texto)) {
       merged.push(fila(rows[index]!, index));
+      continue;
     }
+    const union = unirRevision(anterior.texto, nueva.texto);
+    merged[merged.length - 1] = {
+      ...anterior,
+      texto: union.texto,
+      tramo: {
+        ...anterior.tramo,
+        fin: Math.max(anterior.tramo.fin, nueva.tramo.fin),
+      },
+      revision: anterior.revision + 1,
+      updated_at: index,
+      deleted: false,
+    };
   }
   return merged;
 }

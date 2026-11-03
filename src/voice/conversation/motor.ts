@@ -78,6 +78,7 @@ export function crearConversacion(dependencias: DependenciasConversacion): Conve
   const pendientes: Pendientes = crearPendientes({
     reloj,
     orphanBufferMs: configuracion.orphanBufferMs,
+    silenceCloseMs: configuracion.silenceCloseMs,
     contarDescarte: sesion.contarDescarte,
   })
   const bufferAsr: BufferAsr = crearBufferAsr()
@@ -176,7 +177,6 @@ export function crearConversacion(dependencias: DependenciasConversacion): Conve
     await ingesta.finalizarPendientes(stopKind)
     if (asr && estado.motorAsr) asr.detener()
     estado.tramoAudio = null
-    estado.ultimaMedida = { hayVoz: false, silencioMs: 0 }
     estado.silencioPendienteMs = 0
     estado.estadoAsr = 'idle'
     sesion.emitir({ tipo: 'asr.status', sessionId, estado: estado.estadoAsr })

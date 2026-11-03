@@ -22,7 +22,6 @@ import type {
   EstadoAsr,
   Fila,
   IdiomaLocucion,
-  MedidaVad,
   MotivoCierre,
   MotorAsr,
 } from './ports.ts'
@@ -37,7 +36,6 @@ export type EstadoSesion = {
   motorAsr: MotorAsr | null
   abierta: LocucionAbierta | null
   tramoAudio: TramoAudio | null
-  ultimaMedida: MedidaVad
   silencioPendienteMs: number
   /** Último tramo de audio medido: destina el final que llega tras el cierre. */
   ultimoTramoId: string
@@ -99,7 +97,6 @@ export function crearEstadoSesion(idiomaInicial: IdiomaLocucion): EstadoSesion {
     motorAsr: null,
     abierta: null,
     tramoAudio: null,
-    ultimaMedida: { hayVoz: false, silencioMs: 0 },
     silencioPendienteMs: 0,
     ultimoTramoId: '',
     ultimaEtiqueta: '',
@@ -233,6 +230,7 @@ export function crearSesion(
             inicio: estado.tramoAudio.inicio,
             fin: estado.tramoAudio.fin,
             sampleRate: estado.tramoAudio.sampleRate,
+            silencioPrevioMs: estado.tramoAudio.silencioPrevioMs,
           }
         : null,
       totalMuestrasEntregadas: estado.totalMuestrasEntregadas,
@@ -274,7 +272,6 @@ export function crearSesion(
     estado.idiomaActual = idioma
     estado.abierta = null
     estado.tramoAudio = null
-    estado.ultimaMedida = { hayVoz: false, silencioMs: 0 }
     estado.silencioPendienteMs = 0
     estado.ultimoTramoId = ''
     estado.ultimaEtiqueta = ''

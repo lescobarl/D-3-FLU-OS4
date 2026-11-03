@@ -16,6 +16,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import { crearPendientes } from '../src/voice/conversation/cola.ts'
+import { CONVERSACION_CONFIG } from '../src/voice/conversation/ports.ts'
 import type { EntradaPendiente } from '../src/voice/conversation/tipos.ts'
 
 const PARCIAL = 'voy a poner a la mujer hablar para que no digan que'
@@ -40,6 +41,7 @@ function crear() {
   return crearPendientes({
     reloj: { ahora: () => 0 },
     orphanBufferMs: 8000,
+    silenceCloseMs: CONVERSACION_CONFIG.silenceCloseMs,
     contarDescarte: () => {},
   })
 }

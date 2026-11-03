@@ -5,9 +5,9 @@
  * tramo la decide `decidirRevision` (dueño único de la regla 3).
  */
 import { fusionarVoz } from './fila.ts'
-import { decidirRevision } from './revision.ts'
+import { unirRevision } from './revision.ts'
 // Dueño único de «¿este texto continúa la frase?»: el retén no reimplementa la
-// comparación para decidir qué pendiente sin tramo adopta el tramo que llega.
+// comparación para decidir qué pendiente adopta el tramo que llega.
 import { continuaLaFrase } from '../core/locucion.js'
 import type { ContarDescarte, EntradaPendiente } from './tipos.ts'
 import type { RelojPort } from './ports.ts'
@@ -50,59 +50,70 @@ export type Pendientes = Readonly<{
  * @param opciones Reloj, ventana de huérfanos y contador de descartes.
  * @returns Retén con encolado por tramo, expurgo y consumo en orden.
  */
+/**
+ * ¿Dos pendientes son el MISMO enunciado? Mismo tramo, o texto que continúa la
+ * frase con ventanas de audio a distancia <= `silenceCloseMs`, o uno sin tramo.
+ * La comparación es de `continuaLaFrase`; aquí solo se añade la proximidad.
+ */
+function mismoEnunciado(
+  previo: EntradaPendiente,
+  nuevo: EntradaPendiente,
+  silenceCloseMs: number,
+): boolean {
+  if (previo.tramoId && nuevo.tramoId && previo.tramoId === nuevo.tramoId) return true
+  if (!continuaLaFrase(previo.texto, nuevo.texto)) return false
+  if (!previo.tramo || !nuevo.tramo) return true
+  const rate = Math.max(
+    1,
+    Number(previo.tramo.sampleRate) || Number(nuevo.tramo.sampleRate) || 1,
+  )
+  const distanciaMs = Math.abs((nuevo.tramo.inicio - previo.tramo.fin) / rate) * 1000
+  return distanciaMs <= silenceCloseMs
+}
+
 export function crearPendientes({
   reloj,
   orphanBufferMs,
+  silenceCloseMs,
   contarDescarte,
 }: {
   reloj: RelojPort
   orphanBufferMs: number
+  silenceCloseMs: number
   contarDescarte: ContarDescarte
 }): Pendientes {
   let pendientes: EntradaPendiente[] = []
 
   return {
     encolar: (entrada) => {
-      const tramoId = String(entrada.tramoId || '').trim()
-      // SIN TRAMO: el texto aún no tiene audio que lo sostenga. Se retiene hasta
-      // su ventana de huérfano y NO se fusiona con otro texto sin tramo: la
-      // regla de revisión exige un tramo y nada prueba que sean la misma frase.
-      if (!tramoId) {
-        pendientes = [...pendientes, entrada]
-        return
-      }
-      // El texto de un tramo CONTINÚA a un pendiente SIN tramo: es la MISMA
-      // frase y el tramo que llega ahora ES el suyo. El parcial sin audio cede
-      // al final que ya trae audio (medido 2026-10-31: tras una pausa que el
-      // VAD no segmentó, el final del enunciado llegó sin tramo y su
-      // continuación con tramo; sin adoptar, el parcial quedaba delante).
-      const delTramo = pendientes.findIndex((p) => p.tramoId === tramoId)
-      const indice =
-        delTramo >= 0
-          ? delTramo
-          : pendientes.findIndex(
-              (p) => !p.tramoId && continuaLaFrase(p.texto, entrada.texto),
-            )
+      // UN pendiente por ENUNCIADO, no por tramo. Se busca el mismo enunciado
+      // (mismo tramo; o continúa la frase con audio próximo; o uno sin tramo)
+      // y se funde con su dueño `unirRevision`; solo si no hay relación se crea
+      // una entrada nueva. Las 179 parciales prefijo quedan en UNA.
+      const indice = pendientes.findIndex((p) =>
+        mismoEnunciado(p, entrada, silenceCloseMs),
+      )
       if (indice < 0) {
         pendientes = [...pendientes, entrada]
         return
       }
       const previa = pendientes[indice]
-      const decision = decidirRevision({
-        tramoAbierto: { id: tramoId, texto: previa.texto },
-        tramoId,
-        texto: entrada.texto,
-        final: previa.final || entrada.final,
-      })
+      const unido = unirRevision(previa.texto, entrada.texto)
+      // El tramo del grupo AVANZA al más reciente: la proximidad del siguiente
+      // texto se mide contra el último audio de la frase, no contra el primero.
+      const tramo = entrada.tramo ?? previa.tramo
       const siguiente: EntradaPendiente = {
         ...previa,
-        tramoId,
-        texto: decision.pintar ? decision.texto : previa.texto,
+        tramoId: String(entrada.tramoId || '').trim() || previa.tramoId,
+        texto: unido.pintar ? unido.texto : previa.texto,
         final: previa.final || entrada.final,
         idioma: entrada.idioma,
-        turnId: entrada.turnId,
+        turnId: entrada.turnId || previa.turnId,
         voz: fusionarVoz(previa.voz, entrada.voz),
-        tramo: previa.tramo ?? entrada.tramo,
+        tramo,
+        medida: entrada.medida ?? previa.medida,
+        // La expiración se mide desde la ÚLTIMA llegada, no desde la primera.
+        recibidoAt: entrada.recibidoAt,
       }
       pendientes = pendientes.map((p, posicion) =>
         posicion === indice ? siguiente : p,
@@ -113,7 +124,13 @@ export function crearPendientes({
       const vigentes: EntradaPendiente[] = []
       for (const pendiente of pendientes) {
         if (ahora - pendiente.recibidoAt > orphanBufferMs) {
-          contarDescarte('huerfano', pendiente.tramoId, pendiente.tramo ?? null)
+          // Un pendiente CON TEXTO no es huérfano: se abre/commitea (sintético
+          // si su tramo venció). Solo el texto vacío se descarta.
+          if (String(pendiente.texto || '').trim()) {
+            vigentes.push(pendiente)
+          } else {
+            contarDescarte('huerfano', pendiente.tramoId, pendiente.tramo ?? null)
+          }
         } else {
           vigentes.push(pendiente)
         }

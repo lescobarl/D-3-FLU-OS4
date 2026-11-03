@@ -280,6 +280,59 @@ describe('continuidad de voz — decisión de la sesión', () => {
  * sería ROJO; si no emitiera `speaker.labeled`, la vista no podría reemplazar la
  * etiqueta temporal.
  */
+describe('el final de un tramo no borra lo dicho en tramos anteriores', () => {
+  it('sustituye SOLO su tramo: conserva las frases previas y limpia su ruido', async () => {
+    const { estado, reglas, guardadas } = crearProbePendiente()
+    const tramoA = UUIDS[0]!
+    const tramoB = UUIDS[1]!
+    const tramo = { inicio: 0, fin: 16000, sampleRate: 16000 }
+    reglas.abrirLocucion({
+      tramoId: tramoA,
+      texto: 'necesito para mi',
+      tramo,
+      turnId: tramoA,
+      idioma: 'es',
+      voz: {},
+    })
+    const abierta = estado.abierta
+    if (!abierta) throw new Error('no abrió la locución')
+
+    // A crece con su propia frase (interino).
+    reglas.aplicarRevision(
+      abierta,
+      'necesito para mi no sé cuál es fresa',
+      false,
+      {},
+      undefined,
+      tramoA,
+    )
+    // B aporta primero ruido de su tramo y luego su final limpio.
+    const conA = estado.abierta
+    if (!conA) throw new Error('la revisión cerró la locución')
+    reglas.aplicarRevision(conA, '39 39 39 39', false, {}, undefined, tramoB)
+    const conRuido = estado.abierta
+    if (!conRuido) throw new Error('la revisión cerró la locución')
+    reglas.aplicarRevision(
+      conRuido,
+      'bien aquí están todos los pasteles de Costco',
+      true,
+      {},
+      undefined,
+      tramoB,
+    )
+
+    const final = estado.abierta
+    if (!final) throw new Error('el final cerró la locución')
+    const esperado =
+      'necesito para mi no sé cuál es fresa bien aquí están todos los pasteles de Costco'
+    expect(final.texto).toBe(esperado)
+    expect(final.texto).not.toContain('39 39')
+
+    await reglas.cerrarLocucion(final, 'system', 'silencio', true)
+    expect(guardadas.get(tramoA)?.texto).toBe(esperado)
+  })
+})
+
 describe('el hablante es el ÚNICO campo actualizable de una fila commiteada', () => {
   it('la fila nace TEMPORAL y la medida tardía reemplaza hablante y firma', async () => {
     const { estado, reglas, guardadas, actualizaciones, eventos } = crearProbePendiente()

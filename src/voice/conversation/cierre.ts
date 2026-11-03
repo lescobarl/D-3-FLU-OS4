@@ -12,15 +12,14 @@
  * inserta SU fila. El estado lo posee la sesión, que lo entrega como contexto.
  */
 import { construirFila, fusionarVoz } from './fila.ts'
-import { continuaLaFrase } from '../core/locucion.js'
 import type { CierreLocucion, VozEtiqueta } from './fila.ts'
 import { decidirRevision } from './revision.ts'
-import { decidirFusion } from './fusion.ts'
 import { decidirIdentidad, plantillasDe } from './identidad.ts'
 import type { PlantillaVoz } from './identidad.ts'
 import { registrarMedidaVoz } from './sesion.ts'
 import { concatenarMuestras } from './muestras.ts'
 import { logCaughtError } from '../../lib/caughtError.ts'
+import { normalizeForMatch } from '../../lib/textUtils.ts'
 import { recordSessionEvent } from '../api/sessionLog.ts'
 import type {
   CausaCierre,
@@ -107,7 +106,27 @@ export type AplicarRevision = (
   final: boolean,
   voz: EvidenciaVoz,
   medida?: MedidaMotor,
+  /** Tramo al que pertenece `texto`; sin él, el tramo base de la locución. */
+  tramoOrigen?: string,
 ) => boolean
+
+/** Aporte de texto de un tramo dentro de la locución abierta (orden de llegada). */
+type TextoPorTramo = Readonly<{ tramoId: string; texto: string }>
+
+/** Compone la línea visible a partir de los aportes de cada tramo. */
+function componerTramos(aportes: readonly TextoPorTramo[]): string {
+  return aportes
+    .map((aporte) => aporte.texto.trim())
+    .filter(Boolean)
+    .join(' ')
+}
+
+/** ¿`contenedor` ya incluye `contenido`? Emisión acumulativa del ASR. */
+function contieneTexto(contenedor: string, contenido: string): boolean {
+  const amplio = normalizeForMatch(contenedor)
+  const corto = normalizeForMatch(contenido)
+  return Boolean(amplio) && Boolean(corto) && amplio.includes(corto)
+}
 
 /** Reglas de cierre que la sesión publica en su superficie. */
 export type ReglasCierre = Readonly<{
@@ -142,20 +161,6 @@ export type ReglasCierre = Readonly<{
  * @param plantillasVoz Plantillas de las voces medidas en la sesión.
  * @returns La voz resuelta que consume `resolverEtiqueta`.
  */
-/**
- * ¿La locucion nueva es reentrega del turno ya commiteado? Es reentrega si
- * repite el texto o si lo CONTINUA/revisa (`continuaLaFrase`). Una frase NUEVA
- * del mismo turno no lo es y debe escribir su fila (antes se perdia).
- * @param previo Texto de la fila ya commiteada del turno.
- * @param texto Texto de la locucion que cierra.
- */
-export function esReentregaDeTurno(previo: string, texto: string): boolean {
-  const anterior = String(previo || '').trim()
-  const actual = String(texto || '').trim()
-  if (!anterior || !actual) return false
-  return anterior === actual || continuaLaFrase(anterior, actual)
-}
-
 export function resolverVoz(
   voz: EvidenciaVoz,
   continuidadVoz: boolean,
@@ -236,6 +241,9 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
     estado.abierta = {
       locutionId: datos.tramoId,
       texto: datos.texto,
+      textoTramos: String(datos.texto || '').trim()
+        ? [{ tramoId: datos.tramoId, texto: datos.texto }]
+        : [],
       inicio: datos.tramo.inicio,
       fin: datos.tramo.fin,
       sampleRate: datos.tramo.sampleRate,
@@ -255,13 +263,57 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
   }
 
   /** Aplica texto a la locución abierta ANTES de evaluar la frontera (regla 2). */
-  const aplicarRevision: AplicarRevision = (locucion, texto, final, voz, medida) => {
+  const aplicarRevision: AplicarRevision = (
+    locucion,
+    texto,
+    final,
+    voz,
+    medida,
+    tramoOrigen,
+  ) => {
+    const origen =
+      String(tramoOrigen || locucion.locutionId).trim() || locucion.locutionId;
+    const aportes: readonly TextoPorTramo[] = locucion.textoTramos.length
+      ? locucion.textoTramos
+      : String(locucion.texto || '').trim()
+        ? [{ tramoId: locucion.locutionId, texto: locucion.texto }]
+        : [];
+    const indice = aportes.findIndex((aporte) => aporte.tramoId === origen);
+    const previoTramo = indice >= 0 ? aportes[indice]?.texto ?? '' : '';
+    // Regla 3 DENTRO DEL TRAMO: crece o revisa; si pierde palabras, no pinta.
     const decision = decidirRevision({
-      tramoAbierto: { id: locucion.locutionId, texto: locucion.texto },
-      tramoId: locucion.locutionId,
+      tramoAbierto: previoTramo ? { id: origen, texto: previoTramo } : null,
+      tramoId: origen,
       texto,
-      final: locucion.final || final,
-    })
+      final,
+    });
+    // El final es la hipótesis confirmada de SU tramo: reemplaza SOLO ese
+    // aporte. Lo dicho en tramos anteriores se conserva (antes el final de un
+    // tramo posterior borraba las frases previas de la locución).
+    const textoDelTramo = final
+      ? String(texto || '').trim() || previoTramo
+      : decision.texto;
+    let siguientes: readonly TextoPorTramo[] =
+      indice >= 0
+        ? aportes.map((aporte, i) =>
+            i === indice ? { tramoId: origen, texto: textoDelTramo } : aporte,
+          )
+        : [
+            ...aportes.filter((aporte) => aporte.texto.trim()),
+            { tramoId: origen, texto: textoDelTramo },
+          ];
+    // El ASR puede reemitir de forma ACUMULATIVA: si el texto de este tramo ya
+    // contiene el de los demás, se colapsa para no duplicar lo ya dicho.
+    const otros = siguientes.filter(
+      (aporte) => aporte.tramoId !== origen && aporte.texto.trim(),
+    );
+    if (
+      otros.length > 0 &&
+      otros.every((aporte) => contieneTexto(textoDelTramo, aporte.texto))
+    ) {
+      siguientes = [{ tramoId: origen, texto: textoDelTramo }];
+    }
+    const textoCompuesto = componerTramos(siguientes);
     const vozId = String(voz.vozId || '').trim()
     let continuidadVoz = locucion.continuidadVoz
     if (vozId && !String(locucion.voz.vozId || '').trim()) {
@@ -270,7 +322,8 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
     }
     const siguiente: LocucionAbierta = {
       ...locucion,
-      texto: decision.pintar ? decision.texto : locucion.texto,
+      texto: textoCompuesto,
+      textoTramos: siguientes,
       final: locucion.final || final,
       // Las métricas del motor viajan con SU final; sin final no se guardan.
       medidaMotor: final ? medida ?? locucion.medidaMotor : locucion.medidaMotor,
@@ -361,35 +414,6 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
       hablante: identidad.hablante,
       continuidad: identidad.continuidad,
     }
-  }
-
-  /**
-   * Fila commiteada del MISMO turno en la sesión (Caso 8: un turnId => una fila).
-   * La usa la puerta INSERT-ONLY: si el turno ya commiteó, una locución que no
-   * aporta una voz distinta medida es reentrega y no se escribe.
-   */
-  function filaDelTurno(turno: string, etiqueta?: string): Fila | null {
-    const id = String(turno || '').trim()
-    if (!id) return null
-    let reciente: Fila | null = null
-    for (const fila of estado.filas.values()) {
-      if (fila.sessionId !== estado.sessionId) continue
-      if (fila.deleted) continue
-      if (String(fila.turnId || '').trim() !== id) continue
-      reciente = fila
-      if (etiqueta && fila.etiqueta === etiqueta) return fila
-    }
-    return reciente
-  }
-
-  function filaMasReciente(): Fila | null {
-    let reciente: Fila | null = null
-    for (const fila of estado.filas.values()) {
-      if (fila.sessionId !== estado.sessionId) continue
-      if (fila.deleted) continue
-      if (!reciente || fila.tramo.fin > reciente.tramo.fin) reciente = fila
-    }
-    return reciente
   }
 
   /**
@@ -598,44 +622,10 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
       cerrarDescartada({ sessionId: sesion, locucion, tramo, motivo, causa, medida, descarte: 'control' })
       return
     }
-    const vozDistintaMedida =
-      String(vozCerrada.vozId || '').trim() !== '' && !continuidadVoz
-    // DUPLICADOS/CONTINUACIONES (auditoria 2026-11-01): la misma frase o su
-    // revision con audio contiguo se FUNDE con la fila anterior (upsert por su
-    // id). Antes cada `row.committed` insertaba otra fila y la conversacion
-    // duplicaba lo mismo dos veces. Una voz distinta medida NO se funde.
-    const decision = decidirFusion(filaMasReciente(), resultado.fila, {
-      vozDistinta: vozDistintaMedida,
-    })
-    if (decision.tipo === 'fusionar') {
-      const guardada = await guardarFila(decision.fila, String(vozCerrada.vozId || ''))
-      emitirCierre({ sessionId: sesion, locucion, tramo, motivo, causa, medida })
-      commitar(guardada)
-      registro.registrar('conversacion.locucion.fusionada', {
-        sessionId: sesion,
-        locutionId: locucion.locutionId,
-        fila: guardada.locutionId,
-        revision: guardada.revision,
-      })
-      return
-    }
-    if (decision.tipo === 'descartar') {
-      cerrarDescartada({ sessionId: sesion, locucion, tramo, motivo, causa, medida, descarte: decision.motivo })
-      return
-    }
-    const previaDelTurno = filaDelTurno(cierre.turnId)
-    // La reentrega es la MISMA locucion o una REVISION/continuacion de su texto.
-    // Una frase NUEVA del mismo turno (p. ej. el comando commiteado por el hook
-    // antes de que el modulo cierre) NO es reentrega: antes se descartaba y la
-    // conversacion perdia la ultima frase (auditoria 2026-11-01).
-    const esReentrega = previaDelTurno
-      ? esReentregaDeTurno(previaDelTurno.texto, cierre.texto)
-      : false
-    if (previaDelTurno && !vozDistintaMedida && esReentrega) {
-      cerrarDescartada({ sessionId: sesion, locucion, tramo, motivo, causa, medida, descarte: 'turnoYaEscrito' })
-      return
-    }
-
+    // Una sola frontera: si el módulo abrió esta locución, es una locución
+    // legítima (silencio >5 s o voz distinta). El cierre NO decide otra vez por
+    // texto, turno, reentrega ni contención: esa segunda frontera era la que
+    // creaba la fila 51 y descartaba las filas 6–9.
     const fila = await guardarFila(resultado.fila, String(vozCerrada.vozId || ''))
     emitirCierre({ sessionId: sesion, locucion, tramo, motivo, causa, medida })
     commitar(fila)

@@ -1,0 +1,15 @@
+{
+  "fecha": "2026-11-03",
+  "dueno": "src/voice/conversation",
+  "nota": "Linea base de rutas dobles del modulo CONVERSACION. Solo baja: si una metrica baja, se actualiza aqui en el mismo cambio; si sube, el guard falla.",
+  "metricas": {
+    "timeLiterals": 0,
+    "timeConfigReads": 1,
+    "closureConditionOwners": 1,
+    "finalResultIndex": 0,
+    "staleMeasureReads": 0,
+    "voiceChangeSameTramoOnly": 0,
+    "finalWholeLineReplace": 0,
+    "broadTextDedupe": 0
+  }
+}

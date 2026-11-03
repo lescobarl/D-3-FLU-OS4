@@ -2,15 +2,14 @@
  * FRONTERA DE LA LOCUCIÓN — regla 2 del módulo CONVERSACIÓN (pura).
  *
  * El VAD MIDE (`hayVoz`, `silencioMs`); esta frontera DECIDE si la locución
- * abierta se cierra. Dos cierres distintos, con umbrales del plan:
+ * abierta se cierra. LAS DOS PUERTAS del producto viven aquí:
  *
- *  - FRONTERA: hay silencio suficiente (`minSilenceMs`) y llega texto ajeno
- *    (otro tramo). Es el cierre por cambio de hablante/tramo.
- *  - SILENCIO: no llega texto ajeno, pero el silencio alcanza
- *    `silenceCloseMs`. Es el segundo cierre; el llamador decide si la fila es
- *    provisional o descarte contado (regla 4).
+ *  - VOZ: el tramo entrante fue medido como OTRA voz. Cierra YA (no espera al
+ *    silencio); es la única puerta de cambio de hablante.
+ *  - SILENCIO: el silencio medido alcanza `silenceCloseMs`. Con texto ajeno la
+ *    causa es `frontera`; sin él, `silencio`.
  *
- * Con voz presente no se cierra aunque la medida traiga silencio: la voz gana.
+ * Con voz presente en la medida no se cierra por tiempo: la voz gana.
  * Los umbrales salen de `CONVERSACION_CONFIG` (tabla del plan); no hay literales
  * de milisegundos aquí. Sin imports externos y sin mutar la entrada.
  */
@@ -23,8 +22,8 @@ export type UmbralesFrontera = Readonly<{
   silenceCloseMs: number
 }>
 
-/** Causa del cierre: frontera por texto ajeno o silencio sin texto ajeno. */
-export type CausaFrontera = 'frontera' | 'silencio'
+/** Causa del cierre: voz distinta medida, frontera por texto ajeno o silencio. */
+export type CausaFrontera = 'voz' | 'frontera' | 'silencio'
 
 /** Decisión de la regla 2: si cerrar y por qué. */
 export type DecisionFrontera = Readonly<{
@@ -32,17 +31,19 @@ export type DecisionFrontera = Readonly<{
   causa: CausaFrontera | null
 }>
 
-/** Entrada de la frontera: medida del VAD, texto ajeno y si hay locución abierta. */
+/** Entrada de la frontera: medida del VAD, texto ajeno, voz y locución abierta. */
 export type EntradaFrontera = Readonly<{
   medida: MedidaVad
   textoAjeno: boolean
   abierta: boolean
+  /** Voz DISTINTA medida/declarada para el tramo entrante. */
+  cambioVoz?: boolean
 }>
 
 /**
- * Decide si la locución abierta se cierra con la medida actual del VAD.
+ * Decide si la locución abierta se cierra.
  *
- * @param entrada Medida del VAD, si llegó texto de otro tramo y si hay locución.
+ * @param entrada Medida del VAD, texto ajeno, cambio de voz medido y si hay locución.
  * @param umbrales Umbrales de la tabla del plan (inyectables en pruebas).
  * @returns `{cerrar, causa}`; `causa` es null mientras no se cierre.
  */
@@ -52,14 +53,13 @@ export function decidirFrontera(
 ): DecisionFrontera {
   if (!entrada.abierta) return { cerrar: false, causa: null }
 
+  // PUERTA 1: cambio de hablante MEDIDO. Cierra ya, sin esperar silencio.
+  if (entrada.cambioVoz === true) return { cerrar: true, causa: 'voz' }
+
   const silencioMs = Math.max(0, Number(entrada.medida.silencioMs) || 0)
   if (entrada.medida.hayVoz) return { cerrar: false, causa: null }
 
-  // REGLA DEL PRODUCTO (auditoría 2026-11-01): una locución solo pasa a
-  // conversación con SILENCIO o CAMBIO DE HABLANTE. El texto ajeno por sí solo
-  // NO es cambio de hablante: cerraba a los 900 ms y partía frases de la misma
-  // voz (duplicados/pérdidas). La voz distinta se detecta antes, con medida
-  // (`verificarCambioVoz`, causa 'voz'). Aquí solo queda la puerta de silencio.
+  // PUERTA 2: SOLO el silencio medido. El texto ajeno por sí solo NO cierra.
   if (silencioMs >= umbrales.silenceCloseMs) {
     return { cerrar: true, causa: entrada.textoAjeno ? 'frontera' : 'silencio' }
   }

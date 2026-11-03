@@ -96,15 +96,16 @@ describe('cierre por silencio: el turno cierra y escribe su fila', () => {
 // PRUEBA DE DETECTOR: la frontera pura marca los dos lados del umbral.
 describe('la frontera no es decorativa', () => {
   it('cierra con silencio suficiente y no con menos; la voz gana', () => {
-    expect(decidirFrontera({ medida: { hayVoz: false, silencioMs: 5000 }, textoAjeno: false, abierta: true })).toEqual({
+    const umbral = CONVERSACION_CONFIG.silenceCloseMs
+    expect(decidirFrontera({ medida: { hayVoz: false, silencioMs: umbral }, textoAjeno: false, abierta: true })).toEqual({
       cerrar: true,
       causa: 'silencio',
     })
-    expect(decidirFrontera({ medida: { hayVoz: false, silencioMs: 4999 }, textoAjeno: false, abierta: true })).toEqual({
+    expect(decidirFrontera({ medida: { hayVoz: false, silencioMs: umbral - 1 }, textoAjeno: false, abierta: true })).toEqual({
       cerrar: false,
       causa: null,
     })
-    expect(decidirFrontera({ medida: { hayVoz: true, silencioMs: 9000 }, textoAjeno: true, abierta: true })).toEqual({
+    expect(decidirFrontera({ medida: { hayVoz: true, silencioMs: umbral * 2 }, textoAjeno: true, abierta: true })).toEqual({
       cerrar: false,
       causa: null,
     })
@@ -112,7 +113,7 @@ describe('la frontera no es decorativa', () => {
       cerrar: false,
       causa: null,
     })
-    expect(decidirFrontera({ medida: { hayVoz: false, silencioMs: 5000 }, textoAjeno: true, abierta: true })).toEqual({
+    expect(decidirFrontera({ medida: { hayVoz: false, silencioMs: umbral }, textoAjeno: true, abierta: true })).toEqual({
       cerrar: true,
       causa: 'frontera',
     })

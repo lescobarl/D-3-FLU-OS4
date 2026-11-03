@@ -14,8 +14,10 @@
  * "Más largo" se mide en PALABRAS, no en caracteres: la regla habla de perder
  * palabras. `final` no cambia el texto: solo declara que el tramo completa.
  *
- * Sin imports: no conoce ASR, store, reloj ni UI. No muta la entrada.
+ * Solo importa el dueño del comparador de fragmentos (`speechMerge`). No
+ * conoce ASR, store, reloj ni UI. No muta la entrada.
  */
+import { isSameFragmentRevision } from '../lib/speechMerge.js'
 
 /** Texto de una locución abierta: su tramo y lo que la caja muestra. */
 export type TramoAbierto = Readonly<{ id: string; texto: string }>
@@ -72,7 +74,11 @@ export function unirRevision(anterior: string, nuevo: string): TextoUnido {
     return { texto: siguiente, pintar: true, tipo: 'extiende' }
   }
   if (palabrasNuevas === palabrasAnteriores && palabrasNuevas > 0) {
-    return { texto: siguiente, pintar: true, tipo: 'revisa' }
+    // Solo una REVISIÓN del mismo fragmento reemplaza. Una frase nueva con las
+    // mismas palabras ("uno" → "dos") no pisa la locución.
+    return isSameFragmentRevision(previo, siguiente)
+      ? { texto: siguiente, pintar: true, tipo: 'revisa' }
+      : { texto: previo, pintar: false, tipo: 'revisa' }
   }
   return { texto: previo, pintar: false, tipo: 'revisa' }
 }
