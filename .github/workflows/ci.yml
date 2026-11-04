@@ -14,6 +14,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
@@ -23,6 +25,19 @@ jobs:
           # 'TypeError: webidl.util.markAsUncloneable is not a function'.
           node-version: 22
           cache: npm
+
+      - name: Guard de dueños (archivos nuevos)
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE="${{ github.event.pull_request.base.sha }}"
+          else
+            BASE="${{ github.event.before }}"
+          fi
+          if [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ]; then
+            echo "[owner-gate] Sin base comparable; se omite."
+            exit 0
+          fi
+          node scripts/owner-gate.mjs --diff "$BASE"
 
       - name: Instalar dependencias
         run: npm ci

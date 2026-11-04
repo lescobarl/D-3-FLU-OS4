@@ -35,6 +35,12 @@
 /tests/conversacionRutasDoblesGuard.test.ts @lescobarl
 /scripts/conversacion-rutas-dobles-baseline.json @lescobarl
 
+# Gate de dueños (archivos nuevos)
+/docs/OWNERS.md               @lescobarl
+/scripts/owner-gate.mjs       @lescobarl
+/.claude/settings.json        @lescobarl
+/.githooks/pre-commit         @lescobarl
+
 # Gate y hooks
 /scripts/guard-architecture.mjs @lescobarl
 /scripts/task-gate.mjs         @lescobarl
