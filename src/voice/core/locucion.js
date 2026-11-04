@@ -97,5 +97,32 @@ export function estadoDeLocucion(anterior = '', nuevo = '') {
  */
 export function continuaLaFrase(anterior = '', nuevo = '') {
   const estado = estadoDeLocucion(anterior, nuevo)
-  return estado.mismaRevision || estado.crecimiento
+  return (
+    estado.mismaRevision ||
+    estado.crecimiento ||
+    frasesSolapadas(anterior, nuevo)
+  )
+}
+
+/**
+ * ¿Dos textos son la MISMA frase con una inserción/corrección en medio?
+ *
+ * El ASR reemite la frase con otra grafía o con una cuña ("se vuelve a quedar"
+ * → "se vuelve bien Vamos a quedar"): no comparten un prefijo largo, pero sí
+ * la mayor parte de las palabras. Sin esta comparación el módulo abría una
+ * segunda fila para el mismo audio y el usuario veía texto "batido".
+ * Solo se afirma con evidencia suficiente (4+ palabras compartidas y al menos
+ * la mitad del texto más corto); una frase de otro tema no entra.
+ * @param {string} anterior Texto ya pintado.
+ * @param {string} nuevo Texto reemitido.
+ * @returns {boolean} `true` si es la misma frase reemitiéndose.
+ */
+export function frasesSolapadas(anterior = '', nuevo = '') {
+  const a = speechWords(anterior)
+  const b = speechWords(nuevo)
+  if (a.length < 4 || b.length < 4) return false
+  const setB = new Set(b.map((word) => word.toLowerCase()))
+  const shared = a.filter((word) => setB.has(word.toLowerCase())).length
+  const min = Math.min(a.length, b.length)
+  return shared >= 4 && shared >= min * 0.5
 }

@@ -33,7 +33,10 @@ describe('turnoYaEscrito — solo reentrega', () => {
     const texto = readFileSync(join(process.cwd(), 'src/voice/conversation/texto.ts'), 'utf8');
     const ingesta = readFileSync(join(process.cwd(), 'src/voice/conversation/ingesta.ts'), 'utf8');
     expect(cierre).toContain('tramoYaCommiteado');
-    expect(texto).toContain('tramoYaCommiteado');
+    // La reentrega se decide en la INGESTA (dueño del ASR): un tramo commiteado
+    // solo descarta si el texto continúa/repite la fila; una frase nueva abre.
+    expect(ingesta).toContain('estado.filas.has(tramoId)');
+    expect(texto).not.toContain('tramoYaCommiteado');
     expect(cierre).not.toContain('filaDelTurno(');
     // El descarte por texto-prefijo se retiró: una frase nueva del mismo turno
     // no puede perderse. Solo se descarta la reentrega que CONTINÚA la frase.

@@ -29,7 +29,6 @@ import { noteGameTurn } from '../../core/games/gameSessionStore'
 import { consumesGameTurn, isCatalogLevelGameAction } from '../lib/gameCommands'
 import { relayLog } from '../../lib/clientLogRelay'
 import { recordSessionTurn } from '../lib/sessionRecorder.js'
-import { grabarSnapshotDeTurno } from '../conversation/turnSnapshot.js'
 import { captureTurnAudioSnapshot, probePcmBlock, turnAudioForDiarize } from '../lib/turnAudioSnapshot.js'
 import { useIntegrationStore } from '../../store/integrationStore'
 import { fluAsyncErrorHandler } from '../lib/fluAsyncError.js'
@@ -109,7 +108,7 @@ import { COMMAND_IDS } from '../lib/commandIds.js'
 import { voiceProbe, isVoiceProbeEnabled } from '../lib/voiceProbe'
 import { defaultLanguage } from '../lib/languageDefault.ts'
 import { crearMotorConversacionHook } from '../compose/conversationMotorProducto'
-import { crearResolucionPasivaProducto } from '../conversation/index'
+import { crearResolucionPasivaProducto, grabarSnapshotDeTurno } from '../conversation/index'
 const CONTEXT_HISTORY_LIMIT = FLU_CONFIG.limits.contextHistoryMax
 // Sample rate de captura: fuente única en FLU_CONFIG.audio.sampleRate (sin hardcode).
 const AUDIO_SAMPLE_RATE = FLU_CONFIG.audio?.sampleRate ?? 0

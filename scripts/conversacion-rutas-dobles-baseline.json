@@ -1,15 +1,23 @@
 {
-  "fecha": "2026-11-03",
+  "fecha": "2026-11-04",
   "dueno": "src/voice/conversation",
-  "nota": "Linea base de rutas dobles del modulo CONVERSACION. Solo baja: si una metrica baja, se actualiza aqui en el mismo cambio; si sube, el guard falla.",
+  "nota": "Linea base de rutas dobles del modulo CONVERSACION. Solo baja: si una metrica baja, se actualiza aqui en el mismo cambio; si sube respecto a HEAD/origin base, el guard falla.",
   "metricas": {
-    "timeLiterals": 0,
+    "timeConfigLiterals": 2,
     "timeConfigReads": 1,
     "closureConditionOwners": 1,
     "finalResultIndex": 0,
     "staleMeasureReads": 0,
     "voiceChangeSameTramoOnly": 0,
     "finalWholeLineReplace": 0,
-    "broadTextDedupe": 0
+    "identityDurationFromTramo": 0,
+    "syntheticZeroOneTramo": 0,
+    "broadTextDedupe": 0,
+    "cierreDecisionOwners": 1,
+    "syntheticWindowOwners": 1,
+    "syntheticWrappers": 1,
+    "reentregaOwners": 1,
+    "directSilenceCloses": 0,
+    "continuidadOwners": 1
   }
 }

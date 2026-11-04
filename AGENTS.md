@@ -268,9 +268,12 @@ Estas reglas son duras y aplican a toda tarea, no solo a las de refactor.
 1. **Dueño declarado antes de escribir.** Antes de crear o tocar código, grep del
    símbolo o responsabilidad y declarar el dueño `archivo:línea`. Si no existe,
    declarar el nuevo dueño y su consumidor ANTES de crear el archivo. Sin ese dato no
-   se escribe.
+   se escribe. El mapa vive en `docs/OWNERS.md`; se lee antes de escribir. Si la
+   pregunta ya está, se edita ese dueño; no se crea otro.
 2. **Un dueño por responsabilidad.** Lo demás importa o delega. Prohibido crear una
-   segunda implementación de la misma responsabilidad.
+   segunda implementación de la misma responsabilidad. Si el cambio reemplaza un
+   dueño, la kill list (lo que se borra) va en el mismo commit. Si no puedes borrar
+   el camino viejo ahora, no añadas el nuevo ahora.
 3. **Baseline solo baja.** Cada lista de excepciones y su techo se congelan en un
    archivo versionado. Una excepción nueva exige motivo, dueño y fecha; no se añade sin
    aprobación del dueño (CODEOWNERS). Si un caso se arregla, se borra su excepción y se

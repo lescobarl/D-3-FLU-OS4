@@ -62,6 +62,11 @@ export function labelToSpeakerId(label = '') {
  */
 export function resolveRowSpeakerLabel(row = {}, config = FLU_CONFIG) {
     const escrita = String(row?.speakerName || row?.speaker || '').trim();
+    // Filas NUEVAS del módulo: la etiqueta persistida manda. No se re-resuelve
+    // por voz; el fallback por directorio queda solo para filas legacy/import.
+    if (row?.meta?.origin === 'conversation-module') {
+        return escrita || speakerIdToDefaultName(String(row?.speakerId || '').trim(), config);
+    }
     // FREEZE (mandato del dueno 2026-10-17): un NOMBRE PROPIO congelado en la fila se muestra
     // tal cual y NUNCA se re-resuelve desde el directorio. Una etiqueta AUTOMATICA escrita no
     // manda: la fila muestra la etiqueta de SU VOZ (clave por timbre cuando se midio), asi que

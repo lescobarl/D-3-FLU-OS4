@@ -129,7 +129,11 @@ export function resolverEtiqueta(entrada: EntradaEtiqueta): EtiquetaResuelta {
   // Una etiqueta anónima no es identidad: solo adelanta a la continuidad una
   // medida que SÍ identifica (etiqueta con nombre propio).
   const medidaIdentifica = hablante !== '' && !esEtiquetaAnonima(hablante)
-  const pendiente = String(entrada.pendiente || '').trim()
+  // Sin medida no se inventa identidad, pero la fila NUNCA queda «?»: se usa la
+  // etiqueta anterior o la semilla de config (`Hablante 1`) y se conserva la
+  // evidencia `pendiente` para que la medida tardía la reemplace.
+  const respaldo = String(semilla || '').trim()
+  const usaPendiente = Boolean(String(entrada.pendiente || '').trim())
   const candidatos: ReadonlyArray<EtiquetaResuelta> = [
     { etiqueta: voz.nombreConfirmado ? String(voz.nombre || '').trim() : '', evidencia: 'nombre' },
     // La plantilla casada identifica la voz física (anónima o con nombre): gana
@@ -139,8 +143,9 @@ export function resolverEtiqueta(entrada: EntradaEtiqueta): EtiquetaResuelta {
     { etiqueta: voz.continuidad ? String(anterior ?? '').trim() : '', evidencia: 'continuidad' },
     // Medida ANÓNIMA: solo existe si una medida acuñó la voz (vozId).
     { etiqueta: hablante, evidencia: 'medida' },
-    // Sin voz medida no hay identidad que afirmar: la fila nace TEMPORAL.
-    { etiqueta: pendiente, evidencia: 'pendiente' },
+    // Sin voz medida no hay identidad que afirmar: evidencia TEMPORAL, pero
+    // etiqueta de continuidad/semilla (regla 5: nunca «?»).
+    { etiqueta: respaldo, evidencia: usaPendiente ? 'pendiente' : 'semilla' },
     { etiqueta: String(semilla || '').trim(), evidencia: 'semilla' },
   ]
   const elegido = candidatos.find((candidato) => candidato.etiqueta !== '')

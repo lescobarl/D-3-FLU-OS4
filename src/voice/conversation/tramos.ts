@@ -4,6 +4,7 @@
  * Retiene y entrega datos en orden; no decide frontera ni revisión. La
  * expiración de un tramo huérfano se cuenta al consumirse (ingesta).
  */
+import { DEFAULT_SAMPLE_RATE } from '../lib/audioConstants.js'
 import type { ResultadoAsrCrudo, TramoAudio } from './tipos.ts'
 import type { RelojPort, TramoMuestreado } from './ports.ts'
 
@@ -31,6 +32,13 @@ export type RegistroTramos = Readonly<{
   muestras(tramoId: string, ventana: TramoMuestreado): Float32Array[] | null
   vigente(tramoId: string): TramoRegistrado | null
   resolver(tramoId: string, declarado?: TramoMuestreado): TramoMuestreado | null
+  sintetico(args: {
+    tramoId: string
+    turnId: string
+    ultimo?: TramoRegistrado | null
+    previa?: Readonly<{ fin: number; sampleRate: number }> | null
+    sampleRate?: number
+  }): TramoMuestreado
   limpiar(): void
 }>
 
@@ -113,6 +121,24 @@ export function crearRegistroTramos({
       return partes.length > 0 ? partes : null
     },
     vigente,
+    sintetico: ({ tramoId, turnId, ultimo, previa, sampleRate }) => {
+      const tasa =
+        Number(sampleRate) > 0
+          ? Number(sampleRate)
+          : ultimo?.sampleRate ??
+            previa?.sampleRate ??
+            DEFAULT_SAMPLE_RATE
+      const fin = Math.max(2, ultimo?.fin ?? previa?.fin ?? 2)
+      const tramo = { inicio: fin - 1, fin, sampleRate: tasa }
+      tramos.set(tramoId, {
+        tramoId,
+        ...tramo,
+        turnId,
+        silencioPrevioMs: 0,
+        ultimaVez: reloj.ahora(),
+      })
+      return tramo
+    },
     resolver: (tramoId, declarado) => {
       if (
         declarado &&

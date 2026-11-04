@@ -154,6 +154,25 @@ export async function leerRegistroConversacion(
 
 
 /**
+ * Lee TODAS las filas de conversación. Única puerta de lectura masiva.
+ * @returns Filas de `conversations`.
+ */
+export async function listarConversaciones(): Promise<ConversationRow[]> {
+  return fluDb.conversations.toArray()
+}
+
+/**
+ * Lee un lote de filas por id por la puerta única.
+ * @param ids Ids de las filas.
+ * @returns Filas existentes (misma posición; `undefined` si falta).
+ */
+export async function leerConversacionesPorIds(
+  ids: readonly string[],
+): Promise<(ConversationRow | undefined)[]> {
+  return fluDb.conversations.bulkGet([...ids])
+}
+
+/**
  * Consolida un lote de filas ya construidas (historial del store).
  * @param rows Filas a insertar o reemplazar.
  */

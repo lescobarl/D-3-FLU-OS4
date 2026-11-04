@@ -3,7 +3,8 @@
  *
  * 7 llamadas: `start`, `stop`, `ingestAudio`, `ingestAsr`, `snapshot`,
  * `subscribe`, `registerName`. 6 eventos: `locution.closed`, `row.committed`,
- * `speaker.labeled`, `box.updated`, `asr.status`, `barge.in`.
+ * `speaker.labeled`, `box.updated`, `asr.status`, `barge.in`. 3 utilidades de
+ * snapshot: `snapshotDeTurno`, `grabarSnapshotDeTurno`, `grabarRevisionDeFila`.
  *
  * Dueños únicos dentro del módulo:
  *  - `motor`   orquesta las llamadas y la cola serializada;
@@ -70,6 +71,11 @@ export {
 } from './adapters.ts'
 export { crearMotorConversacionProducto, traeFinal } from './producto.ts'
 export type { EventoProducto, MotorConversacionProducto } from './producto.ts'
+export {
+  grabarRevisionDeFila,
+  grabarSnapshotDeTurno,
+  snapshotDeTurno,
+} from './turnSnapshot.js'
 export { crearResolucionPasiva, renombrarFilaDeUsuario } from './pasivo.ts'
 export type {
   DependenciasRenombreFila,

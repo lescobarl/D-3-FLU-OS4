@@ -15,12 +15,11 @@ import type { BufferAsr, RegistroTramos } from './tramos.ts'
 import type { Sesion } from './sesion.ts'
 import { decidirIdentidad, plantillasDe } from './identidad.ts'
 import type { IdentidadDecidida } from './identidad.ts'
-import { concatenarMuestras, retenerCola } from './muestras.ts'
+import { concatenarMuestras, duracionMsDeMuestras, retenerCola } from './muestras.ts'
 import { fusionarVoz } from './fila.ts'
 import { registrarMedidaVoz } from './sesion.ts'
 import { asrEmpujaAudio } from './ports.ts'
 import { logCaughtError } from '../../lib/caughtError.ts'
-import { DEFAULT_SAMPLE_RATE } from '../lib/audioConstants.js'
 import type {
   ConfiguracionConversacion,
   IdiomaLocucion,
@@ -106,26 +105,43 @@ export function crearIngesta({
   }
 
   /**
+   * Dueño ÚNICO de «este texto es la reentrega de una fila ya escrita». Mismo
+   * turno y misma frase (exacta, continuación o reemisión solapada) sobre una
+   * ventana que toca la fila; una frase nueva no entra.
+   * @param entrada Resultado del ASR con su turno y tramo.
+   * @param tramoId Tramo resuelto para el resultado.
+   * @returns true si debe contarse como `turnoYaEscrito` y no escribir.
+   */
+  function esReentregaDeLaFila(entrada: AsrIngestado, tramoId: string): boolean {
+    const textoEntrante = String(entrada.texto || '').trim()
+    if (!textoEntrante) return false
+    const previa =
+      (tramoId ? estado.filas.get(tramoId) : undefined) ??
+      [...estado.filas.values()].sort((a, b) => b.tramo.fin - a.tramo.fin)[0]
+    if (!previa) return false
+    const turno = entrada.turnId
+      ? String(entrada.turnId).trim()
+      : estado.turnoActual
+    if (previa.turnId !== turno) return false
+    const tramoEntrante = tramos.resolver(tramoId, entrada.tramo)
+    const solapa = Boolean(
+      tramoEntrante && tramoEntrante.inicio <= previa.tramo.fin,
+    )
+    const exacta = String(previa.texto || '').trim() === textoEntrante
+    if (!solapa && !exacta) return false
+    return exacta || continuaLaFrase(previa.texto, textoEntrante)
+  }
+
+  /**
    * Tramo sintético para un texto tardío cuya locución ya cerró: el ASR puede
    * entregar el final después de que el VAD cortó y de que el tramo real venció.
    * Sin él, el texto se atribuye a un tramo commiteado y se pierde.
    */
   function tramoSinteticoParaTexto(): string {
     const ultimo = estado.ultimoTramoId ? tramos.vigente(estado.ultimoTramoId) : null
-    const sampleRate = ultimo?.sampleRate || DEFAULT_SAMPLE_RATE
-    const fin = Math.max(1, ultimo?.fin ?? 1)
-    const inicio = Math.max(0, fin - 512)
     const tramoId = dependencias.id.uuid()
-    const nuevo: TramoAudio = {
-      tramoId,
-      inicio,
-      fin: Math.max(fin, inicio + 1),
-      sampleRate,
-      turnId: estado.turnoActual,
-      silencioPrevioMs: 0,
-    }
+    tramos.sintetico({ tramoId, turnId: estado.turnoActual, ultimo })
     estado.ultimoTramoId = tramoId
-    tramos.registrar(nuevo)
     return tramoId
   }
 
@@ -315,14 +331,17 @@ export function crearIngesta({
    * @param vector Vector que sostiene la voz nueva.
    * @returns false si no hay embebedor o locución abierta.
    */
-  function aplicarIdentidadAlTramoAbierto(vector: readonly number[]): boolean {
+  function aplicarIdentidadAlTramoAbierto(
+    vector: readonly number[],
+    muestrasMedidas: number,
+  ): boolean {
     const embebedor = dependencias.embebedor
     const recien = estado.abierta
     if (!embebedor || !recien) return false
     const identidad = decidirIdentidadSesion(
       vector,
       embebedor,
-      ((recien.fin - recien.inicio) / Math.max(1, recien.sampleRate)) * 1000,
+      duracionMsDeMuestras(muestrasMedidas, recien.sampleRate),
       String(recien.texto || '').trim().split(/\s+/).filter(Boolean).length,
     )
     registrarMedidaVoz(estado, vector, identidad)
@@ -399,7 +418,7 @@ export function crearIngesta({
       idioma,
     )
     // 3. Identidad de la voz nueva con el MISMO vector (etiqueta perezosa).
-    if (!aplicarIdentidadAlTramoAbierto(vector)) return null
+    if (!aplicarIdentidadAlTramoAbierto(vector, ventana.length)) return null
     estado.muestrasAbierta = [ventana]
     estado.medidoHastaFin = Math.max(estado.medidoHastaFin, datos.fin)
     dependencias.registro.registrar('conversacion.locucion.partida', {
@@ -442,7 +461,15 @@ export function crearIngesta({
     if (!abierta) return tramoId
     const previo = String(abierta.texto || '').trim()
     const textoLimpio = String(texto || '').trim()
-     if (abierta.locutionId === tramoId) {
+    // CAPARAZÓN VACÍO: la locución abierta por audio aún no tiene texto. El
+    // primer texto que llega ES su frase: se atribuye a ELLA (y su audio se
+    // suma), no se cierra descartada. Sin esto el final de la frase encontraba
+    // un caparazón nuevo y el texto acababa pendiente/perdido.
+    if (!previo && textoLimpio) {
+      if (tramoId) sumarAudioAtribuido(tramoId)
+      return abierta.locutionId
+    }
+    if (abierta.locutionId === tramoId) {
        // MISMO TRAMO con audio VIVO: es una revisión. Sin audio vivo, el VAD ya
        // cortó pero la locución sigue ABIERTA: el texto solo pertenece a ella si
        // la CONTINÚA; una frase ajena queda pendiente (no se pega ni la cierra).
@@ -654,7 +681,7 @@ export function crearIngesta({
         abierta: true,
       })
       if (frontera.cerrar) {
-        await sesion.cerrarLocucion(abierta, 'system', 'silencio', abierta.final)
+        await sesion.cerrarLocucion(abierta, 'system', frontera.causa ?? 'silencio', abierta.final)
         // El pendiente NO se abre aquí (turno viejo): el siguiente bloque o
         // resultado lo abre con el turno vigente (ver `flushPendientes` arriba).
       }
@@ -689,36 +716,13 @@ export function crearIngesta({
       // (`tramoYaCommiteado`), no por prefijo de texto.
       tramoId = tramoSinteticoParaTexto()
     }
-    // REENTREGA de una locución YA CERRADA: el mismo turno reemite la MISMA
-    // frase (continuación o texto idéntico) sobre una ventana que solapa. La
-    // fila commiteada es inmutable; se cuenta el descarte en vez de duplicarla.
-    // Una frase NUEVA (no continuada) NO entra aquí: escribe su fila. Un
-    // caparazón vacío del tramo entrante cuenta como "sin locución abierta".
-    const sinTextoAbierto = !estado.abierta || !String(estado.abierta.texto || '').trim()
-    if (sinTextoAbierto) {
-      const previa = [...estado.filas.values()].sort(
-        (a, b) => b.tramo.fin - a.tramo.fin,
-      )[0]
-      const textoEntrante = String(entrada.texto || '').trim()
-      if (previa && textoEntrante) {
-        const turno = entrada.turnId
-          ? String(entrada.turnId).trim()
-          : estado.turnoActual
-        const tramoEntrante = tramos.resolver(tramoId, entrada.tramo)
-        const solapa = Boolean(
-          tramoEntrante && tramoEntrante.inicio <= previa.tramo.fin,
-        )
-        const exacta = String(previa.texto || '').trim() === textoEntrante
-        if (
-          previa.turnId === turno &&
-          (solapa || exacta) &&
-          continuaLaFrase(previa.texto, textoEntrante)
-        ) {
-          sesion.contarDescarte('turnoYaEscrito', null, null)
-          return sesion.snapshot()
-        }
-      }
+    // REENTREGA: UN solo dueño (`esReentregaDeLaFila`). Si no es reentrega y el
+    // tramo ya está commiteado, la frase nueva necesita SU id (sintético).
+    if (esReentregaDeLaFila(entrada, tramoId)) {
+      sesion.contarDescarte('turnoYaEscrito', null, null)
+      return sesion.snapshot()
     }
+    if (tramoId && estado.filas.has(tramoId)) tramoId = tramoSinteticoParaTexto()
     // Voz DECLARADA por el productor (si existe): la puerta sigue siendo
     // `frontera.ts`; la partición REAL por medida vive en `verificarCambioVoz`.
     const abiertaParaVoz = estado.abierta
@@ -738,8 +742,47 @@ export function crearIngesta({
     // La ATRIBUCIÓN va después de la VOZ: si el tramo entrante es otra voz, ya
     // se abrió SU locución; si no, el texto decide continuación/pendiente.
     const tramoVoz = (await verificarCambioVoz(tramoId)) ?? tramoId
+    // DOS FRASES EN EL MISMO TRAMO: el ASR cerró una frase nueva y el tramo de
+    // audio no cambió. El tramo no puede ser dueño de dos filas: se cierra la
+    // primera y la segunda abre SU locución con un tramo sintético al final del
+    // audio real (mismo dueño `tramoSinteticoParaTexto`).
+    const abiertaParaFinal = estado.abierta
+    const continuaFinal =
+      Boolean(abiertaParaFinal) &&
+      continuaLaFrase(abiertaParaFinal?.texto || '', entrada.texto)
+    if (
+      entrada.final &&
+      abiertaParaFinal &&
+      String(abiertaParaFinal.texto || '').trim() &&
+      !continuaFinal
+    ) {
+      const locucionAnterior = abiertaParaFinal
+      const cierreFinal = decidirFrontera(
+        {
+          medida: { hayVoz: true, silencioMs: 0 },
+          textoAjeno: true,
+          abierta: true,
+          finalDeFrase: true,
+        },
+        configuracion,
+      )
+      await sesion.cerrarLocucion(
+        locucionAnterior,
+        'system',
+        cierreFinal.causa ?? 'frontera',
+        locucionAnterior.final,
+      )
+      // La frase nueva necesita SU id: el tramo de audio puede ser el mismo
+      // (dos frases en un tramo) o uno ya commiteado. Solo si NO es el tramo de
+      // la locución cerrada y sigue vivo se reutiliza su ventana real.
+      const entrante = tramos.vigente(tramoVoz)
+      tramoId =
+        tramoVoz && tramoVoz !== locucionAnterior.locutionId && entrante
+          ? tramoVoz
+          : tramoSinteticoParaTexto()
+    }
     const tramoDestino = tramoDestinoDeTexto(
-      tramoVoz,
+      tramoId,
       entrada.texto,
       entrada.silencioPrevioMs,
     )
@@ -781,7 +824,9 @@ export function crearIngesta({
     estado.medidoHastaFin = Math.max(estado.medidoHastaFin, locucion.fin)
     embebedor.medir(concatenarMuestras(estado.muestrasAbierta), sampleRate).then(
       (vector) =>
-        encolar(() => Promise.resolve().then(() => aplicarMedidaVoz(locutionId, vector))).catch(
+        encolar(() =>
+          Promise.resolve().then(() => aplicarMedidaVoz(locutionId, vector, totalMuestras)),
+        ).catch(
           (error: unknown) => {
             // AGENTS §1.5: ningún fallo capturado se pierde. La medida no se
             // reintenta; la locución cierra con la evidencia que tenga.
@@ -845,6 +890,7 @@ export function crearIngesta({
   async function reetiquetarConMedidaTardia(
     locucionId: string,
     vector: readonly number[],
+    muestrasMedidas: number,
   ): Promise<void> {
     const embebedor = dependencias.embebedor
     const fila = estado.filas.get(locucionId)
@@ -854,7 +900,7 @@ export function crearIngesta({
     const identidad = decidirIdentidadSesion(
       vector,
       embebedor,
-      ((fila.tramo.fin - fila.tramo.inicio) / Math.max(1, fila.tramo.sampleRate)) * 1000,
+      duracionMsDeMuestras(muestrasMedidas, fila.tramo.sampleRate),
       String(fila.texto || '').trim().split(/\s+/).filter(Boolean).length,
     )
     registrarMedidaVoz(estado, vector, identidad)
@@ -877,6 +923,7 @@ export function crearIngesta({
   async function aplicarMedidaVoz(
     locucionId: string,
     vector: readonly number[] | null,
+    muestrasMedidas = 0,
   ): Promise<void> {
     estado.medidaVozEnCurso = false
     const embebedor = dependencias.embebedor
@@ -887,13 +934,13 @@ export function crearIngesta({
       abierta.locutionId === locucionId &&
       !String(abierta.voz.vozId || '').trim()
     if (!esSuya || abierta === null) {
-      await reetiquetarConMedidaTardia(locucionId, vector)
+      await reetiquetarConMedidaTardia(locucionId, vector, muestrasMedidas)
       return
     }
     const identidad = decidirIdentidadSesion(
       vector,
       embebedor,
-      ((abierta.fin - abierta.inicio) / Math.max(1, abierta.sampleRate)) * 1000,
+      duracionMsDeMuestras(muestrasMedidas, abierta.sampleRate),
       String(abierta.texto || '').trim().split(/\s+/).filter(Boolean).length,
     )
     registrarMedidaVoz(estado, vector, identidad)

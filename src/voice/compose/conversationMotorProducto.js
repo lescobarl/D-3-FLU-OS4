@@ -24,11 +24,10 @@
 import { metaDeFilaConversacion } from '../../core/db/conversationRowMapping'
 import { logCaughtError } from '../../lib/caughtError.ts'
 import { useIntegrationStore } from '../../store/integrationStore'
-import { crearMotorConversacionProducto, traeFinal } from '../conversation/index'
+import { crearMotorConversacionProducto, grabarRevisionDeFila, traeFinal } from '../conversation/index'
 import { resolveEchoContext } from '../lib/conversationDialogue.js'
 import { labelToSpeakerId } from '../lib/conversationRow.js'
 import { autoSpeakerIndexFromKey } from '../lib/speakerCore.js'
-import { grabarRevisionDeFila } from '../conversation/turnSnapshot.js'
 import { voiceKeyFor } from '../lib/speakerDirectory.js'
 import { getLastCompletedSpeechAt } from '../lib/fluSpeech.js'
 import { getSessionRecordingStatus } from '../lib/sessionRecorder.js'
@@ -143,6 +142,9 @@ export function crearMotorConversacionHook({
       // La fila nació con la etiqueta TEMPORAL: la vista lo declara y la medida
       // tardía la reemplaza con `speaker.labeled` (mandato 2026-10-30).
       speakerPending: evento.fila.evidencia === 'pendiente',
+      // El módulo es el ÚNICO escritor de la fila de usuario: el hook de
+      // persistencia NO la reescribe (solo import/renombre autorizado).
+      persistSpeakerName: false,
       meta: metaDeFilaConversacion(evento.fila, evento.fila.sessionId),
     })
     // High-water de la sesión: la clave automática (`speaker_N`) lo sube por el

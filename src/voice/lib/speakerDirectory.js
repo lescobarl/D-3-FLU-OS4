@@ -283,6 +283,14 @@ export function voiceKeyFor({ voiceId = '', signature = null, floor } = {}) {
         // Un match SOLO de la base no trae clave de sesion: NUNCA se devuelve un objeto.
         if (conocido) return id
     }
+    // Una clave que YA tiene un timbre distinto no se reutiliza: dos voces no
+    // pueden compartir `speaker_1` (el caso que la vista tenía que desambiguar).
+    // La voz nueva recibe una clave derivada de SU timbre en la MISMA decisión.
+    if (sig.length && voiceNames.get(id)?.vector?.length) {
+      const firma = sig.reduce((suma, valor, indice) => suma + Number(valor || 0) * (indice + 1), 0)
+      const sufijo = Math.abs(Math.round(firma * 1e6)).toString(36)
+      return `${id || 'speaker'}_sig_${sufijo}`
+    }
     if (sig.length && id) rememberVoiceVector(id, sig)
     return id
 }

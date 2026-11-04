@@ -140,6 +140,7 @@ import { useNotes } from './hooks/useNotes';
 import { useDocuments } from './hooks/useDocuments';
 import type { ParticipantRecord } from './core/db/fluDatabase';
 import { fluDb } from './core/db/fluDatabase';
+import { listarConversaciones } from './core/db/conversationRowWriter';
 import { createAgendaService } from './core/agenda/agendaService';
 import { parseAgendaCommand, type AgendaCommand } from './core/agenda/agendaCommandParser';
 import { parseShoppingIntent, type ShoppingIntent } from './core/reminders/shoppingIntentParser';
@@ -3556,9 +3557,10 @@ const {
         integrationStore.removeConversationEntriesBySpeaker(label);
 
         // 3) Filas de conversacion persistidas: UN solo barrido por el dueno del borrado logico.
-        const participantRows = await fluDb.conversations
-            .filter((r) => isLiveRecord(r) && String(resolveRowSpeakerLabel(r) || '').trim() === label)
-            .primaryKeys()
+        const participantRows = await listarConversaciones()
+            .then((rows) => rows
+                .filter((r) => isLiveRecord(r) && String(resolveRowSpeakerLabel(r) || '').trim() === label)
+                .map((r) => r.id))
             .catch((e) => { logCaughtError('src/App.tsx', e); return [] as string[]; });
         if (participantRows.length > 0) {
             await softDeleteConversationRows(participantRows).catch((e) => logCaughtError('src/App.tsx: softDeleteConversationRows', e));

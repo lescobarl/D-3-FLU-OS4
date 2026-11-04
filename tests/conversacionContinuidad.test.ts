@@ -353,7 +353,7 @@ describe('el hablante es el ÚNICO campo actualizable de una fila commiteada', (
 
     const pendiente = guardadas.get(locutionId)
     if (!pendiente) throw new Error('no se guardó la fila')
-    expect(pendiente.etiqueta, 'sin medida: etiqueta TEMPORAL').toBe('Hablante ?')
+    expect(pendiente.etiqueta, 'sin medida: continuidad/semilla, nunca ?').toBe(SEMILLA)
     expect(pendiente.evidencia).toBe('pendiente')
 
     expect(await reglas.reetiquetarFila(locutionId, 'voz-1', 'Hablante 2')).toBe(true)

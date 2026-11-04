@@ -275,8 +275,11 @@ describe('Caso 9 — cada cierre declara motivo y causa (5 causas con el módulo
     })
 
     const cerrados = cierresDe(eventos)
-    expect(cerrados).toHaveLength(1)
-    expect(cerrados[0]).toMatchObject({ motivo: 'system', causa: 'silencio' })
+    // El FINAL de la frase nueva cierra la anterior (causa frontera) y el
+    // silencio de 5 s cierra la nueva (causa silencio): dos cierres declarados.
+    expect(cerrados).toHaveLength(2)
+    expect(cerrados[0]).toMatchObject({ motivo: 'system', causa: 'frontera' })
+    expect(cerrados[1]).toMatchObject({ motivo: 'system', causa: 'silencio' })
   })
 
   it('stop: el cierre de usuario declara su motivo', async () => {
@@ -446,7 +449,8 @@ describe('Caso 9 — la caja de última frase == última fila commiteada al dete
       final: true,
       tramo: { inicio: SAMPLE_RATE, fin: SAMPLE_RATE * 2, sampleRate: SAMPLE_RATE },
     })
-    expect(api.snapshot().box.texto).toBe('uno')
+    // El final de 'dos' cierra 'uno' y abre 'dos' en el acto (frase nueva).
+    expect(api.snapshot().box.texto).toBe('dos')
 
     const detenida = await api.stop('system')
     expect(

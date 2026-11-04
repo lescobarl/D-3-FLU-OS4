@@ -29,6 +29,7 @@ import {
   crearPartidorWake,
 } from '../src/voice/conversation/adapters'
 import { CONVERSACION_CONFIG } from '../src/voice/conversation/ports'
+import { duracionMsDeMuestras } from '../src/voice/conversation/muestras'
 import type {
   AsrPort,
   ConfigPort,
@@ -806,5 +807,104 @@ describe('frontera — una frase continua no se cierra por el hueco de índices'
 
     const cerrada = await cerrarPorSilencio(api, inicioB + SAMPLE_RATE)
     expect(cerrada.filas.map((fila) => fila.texto)).toEqual(['esto es una prueba'])
+  })
+})
+
+describe('cola - pendientes con su tramo real y locución vacía', () => {
+  it('el pendiente conserva su ventana de audio aunque el registro expire', async () => {
+    const { api, reloj } = crearEscenario()
+    await api.start()
+    const tramoA = await abrirConVoz(api, 0)
+    await api.ingestAsr(asr(tramoA, { texto: 'uno' }))
+    // Pausa corta: corta A y abre B, sin cerrar la locución de A.
+    await api.ingestAudio(bloque(SAMPLE_RATE, SAMPLE_RATE + 14_400, SILENCIO(900)))
+    const inicioB = SAMPLE_RATE * 2
+    const estadoB = await api.ingestAudio(
+      bloque(inicioB, inicioB + SAMPLE_RATE, VOZ()),
+    )
+    const tramoB = estadoB.tramoAudio?.tramoId
+    if (!tramoB) throw new Error('sin tramo B')
+    await api.ingestAsr(asr(tramoB, { texto: 'dos', final: true }))
+
+    // El registro de tramos expira a los 8 s: el pendiente NO debe perder su
+    // ventana real ni convertirse en una fila {inicio:0,fin:1} al stop.
+    reloj.avanzar(10_000)
+    const detenida = await api.stop('system')
+    const filaDos = detenida.filas.find((fila) => fila.texto === 'dos')
+    expect(filaDos?.tramo).toEqual({
+      inicio: inicioB,
+      fin: inicioB + SAMPLE_RATE,
+      sampleRate: SAMPLE_RATE,
+    })
+  })
+
+  it('el primer texto llena el caparazón vacío y no se descarta', async () => {
+    const { api } = crearEscenario()
+    await api.start()
+    const tramoA = await abrirConVoz(api, 0)
+    // El VAD corta el caparazón vacío y el tramo B abre con su audio.
+    await api.ingestAudio(bloque(SAMPLE_RATE, SAMPLE_RATE + 14_400, SILENCIO(900)))
+    const inicioB = SAMPLE_RATE * 2
+    const estadoB = await api.ingestAudio(
+      bloque(inicioB, inicioB + SAMPLE_RATE, VOZ()),
+    )
+    const tramoB = estadoB.tramoAudio?.tramoId
+    if (!tramoB) throw new Error('sin tramo B')
+
+    const estado = await api.ingestAsr(asr(tramoB, { texto: 'dos', final: true }))
+    expect(estado.locucionAbierta?.locutionId).toBe(tramoA)
+    expect(estado.locucionAbierta?.texto).toBe('dos')
+    expect(estado.descartes.some((descarte) => descarte.motivo === 'sinTexto')).toBe(false)
+  })
+})
+
+describe('fila nueva - no repite el texto de la fila anterior', () => {
+  it('si la línea acumulada empieza con la fila ya escrita, la fila nueva lleva solo la cola', async () => {
+    const { api } = crearEscenario()
+    await api.start()
+    const tramoA = await abrirConVoz(api, 0)
+    await api.ingestAsr(asr(tramoA, { texto: 'uno', final: true }))
+    await cerrarPorSilencio(api, SAMPLE_RATE)
+    const inicioB = SAMPLE_RATE * 6
+    const estadoB = await api.ingestAudio(
+      bloque(inicioB, inicioB + SAMPLE_RATE, VOZ()),
+    )
+    const tramoB = estadoB.tramoAudio?.tramoId
+    if (!tramoB) throw new Error('sin tramo B')
+    const estado = await api.ingestAsr(
+      asr(tramoB, { texto: 'uno dos', final: true }),
+    )
+    expect(estado.filas.map((fila) => fila.texto)).toEqual(['uno'])
+    expect(estado.locucionAbierta?.texto).toBe('dos')
+  })
+})
+
+describe('cierre por final de frase', () => {
+  it('un final de otra frase cierra la anterior y abre la nueva en el acto', async () => {
+    const { api } = crearEscenario()
+    await api.start()
+    const tramoA = await abrirConVoz(api, 0)
+    await api.ingestAsr(asr(tramoA, { texto: 'uno', final: true }))
+    // Pausa corta: el VAD corta A y B abre en OTRO tramo.
+    await api.ingestAudio(bloque(SAMPLE_RATE, SAMPLE_RATE + 14_400, SILENCIO(900)))
+    const inicioB = SAMPLE_RATE * 2
+    const estadoB = await api.ingestAudio(
+      bloque(inicioB, inicioB + SAMPLE_RATE, VOZ()),
+    )
+    const tramoB = estadoB.tramoAudio?.tramoId
+    if (!tramoB) throw new Error('sin tramo B')
+
+    const estado = await api.ingestAsr(
+      asr(tramoB, { texto: 'dos', final: true }),
+    )
+    expect(estado.filas.map((fila) => fila.texto)).toEqual(['uno'])
+    expect(estado.locucionAbierta?.texto).toBe('dos')
+  })
+})
+
+describe('identidad - duración del audio medido', () => {
+  it('la conversión muestras→ms es la real, no la del tramo', () => {
+    expect(duracionMsDeMuestras(9 * SAMPLE_RATE, SAMPLE_RATE)).toBe(9000)
+    expect(duracionMsDeMuestras(0, SAMPLE_RATE)).toBe(0)
   })
 })

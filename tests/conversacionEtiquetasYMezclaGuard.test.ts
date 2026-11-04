@@ -476,7 +476,9 @@ describe('voz — corte de VAD y umbral de continuidad medido', () => {
     await entregarAudio(api, VOZ(), cursor)
     const durante = await api.ingestAsr({
       tramoId: '',
-      texto: 'con el doctor',
+      // CONTINUACIÓN de la frase abierta: mide la PARTICIÓN POR VOZ, no la
+      // frontera por final de frase nueva.
+      texto: 'necesito para mi con el doctor',
       final: true,
       turnId: 'T5',
     })
@@ -498,7 +500,7 @@ describe('voz — corte de VAD y umbral de continuidad medido', () => {
       locutionId: tramoA,
       texto: 'necesito para mi',
     })
-    expect(durante.locucionAbierta?.texto).toBe('con el doctor')
+    expect(durante.locucionAbierta?.texto).toBe('necesito para mi con el doctor')
     expect(durante.locucionAbierta?.locutionId).not.toBe(tramoA)
     expect(eventos).toContainEqual(
       expect.objectContaining({ tipo: 'locution.closed', causa: 'voz' }),
@@ -507,7 +509,7 @@ describe('voz — corte de VAD y umbral de continuidad medido', () => {
     await cerrarPorSilencio(escenario.api)
     expect(filasDe(escenario.api).map((fila) => fila.texto)).toEqual([
       'necesito para mi',
-      'con el doctor',
+      'necesito para mi con el doctor',
     ])
   })
 
@@ -537,7 +539,7 @@ describe('voz — corte de VAD y umbral de continuidad medido', () => {
       locutionId: tramoDistinta,
       texto: 'necesito para mi',
     })
-    expect(partida.locucionAbierta?.texto).toBe('con el doctor')
+    expect(partida.locucionAbierta?.texto).toBe('necesito para mi con el doctor')
   })
 })
 

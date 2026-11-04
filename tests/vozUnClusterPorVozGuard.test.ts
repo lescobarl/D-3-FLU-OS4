@@ -16,7 +16,7 @@
 // la diarizacion y despues aplica el tope de etiquetas AUTOMATICAS (fusionando el exceso en
 // el cluster mas parecido). Lo consume el preflight de identidad al escribir los clusters.
 // ============================================================
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 import {
   capAndFuseSpeakerClusters,
   sameVoiceFloor,
@@ -25,6 +25,7 @@ import {
 import { FLU_CONFIG } from '../src/voice/lib/fluConfig.js'
 import { decidirIdentidad } from '../src/voice/conversation/identidad'
 import { compareCosineSignatures } from '../src/voice/lib/speakerCore.js'
+import { resetVoiceDirectory, voiceKeyFor } from '../src/voice/lib/speakerDirectory.js'
 
 const ids = (() => {
   let n = 0
@@ -61,6 +62,14 @@ const topeConfig = () =>
   Number((FLU_CONFIG as never as { voiceIdentity: { capture: { conversationMaxAutoSpeakers: number } } }).voiceIdentity.capture.conversationMaxAutoSpeakers)
 
 describe('A6 - una voz = un cluster (tope + fusion)', () => {
+  beforeEach(() => resetVoiceDirectory())
+
+  it('una MISMA clave no se reutiliza para un timbre distinto', () => {
+    expect(voiceKeyFor({ voiceId: 'speaker_1', signature: v(1) })).toBe('speaker_1')
+    const claveAjena = voiceKeyFor({ voiceId: 'speaker_1', signature: v(0.5) })
+    expect(claveAjena, 'Hablante 1 no puede tener dos timbres').not.toBe('speaker_1')
+  })
+
   it('el TOPE esta configurado (no 0 = sin tope)', () => {
     expect(topeConfig()).toBeGreaterThan(0)
   })

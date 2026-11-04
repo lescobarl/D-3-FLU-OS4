@@ -76,6 +76,8 @@ export type EntradaResolucionPasiva = Readonly<{
   plantillas: readonly PlantillaVozConId[]
   /** Voces nuevas acuñadas hasta ahora (para la etiqueta anónima N+1). */
   contadorVoces: number
+  /** Duración real del audio medido (misma puerta que el modo activo). */
+  duracionMs?: number
 }>
 
 /** Resultado de la resolución: la voz que sostiene la locución y su evidencia. */
@@ -95,7 +97,10 @@ export type ResolucionPasiva = Readonly<{
 /** Dependencias de la resolución pasiva: medida y reglas, todo inyectado. */
 export type DependenciasResolucionPasiva = Readonly<{
   embebedor: EmbebedorPort
-  config: Pick<ConfigPort, 'umbralContinuidadVoz' | 'etiquetaAnonima'>
+  config: Pick<
+    ConfigPort,
+    'umbralContinuidadVoz' | 'etiquetaAnonima' | 'minNuevaVozMs'
+  >
   id: Pick<IdPort, 'uuid'>
   registro: RegistroPort
 }>
@@ -123,10 +128,17 @@ export function crearResolucionPasiva(deps: DependenciasResolucionPasiva): Resol
     if (!vector) {
       return { vozId: '', hablante: '', continuidad: false, evidencia: false, vector: null }
     }
+    const duracionMs =
+      entrada.duracionMs ??
+      (entrada.sampleRate > 0
+        ? (entrada.muestras.length / entrada.sampleRate) * 1000
+        : 0)
     const identidad = decidirIdentidad({
       vector,
       plantillas: entrada.plantillas,
       umbral: deps.config.umbralContinuidadVoz(),
+      duracionMs,
+      minNuevaVozMs: deps.config.minNuevaVozMs?.() ?? 0,
       // Perezoso: la plantilla SOLO se resuelve si la voz es nueva (Caso 10).
       etiquetaNueva: () => deps.config.etiquetaAnonima(entrada.contadorVoces + 1),
       comparar: deps.embebedor.comparar,

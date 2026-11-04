@@ -12,10 +12,12 @@
 
 import { useEffect, useRef } from 'react';
 import { isLiveRecord } from '../core/db/recordCopy';
-import { fluDb, type ConversationRow } from '../core/db/fluDatabase';
+import type { ConversationRow } from '../core/db/fluDatabase';
 import { buildSyncTuple } from '../core/db/syncTuple';
 import {
     bulkPutConversationRecords,
+    leerConversacionesPorIds,
+    listarConversaciones,
     softDeleteConversationRows,
 } from '../core/db/conversationRowWriter';
 import { useIntegrationStore } from '../store/integrationStore';
@@ -216,7 +218,7 @@ export function useConversationPersistence(participantId?: string) {
                 if (switchedRealUser && useIntegrationStore.getState().conversationHistory.length > 0) {
                     useIntegrationStore.getState().batchLoadHistory([]);
                 }
-                const rows = (await fluDb.conversations.toArray())
+                const rows = (await listarConversaciones())
                     .filter((row) => (row.participantId || 'global') === scope && isLiveRecord(row))
                     .sort((a, b) => a.timestamp - b.timestamp)
                     .slice(-MAX_LOADED_ROWS);
@@ -309,7 +311,7 @@ export function useConversationPersistence(participantId?: string) {
                 // entrada cambió de verdad (renombre de voz).
                 const ids = cambiadas.map((entry) => String(entry.id));
                 const existentes = new Map<string, ConversationRow>();
-                const filasGuardadas = await fluDb.conversations.bulkGet(ids);
+                const filasGuardadas = await leerConversacionesPorIds(ids);
                 filasGuardadas.forEach((fila, indice) => {
                     if (fila) existentes.set(ids[indice], fila);
                 });
@@ -354,8 +356,7 @@ export function useConversationPersistence(participantId?: string) {
         if (conversationEpoch === savedEpochRef.current) return;
         savedEpochRef.current = conversationEpoch;
         savedLengthRef.current = 0;
-        fluDb.conversations
-            .toArray()
+        listarConversaciones()
             .then((all) => {
                 const ids = all
                     .filter((row) => (row.participantId || 'global') === scope && isLiveRecord(row))

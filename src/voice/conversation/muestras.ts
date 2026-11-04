@@ -12,6 +12,22 @@
 export { concatFloat32 as concatenarMuestras } from '../lib/pcmChunks.js'
 
 /**
+ * Duración REAL en milisegundos del audio medido. Dueño único de la conversión
+ * muestras→ms: la medida de voz y la medida tardía la consumen; la duración del
+ * tramo (`fin - inicio`) NO es la del audio retenido (una locución sembrada con
+ * audio de otro tramo mide más de lo que dice su ventana).
+ * @param muestras Número de muestras PCM medidas.
+ * @param sampleRate Frecuencia de muestreo.
+ * @returns Milisegundos (0 si no hay muestras o frecuencia válida).
+ */
+export function duracionMsDeMuestras(muestras: number, sampleRate: number): number {
+  const total = Number(muestras)
+  const tasa = Number(sampleRate)
+  if (!(total > 0) || !(tasa > 0)) return 0
+  return (total / tasa) * 1000
+}
+
+/**
  * Añade un bloque a la cola conservando el tope en muestras.
  * Si el tope se supera, se descartan los bloques MÁS VIEJOS; si un único bloque
  * lo supera, se conserva su cola más reciente.

@@ -17,7 +17,7 @@ import { decidirRevision } from './revision.ts'
 import { decidirIdentidad, plantillasDe } from './identidad.ts'
 import type { PlantillaVoz } from './identidad.ts'
 import { registrarMedidaVoz } from './sesion.ts'
-import { concatenarMuestras } from './muestras.ts'
+import { concatenarMuestras, duracionMsDeMuestras } from './muestras.ts'
 import { logCaughtError } from '../../lib/caughtError.ts'
 import { normalizeForMatch } from '../../lib/textUtils.ts'
 import { recordSessionEvent } from '../api/sessionLog.ts'
@@ -290,8 +290,20 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
     // El final es la hipótesis confirmada de SU tramo: reemplaza SOLO ese
     // aporte. Lo dicho en tramos anteriores se conserva (antes el final de un
     // tramo posterior borraba las frases previas de la locución).
+    const textoFinal = String(texto || '').trim()
+    const finalEsPrefijo = Boolean(
+      textoFinal &&
+        previoTramo &&
+        previoTramo.toLowerCase().startsWith(textoFinal.toLowerCase()),
+    )
+    // Un final que NO crece, NO es revisión y NO es prefijo del texto ya dicho
+    // (p. ej. el sufijo suelto "duplicados" tras una frase larga) no puede
+    // reemplazar la frase: se conserva lo dicho. Antes el final autoritativo
+    // borraba la frase larga y su fila se perdía.
     const textoDelTramo = final
-      ? String(texto || '').trim() || previoTramo
+      ? textoFinal && (decision.pintar || finalEsPrefijo)
+        ? textoFinal
+        : previoTramo
       : decision.texto;
     let siguientes: readonly TextoPorTramo[] =
       indice >= 0
@@ -393,7 +405,7 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
       vector,
       plantillas: plantillasDe(estado.plantillasVoz),
       umbral: config.umbralContinuidadVoz(),
-      duracionMs: ((locucion.fin - locucion.inicio) / Math.max(1, locucion.sampleRate)) * 1000,
+      duracionMs: duracionMsDeMuestras(muestras.length, locucion.sampleRate),
       minNuevaVozMs: config.minNuevaVozMs?.() ?? 0,
       palabras: String(locucion.texto || '').trim().split(/\s+/).filter(Boolean).length,
       minNuevaVozPalabras: config.minNuevaVozPalabras?.() ?? 0,

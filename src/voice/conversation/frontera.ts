@@ -38,6 +38,15 @@ export type EntradaFrontera = Readonly<{
   abierta: boolean
   /** Voz DISTINTA medida/declarada para el tramo entrante. */
   cambioVoz?: boolean
+  /** El ASR cerró una frase nueva: cierra la anterior en el acto. */
+  finalDeFrase?: boolean
+  /**
+   * El ASR cerró la frase (`final`) y el texto NO continúa la abierta: es una
+   * frase nueva, no una revisión. Cierra la anterior en el acto. Es la frontera
+   * que evita que todas las frases se acumulen hasta el stop cuando el VAD no
+   * alcanza `silenceCloseMs`.
+   */
+
 }>
 
 /**
@@ -55,6 +64,12 @@ export function decidirFrontera(
 
   // PUERTA 1: cambio de hablante MEDIDO. Cierra ya, sin esperar silencio.
   if (entrada.cambioVoz === true) return { cerrar: true, causa: 'voz' }
+
+  // PUERTA 2: FINAL de una frase nueva. El ASR ya cerró su hipótesis: la
+  // anterior se escribe YA. Es la única decisión de cierre por final.
+  if (entrada.finalDeFrase === true) {
+    return { cerrar: true, causa: entrada.textoAjeno ? 'frontera' : 'silencio' }
+  }
 
   const silencioMs = Math.max(0, Number(entrada.medida.silencioMs) || 0)
   if (entrada.medida.hayVoz) return { cerrar: false, causa: null }
