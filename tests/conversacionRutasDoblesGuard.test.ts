@@ -77,6 +77,13 @@ function nombresDeFunciones(src: string): string[] {
   )) {
     nombres.add(match[1])
   }
+  // Expresión de función con nombre implícito (`const ruta = function () {}`):
+  // es una forma real de declarar y no puede quedar fuera del ratchet.
+  for (const match of limpio.matchAll(
+    /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*(?::[^=]+)?=\s*(?:async\s*)?function\b/g,
+  )) {
+    nombres.add(match[1])
+  }
   for (const match of limpio.matchAll(
     /^[ \t]*(?:(?:public|private|protected|static|async|get|set|readonly|override)[ \t]+)*#?([A-Za-z_$][\w$]*)[ \t]*\([^)]*\)[ \t]*(?::[^{\n]+)?\{/gm,
   )) {
@@ -133,9 +140,20 @@ function refBase(): string {
 }
 
 function baselineEn(ref: string): Record<string, number> {
+  const ruta = 'scripts/conversacion-rutas-dobles-baseline.json'
+  let existe = true
+  try {
+    execFileSync('git', ['cat-file', '-e', `${ref}:${ruta}`], { stdio: 'ignore' })
+  } catch {
+    // La referencia todavía no tiene la línea base (el PR que la introduce):
+    // no hay contra qué comparar. El test de métricas exactas sigue fijando el
+    // estado; cualquier otro fallo del `git show` de abajo se propaga.
+    existe = false
+  }
+  if (!existe) return {}
   const raw = execFileSync(
     'git',
-    ['show', `${ref}:scripts/conversacion-rutas-dobles-baseline.json`],
+    ['show', `${ref}:${ruta}`],
     { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] },
   )
   return (JSON.parse(raw) as { metricas: Record<string, number> }).metricas
@@ -242,6 +260,11 @@ describe('CONVERSACIÓN — rutas dobles medidas', () => {
     ).toEqual(['ingesta.ts:nuevaRuta'])
     // La entrada legítima (el módulo real) no marca nada.
     expect(funcionesNuevas(FUENTES, BASELINE.funciones)).toEqual([])
+  })
+
+  it('cuenta la función asignada como expresión, no solo la flecha', () => {
+    expect(nombresDeFunciones('const nuevaRuta = function () {}\n')).toEqual(['nuevaRuta'])
+    expect(nombresDeFunciones('const otraRuta = async function () {}\n')).toEqual(['otraRuta'])
   })
 
   it('quitar una función no dispara el ratchet (solo sube)', () => {
