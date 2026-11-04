@@ -41,6 +41,13 @@
 /.claude/settings.json        @lescobarl
 /.githooks/pre-commit         @lescobarl
 
+# Módulo CONVERSACIÓN — dueño del módulo y sus consumidores externos
+/src/voice/conversation/**              @lescobarl
+/src/voice/lib/conversationRow.js       @lescobarl
+/src/voice/lib/speakerDirectory.js      @lescobarl
+/src/core/db/conversationRowWriter.ts   @lescobarl
+/src/hooks/useConversationPersistence.ts @lescobarl
+
 # Gate y hooks
 /scripts/guard-architecture.mjs @lescobarl
 /scripts/task-gate.mjs         @lescobarl

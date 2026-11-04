@@ -135,6 +135,11 @@ commits con `--no-verify` se cubren en dos capas:
   `node scripts/owner-gate.mjs --diff <base>`: mira los archivos NUEVOS del PR
   o del push y falla el check. Es el backstop que cierra el `--no-verify`; si
   el check es obligatorio en la rama, el merge no pasa.
+- `.github/CODEOWNERS` exige revisión del dueño para el módulo
+  (`src/voice/conversation/**`) y sus consumidores externos
+  (`conversationRow.js`, `speakerDirectory.js`, `conversationRowWriter.ts` y
+  `useConversationPersistence.ts`).
 
 Los dos modos fallan cerrados: si no pueden leer el mapa, el índice o el rango,
-bloquean.
+bloquean. En un push con base inalcanzable (force push), el CI omite el paso;
+el evento de PR, con `base.sha`, sigue siendo la puerta fiable.

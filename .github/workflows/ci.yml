@@ -37,6 +37,10 @@ jobs:
             echo "[owner-gate] Sin base comparable; se omite."
             exit 0
           fi
+          if [ "${{ github.event_name }}" != "pull_request" ] && ! git rev-parse --verify --end-of-options "$BASE^{commit}" >/dev/null 2>&1; then
+            echo "[owner-gate] Base de push no disponible; se omite."
+            exit 0
+          fi
           node scripts/owner-gate.mjs --diff "$BASE"
 
       - name: Instalar dependencias
