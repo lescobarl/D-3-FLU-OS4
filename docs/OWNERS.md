@@ -107,7 +107,11 @@ También es legítimo:
 5. Archivo nuevo: declara aquí la pregunta, el dueño único, el consumidor y la
    kill list antes de crearlo. Si el dueño ya existe, edítalo. Si la pregunta no
    está clara, paras y preguntas.
-6. No toques guards, baselines, allowlists, CODEOWNERS ni `package.json` sin
+6. Función nueva dentro de un archivo existente: actualiza `funciones` en
+   `scripts/conversacion-rutas-dobles-baseline.json` en el mismo commit. Si
+   responde una pregunta nueva, declárala en la fila del dueño; el ratchet de
+   `conversacionRutasDoblesGuard` falla si el nombre no está congelado.
+7. No toques guards, baselines, allowlists, CODEOWNERS ni `package.json` sin
    aprobación explícita del dueño.
 
 ## Gate de escritura (hook)

@@ -33,7 +33,10 @@ type Fuente = Readonly<{ nombre: string; src: string }>
 const DIRECTORIO = join(process.cwd(), 'src/voice/conversation')
 const BASELINE = JSON.parse(
   readFileSync(join(process.cwd(), 'scripts/conversacion-rutas-dobles-baseline.json'), 'utf8'),
-) as { metricas: Record<string, number> }
+) as {
+  metricas: Record<string, number>
+  funciones: Record<string, readonly string[]>
+}
 
 const FUENTES: readonly Fuente[] = readdirSync(DIRECTORIO)
   .filter((nombre) => /\.(?:ts|js)$/.test(nombre))
@@ -55,6 +58,47 @@ const sinComentariosDeLinea = (src: string): string =>
     .split(/\r?\n/)
     .filter((line) => !/^\s*(?:\/\/|\/\*|\*)/.test(line))
     .join('\n')
+
+/**
+ * Nombres de funciones del módulo: declaraciones, const-arrow y métodos de
+ * objeto/clase. El ratchet congela los nombres: una función nueva obliga a
+ * decidir su dueño y a actualizar la línea base en el mismo cambio.
+ */
+function nombresDeFunciones(src: string): string[] {
+  const limpio = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '')
+  const nombres = new Set<string>()
+  for (const match of limpio.matchAll(
+    /\bfunction\s*\*?\s*([A-Za-z_$][\w$]*)\s*[<(]/g,
+  )) {
+    nombres.add(match[1])
+  }
+  for (const match of limpio.matchAll(
+    /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*(?::[^=]+)?=\s*(?:async\s*)?(?:\([^)]*\)|[A-Za-z_$][\w$]*)\s*=>/g,
+  )) {
+    nombres.add(match[1])
+  }
+  for (const match of limpio.matchAll(
+    /^[ \t]*(?:(?:public|private|protected|static|async|get|set|readonly|override)[ \t]+)*#?([A-Za-z_$][\w$]*)[ \t]*\([^)]*\)[ \t]*(?::[^{\n]+)?\{/gm,
+  )) {
+    if (!/^(?:if|for|while|switch|catch|function|constructor|return|typeof|await)$/.test(match[1])) {
+      nombres.add(match[1])
+    }
+  }
+  return [...nombres].sort()
+}
+
+/** Funciones presentes que no están en la línea base (el ratchet solo sube). */
+function funcionesNuevas(
+  fuentes: readonly Fuente[],
+  base: Record<string, readonly string[]>,
+): string[] {
+  return fuentes.flatMap((archivo) => {
+    const conocidas = new Set(base[archivo.nombre] ?? [])
+    return nombresDeFunciones(archivo.src)
+      .filter((nombre) => !conocidas.has(nombre))
+      .map((nombre) => `${archivo.nombre}:${nombre}`)
+  })
+}
 
 function walk(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
@@ -185,6 +229,27 @@ describe('CONVERSACIÓN — rutas dobles medidas', () => {
     const actual = medir(mutado)
     expect(actual.cierreDecisionOwners).toBe(base.cierreDecisionOwners + 1)
     expect(actual.reentregaOwners).toBe(base.reentregaOwners + 1)
+  })
+
+  it('toda función nombrada del módulo está en la línea base (ratchet)', () => {
+    expect(funcionesNuevas(FUENTES, BASELINE.funciones)).toEqual([])
+  })
+
+  it('una función nueva sin declarar falla (falsificación del ratchet)', () => {
+    const nueva = [{ nombre: 'ingesta.ts', src: 'function nuevaRuta() {}' }]
+    expect(
+      funcionesNuevas(nueva, { 'ingesta.ts': ['crearIngesta'] }),
+    ).toEqual(['ingesta.ts:nuevaRuta'])
+    // La entrada legítima (el módulo real) no marca nada.
+    expect(funcionesNuevas(FUENTES, BASELINE.funciones)).toEqual([])
+  })
+
+  it('quitar una función no dispara el ratchet (solo sube)', () => {
+    expect(
+      funcionesNuevas([{ nombre: 'ingesta.ts', src: '' }], {
+        'ingesta.ts': ['crearIngesta'],
+      }),
+    ).toEqual([])
   })
 
   it('mide también los .js del módulo (turnSnapshot.js no es invisible)', () => {
