@@ -104,8 +104,11 @@ También es legítimo:
    de crear el archivo.
 4. Si reemplazas un dueño: el viejo muere en el mismo commit. Si no puedes
    borrarlo ahora, no añadas el nuevo ahora.
-5. Archivo nuevo = paras y preguntas.
-6. No toques guards, baselines, allowlists, CODEOWNERS ni `package.json`.
+5. Archivo nuevo: declara aquí la pregunta, el dueño único, el consumidor y la
+   kill list antes de crearlo. Si el dueño ya existe, edítalo. Si la pregunta no
+   está clara, paras y preguntas.
+6. No toques guards, baselines, allowlists, CODEOWNERS ni `package.json` sin
+   aprobación explícita del dueño.
 
 ## Gate de escritura (hook)
 
@@ -130,7 +133,13 @@ commits con `--no-verify` se cubren en dos capas:
 
 - `.githooks/pre-commit` ejecuta `node scripts/owner-gate.mjs --staged`: mira
   los archivos NUEVOS del índice y bloquea el commit si alguno no está
-  declarado. Se salta con `git commit --no-verify`.
+  declarado. Lee el mapa del índice, no del árbol, y valida exactamente el
+  commit. Se salta con `git commit --no-verify`.
+  `guard-architecture --staged` (también en el pre-commit) deriva de este mapa
+  los símbolos dueños y exige **una sola definición** en `src` para cada uno. En
+  `--staged` lee el mapa y los archivos del **índice** (lo que se va a
+  commitear), no del árbol de trabajo; el CI lo ejecuta sobre el checkout
+  completo. Si un símbolo no aparece o aparece en dos archivos, el gate falla.
 - `.github/workflows/ci.yml` ejecuta
   `node scripts/owner-gate.mjs --diff <base>`: mira los archivos NUEVOS del PR
   o del push y falla el check. Es el backstop que cierra el `--no-verify`; si

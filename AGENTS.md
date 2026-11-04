@@ -293,6 +293,10 @@ Estas reglas son duras y aplican a toda tarea, no solo a las de refactor.
    validado lo que no se ejecutó.
 9. **La suite completa no se corre en local.** Se valida con `test:file` / `test:grep` /
    `npm test`, `lint`, `typecheck` y `gate` (§1.15).
+10. **Archivo nuevo = dueño declarado en el mapa.** Antes de crear un archivo,
+    declara en `docs/OWNERS.md` la pregunta, el dueño único, el consumidor y la
+    kill list. Si el dueño ya existe, edita ese dueño. Si la pregunta no está
+    clara, paras y preguntas; si está clara, ejecutas y el gate verifica la fila.
 
 ---
 

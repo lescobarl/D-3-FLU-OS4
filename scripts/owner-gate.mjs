@@ -6,6 +6,7 @@
  * Este script se usa en tres puertas:
  *   - hook `PreToolUse` de `Write` (stdin): bloquea antes de crear el archivo.
  *   - `--staged`: bloquea el commit si el índice trae un archivo nuevo sin fila.
+ *     Lee el mapa del índice, no del árbol: valida lo que se va a commitear.
  *   - `--diff <base>`: bloquea el CI/PR si el rango trae un archivo nuevo sin fila.
  *
  * Uso:
@@ -106,9 +107,34 @@ function declarationHint(rel) {
     : `\`${rel}:1\` \`simbolo\``
 }
 
-/** Lee el mapa una vez; si falta o no se puede leer, bloquea. */
-function loadMap(mapPath, label) {
+/**
+ * Lee el mapa una vez; si falta o no se puede leer, bloquea. En --staged lo
+ * lee del índice: el mapa del commit, no el que hay en el árbol de trabajo.
+ */
+function loadMap(mapPath, label, fromIndex = false) {
   const mapRel = relative(ROOT, mapPath).split(sep).join('/')
+  if (fromIndex && !mapRel.startsWith('..')) {
+    try {
+      return {
+        mapText: execFileSync('git', ['show', `:${mapRel}`], {
+          cwd: ROOT,
+          encoding: 'utf8',
+          stdio: ['ignore', 'pipe', 'pipe'],
+          maxBuffer: 16 * 1024 * 1024,
+        }),
+        mapRel,
+      }
+    } catch (error) {
+      const detail = String(error.stderr || error.message || '').trim()
+      block(
+        [
+          `[owner-gate] BLOQUEADO (${label}): no pude leer ${mapRel} del índice.`,
+          detail,
+          'El gate valida el commit: el mapa tiene que estar en el índice.',
+        ].join('\n'),
+      )
+    }
+  }
   if (!existsSync(mapPath)) {
     block(
       [
@@ -146,7 +172,7 @@ function addedPaths(args, label) {
 }
 
 /** Verifica una lista de rutas; bloquea si alguna no está declarada. */
-function checkAddedPaths(paths, mapPath, label) {
+function checkAddedPaths(paths, mapPath, label, fromIndex = false) {
   const codePaths = paths.filter(
     (rel) => rel.toLowerCase().startsWith(SRC_DIR) && CODE_EXT.test(rel),
   )
@@ -156,7 +182,7 @@ function checkAddedPaths(paths, mapPath, label) {
     )
     return 0
   }
-  const { mapText, mapRel } = loadMap(mapPath, label)
+  const { mapText, mapRel } = loadMap(mapPath, label, fromIndex)
   const offenders = codePaths.filter((rel) => !declaredInMap(mapText, rel))
   if (offenders.length === 0) {
     process.stdout.write(
@@ -214,7 +240,7 @@ function main() {
         ],
         '--staged',
       )
-      return checkAddedPaths(paths, mapPath, '--staged')
+      return checkAddedPaths(paths, mapPath, '--staged', true)
     }
 
     try {
