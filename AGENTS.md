@@ -297,6 +297,9 @@ Estas reglas son duras y aplican a toda tarea, no solo a las de refactor.
     declara en `docs/OWNERS.md` la pregunta, el dueño único, el consumidor y la
     kill list. Si el dueño ya existe, edita ese dueño. Si la pregunta no está
     clara, paras y preguntas; si está clara, ejecutas y el gate verifica la fila.
+    El gate `--diff` no es retroactivo: un archivo añadido por un commit que aún
+    no tenía `scripts/owner-gate.mjs` en su árbol queda exento; uno añadido con
+    el gate presente sí exige fila.
 
 ---
 

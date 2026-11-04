@@ -147,7 +147,11 @@ commits con `--no-verify` se cubren en dos capas:
 - `.github/workflows/ci.yml` ejecuta
   `node scripts/owner-gate.mjs --diff <base>`: mira los archivos NUEVOS del PR
   o del push y falla el check. Es el backstop que cierra el `--no-verify`; si
-  el check es obligatorio en la rama, el merge no pasa.
+  el check es obligatorio en la rama, el merge no pasa. No es retroactivo: si
+  el commit que añadió el archivo aún no tenía `scripts/owner-gate.mjs` en su
+  árbol, el archivo queda exento; un archivo añadido con el gate presente sí
+  exige fila. Así el PR que introduce el gate no falla por los archivos que ya
+  existían antes de él.
 - `.github/CODEOWNERS` exige revisión del dueño para el módulo
   (`src/voice/conversation/**`) y sus consumidores externos
   (`conversationRow.js`, `speakerDirectory.js`, `conversationRowWriter.ts` y

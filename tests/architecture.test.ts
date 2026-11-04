@@ -13,7 +13,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { STORAGE_KEYS, GEMINI_CONFIG, POLLINATIONS_CONFIG, DEFAULT_PERSONALITY, WELCOME_MESSAGE, UI_DEFAULTS } from '../src/core/config/appConfig';
@@ -455,6 +455,88 @@ describe('Gate de dueño — falsificación', () => {
         try {
             expect(correr('src/voice/conversation/declarado.ts')).toBe(0);
             expect(correr('src/voice/conversation/no-declarado.ts')).toBe(2);
+        } finally {
+            rmSync(dir, { recursive: true, force: true });
+        }
+    });
+
+    it('exime los archivos anteriores al gate y bloquea los añadidos con el gate presente', () => {
+        const dir = mkdtempSync(join(tmpdir(), 'owner-gate-bootstrap-'));
+        const git = (...args: string[]): string =>
+            execFileSync('git', args, { cwd: dir, encoding: 'utf8', stdio: 'pipe' });
+        const commit = (mensaje: string): void => {
+            git('add', '-A');
+            execFileSync(
+                'git',
+                ['-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-qm', mensaje],
+                { cwd: dir, stdio: 'pipe' },
+            );
+        };
+        const correr = (base: string): { code: number; salida: string } => {
+            try {
+                const salida = execFileSync(
+                    process.execPath,
+                    [script, '--diff', base],
+                    {
+                        cwd: raiz,
+                        encoding: 'utf8',
+                        stdio: 'pipe',
+                        env: { ...process.env, CLAUDE_PROJECT_DIR: dir },
+                    },
+                );
+                return { code: 0, salida: String(salida) };
+            } catch (error) {
+                const fallo = error as { status?: number; stderr?: Buffer | string };
+                return {
+                    code: Number(fallo.status ?? 1),
+                    salida: String(fallo.stderr ?? ''),
+                };
+            }
+        };
+        try {
+            execFileSync('git', ['init', '-q'], { cwd: dir, stdio: 'pipe' });
+            writeFileSync(join(dir, 'README.md'), 'prueba\n');
+            commit('c1');
+            const base = git('rev-list', '--max-parents=0', 'HEAD').trim();
+
+            mkdirSync(join(dir, 'src'));
+            writeFileSync(join(dir, 'src', 'viejo.ts'), 'export const viejo = 1\n');
+            commit('c2: archivo anterior al gate');
+
+            mkdirSync(join(dir, 'scripts'));
+            mkdirSync(join(dir, 'docs'));
+            copyFileSync(script, join(dir, 'scripts', 'owner-gate.mjs'));
+            writeFileSync(
+                join(dir, 'docs', 'OWNERS.md'),
+                '| Pregunta | Dueño | Nota |\n|---|---|---|\n',
+            );
+            commit('c3: nace el gate');
+
+            writeFileSync(join(dir, 'src', 'nuevo.ts'), 'export const nuevo = 1\n');
+            commit('c4: archivo nuevo con el gate presente');
+
+            // `viejo.ts` nació antes del gate: exento. `nuevo.ts` nació con el
+            // gate en su árbol: sin fila, bloquea.
+            const primero = correr(base);
+            expect(primero.code).toBe(2);
+            const [bloqueados, exentos] = primero.salida.split('quedan exento(s):');
+            expect(bloqueados).toContain('src/nuevo.ts');
+            expect(bloqueados).not.toContain('src/viejo.ts');
+            expect(exentos).toContain('src/viejo.ts');
+
+            // Sin el archivo viejo en el rango, el nuevo sigue bloqueado.
+            expect(correr(git('rev-parse', 'HEAD~1').trim()).code).toBe(2);
+
+            writeFileSync(
+                join(dir, 'docs', 'OWNERS.md'),
+                [
+                    '| Pregunta | Dueño | Nota |',
+                    '|---|---|---|',
+                    '| ¿Nuevo? | `src/nuevo.ts:1` | prueba |',
+                ].join('\n'),
+            );
+            commit('c5: declara el nuevo');
+            expect(correr(git('rev-parse', 'HEAD~2').trim()).code).toBe(0);
         } finally {
             rmSync(dir, { recursive: true, force: true });
         }

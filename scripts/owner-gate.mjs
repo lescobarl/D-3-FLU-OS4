@@ -8,6 +8,10 @@
  *   - `--staged`: bloquea el commit si el índice trae un archivo nuevo sin fila.
  *     Lee el mapa del índice, no del árbol: valida lo que se va a commitear.
  *   - `--diff <base>`: bloquea el CI/PR si el rango trae un archivo nuevo sin fila.
+ *     No es retroactivo: un archivo añadido por un commit cuyo árbol aún no tenía
+ *     este script queda exento. Así la rama que introduce el gate no se bloquea
+ *     a sí misma por los archivos que ya existían antes de él; un archivo
+ *     añadido con el gate presente sí exige fila.
  *
  * Uso:
  *   node scripts/owner-gate.mjs --path src/voice/conversation/nuevo.ts
@@ -171,8 +175,54 @@ function addedPaths(args, label) {
   return out.split('\0').filter(Boolean)
 }
 
+/** ¿El árbol de ese commit ya contenía este gate? */
+function treeHasGate(commit) {
+  try {
+    const out = execFileSync(
+      'git',
+      ['ls-tree', '--name-only', commit, '--', 'scripts/owner-gate.mjs'],
+      { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] },
+    )
+    return out.trim() !== ''
+  } catch {
+    // No pude leer el árbol: fallo cerrado; el archivo se trata como nuevo.
+    return true
+  }
+}
+
+/**
+ * ¿La ruta se añadió antes de que existiera el gate? El gate no juzga la
+ * historia: si el commit que añadió el archivo no tenía `scripts/owner-gate.mjs`
+ * en su árbol, el archivo no pudo declararse en un mapa que aún no existía.
+ * Si no encuentro el commit que lo añadió, devuelvo false (fallo cerrado).
+ */
+function addedBeforeGate(rel, base, label) {
+  let adding
+  try {
+    const out = execFileSync(
+      'git',
+      ['log', '--diff-filter=A', '--format=%H', `${base}..HEAD`, '--', rel],
+      { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] },
+    )
+    // `git log` va de más nuevo a más viejo: la primera línea es la última
+    // reincorporación del archivo y la que decide si el gate ya existía.
+    adding = out.split(/\r?\n/).map((line) => line.trim()).filter(Boolean)[0] ?? null
+  } catch (error) {
+    const detail = String(error.stderr || error.message || '').trim()
+    block(
+      [
+        `[owner-gate] BLOQUEADO (${label}): no pude verificar cuándo se añadió ${rel}.`,
+        detail,
+        'El gate falla cerrado: no eximo un archivo sin comprobarlo.',
+      ].join('\n'),
+    )
+  }
+  if (!adding) return false
+  return !treeHasGate(adding)
+}
+
 /** Verifica una lista de rutas; bloquea si alguna no está declarada. */
-function checkAddedPaths(paths, mapPath, label, fromIndex = false) {
+function checkAddedPaths(paths, mapPath, label, fromIndex = false, rangeBase = null) {
   const codePaths = paths.filter(
     (rel) => rel.toLowerCase().startsWith(SRC_DIR) && CODE_EXT.test(rel),
   )
@@ -183,10 +233,19 @@ function checkAddedPaths(paths, mapPath, label, fromIndex = false) {
     return 0
   }
   const { mapText, mapRel } = loadMap(mapPath, label, fromIndex)
-  const offenders = codePaths.filter((rel) => !declaredInMap(mapText, rel))
+  const undeclared = codePaths.filter((rel) => !declaredInMap(mapText, rel))
+  const exentos = rangeBase
+    ? undeclared.filter((rel) => addedBeforeGate(rel, rangeBase, label))
+    : []
+  const exento = new Set(exentos)
+  const offenders = undeclared.filter((rel) => !exento.has(rel))
   if (offenders.length === 0) {
+    const detalle =
+      exentos.length > 0
+        ? `; ${exentos.length} anterior(es) al gate, exento(s)`
+        : ''
     process.stdout.write(
-      `[owner-gate] OK (${label}): ${codePaths.length} archivo(s) de código nuevo(s) bajo ${SRC_DIR}; todos declarados.\n`,
+      `[owner-gate] OK (${label}): ${codePaths.length} archivo(s) de código nuevo(s) bajo ${SRC_DIR}; todos declarados${detalle}.\n`,
     )
     return 0
   }
@@ -194,6 +253,13 @@ function checkAddedPaths(paths, mapPath, label, fromIndex = false) {
     [
       `[owner-gate] BLOQUEADO (${label}): ${offenders.length} archivo(s) NUEVO(s) bajo ${SRC_DIR} sin dueño declarado en ${mapRel}:`,
       ...offenders.map((rel) => `  - ${rel}`),
+      ...(exentos.length > 0
+        ? [
+            '',
+            `${exentos.length} archivo(s) anterior(es) al gate quedan exento(s):`,
+            ...exentos.map((rel) => `  - ${rel}`),
+          ]
+        : []),
       '',
       'Antes de commitear:',
       '1. Busca en el mapa la pregunta que responde cada archivo.',
@@ -270,7 +336,7 @@ function main() {
       ],
       '--diff',
     )
-    return checkAddedPaths(paths, mapPath, '--diff')
+    return checkAddedPaths(paths, mapPath, '--diff', false, diffArg)
   }
 
   let target = pathArg
