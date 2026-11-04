@@ -127,7 +127,7 @@ describe('producto — el tramo lo resuelve el módulo al procesar', () => {
     expect(adios.meta?.conversacion?.tramo).toMatchObject({ inicio: 48000, fin: 64000 })
   }, 300_000)
 
-  it('un final ajeno SIN tramo vivo no se pega a la línea abierta', async () => {
+  it('un final ajeno SIN tramo vivo cierra la línea abierta sin pegarle su texto', async () => {
     const eventos: EventoConversacion[] = []
     let turnoVigente = 'turno-uno'
     const motor = crearMotorConversacionProducto({
@@ -148,22 +148,23 @@ describe('producto — el tramo lo resuelve el módulo al procesar', () => {
     // sigue abierta (aún no hay 5 s de silencio de cierre).
     for (let i = 0; i < 10; i += 1) emitir(motor, silencio(100), 32000 + i * BLOQUE)
 
+    const segunda = 'voy a poner a la mujer hablar para que no digan que'
     // Final de OTRA frase que el VAD no segmentó (medido en el playback
     // 2026-10-31). Sin la guarda del límite, el trozo se pegaba a la línea y la
     // fila commiteaba las DOS frases (93 caracteres donde iban 41).
-    await motor.evento(eventoAsr('voy a poner a la mujer hablar para que no digan que', true))
+    await motor.evento(eventoAsr(segunda, true))
 
     const filas = (): Array<Extract<EventoConversacion, { tipo: 'row.committed' }>> =>
       eventos.filter(
         (evento): evento is Extract<EventoConversacion, { tipo: 'row.committed' }> =>
           evento.tipo === 'row.committed',
       )
-    // Sin cambio de hablante ni silencio, el final ajeno NO se pega ni se
-    // commitea: queda pendiente y la línea abierta conserva SU texto.
-    // Sin cambio de hablante ni silencio, el final ajeno NO se pega ni se
-    // commitea: la línea abierta conserva SU texto.
-    expect(filas()).toHaveLength(0)
-    expect(motor.instantanea().locucionAbierta?.texto).toBe(primera)
+    // La frase nueva cierra la anterior en el acto: UNA fila con SU texto,
+    // sin el texto ajeno. La frase nueva queda abierta en SU línea.
+    expect(filas()).toHaveLength(1)
+    expect(filas()[0]!.fila.texto).toBe(primera)
+    expect(filas()[0]!.fila.texto).not.toContain(segunda)
+    expect(motor.instantanea().locucionAbierta?.texto).toBe(segunda)
 
     const cerrada = new Promise<void>((resolver) => {
       motor.suscribir((evento) => {
@@ -173,8 +174,13 @@ describe('producto — el tramo lo resuelve el módulo al procesar', () => {
     await motor.cerrar('user')
     await cerrada
     const persistidas = await fluDb.conversations.toArray()
-    expect(persistidas).toHaveLength(1)
-    expect(persistidas[0]!.text).toBe(primera)
-    expect(persistidas.some((fila) => fila.text.includes(primera) && fila.text !== primera)).toBe(false)
+    expect(persistidas).toHaveLength(2)
+    const textos = persistidas.map((fila) => fila.text)
+    expect(textos).toContain(primera)
+    expect(textos).toContain(segunda)
+    // Ninguna fila mezcla las dos frases.
+    expect(
+      persistidas.some((fila) => fila.text.includes(primera) && fila.text.includes(segunda)),
+    ).toBe(false)
   })
 })

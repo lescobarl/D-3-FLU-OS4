@@ -141,7 +141,9 @@ export function createBrowserProfileService({
     record: BrowserProfileRecord,
     patch: BrowserProfileInput,
     at: number,
-    syncBase: BrowserProfileRecord['sync'] | undefined = record.sync,
+    // Sin default: `ensure` pasa `undefined` al crear y la tupla nace en 1.
+    // Un default a `record.sync` la subiría a 2 en la creación.
+    syncBase: BrowserProfileRecord['sync'] | undefined,
   ): BrowserProfileRecord => ({
     ...record,
     categories: patch.categories ?? record.categories,
