@@ -51,7 +51,7 @@ mismo commit. Si no puedes borrarlo ahora, no añadas el nuevo ahora.
 | Pregunta | Dueño | Nota |
 |---|---|---|
 | ¿Cómo entra el audio y se registra el tramo? | `ingesta.ts:65` `crearIngesta` (`ingestaAudio` 538) · `tramos.ts:50` `crearRegistroTramos` | El tramo es la identidad de la locución. |
-| ¿Cómo entra el ASR y se resuelve el tramo? | `ingesta.ts:65` `crearIngesta` (`ingestaAsr` 693, `drenarResultadosAsr` 513) · `tramos.ts:178` `crearBufferAsr` | El módulo atribuye el texto dentro de su cola. |
+| ¿Cómo entra el ASR y se resuelve el tramo? | `ingesta.ts:65` `crearIngesta` (`ingestaAsr` 693, `drenarResultadosAsr` 513) · `ingesta.ts:115` `esReentregaDeLaFila` · `ingesta.ts:140` `tramoSinteticoParaTexto` · `tramos.ts:178` `crearBufferAsr` | El módulo atribuye el texto dentro de su cola. |
 | ¿Cómo se verifica el cambio de voz? | `ingesta.ts:220` `verificarCambioVoz` · `ingesta.ts:366` `partirLocucionPorCambioDeVoz` | Mide el tramo entrante antes de atribuir texto. |
 | ¿Cómo se miden las muestras y su duración? | `muestras.ts:23` `duracionMsDeMuestras` | La identidad sale del audio medido, no del tramo. |
 | ¿Cómo se serializan las llamadas y se manejan los pendientes? | `cola.ts:25` `crearCola` · `cola.ts:74` `crearPendientes` · `texto.ts:44` `crearFlujoTexto` (`finalizarPendientes` 280) | Una cola; los pendientes conservan su tramo real. |

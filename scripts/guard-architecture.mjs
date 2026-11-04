@@ -16,7 +16,8 @@
  */
 import { execFileSync } from 'node:child_process'
 import { readFileSync, readdirSync, statSync } from 'node:fs'
-import { join, relative } from 'node:path'
+import { join, relative, resolve } from 'node:path'
+import { pathToFileURL } from 'node:url'
 
 const ROOT = process.cwd()
 const SRC = join(ROOT, 'src')
@@ -83,8 +84,7 @@ function mapText() {
  * dueños. No se prohíbe que se importen/re-exporten; se prohíbe que se
  * reimplementen. El mapa es la fuente: una lista hardcodeada se desincroniza.
  */
-function mapOwnerSymbols() {
-  const text = mapText()
+export function mapOwnerSymbols(text = mapText()) {
   const symbols = new Set()
   for (const line of text.split(/\r?\n/)) {
     if (!line.startsWith('|')) continue
@@ -136,7 +136,7 @@ function rel(file) {
   return relative(ROOT, file).replaceAll('\\', '/')
 }
 
-function countDefinitions(text, symbol) {
+export function countDefinitions(text, symbol) {
   const escaped = symbol.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   const patterns = [
     new RegExp(`\\b(?:export\\s+(?:default\\s+)?)?(?:async\\s+)?function\\s*\\*?\\s+${escaped}\\b`, 'g'),
@@ -144,6 +144,11 @@ function countDefinitions(text, symbol) {
     new RegExp(`\\b(?:export\\s+(?:default\\s+)?)?class\\s+${escaped}\\b`, 'g'),
     new RegExp(`\\b${escaped}\\s*:\\s*(?:async\\s*)?\\([^)]*\\)\\s*(?::\\s*[^={]+)?=>\\s*\\{`, 'g'),
     new RegExp(`\\b${escaped}\\s*:\\s*(?:async\\s*)?function\\s*\\([^)]*\\)\\s*\\{`, 'g'),
+    // Método de clase u objeto: `metodo(args) {`, `async metodo(args): T {`,
+    // `private metodo(...) {`. Anclado a inicio de línea y con el `{` en la
+    // misma línea o la siguiente: una firma de interfaz no cuenta, y el tipo de
+    // retorno no puede "saltar" hasta el cuerpo de otra función.
+    new RegExp(`^[ \\t]*(?:(?:public|private|protected|static|async|get|set|readonly|override)[ \\t]+)*#?${escaped}[ \\t]*\\([^)]*\\)[ \\t]*(?::[^{\\n]+)?(?:\\r?\\n[ \\t]*)?\\{`, 'gm'),
   ]
   let count = 0
   for (const pattern of patterns) count += (text.match(pattern) || []).length
@@ -164,7 +169,7 @@ function oldImportNames(text) {
  * Specifiers que importan un archivo interno del módulo CONVERSACIÓN desde
  * fuera. Permitido: `.../conversation` (directorio) y `.../conversation/index`.
  */
-function conversationInternalImports(text) {
+export function conversationInternalImports(text) {
   const found = new Set()
   const re = /(?:from\s*|require\(\s*|import\(\s*)['"]([^'"]+)['"]/g
   let match
@@ -283,7 +288,7 @@ function indexSources() {
   return sources
 }
 
-function checkFull(ownerSymbols, sources) {
+export function checkFull(ownerSymbols, sources) {
   const errors = []
   const definitions = new Map(ownerSymbols.map((symbol) => [symbol, []]))
   for (const { path, text } of sources) {
@@ -312,25 +317,35 @@ function checkFull(ownerSymbols, sources) {
   return errors
 }
 
-let ownerSymbols
-let sources
-let errors
-try {
-  ownerSymbols = mapOwnerSymbols()
-  sources = STAGED ? indexSources() : treeSources()
-  errors = STAGED
-    ? [...checkStaged(), ...checkFull(ownerSymbols, sources)]
-    : checkFull(ownerSymbols, sources)
-} catch (error) {
-  const detail = error instanceof Error ? error.message : String(error)
-  console.error(`[guard-architecture] BLOQUEADO: ${detail}`)
-  process.exit(1)
+/** Ejecuta el gate con el modo pedido. Devuelve el código de salida. */
+function main() {
+  let ownerSymbols
+  let sources
+  let errors
+  try {
+    ownerSymbols = mapOwnerSymbols()
+    sources = STAGED ? indexSources() : treeSources()
+    errors = STAGED
+      ? [...checkStaged(), ...checkFull(ownerSymbols, sources)]
+      : checkFull(ownerSymbols, sources)
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error)
+    console.error(`[guard-architecture] BLOQUEADO: ${detail}`)
+    return 1
+  }
+  if (errors.length) {
+    console.error(`[guard-architecture] ${errors.length} violación(es):`)
+    for (const error of errors) console.error(` - ${error}`)
+    return 1
+  }
+  console.log(
+    `[guard-architecture] OK (${STAGED ? 'staged + full' : 'full'}): ${ownerSymbols.length} dueño(s) del mapa.`,
+  )
+  return 0
 }
-if (errors.length) {
-  console.error(`[guard-architecture] ${errors.length} violación(es):`)
-  for (const error of errors) console.error(` - ${error}`)
-  process.exit(1)
-}
-console.log(
-  `[guard-architecture] OK (${STAGED ? 'staged + full' : 'full'}): ${ownerSymbols.length} dueño(s) del mapa.`,
-)
+
+const invokedDirectly =
+  process.argv[1] !== undefined &&
+  pathToFileURL(resolve(process.argv[1])).href === import.meta.url
+
+if (invokedDirectly) process.exit(main())

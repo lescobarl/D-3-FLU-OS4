@@ -12,7 +12,17 @@
 // ============================================================
 
 import { describe, it, expect } from 'vitest';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { STORAGE_KEYS, GEMINI_CONFIG, POLLINATIONS_CONFIG, DEFAULT_PERSONALITY, WELCOME_MESSAGE, UI_DEFAULTS } from '../src/core/config/appConfig';
+import {
+    checkFull,
+    conversationInternalImports,
+    countDefinitions,
+    mapOwnerSymbols,
+} from '../scripts/guard-architecture.mjs';
 
 // ============================================================
 // 1. AppConfig — Centralized Configuration (Rule #1)
@@ -358,5 +368,95 @@ describe('Fase 2 — Database v5: tablas reminders y shoppingItems', () => {
     it('fluDatabase must export the Phase 2 record types', async () => {
         const src = (await import('fs')).readFileSync('./src/core/db/fluDatabase.ts', 'utf-8');
         expect(src).toContain('export interface ShoppingItemRecord');
+    });
+});
+
+// ============================================================
+// Gate de arquitectura y dueño — falsificación (AGENTS §8.4)
+// ============================================================
+
+describe('Gate de arquitectura — falsificación', () => {
+    it('cuenta el dueño definido como método de clase, no solo como función', () => {
+        const src = [
+            'export class Motor {',
+            '    async commitUserTurnRow(args) { return args }',
+            '    private commitUserTurnRow() {}',
+            '}',
+            'commitUserTurnRow(1)',
+        ].join('\n');
+        expect(countDefinitions(src, 'commitUserTurnRow')).toBe(2);
+    });
+
+    it('falla si el mismo dueño se define en dos archivos', () => {
+        const errors = checkFull(['commitUserTurnRow'], [
+            { path: 'src/a.ts', text: 'export function commitUserTurnRow() {}' },
+            { path: 'src/b.ts', text: 'const commitUserTurnRow = () => {}' },
+        ]);
+        expect(errors).toEqual([
+            'dueño duplicado "commitUserTurnRow": src/a.ts(1), src/b.ts(1)',
+        ]);
+    });
+
+    it('falla si un dueño del mapa no tiene definición', () => {
+        expect(checkFull(['commitUserTurnRow'], [])).toEqual([
+            'dueño declarado sin definición "commitUserTurnRow"',
+        ]);
+    });
+
+    it('bloquea un import interno y permite la fachada', () => {
+        expect(conversationInternalImports("import { x } from '../conversation/index.ts'")).toEqual([]);
+        expect(conversationInternalImports("import { x } from '../conversation/fila.ts'")).toEqual([
+            '../conversation/fila.ts',
+        ]);
+        const errors = checkFull([], [
+            { path: 'src/voice/compose/motor.js', text: "import { x } from '../conversation/fila.ts'" },
+        ]);
+        expect(errors).toEqual([
+            'src/voice/compose/motor.js importa interno del módulo: ../conversation/fila.ts (usa src/voice/conversation/index.ts)',
+        ]);
+    });
+
+    it('deriva los símbolos solo de la columna Dueño del mapa', () => {
+        const mapa = [
+            '| Pregunta | Dueño | Nota |',
+            '|---|---|---|',
+            '| ¿Quién? | `a.ts:1` `duenoA` · `duenoB` | menciona `noEsDueno` |',
+        ].join('\n');
+        expect(mapOwnerSymbols(mapa)).toEqual(['duenoA', 'duenoB']);
+    });
+});
+
+describe('Gate de dueño — falsificación', () => {
+    const raiz = process.cwd();
+    const script = join(raiz, 'scripts', 'owner-gate.mjs');
+
+    it('bloquea un archivo nuevo no declarado y permite el declarado', () => {
+        const dir = mkdtempSync(join(tmpdir(), 'owner-gate-'));
+        writeFileSync(
+            join(dir, 'OWNERS.md'),
+            [
+                '| Pregunta | Dueño | Nota |',
+                '|---|---|---|',
+                '| ¿Declarado? | `declarado.ts:1` | prueba |',
+            ].join('\n'),
+        );
+        const correr = (filePath: string): number => {
+            try {
+                execFileSync(
+                    process.execPath,
+                    [script, '--path', filePath, '--map', join(dir, 'OWNERS.md')],
+                    { cwd: raiz, encoding: 'utf8', stdio: 'pipe' },
+                );
+                return 0;
+            } catch (error) {
+                return Number((error as { status?: number }).status ?? 1);
+            }
+        };
+        try {
+            expect(correr('src/voice/conversation/declarado.ts')).toBe(0);
+            expect(correr('src/voice/conversation/no-declarado.ts')).toBe(2);
+        } finally {
+            rmSync(dir, { recursive: true, force: true });
+        }
     });
 });
