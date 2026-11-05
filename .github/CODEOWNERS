@@ -58,6 +58,9 @@
 /scripts/install-hooks.mjs     @lescobarl
 /.task/**                      @lescobarl
 /.github/**                    @lescobarl
+/scripts/revisor-*             @lescobarl
+/.githooks/commit-msg          @lescobarl
+/vitest.guards.config.ts       @lescobarl
 
 # Definición del gate (aquí vive el orden de `lint`)
 /package.json                  @lescobarl
