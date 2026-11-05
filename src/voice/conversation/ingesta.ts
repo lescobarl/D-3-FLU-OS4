@@ -16,7 +16,7 @@ import type { Sesion } from './sesion.ts'
 import { decidirIdentidad, plantillasDe } from './identidad.ts'
 import type { IdentidadDecidida } from './identidad.ts'
 import { concatenarMuestras, duracionMsDeMuestras, retenerCola } from './muestras.ts'
-import { fusionarVoz } from './fila.ts'
+import { fusionarVoz, ultimaFilaPorFin } from './fila.ts'
 import { registrarMedidaVoz } from './sesion.ts'
 import { asrEmpujaAudio } from './ports.ts'
 import { logCaughtError } from '../../lib/caughtError.ts'
@@ -117,7 +117,7 @@ export function crearIngesta({
     if (!textoEntrante) return false
     const previa =
       (tramoId ? estado.filas.get(tramoId) : undefined) ??
-      [...estado.filas.values()].sort((a, b) => b.tramo.fin - a.tramo.fin)[0]
+      ultimaFilaPorFin(estado.filas.values())
     if (!previa) return false
     const turno = entrada.turnId
       ? String(entrada.turnId).trim()

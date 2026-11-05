@@ -571,6 +571,55 @@
       "kind": "sites",
       "allowed": {},
       "goal": 0
+    },
+    {
+      "id": "ultima-fila-audio",
+      "owner": "src/voice/conversation/fila.ts",
+      "description": "La ultima fila por fin de audio se calcula una sola vez, en ultimaFilaPorFin; nadie repite el recorrido ni el sort inline.",
+      "pattern": "(?:b\\.tramo\\.fin - a\\.tramo\\.fin|fila\\.tramo\\.fin > ultima\\.tramo\\.fin)",
+      "roots": ["src/voice/conversation"],
+      "kind": "sites",
+      "allowed": {
+        "src/voice/conversation/fila.ts": 1
+      },
+      "goal": 1
+    },
+    {
+      "id": "reentrega-fila",
+      "owner": "src/voice/conversation/ingesta.ts",
+      "description": "La decision de reentrega de una fila ya escrita vive en esReentregaDeLaFila.",
+      "pattern": "function esReentregaDeLaFila",
+      "roots": ["src/voice/conversation"],
+      "kind": "sites",
+      "allowed": {
+        "src/voice/conversation/ingesta.ts": 1
+      },
+      "goal": 1
+    },
+    {
+      "id": "turno-ya-escrito",
+      "owner": "src/voice/conversation/ingesta.ts",
+      "description": "El motivo turnoYaEscrito tiene un solo sitio y un solo dueno: la reentrega de ingesta.",
+      "pattern": "contarDescarte\\(\\s*['\"]turnoYaEscrito['\"]",
+      "roots": ["src/voice/conversation"],
+      "kind": "sites",
+      "allowed": {
+        "src/voice/conversation/ingesta.ts": 1
+      },
+      "goal": 1
+    },
+    {
+      "id": "comando-control",
+      "owner": "src/voice/conversation/adapters.ts",
+      "description": "El predicado de comando de control tiene UN dueno; solo las dos puertas declaradas lo consumen.",
+      "pattern": "esComandoDeControl\\?\\.\\(",
+      "roots": ["src/voice/conversation"],
+      "kind": "sites",
+      "allowed": {
+        "src/voice/conversation/texto.ts": 1,
+        "src/voice/conversation/cierre.ts": 1
+      },
+      "goal": 2
     }
   ]
 }

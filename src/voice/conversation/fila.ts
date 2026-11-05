@@ -37,6 +37,7 @@
 import type { EvidenciaVoz } from './tipos.ts'
 import type {
   EvidenciaEtiqueta,
+  Fila,
   FilaNueva,
   IdiomaLocucion,
   MotivoCierre,
@@ -223,6 +224,22 @@ export function ventanaDentroDe(ventana: TramoMuestreado, tramo: TramoMuestreado
     ventana.inicio >= tramo.inicio &&
     ventana.fin <= tramo.fin
   )
+}
+
+/**
+ * Última fila commiteada según el fin de su audio.
+ *
+ * Dueño único de «la última fila»: la cobertura de un pendiente y la
+ * continuidad de la fila anterior lo consumen; nadie repite el recorrido.
+ * @param filas Filas vivas de la sesión.
+ * @returns La fila con mayor `tramo.fin`, o null si no hay filas.
+ */
+export function ultimaFilaPorFin(filas: Iterable<Fila>): Fila | null {
+  let ultima: Fila | null = null
+  for (const fila of filas) {
+    if (!ultima || fila.tramo.fin > ultima.tramo.fin) ultima = fila
+  }
+  return ultima
 }
 
 /**

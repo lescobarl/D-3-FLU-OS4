@@ -78,6 +78,7 @@
       "construirFila",
       "fusionarVoz",
       "resolverEtiqueta",
+      "ultimaFilaPorFin",
       "ventanaDentroDe"
     ],
     "frontera.ts": [

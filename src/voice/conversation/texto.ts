@@ -9,7 +9,7 @@ import { continuaLaFrase } from '../core/locucion.js'
 import { esEcoDeTts } from './eco.ts'
 import { decidirFrontera } from './frontera.ts'
 import type { DecisionFrontera } from './frontera.ts'
-import { ventanaDentroDe } from './fila.ts'
+import { ultimaFilaPorFin, ventanaDentroDe } from './fila.ts'
 import type { Pendientes } from './cola.ts'
 import type { RegistroTramos } from './tramos.ts'
 import type { Sesion } from './sesion.ts'
@@ -95,9 +95,7 @@ export function crearFlujoTexto({
    * @returns Solo la cola nueva (o el texto completo si no es prefijo).
    */
   function sinPrefijoDeLaFilaAnterior(texto: string, voz: EvidenciaVoz): string {
-    const previa = [...estado.filas.values()].sort(
-      (a, b) => b.tramo.fin - a.tramo.fin,
-    )[0]
+    const previa = ultimaFilaPorFin(estado.filas.values())
     const previo = String(previa?.texto || '').trim()
     const nuevo = String(texto || '').trim()
     if (!previo || !nuevo) return nuevo
@@ -305,9 +303,7 @@ export function crearFlujoTexto({
     }
     for (const siguiente of lotes) {
       const ultimo = estado.ultimoTramoId ? tramos.vigente(estado.ultimoTramoId) : null
-      const previa = [...estado.filas.values()].sort(
-        (a, b) => b.tramo.fin - a.tramo.fin,
-      )[0]
+      const previa = ultimaFilaPorFin(estado.filas.values())
       const tramo =
         siguiente.tramo ??
         tramos.resolver(siguiente.tramoId) ??
