@@ -37,4 +37,5 @@
   'tests/vozEventoSistemaMarcaGuard.test.ts',
   'tests/vozRespuestaFluUnaSolaVezGuard.test.ts',
   'tests/vozFuncionesRatchetGuard.test.ts',
+  'tests/srcFuncionesRatchetGuard.test.ts',
 ]
