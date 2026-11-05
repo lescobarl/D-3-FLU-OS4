@@ -38,4 +38,7 @@
   'tests/vozRespuestaFluUnaSolaVezGuard.test.ts',
   'tests/vozFuncionesRatchetGuard.test.ts',
   'tests/srcFuncionesRatchetGuard.test.ts',
+  'tests/rutasDoblesGuard.test.ts',
+  'tests/revisorFuncionesGuard.test.ts',
+  'tests/revisorPuertasGuard.test.ts',
 ]

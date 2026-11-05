@@ -46,6 +46,23 @@ jobs:
       - name: Instalar dependencias
         run: npm ci
 
+      - name: Revisor de funciones (nuevas)
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE="${{ github.event.pull_request.base.sha }}"
+          else
+            BASE="${{ github.event.before }}"
+          fi
+          if [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ]; then
+            echo "[revisor] Sin base comparable; se omite."
+            exit 0
+          fi
+          if [ "${{ github.event_name }}" != "pull_request" ] && ! git rev-parse --verify --end-of-options "$BASE^{commit}" >/dev/null 2>&1; then
+            echo "[revisor] Base de push no disponible; se omite."
+            exit 0
+          fi
+          node scripts/revisor-git.mjs --diff "$BASE"
+
       - name: Guard de arquitectura
         run: npm run guard:arch
 
