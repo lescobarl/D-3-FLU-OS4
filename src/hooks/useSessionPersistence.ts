@@ -1,23 +1,28 @@
 // ============================================================
 // useSessionPersistence — Save/restore session state across reloads
 // ============================================================
-// OS2-style: session state (active tab, language, role, participant
-// state, workspace image, etc.) is persisted to localStorage so
-// the UI returns to the same state after a page reload.
+// C9 — Un ÚNICO backend de sesión: IndexedDB (Dexie, vía fluStorage).
+// El estado de interfaz (tab/frames/minuta) se persiste en la misma base
+// que la sesión de voz; ya NO existe una ruta localStorage duplicada.
 //
-// This hook is complementary to useConversationPersistence (which
-// persists conversation history to IndexedDB). This one handles
-// ephemeral UI state via localStorage.
+// P8.46 — UN VALOR, UN ALMACÉN: `language` y `sessionRole` NO viajan en este
+// payload. Esos dos ajustes tienen su registro en localStorage
+// (`STORAGE_KEYS.LANGUAGE` / `SESSION_ROLE`) porque los leen consumidores
+// SÍNCRONOS: el estado inicial de `useConfigPersistence` y la copia de seguridad
+// de `backupSystem`. La copia que había aquí la escribía el hook en cada cambio y
+// NO la leía nadie (la hidratación de App solo aplica expandedFrameId y
+// selectedMinuteId), así que era una ruta doble de datos con escritor y sin
+// lector: dos almacenes del mismo valor, con divergencia posible. `pickSession`
+// sanea además lo YA guardado, de modo que un registro viejo no reinyecte esos
+// dos campos ni ningún otro que no esté declarado.
 // ============================================================
 
 import { useEffect, useRef } from 'react';
-
-const SESSION_STORAGE_KEY = 'flu-session-state';
+import { logCaughtError } from '../lib/caughtError';
+import { clearUiSessionState, loadUiSessionState, saveUiSessionState } from '../voice/api/storage';
 
 export interface SessionState {
     activeTab: string;
-    language: string;
-    sessionRole: string;
     expandedFrameId: string;
     selectedMinuteId: string | null;
     participantPhase: string;
@@ -27,8 +32,6 @@ export interface SessionState {
 
 const DEFAULT_SESSION: SessionState = {
     activeTab: 'workspace',
-    language: 'es',
-    sessionRole: '',
     expandedFrameId: '',
     selectedMinuteId: null,
     participantPhase: 'idle',
@@ -36,43 +39,59 @@ const DEFAULT_SESSION: SessionState = {
     workspaceImageExpanded: false,
 };
 
+/** Campos DECLARADOS del payload de sesión (lo que no está aquí no se persiste). */
+const SESSION_FIELD_KEYS = Object.keys(DEFAULT_SESSION) as Array<keyof SessionState>;
+
+/** Sanea una fuente (registro guardado o estado entrante) a los campos declarados. */
+function pickSession(source: unknown): Partial<SessionState> {
+    const out: Record<string, unknown> = {};
+    if (!source || typeof source !== 'object') return out;
+    for (const key of SESSION_FIELD_KEYS) {
+        const value = (source as Record<string, unknown>)[key];
+        if (value !== undefined) out[key] = value;
+    }
+    return out as Partial<SessionState>;
+}
+
+/** Valores por defecto (para hidratación síncrona inicial de la UI). */
+export function defaultSessionState(): SessionState {
+    return { ...DEFAULT_SESSION };
+}
+
 /**
- * Load session state from localStorage.
+ * Load session state from the Dexie session store (fluStorage).
  */
-export function loadSessionState(): SessionState {
+export async function readSessionState(): Promise<SessionState> {
     try {
-        const raw = localStorage.getItem(SESSION_STORAGE_KEY);
-        if (raw) {
-            const parsed = JSON.parse(raw);
-            return { ...DEFAULT_SESSION, ...parsed };
-        }
+        const stored = await loadUiSessionState();
+        if (stored) return { ...DEFAULT_SESSION, ...pickSession(stored) };
     } catch (err) {
-        console.warn('[SessionPersistence] loadSessionState failed:', err);
+        logCaughtError('[SessionPersistence] readSessionState failed', err);
     }
     return { ...DEFAULT_SESSION };
 }
 
 /**
- * Save session state to localStorage.
+ * Save session state to the Dexie backend (merge con lo ya persistido, saneado).
  */
-export function saveSessionState(state: Partial<SessionState>): void {
+export async function writeSessionState(state: Partial<SessionState>): Promise<void> {
     try {
-        const current = loadSessionState();
-        const merged = { ...current, ...state };
-        localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(merged));
+        const current = await loadUiSessionState();
+        const merged = { ...DEFAULT_SESSION, ...pickSession(current), ...pickSession(state) };
+        await saveUiSessionState(merged);
     } catch (err) {
-        console.warn('[SessionPersistence] saveSessionState failed:', err);
+        logCaughtError('[SessionPersistence] writeSessionState failed', err);
     }
 }
 
 /**
- * Clear session state from localStorage.
+ * Clear session state from the Dexie backend.
  */
-export function clearSessionState(): void {
+export async function clearSessionState(): Promise<void> {
     try {
-        localStorage.removeItem(SESSION_STORAGE_KEY);
+        await clearUiSessionState();
     } catch (err) {
-        console.warn('[SessionPersistence] clearSessionState failed:', err);
+        logCaughtError('[SessionPersistence] clearSessionState failed', err);
     }
 }
 
@@ -80,16 +99,7 @@ export function clearSessionState(): void {
  * Hook that auto-saves session state on changes.
  * Pass the current values and they'll be persisted automatically.
  */
-export function useSessionPersistence(state: {
-    activeTab: string;
-    language: string;
-    sessionRole: string;
-    expandedFrameId: string;
-    selectedMinuteId: string | null;
-    participantPhase: string;
-    participantTurnCount: number;
-    workspaceImageExpanded: boolean;
-}) {
+export function useSessionPersistence(state: SessionState) {
     const isInitialMount = useRef(true);
 
     useEffect(() => {
@@ -98,15 +108,14 @@ export function useSessionPersistence(state: {
             isInitialMount.current = false;
             return;
         }
-        saveSessionState(state);
+        void writeSessionState(state);
     }, [
         state.activeTab,
-        state.language,
-        state.sessionRole,
         state.expandedFrameId,
         state.selectedMinuteId,
         state.participantPhase,
         state.participantTurnCount,
         state.workspaceImageExpanded,
+      state,
     ]);
 }

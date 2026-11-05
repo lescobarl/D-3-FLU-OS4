@@ -13,8 +13,9 @@
 //
 // El RNG es inyectable vía options.random para tests deterministas.
 // ============================================================
-import type { GameEngine } from './gameEngine';
-import type { AvatarAnimation, GameSession, GameTurnResult } from './types';
+import type { GameEngine } from './gameEngine.ts';
+import type { AvatarAnimation, GameSession, GameTurnResult } from './types.ts';
+import { END_GAME_FRAMES, adoptRandom, baseSession, readNumberCfg, readLongMaxCfg, gameOverResult, matchesEndGameFrames, normalizeForMatch, pickRandom, turnResult } from './gameUtils.ts';
 
 export const VERB_ALIASES: Record<AvatarAnimation, readonly string[]> = {
     Dance: ['baila', 'bailar', 'baile', 'dance', 'bailemos'],
@@ -38,13 +39,7 @@ const DEFAULT_LONG_MAX = 5;
 const MAX_ROUNDS = 12;
 const MAX_LONG = 10;
 
-const END_FRAMES: readonly string[] = Object.freeze([
-    'salir del juego',
-    'terminar el juego',
-    'dejar de jugar',
-    'ya no quiero jugar',
-    'cerrar el juego',
-]);
+const END_FRAMES: readonly string[] = END_GAME_FRAMES;
 
 const CONTINUE_FRAMES: readonly string[] = Object.freeze([
     'sigo jugando',
@@ -71,23 +66,6 @@ interface SimonDiceState {
 }
 
 type RandomSource = () => number;
-
-function clamp(value: number, min: number, max: number): number {
-    if (!Number.isFinite(value)) return min;
-    return Math.min(max, Math.max(min, Math.round(value)));
-}
-
-function stripDiacritics(text: string): string {
-    return text.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-}
-
-function normalizeForMatch(text = ''): string {
-    return stripDiacritics(text).toLowerCase().replace(/\s+/g, ' ').trim();
-}
-
-function pickRandom<T>(items: readonly T[], rng: RandomSource): T {
-    return items[Math.floor(rng() * items.length)];
-}
 
 /** Extrae los verbos mencionados en el texto, en orden, ignorando relleno. */
 function extractOrderedVerbs(normalized: string, verbos: readonly AvatarAnimation[]): AvatarAnimation[] {
@@ -118,14 +96,7 @@ function describeSequence(sequence: readonly AvatarAnimation[]): string {
 }
 
 function announcePrompt(sequence: readonly AvatarAnimation[]): GameTurnResult {
-    return {
-        prompt: `¡Simón dice: ${describeSequence(sequence)}! Repite los movimientos en el mismo orden.`,
-        valid: false,
-        gameOver: false,
-        score: 0,
-        animation: sequence[0] ?? 'Idle',
-        emotion: 'excited',
-    };
+    return turnResult(`¡Simón dice: ${describeSequence(sequence)}! Repite los movimientos en el mismo orden.`, 0, { animation: sequence[0] ?? 'Idle', emotion: 'excited' })
 }
 
 function growSequence(current: readonly AvatarAnimation[], verbos: readonly AvatarAnimation[], rng: RandomSource): AvatarAnimation[] {
@@ -135,7 +106,7 @@ function growSequence(current: readonly AvatarAnimation[], verbos: readonly Avat
     return [...current, next];
 }
 
-export function createSimonDiceEngine(options?: { random?: RandomSource }): GameEngine {
+export function createSimonDiceEngine(options?: { random?: RandomSource }): GameEngine<SimonDiceState> {
     let rng: RandomSource = options?.random ?? Math.random;
 
     const readConfig = (cfg: Record<string, unknown> | undefined): SimonDiceConfig => {
@@ -143,8 +114,8 @@ export function createSimonDiceEngine(options?: { random?: RandomSource }): Game
             ? (cfg.verbos as unknown[]).filter((verb): verb is AvatarAnimation =>
                   typeof verb === 'string' && verb in VERB_DISPLAY)
             : [...DEFAULT_VERBOS];
-        const rounds = clamp(Number(cfg?.rounds) || DEFAULT_ROUNDS, 1, MAX_ROUNDS);
-        const longMax = clamp(Number(cfg?.longMax) || DEFAULT_LONG_MAX, 1, MAX_LONG);
+        const rounds = readNumberCfg(cfg, ['rounds'], DEFAULT_ROUNDS, MAX_ROUNDS, 1);
+        const longMax = readLongMaxCfg(cfg, DEFAULT_LONG_MAX, MAX_LONG);
         return {
             verbos: verbos.length > 0 ? verbos : [...DEFAULT_VERBOS],
             rounds,
@@ -152,58 +123,43 @@ export function createSimonDiceEngine(options?: { random?: RandomSource }): Game
         };
     };
 
-    const adoptRandom = (cfg: Record<string, unknown> | undefined): void => {
-        if (cfg && typeof cfg.random === 'function') {
-            rng = cfg.random as RandomSource;
-        }
+    const buildState = (cfg: Record<string, unknown> | undefined): SimonDiceState => {
+        rng = adoptRandom(rng, cfg);
+        const config = readConfig(cfg);
+        return {
+            verbos: config.verbos,
+            sequence: [],
+            maxRounds: config.rounds,
+            longMax: config.longMax,
+            phase: 'announce',
+        };
     };
 
     return {
         id: 'simon_dice',
 
-        createSession(optionsConfig: Record<string, unknown> = {}): GameSession {
-            adoptRandom(optionsConfig);
-            const cfg = readConfig(optionsConfig);
-            return {
-                id: 'simon_dice',
-                state: {
-                    verbos: cfg.verbos,
-                    sequence: [],
-                    maxRounds: cfg.rounds,
-                    longMax: cfg.longMax,
-                    phase: 'announce',
-                },
-                score: 0,
-                round: 1,
-            };
+        createSession(optionsConfig: Record<string, unknown> = {}): GameSession<SimonDiceState> {
+            return baseSession('simon_dice', buildState(optionsConfig));
         },
 
-        start(session: GameSession, optionsConfig: Record<string, unknown> = {}): GameTurnResult {
-            adoptRandom(optionsConfig);
-            const cfg = readConfig(optionsConfig);
-            const state = session.state as unknown as SimonDiceState;
-            state.verbos = cfg.verbos;
-            state.maxRounds = cfg.rounds;
-            state.longMax = cfg.longMax;
-            state.sequence = [pickRandom(cfg.verbos, rng)];
-            state.phase = 'announce';
+        start(session: GameSession<SimonDiceState>, optionsConfig: Record<string, unknown> = {}): GameTurnResult {
+            const state = buildState(optionsConfig);
+            state.sequence = [pickRandom(state.verbos, rng)];
+            session.state = state;
             session.score = 0;
             session.round = 1;
             return announcePrompt(state.sequence);
         },
 
-        turn(session: GameSession, text = ''): GameTurnResult {
-            const state = session.state as unknown as SimonDiceState;
+        turn(session: GameSession<SimonDiceState>, text = ''): GameTurnResult {
+            const state = session.state as SimonDiceState;
 
             if (state.phase === 'done') {
-                return {
-                    prompt: 'Ya terminamos de jugar Simón dice. ¿Quieres empezar otra partida?',
-                    valid: false,
-                    gameOver: true,
-                    score: session.score,
-                    animation: 'Idle',
-                    emotion: 'happy',
-                };
+                return gameOverResult(
+                        'Ya terminamos de jugar Simón dice. ¿Quieres empezar otra partida?',
+                        session.score,
+                        {  },
+                    );
             }
 
             if (!state.sequence || state.sequence.length === 0) {
@@ -211,17 +167,22 @@ export function createSimonDiceEngine(options?: { random?: RandomSource }): Game
                 return this.start(session, {});
             }
 
-            const got = extractOrderedVerbs(normalizeForMatch(text), state.verbos);
-            if (got.length === 0) {
+            const normalized = normalizeForMatch(text);
+
+            // Control de REPETICION declarado por el motor ("repite", "no entendi",
+            // "continua"...). Sin rama propia caia al error "no reconoci ningun
+            // movimiento": un control publicado se consumia como respuesta erronea.
+            if (CONTINUE_FRAMES.some((frame) => normalized.includes(frame))) {
                 return {
-                    prompt: `No logré reconocer un movimiento. Repite: ${describeSequence(state.sequence)}.`,
-                    valid: false,
-                    gameOver: false,
+                    ...announcePrompt(state.sequence),
+                    prompt: `Te la repito: ${describeSequence(state.sequence)}! En el mismo orden.`,
                     score: session.score,
-                    animation: state.sequence[0] ?? 'Idle',
-                    emotion: 'neutral',
-                    error: 'no se reconoció ningún verbo de movimiento',
                 };
+            }
+
+            const got = extractOrderedVerbs(normalized, state.verbos);
+            if (got.length === 0) {
+                return turnResult(`No logré reconocer un movimiento. Repite: ${describeSequence(state.sequence)}.`, session.score, { animation: state.sequence[0] ?? 'Idle', error: 'no se reconoció ningún verbo de movimiento' })
             }
 
             const expected = state.sequence;
@@ -232,14 +193,11 @@ export function createSimonDiceEngine(options?: { random?: RandomSource }): Game
                 const isLastRound = session.round >= state.maxRounds || expected.length >= state.longMax;
                 if (isLastRound) {
                     state.phase = 'done';
-                    return {
-                        prompt: `¡Perfecto! Completaste ${session.round} ${session.round === 1 ? 'ronda' : 'rondas'} de Simón dice. ¡Eres increíble!`,
-                        valid: true,
-                        gameOver: true,
-                        score: session.score,
-                        animation: 'Dance',
-                        emotion: 'happy',
-                    };
+                    return gameOverResult(
+                            `¡Perfecto! Completaste ${session.round} ${session.round === 1 ? 'ronda' : 'rondas'} de Simón dice. ¡Eres increíble!`,
+                            session.score,
+                            { valid: true, won: true, animation: 'Dance' },
+                        );
                 }
                 session.round += 1;
                 state.sequence = growSequence(expected, state.verbos, rng);
@@ -254,32 +212,18 @@ export function createSimonDiceEngine(options?: { random?: RandomSource }): Game
             // ¿Empezó bien pero incompleto? → "sigue".
             if (got.length < expected.length && isOrderedSubsequence(got, expected)) {
                 const remaining = expected.slice(got.length);
-                return {
-                    prompt: `¡Vas muy bien! Sigue: ${describeSequence(remaining)}.`,
-                    valid: false,
-                    gameOver: false,
-                    score: session.score,
-                    animation: remaining[0] ?? state.sequence[0] ?? 'Idle',
-                    emotion: 'excited',
-                };
+                return turnResult(`¡Vas muy bien! Sigue: ${describeSequence(remaining)}.`, session.score, { animation: remaining[0] ?? state.sequence[0] ?? 'Idle', emotion: 'excited' })
             }
 
             // Desorden / movimientos de más.
-            return {
-                prompt: `¡Casi! Inténtalo de nuevo en orden: ${describeSequence(expected)}.`,
-                valid: false,
-                gameOver: false,
-                score: session.score,
-                animation: expected[0] ?? 'Idle',
-                emotion: 'encouraging',
-                error: 'secuencia en desorden o con movimientos de más',
-            };
+            return turnResult(`¡Casi! Inténtalo de nuevo en orden: ${describeSequence(expected)}.`, session.score, { animation: expected[0] ?? 'Idle', emotion: 'encouraging', error: 'secuencia en desorden o con movimientos de más' })
         },
 
         isGameCommand(text = ''): boolean {
             const normalized = normalizeForMatch(text);
-            return END_FRAMES.some((frame) => normalized.includes(frame))
+            return matchesEndGameFrames(normalized, END_FRAMES)
                 || CONTINUE_FRAMES.some((frame) => normalized.includes(frame));
         },
     };
 }
+export const SIMON_DICE_COMMAND_FRAMES = Object.freeze({ END_FRAMES, CONTINUE_FRAMES })

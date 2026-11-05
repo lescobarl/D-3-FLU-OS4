@@ -46,10 +46,8 @@ export function unifySkeletons(object: THREE.Object3D): UnifyResult {
         }
     }
 
-    console.log(`[Skeleton] Found ${skinnedMeshes.length} SkinnedMesh, ${uniqueSkeletons.size} unique skeletons`);
 
     if (uniqueSkeletons.size <= 1) {
-        console.log('[Skeleton] Skeletons already unified');
         return { success: true, masterSkeleton: skinnedMeshes[0]?.skeleton || null };
     }
 
@@ -68,7 +66,6 @@ export function unifySkeletons(object: THREE.Object3D): UnifyResult {
         return { success: false, masterSkeleton: null };
     }
 
-    console.log(`[Skeleton] Master skeleton: ${masterSkeleton.bones.length} bones`);
 
     // Build name→index map for master skeleton
     const masterBoneIndex = new Map<string, number>();
@@ -95,7 +92,6 @@ export function unifySkeletons(object: THREE.Object3D): UnifyResult {
         const vertexCount = skinIndexAttr.count;
         const numInfluences = skinIndexAttr.itemSize;
 
-        let remappedCount = 0;
         for (let v = 0; v < vertexCount; v++) {
             for (let i = 0; i < numInfluences; i++) {
                 const idx = v * numInfluences + i;
@@ -105,7 +101,6 @@ export function unifySkeletons(object: THREE.Object3D): UnifyResult {
                     const newBoneIdx = masterBoneIndex.get(boneName);
                     if (newBoneIdx !== undefined) {
                         position[idx] = newBoneIdx;
-                        remappedCount++;
                     } else {
                         position[idx] = 0;
                         if (skinWeightAttr) {
@@ -121,7 +116,6 @@ export function unifySkeletons(object: THREE.Object3D): UnifyResult {
 
         sm.skeleton = masterSkeleton;
 
-        console.log(`[Skeleton] Remapped ${sm.name}: ${remappedCount} skin indices to master skeleton`);
     }
 
 
@@ -171,14 +165,12 @@ export function unifySkeletons(object: THREE.Object3D): UnifyResult {
                 skinIndexAttr.needsUpdate = true;
                 skinWeightAttr.needsUpdate = true;
 
-                console.log(`[Skeleton] Repaired "${sm.name}": assigned full weight to bone "head" (index ${headBoneIndex})`);
             }
         }
     } else {
         console.warn('[Skeleton] Bone "head" not found in master skeleton — cannot repair zero-weight meshes');
     }
 
-    console.log(`[Skeleton] Unification complete. Master skeleton has ${masterSkeleton.bones.length} bones.`);
 
     return { success: true, masterSkeleton };
 }

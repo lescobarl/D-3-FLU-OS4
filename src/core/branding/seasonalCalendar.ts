@@ -1,3 +1,6 @@
+import { logCaughtError } from '../../lib/caughtError';
+import { MONTH_NAMES_ES } from '../temporal/calendarNames';
+
 // ============================================================
 // FLU OS4 — Calendario General de Temporalidades (Branding Inteligente)
 // ============================================================
@@ -299,7 +302,7 @@ export interface SeasonResult {
 export function getActiveSeason(
     userBirthday?: string | null,
     customEvents?: CustomEvent[],
-    celebrateAchievements?: boolean,
+    _celebrateAchievements?: boolean,
 ): SeasonResult {
     const now = new Date();
     const todayMonth = now.getMonth() + 1; // 1-12
@@ -330,7 +333,10 @@ export function getActiveSeason(
     // 2. Birthday (priority: 3)
     if (userBirthday) {
         try {
-            const bday = new Date(userBirthday);
+            // 'YYYY-MM-DD' lo parsea JS como UTC y se compara con getMonth()/getDate()
+            // (LOCAL): eso desplaza el cumpleanos un dia al oeste de UTC. Se compone en local.
+            const bd = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(userBirthday).trim());
+            const bday = bd ? new Date(Number(bd[1]), Number(bd[2]) - 1, Number(bd[3])) : new Date(userBirthday);
             if (!isNaN(bday.getTime())) {
                 const bdayMonth = bday.getMonth() + 1;
                 const bdayDay = bday.getDate();
@@ -351,7 +357,8 @@ export function getActiveSeason(
                     };
                 }
             }
-        } catch {
+        } catch (e) {
+        logCaughtError('[catch] src/core/branding/seasonalCalendar.ts', e);
             // Invalid date, skip birthday detection
         }
     }
@@ -392,9 +399,5 @@ export function isSameDay(month1: number, day1: number, month2: number, day2: nu
  * Obtiene el nombre del mes en español.
  */
 export function getMonthName(month: number): string {
-    const names = [
-        'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
-        'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre',
-    ];
-    return names[month - 1] || 'desconocido';
+    return MONTH_NAMES_ES[month - 1] || 'desconocido';
 }

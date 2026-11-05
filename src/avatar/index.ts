@@ -24,7 +24,6 @@ export { BUNNY_ANIMATIONS } from './types/bunny';
 
 // ---- Components ----
 export { default as BunnyViewer } from './components/BunnyViewer';
-export { default as BunnyControlCenter } from './components/BunnyControlCenter';
 export { default as ComponentPanel } from './components/ComponentPanel';
 export { default as AnimationPanel } from './components/AnimationPanel';
 export { default as ControlsPanel } from './components/ControlsPanel';

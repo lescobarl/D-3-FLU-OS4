@@ -1,0 +1,263 @@
+/**
+ * P5.2/P5.3/P5.4 - configSingleSource: los parametros compartidos viven en la config.
+ *
+ * Un valor repetido como literal en la logica es un valor que se puede desincronizar:
+ * cambiar el sample rate en la config no cambiaba los 23 defaults quemados en los
+ * modulos de voz, y los presupuestos de tokens estaban repartidos por aiServiceBase y
+ * deepseek sin nombre ni origen. Este guard fija el origen unico.
+ *
+ * Reglas (todas sobre el MECANISMO, no sobre prosa):
+ *   1. `48000` no puede aparecer en src/ fuera de src/voice/lib/audioConstants.js.
+ *   2. fluConfig.audio.sampleRate debe derivar de DEFAULT_SAMPLE_RATE.
+ *   3. aiServiceBase.ts no puede llevar `maxTokens: <numero>` (usa TEXT_TOKEN_BUDGETS).
+ *   4. deepseek.ts no puede llevar `temperature || 0.7` ni `max_tokens: <numero>`
+ *      (usa TEXT_TEMPERATURE_DEFAULT / TEXT_TOKEN_LIMITS).
+ *
+ * El segundo describe comprueba el propio detector: un guard que nunca puede fallar no
+ * es una barrera (AGENTS.md 0.12).
+ */
+import { readFileSync } from 'node:fs'
+import { join, relative } from 'node:path'
+import { describe, expect, it } from 'vitest'
+import { parseAgendaCommand } from '../src/core/agenda/agendaCommandParser'
+import { scanTimesOfDay, stripTimesOfDay } from '../src/core/temporal/timeOfDay'
+import { pickTimeOfDay } from '../src/core/temporal/timeOfDay'
+import {
+    SPOKEN_NUMBERS_EN,
+    SPOKEN_NUMBERS_ES,
+    resolveSpokenNumber,
+} from '../src/lib/spokenNumbers'
+import { walkFiles } from './_helpers'
+const ROOT = process.cwd()
+const SRC = join(ROOT, 'src')
+/** Origen unico declarado del sample rate. */
+export const SAMPLE_RATE_OWNER = 'src/voice/lib/audioConstants.js'
+
+const rel = (f: string) => relative(ROOT, f).replace(/\\/g, '/')
+/** Archivos de src/ (excepto el dueno) que contienen el literal del sample rate. */
+export function sampleRateOffenders(files: string[], read: (f: string) => string): string[] {
+  return files.filter((f) => rel(f) !== SAMPLE_RATE_OWNER && /48000/.test(read(f))).map(rel)
+}
+/** Numeros sueltos de las reglas 3 y 4 en un fuente dado. */
+export function literalOffenders(src: string, fileName: string): string[] {
+  const out: string[] = []
+  if (/aiServiceBase\.ts$/.test(fileName)) {
+    for (const m of src.matchAll(/maxTokens:\s*\d+/g)) out.push(`${fileName}: ${m[0]}`)
+  }
+  if (/services\/deepseek\.ts$/.test(fileName)) {
+    for (const m of src.matchAll(/temperature\s*\|\|\s*0\.7|max_tokens:\s*\d+/g)) out.push(`${fileName}: ${m[0]}`)
+  }
+  return out
+}
+describe('P5.2 configSingleSource - el sample rate tiene un solo origen', () => {
+  it('ningun modulo de src repite el literal 48000', () => {
+    const files = walkFiles(SRC, /\.(ts|tsx|js|jsx|mjs)$/)
+    expect(files.map(rel)).toContain(SAMPLE_RATE_OWNER)
+    const offenders = sampleRateOffenders(files, (f) => readFileSync(f, 'utf8'))
+    expect(offenders, `literales 48000 fuera de ${SAMPLE_RATE_OWNER}:\n  ${offenders.join('\n  ')}`).toEqual([])
+  })
+  it('fluConfig deriva audio.sampleRate del origen unico', () => {
+    const cfg = readFileSync(join(ROOT, 'src/voice/lib/fluConfig.js'), 'utf8')
+    expect(cfg).toContain("import { DEFAULT_SAMPLE_RATE } from './audioConstants.js'")
+    expect(cfg).toContain('sampleRate: DEFAULT_SAMPLE_RATE,')
+  })
+})
+describe('P5.3/P5.4 configSingleSource - presupuestos de texto con nombre', () => {
+  it('ni aiServiceBase ni deepseek llevan los limites quemados', () => {
+    const offenders = [
+      ...literalOffenders(readFileSync(join(ROOT, 'src/core/ai/aiServiceBase.ts'), 'utf8'), 'aiServiceBase.ts'),
+      ...literalOffenders(readFileSync(join(ROOT, 'src/services/deepseek.ts'), 'utf8'), 'services/deepseek.ts'),
+    ]
+    expect(offenders, `limites quemados en la logica:\n  ${offenders.join('\n  ')}`).toEqual([])
+  })
+  it('el catalogo declara el origen unico', () => {
+    const cfg = readFileSync(join(ROOT, 'src/core/config/appConfig.ts'), 'utf8')
+    for (const k of ['TEXT_TOKEN_BUDGETS', 'TEXT_TEMPERATURE_DEFAULT', 'TEXT_TOKEN_LIMITS']) {
+      expect(cfg, `falta ${k} en appConfig`).toContain(k)
+    }
+  })
+})
+describe('P5 configSingleSource - el detector no es decorativo', () => {
+  it('marca el literal 48000 fuera del dueno', () => {
+    expect(sampleRateOffenders([join(SRC, 'a.js'), join(SRC, 'b.js')], (f) => (f.endsWith('a.js') ? 'x = 48000' : 'y = 1'))).toEqual([
+      'src/a.js',
+    ])
+  })
+  it('no marca el archivo dueno', () => {
+    const own = join(ROOT, SAMPLE_RATE_OWNER)
+    expect(sampleRateOffenders([own], () => 'export const DEFAULT_SAMPLE_RATE = 48000')).toEqual([])
+  })
+  it('marca un maxTokens numerico en aiServiceBase', () => {
+    expect(literalOffenders('completeText({ maxTokens: 1800 })', 'src/core/ai/aiServiceBase.ts')).toHaveLength(1)
+  })
+  it('marca temperature||0.7 y max_tokens numerico en deepseek', () => {
+    expect(literalOffenders('temperature: temperature || 0.7, max_tokens: 500,', 'src/services/deepseek.ts')).toHaveLength(2)
+  })
+  it('no marca el uso de las constantes', () => {
+    expect(literalOffenders('maxTokens: TEXT_TOKEN_BUDGETS.single', 'src/core/ai/aiServiceBase.ts')).toEqual([])
+    expect(literalOffenders('temperature: temperature || TEXT_TEMPERATURE_DEFAULT,', 'src/services/deepseek.ts')).toEqual([])
+  })
+})/** Fuente unica declarada de los locales de voz. */
+export const LOCALE_OWNER = 'src/core/config/localeConfig.ts'
+/** Fuentes unicas declaradas de los presupuestos de tokens. */
+export const TOKEN_BUDGET_OWNERS = ['src/voice/lib/fluConfig.js', 'src/core/config/appConfig.ts']
+/** Literales BCP-47 (xx-YY) en un fuente dado. */
+export function localeLiteralOffenders(src: string, fileName: string): string[] {
+  if (fileName === LOCALE_OWNER) return []
+  return [...src.matchAll(/'[a-z]{2}-[A-Z]{2}'/g)].map((m) => `${fileName}: ${m[0]}`)
+}
+/** Ids de proveedor escritos como literal en una comparacion o asignacion. */
+export function providerLiteralOffenders(src: string, fileName: string): string[] {
+  const re = /(?:===|!==|==|!=)\s*'(openrouter|gemini|local)'|(?:provider|providerId|providerKey)\s*:\s*'(openrouter|gemini|local)'/g
+  return [...src.matchAll(re)].map((m) => `${fileName}: ${m[0]}`)
+}
+/** Presupuesto de tokens quemado fuera del catalogo. */
+export function tokenBudgetOffenders(src: string, fileName: string): string[] {
+  if (TOKEN_BUDGET_OWNERS.includes(fileName)) return []
+  const re = /(?:maxTokens|max_tokens|maxOutputTokens|maxOutput)\s*[:=]\s*\d+/g
+  return [...src.matchAll(re)].map((m) => `${fileName}: ${m[0]}`)
+}
+describe('P5.5/P5.6/P5.7 configSingleSource - locales, proveedores y presupuestos', () => {
+  it('ningun modulo de src declara un locale BCP-47 fuera del catalogo hoja', () => {
+    const offenders = walkFiles(SRC, /\.(ts|tsx|js|jsx|mjs)$/).flatMap((f) => localeLiteralOffenders(readFileSync(f, 'utf8'), rel(f)))
+    expect(offenders, `locales fuera de ${LOCALE_OWNER}:\n  ${offenders.join('\n  ')}`).toEqual([])
+  })
+  it('ningun modulo compara o asigna un id de proveedor con literal', () => {
+    const offenders = walkFiles(SRC, /\.(ts|tsx|js|jsx|mjs)$/).flatMap((f) => providerLiteralOffenders(readFileSync(f, 'utf8'), rel(f)))
+    expect(offenders, `ids de proveedor literales (usa AI_PROVIDER_IDS):\n  ${offenders.join('\n  ')}`).toEqual([])
+  })
+  it('ningun modulo fuera del catalogo quema un presupuesto de tokens', () => {
+    const offenders = walkFiles(SRC, /\.(ts|tsx|js|jsx|mjs)$/).flatMap((f) => tokenBudgetOffenders(readFileSync(f, 'utf8'), rel(f)))
+    expect(offenders, `presupuestos quemados:\n  ${offenders.join('\n  ')}`).toEqual([])
+  })
+  it('el catalogo de proveedores sigue siendo el origen unico', () => {
+    const cfg = readFileSync(join(ROOT, 'src/core/config/sharedConfig.ts'), 'utf8')
+    expect(cfg).toContain('AI_PROVIDER_IDS')
+    expect(readFileSync(join(ROOT, LOCALE_OWNER), 'utf8')).toContain('SCRIPT_SPEECH_LOCALES')
+  })
+})
+describe('P5.5/P5.6/P5.7 configSingleSource - el detector no es decorativo', () => {
+  it('marca un locale BCP-47 fuera del dueno y no marca al dueno', () => {
+    expect(localeLiteralOffenders("return 'ja-JP'", 'src/voice/lib/fluSpeech.js')).toHaveLength(1)
+    expect(localeLiteralOffenders("return 'ja-JP'", LOCALE_OWNER)).toEqual([])
+  })
+  it('marca un id de proveedor literal', () => {
+    expect(providerLiteralOffenders("if (p === 'openrouter') return 1", 'src/a.ts')).toHaveLength(1)
+    expect(providerLiteralOffenders("provider: 'local'", 'src/a.ts')).toHaveLength(1)
+  })
+  it('no marca el uso de las constantes de proveedor', () => {
+    expect(providerLiteralOffenders('if (p === AI_PROVIDER_IDS.OPENROUTER) return 1', 'src/a.ts')).toEqual([])
+  })
+  it('marca un presupuesto de tokens quemado y no marca al catalogo', () => {
+    expect(tokenBudgetOffenders('maxTokens = 2048,', 'src/voice/lib/gemini.js')).toHaveLength(1)
+    expect(tokenBudgetOffenders('maxOutputTokens: 2048,', 'src/voice/lib/fluConfig.js')).toEqual([])
+  })
+})
+
+// ------------------------------------------------------------
+// P5.8 - El léxico de números hablados tiene UN solo origen y la hora lo usa.
+// Antes la hora sólo aceptaba cifras y el léxico vivía copiado dentro de
+// configCommands: "a las siete" no existía para ningún flujo (la agenda creaba
+// el item SIN la hora). El detector no es decorativo: una palabra fuera del
+// léxico NO resuelve.
+// ------------------------------------------------------------
+describe('P5.8 configSingleSource - el léxico de números hablados tiene un solo origen', () => {
+    it('resuelve cifras y palabras (es/en) y acota las cifras a 2 dígitos', () => {
+        expect(resolveSpokenNumber('7')).toBe(7)
+        expect(resolveSpokenNumber('siete')).toBe(7)
+        expect(resolveSpokenNumber('Siete')).toBe(7)
+        expect(resolveSpokenNumber('veinticinco')).toBe(25)
+        expect(resolveSpokenNumber('seven')).toBe(7)
+        expect(resolveSpokenNumber('1995')).toBeNull()
+        expect(resolveSpokenNumber('folegre')).toBeNull()
+    })
+
+    it('la hora en palabras resuelve igual que en cifras (es)', () => {
+        for (const [word, value] of Object.entries(SPOKEN_NUMBERS_ES)) {
+            if (value < 1 || value > 23) continue
+            const hh = String(value).padStart(2, '0')
+            expect(pickTimeOfDay(`pon una alarma a las ${word}`).timeOfDay, `a las ${word}`).toBe(`${hh}:00`)
+        }
+    })
+
+    it('la hora en palabras resuelve igual que en cifras (en)', () => {
+        for (const [word, value] of Object.entries(SPOKEN_NUMBERS_EN)) {
+            if (value < 1 || value > 23) continue
+            const hh = String(value).padStart(2, '0')
+            expect(pickTimeOfDay(`set an alarm at ${word}`).timeOfDay, `at ${word}`).toBe(`${hh}:00`)
+        }
+    })
+
+    it('parte del día y minutos hablados', () => {
+        expect(pickTimeOfDay('a las siete de la tarde').timeOfDay).toBe('19:00')
+        expect(pickTimeOfDay('a las siete de la noche').timeOfDay).toBe('19:00')
+        expect(pickTimeOfDay('a las doce de la noche').timeOfDay).toBe('00:00')
+        expect(pickTimeOfDay('a las siete y media').timeOfDay).toBe('07:30')
+        expect(pickTimeOfDay('a las siete y cuarto').timeOfDay).toBe('07:15')
+        expect(pickTimeOfDay('a las siete y veinte').timeOfDay).toBe('07:20')
+        expect(pickTimeOfDay('at seven thirty').timeOfDay).toBe('07:30')
+        expect(pickTimeOfDay('at seven pm').timeOfDay).toBe('19:00')
+    })
+
+    it('las cifras siguen resolviendo igual (sin regresión)', () => {
+        expect(pickTimeOfDay('a las 7').timeOfDay).toBe('07:00')
+        expect(pickTimeOfDay('a las 7:30').timeOfDay).toBe('07:30')
+        expect(pickTimeOfDay('a las 7 de la tarde').timeOfDay).toBe('19:00')
+        expect(pickTimeOfDay('a las 10 pm').timeOfDay).toBe('22:00')
+        expect(pickTimeOfDay('a mediodia').timeOfDay).toBe('12:00')
+        expect(pickTimeOfDay('a medianoche').timeOfDay).toBe('00:00')
+    })
+
+    it('la hora consumida no deja el número en el texto restante', () => {
+        expect(pickTimeOfDay('pon una alarma a las siete').rest).not.toMatch(/siete/)
+        expect(pickTimeOfDay('pon un recordatorio para las ocho').rest).not.toMatch(/ocho/)
+    })
+
+    it('el detector no es decorativo: una palabra fuera del léxico no resuelve', () => {
+        expect(pickTimeOfDay('a las folegre').timeOfDay).toBeNull()
+        expect(resolveSpokenNumber('folegre')).toBeNull()
+    })
+})
+
+// ------------------------------------------------------------
+// P5.9 - La hora se lee UNA vez y un cambio de hora apunta al DESTINO.
+// El escáner devuelve todas las horas ("de las siete a las ocho" = dos) y el
+// consumidor elige; sin esto ganaba la hora de ORIGEN y el cambio quedaba en
+// nada (mover 07:00 a 07:00). Mismo resultado en cifras que en palabras.
+// ------------------------------------------------------------
+describe('P5.9 configSingleSource - la hora se lee una vez y el cambio apunta al destino', () => {
+    const NOW = new Date(2026, 8, 22, 15, 30, 0, 0).getTime()
+    const horas = (cmd: { trigger?: unknown }) => {
+        const trigger = cmd.trigger as { at?: number } | undefined
+        return trigger?.at ? new Date(trigger.at).getHours() : null
+    }
+
+    it('el escáner devuelve TODAS las horas en orden y el recorte las quita todas', () => {
+        expect(scanTimesOfDay('de las siete a las ocho').map((m) => m.timeOfDay)).toEqual(['07:00', '08:00'])
+        expect(stripTimesOfDay('cambia la alarma de las siete a las ocho')).not.toMatch(/siete|ocho/)
+    })
+
+    it('un cambio de hora apunta al DESTINO, igual en cifras que en palabras', () => {
+        const cifras = parseAgendaCommand('cambia la alarma de las 7 a las 8', { now: NOW })
+        const palabras = parseAgendaCommand('cambia la alarma de las siete a las ocho', { now: NOW })
+        expect(palabras.label).toBe(cifras.label)
+        expect(palabras.trigger).toEqual(cifras.trigger)
+        expect(horas(palabras)).toBe(8)
+    })
+
+    it('sin hora no se inventa ninguna (editar el nombre no mueve la hora)', () => {
+        const cmd = parseAgendaCommand('cambia el nombre de la clase de historia', { now: NOW })
+        expect(cmd.trigger).toBeUndefined()
+    })
+
+    it('el countdown es bilingüe', () => {
+        expect(parseAgendaCommand('pon una alarma en 5 minutos', { now: NOW }).trigger).toEqual({
+            type: 'countdown',
+            durationMs: 5 * 60_000,
+        })
+        expect(parseAgendaCommand('pon una alarma in 2 hours', { now: NOW }).trigger).toEqual({
+            type: 'countdown',
+            durationMs: 2 * 3_600_000,
+        })
+    })
+})

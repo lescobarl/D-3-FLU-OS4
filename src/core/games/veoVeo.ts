@@ -15,8 +15,9 @@
 //
 // El RNG es inyectable vía options.random para tests deterministas.
 // ============================================================
-import type { GameEngine } from './gameEngine';
-import type { GameSession, GameTurnResult } from './types';
+import type { GameEngine } from './gameEngine.ts';
+import type { GameSession, GameTurnResult } from './types.ts';
+import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, createShuffledAnnounceStateBuilder, createShuffledAnnounceSurface, bankItemAt, hasAnyToken, isEngineCommand, runGuessTurn, stripDiacritics } from './gameUtils.ts';
 
 export interface VeoVeoItem {
     nombre: string;
@@ -90,21 +91,18 @@ export const VEO_VEO_BANK: readonly VeoVeoItem[] = Object.freeze([
 const DEFAULT_ROUNDS = 3;
 const MAX_ROUNDS = VEO_VEO_BANK.length;
 
+// "no sé" = el niño está atascado → PISTA de la categoría (documentado).
+// Se elimina de SKIP: tenerlo en ambas listas era código muerto (HINT gana).
 const HINT_FRAMES: readonly string[] = Object.freeze([
-    'pista', 'ayuda', 'ayudame', 'dame una pista', 'no se', 'no sé',
+    ...HELP_CORE_FRAMES,
+    'dame una pista', 'no se', 'no sé',
 ]);
 
 const SKIP_FRAMES: readonly string[] = Object.freeze([
-    'otra', 'siguiente', 'paso', 'no se', 'no sé',
+    'otra', 'siguiente', 'paso', 'me rindo',
 ]);
 
-const END_FRAMES: readonly string[] = Object.freeze([
-    'salir del juego',
-    'terminar el juego',
-    'dejar de jugar',
-    'ya no quiero jugar',
-    'cerrar el juego',
-]);
+const END_FRAMES: readonly string[] = END_GAME_FRAMES;
 
 interface VeoVeoState {
     order: number[];
@@ -115,225 +113,65 @@ interface VeoVeoState {
 
 type RandomSource = () => number;
 
-function clamp(value: number, min: number, max: number): number {
-    if (!Number.isFinite(value)) return min;
-    return Math.min(max, Math.max(min, Math.round(value)));
-}
-
-function stripDiacritics(text: string): string {
-    return text.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-}
-
-function normalizeForMatch(text = ''): string {
-    return stripDiacritics(text).toLowerCase().replace(/\s+/g, ' ').trim();
-}
-
-function hasToken(normalized = '', phrase = ''): boolean {
-    if (!phrase) return false;
-    const escaped = phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const pattern = new RegExp(`(^|\\s)${escaped}($|\\s|[.,;!?¡¿])`);
-    return pattern.test(normalized);
-}
-
-function hasAnyToken(normalized: string, phrases: readonly string[]): boolean {
-    return phrases.some((phrase) => hasToken(normalized, phrase));
-}
-
-/** Baraja determinista (Fisher-Yates) de los índices del banco. */
-function shuffleOrder(rng: RandomSource): number[] {
-    const order = VEO_VEO_BANK.map((_, index) => index);
-    for (let i = order.length - 1; i > 0; i -= 1) {
-        const j = Math.floor(rng() * (i + 1));
-        [order[i], order[j]] = [order[j], order[i]];
-    }
-    return order;
-}
-
-function itemAt(state: VeoVeoState): VeoVeoItem | null {
-    const index = state.order[state.cursor];
-    return index === undefined ? null : VEO_VEO_BANK[index];
-}
+const itemAt = (state: VeoVeoState) => bankItemAt(state, VEO_VEO_BANK);
 
 /** Primera letra del nombre (sin acentos, en mayúscula) → la pista del juego. */
 function itemLetter(item: VeoVeoItem): string {
     return stripDiacritics(item.nombre).trim()[0]?.toUpperCase() ?? '?';
 }
 
+/**
+ * Pista del juego. En el veo-veo real se adivina entre lo que ambos VEN; aquí
+ * no hay escena compartida, así que la letra sola es injugable ("algo con G").
+ * Por eso la pista SIEMPRE incluye la categoría del banco (fuente única de datos).
+ */
 function itemPrompt(item: VeoVeoItem): string {
-    return `Veo una cosita que empieza con la letra ${itemLetter(item)}. ¿Qué es?`;
+    return `Veo una cosita que empieza con la letra ${itemLetter(item)} y es ${item.categoria}. ¿Qué es?`;
 }
 
-export function createVeoVeoEngine(options?: { random?: RandomSource }): GameEngine {
+export function createVeoVeoEngine(options?: { random?: RandomSource }): GameEngine<VeoVeoState> {
     let rng: RandomSource = options?.random ?? Math.random;
+    const buildState = createShuffledAnnounceStateBuilder({
+        bankLength: VEO_VEO_BANK.length,
+        defaultRounds: DEFAULT_ROUNDS,
+        maxRounds: MAX_ROUNDS,
+        adopt: (cfg2) => (rng = adoptRandom(rng, cfg2)),
+    });
 
-    const readRounds = (cfg: Record<string, unknown> | undefined): number => {
-        const rounds = Number(cfg?.rounds) || Number(cfg?.defaultRounds) || DEFAULT_ROUNDS;
-        return clamp(rounds, 1, MAX_ROUNDS);
-    };
-
-    const adoptRandom = (cfg: Record<string, unknown> | undefined): void => {
-        if (cfg && typeof cfg.random === 'function') {
-            rng = cfg.random as RandomSource;
-        }
-    };
-
-    const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): VeoVeoState => {
-        adoptRandom(cfg);
-        const state: VeoVeoState = {
-            order: shuffleOrder(rng),
-            cursor: 0,
-            maxRounds: readRounds(cfg),
-            phase: 'announce',
-        };
-        session.state = state as unknown as Record<string, unknown>;
-        session.score = 0;
-        session.round = 1;
-        return state;
-    };
+    const surface = createShuffledAnnounceSurface('veo_veo', buildState, (raw) => {
+        const state = raw as VeoVeoState;
+        const item = itemAt(state);
+        return `¡Vamos a jugar a veo veo! ${item ? itemPrompt(item) : ''}`;
+    });
 
     return {
-        id: 'veo_veo',
-
-        createSession(optionsConfig: Record<string, unknown> = {}): GameSession {
-            adoptRandom(optionsConfig);
-            return {
-                id: 'veo_veo',
-                state: {
-                    order: shuffleOrder(rng),
-                    cursor: 0,
-                    maxRounds: readRounds(optionsConfig),
-                    phase: 'announce',
-                },
-                score: 0,
-                round: 1,
-            };
-        },
-
-        start(session: GameSession, optionsConfig: Record<string, unknown> = {}): GameTurnResult {
-            reset(session, optionsConfig);
-            const state = session.state as unknown as VeoVeoState;
-            const item = itemAt(state);
-            return {
-                prompt: `¡Vamos a jugar a veo veo! ${item ? itemPrompt(item) : ''}`,
-                valid: false,
-                gameOver: false,
-                score: session.score,
-                animation: 'Idle',
-                emotion: 'excited',
-            };
-        },
+        ...surface,
 
         turn(session: GameSession, text = ''): GameTurnResult {
-            const state = session.state as unknown as VeoVeoState;
-
-            if (state.phase === 'done') {
-                return {
-                    prompt: 'Ya terminamos de jugar veo veo. ¿Jugamos otra vez?',
-                    valid: false,
-                    gameOver: true,
-                    score: session.score,
-                    animation: 'Idle',
-                    emotion: 'happy',
-                };
-            }
-
-            const item = itemAt(state);
-            if (!item) {
-                state.phase = 'done';
-                return {
-                    prompt: `¡Se acabaron los objetos! Tu puntaje fue ${session.score}. ¡Muy bien!`,
-                    valid: false,
-                    gameOver: true,
-                    score: session.score,
-                    animation: 'Dance',
-                    emotion: 'happy',
-                };
-            }
-
-            const normalized = normalizeForMatch(text);
-
-            // ¿Pide pista (categoría)?
-            if (hasAnyToken(normalized, HINT_FRAMES)) {
-                return {
-                    prompt: `¡Uy! Te doy una pista: es algo de ${item.categoria}. ¿Ya sabes qué es?`,
-                    valid: false,
-                    gameOver: false,
-                    score: session.score,
-                    animation: 'Idle',
-                    emotion: 'thinking',
-                };
-            }
-
-            // ¿Intenta adivinar el objeto?
-            if (hasAnyToken(normalized, item.keywords)) {
-                session.score += 1;
-                session.round += 1;
-                if (state.cursor + 1 >= state.maxRounds || state.cursor + 1 >= state.order.length) {
-                    state.phase = 'done';
-                    return {
-                        prompt: `¡Correcto, es ${item.nombre}! Completaste ${state.maxRounds} rondas de veo veo. ¡Eres un gran detective!`,
-                        valid: true,
-                        gameOver: true,
-                        score: session.score,
-                        animation: 'Dance',
-                        emotion: 'happy',
-                    };
-                }
-                state.cursor += 1;
-                const next = itemAt(state);
-                return {
-                    prompt: `¡Correcto, es ${item.nombre}! ${next ? itemPrompt(next) : ''}`,
-                    valid: true,
-                    gameOver: false,
-                    score: session.score,
-                    animation: 'Jump_in_place',
-                    emotion: 'happy',
-                };
-            }
-
-            // ¿Salta al siguiente objeto?
-            if (hasAnyToken(normalized, SKIP_FRAMES)) {
-                session.round += 1;
-                if (state.cursor + 1 >= state.maxRounds || state.cursor + 1 >= state.order.length) {
-                    state.phase = 'done';
-                    return {
-                        prompt: `Terminamos con ${session.score} puntos. ¡Muy bien jugado!`,
-                        valid: false,
-                        gameOver: true,
-                        score: session.score,
-                        animation: 'Dance',
-                        emotion: 'happy',
-                    };
-                }
-                state.cursor += 1;
-                const next = itemAt(state);
-                return {
-                    prompt: `¡Claro! Era ${item.nombre}. ${next ? itemPrompt(next) : ''}`,
-                    valid: false,
-                    gameOver: false,
-                    score: session.score,
-                    animation: 'Idle',
-                    emotion: 'neutral',
-                };
-            }
-
-            // Respuesta incorrecta → reintenta el mismo objeto.
-            return {
-                prompt: `¡Casi! Inténtalo otra vez. ${itemPrompt(item)}`,
-                valid: false,
-                gameOver: false,
-                score: session.score,
-                animation: 'Idle',
-                emotion: 'encouraging',
-                error: 'respuesta incorrecta',
-            };
+            return runGuessTurn<VeoVeoState, NonNullable<ReturnType<typeof itemAt>>>({
+                session,
+                state: session.state as VeoVeoState,
+                text,
+                itemAt,
+                matches: (normalized, item) => hasAnyToken(normalized, item.keywords),
+                hintFrames: HINT_FRAMES,
+                skipFrames: SKIP_FRAMES,
+                message: {
+                    done: 'Ya terminamos de jugar veo veo. ¿Jugamos otra vez?',
+                    exhausted: ({ score }) => `¡Se acabaron los objetos! Tu puntaje fue ${score}. ¡Muy bien!`,
+                    hint: (item) => `¡Uy! Te doy una pista: es algo de ${item.categoria}. ¿Ya sabes qué es?`,
+                    won: (item, { maxRounds }) =>
+                        `¡Correcto, es ${item.nombre}! Completaste ${maxRounds} rondas de veo veo. ¡Eres un gran detective!`,
+                    correct: (item, next) => `¡Correcto, es ${item.nombre}! ${next ? itemPrompt(next) : ''}`,
+                    skipped: (item, next) => `¡Claro! Era ${item.nombre}. ${next ? itemPrompt(next) : ''}`,
+                    retry: (item) => `¡Casi! Inténtalo otra vez. ${itemPrompt(item)}`,
+                },
+            });
         },
 
         isGameCommand(text = ''): boolean {
-            const normalized = normalizeForMatch(text);
-            return END_FRAMES.some((frame) => normalized.includes(frame))
-                || HINT_FRAMES.some((frame) => hasToken(normalized, frame))
-                || SKIP_FRAMES.some((frame) => hasToken(normalized, frame));
+            return isEngineCommand(text, { end: END_FRAMES, hint: HINT_FRAMES, skip: SKIP_FRAMES });
         },
     };
 }
+export const VEO_VEO_COMMAND_FRAMES = Object.freeze({ HINT_FRAMES, SKIP_FRAMES, END_FRAMES })

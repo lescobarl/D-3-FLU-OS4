@@ -1,0 +1,5 @@
+{
+  "_nota": "Barrera de rutas BAJA: sin acciones muertas, una sola clave enabled (JSON canónico), sin escrituras de flu-user-name, preferencia de IA por su dueño y sin clientes/rutas muertas. deadRoutes debe ser 0 y solo baja.",
+  "deadRoutes": 0,
+  "minSources": 400
+}

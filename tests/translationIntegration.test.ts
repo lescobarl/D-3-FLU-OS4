@@ -91,7 +91,8 @@ describe('generateFluContract — idioma / estructura de conversación (pipeline
       language: 'es',
       history: [
         { role: 'user', transcript: 'habla en chino' },
-        { role: 'assistant', response: ZH_PREV },
+        // P9.82: la respuesta de FLU es SU fila y su texto va en `text`.
+        { role: 'assistant', text: ZH_PREV },
       ],
     } as any)
 
@@ -133,7 +134,8 @@ describe('generateFluContract — idioma / estructura de conversación (pipeline
       language: 'es',
       history: [
         { role: 'user', transcript: 'habla en chino' },
-        { role: 'assistant', response: ZH_PREV },
+        // P9.82: la respuesta de FLU es SU fila y su texto va en `text`.
+        { role: 'assistant', text: ZH_PREV },
       ],
     } as any)
 

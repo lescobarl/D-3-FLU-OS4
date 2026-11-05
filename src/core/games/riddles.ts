@@ -14,8 +14,9 @@
 // Incorrecta → reintenta la misma.
 // Fin al alcanzar `rounds` adivinanzas.
 // ============================================================
-import type { GameEngine } from './gameEngine';
-import type { GameSession, GameTurnResult } from './types';
+import type { GameEngine } from './gameEngine.ts';
+import type { GameSession, GameTurnResult } from './types.ts';
+import { END_GAME_FRAMES, HELP_CORE_FRAMES, adoptRandom, createShuffledAnnounceStateBuilder, createShuffledAnnounceSurfaceBase, bankItemAt, gamePrompt, hasAnyToken, isEngineCommand, runGuessTurn, turnResult } from './gameUtils.ts';
 
 export interface Riddle {
     pregunta: string;
@@ -25,7 +26,7 @@ export interface Riddle {
 
 export const RIDDLE_BANK: readonly Riddle[] = Object.freeze([
     {
-        pregunta: 'Soy amarillo por fuera y blanco por dentro, y me tienes que pelar para comerme.',
+        pregunta: 'Soy una fruta con forma de gota, mi piel es verde o amarilla y por dentro soy blanca y jugosa',
         respuesta: ['pera'],
         pista: 'Es una fruta que empieza con la letra "pe".',
     },
@@ -76,8 +77,8 @@ export const RIDDLE_BANK: readonly Riddle[] = Object.freeze([
     },
     {
         pregunta: 'Aparezco después de la lluvia, tengo siete colores y no puedes tocarme.',
-        respuesta: ['arcoiris'],
-        pista: 'Tiene los colores del arco en el cielo.',
+        respuesta: ['arcoiris', 'arco iris'],
+        pista: 'Aparezco en el cielo cuando llueve y brilla el sol.',
     },
     {
         pregunta: 'Tengo una llama arriba, me prenden en la torta y alumbro en la oscuridad.',
@@ -90,20 +91,15 @@ const DEFAULT_ROUNDS = 3;
 const MAX_ROUNDS = RIDDLE_BANK.length;
 
 const HINT_FRAMES: readonly string[] = Object.freeze([
-    'pista', 'ayuda', 'ayudame', 'dame una pista', 'no se', 'no sé',
+    ...HELP_CORE_FRAMES,
+    'dame una pista', 'no se', 'no sé',
 ]);
 
 const SKIP_FRAMES: readonly string[] = Object.freeze([
     'otra', 'siguiente', 'otra adivinanza', 'sigo', 'paso', 'no se', 'no sé',
 ]);
 
-const END_FRAMES: readonly string[] = Object.freeze([
-    'salir del juego',
-    'terminar el juego',
-    'dejar de jugar',
-    'ya no quiero jugar',
-    'cerrar el juego',
-]);
+const END_FRAMES: readonly string[] = END_GAME_FRAMES;
 
 interface RiddlesState {
     order: number[];
@@ -114,220 +110,59 @@ interface RiddlesState {
 
 type RandomSource = () => number;
 
-function clamp(value: number, min: number, max: number): number {
-    if (!Number.isFinite(value)) return min;
-    return Math.min(max, Math.max(min, Math.round(value)));
-}
-
-function stripDiacritics(text: string): string {
-    return text.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-}
-
-function normalizeForMatch(text = ''): string {
-    return stripDiacritics(text).toLowerCase().replace(/\s+/g, ' ').trim();
-}
-
-function hasToken(normalized = '', phrase = ''): boolean {
-    if (!phrase) return false;
-    const escaped = phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const pattern = new RegExp(`(^|\\s)${escaped}($|\\s|[.,;!?¡¿])`);
-    return pattern.test(normalized);
-}
-
-function hasAnyToken(normalized: string, phrases: readonly string[]): boolean {
-    return phrases.some((phrase) => hasToken(normalized, phrase));
-}
-
-/** Baraja determinista (Fisher-Yates) de los índices del banco. */
-function shuffleOrder(rng: RandomSource): number[] {
-    const order = RIDDLE_BANK.map((_, index) => index);
-    for (let i = order.length - 1; i > 0; i -= 1) {
-        const j = Math.floor(rng() * (i + 1));
-        [order[i], order[j]] = [order[j], order[i]];
-    }
-    return order;
-}
-
 function riddleAt(state: RiddlesState): Riddle | null {
-    const index = state.order[state.cursor];
-    return index === undefined ? null : RIDDLE_BANK[index];
+    return bankItemAt(state, RIDDLE_BANK);
 }
 
-function currentPrompt(state: RiddlesState): string {
-    const riddle = riddleAt(state);
-    if (!riddle) return 'Ya se me acabaron las adivinanzas.';
-    return `${riddle.pregunta} ¿Qué soy?`;
-}
+const currentPrompt = (state: RiddlesState) =>
+    gamePrompt(state, riddleAt, (riddle) => `${riddle.pregunta} ¿Qué soy?`, 'Ya se me acabaron las adivinanzas.');
 
-export function createRiddlesEngine(options?: { random?: RandomSource }): GameEngine {
+export function createRiddlesEngine(options?: { random?: RandomSource }): GameEngine<RiddlesState> {
     let rng: RandomSource = options?.random ?? Math.random;
+    const buildState = createShuffledAnnounceStateBuilder({
+        bankLength: RIDDLE_BANK.length,
+        defaultRounds: DEFAULT_ROUNDS,
+        maxRounds: MAX_ROUNDS,
+        adopt: (cfg2) => (rng = adoptRandom(rng, cfg2)),
+    });
 
-    const readRounds = (cfg: Record<string, unknown> | undefined): number => {
-        const rounds = Number(cfg?.rounds) || Number(cfg?.defaultRounds) || DEFAULT_ROUNDS;
-        return clamp(rounds, 1, MAX_ROUNDS);
-    };
-
-    const adoptRandom = (cfg: Record<string, unknown> | undefined): void => {
-        if (cfg && typeof cfg.random === 'function') {
-            rng = cfg.random as RandomSource;
-        }
-    };
-
-    const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): RiddlesState => {
-        adoptRandom(cfg);
-        const state: RiddlesState = {
-            order: shuffleOrder(rng),
-            cursor: 0,
-            maxRounds: readRounds(cfg),
-            phase: 'announce',
-        };
-        session.state = state as unknown as Record<string, unknown>;
-        session.score = 0;
-        session.round = 1;
-        return state;
-    };
+    const surface = createShuffledAnnounceSurfaceBase('adivinanzas', buildState);
+    const reset = surface.reset;
 
     return {
-        id: 'adivinanzas',
-
-        createSession(optionsConfig: Record<string, unknown> = {}): GameSession {
-            adoptRandom(optionsConfig);
-            return {
-                id: 'adivinanzas',
-                state: {
-                    order: shuffleOrder(rng),
-                    cursor: 0,
-                    maxRounds: readRounds(optionsConfig),
-                    phase: 'announce',
-                },
-                score: 0,
-                round: 1,
-            };
-        },
+        ...surface,
 
         start(session: GameSession, optionsConfig: Record<string, unknown> = {}): GameTurnResult {
             reset(session, optionsConfig);
-            return {
-                prompt: `¡Vamos a jugar a las adivinanzas! ${currentPrompt(session.state as unknown as RiddlesState)}`,
-                valid: false,
-                gameOver: false,
-                score: session.score,
-                animation: 'Idle',
-                emotion: 'excited',
-            };
+            return turnResult(`¡Vamos a jugar a las adivinanzas! ${currentPrompt(session.state as RiddlesState)}`, session.score, { emotion: 'excited' });
         },
 
         turn(session: GameSession, text = ''): GameTurnResult {
-            const state = session.state as unknown as RiddlesState;
-
-            if (state.phase === 'done') {
-                return {
-                    prompt: 'Ya terminamos las adivinanzas. ¿Jugamos otra vez?',
-                    valid: false,
-                    gameOver: true,
-                    score: session.score,
-                    animation: 'Idle',
-                    emotion: 'happy',
-                };
-            }
-
-            const riddle = riddleAt(state);
-            if (!riddle) {
-                state.phase = 'done';
-                return {
-                    prompt: `¡Se acabaron las adivinanzas! Tu puntaje fue ${session.score}. ¡Muy bien!`,
-                    valid: false,
-                    gameOver: true,
-                    score: session.score,
-                    animation: 'Dance',
-                    emotion: 'happy',
-                };
-            }
-
-            const normalized = normalizeForMatch(text);
-
-            // ¿Pide pista?
-            if (hasAnyToken(normalized, HINT_FRAMES)) {
-                return {
-                    prompt: `Aquí va una pista: ${riddle.pista}`,
-                    valid: false,
-                    gameOver: false,
-                    score: session.score,
-                    animation: 'Idle',
-                    emotion: 'thinking',
-                };
-            }
-
-            // ¿Intenta responder?
-            if (hasAnyToken(normalized, riddle.respuesta)) {
-                session.score += 1;
-                session.round += 1;
-                if (state.cursor + 1 >= state.maxRounds || state.cursor + 1 >= state.order.length) {
-                    state.phase = 'done';
-                    return {
-                        prompt: `¡Correcto, era ${riddle.respuesta[0]}! Completaste ${state.maxRounds} adivinanzas con ${session.score} puntos. ¡Eres muy listo!`,
-                        valid: true,
-                        gameOver: true,
-                        score: session.score,
-                        animation: 'Dance',
-                        emotion: 'happy',
-                    };
-                }
-                state.cursor += 1;
-                const next = riddleAt(state);
-                return {
-                    prompt: `¡Correcto, era ${riddle.respuesta[0]}! Siguiente: ${next ? next.pregunta : ''} ¿Qué soy?`,
-                    valid: true,
-                    gameOver: false,
-                    score: session.score,
-                    animation: 'Jump_in_place',
-                    emotion: 'happy',
-                };
-            }
-
-            // ¿Salta a la siguiente?
-            if (hasAnyToken(normalized, SKIP_FRAMES)) {
-                session.round += 1;
-                if (state.cursor + 1 >= state.maxRounds || state.cursor + 1 >= state.order.length) {
-                    state.phase = 'done';
-                    return {
-                        prompt: `Terminamos con ${session.score} puntos. ¡Muy bien jugado!`,
-                        valid: false,
-                        gameOver: true,
-                        score: session.score,
-                        animation: 'Dance',
-                        emotion: 'happy',
-                    };
-                }
-                state.cursor += 1;
-                const next = riddleAt(state);
-                return {
-                    prompt: `¡Claro! Aquí va otra: ${next ? next.pregunta : ''} ¿Qué soy?`,
-                    valid: false,
-                    gameOver: false,
-                    score: session.score,
-                    animation: 'Idle',
-                    emotion: 'neutral',
-                };
-            }
-
-            // Respuesta incorrecta → reintenta la misma.
-            return {
-                prompt: `¡Casi! Inténtalo otra vez. ${riddle.pregunta} ¿Qué soy?`,
-                valid: false,
-                gameOver: false,
-                score: session.score,
-                animation: 'Idle',
-                emotion: 'encouraging',
-                error: 'respuesta incorrecta',
-            };
+            return runGuessTurn<RiddlesState, NonNullable<ReturnType<typeof riddleAt>>>({
+                session,
+                state: session.state as RiddlesState,
+                text,
+                itemAt: riddleAt,
+                matches: (normalized, riddle) => hasAnyToken(normalized, riddle.respuesta),
+                hintFrames: HINT_FRAMES,
+                skipFrames: SKIP_FRAMES,
+                message: {
+                    done: 'Ya terminamos las adivinanzas. ¿Jugamos otra vez?',
+                    exhausted: ({ score }) => `¡Se acabaron las adivinanzas! Tu puntaje fue ${score}. ¡Muy bien!`,
+                    hint: (riddle) => `Aquí va una pista: ${riddle.pista}`,
+                    won: (riddle, { score, maxRounds }) =>
+                        `¡Correcto, era ${riddle.respuesta[0]}! Completaste ${maxRounds} adivinanzas con ${score} puntos. ¡Eres muy listo!`,
+                    correct: (riddle, next) =>
+                        `¡Correcto, era ${riddle.respuesta[0]}! Siguiente: ${next ? next.pregunta : ''} ¿Qué soy?`,
+                    skipped: (_riddle, next) => `¡Claro! Aquí va otra: ${next ? next.pregunta : ''} ¿Qué soy?`,
+                    retry: (riddle) => `¡Casi! Inténtalo otra vez. ${riddle.pregunta} ¿Qué soy?`,
+                },
+            });
         },
 
         isGameCommand(text = ''): boolean {
-            const normalized = normalizeForMatch(text);
-            return END_FRAMES.some((frame) => normalized.includes(frame))
-                || HINT_FRAMES.some((frame) => hasToken(normalized, frame))
-                || SKIP_FRAMES.some((frame) => hasToken(normalized, frame));
+            return isEngineCommand(text, { end: END_FRAMES, hint: HINT_FRAMES, skip: SKIP_FRAMES });
         },
     };
 }
+export const RIDDLES_COMMAND_FRAMES = Object.freeze({ HINT_FRAMES, SKIP_FRAMES, END_FRAMES })

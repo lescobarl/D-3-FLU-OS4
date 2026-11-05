@@ -18,6 +18,16 @@
 //   - Registra justificación de cada decisión
 // ============================================================
 
+import { IntervalLifecycle, fireAndForget } from './intervalLifecycle';
+import { createModuleSingleton } from './serviceSingleton';
+import { snapshotConfig } from './configSnapshot';
+import { copyList } from '../../lib/listOps';
+import { emitAutonomyEvent } from './autonomyEvents';
+import { AUTONOMY_THRESHOLD_DEFAULTS, AI_PROVIDER_IDS, DEFAULT_AI_FALLBACK_ORDER, type AIProvider } from '../config/sharedConfig';
+import { getPreferredAIProvider, setPreferredAIProvider } from '../ai/providerPreference';
+import { logCaughtError } from '../../lib/caughtError';
+import { localGet, localSet } from '../storage/localStore';
+
 // -----------------------------------------------------------
 // Tipos
 // -----------------------------------------------------------
@@ -73,15 +83,45 @@ export interface AutonomousDecision {
     actions: DecisionAction[];
 }
 
-export interface DecisionAction {
-    /** Acción a realizar */
-    action: string;
-    /** Parámetros de la acción */
-    params: Record<string, any>;
-    /** Orden de ejecución */
-    order: number;
-    /** Dependencias de otras acciones */
-    dependencies?: string[];
+/** Parámetros de la acción `monitor_continue`. */
+export interface MonitorContinueParams {
+    provider: string;
+    reason: string;
+}
+
+/** Parámetros de la acción `update_provider_config`. */
+export interface UpdateProviderConfigParams {
+    newProvider: string;
+    oldProvider: string;
+}
+
+/** Parámetros de la acción `notify_system`. */
+export interface NotifySystemParams {
+    message: string;
+    type: 'info' | 'warning' | 'error';
+}
+
+/** Parámetros de la acción `record_decision`. */
+export interface RecordDecisionParams {
+    decisionType: string;
+    from: string;
+    to: string;
+    timestamp: number;
+}
+
+/** Acción ejecutable derivada de una decisión autónoma, discriminada por `action`. */
+export type DecisionAction =
+    | { action: 'monitor_continue'; params: MonitorContinueParams; order: number; dependencies?: string[] }
+    | { action: 'update_provider_config'; params: UpdateProviderConfigParams; order: number; dependencies?: string[] }
+    | { action: 'notify_system'; params: NotifySystemParams; order: number; dependencies?: string[] }
+    | { action: 'record_decision'; params: RecordDecisionParams; order: number; dependencies?: string[] };
+
+/** Registro persistido en `flu-provider-changes`. */
+interface ProviderChangeRecord {
+    from: string;
+    to: string;
+    timestamp: number;
+    reason: string;
 }
 
 export interface DecisionEngineConfig {
@@ -113,7 +153,7 @@ export const DEFAULT_DECISION_CONFIG: DecisionEngineConfig = {
     minConfidenceThreshold: 0.7,
     considerEcologicalFactors: true,
     considerCostFactors: true,
-    hysteresisThreshold: 0.15, // 15% de mejora mínima para cambiar
+    hysteresisThreshold: AUTONOMY_THRESHOLD_DEFAULTS.decision.hysteresis, // 15% de mejora mínima para cambiar
     maxDecisionsPerDay: 10,
     verboseLogging: false,
 };
@@ -147,7 +187,7 @@ interface AIProviderMetrics {
 // Evaluador de factores
 // -----------------------------------------------------------
 
-class FactorEvaluator {
+export class FactorEvaluator {
     private metricsHistory: Map<string, AIProviderMetrics[]> = new Map();
     private readonly maxHistorySize = 100;
     
@@ -173,7 +213,7 @@ class FactorEvaluator {
         factors.push({
             name: 'response_time',
             value: 1 - responseTimeFactor, // Invertir: menor tiempo = mejor
-            weight: 0.25,
+            weight: AUTONOMY_THRESHOLD_DEFAULTS.decision.factorWeightResponseTime,
             trend: this.analyzeTrend(currentMetrics.provider, 'avgResponseTime'),
         });
         
@@ -181,7 +221,7 @@ class FactorEvaluator {
         factors.push({
             name: 'success_rate',
             value: currentMetrics.successRate,
-            weight: 0.30,
+            weight: AUTONOMY_THRESHOLD_DEFAULTS.decision.factorWeightSuccessRate,
             trend: this.analyzeTrend(currentMetrics.provider, 'successRate'),
         });
         
@@ -199,7 +239,7 @@ class FactorEvaluator {
             factors.push({
                 name: 'cost',
                 value: 1 - costFactor, // Invertir: menor costo = mejor
-                weight: 0.20,
+                weight: AUTONOMY_THRESHOLD_DEFAULTS.decision.factorWeightCost,
                 trend: this.analyzeTrend(currentMetrics.provider, 'costPer1kTokens'),
             });
         }
@@ -218,7 +258,7 @@ class FactorEvaluator {
             factors.push({
                 name: 'ecological_impact',
                 value: 1 - co2Factor, // Invertir: menor CO₂ = mejor
-                weight: 0.15,
+                weight: AUTONOMY_THRESHOLD_DEFAULTS.decision.factorWeightEcological,
                 trend: this.analyzeTrend(currentMetrics.provider, 'co2Emissions'),
             });
         }
@@ -227,7 +267,7 @@ class FactorEvaluator {
         factors.push({
             name: 'response_quality',
             value: currentMetrics.responseQuality,
-            weight: 0.10,
+            weight: AUTONOMY_THRESHOLD_DEFAULTS.decision.factorWeightResponseQuality,
             trend: this.analyzeTrend(currentMetrics.provider, 'responseQuality'),
         });
         
@@ -235,7 +275,7 @@ class FactorEvaluator {
     }
     
     evaluateSwitchAIOptions(currentProvider: string): DecisionOption[] {
-        const allProviders = ['openrouter', 'gemini'];
+        const allProviders = DEFAULT_AI_FALLBACK_ORDER;
         const options: DecisionOption[] = [];
         
         for (const provider of allProviders) {
@@ -272,9 +312,8 @@ class FactorEvaluator {
         const alternativeFactors = this.evaluateAIProviderFactors(alternativeProvider);
         
         // Calcular mejora esperada
-        const currentScore = currentFactors.reduce((sum, f) => sum + (f.value * f.weight), 0);
+        currentFactors.reduce((sum, f) => sum + (f.value * f.weight), 0);
         const alternativeScore = alternativeFactors.reduce((sum, f) => sum + (f.value * f.weight), 0);
-        const improvement = alternativeScore - currentScore;
         
         // Ajustar por costo de cambio (penalización por cambio frecuente)
         const changePenalty = this.calculateChangePenalty(currentProvider, alternativeProvider);
@@ -321,10 +360,10 @@ class FactorEvaluator {
         return 'stable';
     }
     
-    private calculateChangePenalty(currentProvider: string, newProvider: string): number {
+    private calculateChangePenalty(_currentProvider: string, _newProvider: string): number {
         // Penalizar cambios frecuentes
-        const changeHistory = JSON.parse(localStorage.getItem('flu-provider-changes') || '[]');
-        const recentChanges = changeHistory.filter((c: any) => 
+        const changeHistory: ProviderChangeRecord[] = JSON.parse(localGet('flu-provider-changes') || '[]');
+        const recentChanges = changeHistory.filter((c) => 
             Date.now() - c.timestamp < 3600000 // Última hora
         );
         
@@ -345,26 +384,26 @@ class FactorEvaluator {
         
         return [
             {
-                provider: 'openrouter',
-                avgResponseTime: 12000, // Gemini 2.5 Flash Lite — 12 segundos
-                successRate: 0.92,
-                costPer1kTokens: 0.075, // ~$0.30/M input + ~$0.50/M output
-                co2Emissions: 1.0,
-                perceivedLatency: 15000,
-                responseQuality: 0.90,
+                provider: AI_PROVIDER_IDS.OPENROUTER,
+                avgResponseTime: AUTONOMY_THRESHOLD_DEFAULTS.decision.sampleOpenrouterResponseTimeMs,
+                successRate: AUTONOMY_THRESHOLD_DEFAULTS.decision.sampleOpenrouterSuccessRate,
+                costPer1kTokens: AUTONOMY_THRESHOLD_DEFAULTS.decision.sampleOpenrouterCostPer1k, // costo por 1k tokens (config)
+                co2Emissions: AUTONOMY_THRESHOLD_DEFAULTS.decision.sampleOpenrouterCo2,
+                perceivedLatency: AUTONOMY_THRESHOLD_DEFAULTS.decision.sampleOpenrouterPerceivedLatencyMs,
+                responseQuality: AUTONOMY_THRESHOLD_DEFAULTS.decision.sampleOpenrouterQuality,
                 lastUpdated: Date.now(),
-                requestCount: 150,
+                requestCount: AUTONOMY_THRESHOLD_DEFAULTS.decision.sampleOpenrouterRequestCount,
             },
             {
-                provider: 'gemini',
-                avgResponseTime: 45000, // 45 segundos (nativo)
-                successRate: 0.85,
-                costPer1kTokens: 0.50,
-                co2Emissions: 2.5,
-                perceivedLatency: 50000,
-                responseQuality: 0.88,
+                provider: AI_PROVIDER_IDS.GEMINI,
+                avgResponseTime: AUTONOMY_THRESHOLD_DEFAULTS.decision.sampleGeminiResponseTimeMs,
+                successRate: AUTONOMY_THRESHOLD_DEFAULTS.decision.sampleGeminiSuccessRate,
+                costPer1kTokens: AUTONOMY_THRESHOLD_DEFAULTS.decision.sampleGeminiCostPer1k,
+                co2Emissions: AUTONOMY_THRESHOLD_DEFAULTS.decision.sampleGeminiCo2,
+                perceivedLatency: AUTONOMY_THRESHOLD_DEFAULTS.decision.sampleGeminiPerceivedLatencyMs,
+                responseQuality: AUTONOMY_THRESHOLD_DEFAULTS.decision.sampleGeminiQuality,
                 lastUpdated: Date.now(),
-                requestCount: 100,
+                requestCount: AUTONOMY_THRESHOLD_DEFAULTS.decision.sampleGeminiRequestCount,
             },
         ];
     }
@@ -390,8 +429,8 @@ class DecisionMaker {
     private lastDecisionTime: number = 0;
     private decisionsToday: number = 0;
     
-    constructor() {
-        this.factorEvaluator = new FactorEvaluator();
+    constructor(deps: { factorEvaluator: FactorEvaluator }) {
+        this.factorEvaluator = deps.factorEvaluator;
         this.loadDailyDecisionCount();
     }
     
@@ -424,7 +463,7 @@ class DecisionMaker {
         const improvement = bestOption.expectedValue - currentOption.expectedValue;
         
         // Aplicar histéresis: solo cambiar si la mejora supera el umbral
-        if (improvement < 0.15) { // DEFAULT_DECISION_CONFIG.hysteresisThreshold
+        if (improvement < DEFAULT_DECISION_CONFIG.hysteresisThreshold) { // DEFAULT_DECISION_CONFIG.hysteresisThreshold
             return null;
         }
         
@@ -467,10 +506,10 @@ class DecisionMaker {
         
         // Aumentar confianza basado en factores de apoyo
         const strongSupport = bestOption.supportingFactors.filter(f => f.value > 0.8).length;
-        confidence += strongSupport * 0.05;
+        confidence += strongSupport * AUTONOMY_THRESHOLD_DEFAULTS.decision.confidenceSupportPerFactor;
         
         // Reducir confianza basado en riesgos
-        confidence -= bestOption.risks.length * 0.05;
+        confidence -= bestOption.risks.length * AUTONOMY_THRESHOLD_DEFAULTS.decision.confidenceRiskPenalty;
         
         // Aumentar confianza si hay tendencias claras
         const improvingTrends = factors.filter(f => f.trend === 'improving').length;
@@ -485,7 +524,7 @@ class DecisionMaker {
     
     private generateJustification(
         bestOption: DecisionOption,
-        currentOption: DecisionOption,
+        _currentOption: DecisionOption,
         improvement: number,
         factors: DecisionFactor[]
     ): string {
@@ -551,7 +590,7 @@ class DecisionMaker {
     
     private loadDailyDecisionCount(): void {
         const today = new Date().toDateString();
-        const stored = localStorage.getItem('flu-decisions-today');
+        const stored = localGet('flu-decisions-today');
         
         if (stored) {
             const { date, count } = JSON.parse(stored);
@@ -565,7 +604,7 @@ class DecisionMaker {
     
     private saveDailyDecisionCount(): void {
         const today = new Date().toDateString();
-        localStorage.setItem('flu-decisions-today', JSON.stringify({
+        localSet('flu-decisions-today', JSON.stringify({
             date: today,
             count: this.decisionsToday,
         }));
@@ -581,45 +620,39 @@ class DecisionMaker {
 // Clase principal del Decision Engine
 // -----------------------------------------------------------
 
-export class DecisionEngine {
-    private config: DecisionEngineConfig;
+export class DecisionEngine extends IntervalLifecycle<DecisionEngineConfig> {
     private decisionMaker: DecisionMaker;
     private factorEvaluator: FactorEvaluator;
-    private evaluationIntervalId: number | null = null;
     private decisionHistory: AutonomousDecision[] = [];
     
-    constructor(config: Partial<DecisionEngineConfig> = {}) {
-        this.config = { ...DEFAULT_DECISION_CONFIG, ...config };
-        this.decisionMaker = new DecisionMaker();
-        this.factorEvaluator = new FactorEvaluator();
+    /**
+     * Fábrica por defecto del motor. Punto de composición del singleton:
+     * permite inyectar otra fábrica vía setDecisionEngineFactory (§2.4).
+     */
+    static create(
+        config: Partial<DecisionEngineConfig> = {},
+        deps: { decisionMaker?: DecisionMaker; factorEvaluator?: FactorEvaluator } = {},
+    ): DecisionEngine {
+        return new this(config, {
+            decisionMaker: deps.decisionMaker ?? new DecisionMaker({ factorEvaluator: new FactorEvaluator() }),
+            factorEvaluator: deps.factorEvaluator ?? new FactorEvaluator(),
+        });
     }
     
-    start(): void {
-        if (this.evaluationIntervalId !== null || !this.config.enabled) {
-            return;
-        }
-        
-        this.evaluationIntervalId = window.setInterval(() => {
-            this.evaluateAndDecide().catch(error => {
-                console.error('Error en evaluación de decisiones:', error);
-            });
-        }, this.config.evaluationInterval);
-        
-        if (this.config.verboseLogging) {
-            console.log('DecisionEngine iniciado con intervalo:', this.config.evaluationInterval, 'ms');
-        }
+    constructor(
+        config: Partial<DecisionEngineConfig> = {},
+        deps: { decisionMaker: DecisionMaker; factorEvaluator: FactorEvaluator },
+    ) {
+        super({ ...DEFAULT_DECISION_CONFIG, ...config }, 'evaluationInterval');
+        this.decisionMaker = deps.decisionMaker;
+        this.factorEvaluator = deps.factorEvaluator;
     }
-    
-    stop(): void {
-        if (this.evaluationIntervalId !== null) {
-            clearInterval(this.evaluationIntervalId);
-            this.evaluationIntervalId = null;
-        }
-        
-        if (this.config.verboseLogging) {
-            console.log('DecisionEngine detenido');
-        }
+    protected tick(): void {
+        fireAndForget(() => this.evaluateAndDecide(), 'Error en evaluacion de decisiones');
     }
+
+
+
     
     async evaluateAndDecide(): Promise<AutonomousDecision | null> {
         if (!this.config.enabled) {
@@ -627,7 +660,7 @@ export class DecisionEngine {
         }
         
         // Obtener proveedor actual
-        const currentProvider = localStorage.getItem('flu-ai-provider') || 'openrouter';
+        const currentProvider = getPreferredAIProvider();
         
         // Evaluar decisión de cambio de proveedor
         const decision = this.decisionMaker.evaluateAISwitchDecision(currentProvider);
@@ -647,16 +680,6 @@ export class DecisionEngine {
             if (this.decisionHistory.length > 50) {
                 this.decisionHistory = this.decisionHistory.slice(-50);
             }
-            
-            // Loggear si está habilitado
-            if (this.config.verboseLogging) {
-                console.log('Decisión autónoma ejecutada:', {
-                    type: decision.type,
-                    selectedOption: decision.selectedOption,
-                    confidence: decision.confidence,
-                    justification: decision.justification,
-                });
-            }
         }
         
         return decision;
@@ -670,13 +693,14 @@ export class DecisionEngine {
             try {
                 await this.executeSingleAction(action, decision);
             } catch (error) {
-                console.error(`Error ejecutando acción ${action.action}:`, error);
+                logCaughtError(`Error ejecutando acción ${action.action}:`, error);
                 // Continuar con siguientes acciones si es posible
             }
         }
     }
     
     private async executeSingleAction(action: DecisionAction, decision: AutonomousDecision): Promise<void> {
+        const actionName = action.action;
         switch (action.action) {
             case 'update_provider_config':
                 await this.executeUpdateProviderConfig(action.params);
@@ -695,18 +719,18 @@ export class DecisionEngine {
                 break;
                 
             default:
-                console.warn(`Acción no implementada: ${action.action}`);
+                console.warn(`Acción no implementada: ${actionName}`);
         }
     }
     
-    private async executeUpdateProviderConfig(params: any): Promise<void> {
+    private async executeUpdateProviderConfig(params: UpdateProviderConfigParams): Promise<void> {
         const { newProvider, oldProvider } = params;
         
         // Actualizar configuración
-        localStorage.setItem('flu-ai-provider', newProvider);
+        setPreferredAIProvider(newProvider as AIProvider);
         
         // Registrar cambio
-        const changeHistory = JSON.parse(localStorage.getItem('flu-provider-changes') || '[]');
+        const changeHistory: ProviderChangeRecord[] = JSON.parse(localGet('flu-provider-changes') || '[]');
         changeHistory.push({
             from: oldProvider,
             to: newProvider,
@@ -719,24 +743,30 @@ export class DecisionEngine {
             changeHistory.shift();
         }
         
-        localStorage.setItem('flu-provider-changes', JSON.stringify(changeHistory));
+        localSet('flu-provider-changes', JSON.stringify(changeHistory));
         
-        // Notificar a la aplicación del cambio
-        window.dispatchEvent(new CustomEvent('flu-ai-provider-changed', {
-            detail: { oldProvider, newProvider }
-        }));
+        // Notificar del cambio de proveedor vía bus central de autonomía
+        emitAutonomyEvent({
+            type: 'ai-provider-changed',
+            level: 'info',
+            message: `Proveedor de IA cambiado: ${oldProvider} → ${newProvider}`,
+            detail: { oldProvider, newProvider },
+        });
     }
     
-    private async executeNotifySystem(params: any): Promise<void> {
+    private async executeNotifySystem(params: NotifySystemParams): Promise<void> {
         const { message, type } = params;
         
-        window.dispatchEvent(new CustomEvent('flu-system-notification', {
-            detail: { message, type, source: 'decision_engine' }
-        }));
+        emitAutonomyEvent({
+            type: 'system-notification',
+            level: type === 'error' ? 'error' : type === 'warning' ? 'warning' : 'info',
+            message: message || 'Notificación del sistema',
+            detail: { source: 'decision_engine' },
+        });
     }
     
-    private async executeRecordDecision(params: any, decision: AutonomousDecision): Promise<void> {
-        const decisionHistory = JSON.parse(localStorage.getItem('flu-autonomous-decisions') || '[]');
+    private async executeRecordDecision(_params: RecordDecisionParams, decision: AutonomousDecision): Promise<void> {
+        const decisionHistory: Array<AutonomousDecision & { executedAt: number }> = JSON.parse(localGet('flu-autonomous-decisions') || '[]');
         
         decisionHistory.push({
             ...decision,
@@ -748,11 +778,11 @@ export class DecisionEngine {
             decisionHistory.shift();
         }
         
-        localStorage.setItem('flu-autonomous-decisions', JSON.stringify(decisionHistory));
+        localSet('flu-autonomous-decisions', JSON.stringify(decisionHistory));
     }
     
     getDecisionHistory(): AutonomousDecision[] {
-        return [...this.decisionHistory];
+        return copyList(this.decisionHistory);
     }
     
     getRecentDecisions(count: number = 10): AutonomousDecision[] {
@@ -762,19 +792,10 @@ export class DecisionEngine {
     clearDecisionHistory(): void {
         this.decisionHistory = [];
     }
-    
-    updateConfig(newConfig: Partial<DecisionEngineConfig>): void {
-        this.config = { ...this.config, ...newConfig };
-        
-        // Reiniciar si el intervalo cambió
-        if (this.evaluationIntervalId !== null && newConfig.evaluationInterval) {
-            this.stop();
-            this.start();
-        }
-    }
+
     
     getConfig(): DecisionEngineConfig {
-        return { ...this.config };
+        return snapshotConfig(this.config);
     }
     
     recordProviderMetrics(provider: string, metrics: Partial<AIProviderMetrics>): void {
@@ -798,27 +819,34 @@ export class DecisionEngine {
 // Instancia global (singleton)
 // -----------------------------------------------------------
 
-let globalDecisionEngine: DecisionEngine | null = null;
+/** Fábrica inyectable del motor global (seam de DI, §2.4). */
+export type DecisionEngineFactory = (config?: Partial<DecisionEngineConfig>) => DecisionEngine;
 
+let decisionEngineFactory: DecisionEngineFactory = (config) => DecisionEngine.create(config);
+
+/**
+ * Inyecta la fábrica usada al crear el motor global. Debe llamarse antes de
+ * la primera creación; si el singleton ya existe, esta llamada no lo reemplaza.
+ */
+export function setDecisionEngineFactory(factory: DecisionEngineFactory): void {
+    decisionEngineFactory = factory;
+}
+
+const decisionEngineSingleton = createModuleSingleton((config?: Partial<DecisionEngineConfig>) => decisionEngineFactory(config));
+
+/** Instancia global (creada la primera vez con la config dada). */
 export function getDecisionEngine(config?: Partial<DecisionEngineConfig>): DecisionEngine {
-    if (!globalDecisionEngine) {
-        globalDecisionEngine = new DecisionEngine(config);
-    }
-    return globalDecisionEngine;
+    return decisionEngineSingleton.get(config);
 }
 
 export function startGlobalDecisionEngine(config?: Partial<DecisionEngineConfig>): DecisionEngine {
-    const engine = getDecisionEngine(config);
-    engine.start();
-    return engine;
+    return decisionEngineSingleton.start(config);
 }
 
 export function stopGlobalDecisionEngine(): void {
-    if (globalDecisionEngine) {
-        globalDecisionEngine.stop();
-    }
+    decisionEngineSingleton.stop();
 }
 
 export function getRecentAutonomousDecisions(count: number = 5): AutonomousDecision[] {
-    return globalDecisionEngine?.getRecentDecisions(count) || [];
+    return decisionEngineSingleton.current()?.getRecentDecisions(count) || [];
 }

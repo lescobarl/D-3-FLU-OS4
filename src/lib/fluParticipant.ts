@@ -6,7 +6,10 @@
 // evaluation scheduling, hand-raise timeout, cooldown,
 // rate limiting, and UI presentation.
 // ============================================================
+import { FLU_CONFIG } from '../voice/api/config';
 
+import { pickText } from './uiStrings';
+import { normalizeLang } from '../core/config/localeConfig';
 // -----------------------------------------------------------
 // Types
 // -----------------------------------------------------------
@@ -33,7 +36,7 @@ export interface ParticipantState {
     evalGeneration: number;
 }
 
-export interface ParticipantConfig {
+export interface ParticipantEvaluationConfig {
     enabled: boolean;
     evaluateOnTurnCommit: boolean;
     evaluateOnManualGrant: boolean;
@@ -78,7 +81,12 @@ export interface FloorGrantContext {
 // Defaults
 // -----------------------------------------------------------
 
-export const DEFAULT_PARTICIPANT_CONFIG: ParticipantConfig = {
+/** DUENO UNICO de `evaluateOnTurnCommit`: el unico sitio que lee la clave. */
+export function evaluatesOnTurnCommit(cfg: ParticipantEvaluationConfig): boolean {
+    return cfg.evaluateOnTurnCommit !== false;
+}
+
+export const DEFAULT_PARTICIPANT_CONFIG: ParticipantEvaluationConfig = {
     enabled: true,
     evaluateOnTurnCommit: true,
     evaluateOnManualGrant: true,
@@ -112,7 +120,7 @@ const UI_LABELS: Record<string, { es: string; en: string }> = {
 export function resolveFluParticipantLabel(key: string, language: string): string {
     const entry = UI_LABELS[key];
     if (!entry) return '';
-    const lang = language === 'en' ? 'en' : 'es';
+    const lang = normalizeLang(language);
     return entry[lang] || entry.es || '';
 }
 
@@ -156,7 +164,7 @@ export function buildParticipantLogWindow(
     for (let index = start; index < count; index += 1) {
         const text = String(texts[index] || '').trim();
         if (!text) continue;
-        const speaker = String(speakers[index] || speakers[speakers.length - 1] || 'Hablante 1').trim() || 'Hablante 1';
+        const speaker = String(speakers[index] || speakers[speakers.length - 1] || FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker).trim() || FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker;
         rows.push({ speaker, text });
     }
 
@@ -169,7 +177,7 @@ export function buildParticipantLogWindow(
 
 export function formatParticipantLogForPrompt(rows: LogRow[], language: string = 'es'): string {
     if (!rows.length) {
-        return language === 'en' ? '(empty conversation)' : '(conversación vacía)';
+        return pickText(language, 'conversacion_vacia');
     }
     return rows.map((row, index) => `${index + 1}. ${row.speaker}: ${row.text}`).join('\n');
 }
@@ -187,13 +195,13 @@ function countInterventionsInHour(timestamps: number[], now: number = Date.now()
 // Evaluation scheduling
 // -----------------------------------------------------------
 
-export function shouldEvaluateParticipantOnTurn(state: ParticipantState, cfg: ParticipantConfig): boolean {
+export function shouldEvaluateParticipantOnTurn(state: ParticipantState, cfg: ParticipantEvaluationConfig): boolean {
     const every = Number(cfg.evaluateEveryNTurns);
     const nextCount = Number(state.turnsSinceLastEval) + 1;
     return nextCount >= every;
 }
 
-export function advanceParticipantTurnCounter(state: ParticipantState, cfg: ParticipantConfig): ParticipantState {
+export function advanceParticipantTurnCounter(state: ParticipantState, cfg: ParticipantEvaluationConfig): ParticipantState {
     const every = Number(cfg.evaluateEveryNTurns);
     const nextCount = Number(state.turnsSinceLastEval) + 1;
 
@@ -205,7 +213,7 @@ export function advanceParticipantTurnCounter(state: ParticipantState, cfg: Part
 
 export function canScheduleParticipantEvaluation(
     state: ParticipantState,
-    cfg: ParticipantConfig,
+    cfg: ParticipantEvaluationConfig,
     {
         conversationActive = false,
         turnCount = 0,
@@ -231,7 +239,7 @@ export function canScheduleParticipantEvaluation(
     // incondicionalmente, dejando muerta la opción conversationOnly=false.
     if (cfg.enabled === false) return false;
     if (cfg.conversationOnly !== false && !conversationActive) return false;
-    if (!force && cfg.evaluateOnTurnCommit === false) return false;
+    if (!force && !evaluatesOnTurnCommit(cfg)) return false;
     if (force && cfg.evaluateOnManualGrant === false) return false;
     if (state.phase === 'evaluating' || state.phase === 'raised') return false;
     if (state.phase === 'cooldown' && now < state.cooldownUntil) return false;
@@ -260,7 +268,8 @@ export function canScheduleParticipantEvaluation(
 // Normalize Gemini evaluation response
 // -----------------------------------------------------------
 
-export function normalizeParticipantEvaluation(raw: Record<string, unknown>, cfg: ParticipantConfig): ParticipantEvaluation {
+export function normalizeParticipantEvaluation(input: unknown, cfg: ParticipantEvaluationConfig): ParticipantEvaluation {
+    const raw = (input && typeof input === 'object' ? input : {}) as Record<string, unknown>;
     const minConf = Number(cfg.minConfidence);
     const minChars = Number(cfg.minDraftChars);
     const maxChars = Number(cfg.maxDraftChars);
@@ -310,7 +319,7 @@ export function applyParticipantEvaluation(
 // Dismiss raised hand
 // -----------------------------------------------------------
 
-export function dismissRaisedHand(state: ParticipantState, now: number = Date.now()): ParticipantState {
+export function dismissRaisedHand(state: ParticipantState, _now: number = Date.now()): ParticipantState {
     return {
         ...state,
         phase: 'idle',
@@ -327,7 +336,7 @@ export function dismissRaisedHand(state: ParticipantState, now: number = Date.no
 
 export function consumeRaisedDraft(
     state: ParticipantState,
-    cfg: ParticipantConfig,
+    cfg: ParticipantEvaluationConfig,
 ): { state: ParticipantState; draft: string } {
     if (state.phase !== 'raised' || !state.draftContribution) {
         return { state, draft: '' };
@@ -366,7 +375,7 @@ export function recordParticipantIntervention(state: ParticipantState, now: numb
 
 export function shouldAutoDismissRaisedHand(
     state: ParticipantState,
-    cfg: ParticipantConfig,
+    cfg: ParticipantEvaluationConfig,
     now: number = Date.now(),
 ): boolean {
     if (state.phase !== 'raised') return false;
@@ -382,7 +391,7 @@ export function shouldAutoDismissRaisedHand(
 export function resolveParticipantUiPresentation(
     state: ParticipantState,
     language: string = 'es',
-    cfg?: ParticipantConfig,
+    cfg?: ParticipantEvaluationConfig,
 ): ParticipantUiPresentation {
     const config = cfg ?? DEFAULT_PARTICIPANT_CONFIG;
 
@@ -423,7 +432,7 @@ export function resolveParticipantUiPresentation(
 // Floor grant checks
 // -----------------------------------------------------------
 
-export function canGrantParticipantFloor(state: ParticipantState, cfg: ParticipantConfig): boolean {
+export function canGrantParticipantFloor(state: ParticipantState, cfg: ParticipantEvaluationConfig): boolean {
     if (cfg.enabled === false) return false;
     return state.phase === 'raised' && Boolean(String(state.draftContribution || '').trim());
 }
@@ -436,7 +445,7 @@ export function shouldIgnoreParticipantFloorGrant(
         delivering = false,
         cfg = DEFAULT_PARTICIPANT_CONFIG,
         now = Date.now(),
-    }: FloorGrantContext & { cfg?: ParticipantConfig } = {},
+    }: FloorGrantContext & { cfg?: ParticipantEvaluationConfig } = {},
 ): boolean {
     if (delivering || speechActive) return true;
     if (state.phase === 'cooldown' && now < state.cooldownUntil) return true;

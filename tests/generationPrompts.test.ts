@@ -130,11 +130,37 @@ describe('generationPrompts — buildGenerationFallbackContent', () => {
         expect(content).toContain('libro.xlsx');
     });
 
-    test('md incluye resumen y fuentes', () => {
+    test('md/doc/pdf incluye estructura real sobre el tema y sus fuentes seguras', () => {
         const content = buildGenerationFallbackContent(basePayload, 'es');
         expect(content.startsWith('# Reporte mensual')).toBe(true);
-        expect(content).toContain('## Resumen');
-        expect(content).toContain('libro.xlsx');
+        expect(content).toContain('## Introducción');
+        expect(content).toContain('## Desarrollo');
+        expect(content).toContain('## Fuentes consultadas');
+        expect(content).toContain('documento: libro.xlsx');
         expect(content).toContain('respaldo sin conexión');
+    });
+
+    test('la conversación NO se vuelca en crudo al cuerpo del documento (Bug #6: filler)', () => {
+        const payload: GenerationInput = {
+            formato: 'pdf',
+            parametros: { tema: 'Carta sobre un conejo saltando' },
+            fuentes: [
+                { tipo: 'conversacion', ref: 'Procederé a generar un video de un conejo saltando.' },
+                { tipo: 'documento', ref: 'Apuntes de clase' },
+            ],
+        };
+        const content = buildGenerationFallbackContent(payload, 'es');
+        expect(content).toContain('Carta sobre un conejo saltando');
+        expect(content).not.toContain('Procederé a generar un video');
+        expect(content).toContain('Conversación reciente');
+    });
+
+    test('video produce guion con escenas para el ensamblador', () => {
+        const content = buildGenerationFallbackContent(
+            { ...basePayload, formato: 'video' },
+            'es',
+        );
+        expect(content).toContain('# Reporte mensual');
+        expect(content).toMatch(/## Escena \d+/);
     });
 });

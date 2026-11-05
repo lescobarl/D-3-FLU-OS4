@@ -18,6 +18,20 @@
 //   - Mantiene historial de cambios para rollback
 // ============================================================
 
+import { IntervalLifecycle, fireAndForget } from './intervalLifecycle';
+import { createModuleSingleton } from './serviceSingleton';
+import { snapshotConfig } from './configSnapshot';
+import { copyList } from '../../lib/listOps';
+import { emitAutonomyEvent } from './autonomyEvents';
+import { AUTONOMY_POLICY } from './autonomyPolicy';
+import { AUTONOMY_THRESHOLD_DEFAULTS } from '../config/sharedConfig';
+import { logCaughtError } from '../../lib/caughtError';
+import { localSet } from '../storage/localStore';
+
+/** Alias locales: la política vive en autonomyPolicy.ts (fuente única). */
+const OPT = AUTONOMY_POLICY.optimization;
+const UNITS = AUTONOMY_POLICY.units;
+
 // -----------------------------------------------------------
 // Tipos
 // -----------------------------------------------------------
@@ -108,13 +122,13 @@ export interface AutoOptimizationConfig {
 
 export const DEFAULT_OPTIMIZATION_CONFIG: AutoOptimizationConfig = {
     enabled: true,
-    evaluationInterval: 600000, // 10 minutos
-    maxChangePerAdjustment: 20, // 20%
-    minSamples: 50,
+    evaluationInterval: OPT.config.evaluationIntervalMs, // 10 minutos
+    maxChangePerAdjustment: OPT.config.maxChangePerAdjustmentPercent, // 20%
+    minSamples: OPT.config.minSamples,
     considerUserFeedback: true,
-    minConfidenceThreshold: 0.65,
+    minConfidenceThreshold: AUTONOMY_THRESHOLD_DEFAULTS.optimization.minConfidence,
     allowAutoRollback: true,
-    evaluationPeriodAfterChange: 300000, // 5 minutos
+    evaluationPeriodAfterChange: OPT.config.evaluationPeriodAfterChangeMs, // 5 minutos
     verboseLogging: false,
 };
 
@@ -124,59 +138,59 @@ export const DEFAULT_OPTIMIZATION_CONFIG: AutoOptimizationConfig = {
 
 export const OPTIMIZABLE_PARAMETERS: Record<OptimizableParameter, ParameterValue> = {
     'speech_recognition_confidence_threshold': {
-        current: 0.7,
-        min: 0.3,
-        max: 0.95,
-        step: 0.05,
+        current: OPT.parameters.speechConfidence.current,
+        min: OPT.parameters.speechConfidence.min,
+        max: AUTONOMY_THRESHOLD_DEFAULTS.optimization.confidenceMax,
+        step: AUTONOMY_THRESHOLD_DEFAULTS.optimization.confidenceStep,
         unit: 'confidence',
     },
     'ai_request_timeout': {
-        current: 30000,
-        min: 5000,
-        max: 120000,
-        step: 5000,
+        current: OPT.parameters.aiRequestTimeout.currentMs,
+        min: OPT.parameters.aiRequestTimeout.minMs,
+        max: OPT.parameters.aiRequestTimeout.maxMs,
+        step: OPT.parameters.aiRequestTimeout.stepMs,
         unit: 'ms',
     },
     'cache_ttl': {
-        current: 300000,
-        min: 60000,
-        max: 1800000,
-        step: 60000,
+        current: OPT.parameters.cacheTtl.currentMs,
+        min: OPT.parameters.cacheTtl.minMs,
+        max: OPT.parameters.cacheTtl.maxMs,
+        step: OPT.parameters.cacheTtl.stepMs,
         unit: 'ms',
     },
     'animation_speed': {
-        current: 1.0,
-        min: 0.5,
-        max: 2.0,
-        step: 0.1,
+        current: OPT.parameters.animationSpeed.current,
+        min: OPT.parameters.animationSpeed.min,
+        max: OPT.parameters.animationSpeed.max,
+        step: OPT.parameters.animationSpeed.step,
         unit: 'multiplier',
     },
     'ui_refresh_rate': {
-        current: 60,
-        min: 30,
-        max: 120,
-        step: 5,
+        current: OPT.parameters.uiRefreshRate.current,
+        min: OPT.parameters.uiRefreshRate.min,
+        max: OPT.parameters.uiRefreshRate.max,
+        step: OPT.parameters.uiRefreshRate.step,
         unit: 'fps',
     },
     'memory_cache_size': {
-        current: 100,
-        min: 10,
-        max: 1000,
-        step: 10,
+        current: OPT.parameters.memoryCacheSize.current,
+        min: OPT.parameters.memoryCacheSize.min,
+        max: OPT.parameters.memoryCacheSize.max,
+        step: OPT.parameters.memoryCacheSize.step,
         unit: 'items',
     },
     'retry_max_attempts': {
-        current: 3,
-        min: 1,
-        max: 10,
-        step: 1,
+        current: OPT.parameters.retryMaxAttempts.current,
+        min: OPT.parameters.retryMaxAttempts.min,
+        max: OPT.parameters.retryMaxAttempts.max,
+        step: OPT.parameters.retryMaxAttempts.step,
         unit: 'attempts',
     },
     'backoff_base_delay': {
-        current: 1000,
-        min: 500,
-        max: 5000,
-        step: 500,
+        current: OPT.parameters.backoffBaseDelay.currentMs,
+        min: OPT.parameters.backoffBaseDelay.minMs,
+        max: OPT.parameters.backoffBaseDelay.maxMs,
+        step: OPT.parameters.backoffBaseDelay.stepMs,
         unit: 'ms',
     },
 };
@@ -208,17 +222,17 @@ interface PerformanceMetrics {
 // Optimizador de parámetros
 // -----------------------------------------------------------
 
-class ParameterOptimizer {
+export class ParameterOptimizer {
     private metricsHistory: PerformanceMetrics[] = [];
     private optimizationHistory: OptimizationResult[] = [];
-    private readonly maxHistorySize = 1000;
+    private readonly maxHistorySize = OPT.runtime.historyLimit;
     
     evaluateParameter(parameter: OptimizableParameter): OptimizationResult | null {
         const paramDef = OPTIMIZABLE_PARAMETERS[parameter];
         if (!paramDef) return null;
         
         // Obtener métricas recientes
-        const recentMetrics = this.getRecentMetrics(100);
+        const recentMetrics = this.getRecentMetrics(OPT.runtime.evaluationSampleWindow);
         if (recentMetrics.length < DEFAULT_OPTIMIZATION_CONFIG.minSamples) {
             return null;
         }
@@ -244,7 +258,7 @@ class ParameterOptimizer {
             relevantMetrics
         );
         
-        if (expectedImprovement < 0.05) { // Mejora mínima del 5%
+        if (expectedImprovement < AUTONOMY_THRESHOLD_DEFAULTS.optimization.minImprovement) { // Mejora mínima del 5%
             return null;
         }
         
@@ -287,7 +301,7 @@ class ParameterOptimizer {
     
     evaluateOptimizationResult(result: OptimizationResult): void {
         // Obtener métricas después del cambio
-        const postChangeMetrics = this.getRecentMetrics(20); // Últimas 20 muestras
+        const postChangeMetrics = this.getRecentMetrics(OPT.runtime.postChangeSampleWindow); // Últimas 20 muestras
         
         if (postChangeMetrics.length === 0) {
             return;
@@ -296,7 +310,7 @@ class ParameterOptimizer {
         // Calcular métricas antes del cambio
         const preChangeMetrics = this.metricsHistory.filter(m => 
             m.timestamp < result.timestamp
-        ).slice(-20);
+        ).slice(-OPT.runtime.preChangeSampleWindow);
         
         if (preChangeMetrics.length === 0) {
             return;
@@ -324,14 +338,13 @@ class ParameterOptimizer {
             
             // Rollback automático si el resultado es negativo
             if (DEFAULT_OPTIMIZATION_CONFIG.allowAutoRollback && 
-                actualResult.improvement < -0.1) { // Empeoró más del 10%
+                actualResult.improvement < OPT.runtime.rollbackImprovement) { // Empeoró más del 10%
                 this.rollbackOptimization(appliedResult);
             }
         }
     }
     
     private rollbackOptimization(result: OptimizationResult): void {
-        console.log(`Rollback automático para parámetro ${result.parameter}`);
         
         // Revertir al valor anterior
         OPTIMIZABLE_PARAMETERS[result.parameter].current = result.oldValue;
@@ -340,16 +353,19 @@ class ParameterOptimizer {
         // Marcar como revertido
         result.applied = false;
         
-        // Notificar al sistema
-        window.dispatchEvent(new CustomEvent('flu-parameter-rollback', {
+        // Notificar el rollback vía bus central de autonomía
+        emitAutonomyEvent({
+            type: 'parameter-rollback',
+            level: 'warning',
+            message: `Parámetro ${result.parameter} revertido: ${result.newValue} → ${result.oldValue} (impacto negativo)`,
             detail: {
                 parameter: result.parameter,
                 from: result.newValue,
                 to: result.oldValue,
                 reason: 'negative_impact',
                 improvement: result.actualResult?.improvement,
-            }
-        }));
+            },
+        });
     }
     
     private getRecentMetrics(count: number): PerformanceMetrics[] {
@@ -411,74 +427,82 @@ class ParameterOptimizer {
         parameter: OptimizableParameter,
         metrics: Partial<PerformanceMetrics>
     ): 'increase' | 'decrease' | 'no_change' {
+        // Una metrica ausente (Partial) no cumple la comparacion: mismo resultado
+        // que `metrics.x! < t` (undefined < t es false), pero sin asertar que existe.
+        // NO se usa `?? 0`: 0 < 0.6 seria true y cambiaria la decision.
+        const lt = (value: number | undefined, threshold: number): boolean =>
+            value !== undefined && value < threshold;
+        const gt = (value: number | undefined, threshold: number): boolean =>
+            value !== undefined && value > threshold;
+
         // Lógica específica por parámetro
         switch (parameter) {
             case 'speech_recognition_confidence_threshold':
                 // Aumentar si la tasa de éxito es baja, disminuir si es alta pero hay muchos falsos negativos
-                if (metrics.speechRecognitionSuccessRate! < 0.6) {
+                if (lt(metrics.speechRecognitionSuccessRate, OPT.direction.speech.successRateLow)) {
                     return 'decrease'; // Bajar umbral para capturar más
-                } else if (metrics.speechRecognitionSuccessRate! > 0.9 && metrics.userFeedback! < 0.7) {
+                } else if (gt(metrics.speechRecognitionSuccessRate, OPT.direction.speech.successRateHigh) && lt(metrics.userFeedback, OPT.direction.speech.userFeedbackLow)) {
                     return 'increase'; // Subir umbral para reducir falsos positivos
                 }
                 break;
                 
             case 'ai_request_timeout':
                 // Aumentar si hay muchos timeouts, disminuir si es demasiado largo
-                if (metrics.timeoutRate! > 0.3) {
+                if (gt(metrics.timeoutRate, OPT.direction.aiTimeout.timeoutRateHigh)) {
                     return 'increase';
-                } else if (metrics.aiResponseTime! < 10000 && metrics.timeoutRate! < 0.1) {
+                } else if (lt(metrics.aiResponseTime, OPT.direction.aiTimeout.responseTimeFastMs) && lt(metrics.timeoutRate, OPT.direction.aiTimeout.timeoutRateLow)) {
                     return 'decrease';
                 }
                 break;
                 
             case 'cache_ttl':
                 // Aumentar si la respuesta de IA es lenta, disminuir si el uso de memoria es alto
-                if (metrics.aiResponseTime! > 20000 && metrics.memoryUsage! < 500) {
+                if (gt(metrics.aiResponseTime, OPT.direction.cache.responseTimeSlowMs) && lt(metrics.memoryUsage, OPT.direction.cache.memoryUsageLowMb)) {
                     return 'increase';
-                } else if (metrics.memoryUsage! > 800) {
+                } else if (gt(metrics.memoryUsage, OPT.direction.cache.memoryUsageHighMb)) {
                     return 'decrease';
                 }
                 break;
                 
             case 'animation_speed':
                 // Ajustar basado en feedback del usuario
-                if (metrics.userFeedback! < 0.6) {
-                    return Math.random() > 0.5 ? 'increase' : 'decrease'; // Exploración
+                if (lt(metrics.userFeedback, OPT.direction.animation.userFeedbackLow)) {
+                    return Math.random() > OPT.direction.animation.explorationThreshold ? 'increase' : 'decrease'; // Exploración
                 }
                 break;
                 
             case 'ui_refresh_rate':
                 // Disminuir si el uso de memoria es alto, aumentar si la tasa real es baja
-                if (metrics.memoryUsage! > 700) {
+                if (gt(metrics.memoryUsage, OPT.direction.uiRefresh.memoryUsageHighMb)) {
                     return 'decrease';
-                } else if (metrics.actualUIRefreshRate! < 45 && metrics.memoryUsage! < 400) {
+                } else if (lt(metrics.actualUIRefreshRate, OPT.direction.uiRefresh.actualRefreshRateLow) && lt(metrics.memoryUsage, OPT.direction.uiRefresh.memoryUsageLowMb)) {
                     return 'increase';
                 }
                 break;
                 
             case 'memory_cache_size':
                 // Aumentar si la respuesta de IA es lenta, disminuir si el uso de memoria es alto
-                if (metrics.aiResponseTime! > 15000 && metrics.memoryUsage! < 600) {
+                if (gt(metrics.aiResponseTime, OPT.direction.memoryCache.responseTimeSlowMs) && lt(metrics.memoryUsage, OPT.direction.memoryCache.memoryUsageLowMb)) {
                     return 'increase';
-                } else if (metrics.memoryUsage! > 900) {
+                } else if (gt(metrics.memoryUsage, OPT.direction.memoryCache.memoryUsageHighMb)) {
                     return 'decrease';
                 }
                 break;
                 
             case 'retry_max_attempts':
                 // Aumentar si hay muchos timeouts, disminuir si el sistema es inestable
-                if (metrics.timeoutRate! > 0.4) {
+                if (gt(metrics.timeoutRate, OPT.direction.retry.timeoutRateHigh)) {
                     return 'increase';
-                } else if (metrics.systemStability! < 0.7) {
+                } else if (lt(metrics.systemStability, OPT.direction.retry.systemStabilityLow)) {
                     return 'decrease';
                 }
                 break;
                 
             case 'backoff_base_delay':
                 // Aumentar si el sistema es inestable, disminuir si la respuesta es lenta
-                if (metrics.systemStability! < 0.7) {
+                if (lt(metrics.systemStability, OPT.direction.backoff.systemStabilityLow)) {
                     return 'increase';
-                } else if (metrics.aiResponseTime! > 25000) {
+                } else if (gt(metrics.aiResponseTime, OPT.direction.backoff.responseTimeSlowMs)) {
                     return 'decrease';
                 }
                 break;
@@ -488,8 +512,8 @@ class ParameterOptimizer {
     }
     
     private calculateNewValue(paramDef: ParameterValue, direction: 'increase' | 'decrease'): number {
-        const maxChange = paramDef.current * (DEFAULT_OPTIMIZATION_CONFIG.maxChangePerAdjustment / 100);
-        const change = Math.min(maxChange, paramDef.step * 3); // Máximo 3 pasos
+        const maxChange = paramDef.current * (DEFAULT_OPTIMIZATION_CONFIG.maxChangePerAdjustment / UNITS.percentScale);
+        const change = Math.min(maxChange, paramDef.step * OPT.runtime.maxStepsPerAdjustment); // Máximo 3 pasos
         
         let newValue = direction === 'increase' 
             ? paramDef.current + change
@@ -517,35 +541,35 @@ class ParameterOptimizer {
             case 'speech_recognition_confidence_threshold':
                 if (newValue < oldValue) {
                     // Bajar umbral → debería aumentar tasa de éxito
-                    improvement = 0.3 * (1 - (metrics.speechRecognitionSuccessRate || 0));
+                    improvement = OPT.improvement.speechDecreaseFactor * (1 - (metrics.speechRecognitionSuccessRate || 0));
                 } else {
                     // Subir umbral → debería mejorar precisión
-                    improvement = 0.2 * (1 - (metrics.userFeedback || 0));
+                    improvement = OPT.improvement.speechIncreaseFactor * (1 - (metrics.userFeedback || 0));
                 }
                 break;
                 
             case 'ai_request_timeout':
                 if (newValue > oldValue) {
                     // Aumentar timeout → debería reducir tasa de timeout
-                    improvement = 0.4 * (metrics.timeoutRate || 0);
+                    improvement = OPT.improvement.timeoutIncreaseFactor * (metrics.timeoutRate || 0);
                 } else {
                     // Disminuir timeout → debería mejorar tiempo de respuesta
-                    improvement = 0.2 * Math.max(0, (30000 - (metrics.aiResponseTime || 30000)) / 30000);
+                    improvement = OPT.improvement.timeoutDecreaseFactor * Math.max(0, (OPT.improvement.timeoutReferenceMs - (metrics.aiResponseTime || OPT.improvement.timeoutReferenceMs)) / OPT.improvement.timeoutReferenceMs);
                 }
                 break;
                 
             case 'cache_ttl':
                 if (newValue > oldValue) {
                     // Cache más larga → debería mejorar tiempo de respuesta
-                    improvement = 0.3 * Math.max(0, (50000 - (metrics.aiResponseTime || 50000)) / 50000);
+                    improvement = OPT.improvement.cacheIncreaseFactor * Math.max(0, (OPT.improvement.cacheResponseReferenceMs - (metrics.aiResponseTime || OPT.improvement.cacheResponseReferenceMs)) / OPT.improvement.cacheResponseReferenceMs);
                 } else {
                     // Cache más corta → debería reducir uso de memoria
-                    improvement = 0.3 * Math.min(1, (metrics.memoryUsage || 1000) / 1000);
+                    improvement = OPT.improvement.cacheDecreaseFactor * Math.min(1, (metrics.memoryUsage || OPT.improvement.cacheMemoryReferenceMb) / OPT.improvement.cacheMemoryReferenceMb);
                 }
                 break;
                 
             default:
-                improvement = 0.1; // Mejora base para otros parámetros
+                improvement = OPT.improvement.defaultFactor; // Mejora base para otros parámetros
         }
         
         return Math.max(0, Math.min(1, improvement));
@@ -559,19 +583,19 @@ class ParameterOptimizer {
     ): string {
         const paramName = parameter.replace(/_/g, ' ');
         const directionText = direction === 'increase' ? 'aumentar' : 'disminuir';
-        const improvementPercent = Math.round(improvement * 100);
+        const improvementPercent = Math.round(improvement * UNITS.percentScale);
         
         let reason = '';
         
         switch (parameter) {
             case 'speech_recognition_confidence_threshold':
-                reason = `Tasa de éxito de reconocimiento: ${Math.round((metrics.speechRecognitionSuccessRate || 0) * 100)}%`;
+                reason = `Tasa de éxito de reconocimiento: ${Math.round((metrics.speechRecognitionSuccessRate || 0) * UNITS.percentScale)}%`;
                 break;
             case 'ai_request_timeout':
-                reason = `Tasa de timeout: ${Math.round((metrics.timeoutRate || 0) * 100)}%, Tiempo de respuesta: ${Math.round((metrics.aiResponseTime || 0) / 1000)}s`;
+                reason = `Tasa de timeout: ${Math.round((metrics.timeoutRate || 0) * UNITS.percentScale)}%, Tiempo de respuesta: ${Math.round((metrics.aiResponseTime || 0) / UNITS.msPerSecond)}s`;
                 break;
             case 'cache_ttl':
-                reason = `Uso de memoria: ${Math.round(metrics.memoryUsage || 0)}MB, Tiempo de respuesta: ${Math.round((metrics.aiResponseTime || 0) / 1000)}s`;
+                reason = `Uso de memoria: ${Math.round(metrics.memoryUsage || 0)}MB, Tiempo de respuesta: ${Math.round((metrics.aiResponseTime || 0) / UNITS.msPerSecond)}s`;
                 break;
             default:
                 reason = `Métricas actuales dentro de rangos optimizables`;
@@ -582,15 +606,17 @@ class ParameterOptimizer {
     
     applyToSystemConfig(parameter: OptimizableParameter, value: number): void {
         // En una implementación real, esto actualizaría la configuración del sistema
-        console.log(`Aplicando ${parameter} = ${value}`);
         
         // Guardar en localStorage para persistencia
-        localStorage.setItem(`flu-param-${parameter}`, value.toString());
+        localSet(`flu-param-${parameter}`, value.toString());
         
-        // Notificar a los componentes del cambio
-        window.dispatchEvent(new CustomEvent('flu-parameter-changed', {
-            detail: { parameter, value }
-        }));
+        // Notificar el cambio de parámetro vía bus central de autonomía
+        emitAutonomyEvent({
+            type: 'parameter-changed',
+            level: 'info',
+            message: `Parámetro ${parameter} aplicado = ${value}`,
+            detail: { parameter, value },
+        });
     }
     
     private compareMetrics(before: PerformanceMetrics[], after: PerformanceMetrics[]): {
@@ -624,21 +650,21 @@ class ParameterOptimizer {
         // Calcular mejoras (normalizadas)
         const improvements = {
             speechRecognitionSuccessRate: avgAfter.speechRecognitionSuccessRate - avgBefore.speechRecognitionSuccessRate,
-            aiResponseTime: (avgBefore.aiResponseTime - avgAfter.aiResponseTime) / 10000, // Normalizar
+            aiResponseTime: (avgBefore.aiResponseTime - avgAfter.aiResponseTime) / OPT.normalization.responseTimeDivisorMs, // Normalizar
             timeoutRate: avgBefore.timeoutRate - avgAfter.timeoutRate,
-            memoryUsage: (avgBefore.memoryUsage - avgAfter.memoryUsage) / 100, // Normalizar
+            memoryUsage: (avgBefore.memoryUsage - avgAfter.memoryUsage) / OPT.normalization.memoryUsageDivisorMb, // Normalizar
             userFeedback: avgAfter.userFeedback - avgBefore.userFeedback,
             systemStability: avgAfter.systemStability - avgBefore.systemStability,
         };
         
         // Ponderar mejoras
         const weights = {
-            speechRecognitionSuccessRate: 0.2,
-            aiResponseTime: 0.15,
-            timeoutRate: 0.15,
-            memoryUsage: 0.1,
-            userFeedback: 0.25,
-            systemStability: 0.15,
+            speechRecognitionSuccessRate: AUTONOMY_THRESHOLD_DEFAULTS.optimization.weightSpeechSuccessRate,
+            aiResponseTime: AUTONOMY_THRESHOLD_DEFAULTS.optimization.weightAiResponseTime,
+            timeoutRate: AUTONOMY_THRESHOLD_DEFAULTS.optimization.weightTimeoutRate,
+            memoryUsage: AUTONOMY_THRESHOLD_DEFAULTS.optimization.weightMemoryUsage,
+            userFeedback: AUTONOMY_THRESHOLD_DEFAULTS.optimization.weightUserFeedback,
+            systemStability: AUTONOMY_THRESHOLD_DEFAULTS.optimization.weightSystemStability,
         };
         
         const overallImprovement = Object.entries(weights).reduce((sum, [metric, weight]) => {
@@ -659,7 +685,7 @@ class ParameterOptimizer {
             result.push({
                 name: 'speech_recognition_success_rate',
                 value: metrics.speechRecognitionSuccessRate,
-                weight: 0.2,
+                weight: OPT.normalization.speechSuccessRateMetricWeight,
                 goal: 'maximize',
             });
         }
@@ -667,8 +693,8 @@ class ParameterOptimizer {
         if (metrics.aiResponseTime !== undefined) {
             result.push({
                 name: 'ai_response_time',
-                value: 1 - Math.min(1, metrics.aiResponseTime / 60000), // Normalizar
-                weight: 0.15,
+                value: 1 - Math.min(1, metrics.aiResponseTime / OPT.normalization.mapResponseTimeDivisorMs), // Normalizar
+                weight: AUTONOMY_THRESHOLD_DEFAULTS.optimization.weightAiResponseTime,
                 goal: 'maximize', // Queremos menor tiempo = mayor valor
             });
         }
@@ -677,7 +703,7 @@ class ParameterOptimizer {
             result.push({
                 name: 'user_feedback',
                 value: metrics.userFeedback,
-                weight: 0.25,
+                weight: AUTONOMY_THRESHOLD_DEFAULTS.optimization.weightUserFeedback,
                 goal: 'maximize',
             });
         }
@@ -686,7 +712,7 @@ class ParameterOptimizer {
             result.push({
                 name: 'system_stability',
                 value: metrics.systemStability,
-                weight: 0.15,
+                weight: AUTONOMY_THRESHOLD_DEFAULTS.optimization.weightSystemStability,
                 goal: 'maximize',
             });
         }
@@ -709,7 +735,7 @@ class ParameterOptimizer {
     }
     
     getOptimizationHistory(): OptimizationResult[] {
-        return [...this.optimizationHistory];
+        return copyList(this.optimizationHistory);
     }
     
     getParameterValue(parameter: OptimizableParameter): number {
@@ -721,42 +747,32 @@ class ParameterOptimizer {
 // Clase principal de Auto Optimization
 // -----------------------------------------------------------
 
-export class AutoOptimizationSystem {
-    private config: AutoOptimizationConfig;
+export class AutoOptimizationSystem extends IntervalLifecycle<AutoOptimizationConfig> {
     private optimizer: ParameterOptimizer;
-    private evaluationIntervalId: number | null = null;
     
-    constructor(config: Partial<AutoOptimizationConfig> = {}) {
-        this.config = { ...DEFAULT_OPTIMIZATION_CONFIG, ...config };
-        this.optimizer = new ParameterOptimizer();
+    /** Punto de composición de dependencias (§2.4). */
+    static create(
+        config: Partial<AutoOptimizationConfig> = {},
+        deps: { optimizer?: ParameterOptimizer } = {},
+    ): AutoOptimizationSystem {
+        return new AutoOptimizationSystem(config, {
+            optimizer: deps.optimizer ?? new ParameterOptimizer(),
+        });
     }
-    
-    start(): void {
-        if (this.evaluationIntervalId !== null || !this.config.enabled) {
-            return;
-        }
-        
-        this.evaluationIntervalId = window.setInterval(() => {
-            this.evaluateAndOptimize().catch(error => {
-                console.error('Error en optimización automática:', error);
-            });
-        }, this.config.evaluationInterval);
-        
-        if (this.config.verboseLogging) {
-            console.log('AutoOptimization iniciado con intervalo:', this.config.evaluationInterval, 'ms');
-        }
+
+    constructor(
+        config: Partial<AutoOptimizationConfig> = {},
+        deps: { optimizer: ParameterOptimizer },
+    ) {
+        super({ ...DEFAULT_OPTIMIZATION_CONFIG, ...config }, 'evaluationInterval');
+        this.optimizer = deps.optimizer;
     }
-    
-    stop(): void {
-        if (this.evaluationIntervalId !== null) {
-            clearInterval(this.evaluationIntervalId);
-            this.evaluationIntervalId = null;
-        }
-        
-        if (this.config.verboseLogging) {
-            console.log('AutoOptimization detenido');
-        }
+    protected tick(): void {
+        fireAndForget(() => this.evaluateAndOptimize(), 'Error en optimizacion automatica');
     }
+
+
+
     
     async evaluateAndOptimize(): Promise<void> {
         if (!this.config.enabled) {
@@ -781,18 +797,9 @@ export class AutoOptimizationSystem {
                 
                 if (result && result.expectedImprovement >= this.config.minConfidenceThreshold) {
                     this.optimizer.applyOptimization(result);
-                    
-                    if (this.config.verboseLogging) {
-                        console.log('Optimización aplicada:', {
-                            parameter: result.parameter,
-                            oldValue: result.oldValue,
-                            newValue: result.newValue,
-                            expectedImprovement: result.expectedImprovement,
-                        });
-                    }
                 }
             } catch (error) {
-                console.error(`Error evaluando parámetro ${parameter}:`, error);
+                logCaughtError(`Error evaluando parámetro ${parameter}:`, error);
             }
         }
     }
@@ -819,19 +826,10 @@ export class AutoOptimizationSystem {
     getParameterValue(parameter: OptimizableParameter): number {
         return this.optimizer.getParameterValue(parameter);
     }
-    
-    updateConfig(newConfig: Partial<AutoOptimizationConfig>): void {
-        this.config = { ...this.config, ...newConfig };
-        
-        // Reiniciar si el intervalo cambió
-        if (this.evaluationIntervalId !== null && newConfig.evaluationInterval) {
-            this.stop();
-            this.start();
-        }
-    }
+
     
     getConfig(): AutoOptimizationConfig {
-        return { ...this.config };
+        return snapshotConfig(this.config);
     }
     
     resetParameter(parameter: OptimizableParameter): void {
@@ -845,20 +843,19 @@ export class AutoOptimizationSystem {
         // Aplicar al sistema
         this.optimizer.applyToSystemConfig(parameter, defaultValue);
         
-        console.log(`Parámetro ${parameter} restaurado a valor por defecto: ${defaultValue}`);
     }
     
     private getDefaultParameterValue(parameter: OptimizableParameter): number {
         // Valores por defecto basados en análisis inicial
         const defaults: Record<OptimizableParameter, number> = {
-            'speech_recognition_confidence_threshold': 0.7,
-            'ai_request_timeout': 30000,
-            'cache_ttl': 300000,
-            'animation_speed': 1.0,
-            'ui_refresh_rate': 60,
-            'memory_cache_size': 100,
-            'retry_max_attempts': 3,
-            'backoff_base_delay': 1000,
+            'speech_recognition_confidence_threshold': OPT.parameters.speechConfidence.current,
+            'ai_request_timeout': OPT.parameters.aiRequestTimeout.currentMs,
+            'cache_ttl': OPT.parameters.cacheTtl.currentMs,
+            'animation_speed': OPT.parameters.animationSpeed.current,
+            'ui_refresh_rate': OPT.parameters.uiRefreshRate.current,
+            'memory_cache_size': OPT.parameters.memoryCacheSize.current,
+            'retry_max_attempts': OPT.parameters.retryMaxAttempts.current,
+            'backoff_base_delay': OPT.parameters.backoffBaseDelay.currentMs,
         };
         
         return defaults[parameter];
@@ -869,25 +866,21 @@ export class AutoOptimizationSystem {
 // Instancia global (singleton)
 // -----------------------------------------------------------
 
-let globalAutoOptimization: AutoOptimizationSystem | null = null;
+const autoOptimizationSingleton = createModuleSingleton(
+    (config?: Partial<AutoOptimizationConfig>) => AutoOptimizationSystem.create(config),
+);
 
+/** Instancia global (creada la primera vez con la config dada). */
 export function getAutoOptimizationSystem(config?: Partial<AutoOptimizationConfig>): AutoOptimizationSystem {
-    if (!globalAutoOptimization) {
-        globalAutoOptimization = new AutoOptimizationSystem(config);
-    }
-    return globalAutoOptimization;
+    return autoOptimizationSingleton.get(config);
 }
 
 export function startGlobalAutoOptimization(config?: Partial<AutoOptimizationConfig>): AutoOptimizationSystem {
-    const system = getAutoOptimizationSystem(config);
-    system.start();
-    return system;
+    return autoOptimizationSingleton.start(config);
 }
 
 export function stopGlobalAutoOptimization(): void {
-    if (globalAutoOptimization) {
-        globalAutoOptimization.stop();
-    }
+    autoOptimizationSingleton.stop();
 }
 
 export function getCurrentParameterValues(): Record<OptimizableParameter, number> {

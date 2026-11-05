@@ -25,7 +25,7 @@ describe('veoVeo — inicio de partida', () => {
     test('start anuncia el primer objeto por su letra (manzana → M)', () => {
         const { session, startResult } = freshVeo();
         expect(startResult.prompt).toBe(
-            '¡Vamos a jugar a veo veo! Veo una cosita que empieza con la letra M. ¿Qué es?'
+            '¡Vamos a jugar a veo veo! Veo una cosita que empieza con la letra M y es una fruta roja y dulce. ¿Qué es?'
         );
         expect(startResult.valid).toBe(false);
         expect(startResult.gameOver).toBe(false);
@@ -57,7 +57,7 @@ describe('veoVeo — aciertos', () => {
         expect(session.round).toBe(2);
         expect(result.animation).toBe('Jump_in_place');
         expect(result.prompt).toBe(
-            '¡Correcto, es manzana! Veo una cosita que empieza con la letra S. ¿Qué es?'
+            '¡Correcto, es manzana! Veo una cosita que empieza con la letra S y es una cosa del cielo que da calor. ¿Qué es?'
         );
     });
 
@@ -91,7 +91,7 @@ describe('veoVeo — pistas y turnos incorrectos', () => {
         expect(result.valid).toBe(false);
         expect(result.gameOver).toBe(false);
         expect(result.error).toBe('respuesta incorrecta');
-        expect(result.prompt).toBe('¡Casi! Inténtalo otra vez. Veo una cosita que empieza con la letra M. ¿Qué es?');
+        expect(result.prompt).toBe(            '¡Casi! Inténtalo otra vez. Veo una cosita que empieza con la letra M y es una fruta roja y dulce. ¿Qué es?');
         expect(session.round).toBe(1); // no avanza
     });
 
@@ -102,7 +102,7 @@ describe('veoVeo — pistas y turnos incorrectos', () => {
         expect(result.score).toBe(0);
         expect(session.round).toBe(2);
         expect(result.prompt).toBe(
-            '¡Claro! Era manzana. Veo una cosita que empieza con la letra S. ¿Qué es?'
+            '¡Claro! Era manzana. Veo una cosita que empieza con la letra S y es una cosa del cielo que da calor. ¿Qué es?'
         );
     });
 

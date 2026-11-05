@@ -13,8 +13,9 @@
 // - Acierto → +1 punto, siguiente operación.
 // - Fin al alcanzar `rounds` operaciones.
 // ============================================================
-import type { GameEngine } from './gameEngine';
-import type { GameSession, GameTurnResult } from './types';
+import type { GameEngine } from './gameEngine.ts';
+import type { GameSession, GameTurnResult } from './types.ts';
+import { END_GAME_FRAMES, adoptRandom, baseSession, beginGame, readNumberCfg, gameOverResult, hasAnyToken, isStopOrSkipCommand, normalizeForMatch, pickRandom, readRounds, resetGameSession, resolveNumericAnswer, roundsOverMessage, turnResult } from './gameUtils.ts';
 
 const DEFAULT_ROUNDS = 3;
 const MAX_ROUNDS = 10;
@@ -32,21 +33,9 @@ const SKIP_FRAMES: readonly string[] = Object.freeze([
     'paso', 'otra', 'siguiente', 'no se', 'no sé', 'me rindo',
 ]);
 
-const END_FRAMES: readonly string[] = Object.freeze([
-    'salir del juego',
-    'terminar el juego',
-    'dejar de jugar',
-    'ya no quiero jugar',
-    'cerrar el juego',
-]);
+const END_FRAMES: readonly string[] = END_GAME_FRAMES;
 
-/** Números en letras (0-20) para robustez de ASR en voz. */
-const NUMBER_WORDS_ES: Record<string, number> = Object.freeze({
-    cero: 0, uno: 1, dos: 2, tres: 3, cuatro: 4, cinco: 5, seis: 6,
-    siete: 7, ocho: 8, nueve: 9, diez: 10, once: 11, doce: 12,
-    trece: 13, catorce: 14, quince: 15, dieciseis: 16, diecisiete: 17,
-    dieciocho: 18, diecinueve: 19, veinte: 20,
-});
+/** Números en letras y su resolución: fuente única en `gameUtils`. */
 
 interface CalculoMentalConfig {
     maxSuma: number;
@@ -65,34 +54,6 @@ interface CalculoMentalState {
 }
 
 type RandomSource = () => number;
-
-function clamp(value: number, min: number, max: number): number {
-    if (!Number.isFinite(value)) return min;
-    return Math.min(max, Math.max(min, Math.round(value)));
-}
-
-function stripDiacritics(text: string): string {
-    return text.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-}
-
-function normalizeForMatch(text = ''): string {
-    return stripDiacritics(text).toLowerCase().replace(/\s+/g, ' ').trim();
-}
-
-function hasToken(normalized = '', phrase = ''): boolean {
-    if (!phrase) return false;
-    const escaped = phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const pattern = new RegExp(`(^|\\s)${escaped}($|\\s|[.,;!?¡¿])`);
-    return pattern.test(normalized);
-}
-
-function hasAnyToken(normalized: string, phrases: readonly string[]): boolean {
-    return phrases.some((phrase) => hasToken(normalized, phrase));
-}
-
-function pickRandom<T>(items: readonly T[], rng: RandomSource): T {
-    return items[Math.floor(rng() * items.length)];
-}
 
 /**
  * Genera una operación determinista: suma acotada por maxSuma
@@ -118,28 +79,11 @@ function operationPrompt(state: CalculoMentalState): string {
     return `¿Cuánto es ${state.a} ${OP_WORD[state.op]} ${state.b}?`;
 }
 
-/**
- * Resuelve una respuesta numérica a partir del texto normalizado.
- * Espejo local del algoritmo de resolveNumberValue: primero dígitos
- * ("12", "3.5") y, si no, un número escrito en letras.
- */
-function resolveNumericAnswer(normalized: string): number | null {
-    const digits = normalized.match(/(\d+(?:[.,]\d+)?)/);
-    if (digits) {
-        const value = Number.parseFloat(digits[1].replace(',', '.'));
-        if (Number.isFinite(value)) return Math.round(value);
-    }
-    for (const token of normalized.split(/\s+/)) {
-        if (token in NUMBER_WORDS_ES) return NUMBER_WORDS_ES[token];
-    }
-    return null;
-}
-
-export function createCalculoMentalEngine(options?: { random?: RandomSource }): GameEngine {
+export function createCalculoMentalEngine(options?: { random?: RandomSource }): GameEngine<CalculoMentalState> {
     let rng: RandomSource = options?.random ?? Math.random;
 
     const readConfig = (cfg: Record<string, unknown> | undefined): CalculoMentalConfig => {
-        const maxSuma = clamp(Number(cfg?.maxSuma) || DEFAULT_MAX_SUMA, 2, MAX_SUMA);
+        const maxSuma = readNumberCfg(cfg, ['maxSuma'], DEFAULT_MAX_SUMA, MAX_SUMA, 2);
         const operaciones = Array.isArray(cfg?.operaciones)
             ? (cfg.operaciones as unknown[]).filter((op): op is string =>
                   typeof op === 'string' && op in OP_WORD)
@@ -149,79 +93,40 @@ export function createCalculoMentalEngine(options?: { random?: RandomSource }): 
             operaciones: operaciones.length > 0 ? operaciones : [...DEFAULT_OPERACIONES],
         };
     };
-
-    const readRounds = (cfg: Record<string, unknown> | undefined): number => {
-        const rounds = Number(cfg?.rounds) || Number(cfg?.defaultRounds) || DEFAULT_ROUNDS;
-        return clamp(rounds, 1, MAX_ROUNDS);
-    };
-
-    const adoptRandom = (cfg: Record<string, unknown> | undefined): void => {
-        if (cfg && typeof cfg.random === 'function') {
-            rng = cfg.random as RandomSource;
-        }
-    };
-
-    const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): CalculoMentalState => {
-        adoptRandom(cfg);
+    const buildState = (cfg: Record<string, unknown> | undefined): CalculoMentalState => {
+        rng = adoptRandom(rng, cfg);
         const config = readConfig(cfg);
-        const state: CalculoMentalState = {
+        return {
             ...generateOperation(config.operaciones, config.maxSuma, rng),
             maxSuma: config.maxSuma,
             operaciones: config.operaciones,
-            maxRounds: readRounds(cfg),
+            maxRounds: readRounds(cfg, DEFAULT_ROUNDS, MAX_ROUNDS),
             phase: 'announce',
         };
-        session.state = state as unknown as Record<string, unknown>;
-        session.score = 0;
-        session.round = 1;
-        return state;
     };
+
+    const reset = (session: GameSession, cfg: Record<string, unknown> | undefined): CalculoMentalState =>
+        resetGameSession(session, cfg, buildState);
 
     return {
         id: 'calculo_mental',
 
-        createSession(optionsConfig: Record<string, unknown> = {}): GameSession {
-            adoptRandom(optionsConfig);
-            const config = readConfig(optionsConfig);
-            return {
-                id: 'calculo_mental',
-                state: {
-                    ...generateOperation(config.operaciones, config.maxSuma, rng),
-                    maxSuma: config.maxSuma,
-                    operaciones: config.operaciones,
-                    maxRounds: readRounds(optionsConfig),
-                    phase: 'announce',
-                },
-                score: 0,
-                round: 1,
-            };
+        createSession(optionsConfig: Record<string, unknown> = {}): GameSession<CalculoMentalState> {
+            return baseSession('calculo_mental', buildState(optionsConfig));
         },
 
         start(session: GameSession, optionsConfig: Record<string, unknown> = {}): GameTurnResult {
-            reset(session, optionsConfig);
-            const state = session.state as unknown as CalculoMentalState;
-            return {
-                prompt: `¡Vamos a jugar a cálculo mental! ${operationPrompt(state)}`,
-                valid: false,
-                gameOver: false,
-                score: session.score,
-                animation: 'Idle',
-                emotion: 'excited',
-            };
+            return beginGame(session, optionsConfig, reset, (raw) => {
+                const state = raw as CalculoMentalState;
+                return `¡Vamos a jugar a cálculo mental! ${operationPrompt(state)}`;
+            }, { emotion: 'excited' });
         },
 
         turn(session: GameSession, text = ''): GameTurnResult {
-            const state = session.state as unknown as CalculoMentalState;
+            const state = session.state as CalculoMentalState;
 
             if (state.phase === 'done') {
-                return {
-                    prompt: 'Ya terminamos de jugar cálculo mental. ¿Jugamos otra vez?',
-                    valid: false,
-                    gameOver: true,
-                    score: session.score,
-                    animation: 'Idle',
-                    emotion: 'happy',
-                };
+                return gameOverResult('Ya terminamos de jugar cálculo mental. ¿Jugamos otra vez?', session.score);
             }
 
             const normalized = normalizeForMatch(text);
@@ -232,39 +137,21 @@ export function createCalculoMentalEngine(options?: { random?: RandomSource }): 
                 const prevAnswer = state.answer;
                 if (session.round > state.maxRounds) {
                     state.phase = 'done';
-                    return {
-                        prompt: `Terminamos con ${session.score} puntos. ¡Muy bien jugado!`,
-                        valid: false,
-                        gameOver: true,
-                        score: session.score,
-                        animation: 'Dance',
-                        emotion: 'happy',
-                    };
+                    return gameOverResult(
+                            roundsOverMessage(session.score),
+                            session.score,
+                            { animation: 'Dance' },
+                        );
                 }
                 const next = generateOperation(state.operaciones, state.maxSuma, rng);
                 Object.assign(state, next);
-                return {
-                    prompt: `Era ${prevAnswer}. ${operationPrompt(state)}`,
-                    valid: false,
-                    gameOver: false,
-                    score: session.score,
-                    animation: 'Idle',
-                    emotion: 'neutral',
-                };
+                return turnResult(`Era ${prevAnswer}. ${operationPrompt(state)}`, session.score);
             }
 
             // Intento numérico.
             const answer = resolveNumericAnswer(normalized);
             if (answer === null) {
-                return {
-                    prompt: `No logré reconocer un número. ${operationPrompt(state)}`,
-                    valid: false,
-                    gameOver: false,
-                    score: session.score,
-                    animation: 'Idle',
-                    emotion: 'neutral',
-                    error: 'no se reconoció ningún número',
-                };
+                return turnResult(`No logré reconocer un número. ${operationPrompt(state)}`, session.score, { error: 'no se reconoció ningún número' });
             }
 
             if (answer === state.answer) {
@@ -276,43 +163,24 @@ export function createCalculoMentalEngine(options?: { random?: RandomSource }): 
                 session.round += 1;
                 if (session.round > state.maxRounds) {
                     state.phase = 'done';
-                    return {
-                        prompt: `¡Perfecto! Completaste ${state.maxRounds} operaciones con ${session.score} puntos. ¡Eres una calculadora humana!`,
-                        valid: true,
-                        gameOver: true,
-                        score: session.score,
-                        animation: 'Dance',
-                        emotion: 'happy',
-                    };
+                    return gameOverResult(
+                            `¡Perfecto! Completaste ${state.maxRounds} operaciones con ${session.score} puntos. ¡Eres una calculadora humana!`,
+                            session.score,
+                            { valid: true, won: true, animation: 'Dance' },
+                        );
                 }
                 const next = generateOperation(state.operaciones, state.maxSuma, rng);
                 Object.assign(state, next);
-                return {
-                    prompt: `¡Correcto! ${a} ${OP_WORD[op]} ${b} es ${result}. Siguiente: ${operationPrompt(state)}`,
-                    valid: true,
-                    gameOver: false,
-                    score: session.score,
-                    animation: 'Jump_in_place',
-                    emotion: 'happy',
-                };
+                return turnResult(`¡Correcto! ${a} ${OP_WORD[op]} ${b} es ${result}. Siguiente: ${operationPrompt(state)}`, session.score, { valid: true, animation: 'Jump_in_place', emotion: 'happy' });
             }
 
             // Respuesta incorrecta → reintenta la misma operación.
-            return {
-                prompt: `¡Casi! Inténtalo otra vez. ${operationPrompt(state)}`,
-                valid: false,
-                gameOver: false,
-                score: session.score,
-                animation: 'Idle',
-                emotion: 'encouraging',
-                error: 'respuesta incorrecta',
-            };
+            return turnResult(`¡Casi! Inténtalo otra vez. ${operationPrompt(state)}`, session.score, { emotion: 'encouraging', error: 'respuesta incorrecta' });
         },
 
         isGameCommand(text = ''): boolean {
-            const normalized = normalizeForMatch(text);
-            return END_FRAMES.some((frame) => normalized.includes(frame))
-                || SKIP_FRAMES.some((frame) => hasToken(normalized, frame));
+            return isStopOrSkipCommand(text, END_FRAMES, SKIP_FRAMES);
         },
     };
 }
+export const CALCULO_MENTAL_COMMAND_FRAMES = Object.freeze({ SKIP_FRAMES, END_FRAMES })

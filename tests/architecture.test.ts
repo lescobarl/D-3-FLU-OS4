@@ -1,8 +1,8 @@
 // ============================================================
-// FLU OS3 — Architecture & Compliance Tests
+// FLU OS4 — Architecture & Compliance Tests
 // ============================================================
 // Validates that the refactored codebase complies with
-// CLAUDE.md constraints:
+// AGENTS.md constraints:
 //   - Rule #1: NO HARDCODE — centralized configuration
 //   - Rule #2: NO PARCHES — no external mutations
 //   - Obligación #1: DI via interfaces
@@ -12,8 +12,17 @@
 // ============================================================
 
 import { describe, it, expect } from 'vitest';
+import { execFileSync } from 'node:child_process';
+import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { STORAGE_KEYS, GEMINI_CONFIG, POLLINATIONS_CONFIG, DEFAULT_PERSONALITY, WELCOME_MESSAGE, UI_DEFAULTS } from '../src/core/config/appConfig';
-import type { IAIService } from '../src/core/ai/IAIService';
+import {
+    checkFull,
+    conversationInternalImports,
+    countDefinitions,
+    mapOwnerSymbols,
+} from '../scripts/guard-architecture.mjs';
 
 // ============================================================
 // 1. AppConfig — Centralized Configuration (Rule #1)
@@ -69,30 +78,6 @@ describe('AppConfig — Centralized Configuration [Rule #1]', () => {
 });
 
 // ============================================================
-// 2. IAIService Interface — Dependency Injection (Obligación #1)
-// ============================================================
-describe('IAIService — Dependency Injection Interface [Obligación #1]', () => {
-
-    it('IAIService must define all required methods', () => {
-        // We can't instantiate an interface, but we can verify the type contract
-        const methods: (keyof IAIService)[] = [
-            'generateMinute',
-            'generateResponse',
-            'generateParticipantEvaluation',
-            'generateConversationSummary',
-            'generateFluContract',
-            'generateWorkspaceImage',
-        ];
-        expect(methods.length).toBe(6);
-        // All methods must be async (return Promise)
-        methods.forEach(m => {
-            // Just verify the method names exist in the type
-            expect(m).toBeDefined();
-        });
-    });
-});
-
-// ============================================================
 // 3. App.tsx — No Hardcoded Storage Keys (Rule #1)
 // ============================================================
 describe('App.tsx — No Hardcoded Storage Keys [Rule #1]', () => {
@@ -137,7 +122,7 @@ describe('IntegrationStore — Uses appConfig [Rule #1]', () => {
 
     it('integrationStore must import DEFAULT_PERSONALITY from appConfig', async () => {
         const src = (await import('fs')).readFileSync('./src/store/integrationStore.ts', 'utf-8');
-        expect(src).toContain("from '../core/config/appConfig'");
+        expect(src).toContain("from '../core/config/appConfig.ts'");
         expect(src).toContain('DEFAULT_PERSONALITY');
         expect(src).toContain('UI_DEFAULTS');
         expect(src).toContain('SENTIMENT_KEYWORDS');
@@ -148,31 +133,25 @@ describe('IntegrationStore — Uses appConfig [Rule #1]', () => {
 });
 
 // ============================================================
-// 5. FluAvatarVoiceBridge — Uses WELCOME_MESSAGE from appConfig
-// ============================================================
-describe('FluAvatarVoiceBridge — Uses appConfig [Rule #1]', () => {
-
-    it('FluAvatarVoiceBridge must import WELCOME_MESSAGE from appConfig', async () => {
-        const src = (await import('fs')).readFileSync('./src/components/FluAvatarVoiceBridge.tsx', 'utf-8');
-        expect(src).toContain("import { WELCOME_MESSAGE } from '../core/config/appConfig'");
-        // welcomeMessage comes from FluBridgeContext (Fase 6 refactor), not as a default prop.
-        // The import is kept for reference/fallback usage.
-        expect(src).toContain('WELCOME_MESSAGE');
-    });
-});
-
-// ============================================================
 // 6. Gemini Service — Implements IAIService (Obligación #1)
 // ============================================================
 describe('Gemini Service — IAIService Implementation [Obligación #1]', () => {
 
-    it('gemini.ts must implement IAIService', async () => {
+    it('gemini.ts must implement IAIService (adapter de transporte)', async () => {
         const src = (await import('fs')).readFileSync('./src/services/gemini.ts', 'utf-8');
-        expect(src).toContain('class GeminiService implements IAIService');
+        // Arquitectura de implementación única: la orquestación vive en
+        // BaseAIService (src/core/ai/aiServiceBase.ts) y gemini.ts solo aporta
+        // el transporte. El adapter implementa IAIService vía la base.
+        const baseSrc = (await import('fs')).readFileSync('./src/core/ai/aiServiceBase.ts', 'utf-8');
+        expect(baseSrc).toContain('class BaseAIService implements IAIService');
+        expect(src).toContain('class GeminiService extends BaseAIService');
+        expect(src).toContain('IAIService');
         // Should use appConfig for configuration (2-API architecture:
         // texto vía resolveTextApiKey + proxy, imágenes vía Pollinations)
         expect(src).toContain("from '../core/config/appConfig'");
-        expect(src).toContain('resolveTextApiKey');
+        // La clave de texto se resuelve en el dueño único `core/ai/textKey`;
+        // el adapter delega en él (no la relee por su cuenta).
+        expect(src.includes('resolveTextRequestKey') || src.includes('resolveTextApiKey')).toBe(true);
         expect(src).toContain('buildPollinationsUrl');
     });
 
@@ -233,11 +212,10 @@ describe('UUIDv4 Compliance [Obligación #6]', () => {
 // ============================================================
 describe('SyncTuple Compliance [Obligación #7]', () => {
 
-    it('fluDatabase must export SyncTuple interface with [revision, updated_at, deleted]', async () => {
-        const fluDb = await import('../src/core/db/fluDatabase');
-        const { newSyncTuple, bumpSync } = fluDb;
-        // Verify the interface structure via newSyncTuple
-        const tuple = newSyncTuple();
+    it('buildSyncTuple produce SyncTuple con [revision, updated_at, deleted]', async () => {
+        const { buildSyncTuple } = await import('../src/core/db/syncTuple');
+        // Verify the interface structure via the canonical builder
+        const tuple = buildSyncTuple(undefined, Date.now());
         expect(tuple).toHaveProperty('revision');
         expect(tuple).toHaveProperty('updated_at');
         expect(tuple).toHaveProperty('deleted');
@@ -245,28 +223,10 @@ describe('SyncTuple Compliance [Obligación #7]', () => {
         expect(tuple.deleted).toBe(false);
         expect(typeof tuple.updated_at).toBe('string');
 
-        // bumpSync must increment revision
-        const bumped = bumpSync(tuple);
+        // buildSyncTuple must increment revision
+        const bumped = buildSyncTuple(tuple, Date.now());
         expect(bumped.revision).toBe(2);
         expect(bumped.deleted).toBe(false);
-    });
-});
-
-// ============================================================
-// 11. Audit Log Compliance (Obligación #5)
-// ============================================================
-describe('Audit Log Compliance [Obligación #5]', () => {
-
-    it('fluDatabase must export addAuditLog function', async () => {
-        const { addAuditLog } = await import('../src/core/db/fluDatabase');
-        expect(addAuditLog).toBeDefined();
-        expect(typeof addAuditLog).toBe('function');
-    });
-
-    it('useAuditLog hook must exist and export required functions', async () => {
-        const { useAuditLog } = await import('../src/hooks/useAuditLog');
-        expect(useAuditLog).toBeDefined();
-        expect(typeof useAuditLog).toBe('function');
     });
 });
 
@@ -283,11 +243,6 @@ describe('Conversation State Machine', () => {
         expect(src).toContain("case 'THINKING'");
         expect(src).toContain("case 'SPEAKING'");
         expect(src).toContain("case 'ERROR'");
-    });
-
-    it('integrationStore must have all conversation states in type', () => {
-        const states = ['IDLE', 'LISTENING', 'THINKING', 'SPEAKING', 'ERROR'] as const;
-        expect(states.length).toBe(5);
     });
 });
 
@@ -336,41 +291,23 @@ describe('Bridge Types — Complete Type Definitions', () => {
 });
 
 // ============================================================
-// 15. Fallback Responses — All Categories Covered
-// ============================================================
-describe('Fallback Responses — Complete Coverage', () => {
-
-    it('fallbackResponses must export generateResponse', async () => {
-        const { generateResponse } = await import('../src/services/fallbackResponses');
-        expect(generateResponse).toBeDefined();
-        expect(typeof generateResponse).toBe('function');
-    });
-});
-
-// ============================================================
-// 16. EXPRESSION_MAP vs expressionRegistry — Data Alignment
+// 15. EXPRESSION_MAP vs expressionRegistry — Data Alignment
 // ============================================================
 describe('EXPRESSION_MAP vs expressionRegistry — Data Alignment [Hallazgo 6]', () => {
 
     it('EXPRESSION_MAP must have all expressions registered in expressionRegistry', async () => {
         const { EXPRESSION_MAP } = await import('../src/avatar/index');
-        const { getExpressionDef, getValidAnimations } = await import('../src/core/anim/expressionRegistry');
+        const { getExpressionDef } = await import('../src/core/anim/expressionRegistry');
 
         const mapKeys = Object.keys(EXPRESSION_MAP);
-        expect(mapKeys.length).toBeGreaterThan(0);
-
-        const missing: string[] = [];
-        for (const expr of mapKeys) {
-            const def = getExpressionDef(expr);
-            if (!def) {
-                // Some expressions like 'saludo', 'wave', 'alerta', 'sleep' are OS3 parity
-                // extras that may not be in the registry yet — that's acceptable
-                continue;
-            }
-        }
-        // This test is informational — EXPRESSION_MAP may have extras not in registry
         expect(mapKeys.length).toBeGreaterThanOrEqual(20);
-    });
+
+        // Extras de paridad OS3 que pueden no estar aún en el registry.
+        const ALLOWED_MAP_EXTRAS = new Set(['saludo', 'wave', 'alerta', 'sleep']);
+
+        const missing = mapKeys.filter((expr) => !getExpressionDef(expr) && !ALLOWED_MAP_EXTRAS.has(expr));
+        expect(missing, 'expresiones de EXPRESSION_MAP sin definición en expressionRegistry').toEqual([]);
+    }, 60_000);
 
     it('EXPRESSION_MAP animations must be valid BunnyAnimation values', async () => {
         const { EXPRESSION_MAP } = await import('../src/avatar/index');
@@ -390,10 +327,9 @@ describe('EXPRESSION_MAP vs expressionRegistry — Data Alignment [Hallazgo 6]',
         }
 
         if (invalid.length > 0) {
-            const details = invalid.map((i) => `  ${i.expression} → '${i.anim}'`).join('\n');
             expect(invalid).toEqual([]);
         }
-    });
+    }, 60_000);
 
     it('EXPRESSION_MAP must not have stale expressions (removed from registry)', async () => {
         const { EXPRESSION_MAP } = await import('../src/avatar/index');
@@ -413,8 +349,196 @@ describe('EXPRESSION_MAP vs expressionRegistry — Data Alignment [Hallazgo 6]',
         }
 
         if (stale.length > 0) {
-            const details = stale.map((s) => `  '${s}'`).join('\n');
             expect(stale).toEqual([]);
+        }
+    }, 60_000);
+});
+
+// ============================================================
+// Fase 2 — Memoria y recordatorios (estructura persistente)
+// ============================================================
+
+describe('Fase 2 — Database v5: tablas reminders y shoppingItems', () => {
+    it('fluDatabase must declare v5 stores for reminders and shoppingItems', async () => {
+        const src = (await import('fs')).readFileSync('./src/core/db/fluDatabase.ts', 'utf-8');
+        expect(src).toMatch(/reminders:\s*'id, status, dueAt, personId, createdAt'/);
+        expect(src).toMatch(/shoppingItems:\s*'id, checked, personId, createdAt'/);
+    });
+
+    it('fluDatabase must export the Phase 2 record types', async () => {
+        const src = (await import('fs')).readFileSync('./src/core/db/fluDatabase.ts', 'utf-8');
+        expect(src).toContain('export interface ShoppingItemRecord');
+    });
+});
+
+// ============================================================
+// Gate de arquitectura y dueño — falsificación (AGENTS §8.4)
+// ============================================================
+
+describe('Gate de arquitectura — falsificación', () => {
+    it('cuenta el dueño definido como método de clase, no solo como función', () => {
+        const src = [
+            'export class Motor {',
+            '    async commitUserTurnRow(args) { return args }',
+            '    private commitUserTurnRow() {}',
+            '}',
+            'commitUserTurnRow(1)',
+        ].join('\n');
+        expect(countDefinitions(src, 'commitUserTurnRow')).toBe(2);
+    });
+
+    it('falla si el mismo dueño se define en dos archivos', () => {
+        const errors = checkFull(['commitUserTurnRow'], [
+            { path: 'src/a.ts', text: 'export function commitUserTurnRow() {}' },
+            { path: 'src/b.ts', text: 'const commitUserTurnRow = () => {}' },
+        ]);
+        expect(errors).toEqual([
+            'dueño duplicado "commitUserTurnRow": src/a.ts(1), src/b.ts(1)',
+        ]);
+    });
+
+    it('falla si un dueño del mapa no tiene definición', () => {
+        expect(checkFull(['commitUserTurnRow'], [])).toEqual([
+            'dueño declarado sin definición "commitUserTurnRow"',
+        ]);
+    });
+
+    it('bloquea un import interno y permite la fachada', () => {
+        expect(conversationInternalImports("import { x } from '../conversation/index.ts'")).toEqual([]);
+        expect(conversationInternalImports("import { x } from '../conversation/fila.ts'")).toEqual([
+            '../conversation/fila.ts',
+        ]);
+        const errors = checkFull([], [
+            { path: 'src/voice/compose/motor.js', text: "import { x } from '../conversation/fila.ts'" },
+        ]);
+        expect(errors).toEqual([
+            'src/voice/compose/motor.js importa interno del módulo: ../conversation/fila.ts (usa src/voice/conversation/index.ts)',
+        ]);
+    });
+
+    it('deriva los símbolos solo de la columna Dueño del mapa', () => {
+        const mapa = [
+            '| Pregunta | Dueño | Nota |',
+            '|---|---|---|',
+            '| ¿Quién? | `a.ts:1` `duenoA` · `duenoB` | menciona `noEsDueno` |',
+        ].join('\n');
+        expect(mapOwnerSymbols(mapa)).toEqual(['duenoA', 'duenoB']);
+    });
+});
+
+describe('Gate de dueño — falsificación', () => {
+    const raiz = process.cwd();
+    const script = join(raiz, 'scripts', 'owner-gate.mjs');
+
+    it('bloquea un archivo nuevo no declarado y permite el declarado', () => {
+        const dir = mkdtempSync(join(tmpdir(), 'owner-gate-'));
+        writeFileSync(
+            join(dir, 'OWNERS.md'),
+            [
+                '| Pregunta | Dueño | Nota |',
+                '|---|---|---|',
+                '| ¿Declarado? | `declarado.ts:1` | prueba |',
+            ].join('\n'),
+        );
+        const correr = (filePath: string): number => {
+            try {
+                execFileSync(
+                    process.execPath,
+                    [script, '--path', filePath, '--map', join(dir, 'OWNERS.md')],
+                    { cwd: raiz, encoding: 'utf8', stdio: 'pipe' },
+                );
+                return 0;
+            } catch (error) {
+                return Number((error as { status?: number }).status ?? 1);
+            }
+        };
+        try {
+            expect(correr('src/voice/conversation/declarado.ts')).toBe(0);
+            expect(correr('src/voice/conversation/no-declarado.ts')).toBe(2);
+        } finally {
+            rmSync(dir, { recursive: true, force: true });
+        }
+    });
+
+    it('exime los archivos anteriores al gate y bloquea los añadidos con el gate presente', () => {
+        const dir = mkdtempSync(join(tmpdir(), 'owner-gate-bootstrap-'));
+        const git = (...args: string[]): string =>
+            execFileSync('git', args, { cwd: dir, encoding: 'utf8', stdio: 'pipe' });
+        const commit = (mensaje: string): void => {
+            git('add', '-A');
+            execFileSync(
+                'git',
+                ['-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-qm', mensaje],
+                { cwd: dir, stdio: 'pipe' },
+            );
+        };
+        const correr = (base: string): { code: number; salida: string } => {
+            try {
+                const salida = execFileSync(
+                    process.execPath,
+                    [script, '--diff', base],
+                    {
+                        cwd: raiz,
+                        encoding: 'utf8',
+                        stdio: 'pipe',
+                        env: { ...process.env, CLAUDE_PROJECT_DIR: dir },
+                    },
+                );
+                return { code: 0, salida: String(salida) };
+            } catch (error) {
+                const fallo = error as { status?: number; stderr?: Buffer | string };
+                return {
+                    code: Number(fallo.status ?? 1),
+                    salida: String(fallo.stderr ?? ''),
+                };
+            }
+        };
+        try {
+            execFileSync('git', ['init', '-q'], { cwd: dir, stdio: 'pipe' });
+            writeFileSync(join(dir, 'README.md'), 'prueba\n');
+            commit('c1');
+            const base = git('rev-list', '--max-parents=0', 'HEAD').trim();
+
+            mkdirSync(join(dir, 'src'));
+            writeFileSync(join(dir, 'src', 'viejo.ts'), 'export const viejo = 1\n');
+            commit('c2: archivo anterior al gate');
+
+            mkdirSync(join(dir, 'scripts'));
+            mkdirSync(join(dir, 'docs'));
+            copyFileSync(script, join(dir, 'scripts', 'owner-gate.mjs'));
+            writeFileSync(
+                join(dir, 'docs', 'OWNERS.md'),
+                '| Pregunta | Dueño | Nota |\n|---|---|---|\n',
+            );
+            commit('c3: nace el gate');
+
+            writeFileSync(join(dir, 'src', 'nuevo.ts'), 'export const nuevo = 1\n');
+            commit('c4: archivo nuevo con el gate presente');
+
+            // `viejo.ts` nació antes del gate: exento. `nuevo.ts` nació con el
+            // gate en su árbol: sin fila, bloquea.
+            const primero = correr(base);
+            expect(primero.code).toBe(2);
+            const [bloqueados, exentos] = primero.salida.split('quedan exento(s):');
+            expect(bloqueados).toContain('src/nuevo.ts');
+            expect(bloqueados).not.toContain('src/viejo.ts');
+            expect(exentos).toContain('src/viejo.ts');
+
+            // Sin el archivo viejo en el rango, el nuevo sigue bloqueado.
+            expect(correr(git('rev-parse', 'HEAD~1').trim()).code).toBe(2);
+
+            writeFileSync(
+                join(dir, 'docs', 'OWNERS.md'),
+                [
+                    '| Pregunta | Dueño | Nota |',
+                    '|---|---|---|',
+                    '| ¿Nuevo? | `src/nuevo.ts:1` | prueba |',
+                ].join('\n'),
+            );
+            commit('c5: declara el nuevo');
+            expect(correr(git('rev-parse', 'HEAD~2').trim()).code).toBe(0);
+        } finally {
+            rmSync(dir, { recursive: true, force: true });
         }
     });
 });

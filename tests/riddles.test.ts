@@ -24,7 +24,7 @@ describe('riddles — inicio de partida', () => {
     test('start anuncia la primera adivinanza (pera)', () => {
         const { session, startResult } = freshRiddles();
         expect(startResult.prompt).toBe(
-            '¡Vamos a jugar a las adivinanzas! Soy amarillo por fuera y blanco por dentro, y me tienes que pelar para comerme. ¿Qué soy?'
+            '¡Vamos a jugar a las adivinanzas! Soy una fruta con forma de gota, mi piel es verde o amarilla y por dentro soy blanca y jugosa ¿Qué soy?'
         );
         expect(startResult.valid).toBe(false);
         expect(startResult.gameOver).toBe(false);
@@ -78,7 +78,7 @@ describe('riddles — respuesta incorrecta y límites de palabra', () => {
         expect(result.gameOver).toBe(false);
         expect(result.error).toBe('respuesta incorrecta');
         expect(result.prompt).toBe(
-            '¡Casi! Inténtalo otra vez. Soy amarillo por fuera y blanco por dentro, y me tienes que pelar para comerme. ¿Qué soy?'
+            '¡Casi! Inténtalo otra vez. Soy una fruta con forma de gota, mi piel es verde o amarilla y por dentro soy blanca y jugosa ¿Qué soy?'
         );
         expect(session.round).toBe(1); // no avanza
     });

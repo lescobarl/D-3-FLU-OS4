@@ -7,7 +7,9 @@
 // - getGameEngine resuelve SOLO juegos del catálogo activo.
 // ============================================================
 import { describe, test, expect } from 'vitest';
-import { matchGameIntent, getGameEngine, isGameId, GAME_IDS } from '../src/core/games/gameCatalog';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { matchGameIntent, getGameEngine, isGameId, GAME_IDS, GAME_CATALOG, END_GAME_FRAMES } from '../src/core/games/gameCatalog';
 
 describe('gameCatalog — matchGameIntent (guardia triple)', () => {
     test('"ok flu, vamos a jugar a las adivinanzas" → adivinanzas', () => {
@@ -64,9 +66,9 @@ describe('gameCatalog — matchGameIntent (guardia triple)', () => {
         expect(matchGameIntent('')).toBeNull();
     });
 
-    test('juego en GAME_IDS pero NO en el catálogo → null (sin dummies)', () => {
-        // 'ahorcado' es un id válido pero NO está implementado.
-        expect(matchGameIntent('juguemos a ahorcado')).toBeNull();
+    test('juego inexistente (fuera de GAME_IDS) → null (sin dummies)', () => {
+        // 'piedra_papel' no es un id válido ni está en el catálogo.
+        expect(matchGameIntent('juguemos a piedra papel o tijera')).toBeNull();
     });
 
     test('"juguemos a veo veo" → veo_veo', () => {
@@ -109,8 +111,8 @@ describe('gameCatalog — getGameEngine (solo catálogo activo)', () => {
         expect(getGameEngine('piedra_papel' as never)).toBeNull();
     });
 
-    test('id en GAME_IDS pero sin motor (ahorcado) → null', () => {
-        expect(getGameEngine('ahorcado' as never)).toBeNull();
+    test('id inexistente → null', () => {
+        expect(getGameEngine('piedra_papel' as never)).toBeNull();
     });
 
     test('veo_veo → motor disponible', () => {
@@ -180,5 +182,101 @@ describe('gameCatalog — isGameId / GAME_IDS', () => {
         expect(GAME_IDS.length).toBeGreaterThan(0);
         expect(GAME_IDS).toContain('simon_dice');
         expect(GAME_IDS).toContain('adivinanzas');
+    });
+});
+
+describe('gameCatalog — END_GAME_FRAMES (control data-driven de partida activa)', () => {
+    test('catálogo congelado y no vacío, todas las frases son texto no vacío', () => {
+        expect(Object.isFrozen(END_GAME_FRAMES)).toBe(true);
+        expect(END_GAME_FRAMES.length).toBeGreaterThan(0);
+        for (const frame of END_GAME_FRAMES) {
+            expect(typeof frame).toBe('string');
+            expect(frame.trim().length).toBeGreaterThan(0);
+        }
+    });
+
+    test('incluye las frases de salida documentadas del fast-path de voz', () => {
+        expect(END_GAME_FRAMES).toEqual(expect.arrayContaining([
+            'salir del juego',
+            'terminar el juego',
+            'dejar de jugar',
+            'ya no quiero jugar',
+            'cerrar el juego',
+            'terminemos',
+            'ya basta',
+            'se acabo',
+        ]));
+    });
+
+    test('frases ya normalizadas: sin diacríticos, minúsculas, sin dobles espacios', () => {
+        for (const frame of END_GAME_FRAMES) {
+            const normalized = frame
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .toLowerCase()
+                .replace(/\s+/g, ' ')
+                .trim();
+            expect(normalized).toBe(frame);
+        }
+    });
+
+    test('sin frases duplicadas', () => {
+        expect(new Set(END_GAME_FRAMES).size).toBe(END_GAME_FRAMES.length);
+    });
+
+    test('fuente UNICA: ningun motor redefine su propia lista de salida', () => {
+        // El defecto medido nacio de 21 copias divergentes de esta lista (solo la
+        // loteria conocia las salidas cortas). Los motores deben consumir
+        // END_GAME_FRAMES de gameUtils, no volver a escribir las frases.
+        const dir = join(process.cwd(), 'src', 'core', 'games');
+        const offenders = enginesWithOwnEndFrames(sourcesOf(dir));
+        expect(offenders).toEqual([]);
+    });
+    test('cada alias del catalogo resuelve a su propio juego (sin colisiones de especificidad)', () => {
+        // Un alias genérico de un juego no debe secuestrar el alias más
+        // específico de otro: "hagamos un cuento" es cuento_colaborativo, no
+        // el "un cuento" de cuentacuentos. Guard genérico: cubre cualquier
+        // colisión presente o futura, sin listas de excepciones.
+        const perdidos: string[] = [];
+        for (const entry of GAME_CATALOG) {
+            for (const alias of entry.aliases) {
+                const resuelto = matchGameIntent(`juguemos a ${alias}`);
+                if (resuelto?.id !== entry.id) {
+                    perdidos.push(`${alias} => ${resuelto?.id ?? 'null'} (esperado ${entry.id})`);
+                }
+            }
+        }
+        expect(perdidos).toEqual([]);
+    });
+});
+
+/** Fuentes de un directorio en la forma que espera el detector de fuente unica. */
+function sourcesOf(dir: string): Array<{ file: string; src: string }> {
+    return readdirSync(dir)
+        .filter((file) => file.endsWith('.ts'))
+        .map((file) => ({ file, src: readFileSync(join(dir, file), 'utf8') }));
+}
+
+/** Motores que vuelven a escribir su propia lista de salida (detector). */
+export function enginesWithOwnEndFrames(sources: Array<{ file: string; src: string }>): string[] {
+    return sources
+        .filter(({ file, src }) => {
+            if (!file.endsWith('.ts') || file === 'gameUtils.ts' || file === 'gameCatalog.ts') return false;
+            return /'salir del juego'/.test(src);
+        })
+        .map(({ file }) => file);
+}
+
+describe('gameCatalog - prueba de detector', () => {
+    // Prueba de detector: el detector debe marcar al que reescribe la lista y NO al
+    // que la consume, ni al dueno (gameUtils/gameCatalog). Sin esto el guard podria
+    // estar verde para siempre sin proteger nada.
+    test('el detector marca al infractor sintetico y no al dueno ni al limpio', () => {
+        const offenders = enginesWithOwnEndFrames([
+            { file: 'ahorcado.ts', src: "const X = ['salir del juego']" },
+            { file: 'limpio.ts', src: "import { END_GAME_FRAMES } from './gameUtils'" },
+            { file: 'gameUtils.ts', src: "const X = ['salir del juego']" },
+        ]);
+        expect(offenders).toEqual(['ahorcado.ts']);
     });
 });

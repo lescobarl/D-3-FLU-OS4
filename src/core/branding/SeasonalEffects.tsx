@@ -23,143 +23,47 @@ export interface SeasonalEffectConfig {
 // 17 temporadas con decoración real (coinciden 1:1 con PALETTES).
 // Las temporadas SIN decoración (default/maestro/trabajo/padres)
 // NO tienen entrada aquí: getSeasonalEffect devuelve null.
+type EffectRanges = Pick<SeasonalEffectConfig, 'durationRange' | 'opacityRange' | 'sizeRange'>
+
+/** Rangos de un efecto (dueño único: evita repetir la tripleta por temporada). */
+const r = (
+  durationRange: [number, number],
+  opacityRange: [number, number],
+  sizeRange: [number, number],
+): EffectRanges => ({ durationRange, opacityRange, sizeRange })
+
+/** Config de un efecto que cae. */
+const fall = (
+  emojis: string[],
+  count: number,
+  ranges: EffectRanges,
+): SeasonalEffectConfig => ({ emojis, count, motion: 'fall', ...ranges })
+
+/** Config de un efecto que asciende. */
+const rise = (
+  emojis: string[],
+  count: number,
+  ranges: EffectRanges,
+): SeasonalEffectConfig => ({ emojis, count, motion: 'rise', ...ranges })
+
 export const SEASONAL_EFFECTS: Record<string, SeasonalEffectConfig> = {
-  navidad: {
-    emojis: ['❄️', '⭐', '🎄'],
-    count: 20,
-    motion: 'fall',
-    durationRange: [6, 14],
-    opacityRange: [0.5, 0.9],
-    sizeRange: [14, 26],
-  },
-  muertos: {
-    emojis: ['🌼', '💀', '🕯️'],
-    count: 18,
-    motion: 'fall',
-    durationRange: [7, 15],
-    opacityRange: [0.45, 0.85],
-    sizeRange: [14, 26],
-  },
-  patrio: {
-    emojis: ['🎆', '🎊', '🎉', '🪅'],
-    count: 18,
-    motion: 'fall',
-    durationRange: [5, 12],
-    opacityRange: [0.5, 0.9],
-    sizeRange: [14, 24],
-  },
-  infantil: {
-    emojis: ['🎈', '🎉', '🧸', '🎠'],
-    count: 20,
-    motion: 'fall',
-    durationRange: [6, 13],
-    opacityRange: [0.5, 0.9],
-    sizeRange: [14, 26],
-  },
-  cumpleanos: {
-    emojis: ['🎉', '🎊', '🎈', '🎂'],
-    count: 22,
-    motion: 'fall',
-    durationRange: [5, 12],
-    opacityRange: [0.5, 0.95],
-    sizeRange: [14, 28],
-  },
-  ano_nuevo: {
-    emojis: ['🎆', '🎊', '🥂', '✨'],
-    count: 22,
-    motion: 'fall',
-    durationRange: [5, 12],
-    opacityRange: [0.5, 0.95],
-    sizeRange: [14, 26],
-  },
-  reyes: {
-    emojis: ['👑', '⭐', '✨', '🌙'],
-    count: 20,
-    motion: 'fall',
-    durationRange: [6, 14],
-    opacityRange: [0.5, 0.9],
-    sizeRange: [14, 26],
-  },
-  san_valentin: {
-    emojis: ['❤️', '💖', '💘', '🌹'],
-    count: 20,
-    motion: 'fall',
-    durationRange: [6, 13],
-    opacityRange: [0.5, 0.9],
-    sizeRange: [14, 26],
-  },
-  primavera: {
-    emojis: ['🌸', '🌷', '🦋', '💐'],
-    count: 22,
-    motion: 'fall',
-    durationRange: [6, 14],
-    opacityRange: [0.5, 0.9],
-    sizeRange: [14, 26],
-  },
-  san_patricio: {
-    emojis: ['🍀', '✨', '🌈', '💚'],
-    count: 20,
-    motion: 'fall',
-    durationRange: [6, 13],
-    opacityRange: [0.5, 0.9],
-    sizeRange: [14, 26],
-  },
-  tierra: {
-    emojis: ['🌿', '🌱', '🍃', '🌍'],
-    count: 20,
-    motion: 'fall',
-    durationRange: [6, 14],
-    opacityRange: [0.5, 0.9],
-    sizeRange: [14, 26],
-  },
-  madres: {
-    emojis: ['💐', '🌹', '🌸', '💝'],
-    count: 18,
-    motion: 'fall',
-    durationRange: [6, 14],
-    opacityRange: [0.5, 0.9],
-    sizeRange: [14, 26],
-  },
-  verano: {
-    emojis: ['☀️', '✨', '🌈', '🕶️'],
-    count: 18,
-    motion: 'rise',
-    durationRange: [6, 13],
-    opacityRange: [0.5, 0.9],
-    sizeRange: [16, 28],
-  },
-  otono: {
-    emojis: ['🍂', '🍁', '🍃', '🌰'],
-    count: 22,
-    motion: 'fall',
-    durationRange: [6, 14],
-    opacityRange: [0.5, 0.9],
-    sizeRange: [14, 26],
-  },
-  halloween: {
-    emojis: ['🦇', '🎃', '👻', '🕷️'],
-    count: 20,
-    motion: 'fall',
-    durationRange: [6, 14],
-    opacityRange: [0.5, 0.9],
-    sizeRange: [14, 26],
-  },
-  invierno: {
-    emojis: ['❄️', '⭐', '☃️', '🌨️'],
-    count: 22,
-    motion: 'fall',
-    durationRange: [6, 14],
-    opacityRange: [0.5, 0.9],
-    sizeRange: [14, 26],
-  },
-  ecologico: {
-    emojis: ['🌱', '🍃', '🌿', '💚'],
-    count: 18,
-    motion: 'fall',
-    durationRange: [6, 14],
-    opacityRange: [0.45, 0.85],
-    sizeRange: [14, 24],
-  },
+  navidad: fall(['❄️', '⭐', '🎄'], 20, r([6, 14], [0.5, 0.9], [14, 26])),
+  muertos: fall(['🌼', '💀', '🕯️'], 18, r([7, 15], [0.45, 0.85], [14, 26])),
+  patrio: fall(['🎆', '🎊', '🎉', '🪅'], 18, r([5, 12], [0.5, 0.9], [14, 24])),
+  infantil: fall(['🎈', '🎉', '🧸', '🎠'], 20, r([6, 13], [0.5, 0.9], [14, 26])),
+  cumpleanos: fall(['🎉', '🎊', '🎈', '🎂'], 22, r([5, 12], [0.5, 0.95], [14, 28])),
+  ano_nuevo: fall(['🎆', '🎊', '🥂', '✨'], 22, r([5, 12], [0.5, 0.95], [14, 26])),
+  reyes: fall(['👑', '⭐', '✨', '🌙'], 20, r([6, 14], [0.5, 0.9], [14, 26])),
+  san_valentin: fall(['❤️', '💖', '💘', '🌹'], 20, r([6, 13], [0.5, 0.9], [14, 26])),
+  primavera: fall(['🌸', '🌷', '🦋', '💐'], 22, r([6, 14], [0.5, 0.9], [14, 26])),
+  san_patricio: fall(['🍀', '✨', '🌈', '💚'], 20, r([6, 13], [0.5, 0.9], [14, 26])),
+  tierra: fall(['🌿', '🌱', '🍃', '🌍'], 20, r([6, 14], [0.5, 0.9], [14, 26])),
+  madres: fall(['💐', '🌹', '🌸', '💝'], 18, r([6, 14], [0.5, 0.9], [14, 26])),
+  verano: rise(['☀️', '✨', '🌈', '🕶️'], 18, r([6, 13], [0.5, 0.9], [16, 28])),
+  otono: fall(['🍂', '🍁', '🍃', '🌰'], 22, r([6, 14], [0.5, 0.9], [14, 26])),
+  halloween: fall(['🦇', '🎃', '👻', '🕷️'], 20, r([6, 14], [0.5, 0.9], [14, 26])),
+  invierno: fall(['❄️', '⭐', '☃️', '🌨️'], 22, r([6, 14], [0.5, 0.9], [14, 26])),
+  ecologico: fall(['🌱', '🍃', '🌿', '💚'], 18, r([6, 14], [0.45, 0.85], [14, 24])),
 };
 
 export function getSeasonalEffect(season: string): SeasonalEffectConfig | null {

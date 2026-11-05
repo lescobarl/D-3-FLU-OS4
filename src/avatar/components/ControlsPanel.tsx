@@ -94,7 +94,6 @@ export default function ControlsPanel() {
 
     const handleControlClick = (control: ControlDef) => {
         if (logsEnabled) {
-            console.log(`[ControlsPanel] Control seleccionado: ${control.id} → bone: ${control.bone}`);
         }
         addLog({
             timestamp: new Date().toISOString(),

@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 // ============================================================
 // localAi.test.ts — compatibilidad con LLM local (Ollama/localhost)
 // ============================================================
@@ -114,6 +115,13 @@ describe('localAi — deepseek F1/F2/F3 con endpoint local', () => {
     beforeEach(() => {
         mockLocalStorage.clear();
         vi.unstubAllGlobals();
+                // La key de texto tiene UN solo dueno (resolveTextApiKey: localStorage > env).
+        // Antes estos casos neutralizaban las DOS copias de la constante
+        // (OPENROUTER_CONFIG/DEEPSEEK_CONFIG, via el mock de arriba); con el dueno
+        // unico hay que neutralizar la FUENTE, que es el env.
+        vi.stubEnv('VITE_OPENROUTER_API_KEY', '');
+        vi.stubEnv('VITE_GEMINI_API_KEY', '');
+        vi.stubEnv('VITE_DEEPSEEK_API_KEY', '');
         // Endpoint local (Ollama) sin API key
         mockLocalStorage.store[STORAGE_KEYS.TEXT_API_URL] = 'http://localhost:11434/v1';
         mockLocalStorage.store[STORAGE_KEYS.TEXT_MODEL] = 'llama3.2';

@@ -9,7 +9,9 @@
 //   window.__fluClientLog.enable(false)
 // ============================================================
 
-import { FLU_CONFIG } from '../voice/lib/fluConfig';
+import { FLU_CONFIG } from '../voice/api/config.ts'
+import { recordSessionEvent } from '../voice/api/sessionLog.ts';
+import { registrarReceptorCaughtError } from './caughtError.ts';
 
 type LogLevel = 'LOG' | 'INFO' | 'WARN' | 'ERROR';
 
@@ -21,10 +23,21 @@ function syncEnabled(): boolean {
     return FLU_CONFIG.debug?.relayToServer !== false;
 }
 
+/**
+ * El relay entrega a una ruta RELATIVA del origen del documento. Sin documento
+ * (Node, SSR) no hay origen que resolver: `fetch` no puede resolverla y el intento no
+ * entrega nada, solo mete ruido en la consola. Medido: era el TypeError que aparecia en
+ * la suite al importar modulos que registran logs (C68).
+ */
+function hasDocumentOrigin(): boolean {
+    return typeof document !== 'undefined' && Boolean(document.baseURI);
+}
+
 function flush() {
     if (pending.length === 0) return;
     const batch = pending;
     pending = [];
+    if (!hasDocumentOrigin()) return;
     try {
         // Always send as array so server handler can iterate uniformly
         // Sending single object vs array causes server-side parsing failures
@@ -34,10 +47,13 @@ function flush() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(batch),
         }).catch(() => {
-            // Silently ignore — server may not be available
+            /* ignorado: un fallo de entrega NO se re-encola (bucle de reintento, C67) ni
+               se re-reporta por el registro central: ese registro ES este mismo relay,
+               asi que reportarlo desde aqui era justamente el bucle. */
         });
     } catch {
-        // Silently ignore
+        /* ignorado: sin servidor dev al que entregar (entorno de tests, preview
+           estatica, SSR) el intento es esperado; reportarlo metia ruido (C68). */
     }
 }
 
@@ -57,11 +73,21 @@ function scheduleFlush() {
  * @param data - Datos opcionales (objeto)
  */
 export function relayLog(level: LogLevel, tag: string, message: string, data?: unknown): void {
+    // La grabación de sesión NO depende del relay: si su bandera está encendida,
+    // conserva el log aunque el envío al servidor esté apagado.
+    recordSessionEvent('log', `${level}:${tag}`, { message, data });
     if (!enabled) return;
     if (!syncEnabled()) return;
     pending.push({ level, tag, message, data });
     scheduleFlush();
 }
+
+// Inversión de dependencia (corte 2026-10-26): `caughtError` es HOJA y no puede
+// importar este módulo — importarlo desde los workers cerraba ciclos de imports
+// entre workers (whisperAsr.worker <-> voiceId.worker). Al cargar en el hilo
+// principal, este módulo se registra como receptor de las capturas: la entrada
+// del relay queda idéntica (`relayLog('ERROR', 'catch', message, { detail })`).
+registrarReceptorCaughtError((nivel, tag, message, data) => relayLog(nivel, tag, message, data));
 
 /**
  * Activar/desactivar el relay de logs.
@@ -84,7 +110,7 @@ export function flushLogs(): void {
 
 // Exponer control en window para调试 desde consola del navegador (solo DEV)
 if (typeof window !== 'undefined' && import.meta.env.DEV) {
-    (window as any).__fluClientLog = {
+    window.__fluClientLog = {
         enable: (on: boolean) => setRelayEnabled(on),
         flush: flushLogs,
         status: () => ({ enabled, relayToServer: syncEnabled() }),

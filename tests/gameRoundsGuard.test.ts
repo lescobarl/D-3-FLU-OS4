@@ -1,0 +1,78 @@
+/**
+ * C60 gameRounds — una sola lectura de `rounds` con clamps.
+ *
+ * Antes (RED): 12 motores reimplementaban
+ *   const rounds = Number(cfg?.rounds) || Number(cfg?.defaultRounds) || DEFAULT_ROUNDS;
+ *   return clamp(rounds, 1, MAX_ROUNDS);
+ *   (abecedario, adivinaCancion, calculoMental, memoriaSecuencias, ordenaSecuencia,
+ *   palabrasEncadenadas, quienSoy, repiteTraduce, riddles, trabalenguas, trivia,
+ *   veoVeo). Ahora todos usan gameUtils.readRounds.
+ *
+ * NO unificado A PROPÓSITO: respiracion.readRondas usa las claves `rondas`/
+ * `defaultRondas` (contrato de config distinto); unificarlo cambiaría su
+ * comportamiento y su config. Se documenta como decisión, no como deuda.
+ */
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join, relative, sep } from 'node:path'
+import { describe, expect, it } from 'vitest'
+import { readRounds } from '../src/core/games/gameUtils'
+import { walkFiles } from './_helpers'
+
+const ROOT = process.cwd()
+const SRC = join(ROOT, 'src')
+const PATTERN =
+  /Number\(cfg\?\.rounds\)\s*\|\|\s*Number\(cfg\?\.defaultRounds\)\s*\|\|\s*DEFAULT_ROUNDS/
+
+
+
+/** Archivos con una copia local de la lectura de rounds. */
+export function roundsCopyFiles(files: string[] = walkFiles(SRC, /\.(ts|tsx|js|jsx)$/)): string[] {
+  const hits: string[] = []
+  for (const f of files) {
+    if (PATTERN.test(readFileSync(f, 'utf8'))) {
+      hits.push(relative(ROOT, f).split(sep).join('/'))
+    }
+  }
+  return hits.sort()
+}
+
+describe('C60 gameRounds — una sola lectura de rounds', () => {
+  it('ningún motor reimplementa la lectura de rounds', () => {
+    const impls = roundsCopyFiles()
+    expect(
+      impls,
+      `Copias locales de lectura de rounds (N=${impls.length}): ${impls.join(', ')}`,
+    ).toEqual([])
+  })
+})
+
+describe('C60 gameRounds — contrato de comportamiento', () => {
+  it('usa cfg.rounds', () => {
+    expect(readRounds({ rounds: 7 }, 3, 20)).toBe(7)
+  })
+  it('cae a cfg.defaultRounds', () => {
+    expect(readRounds({ defaultRounds: 5 }, 3, 20)).toBe(5)
+  })
+  it('cae al default del motor', () => {
+    expect(readRounds({}, 4, 20)).toBe(4)
+  })
+  it('aplica clamps [1, maxRounds]', () => {
+    expect(readRounds({ rounds: -5 }, 3, 20)).toBe(1)
+    expect(readRounds({ rounds: 99 }, 3, 20)).toBe(20)
+  })
+})
+
+describe('C60 gameRounds - prueba de detector', () => {
+  // Prueba de detector: el detector debe marcar la copia sintetica y NO el limpio.
+  it('el detector marca una copia sintetica y no el fichero limpio', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'rounds-'))
+    const malo = join(dir, 'malo.ts')
+    const limpio = join(dir, 'limpio.ts')
+    writeFileSync(malo, 'const rounds = Number(cfg?.rounds) || Number(cfg?.defaultRounds) || DEFAULT_ROUNDS\n')
+    writeFileSync(limpio, 'import { readRounds } from "./gameUtils"\n')
+    expect(roundsCopyFiles([malo])).toEqual([relative(ROOT, malo).split(sep).join('/')])
+    expect(roundsCopyFiles([limpio])).toEqual([])
+    rmSync(dir, { recursive: true, force: true })
+  })
+})

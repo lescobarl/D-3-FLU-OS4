@@ -27,27 +27,16 @@ export interface MusicSearchClient {
  */
 export type StreamProbe = (url: string, timeoutMs?: number) => Promise<boolean>
 
+import { REQUEST_TIMEOUT_DEFAULTS } from '../core/config/sharedConfig.ts'
+import { logCaughtError } from '../lib/caughtError.ts';
+import { fetchTextEngine } from '../core/ai/httpClient.ts';
+
 const SEARCH_ROWS = 5
 
-/** Timeout por petición (evita esperas infinitas). */
-const REQUEST_TIMEOUT_MS = 8000
-/** Timeout de la sonda de transmisibilidad. */
-const PROBE_TIMEOUT_MS = 4000
-
-/** fetch con timeout (AbortController): sin timeout fetch espera indefinidamente. */
-async function fetchWithTimeout(
-  url: string,
-  timeoutMs: number,
-  init?: RequestInit,
-): Promise<Response> {
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), timeoutMs)
-  try {
-    return await fetch(url, { ...init, signal: controller.signal })
-  } finally {
-    clearTimeout(timer)
-  }
-}
+/** Timeout por petición (fuente única: config; evita esperas infinitas). */
+const requestMs: number = REQUEST_TIMEOUT_DEFAULTS.MUSIC_SEARCH_MS
+/** Timeout de la sonda de transmisibilidad (fuente única: config). */
+const probeMs: number = REQUEST_TIMEOUT_DEFAULTS.MUSIC_PROBE_MS
 
 /**
  * Búsqueda en Deezer a través del proxy same-origin de Vite
@@ -59,7 +48,7 @@ async function defaultSearchJson(
   query: string,
 ): Promise<{ data?: Array<{ id?: string | number; title?: string; preview?: string }> }> {
   const url = `/api/deezer/search?q=${encodeURIComponent(query)}&limit=${SEARCH_ROWS}`
-  const res = await fetchWithTimeout(url, REQUEST_TIMEOUT_MS)
+  const res = await fetchTextEngine(url, {}, requestMs)
   if (!res.ok) throw new Error(`deezer search failed: ${res.status}`)
   return res.json()
 }
@@ -100,12 +89,14 @@ function probeWithAudio(url: string, timeoutMs: number): Promise<boolean> {
 /** Sonda HTTP de respaldo (entornos sin HTMLAudio: Node/jsdom): rango inicial. */
 async function probeWithRange(url: string, timeoutMs: number): Promise<boolean> {
   try {
-    const res = await fetchWithTimeout(url, timeoutMs, {
-      headers: { Range: 'bytes=0-1024' },
-      redirect: 'follow',
-    })
+    const res = await fetchTextEngine(
+      url,
+      { headers: { Range: 'bytes=0-1024' }, redirect: 'follow' },
+      timeoutMs,
+    )
     return res.ok
-  } catch {
+  } catch (e) {
+        logCaughtError('[catch] src/services/musicSearch.ts', e);
     return false
   }
 }
@@ -115,7 +106,7 @@ async function probeWithRange(url: string, timeoutMs: number): Promise<boolean> 
  * (verificación real de playability); en entornos sin <audio> (Node/jsdom)
  * usa fetch-Range como respaldo.
  */
-export async function probeStream(url: string, timeoutMs = PROBE_TIMEOUT_MS): Promise<boolean> {
+export async function probeStream(url: string, timeoutMs = probeMs): Promise<boolean> {
   if (typeof Audio !== 'undefined' && typeof Audio.prototype.addEventListener === 'function') {
     return probeWithAudio(url, timeoutMs)
   }
@@ -131,7 +122,7 @@ export async function searchSongOnline(
   query: string,
   client: MusicSearchClient = DEFAULT_MUSIC_SEARCH_CLIENT,
   probe: StreamProbe = probeStream,
-  probeTimeoutMs = PROBE_TIMEOUT_MS,
+  probeTimeoutMs = probeMs,
 ): Promise<SongSearchResult | null> {
   const normalized = query?.trim()
   if (!normalized) return null
@@ -142,7 +133,7 @@ export async function searchSongOnline(
     const url = item?.preview
     if (!url) continue
     // Solo se devuelve el candidato si su preview realmente se puede reproducir.
-    const streamable = await probe(url, probeTimeoutMs).catch(() => false)
+    const streamable = await probe(url, probeTimeoutMs).catch((e) => { logCaughtError('[catch] src/services/musicSearch.ts', e); return false; })
     if (streamable) {
       const id = String(item.id ?? url)
       return { identifier: id, title: item.title || id, url }

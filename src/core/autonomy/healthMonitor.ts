@@ -20,7 +20,19 @@
 //   - Integración con sistema de recuperación automática
 // ============================================================
 
-import { NETWORK_PROBE_URLS, buildTextApiUrl, isLocalTextEndpoint, resolveTextApiKey } from '../config/appConfig';
+import { IntervalLifecycle } from './intervalLifecycle';
+import { createModuleSingleton } from './serviceSingleton';
+import { NETWORK_PROBE_URLS, buildTextApiUrl, isLocalTextEndpoint, resolveTextApiKey, TIMEOUT_POLICY_MS } from '../config/appConfig';
+import { fetchTextEngineResilient } from '../ai/httpClient';
+import { AUTONOMY_THRESHOLD_DEFAULTS } from '../config/sharedConfig';
+import { AUTONOMY_POLICY } from './autonomyPolicy';
+import { getSpeechVoices, isSpeechSupported } from '../../voice/api/speech';
+import { logCaughtError } from '../../lib/caughtError';
+import { probeIndexedDb } from '../db/fluDatabase';
+
+/** Alias locales: la política vive en autonomyPolicy.ts (fuente única). */
+const HP = AUTONOMY_POLICY.health;
+const UNITS = AUTONOMY_POLICY.units;
 
 // -----------------------------------------------------------
 // Tipos
@@ -95,21 +107,26 @@ export interface HealthMonitorConfig {
 // Configuración por defecto
 // -----------------------------------------------------------
 
+/**
+ * Componentes monitoreados por defecto — FUENTE ÚNICA. El arranque (App) y el
+ * hook de autonomía importan esta lista en vez de recopiarla.
+ * `speech-recognition` y `speech-synthesis` quedan EXCLUIDOS: los maneja el
+ * sistema de voz (`useFluVoiceAssistant`) y no necesitan chequeo autónomo.
+ */
+export const DEFAULT_MONITORED_COMPONENTS: readonly string[] = Object.freeze([
+    'ai-service',
+    'indexed-db',
+    'network',
+    'memory',
+    'react-components',
+]);
+
 export const DEFAULT_HEALTH_CONFIG: HealthMonitorConfig = {
-    monitoringInterval: 30000, // 30 segundos
-    degradedThreshold: 0.85,   // 85% de salud
-    criticalThreshold: 0.60,   // 60% de salud
+    monitoringInterval: HP.config.monitoringIntervalMs, // 30 segundos
+    degradedThreshold: AUTONOMY_THRESHOLD_DEFAULTS.health.degraded,   // 85% de salud
+    criticalThreshold: AUTONOMY_THRESHOLD_DEFAULTS.health.critical,   // 60% de salud
     autoRecoveryEnabled: false, // Deshabilitado por defecto - se habilita solo para componentes específicos
-    monitoredComponents: [
-        'ai-service',
-        'indexed-db',
-        'network',
-        'memory',
-        'react-components',
-        // NOTA: 'speech-recognition' y 'speech-synthesis' están EXCLUIDOS por defecto
-        // Estos componentes son manejados por el sistema de voz (useFluVoiceAssistant)
-        // y no necesitan monitoreo autónomo
-    ],
+    monitoredComponents: [...DEFAULT_MONITORED_COMPONENTS],
     verboseLogging: false,
 };
 
@@ -119,46 +136,46 @@ export const DEFAULT_HEALTH_CONFIG: HealthMonitorConfig = {
 
 const COMPONENT_THRESHOLDS: Record<string, ComponentThresholds> = {
     'ai-service': {
-        responseTimeMax: 10000,    // 10 segundos máximo
-        errorRateMax: 0.2,         // 20% máximo de errores
-        availabilityMin: 0.95,     // 95% mínimo de disponibilidad
-        checkInterval: 15000,      // Verificar cada 15 segundos
+        responseTimeMax: HP.thresholds.aiService.responseTimeMaxMs,    // 10 segundos máximo
+        errorRateMax: HP.thresholds.aiService.errorRateMax,         // 20% máximo de errores
+        availabilityMin: AUTONOMY_THRESHOLD_DEFAULTS.health.aiAvailabilityMin,     // 95% mínimo de disponibilidad
+        checkInterval: HP.thresholds.aiService.checkIntervalMs,      // Verificar cada 15 segundos
     },
     'speech-recognition': {
-        responseTimeMax: 5000,     // 5 segundos máximo
-        errorRateMax: 0.3,         // 30% máximo de errores
-        availabilityMin: 0.90,     // 90% mínimo de disponibilidad
-        checkInterval: 10000,      // Verificar cada 10 segundos
+        responseTimeMax: HP.thresholds.speechRecognition.responseTimeMaxMs,     // 5 segundos máximo
+        errorRateMax: HP.thresholds.speechRecognition.errorRateMax,         // 30% máximo de errores
+        availabilityMin: AUTONOMY_THRESHOLD_DEFAULTS.health.speechRecognitionAvailabilityMin,     // 90% mínimo de disponibilidad
+        checkInterval: HP.thresholds.speechRecognition.checkIntervalMs,      // Verificar cada 10 segundos
     },
     'speech-synthesis': {
-        responseTimeMax: 3000,     // 3 segundos máximo
-        errorRateMax: 0.15,        // 15% máximo de errores
-        availabilityMin: 0.98,     // 98% mínimo de disponibilidad
-        checkInterval: 10000,      // Verificar cada 10 segundos
+        responseTimeMax: HP.thresholds.speechSynthesis.responseTimeMaxMs,     // 3 segundos máximo
+        errorRateMax: AUTONOMY_THRESHOLD_DEFAULTS.health.ttsErrorRateMax,        // 15% máximo de errores
+        availabilityMin: AUTONOMY_THRESHOLD_DEFAULTS.health.ttsAvailabilityMin,     // 98% mínimo de disponibilidad
+        checkInterval: HP.thresholds.speechSynthesis.checkIntervalMs,      // Verificar cada 10 segundos
     },
     'indexed-db': {
-        responseTimeMax: 2000,     // 2 segundos máximo
-        errorRateMax: 0.1,         // 10% máximo de errores
-        availabilityMin: 0.99,     // 99% mínimo de disponibilidad
-        checkInterval: 20000,      // Verificar cada 20 segundos
+        responseTimeMax: HP.thresholds.indexedDb.responseTimeMaxMs,     // 2 segundos máximo
+        errorRateMax: HP.thresholds.indexedDb.errorRateMax,         // 10% máximo de errores
+        availabilityMin: AUTONOMY_THRESHOLD_DEFAULTS.health.indexedDbAvailabilityMin,     // 99% mínimo de disponibilidad
+        checkInterval: HP.thresholds.indexedDb.checkIntervalMs,      // Verificar cada 20 segundos
     },
     'network': {
-        responseTimeMax: 3000,     // 3 segundos máximo
-        errorRateMax: 0.25,        // 25% máximo de errores
-        availabilityMin: 0.85,     // 85% mínimo de disponibilidad
-        checkInterval: 5000,       // Verificar cada 5 segundos
+        responseTimeMax: HP.thresholds.network.responseTimeMaxMs,     // 3 segundos máximo
+        errorRateMax: AUTONOMY_THRESHOLD_DEFAULTS.health.networkErrorRateMax,        // 25% máximo de errores
+        availabilityMin: AUTONOMY_THRESHOLD_DEFAULTS.health.networkAvailabilityMin,     // 85% mínimo de disponibilidad
+        checkInterval: HP.thresholds.network.checkIntervalMs,       // Verificar cada 5 segundos
     },
     'memory': {
-        responseTimeMax: 1000,     // 1 segundo máximo
-        errorRateMax: 0.05,        // 5% máximo de errores
-        availabilityMin: 0.95,     // 95% mínimo de disponibilidad
-        checkInterval: 30000,      // Verificar cada 30 segundos
+        responseTimeMax: HP.thresholds.memory.responseTimeMaxMs,     // 1 segundo máximo
+        errorRateMax: AUTONOMY_THRESHOLD_DEFAULTS.health.memoryErrorRateMax,        // 5% máximo de errores
+        availabilityMin: AUTONOMY_THRESHOLD_DEFAULTS.health.memoryAvailabilityMin,     // 95% mínimo de disponibilidad
+        checkInterval: HP.thresholds.memory.checkIntervalMs,      // Verificar cada 30 segundos
     },
     'react-components': {
-        responseTimeMax: 1000,     // 1 segundo máximo
-        errorRateMax: 0.1,         // 10% máximo de errores
-        availabilityMin: 0.98,     // 98% mínimo de disponibilidad
-        checkInterval: 30000,      // Verificar cada 30 segundos
+        responseTimeMax: HP.thresholds.reactComponents.responseTimeMaxMs,     // 1 segundo máximo
+        errorRateMax: HP.thresholds.reactComponents.errorRateMax,         // 10% máximo de errores
+        availabilityMin: AUTONOMY_THRESHOLD_DEFAULTS.health.reactComponentsAvailabilityMin,     // 98% mínimo de disponibilidad
+        checkInterval: HP.thresholds.reactComponents.checkIntervalMs,      // Verificar cada 30 segundos
     },
 };
 
@@ -175,19 +192,20 @@ interface MetricHistory {
 
 class HealthMetricTracker {
     private history: Map<string, MetricHistory> = new Map();
-    private readonly maxHistorySize = 100;
+    private readonly maxHistorySize = HP.metricHistoryLimit;
 
     recordMetric(component: string, responseTime: number, hasError: boolean): void {
-        if (!this.history.has(component)) {
-            this.history.set(component, {
+        let hist = this.history.get(component);
+        if (!hist) {
+            hist = {
                 responseTimes: [],
                 errorCounts: [],
                 checkCounts: [],
                 timestamps: [],
-            });
+            };
+            this.history.set(component, hist);
         }
 
-        const hist = this.history.get(component)!;
         hist.responseTimes.push(responseTime);
         hist.errorCounts.push(hasError ? 1 : 0);
         hist.checkCounts.push(1);
@@ -243,6 +261,41 @@ class HealthMetricTracker {
 // Verificadores de componentes
 // -----------------------------------------------------------
 
+/**
+ * Cierra un chequeo de componente con su contrato de salud.
+ * Dueño único del bloque que repetían los siete chequeos.
+ * @param name Nombre del componente.
+ * @param startTime Inicio de la medición.
+ * @param hasError ¿El chequeo falló?
+ * @param message Mensaje del chequeo.
+ * @param metrics Métricas medidas.
+ * @returns Salud del componente.
+ */
+function componentHealth(
+    name: string,
+    startTime: number,
+    hasError: boolean,
+    message: string,
+    metrics: Record<string, number | string | boolean>,
+): ComponentHealth {
+    const responseTime = Date.now() - startTime;
+    const thresholds = COMPONENT_THRESHOLDS[name];
+    const status = determineComponentStatus(responseTime, hasError, thresholds);
+
+    return {
+        name,
+        status,
+        lastCheck: Date.now(),
+        metrics: {
+            ...metrics,
+            responseTime,
+            hasError,
+        },
+        message,
+        thresholds,
+    };
+}
+
 async function checkAIService(): Promise<ComponentHealth> {
     const startTime = Date.now();
     let hasError = false;
@@ -266,49 +319,38 @@ async function checkAIService(): Promise<ComponentHealth> {
             message = 'No hay API key configurada para servicios de IA remotos';
         } else {
             // Verificar conectividad real enviando la credencial (HEAD autorizado)
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 5000);
-
             try {
-                const response = await fetch(testUrl, {
-                    method: 'HEAD',
-                    signal: controller.signal,
-                    headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : undefined,
-                });
+                // El transporte lo sirve su DUENO (`fetchTextEngineResilient`): la
+                // politica de reintento vive en UN sitio (fallo de transporte -> 1 reintento; el
+                // TIMEOUT no se reintenta: es el veredicto de la sonda). Antes la sonda llamaba al
+                // transporte crudo y quedaba FUERA de esa politica (hallazgo P9.62).
+                const response = await fetchTextEngineResilient(
+                    testUrl,
+                    {
+                        method: 'HEAD',
+                        headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : undefined,
+                    },
+                    { timeoutMs: TIMEOUT_POLICY_MS.healthProbeAbort },
+                );
                 metrics.networkReachable = response.ok;
                 if (!response.ok) {
                     hasError = true;
                     message = `Servicio de IA no responde correctamente (HTTP ${response.status})`;
                 }
-            } catch (error) {
+            } catch (e) {
+        logCaughtError('[catch] src/core/autonomy/healthMonitor.ts', e);
                 hasError = true;
                 message = 'Error de conexión con servicio de IA';
                 metrics.networkReachable = false;
-            } finally {
-                clearTimeout(timeoutId);
             }
         }
     } catch (error) {
+        logCaughtError('[catch] src/core/autonomy/healthMonitor.ts', error);
         hasError = true;
         message = `Error verificando servicio de IA: ${error instanceof Error ? error.message : 'Error desconocido'}`;
     }
 
-    const responseTime = Date.now() - startTime;
-    const thresholds = COMPONENT_THRESHOLDS['ai-service'];
-    const status = determineComponentStatus(responseTime, hasError, thresholds);
-
-    return {
-        name: 'ai-service',
-        status,
-        lastCheck: Date.now(),
-        metrics: {
-            ...metrics,
-            responseTime,
-            hasError,
-        },
-        message,
-        thresholds,
-    };
+    return componentHealth('ai-service', startTime, hasError, message, metrics);
 }
 
 async function checkSpeechRecognition(): Promise<ComponentHealth> {
@@ -318,50 +360,46 @@ async function checkSpeechRecognition(): Promise<ComponentHealth> {
     const metrics: Record<string, number | string | boolean> = {};
 
     try {
-        // Verificar si Web Speech API está disponible
-        if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
+        // §9 Motor de escucha: Chrome SpeechRecognition (Google, online).
+        const hasSpeechRecognition =
+            typeof window !== 'undefined' &&
+            Boolean((window as Window & { SpeechRecognition?: unknown }).SpeechRecognition ||
+                (window as Window & { webkitSpeechRecognition?: unknown }).webkitSpeechRecognition);
+        if (!hasSpeechRecognition) {
             hasError = true;
-            message = 'Web Speech API no disponible en este navegador';
+            message = 'SpeechRecognition no disponible en este navegador';
             metrics.apiAvailable = false;
         } else {
             metrics.apiAvailable = true;
         }
 
-        // Verificar permisos de micrófono
-        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        // Verificar permiso de micrófono SIN abrir un segundo stream: la captura
+        // la posee el motor único de escucha. Abrir otro getUserMedia aquí era
+        // una segunda captura del mismo micrófono (ruta doble).
+        if (navigator.permissions?.query) {
             try {
-                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                metrics.microphonePermission = true;
-                stream.getTracks().forEach(track => track.stop());
-            } catch (error) {
-                hasError = true;
-                message = 'Permiso de micrófono no concedido';
-                metrics.microphonePermission = false;
+                const permission = await navigator.permissions.query({
+                    name: 'microphone' as PermissionName,
+                });
+                metrics.microphonePermission = permission.state !== 'denied';
+                if (permission.state === 'denied') {
+                    hasError = true;
+                    message = 'Permiso de micrófono no concedido';
+                }
+            } catch (e) {
+        logCaughtError('[catch] src/core/autonomy/healthMonitor.ts', e);
+                metrics.microphonePermission = 'unknown';
             }
         } else {
-            metrics.microphonePermission = false;
+            metrics.microphonePermission = 'unknown';
         }
     } catch (error) {
+        logCaughtError('[catch] src/core/autonomy/healthMonitor.ts', error);
         hasError = true;
         message = `Error verificando reconocimiento de voz: ${error instanceof Error ? error.message : 'Error desconocido'}`;
     }
 
-    const responseTime = Date.now() - startTime;
-    const thresholds = COMPONENT_THRESHOLDS['speech-recognition'];
-    const status = determineComponentStatus(responseTime, hasError, thresholds);
-
-    return {
-        name: 'speech-recognition',
-        status,
-        lastCheck: Date.now(),
-        metrics: {
-            ...metrics,
-            responseTime,
-            hasError,
-        },
-        message,
-        thresholds,
-    };
+    return componentHealth('speech-recognition', startTime, hasError, message, metrics);
 }
 
 async function checkSpeechSynthesis(): Promise<ComponentHealth> {
@@ -371,16 +409,16 @@ async function checkSpeechSynthesis(): Promise<ComponentHealth> {
     const metrics: Record<string, number | string | boolean> = {};
 
     try {
-        // Verificar si SpeechSynthesis está disponible
-        if (!('speechSynthesis' in window)) {
+        // Verificar si la síntesis de voz está disponible
+        if (!isSpeechSupported()) {
             hasError = true;
-            message = 'SpeechSynthesis API no disponible en este navegador';
+            message = 'Síntesis de voz no disponible en este navegador';
             metrics.apiAvailable = false;
         } else {
             metrics.apiAvailable = true;
             
             // Verificar voces disponibles
-            const voices = speechSynthesis.getVoices();
+            const voices = getSpeechVoices();
             metrics.voiceCount = voices.length;
             metrics.hasSpanishVoice = voices.some(voice => 
                 voice.lang.startsWith('es') || voice.lang.includes('es')
@@ -392,26 +430,12 @@ async function checkSpeechSynthesis(): Promise<ComponentHealth> {
             }
         }
     } catch (error) {
+        logCaughtError('[catch] src/core/autonomy/healthMonitor.ts', error);
         hasError = true;
         message = `Error verificando síntesis de voz: ${error instanceof Error ? error.message : 'Error desconocido'}`;
     }
 
-    const responseTime = Date.now() - startTime;
-    const thresholds = COMPONENT_THRESHOLDS['speech-synthesis'];
-    const status = determineComponentStatus(responseTime, hasError, thresholds);
-
-    return {
-        name: 'speech-synthesis',
-        status,
-        lastCheck: Date.now(),
-        metrics: {
-            ...metrics,
-            responseTime,
-            hasError,
-        },
-        message,
-        thresholds,
-    };
+    return componentHealth('speech-synthesis', startTime, hasError, message, metrics);
 }
 
 async function checkIndexedDB(): Promise<ComponentHealth> {
@@ -428,53 +452,26 @@ async function checkIndexedDB(): Promise<ComponentHealth> {
             metrics.apiAvailable = false;
         } else {
             metrics.apiAvailable = true;
-            
-            // Intentar abrir una base de datos de prueba
-            const testDbName = 'flu-health-test';
-            const request = indexedDB.open(testDbName, 1);
-            
-            await new Promise<void>((resolve, reject) => {
-                request.onerror = () => {
-                    hasError = true;
-                    message = 'Error abriendo base de datos IndexedDB';
-                    reject(new Error('IndexedDB open failed'));
-                };
-                
-                request.onsuccess = () => {
-                    const db = request.result;
-                    db.close();
-                    // Eliminar la base de datos de prueba
-                    indexedDB.deleteDatabase(testDbName);
-                    resolve();
-                };
-                
-                request.onupgradeneeded = (event) => {
-                    const db = (event.target as IDBOpenDBRequest).result;
-                    db.createObjectStore('test');
-                };
-            });
+
+            // Sondear la base REAL de la app a traves del singleton Dexie.
+            // Antes se creaba una base desechable (flu-health-test) y se borraba:
+            // un segundo almacen fuera del ciclo de vida de Dexie (7.7.c) y el
+            // unico punto que tocaba indexedDB a mano. Sondear fluDb responde la
+            // misma pregunta sin crear ni destruir almacenes ajenos.
+            const opened = await probeIndexedDb();
+            metrics.opened = opened;
+            if (!opened) {
+                hasError = true;
+                message = 'Error abriendo base de datos IndexedDB';
+            }
         }
     } catch (error) {
+        logCaughtError('[catch] src/core/autonomy/healthMonitor.ts', error);
         hasError = true;
         message = `Error verificando IndexedDB: ${error instanceof Error ? error.message : 'Error desconocido'}`;
     }
 
-    const responseTime = Date.now() - startTime;
-    const thresholds = COMPONENT_THRESHOLDS['indexed-db'];
-    const status = determineComponentStatus(responseTime, hasError, thresholds);
-
-    return {
-        name: 'indexed-db',
-        status,
-        lastCheck: Date.now(),
-        metrics: {
-            ...metrics,
-            responseTime,
-            hasError,
-        },
-        message,
-        thresholds,
-    };
+    return componentHealth('indexed-db', startTime, hasError, message, metrics);
 }
 
 async function checkNetwork(): Promise<ComponentHealth> {
@@ -487,28 +484,31 @@ async function checkNetwork(): Promise<ComponentHealth> {
         // Verificar conectividad
         const testUrls = NETWORK_PROBE_URLS;
         
-        let successfulPings = 0;
-        const pingResults: number[] = [];
-        
-        for (const url of testUrls) {
-            const pingStart = Date.now();
-            try {
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 3000);
-                
-                const response = await fetch(url, {
-                    method: 'HEAD',
-                    signal: controller.signal,
-                    mode: 'no-cors',
-                });
-                
-                clearTimeout(timeoutId);
-                successfulPings++;
-                pingResults.push(Date.now() - pingStart);
-            } catch {
-                // Ignorar errores individuales
-            }
-        }
+        // Los sondeos son INDEPENDIENTES: en paralelo el peor caso es UN timeout,
+        // no la suma de todos. En serie, N URLs tardaban hasta N × el abort.
+        const pings = await Promise.all(
+            testUrls.map(async (url) => {
+                const pingStart = Date.now();
+                try {
+                    await fetchTextEngineResilient(
+                        url,
+                        {
+                            method: 'HEAD',
+                            mode: 'no-cors',
+                        },
+                        { timeoutMs: TIMEOUT_POLICY_MS.networkPingAbort },
+                    );
+                    return Date.now() - pingStart;
+                } catch (e) {
+                    logCaughtError('[catch] src/core/autonomy/healthMonitor.ts', e);
+                    // Error individual: no cuenta como ping exitoso.
+                    return null;
+                }
+            }),
+        );
+
+        const pingResults = pings.filter((ms): ms is number => ms !== null);
+        const successfulPings = pingResults.length;
         
         metrics.successfulPings = successfulPings;
         metrics.totalPings = testUrls.length;
@@ -526,26 +526,19 @@ async function checkNetwork(): Promise<ComponentHealth> {
             message = 'Conectividad de red limitada';
         }
     } catch (error) {
+        logCaughtError('[catch] src/core/autonomy/healthMonitor.ts', error);
         hasError = true;
         message = `Error verificando red: ${error instanceof Error ? error.message : 'Error desconocido'}`;
     }
 
-    const responseTime = Date.now() - startTime;
-    const thresholds = COMPONENT_THRESHOLDS['network'];
-    const status = determineComponentStatus(responseTime, hasError, thresholds);
+    return componentHealth('network', startTime, hasError, message, metrics);
+}
 
-    return {
-        name: 'network',
-        status,
-        lastCheck: Date.now(),
-        metrics: {
-            ...metrics,
-            responseTime,
-            hasError,
-        },
-        message,
-        thresholds,
-    };
+/** performance.memory no está en el lib DOM (solo Chrome): tipo mínimo. */
+interface PerformanceMemory {
+    usedJSHeapSize: number;
+    totalJSHeapSize: number;
+    jsHeapSizeLimit: number;
 }
 
 async function checkMemory(): Promise<ComponentHealth> {
@@ -556,19 +549,19 @@ async function checkMemory(): Promise<ComponentHealth> {
 
     try {
         // Verificar uso de memoria (si está disponible)
-        if ('memory' in (performance as any)) {
-            const memory = (performance as any).memory;
-            metrics.usedJSHeapSize = memory.usedJSHeapSize;
-            metrics.totalJSHeapSize = memory.totalJSHeapSize;
-            metrics.jsHeapSizeLimit = memory.jsHeapSizeLimit;
+        const perfMemory = (performance as Performance & { memory?: PerformanceMemory }).memory;
+        if (perfMemory) {
+            metrics.usedJSHeapSize = perfMemory.usedJSHeapSize;
+            metrics.totalJSHeapSize = perfMemory.totalJSHeapSize;
+            metrics.jsHeapSizeLimit = perfMemory.jsHeapSizeLimit;
             
-            const usageRatio = memory.usedJSHeapSize / memory.jsHeapSizeLimit;
+            const usageRatio = perfMemory.usedJSHeapSize / perfMemory.jsHeapSizeLimit;
             metrics.usageRatio = usageRatio;
             
-            if (usageRatio > 0.9) {
+            if (usageRatio > HP.criticalLoadRatio) {
                 hasError = true;
                 message = 'Uso de memoria crítico (>90%)';
-            } else if (usageRatio > 0.75) {
+            } else if (usageRatio > AUTONOMY_THRESHOLD_DEFAULTS.health.loadWarnRatio) {
                 hasError = true;
                 message = 'Uso de memoria elevado (>75%)';
             }
@@ -580,26 +573,12 @@ async function checkMemory(): Promise<ComponentHealth> {
         metrics.navigationTiming = performance.timing.loadEventEnd - performance.timing.navigationStart;
         metrics.nowPerformance = performance.now();
     } catch (error) {
+        logCaughtError('[catch] src/core/autonomy/healthMonitor.ts', error);
         hasError = true;
         message = `Error verificando memoria: ${error instanceof Error ? error.message : 'Error desconocido'}`;
     }
 
-    const responseTime = Date.now() - startTime;
-    const thresholds = COMPONENT_THRESHOLDS['memory'];
-    const status = determineComponentStatus(responseTime, hasError, thresholds);
-
-    return {
-        name: 'memory',
-        status,
-        lastCheck: Date.now(),
-        metrics: {
-            ...metrics,
-            responseTime,
-            hasError,
-        },
-        message,
-        thresholds,
-    };
+    return componentHealth('memory', startTime, hasError, message, metrics);
 }
 
 async function checkReactComponents(): Promise<ComponentHealth> {
@@ -615,41 +594,27 @@ async function checkReactComponents(): Promise<ComponentHealth> {
         
         // Verificar si hay errores recientes en la consola
         // (esto es una simulación - en producción se usaría un servicio de logging)
-        const consoleErrors = (window as any).__FLU_CONSOLE_ERRORS || [];
+        const consoleErrors = window.__FLU_CONSOLE_ERRORS || [];
         metrics.recentConsoleErrors = consoleErrors.length;
         
-        if (consoleErrors.length > 10) {
+        if (consoleErrors.length > HP.consoleErrorMax) {
             hasError = true;
             message = 'Demasiados errores en consola';
         }
     } catch (error) {
+        logCaughtError('[catch] src/core/autonomy/healthMonitor.ts', error);
         hasError = true;
         message = `Error verificando componentes React: ${error instanceof Error ? error.message : 'Error desconocido'}`;
     }
 
-    const responseTime = Date.now() - startTime;
-    const thresholds = COMPONENT_THRESHOLDS['react-components'];
-    const status = determineComponentStatus(responseTime, hasError, thresholds);
-
-    return {
-        name: 'react-components',
-        status,
-        lastCheck: Date.now(),
-        metrics: {
-            ...metrics,
-            responseTime,
-            hasError,
-        },
-        message,
-        thresholds,
-    };
+    return componentHealth('react-components', startTime, hasError, message, metrics);
 }
 
 // -----------------------------------------------------------
 // Helper functions
 // -----------------------------------------------------------
 
-function determineComponentStatus(
+export function determineComponentStatus(
     responseTime: number,
     hasError: boolean,
     thresholds: ComponentThresholds
@@ -658,7 +623,7 @@ function determineComponentStatus(
         return 'critical';
     }
     
-    if (responseTime > thresholds.responseTimeMax * 1.5) {
+    if (responseTime > thresholds.responseTimeMax * HP.criticalResponseTimeFactor) {
         return 'critical';
     }
     
@@ -669,14 +634,14 @@ function determineComponentStatus(
     return 'healthy';
 }
 
-function calculateOverallStatus(components: ComponentHealth[]): HealthStatus {
+export function calculateOverallStatus(components: ComponentHealth[]): HealthStatus {
     if (components.length === 0) return 'healthy';
     
     const statusWeights: Record<HealthStatus, number> = {
-        'critical': 0,
-        'unhealthy': 0.3,
-        'degraded': 0.7,
-        'healthy': 1,
+        'critical': HP.statusWeights.critical,
+        'unhealthy': HP.statusWeights.unhealthy,
+        'degraded': HP.statusWeights.degraded,
+        'healthy': HP.statusWeights.healthy,
     };
     
     const totalWeight = components.reduce((sum, comp) => {
@@ -685,9 +650,9 @@ function calculateOverallStatus(components: ComponentHealth[]): HealthStatus {
     
     const averageWeight = totalWeight / components.length;
     
-    if (averageWeight < 0.3) return 'critical';
-    if (averageWeight < 0.6) return 'unhealthy';
-    if (averageWeight < 0.85) return 'degraded';
+    if (averageWeight < HP.overall.criticalBelow) return 'critical';
+    if (averageWeight < HP.overall.unhealthyBelow) return 'unhealthy';
+    if (averageWeight < AUTONOMY_THRESHOLD_DEFAULTS.health.weightDegraded) return 'degraded';
     return 'healthy';
 }
 
@@ -695,20 +660,39 @@ function calculateOverallStatus(components: ComponentHealth[]): HealthStatus {
 // Clase principal del monitor de salud
 // -----------------------------------------------------------
 
-export class HealthMonitor {
-    private config: HealthMonitorConfig;
+/**
+ * Verificadores de componente INYECTABLES (§2.4). Sin esto, la clase solo se podia
+ * probar golpeando las APIs reales (fetch/indexedDB/navigator): añadir la costura
+ * permite un doble de prueba y hace determinista `performHealthCheck`.
+ */
+export type ComponentCheckers = Record<string, () => Promise<ComponentHealth>>;
+
+export class HealthMonitor extends IntervalLifecycle<HealthMonitorConfig> {
     private metricTracker: HealthMetricTracker;
-    private monitoringIntervalId: number | null = null;
     private startPromise: Promise<void> | null = null;
     private lastSystemHealth: SystemHealth | null = null;
     private listeners: Array<(health: SystemHealth) => void> = [];
     private componentCheckers: Record<string, () => Promise<ComponentHealth>>;
 
-    constructor(config: Partial<HealthMonitorConfig> = {}) {
-        this.config = { ...DEFAULT_HEALTH_CONFIG, ...config };
-        this.metricTracker = new HealthMetricTracker();
+    /** Punto de composición de dependencias (§2.4). */
+    static create(
+        config: Partial<HealthMonitorConfig> = {},
+        deps: { metricTracker?: HealthMetricTracker; componentCheckers?: ComponentCheckers } = {},
+    ): HealthMonitor {
+        return new HealthMonitor(config, {
+            metricTracker: deps.metricTracker ?? new HealthMetricTracker(),
+            componentCheckers: deps.componentCheckers,
+        });
+    }
+
+    constructor(
+        config: Partial<HealthMonitorConfig> = {},
+        deps: { metricTracker: HealthMetricTracker; componentCheckers?: ComponentCheckers },
+    ) {
+        super({ ...DEFAULT_HEALTH_CONFIG, ...config }, 'monitoringInterval');
+        this.metricTracker = deps.metricTracker;
         
-        this.componentCheckers = {
+        this.componentCheckers = deps.componentCheckers ?? {
             'ai-service': checkAIService,
             'speech-recognition': checkSpeechRecognition,
             'speech-synthesis': checkSpeechSynthesis,
@@ -721,7 +705,7 @@ export class HealthMonitor {
 
     async start(): Promise<void> {
         // Si el monitoreo ya está en marcha (intervalo activo), no hacer nada.
-        if (this.monitoringIntervalId !== null) {
+        if (this.intervalId !== null) {
             return;
         }
 
@@ -739,14 +723,13 @@ export class HealthMonitor {
             await this.performHealthCheck();
 
             // Configurar intervalo de monitoreo
-            this.monitoringIntervalId = window.setInterval(() => {
+            this.intervalId = window.setInterval(() => {
                 this.performHealthCheck().catch(error => {
-                    console.error('Error en verificación de salud:', error);
+                    logCaughtError('Error en verificación de salud', error);
                 });
             }, this.config.monitoringInterval);
 
             if (this.config.verboseLogging) {
-                console.log('HealthMonitor iniciado con intervalo:', this.config.monitoringInterval, 'ms');
             }
         })().finally(() => {
             this.startPromise = null;
@@ -755,19 +738,12 @@ export class HealthMonitor {
         return this.startPromise;
     }
 
-    stop(): void {
-        if (this.monitoringIntervalId !== null) {
-            clearInterval(this.monitoringIntervalId);
-            this.monitoringIntervalId = null;
-        }
-        
-        if (this.config.verboseLogging) {
-            console.log('HealthMonitor detenido');
-        }
+    protected tick(): void {
+        void this.performHealthCheck();
     }
 
     async performHealthCheck(): Promise<SystemHealth> {
-        const checkStartTime = Date.now();
+        Date.now();
         const components: ComponentHealth[] = [];
         const recommendations: string[] = [];
 
@@ -795,7 +771,7 @@ export class HealthMonitor {
                     recommendations.push(`[${componentName}] ${health.message}`);
                 }
             } catch (error) {
-                console.error(`Error verificando componente ${componentName}:`, error);
+                logCaughtError(`Error verificando componente ${componentName}:`, error);
                 
                 const errorHealth: ComponentHealth = {
                     name: componentName,
@@ -804,10 +780,10 @@ export class HealthMonitor {
                     metrics: { error: error instanceof Error ? error.message : 'Error desconocido' },
                     message: `Error durante verificación: ${error instanceof Error ? error.message : 'Error desconocido'}`,
                     thresholds: COMPONENT_THRESHOLDS[componentName] || {
-                        responseTimeMax: 5000,
-                        errorRateMax: 0.5,
-                        availabilityMin: 0.5,
-                        checkInterval: 30000,
+                        responseTimeMax: HP.fallbackThresholds.responseTimeMaxMs,
+                        errorRateMax: HP.fallbackThresholds.errorRateMax,
+                        availabilityMin: HP.fallbackThresholds.availabilityMin,
+                        checkInterval: HP.fallbackThresholds.checkIntervalMs,
                     },
                 };
                 
@@ -836,7 +812,7 @@ export class HealthMonitor {
             errorRate: componentMetrics.length > 0
                 ? componentMetrics.reduce((sum, m) => sum + m.errorRate, 0) / componentMetrics.length
                 : 0,
-            uptime: performance.now() / 1000, // segundos desde carga de página
+            uptime: performance.now() / UNITS.msPerSecond, // segundos desde carga de página
         };
 
         // Determinar estado general
@@ -858,16 +834,6 @@ export class HealthMonitor {
 
         // Notificar listeners
         this.listeners.forEach(listener => listener(systemHealth));
-
-        // Log si está habilitado
-        if (this.config.verboseLogging) {
-            console.log('Health check completado:', {
-                duration: Date.now() - checkStartTime,
-                status: overallStatus,
-                components: components.length,
-                recommendations: recommendations.length,
-            });
-        }
 
         return systemHealth;
     }
@@ -891,18 +857,8 @@ export class HealthMonitor {
         }
     }
 
-    updateConfig(newConfig: Partial<HealthMonitorConfig>): void {
-        this.config = { ...this.config, ...newConfig };
-        
-        // Reiniciar monitoreo si el intervalo cambió
-        if (this.monitoringIntervalId !== null && newConfig.monitoringInterval) {
-            this.stop();
-            this.start();
-        }
-    }
-
     getConfig(): HealthMonitorConfig {
-        return { ...this.config };
+        return { ...this.config, monitoredComponents: [...this.config.monitoredComponents] };
     }
 
     clearHistory(): void {
@@ -914,27 +870,21 @@ export class HealthMonitor {
 // Instancia global (singleton)
 // -----------------------------------------------------------
 
-let globalHealthMonitor: HealthMonitor | null = null;
+const healthMonitorSingleton = createModuleSingleton((config?: Partial<HealthMonitorConfig>) => HealthMonitor.create(config));
 
+/** Instancia global (creada la primera vez con la config dada). */
 export function getHealthMonitor(config?: Partial<HealthMonitorConfig>): HealthMonitor {
-    if (!globalHealthMonitor) {
-        globalHealthMonitor = new HealthMonitor(config);
-    }
-    return globalHealthMonitor;
+    return healthMonitorSingleton.get(config);
 }
 
 export function startGlobalHealthMonitoring(config?: Partial<HealthMonitorConfig>): HealthMonitor {
-    const monitor = getHealthMonitor(config);
-    monitor.start();
-    return monitor;
+    return healthMonitorSingleton.start(config);
 }
 
 export function stopGlobalHealthMonitoring(): void {
-    if (globalHealthMonitor) {
-        globalHealthMonitor.stop();
-    }
+    healthMonitorSingleton.stop();
 }
 
 export function getSystemHealth(): SystemHealth | null {
-    return globalHealthMonitor?.getLastHealth() || null;
+    return healthMonitorSingleton.current()?.getLastHealth() || null;
 }

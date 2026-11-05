@@ -14,6 +14,7 @@ import {
     resolveNavigationCommandFromTexts,
     userRequestedNavigationCommand,
     getCommandSpeech,
+    resolveVoiceConversationAction,
 } from '../src/voice/lib/voiceCommands.js';
 
 describe('voiceCommands — NAVIGATION_COMMAND_IDS', () => {
@@ -90,5 +91,35 @@ describe('voiceCommands — getCommandSpeech', () => {
 
     test('comando desconocido devuelve cadena vacía', () => {
         expect(getCommandSpeech('COMANDO_DESCONOCIDO', 'es')).toBe('');
+    });
+});
+
+describe('voiceCommands — generación de contenido sin truncar (regresión video)', () => {
+    test('gatillo pelado "generame un video" → wait (NO dispara de inmediato)', () => {
+        const action = resolveVoiceConversationAction('Okay Flow generame un video');
+        expect(action.kind).toBe('wait');
+    });
+
+    test('gatillo pelado "genera un documento" → wait', () => {
+        const action = resolveVoiceConversationAction('Okay Flow genera un documento');
+        expect(action.kind).toBe('wait');
+    });
+
+    test('gatillo con contenido "generame un video sobre la historia de México" → flu (IA)', () => {
+        const action = resolveVoiceConversationAction('Okay Flow generame un video sobre la historia de México');
+        expect(action.kind).toBe('flu');
+        expect(action.question).toContain('video sobre la historia');
+    });
+
+    test('gatillo con contenido "genera un documento de la minuta" → flu (IA)', () => {
+        const action = resolveVoiceConversationAction('Okay Flow genera un documento de la minuta');
+        expect(action.kind).toBe('flu');
+    });
+
+    test('gatillo pelado sin wake word también espera (nunca dispara de inmediato)', () => {
+        const action = resolveVoiceConversationAction('generame un video');
+        // Aunque no haya wake word, el gatillo pelado nunca debe disparar la
+        // generación al instante → wait (sigue escuchando la descripción).
+        expect(action.kind).toBe('wait');
     });
 });

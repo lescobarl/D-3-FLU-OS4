@@ -1,8 +1,16 @@
+import { pickLabel } from '../../lib/textUtils.ts';
 /**
  * Pipeline visual: brief de workspace IA → prompt de generación. Sin números mágicos aquí.
  * Inventario: docs/reglas-duras-visual.md · listConfiguredVisualPipelineRules()
  */
+import {
+  buildPollinationsImageUrl,
+  POLLINATIONS_DEFAULTS,
+  VALID_VISUAL_TIPOS,
+} from '../../core/config/sharedConfig.ts'
 import { VISUAL_CONFIG } from './visualConfig.js'
+import { normalizeSpaces, shortText } from '../../lib/textUtils.ts'
+import { defaultLanguage } from './languageDefault.ts'
 
 export const VISUAL_PIPELINE_KEYS = [
   'primary',
@@ -35,10 +43,10 @@ export function getVisualPipelineConfig() {
   const openverse = image.openverse || {}
   const prompt = image.prompt || {}
   return {
-    primary: String(pipeline.primary || 'pollinations').trim(),
+    primary: String(pipeline.primary || POLLINATIONS_DEFAULTS.ID).trim(),
     visualTypes: Array.isArray(pipeline.visualTypes)
       ? pipeline.visualTypes.map((t) => String(t || '').trim().toLowerCase()).filter(Boolean)
-      : ['image_prompt', 'diagram', '3d'],
+      : [...VALID_VISUAL_TIPOS],
     errorFallback: String(pipeline.errorFallback || 'localSvg').trim(),
     stockSearchEnabled: pipeline.stockSearch?.enabled === true,
     stockQueryMode: String(pipeline.stockSearch?.queryMode || 'fullBrief').trim(),
@@ -65,42 +73,29 @@ export function listConfiguredVisualPipelineRules() {
   })
 }
 
-function normalizeText(value = '') {
-  return String(value || '')
-    .replace(/\s+/g, ' ')
-    .trim()
-}
-
-function shortText(value = '', max) {
-  const text = normalizeText(value)
-  const limit = Number.isFinite(max) && max > 0 ? max : text.length
-  if (text.length <= limit) return text
-  return `${text.slice(0, limit)}…`
-}
-
 /** Núcleo del brief: solo campos del workspace (decisión IA). */
 export function resolveVisualBriefCore(workspace = {}) {
   return shortText(
-    normalizeText(workspace.prompt_visual || workspace.contenido || workspace.titulo || ''),
+    normalizeSpaces(workspace.prompt_visual || workspace.contenido || workspace.titulo || ''),
     getVisualPipelineConfig().promptMaxSubjectChars,
   )
 }
 
-function templateForType(tipo = '', language = 'es') {
+function templateForType(tipo = '', language = defaultLanguage()) {
   const promptCfg = cfg().prompt || {}
   if (tipo === 'diagram') {
-    return language === 'en' ? promptCfg.diagram3dLead?.en : promptCfg.diagramLead?.es
+    return pickLabel(promptCfg.diagramLead, language, promptCfg.diagramLead?.es ?? '')
   }
   if (tipo === '3d') {
-    return language === 'en' ? promptCfg.diagram3dLead?.en : promptCfg.diagram3dLead?.es
+    return pickLabel(promptCfg.diagram3dLead, language, promptCfg.diagram3dLead?.es ?? '')
   }
-  return language === 'en' ? promptCfg.imagePromptLeadReal?.en : promptCfg.imagePromptLeadReal?.es
+  return pickLabel(promptCfg.imagePromptLeadReal, language, promptCfg.imagePromptLeadReal?.es ?? '')
 }
 
 /**
  * Prompt de generación fiel al workspace (misma fuente para foto, diagrama y 3D).
  */
-export function buildGenerationPrompt(workspace = {}, language = 'es') {
+export function buildVisualGenerationPrompt(workspace = {}, language = defaultLanguage()) {
   const type = String(workspace.tipo || '').trim().toLowerCase()
   const core = resolveVisualBriefCore(workspace)
   if (!core) return ''
@@ -132,22 +127,23 @@ export function hashPromptSeed(input = '') {
 export function buildPollinationsArtifact(prompt = '', { seedInput = '' } = {}) {
   const c = getVisualPipelineConfig()
   const seed = hashPromptSeed(seedInput || prompt)
-  const params = new URLSearchParams({
-    width: String(c.imageWidth),
-    height: String(c.imageHeight),
-    model: c.pollinationsModel,
-    seed: String(seed),
-  })
-  if (c.pollinationsNologo) params.set('nologo', 'true')
-  if (c.pollinationsEnhance) params.set('enhance', 'true')
-
+  // Ensamblado delegado al dueno (P7.6). Antes se construia aqui a mano y evadia
+  // transportSingleOwnerGuard porque usaba params.set('nologo', 'true') en vez del
+  // literal nologo=true que el guard buscaba.
   const base = c.pollinationsBaseUrl.replace(/\/$/, '')
-  const image_url = `${base}/prompt/${encodeURIComponent(prompt)}?${params.toString()}`
+  const image_url = buildPollinationsImageUrl(`${base}/prompt`, prompt, {
+    width: c.imageWidth,
+    height: c.imageHeight,
+    seed,
+    model: c.pollinationsModel,
+    nologo: c.pollinationsNologo,
+    enhance: c.pollinationsEnhance,
+  })
 
   return {
     image_url,
     trace: {
-      provider: 'pollinations',
+      provider: POLLINATIONS_DEFAULTS.ID,
       model: c.pollinationsModel,
       kind: 'url',
       source: 'pollinations_generation',

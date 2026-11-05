@@ -34,6 +34,16 @@ const VOICE_SRC = readFileSync('./src/voice/hooks/useFluVoiceAssistant.js', 'utf
 const AUTONOMY_SRC = readFileSync('./src/core/autonomy/useAutonomyIntegration.ts', 'utf-8');
 const PROXY_SRC = readFileSync('./src/server/geminiProxy.ts', 'utf-8');
 
+/**
+ * ¿El bloque del rebuild del reconocedor TOCA la locución viva? Un rebuild solo puede
+ * rearmar la medida de identidad: commitear el parcial, resetear la línea/preview o
+ * cerrar la locución son el defecto medido (P9.60/Bug D) o la ruta retirada.
+ * @param block Cuerpo de `flushListenStateBeforeRebuild`.
+ */
+export function rebuildTocaLaLocucion(block: string): boolean {
+    return /syncConversationStream|turnCommit|listenStateRef\.current\.(?:openLine|pendingInterim)|openPreviewTurnRef|lastStreamPreviewRef|setLiveTranscript\(''\)|motorConversacionRef\.current\.cerrar|cerrarMotorConversacion/.test(block);
+}
+
 // ============================================================
 // Bug A — ReferenceError: resolvedSpeakerName is not defined
 // ============================================================
@@ -115,20 +125,23 @@ describe('🧪 Guard de estabilidad — Bug B: Maximum update depth (stopAllSyst
 // ============================================================
 describe('🧪 Guard de estabilidad — Bug C: el proxy no puede tumbar Vite', () => {
     it('sendJson protege la escritura ante socket cerrado (try/catch + guard writableEnded/destroyed)', () => {
-        const sendStart = PROXY_SRC.indexOf('function sendJson(');
+        const OWNER_SRC = readFileSync('./src/server/httpJson.ts', 'utf-8');
+        // El proxy ya NO tiene copia propia (auditoria 2026-10-02): el escritor
+        // unico vive en httpJson y el proxy lo importa.
+        expect(PROXY_SRC).not.toContain('function sendJson(');
+        expect(PROXY_SRC).toContain("import { sendJson");
+        const sendStart = OWNER_SRC.indexOf('export function sendJson(');
         expect(sendStart, 'Debe existir la función sendJson').toBeGreaterThan(-1);
-        const sendBlock = PROXY_SRC.slice(sendStart, sendStart + 600);
+        const sendBlock = OWNER_SRC.slice(sendStart, sendStart + 700);
 
         expect(sendBlock).toContain('try {');
         expect(sendBlock).toContain('res.writableEnded || res.destroyed');
-        expect(sendBlock).toContain('catch (err: any)');
+        expect(sendBlock).toContain('catch (err: unknown)');
     });
 
     it('todos los middleware handlers de IA están envueltos en try/catch exterior', () => {
         const routes = [
             '/api/gemini/contract',
-            '/api/gemini/summary',
-            '/api/gemini/participant-eval',
             '/api/gemini/vision',
             '/api/gemini/text',
             '/api/workspace-image',
@@ -157,5 +170,66 @@ describe('🧪 Guard de estabilidad — Bug C: el proxy no puede tumbar Vite', (
         const handleBlock = PROXY_SRC.slice(handleStart, handleEnd > handleStart ? handleEnd : handleStart + 5000);
         expect(handleBlock, 'handleContract debe tener try/catch interno').toContain('try {');
         expect(handleBlock).toContain('sendJson(res, error.status || 500');
+    });
+});
+
+// ============================================================
+// Bug D — "hoa" + escucha pasmada: flushListenStateBeforeRebuild
+//         NO debe commitear interinos parciales como turnos finales
+// ============================================================
+// Síntoma reportado: la transcripción solo escribía "hoa" y luego se
+// detenía ("escucha pasmada"). Causa raíz: el watchdog de stall en modo
+// conversación reconstruye el reconocimiento cada ~4.2s sin ingress, y
+// flushListenStateBeforeRebuild() commitaba el interino parcial en vuelo
+// (p.ej. "hoa" de "hola") como turno final vía syncConversationStream
+// ({ turnCommit: true }). Eso creaba filas basura y reiniciaba la línea
+// abierta, de modo que cada ciclo volvía a commitear otro fragmento.
+//
+// La corrección: en un rebuild el interino parcial se DESCARTA (no se
+// commitea) y la línea abierta se resetea limpia, sin emitir fila al log.
+describe('🧪 Guard de estabilidad — Bug D: el rebuild del reconocedor no commitea interinos parciales', () => {
+    // Extrae el bloque completo de rebuildRecognition (desde su declaración hasta el
+    // cierre del useCallback).
+    function rebuildBlock(): string {
+        const start = VOICE_SRC.indexOf('const rebuildRecognition = useCallback');
+        expect(start, 'Debe existir rebuildRecognition').toBeGreaterThan(-1);
+        // El bloque termina en el "}, [" que cierra el useCallback + su array de deps.
+        const end = VOICE_SRC.indexOf('}, [', start);
+        expect(end, 'El useCallback debe cerrarse con }, [').toBeGreaterThan(start);
+        return VOICE_SRC.slice(start, end);
+    }
+
+    it('existe el rebuild del reconocedor y NO commitea el interino parcial', () => {
+        // Corte 2026-10-26: `flushListenStateBeforeRebuild` salio con la tuberia vieja.
+        // El rebuild vivo es `rebuildRecognition`: recrea el SR y re-cablea los eventos
+        // SIN tocar la locucion del modulo (el defecto Bug D era commitear el parcial
+        // en vuelo como turno final).
+        expect(VOICE_SRC).toContain('const rebuildRecognition = useCallback');
+        expect(rebuildTocaLaLocucion(rebuildBlock()), 'el rebuild no toca la locución viva').toBe(false);
+    });
+
+    it('re-cablea el SR y NO cierra la sesion ni rearma el preflight del turno (el módulo es su dueño)', () => {
+        const block = rebuildBlock();
+        // Contrato nuevo (corte 2026-10-26): la locución viva y su cierre son del módulo
+        // CONVERSACIÓN, que SOBREVIVE al rebuild con su sesión abierta (edb4a2b6). El hook
+        // solo recrea el reconocedor y re-cablea onresult/onend/onerror.
+        expect(block, 're-cablea los eventos del SR nuevo').toContain('wireRecognitionEvents(Recognition)');
+        // El preflight de identidad del turno ya no vive en el hook (lo mide el módulo).
+        expect(VOICE_SRC, 'el preflight del turno ya no vive en el hook').not.toContain('preflightScheduledForTurnRef');
+        expect(block, 'el rebuild NO cierra la locución del módulo').not.toContain('.cerrar(');
+        // La "ultima frase" NO se vacia en el rebuild (spec del dueno 2026-10-11): antes la
+        // borraba a mitad de frase y producia el borra-y-reaparece. Su dueno es el reset de sesion/voz.
+        expect(block, 'NO debe borrar la memoria de la frase viva').not.toContain("publishedLiveRef.current = ''");
+    });
+
+    it('PRUEBA DE DETECTOR: el bloque que SÍ toca la locución viva se marca', () => {
+        const infractor =
+            'const flushListenStateBeforeRebuild = useCallback(() => {' +
+            "  listenStateRef.current.openLine = ''" +
+            '  syncConversationStream({ turnCommit: true })' +
+            '}, [])';
+        expect(rebuildTocaLaLocucion(infractor), 'el defecto medido (commit del parcial)').toBe(true);
+        const conCierre = 'const x = useCallback(() => { motorConversacionRef.current.cerrar("system") }, [])';
+        expect(rebuildTocaLaLocucion(conCierre), 'cerrar la locución en el rebuild').toBe(true);
     });
 });

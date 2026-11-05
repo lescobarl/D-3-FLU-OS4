@@ -10,23 +10,43 @@ import {
   isMinuteGenerationRequest,
   isMinuteSaveRequest,
   planConversationDispatch,
-  resolveFinalConversationAction,
 } from './audioMath.js'
+import { COMMAND_IDS } from './commandIds.js'
+import { defaultLanguage } from './languageDefault.ts'
 
 export const NAVIGATION_COMMAND_IDS = Object.freeze([
-  'INICIAR_CONVERSACION',
-  'GENERAR_RESUMEN',
-  'GUARDAR_MINUTA',
-  'ABRIR_ESCUCHA',
-  'CERRAR_ESCUCHA',
-  'REGISTRAR_PARTICIPANTE',
-  'FLU_WAKE',
-  'FLU_ADELANTE',
-  'FLU_ESPERA',
-  'ANALIZAR_DOCUMENTO',
-  'ANALIZAR_APP',
-  'GENERAR_DOCUMENTO',
-  'GENERAR_VIDEO',
+  FLU_CONFIG.navigation.sessionResetCommand,
+  COMMAND_IDS.GENERAR_RESUMEN,
+  COMMAND_IDS.GUARDAR_MINUTA,
+  COMMAND_IDS.ABRIR_ESCUCHA,
+  COMMAND_IDS.CERRAR_ESCUCHA,
+  COMMAND_IDS.REGISTRAR_PARTICIPANTE,
+  COMMAND_IDS.FLU_WAKE,
+  COMMAND_IDS.FLU_ADELANTE,
+  COMMAND_IDS.FLU_ESPERA,
+  COMMAND_IDS.ANALIZAR_DOCUMENTO,
+  COMMAND_IDS.ANALIZAR_APP,
+  COMMAND_IDS.GENERAR_DOCUMENTO,
+  COMMAND_IDS.GENERAR_VIDEO,
+  COMMAND_IDS.NAVEGAR,
+  COMMAND_IDS.BUSCAR,
+  // P1-C (§1.3.1) — autoconocimiento por voz (fast-path local sin IA).
+  COMMAND_IDS.CONOCER_FLU,
+])
+
+/**
+ * Subconjunto de comandos que Gemini puede emitir como safety net.
+ * Los fast-paths locales (BUSCAR, CONOCER_FLU, GENERAR_VIDEO, etc.) NO deben
+ * llegar a Gemini: se resuelven antes en detectUiVoiceCommand/detectSessionVoiceCommand.
+ * Esta lista es la única fuente de verdad para gemini.js (schema + user prompt),
+ * de modo que añadir/eliminar un comando inferible se sincroniza automáticamente.
+ */
+export const GEMINI_INFERABLE_COMMAND_IDS = Object.freeze([
+  COMMAND_IDS.FLU_WAKE,
+  FLU_CONFIG.navigation.sessionResetCommand,
+  COMMAND_IDS.CERRAR_ESCUCHA,
+  COMMAND_IDS.ABRIR_ESCUCHA,
+  COMMAND_IDS.NAVEGAR,
 ])
 
 export function getVoiceCommands(config = FLU_CONFIG) {
@@ -51,11 +71,8 @@ export function userRequestedNavigationCommand(
   if (!cmd) return false
   const text = cleanForSpeech(transcript)
   if (!text) return false
-  if (cmd === 'GENERAR_RESUMEN') return isMinuteGenerationRequest(text)
-  if (cmd === 'GUARDAR_MINUTA') return isMinuteSaveRequest(text)
-  if (cmd === 'FLU_WAKE' || cmd === 'FLU_ADELANTE' || cmd === 'FLU_ESPERA') {
-    return detectSessionVoiceCommand(text, voiceCommands) === cmd
-  }
+  if (cmd === COMMAND_IDS.GENERAR_RESUMEN) return isMinuteGenerationRequest(text)
+  if (cmd === COMMAND_IDS.GUARDAR_MINUTA) return isMinuteSaveRequest(text)
   return detectSessionVoiceCommand(text, voiceCommands) === cmd
 }
 
@@ -80,12 +97,20 @@ export function planVoiceCommandDispatch(
 }
 
 export function resolveVoiceConversationAction(text = '', voiceCommands = getVoiceCommands()) {
-  return resolveFinalConversationAction(text, voiceCommands)
+  // Derivación ÚNICA: delega en el planificador canónico, el único que llama a
+  // deriveQueryFromRow. Fallback no-nulo con la misma forma.
+  return (
+    planConversationDispatch(text, voiceCommands).action ?? {
+      kind: 'log',
+      question: '',
+      searchQuery: '',
+    }
+  )
 }
 
 export function getCommandSpeech(
   comando = '',
-  language = 'es',
+  language = defaultLanguage(),
   config = FLU_CONFIG,
   params = {},
 ) {
@@ -103,10 +128,11 @@ export function getCommandSpeech(
   if (name) {
     text = text.replace(/\{name\}/gi, name)
   }
+  // El marcador es una RANURA, nunca texto: si nadie aporto el dato, la ranura se retira
+  // (defecto medido por el dueno 2026-10-12 21:37: FLU dijo literalmente "Registrado {name}.").
   return text
-}
-
-/** @deprecated Usar getCommandSpeech */
-export function getNavigationCommandSpeech(comando = '', language = 'es') {
-  return getCommandSpeech(comando, language)
+    .replace(/\s*\{name\}\s*/gi, '')
+    .replace(/\s+([.,;!?])/g, '$1')
+    .replace(/\s+/g, ' ')
+    .trim()
 }

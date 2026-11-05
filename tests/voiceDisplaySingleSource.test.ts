@@ -1,0 +1,105 @@
+/**
+ * voiceDisplaySingleSource — Invariante §9.3: UNA SOLA derivación de la frase visible.
+ *
+ * Nace ROJO (§10.2): lista `archivo:línea:contenido` mientras existan derivaciones
+ * competidoras de "última frase" fuera del selector canónico `selectVisiblePhrase`.
+ *
+ *   C1  sin derivación muerta `phraseDisplay` (App re-derivaba la frase).
+ *   C2  `listenParity` usa la lib única `evaluateListenParity` (sin re-normalizar inline).
+ *   C3  la última frase del usuario se deriva por `deriveUserLastText` (sin escaneo inline).
+ *   C4  `selectVisiblePhrase` es el ÚNICO selector de frase visible.
+ */
+import { describe, expect, it } from 'vitest'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join, relative } from 'node:path'
+import { walkFiles } from './_helpers'
+
+const ROOT = process.cwd()
+const SRC = join(ROOT, 'src')
+
+const FILES = walkFiles(SRC, /\.(ts|tsx|js|jsx|mjs)$/)
+const rel = (f: string) => relative(ROOT, f).replace(/\\/g, '/')
+const fileLines = (f: string) => readFileSync(f, 'utf8').split(/\r?\n/)
+const stripLineComment = (line: string) => {
+  const trimmed = line.trim()
+  if (trimmed.startsWith('*') || trimmed.startsWith('/*') || trimmed.startsWith('//')) return ''
+  return line.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/, '')
+}
+
+function grep(re: RegExp, files: string[]): string[] {
+  const out: string[] = []
+  for (const f of files) {
+    fileLines(f).forEach((raw, index) => {
+      const line = stripLineComment(raw)
+      re.lastIndex = 0
+      if (re.test(line)) out.push(`${rel(f)}:${index + 1}:${line.trim().slice(0, 110)}`)
+    })
+  }
+  return out
+}
+
+const count = (re: RegExp, files: string[]) => grep(re, files).length
+
+describe('voiceDisplaySingleSource — 1 sola derivación de frase visible (§9.3)', () => {
+  it('C1 — no existe `phraseDisplay` (derivación muerta)', () => {
+    const findings = grep(/phraseDisplay/, FILES)
+    expect(
+      findings,
+      `Derivaciones competidoras de display (N=${findings.length}); debe quedar 0:\n  ${findings.join('\n  ')}`,
+    ).toEqual([])
+  })
+
+  it('C2 — listenParity usa la lib única (sin re-normalizar inline)', () => {
+    const inline = grep(/liveNorm/, [join(SRC, 'App.tsx')])
+    expect(
+      inline,
+      `Normalización inline de listenParity (N=${inline.length}); usar evaluateListenParity:\n  ${inline.join('\n  ')}`,
+    ).toEqual([])
+    const lib = grep(/evaluateListenParity\s*\(/, FILES)
+    expect(
+      lib.length,
+      `listenParity debe consumir evaluateListenParity (N=${lib.length})`,
+    ).toBeGreaterThanOrEqual(1)
+  })
+
+  it('C3 — última frase del usuario se deriva por la lib (sin escaneo inline)', () => {
+    const defined = count(/export function deriveUserLastText/, FILES)
+    expect(defined, `deriveUserLastText debe definirse 1 vez (N=${defined})`).toBe(1)
+    const used = grep(/deriveUserLastText\s*\(/, [join(SRC, 'App.tsx')])
+    expect(
+      used.length,
+      `App debe consumir deriveUserLastText (N=${used.length})`,
+    ).toBeGreaterThanOrEqual(1)
+  })
+
+  it('C4 — `selectVisiblePhrase` es el ÚNICO selector de frase visible', () => {
+    const definition = count(/export function selectVisiblePhrase/, FILES)
+    const uses = count(/selectVisiblePhrase\s*\(/, FILES) - definition
+    expect(definition, `selectVisiblePhrase debe definirse 1 vez (N=${definition})`).toBe(1)
+    expect(uses, `selectVisiblePhrase debe usarse al menos 1 vez (N=${uses})`).toBeGreaterThanOrEqual(1)
+  })
+})
+
+/** P2.4 - prueba de DETECTOR: escribe entradas sinteticas en un directorio temporal
+ *  y comprueba que el detector MARCA la infractora y PERDONA la limpia. */
+function dirSintetico(files: Record<string, string>): string {
+  const dir = mkdtempSync(join(tmpdir(), 'p24-'))
+  for (const [n, c] of Object.entries(files)) writeFileSync(join(dir, n), c)
+  return dir
+}
+
+describe('P2.4 voiceDisplaySingleSource - el detector no es decorativo', () => {
+  it('marca la derivacion muerta sintetica y ve el selector canonico', () => {
+    const dir = dirSintetico({
+      'infractor.ts': 'const phraseDisplay = x',
+      'limpio.ts': 'const visible = selectVisiblePhrase(row)',
+    })
+    try {
+      expect(grep(/phraseDisplay/, walkFiles(dir, /\.(ts|tsx|js|jsx|mjs)$/))).toHaveLength(1)
+      expect(grep(/selectVisiblePhrase\s*\(/, walkFiles(dir, /\.(ts|tsx|js|jsx|mjs)$/))).toHaveLength(1)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+})

@@ -3,6 +3,10 @@
  * Defaults en fluConfig.fluParticipant; overrides en localStorage (flu-participant-settings).
  */
 import { FLU_CONFIG } from './fluConfig.js'
+import { logCaughtError } from '../../lib/caughtError.ts';
+import { normalizeLang } from '../../core/config/localeConfig.ts';
+import { hasLocalStorage, localGet, localRemove, localSet } from '../../core/storage/localStore.ts';
+import { defaultLanguage } from './languageDefault.ts'
 
 export const FLU_PARTICIPANT_STORAGE_KEY = 'flu-participant-settings'
 const LEGACY_ENABLED_KEY = 'flu-participant-enabled'
@@ -50,6 +54,9 @@ export const FLU_PARTICIPANT_EDITABLE_FIELDS = Object.freeze([
   { key: 'minDraftChars', type: 'number', min: 8, max: 200, step: 1 },
 ])
 
+/**
+ * @returns {Record<string, unknown>}
+ */
 function pickDefaultsFrom(config = FLU_CONFIG) {
   const block = config.fluParticipant
   if (!block || typeof block !== 'object') {
@@ -66,13 +73,14 @@ function pickDefaultsFrom(config = FLU_CONFIG) {
 }
 
 function readStorageOverrides() {
-  if (typeof localStorage === 'undefined') return {}
+  if (!hasLocalStorage()) return {}
   try {
-    const raw = localStorage.getItem(FLU_PARTICIPANT_STORAGE_KEY)
+    const raw = localGet(FLU_PARTICIPANT_STORAGE_KEY)
     if (!raw) return {}
     const parsed = JSON.parse(raw)
     return parsed && typeof parsed === 'object' ? parsed : {}
-  } catch {
+  } catch (e) {
+        logCaughtError('[catch] src/voice/lib/fluParticipantConfig.js', e);
     return {}
   }
 }
@@ -111,10 +119,16 @@ function coerceParticipantValue(key, value) {
   return num
 }
 
+/**
+ * @returns {Record<string, unknown>}
+ */
 export function getFluParticipantDefaults(config = FLU_CONFIG) {
   return pickDefaultsFrom(config)
 }
 
+/**
+ * @returns {Record<string, unknown>}
+ */
 export function getFluParticipantConfig(config = FLU_CONFIG) {
   const merged = { ...pickDefaultsFrom(config) }
   const overrides = readStorageOverrides()
@@ -123,31 +137,36 @@ export function getFluParticipantConfig(config = FLU_CONFIG) {
       merged[key] = coerceParticipantValue(key, overrides[key])
     }
   }
-  if (typeof localStorage !== 'undefined') {
-    const legacy = localStorage.getItem(LEGACY_ENABLED_KEY)
+  // El JSON es la fuente canónica. La clave heredada solo RELLENA si el JSON no
+  // trae `enabled` (instalaciones antiguas); nunca lo pisa.
+  if (hasLocalStorage() && !('enabled' in overrides)) {
+    const legacy = localGet(LEGACY_ENABLED_KEY)
     if (legacy === '0') merged.enabled = false
     if (legacy === '1') merged.enabled = true
   }
   return merged
 }
 
+/**
+ * @param {Record<string, unknown>} [partial]
+ * @returns {Record<string, unknown>}
+ */
 export function setFluParticipantOverrides(partial = {}) {
-  if (typeof localStorage === 'undefined') return getFluParticipantConfig()
+  if (!hasLocalStorage()) return getFluParticipantConfig()
   const current = readStorageOverrides()
   const next = { ...current }
   for (const [key, value] of Object.entries(partial)) {
     if (!FLU_PARTICIPANT_CONFIG_KEYS.includes(key)) continue
     next[key] = coerceParticipantValue(key, value)
   }
-  localStorage.setItem(FLU_PARTICIPANT_STORAGE_KEY, JSON.stringify(next))
-  localStorage.setItem(LEGACY_ENABLED_KEY, next.enabled === false ? '0' : '1')
+  localSet(FLU_PARTICIPANT_STORAGE_KEY, JSON.stringify(next))
   return getFluParticipantConfig()
 }
 
 export function resetFluParticipantOverrides() {
-  if (typeof localStorage === 'undefined') return getFluParticipantConfig()
-  localStorage.removeItem(FLU_PARTICIPANT_STORAGE_KEY)
-  localStorage.removeItem(LEGACY_ENABLED_KEY)
+  if (!hasLocalStorage()) return getFluParticipantConfig()
+  localRemove(FLU_PARTICIPANT_STORAGE_KEY)
+  localRemove(LEGACY_ENABLED_KEY)
   return getFluParticipantConfig()
 }
 
@@ -155,19 +174,27 @@ export function setFluParticipantEnabled(enabled) {
   return setFluParticipantOverrides({ enabled: Boolean(enabled) })
 }
 
+/**
+ * DUENO UNICO de "el participante esta activo": SOLO con encendido EXPLICITO
+ * (`enabled === true`). Defecto APAGADO (decision del dueno, P9.84): el participante
+ * es un SEGUNDO consumidor del LLM y competia con el turno principal (medido: su
+ * evento entro al historial y FLU respondio Me siento enojado hablando de otra
+ * cosa). Antes la puerta era `!== false` (fail-open): un `enabled` ausente la dejaba
+ * ENCENDIDA. Va a produccion solo si se demuestra que no inventa.
+ */
 export function isFluParticipantEnabled(config = FLU_CONFIG) {
-  return getFluParticipantConfig(config).enabled !== false
+  return getFluParticipantConfig(config).enabled === true
 }
 
-export function resolveFluParticipantFieldLabel(key = '', language = 'es', config = FLU_CONFIG) {
+export function resolveFluParticipantFieldLabel(key = '', language = defaultLanguage(), config = FLU_CONFIG) {
   const entry = config.fluParticipant?.ui?.fields?.[key] || {}
-  const lang = language === 'en' && entry.en ? 'en' : 'es'
+  const lang = normalizeLang(language)
   return entry[lang] || entry.es || entry.en || key
 }
 
-export function resolveFluParticipantFieldHint(key = '', language = 'es', config = FLU_CONFIG) {
+export function resolveFluParticipantFieldHint(key = '', language = defaultLanguage(), config = FLU_CONFIG) {
   const entry = config.fluParticipant?.ui?.fieldHints?.[key] || {}
-  const lang = language === 'en' && entry.en ? 'en' : 'es'
+  const lang = normalizeLang(language)
   return entry[lang] || entry.es || entry.en || ''
 }
 

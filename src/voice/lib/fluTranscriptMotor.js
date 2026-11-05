@@ -2,86 +2,54 @@
  * Lectores de config del motor de transcripción/ingress (sin fallbacks numéricos en código).
  * Inventario: docs/reglas-duras.md · validate-pause-config.mjs
  */
-import { FLU_CONFIG } from './fluConfig.js'
-
-export const INGRESS_GUARDS_KEYS = [
-  'forceNewRowShortFinalMaxWords',
-  'novelWordMinCount',
-  'novelWordMinTextLength',
-  'alternateNewRowMinLength',
-]
-
-export const SPEECH_MERGE_KEYS = [
-  'shortFinalKeywords',
-  'minKeywordConfidence',
-  'shortFinalMaxWords',
-  'shortFinalKeywordMinChars',
-]
+import { requireConfigBlock } from './configGuard.js'
 
 export function getSpeakerThresholdsCfg() {
-  const cfg = FLU_CONFIG.voiceIdentity?.capture?.conversationSpeakerThresholds
-  if (!cfg || typeof cfg !== 'object') {
-    throw new Error('fluConfig.voiceIdentity.capture.conversationSpeakerThresholds es obligatorio')
-  }
-  return cfg
+  return requireConfigBlock(['voiceIdentity', 'capture', 'conversationSpeakerThresholds'], 'fluConfig.voiceIdentity.capture.conversationSpeakerThresholds')
 }
 
 export function getIngressGuardsCfg() {
-  const cfg = FLU_CONFIG.transcript?.ingressGuards
-  if (!cfg || typeof cfg !== 'object') {
-    throw new Error('fluConfig.transcript.ingressGuards es obligatorio')
-  }
-  return cfg
+  return requireConfigBlock(['transcript', 'ingressGuards'], 'fluConfig.transcript.ingressGuards')
 }
 
 export function getSpeechMergeCfg() {
-  const cfg = FLU_CONFIG.transcript?.speechMerge
-  if (!cfg || typeof cfg !== 'object') {
-    throw new Error('fluConfig.transcript.speechMerge es obligatorio')
-  }
-  return cfg
+  return requireConfigBlock(['transcript', 'speechMerge'], 'fluConfig.transcript.speechMerge')
 }
 
-export function getAsrSegmentationCfg() {
-  const cfg = FLU_CONFIG.transcript?.asrSegmentation
-  if (!cfg || typeof cfg !== 'object') {
-    throw new Error('fluConfig.transcript.asrSegmentation es obligatorio')
-  }
-  return cfg
+/**
+ * POLITICAS DE TRANSCRIPCION: constantes de DOMINIO con un solo dueno (auditoria
+ * 2026-10-23). Eran literales repartidos por el pipeline (2 palabras en la caja, 24
+ * caracteres en la revision, 8 palabras y 48 caracteres en speechMerge, 2 letras en la
+ * clave de palabra) y cada modulo decidia por su cuenta. Se declaran aqui, una vez.
+ * @returns tabla congelada de umbrales de transcripcion
+ */
+export function getTranscriptPolicyCfg() {
+  return TRANSCRIPT_POLICY
 }
 
-export function getProfileMatchCfg() {
-  const cfg = FLU_CONFIG.voiceIdentity?.capture?.profileMatch
-  if (!cfg || typeof cfg !== 'object') {
-    throw new Error('fluConfig.voiceIdentity.capture.profileMatch es obligatorio')
-  }
-  return cfg
-}
+const TRANSCRIPT_POLICY = Object.freeze({
+  /** Palabras compartidas al arranque que acreditan "misma revision" en la caja. */
+  boxStablePrefixWords: 2,
+  /** Caja corta (<= N palabras): una palabra comun ya es arranque estable. */
+  boxShortBoxMaxWords: 4,
+  boxShortBoxPrefixWords: 1,
+  /** Caracteres de prefijo comun que acreditan "misma revision" de transcripcion. */
+  sameRevisionMinSharedChars: 24,
+  /** Palabras minimas para buscar tartamudeo / bloque de palabras repetido. */
+  stutterMinWords: 8,
+  /** Longitud (caracteres) desde la que `normalizeMicText` colapsa tartamudeo. */
+  stutterCharFloor: 48,
+  /** Letras minimas para que dos palabras compartan clave (prefijo). */
+  sameWordMinLetters: 2,
+  /** Caracteres minimos para colapsar un parrafo repetido consecutivo (transcripcion).
+   *  UNICA clave de ese colapso: la usan el pipeline y el default del colapsador. */
+  inlineRepeatMinChars: 24,
+  /** Repeticiones seguidas minimas que se colapsan como tartamudeo del ASR. */
+  stutterRepeatMinCount: 2,
+})
 
 export function getFluTimingCfg() {
-  const cfg = FLU_CONFIG.timing
-  if (!cfg || typeof cfg !== 'object') {
-    throw new Error('fluConfig.timing es obligatorio')
-  }
-  return cfg
-}
-
-export function listConfiguredIngressGuardsRules() {
-  const cfg = getIngressGuardsCfg()
-  return INGRESS_GUARDS_KEYS.filter((key) => key in cfg).map((key) => ({
-    key,
-    value: cfg[key],
-    source: 'fluConfig.transcript.ingressGuards',
-  }))
-}
-
-export function listConfiguredSpeechMergeRules() {
-  const cfg = getSpeechMergeCfg()
-  return SPEECH_MERGE_KEYS.filter((key) => key in cfg).map((key) => ({
-    key,
-    value: cfg[key],
-    source: 'fluConfig.transcript.speechMerge',
-  }))
+  return requireConfigBlock(['timing'], 'fluConfig.timing')
 }
 
 /** Set de palabras clave para filas cortas (speechMerge). */

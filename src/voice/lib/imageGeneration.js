@@ -1,16 +1,22 @@
 import { VISUAL_CONFIG } from './visualConfig.js'
+import { TIMEOUT_POLICY_MS } from '../../core/config/appConfig'
+import { shortText } from '../../lib/textUtils'
 import { resolveOpenverseStockArtifact } from './fluVisualStockSearch.js'
+import { logCaughtError } from '../../lib/caughtError';
+import { AI_PROVIDER_IDS } from '../../core/config/sharedConfig'
 import {
-  buildGenerationPrompt,
+  buildVisualGenerationPrompt,
   buildPollinationsArtifact,
   getVisualPipelineConfig,
   resolveVisualBriefCore,
   shouldUseLocalSvgOnError,
 } from './fluVisualPipeline.js'
+import { GENERATION_FAILED_SOURCE } from '../../lib/generationTrace';
+import { fetchWithDeadline } from '../../lib/fetchWithDeadline'
+import { defaultLanguage } from './languageDefault.ts'
 
 export {
-  buildGenerationPrompt,
-  buildGenerationPrompt as buildWorkspaceImagePrompt,
+  buildVisualGenerationPrompt,
   buildPollinationsArtifact,
   getVisualPipelineConfig,
   resolveVisualBriefCore,
@@ -18,10 +24,65 @@ export {
 
 const workspaceImageSourceCache = new Map()
 
-function normalizeText(value = '') {
-  return String(value || '')
-    .replace(/\s+/g, ' ')
-    .trim()
+/** Traza de OpenRouter para un resultado de imagen (dueño único). */
+function openRouterTrace({ source, hasImage, prompt, error, language }) {
+  return {
+    provider: AI_PROVIDER_IDS.OPENROUTER,
+    model: '',
+    kind: 'images',
+    source,
+    hasImage,
+    ...(error ? { error } : {}),
+    prompt,
+    ...(language ? { language } : {}),
+  }
+}
+
+/**
+ * Deadline UNICO de las llamadas al proxy local (`/api/*`). Antes cada funcion
+ * repetia su propio `AbortController` + `setTimeout` + `clearTimeout` con el mismo
+ * `timeoutMs` (3 copias medidas). Se conserva el `AbortError` a proposito: los
+ * `trace` distinguen timeout (`*_timeout`) de fallo generico, y cambiar el tipo de
+ * error cambiaria esa etiqueta.
+ */
+async function postJsonToProxy(url, body, timeoutMs) {
+  // P8.46: el deadline lo pone el primitivo unico; aqui solo el POST JSON. El
+  // AbortError se conserva crudo porque las trazas del proxy visual lo etiquetan
+  // (`workspace_image_timeout` / `openrouter_image_timeout` / `fal_video_timeout`).
+  return fetchWithDeadline(
+    url,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    },
+    timeoutMs,
+  )
+}
+
+/**
+ * Lee el detalle del cuerpo de un proxy visual fallido. Dueno unico: imagen de
+ * workspace, fallback OpenRouter y video fal comparten el manejo del error.
+ * @param {Response} response respuesta HTTP no ok
+ * @returns {Promise<string>} cuerpo del error, o '' si no se pudo leer
+ */
+async function readProxyErrorDetail(response) {
+  return response.text().catch((e) => { logCaughtError('[catch] src/voice/lib/imageGeneration.js', e); return ''; })
+}
+
+/**
+ * POST a un proxy visual con el idioma y la apiKey opcional. Dueno unico del
+ * contrato de esas llamadas: el deadline es el configurado para imagen.
+ * @param {string} url endpoint del proxy
+ * @param {Record<string, unknown>} payload campos propios del proveedor
+ * @param {string} apiKey clave opcional del usuario
+ */
+function postVisualProxy(url, payload, apiKey = '') {
+  return postJsonToProxy(
+    url,
+    { ...payload, ...(apiKey ? { apiKey } : {}) },
+    Number(VISUAL_CONFIG.image?.clientFetchTimeoutMs),
+  )
 }
 
 function escapeXml(value = '') {
@@ -30,12 +91,6 @@ function escapeXml(value = '') {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
-}
-
-function shortText(value = '', max = 260) {
-  const text = normalizeText(value)
-  if (text.length <= max) return text
-  return `${text.slice(0, max)}…`
 }
 
 function buildLocalSvgDataUrl(subject = '') {
@@ -70,8 +125,8 @@ function buildNotVisualTrace() {
   }
 }
 
-export async function resolveWorkspaceAiImageSource({ workspace = {}, language = 'es' } = {}) {
-  const prompt = buildGenerationPrompt(workspace, language)
+export async function resolveWorkspaceAiImageSource({ workspace = {}, language = defaultLanguage() } = {}) {
+  const prompt = buildVisualGenerationPrompt(workspace, language)
   const subject = resolveVisualBriefCore(workspace)
   return {
     image_url: buildLocalSvgDataUrl(subject),
@@ -87,10 +142,10 @@ export async function resolveWorkspaceAiImageSource({ workspace = {}, language =
   }
 }
 
-export async function buildWorkspaceImageArtifact(workspace = {}, language = 'es') {
+export async function buildWorkspaceImageArtifact(workspace = {}, language = defaultLanguage()) {
   const c = getVisualPipelineConfig()
   const type = String(workspace.tipo || '').trim().toLowerCase()
-  const prompt = buildGenerationPrompt(workspace, language)
+  const prompt = buildVisualGenerationPrompt(workspace, language)
 
   if (!prompt || !c.visualTypes.includes(type)) {
     return buildNotVisualTrace()
@@ -106,28 +161,24 @@ export async function buildWorkspaceImageArtifact(workspace = {}, language = 'es
     }
   }
 
-  if (c.primary === 'pollinations') {
-    return buildPollinationsArtifact(prompt, { seedInput: `${language}::${prompt}` })
-  }
-
   return buildPollinationsArtifact(prompt, { seedInput: `${language}::${prompt}` })
 }
 
-function buildWorkspaceImageRequestKey(workspace = {}, language = 'es') {
-  return `${language}::${buildGenerationPrompt(workspace, language)}`
+function buildWorkspaceImageRequestKey(workspace = {}, language = defaultLanguage()) {
+  return `${language}::${buildVisualGenerationPrompt(workspace, language)}`
 }
 
-async function resolveErrorFallback(workspace = {}, language = 'es', error = '') {
+async function resolveErrorFallback(workspace = {}, language = defaultLanguage(), error = '') {
   if (!shouldUseLocalSvgOnError()) {
     return {
       image_url: '',
       trace: {
         provider: 'local-proxy',
         kind: 'blob',
-        source: 'generation_failed',
+        source: GENERATION_FAILED_SOURCE,
         hasImage: false,
         error: error || 'unknown',
-        prompt: buildGenerationPrompt(workspace, language),
+        prompt: buildVisualGenerationPrompt(workspace, language),
       },
     }
   }
@@ -141,8 +192,8 @@ async function resolveErrorFallback(workspace = {}, language = 'es', error = '')
   }
 }
 
-export async function fetchWorkspaceImageSource({ workspace = {}, language = 'es', apiKey = '' } = {}) {
-  const prompt = buildGenerationPrompt(workspace, language)
+export async function fetchWorkspaceImageSource({ workspace = {}, language = defaultLanguage(), apiKey = '' } = {}) {
+  const prompt = buildVisualGenerationPrompt(workspace, language)
   const type = String(workspace.tipo || '').trim().toLowerCase()
   const c = getVisualPipelineConfig()
 
@@ -164,24 +215,15 @@ export async function fetchWorkspaceImageSource({ workspace = {}, language = 'es
   if (cached?.promise) return cached.promise
 
   const promise = (async () => {
-    const timeoutMs = Number(VISUAL_CONFIG.image?.clientFetchTimeoutMs)
-    const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), timeoutMs)
-
     try {
-      const response = await fetch('/api/workspace-image', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        signal: controller.signal,
-        body: JSON.stringify({
-          workspace,
-          language,
-          ...(apiKey ? { apiKey } : {}),
-        }),
-      })
+      const response = await postVisualProxy(
+        VISUAL_CONFIG.image.proxies.workspaceImage,
+        { workspace, language },
+        apiKey,
+      )
 
       if (!response.ok) {
-        const detail = await response.text().catch(() => '')
+        const detail = await readProxyErrorDetail(response)
         return resolveErrorFallback(
           workspace,
           language,
@@ -227,8 +269,6 @@ export async function fetchWorkspaceImageSource({ workspace = {}, language = 'es
         return resolveErrorFallback(workspace, language, 'workspace_image_timeout')
       }
       throw error
-    } finally {
-      clearTimeout(timer)
     }
   })()
 
@@ -243,7 +283,129 @@ export async function fetchWorkspaceImageSource({ workspace = {}, language = 'es
     }
     return resolved
   } catch (error) {
+        logCaughtError('[catch] src/voice/lib/imageGeneration.js', error);
     workspaceImageSourceCache.delete(cacheKey)
     return resolveErrorFallback(workspace, language, error?.message || 'unknown')
+  }
+}
+
+/**
+ * Fallback real de imagen por OpenRouter (servidor). Se invoca cuando la
+ * imagen de Pollinations falla al cargar en el navegador (onError del <img>),
+ * para no dejar el placeholder «chipote».
+ * POST /api/openrouter-image → { imageUrl (data URL), trace }.
+ * Devuelve { image_url, trace }; image_url vacío si no hay key o falla.
+ */
+export async function fetchOpenRouterImageFallback({
+  workspace = {},
+  language = defaultLanguage(),
+  apiKey = '',
+} = {}) {
+  const prompt = buildVisualGenerationPrompt(workspace, language)
+  try {
+    const response = await postVisualProxy(
+      VISUAL_CONFIG.image.proxies.openrouterImage,
+      { prompt, language },
+      apiKey,
+    )
+
+    if (!response.ok) {
+      const detail = await readProxyErrorDetail(response)
+      return {
+        image_url: '',
+        trace: openRouterTrace({
+          source: 'proxy_error',
+          hasImage: false,
+          prompt,
+          error: detail || `openrouter_image_http_${response.status}`,
+        }),
+      }
+    }
+
+    const payload = await response.json()
+    if (!payload?.imageUrl) {
+      return {
+        image_url: '',
+        trace:
+          payload?.trace ||
+          openRouterTrace({ source: 'empty_response', hasImage: false, prompt }),
+      }
+    }
+
+    return {
+      image_url: payload.imageUrl,
+      trace:
+        payload.trace ||
+        openRouterTrace({
+          source: 'openrouter_image_fallback',
+          hasImage: true,
+          prompt,
+          language,
+        }),
+    }
+  } catch (error) {
+        logCaughtError('[catch] src/voice/lib/imageGeneration.js', error);
+    return {
+      image_url: '',
+      trace: openRouterTrace({
+        source:
+          error?.name === 'AbortError' ? 'openrouter_image_timeout' : GENERATION_FAILED_SOURCE,
+        hasImage: false,
+        prompt,
+        error: error?.message || 'unknown',
+      }),
+    }
+  }
+}
+
+/**
+ * Video REAL con fal.ai (text-to-video). Se invoca desde la generación de
+ * video (GENERAR_VIDEO) con el tema/prompt del usuario.
+ * POST /api/fal-video → { videoUrl (url del clip), trace }.
+ * Devuelve { video_url, trace }; video_url vacío si no hay key o falla.
+ */
+export async function fetchFalVideo({ prompt = '', language = defaultLanguage(), apiKey = '', model = '' } = {}) {
+  if (!prompt.trim()) {
+    return {
+      video_url: '',
+      trace: { provider: 'falai', source: 'empty_prompt', hasVideo: false, prompt },
+    }
+  }
+  try {
+    const response = await postJsonToProxy(
+      VISUAL_CONFIG.image.proxies.falVideo,
+      { prompt, language, ...(apiKey ? { apiKey } : {}), ...(model ? { model } : {}) },
+      TIMEOUT_POLICY_MS.falVideoFetchAbort,
+    )
+    if (!response.ok) {
+      const detail = await readProxyErrorDetail(response)
+      return {
+        video_url: '',
+        trace: {
+          provider: 'falai',
+          source: 'proxy_error',
+          hasVideo: false,
+          error: detail || `fal_video_http_${response.status}`,
+          prompt,
+        },
+      }
+    }
+    const payload = await response.json()
+    return {
+      video_url: payload?.videoUrl || '',
+      trace: payload?.trace || { provider: 'falai', source: 'empty_response', hasVideo: false, prompt },
+    }
+  } catch (error) {
+        logCaughtError('[catch] src/voice/lib/imageGeneration.js', error);
+    return {
+      video_url: '',
+      trace: {
+        provider: 'falai',
+        source: error?.name === 'AbortError' ? 'fal_video_timeout' : GENERATION_FAILED_SOURCE,
+        hasVideo: false,
+        error: error?.message || 'unknown',
+        prompt,
+      },
+    }
   }
 }

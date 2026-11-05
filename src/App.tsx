@@ -20,13 +20,17 @@
 //   - Obligación #7: Sync tuple [revision, updated_at, deleted]
 // ============================================================
 
-import React, { useState, useCallback, useRef, useMemo, useEffect } from 'react';
+import React, { useState, useCallback, useRef, useMemo, useEffect, lazy, Suspense } from 'react';
+import { isLiveRecord } from './core/db/recordCopy';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useConfigPersistence } from './hooks/useConfigPersistence';
+import { useCatalogsSettings } from './hooks/useCatalogsSettings';
+import { useDocumentGenerationBridge } from './hooks/useDocumentGenerationBridge';
 import { useBunnyStore, ensureAvatarPantsVisible, EXPRESSION_MAP } from './avatar';
 import { relayLog } from './lib/clientLogRelay';
-import { cleanForSpeech } from './lib/textUtils';
-import type { BunnyComponent } from './avatar/types/bunny';
+import { cleanForSpeech, pickLabel } from './lib/textUtils';
 import { v4 as uuidv4 } from 'uuid';
+import { NotificationCenterBell } from './components/NotificationCenterBell';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { FluBridgeProvider } from './context/FluBridgeContext';
 import { FluAvatarVoiceBridge } from './components/FluAvatarVoiceBridge';
@@ -35,29 +39,53 @@ import { useIntegrationStore, detectSentiment } from './store/integrationStore';
 import { useAuditLog } from './hooks/useAuditLog';
 import { useMinuteKnowledge } from './hooks/useMinuteKnowledge';
 import { useVoiceProfiles } from './hooks/useVoiceProfiles';
-import { useConversationPersistence } from './hooks/useConversationPersistence';
+import { useConversationPersistence, softDeleteConversationRows } from './hooks/useConversationPersistence';
 import { useFluParticipant } from './hooks/useFluParticipant';
-import { useSessionPersistence, loadSessionState } from './hooks/useSessionPersistence';
+import { useSessionPersistence, readSessionState, defaultSessionState } from './hooks/useSessionPersistence';
 import { useWorkspaceImage } from './hooks/useWorkspaceImage';
-import { useMinuteHandlers } from './hooks/useMinuteHandlers';
+import { useMinuteHandlers, type MinuteDraft } from './hooks/useMinuteHandlers';
 import { useNavigationCommands } from './hooks/useNavigationCommands';
-import { FLU_EVENTS, onFluEvent } from './core/events/fluEvents';
-import { STORAGE_KEYS, WELCOME_MESSAGE, UI_DEFAULTS, APP_BRANDING } from './core/config/appConfig';
-import type { ConversationState, WorkspaceEntry, FluProfile, VoiceConfig, PersonalityConfig, AdvancedConfig, ImageConfig } from './types/bridge';
+import { useCommunicationProfiles } from './hooks/useCommunicationProfiles';
+import { useBrowserProfiles } from './hooks/useBrowserProfiles';
+import { useSearchSites } from './hooks/useSearchSites';
+import { buildSelfManifesto, isSelfKnowledgeRequest } from './core/selfKnowledge/selfKnowledge';
+import { FLU_EVENTS, dispatchFluEvent, dispatchFluResetSearch, onFluEvent } from './core/events/fluEvents';
+import { STORAGE_KEYS, WELCOME_MESSAGE, APP_BRANDING, TIMEOUT_POLICY_MS } from './core/config/appConfig';
+import { shouldRolloverDay } from './core/days/dayRollover';
+import { dayKey } from './lib/dateKey';
+import type { ConversationState, FluContract, FluProfile } from './types/bridge';
+import type { VoiceProfileRow } from './voice/components/VoiceProfilesPanel';
 import { FLU_PROFILES } from './core/config/appConfig';
 import { geminiService } from './services/gemini';
-import { playSong, pauseMusic, stopMusic } from './services/musicPlayer';
+import { playSong, pauseMusic, stopMusic, isMusicPlaying } from './services/musicPlayer';
+import { shouldAutoPlayDanceTrack } from './core/media/musicActions';
 import { getPreferredAIProvider, setPreferredAIProvider } from './services/aiServiceFactory';
-import { extractTextFromImage, extractTextFromPdf } from './services/ocrService';
+import { extractTextFromImage } from './services/ocrService';
 import { useDocumentAnalysis } from './hooks/useDocumentAnalysis';
 import { useAppAnalysis } from './hooks/useAppAnalysis';
 import { useDocumentGeneration } from './hooks/useDocumentGeneration';
-import DocumentResultPanel from './components/DocumentResultPanel';
-import AppAnalysisPanel from './components/AppAnalysisPanel';
-import GenerationProgressPanel from './components/GenerationProgressPanel';
+import { buildGenerationTopic, normalizeWorkspaceDocumentFields, resolveDocumentTitle, type GenerationConversationSlice } from './lib/generationTopic';
+import { isDataUrl } from './lib/formatAdapters';
+import { resolveTurnArtifactKind } from './lib/turnArtifactKind';
+import { isMinuteGenerationRequest, isRecoverableRecognitionError } from './voice/api/audio'
+import { COMMAND_IDS, getCommandSpeech, normalizeJuego, resolveDeterministicCommand, resolveNoteVoiceIntent } from './voice/api/commands'
+import { FLU_CONFIG } from './voice/api/config'
+import { buildFluSpeechAuditRows, createConversationModeController, deriveUserLastText, evaluateListenParity, logFluReply, resolvedActionIdentity, resolveRowSpeakerLabel, selectVisiblePhrase } from './voice/api/conversation'
+import { applyKnownVoiceName, forgetVoiceName, isAutoSpeakerLabel, participantVoiceAnchorsForDiarization, resolveVoiceIdentity, resolveVoiceParticipants } from './voice/api/identity'
+import { resolveGeminiErrorPresentation } from './voice/api/media'
+import { cancelSpeech, isSpeechBusy, speakResponse, waitForSpeechIdle } from './voice/api/speech'
+import { formatStreamSttUiStatus, getFluParticipantConfig, isFluParticipantEnabled, setFluParticipantOverrides } from './voice/api/uiConfig';
+import { createMediaRequestGate } from './core/media/mediaRequestGate';
+import { buildResponseKey, isDuplicateResponseIn, pushResponseState } from './core/voice/responseGate';
+import {
+    loadSearchConfigOverrides,
+    saveSearchConfigOverrides,
+    clearSearchConfigOverrides,
+    type SearchConfigOverrides,
+} from './core/search/searchConfigOverrides';
 import { isSupportedDocument } from './lib/documentParser';
-import type { GenerationFormato } from './types/documentContracts';
-import { useAutonomyIntegration, AutonomyStatusPanel } from './core/autonomy';
+import { useAutonomyIntegration } from './core/autonomy';
+import { DEFAULT_MONITORED_COMPONENTS } from './core/autonomy/healthMonitor';
 import {
     detectActionInTranscript,
     detectEmotionInTranscript,
@@ -65,84 +93,119 @@ import {
 } from './lib/transcriptProcessor';
 import { useEnhancedBranding } from './core/branding/useEnhancedBranding';
 import { SeasonalEffects } from './core/branding/SeasonalEffects';
-import {
-    VOICE_CONFIG_CATALOG,
-    BRANDING_MODES,
-    UI_LANGUAGES,
-    AI_PROVIDERS,
-    FLU_PROFILE_IDS,
-    type ConfigCatalogEntry,
-} from './core/config/voiceConfigCatalog';
-import './App.css';
+import { pickText } from './lib/uiStrings';
+import { normalizeLang } from './core/config/localeConfig';
+// Fase 4: el CSS de la app (antes App.css) vive en src/styles/unified.css
+// (vía @import desde src/index.css). Aquí solo queda el CSS del BunnyViewer.
 // OS1 visual parity: import BunnyViewer styles for 3D avatar rendering
 import './avatar/App.css';
 
 // ============================================================
 // OS2 Component Imports — local paths (formerly flu-voz alias)
 // ============================================================
-import FluParticipantSettingsPanel from './voice/components/FluParticipantSettingsPanel';
-import { MinuteHistoryPanel } from './voice/components/MinuteHistoryPanel';
-import { MinuteDraftPanel } from './voice/components/MinuteDraftPanel';
-import { VoiceProfilesPanel } from './voice/components/VoiceProfilesPanel';
-import { ConversationLog } from './voice/components/ConversationLog';
-import { FluShellTabs, FluTabPanel } from './voice/components/FluShellTabs';
-import { PanelFrame } from './voice/components/PanelFrame';
-
-// ---- OS2 components are JS (no TS declarations) — cast for TypeScript compatibility ----
-const ConversationLogAny = ConversationLog as React.ComponentType<any>;
-const MinuteDraftPanelAny = MinuteDraftPanel as React.ForwardRefExoticComponent<any>;
+import { FluShellTabs } from './voice/components/FluShellTabs';
 import { VoiceAssistantBarWrapper } from './components/VoiceAssistantBarWrapper';
-import { FluSettingsPanel } from './components/FluSettingsPanel';
+import type { SettingsGroupId } from './components/FluSettingsTabView';
+import { OnboardingOverlay } from './components/OnboardingOverlay';
+import { useOnboarding } from './hooks/useOnboarding';
+import { useOnboardingVoiceCapture } from './hooks/useOnboardingVoiceCapture';
+import { useNotificationCenter } from './hooks/useNotificationCenter';
+import { useDoNotDisturb } from './hooks/useDoNotDisturb';
+// ---- Fase 2 — Memoria y recordatorios: hooks, paneles y parser de intención ----
+import { useShoppingList } from './hooks/useShoppingList';
+// ---- Fase 7 — Acciones de dispositivo: llamar, WhatsApp, SMS y correo (Módulo I+) ----
+import { useDeviceActions } from './hooks/useDeviceActions';
+import { parseDeviceActionIntent, type DeviceActionIntentData } from './core/deviceActions/deviceActionIntentParser';
+// ---- Horario de clases: importación OCR desde imagen (estructura → agenda) ----
+import { diaDeFecha, type HorarioClaseEstructurada } from './core/agenda/agendaShared';
+import { createScheduleAdapter } from './core/documents/scheduleAdapter';
+import { buildDocumentInsumo } from './core/documents/documentInsumo';
+import { buildImageInsumo } from './core/documents/imageInsumo';
+import type { NotificationService } from './core/notifications/notificationService';
+import { nameCaptureKey, promptForStep, type OnboardingState } from './core/onboarding/onboardingFlow';
+import {
+    DEFAULT_ONBOARDING_USER,
+    resolveActiveUser,
+    setActiveUser,
+} from './core/onboarding/onboardingService';
+// ---- Fase 3 — Multi-usuario: participantes, materia gris y paneles ----
+import { useParticipants } from './hooks/useParticipants';
+
+import { resolveKindRole } from './core/multiuser/participantRegistry';
+import { useMateriaGris } from './hooks/useMateriaGris';
+// ---- Fase 6 — Módulos I y J: contactos y diario personal ----
+import { useContacts } from './hooks/useContacts';
+import { useDiary } from './hooks/useDiary';
+import { useNotes } from './hooks/useNotes';
+import { useDocuments } from './hooks/useDocuments';
+import type { ParticipantRecord } from './core/db/fluDatabase';
+import { fluDb } from './core/db/fluDatabase';
+import { listarConversaciones } from './core/db/conversationRowWriter';
+import { createAgendaService } from './core/agenda/agendaService';
+import { parseAgendaCommand, type AgendaCommand } from './core/agenda/agendaCommandParser';
+import { parseShoppingIntent, type ShoppingIntent } from './core/reminders/shoppingIntentParser';
+import { summarizeAgenda, agendaSummaryText } from './core/agenda/agendaSummary';
+import { nextAgendaDue, type AgendaColorMap, type AgendaKind } from './core/agenda/agendaModel';
+import { describeTriggerWhen, describeWeekdays } from './core/agenda/describeTriggerText';
+import { buildDemoNotes, selectDemoAgendaInputs } from './core/agenda/demoSeed';
+import { MS_DAY } from './core/temporal/scheduleEngine';
+import { useAgenda } from './hooks/useAgenda';
+import { createWebAudioDriver, type AudioDriver, type SoundOptions } from './core/temporal/audioAlert';
 
 // ============================================================
 // OS2 Library Imports — local paths (formerly flu-voz alias)
 // ============================================================
 import { useFluVoiceAssistant } from './voice/hooks/useFluVoiceAssistant';
-import { speakResponse, isSpeechBusy, waitForSpeechIdle } from './voice/lib/fluSpeech';
-import { FLU_CONFIG } from './voice/lib/fluConfig';
-import { normalizeJuego } from './voice/lib/configCommands';
-import { getGameEngine } from './core/games/gameCatalog';
+import { resolveDiaryVoiceIntent } from './core/diary/diaryIntentParser';
+import { normalizeEnvironment } from './core/environments/environmentIntents';
+import { applyEnvironment, resetEnvironment } from './core/environments/applyEnvironment';
+import { askMissingInstant } from './core/agenda/domainScopedIntent';
 import {
-    getActiveGameSession,
-    setActiveGameSession,
-    clearActiveGameSession,
-} from './core/games/gameSessionStore';
-import type { GameId } from './core/games/types';
-import { getCommandSpeech } from './voice/lib/voiceCommands';
-import { formatStreamSttUiStatus, getTranscriptSource } from './voice/lib/transcriptConfig';
-import {
-    getFluParticipantConfig,
-    setFluParticipantOverrides,
-    resetFluParticipantOverrides,
-    isFluParticipantEnabled,
-} from './voice/lib/fluParticipantConfig';
-import {
-    createMinuteDraftFromSummary,
-} from './voice/lib/minuteKnowledge';
+    getVisibleTabIds,
+    DEFAULT_AMBIENTE_ID,
+} from './core/environments/environmentRegistry';
+import { useEnvironmentStore } from './store/environmentStore';
 import {
     buildMinuteKnowledgeBase2,
     resolveMinuteQuery,
     selectMinuteForLookup,
+    type MinuteLookupSelection,
 } from './lib/minuteKnowledgeHelpers';
 import {
     buildDailyAgenda,
     formatAgendaForPrompt,
-    countPendingItems,
+    appendPendingCalendar,
 } from './lib/dailyAgenda';
 import {
     buildSystemConversationEntry,
-    isDuplicateSystemEvent,
     type SystemEvent,
 } from './lib/systemEventLog';
-import { buildFluSpeechAuditRows } from './voice/lib/conversationDialogue';
-import { shouldGenerateWorkspaceImage, normalizeWorkspaceContract } from './voice/lib/workspaceContract';
-import { resolveGeminiErrorPresentation } from './voice/lib/geminiDiagnostics';
-import { deleteAuditLogsBySpeaker } from './voice/lib/fluStorage';
+import { logCaughtError } from './lib/caughtError';
+import { localGet, localSet } from './core/storage/localStore';
+import { pathForTab, type RightTab, tabFromPath } from './app/tabRoutes';
+import { useFluBridgesLifecycle } from './app/fluBridges';
+import { registerParticipantVoice } from './app/registerParticipantVoice';
+import { useIdentitySessionRef } from './app/useIdentitySessionRef';
+import { isAIProvider } from './app/appTypeGuards';
+import { type FastPathExecutedMarks, arbiterDomainRoute, isTurnAlreadyExecuted } from './app/arbiterDomainRoutes';
+import { type ArbiterResult, dispatchArbiterIntent, readStringProp } from './app/arbiterDispatch';
+import { buildArbiterOptions, exposeContractHookDev, exposeDevHook, isRedundantTextWorkspace, resolveDomainScopedIntent, type DiaryVoiceIntent, type NoteVoiceIntent } from './app/appDispatchHelpers';
+import { applyConfigAction } from './app/configActions';
+import { applyGameAction } from './app/gameActions';
+import { isVisualWorkspaceTipo, type GenerationWorkspaceTipo, type VisualTipo } from './core/config/sharedConfig';
+import {
+    isSuperNoteLabel,
+    superNoteItems,
+} from './core/notes/superNoteTarget';
+import { superNoteIncoming, writeSuperNoteList } from './app/superNoteActions';
+import { runNoteRemovalIntent } from './app/noteRemovalActions';
 
-// ============================================================
-// Tipo para las pestañas del panel derecho
-// ============================================================
-type RightTab = 'workspace' | 'conversation' | 'minutes' | 'settings';
+// Vistas por tab cargadas con lazy (cada una es un chunk separado).
+const FluWorkspaceTabView = lazy(() => import('./components/FluWorkspaceTabView'));
+const FluConversationTabView = lazy(() => import('./components/FluConversationTabView'));
+const FluMinutesTabView = lazy(() => import('./components/FluMinutesTabView'));
+const FluSettingsTabView = lazy(() => import('./components/FluSettingsTabView'));
+const FluSystemTabView = lazy(() => import('./components/FluSystemTabView'));
 
 // ============================================================
 // ErrorBoundary — Captura errores de renderizado y los muestra en la UI
@@ -156,571 +219,110 @@ type RightTab = 'workspace' | 'conversation' | 'minutes' | 'settings';
 // - STORAGE_KEYS.SESSION_ROLE
 
 // ============================================================
-// applyConfigAction — Procesa configuracion por voz desde Gemini
-// ============================================================
-// Se ejecuta al final de onContractResolved, después de todo lo demás.
-// Si falla, no afecta el resto del contrato (try/catch en el caller).
-// ============================================================
-
-interface ApplyConfigContext {
-    branding: ReturnType<typeof useEnhancedBranding>;
-    languageRef: React.MutableRefObject<string>;
-    setLanguage?: (lang: 'es' | 'en' | 'both') => void;
-    setSessionRole?: (role: string) => void;
-    handleTextApiKeyCommit?: (key: string) => void;
-    handleTextModelCommit?: (model: string) => void;
-    handleTextApiUrlCommit?: (url: string) => void;
-    handleImageApiKeyCommit?: (key: string) => void;
-    handleImageModelCommit?: (model: string) => void;
-    handleImageApiUrlCommit?: (url: string) => void;
-    handleOcrApiKeyCommit?: (key: string) => void;
-    handleOcrModelCommit?: (model: string) => void;
-    handleOcrApiUrlCommit?: (url: string) => void;
-    setComponentColor?: (component: BunnyComponent, color: string) => void;
-    resetComponentColors?: () => void;
-    /** Aplicar configuración de voz (rate/volume) al integrationStore */
-    setVoiceConfig?: (config: Partial<VoiceConfig>) => void;
-    /** Establecer configuración de personalidad (setPersonality del integrationStore) */
-    setPersonality?: (config: Partial<PersonalityConfig>) => void;
-    /** Establecer configuración avanzada (setAdvancedConfig del integrationStore) */
-    setAdvancedConfig?: (config: Partial<AdvancedConfig>) => void;
-    /** Establecer configuración de imagen del avatar (setImageConfig del integrationStore) */
-    setImageConfig?: (config: Partial<ImageConfig>) => void;
-    /** Voces TTS instaladas (para la clave "voice") */
-    voices?: SpeechSynthesisVoice[];
-    /** Cambiar el proveedor de IA preferido */
-    handleSetAiProvider?: (provider: string) => void;
-    /** Activar/desactivar celebraciones por logros (branding) */
-    setCelebrateAchievements?: (enabled: boolean) => void;
-    /** Aplicar un perfil completo de FLU */
-    applyProfile?: (profileId: FluProfile) => void;
-    /** Limpiar caché y recargar (useConfigPersistence) */
-    handleClearCache?: () => void;
-    /** Palabras de activación actuales (ref fresca para onContractResolved memoizado) */
-    wakeWordsRef: React.MutableRefObject<string>;
-    setWakeWords?: (value: string) => void;
-    /** Logs de depuración persistidos */
-    setDebugLogsEnabled?: (enabled: boolean) => void;
-}
-
-// ============================================================
-// Despachador de configuración por voz (data-driven)
-// ============================================================
-// VOICE_CONFIG_CATALOG es la ÚNICA fuente de verdad: la entrada
-// (accion + clave) → handler → acción real. Añadir una opción al
-// módulo de configuración = añadir una entrada al catálogo; aquí
-// no hay que tocar nada más (sin hardcode, sin parches).
-// ============================================================
-
-/** Convierte un valor booleano lenient ("true"/"false"/"1"/"0"/"sí"/"no"). */
-function parseBoolean(value: string): boolean | null {
-    const v = value.trim().toLowerCase();
-    const truthy = ['true', '1', 'yes', 'si', 'sí', 'on', 'activar', 'activa', 'encender', 'mostrar', 'visible'];
-    const falsy = ['false', '0', 'no', 'off', 'desactivar', 'desactiva', 'apagar', 'ocultar', 'oculta', 'invisible'];
-    if (truthy.includes(v)) return true;
-    if (falsy.includes(v)) return false;
-    return null;
-}
-
-/**
- * Aplica un valor numérico validando el rango del catálogo (entry.min/max)
- * y convirtiendo unidades de entrada (minutes/seconds) a ms si hace falta.
- * `apply` recibe el número ya validado para el store objetivo.
- */
-function applyNumberConfig(
-    entry: ConfigCatalogEntry,
-    raw: string,
-    apply: (n: number) => void,
-): boolean {
-    const parsed = Number.parseFloat(raw);
-    if (Number.isNaN(parsed)) {
-        console.warn(`[applyConfigAction] Valor numérico inválido para "${entry.clave}":`, raw);
-        return false;
-    }
-    let value = parsed;
-    if (entry.inputUnit === 'minutes') value = value * 60_000;
-    else if (entry.inputUnit === 'seconds') value = value * 1_000;
-    if (entry.min !== undefined && value < entry.min) {
-        console.warn(`[applyConfigAction] "${entry.clave}" fuera de rango (min ${entry.min}):`, value);
-        return false;
-    }
-    if (entry.max !== undefined && value > entry.max) {
-        console.warn(`[applyConfigAction] "${entry.clave}" fuera de rango (max ${entry.max}):`, value);
-        return false;
-    }
-    apply(value);
-    return true;
-}
-
-/**
- * Despacha una acción de configuración del contrato a la acción real,
- * usando el catálogo como fuente de verdad (sin switches hardcodeados).
- */
-async function applyConfigAction(
-    configAction: { accion: string; componente: string; clave: string; valor: string; subvalor?: string; meta?: Record<string, unknown> },
-    ctx: ApplyConfigContext,
-): Promise<void> {
-    const { accion, clave, valor, subvalor } = configAction;
-
-    const entry = VOICE_CONFIG_CATALOG.find((e) => e.accion === accion && e.clave === clave);
-    if (!entry) {
-        console.warn('[applyConfigAction] Clave sin entrada en catálogo:', accion, clave);
-        return;
-    }
-    if (entry.handler === 'unsupported') {
-        console.info('[applyConfigAction] Opción no soportada por voz, omitida:', clave, entry.motivoNoSoportado ?? '');
-        return;
-    }
-
-    switch (entry.handler) {
-        // --------------------------------------------------------
-        // BRANDING (set_branding) — useSeasonalBranding
-        // --------------------------------------------------------
-        case 'brandingActiveSeason': {
-            // Cambiar temporada activa (fuerza modo manual automáticamente)
-            await ctx.branding.seasonalActions.setMode('manual');
-            await ctx.branding.seasonalActions.setActiveSeason(valor);
-            break;
-        }
-        case 'brandingMode': {
-            // Modo: auto | manual | disabled
-            if ((BRANDING_MODES as readonly string[]).includes(valor)) {
-                await ctx.branding.seasonalActions.setMode(valor as 'auto' | 'manual' | 'disabled');
-            } else {
-                console.warn('[applyConfigAction] Modo branding inválido:', valor);
-            }
-            break;
-        }
-        case 'brandingBirthday': {
-            // Cumpleaños: "YYYY-MM-DD"
-            await ctx.branding.seasonalActions.setBirthday(valor || null);
-            break;
-        }
-        case 'brandingCelebrateAchievements': {
-            const enabled = parseBoolean(valor);
-            if (enabled !== null) {
-                await ctx.setCelebrateAchievements?.(enabled);
-            } else {
-                console.warn('[applyConfigAction] Booleano inválido para celebrateAchievements:', valor);
-            }
-            break;
-        }
-        case 'brandingCustomEvent': {
-            // Festividad personalizada: valor "nombre|MM-DD|paleta", subvalor "add"|"remove"
-            const mode = subvalor?.trim().toLowerCase();
-            const parts = valor.split('|').map((s) => s.trim());
-            if (mode === 'add' || mode === 'agregar' || mode === 'añade' || mode === 'añadir') {
-                const [name = '', mmdd = '', palette = 'cumpleanos'] = parts;
-                const m = mmdd.match(/^(\d{1,2})-(\d{1,2})$/);
-                if (!name || !m) {
-                    console.warn('[applyConfigAction] Festividad personalizada inválida (esperaba "nombre|MM-DD|paleta"):', valor);
-                    break;
-                }
-                const id = `custom-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-                await ctx.branding.seasonalActions.addCustomEvent({ id, name, month: Number(m[1]), day: Number(m[2]), palette });
-            } else if (mode === 'remove' || mode === 'quitar' || mode === 'eliminar') {
-                const targetName = parts[0] || '';
-                const events = ctx.branding.config.customEvents ?? [];
-                const norm = (s: string) => s.toLowerCase().replace(/\s+/g, ' ').trim();
-                const match = events.find((e) => norm(e.name) === norm(targetName));
-                if (match) {
-                    await ctx.branding.seasonalActions.removeCustomEvent(match.id);
-                } else {
-                    console.warn('[applyConfigAction] Festividad personalizada no encontrada:', targetName);
-                }
-            } else {
-                console.warn('[applyConfigAction] customEvent requiere subvalor "add"|"remove":', subvalor);
-            }
-            break;
-        }
-
-        // --------------------------------------------------------
-        // TEXTO / IMAGEN (set_config) — useConfigPersistence
-        // --------------------------------------------------------
-        case 'textApiKey':
-            ctx.handleTextApiKeyCommit?.(valor);
-            break;
-        case 'textModel':
-            ctx.handleTextModelCommit?.(valor);
-            break;
-        case 'textApiUrl':
-            ctx.handleTextApiUrlCommit?.(valor);
-            break;
-        case 'imageApiKey':
-            ctx.handleImageApiKeyCommit?.(valor);
-            break;
-        case 'imageModel':
-            ctx.handleImageModelCommit?.(valor);
-            break;
-        case 'imageApiUrl':
-            ctx.handleImageApiUrlCommit?.(valor);
-            break;
-        case 'ocrApiKey':
-            ctx.handleOcrApiKeyCommit?.(valor);
-            break;
-        case 'ocrModel':
-            ctx.handleOcrModelCommit?.(valor);
-            break;
-        case 'ocrApiUrl':
-            ctx.handleOcrApiUrlCommit?.(valor);
-            break;
-
-        // --------------------------------------------------------
-        // GENERAL (set_config)
-        // --------------------------------------------------------
-        case 'language': {
-            if ((UI_LANGUAGES as readonly string[]).includes(valor)) {
-                ctx.setLanguage?.(valor as 'es' | 'en' | 'both');
-            } else {
-                console.warn('[applyConfigAction] Idioma inválido:', valor);
-            }
-            break;
-        }
-        case 'sessionRole':
-            ctx.setSessionRole?.(valor);
-            break;
-
-        // --------------------------------------------------------
-        // VOZ (set_config → setVoiceConfig)
-        // --------------------------------------------------------
-        case 'voiceSpeed': {
-            // Velocidad TTS: el catálogo admite 0.1-10.0 pero se acota al
-            // rango seguro del slider de la UI (0.5-2.0).
-            const speed = Number.parseFloat(valor);
-            if (!Number.isNaN(speed) && speed >= 0.1 && speed <= 10.0) {
-                const clamped = Math.min(2.0, Math.max(0.5, speed));
-                ctx.setVoiceConfig?.({ rate: clamped });
-                console.log('[applyConfigAction] Voice speed set:', clamped);
-            }
-            break;
-        }
-        case 'voiceNumber': {
-            const ok = applyNumberConfig(entry, valor, (n) => {
-                ctx.setVoiceConfig?.({ [entry.clave]: n } as Partial<VoiceConfig>);
-            });
-            if (ok) console.log(`[applyConfigAction] ${entry.clave} set:`, valor);
-            break;
-        }
-        case 'voice': {
-            // Match por voiceURI exacto → nombre exacto → coincidencia parcial.
-            const voices = ctx.voices ?? [];
-            const target = valor.trim();
-            if (!target) break;
-            const exact = voices.find((v) => v.voiceURI === target || v.name === target);
-            const partial = !exact
-                ? voices.find(
-                      (v) =>
-                          v.name.toLowerCase().includes(target.toLowerCase()) ||
-                          v.voiceURI.toLowerCase().includes(target.toLowerCase()),
-                  )
-                : undefined;
-            const selected = exact ?? partial;
-            if (selected) {
-                ctx.setVoiceConfig?.({ voiceURI: selected.voiceURI, voiceName: selected.name });
-                console.log('[applyConfigAction] Voice set:', selected.name);
-            } else {
-                console.warn('[applyConfigAction] Voz no encontrada (¿voces aún cargándose?):', target);
-            }
-            break;
-        }
-
-        // --------------------------------------------------------
-        // PERSONALIDAD (set_config → setPersonality)
-        // --------------------------------------------------------
-        case 'personalityTraits': {
-            const trait = valor.trim();
-            if (!trait) break;
-            const current = useIntegrationStore.getState().config.personality?.traits ?? [];
-            const mode = subvalor?.trim().toLowerCase();
-            let next: string[];
-            if (mode === 'add' || mode === 'agregar' || mode === 'añadir') {
-                next = current.includes(trait) ? current : [...current, trait];
-            } else if (mode === 'remove' || mode === 'quitar' || mode === 'eliminar') {
-                next = current.filter((t) => t !== trait);
-            } else {
-                console.warn('[applyConfigAction] traits requiere subvalor "add"|"remove":', subvalor);
-                break;
-            }
-            ctx.setPersonality?.({ traits: next } as Partial<PersonalityConfig>);
-            break;
-        }
-        case 'personalitySelect': {
-            if (entry.opciones && !entry.opciones.includes(valor)) {
-                console.warn(`[applyConfigAction] Valor inválido para "${entry.clave}":`, valor);
-                break;
-            }
-            ctx.setPersonality?.({ [entry.clave]: valor } as Partial<PersonalityConfig>);
-            break;
-        }
-        case 'personalityText': {
-            ctx.setPersonality?.({ [entry.clave]: valor } as Partial<PersonalityConfig>);
-            break;
-        }
-        case 'personalityNumber': {
-            const ok = applyNumberConfig(entry, valor, (n) => {
-                ctx.setPersonality?.({ [entry.clave]: n } as Partial<PersonalityConfig>);
-            });
-            if (ok) console.log(`[applyConfigAction] ${entry.clave} set:`, valor);
-            break;
-        }
-
-        // --------------------------------------------------------
-        // AVANZADO (set_config → setAdvancedConfig)
-        // Claves del catálogo == campos de AdvancedConfig.
-        // --------------------------------------------------------
-        case 'advancedNumber': {
-            const ok = applyNumberConfig(entry, valor, (n) => {
-                ctx.setAdvancedConfig?.({ [entry.clave]: n } as Partial<AdvancedConfig>);
-            });
-            if (ok) console.log(`[applyConfigAction] ${entry.clave} set:`, valor);
-            break;
-        }
-
-        // --------------------------------------------------------
-        // IMAGEN DEL AVATAR (set_config → setImageConfig)
-        // Claves del catálogo == campos de ImageConfig.
-        // --------------------------------------------------------
-        case 'imageBoolean': {
-            const enabled = parseBoolean(valor);
-            if (enabled !== null) {
-                ctx.setImageConfig?.({ [entry.clave]: enabled } as Partial<ImageConfig>);
-            } else {
-                console.warn(`[applyConfigAction] Booleano inválido para "${entry.clave}":`, valor);
-            }
-            break;
-        }
-
-        // --------------------------------------------------------
-        // COLORES DEL AVATAR (set_config → BunnyStore)
-        // --------------------------------------------------------
-        case 'avatarColor': {
-            // Formato: "component:color" (ej. "Bunny_pants:#8B4513")
-            const [component, color] = valor.split(':');
-            if (component && color) {
-                ctx.setComponentColor?.(component as any, color);
-            } else {
-                console.warn('[applyConfigAction] avatarColor requiere "componente:color":', valor);
-            }
-            break;
-        }
-        case 'avatarComponentColor': {
-            const map: Record<string, string> = {
-                pantsColor: 'Bunny_pants',
-                bodyColor: 'Bunny_body',
-                faceColor: 'Bunny_face',
-            };
-            const component = map[entry.clave];
-            if (component) {
-                ctx.setComponentColor?.(component as any, valor);
-            }
-            break;
-        }
-        case 'resetAvatarColors': {
-            ctx.resetComponentColors?.();
-            break;
-        }
-
-        // --------------------------------------------------------
-        // MOTOR IA / PERFIL (set_config)
-        // --------------------------------------------------------
-        case 'aiProvider': {
-            if ((AI_PROVIDERS as readonly string[]).includes(valor)) {
-                ctx.handleSetAiProvider?.(valor);
-            } else {
-                console.warn('[applyConfigAction] Proveedor IA inválido:', valor);
-            }
-            break;
-        }
-        case 'applyProfile': {
-            if ((FLU_PROFILE_IDS as readonly string[]).includes(valor)) {
-                ctx.applyProfile?.(valor as FluProfile);
-            } else {
-                console.warn('[applyConfigAction] Perfil inválido:', valor);
-            }
-            break;
-        }
-        case 'wakeWords': {
-            const word = valor.trim();
-            if (!word) break;
-            const mode = subvalor?.trim().toLowerCase();
-            const current = (ctx.wakeWordsRef?.current ?? '')
-                .split('\n')
-                .map((w) => w.trim())
-                .filter(Boolean);
-            let next: string[];
-            if (mode === 'add' || mode === 'agregar' || mode === 'añadir') {
-                next = current.includes(word) ? current : [...current, word];
-            } else if (mode === 'remove' || mode === 'quitar' || mode === 'eliminar') {
-                next = current.filter((w) => w !== word);
-            } else {
-                console.warn('[applyConfigAction] wakeWords requiere subvalor "add"|"remove":', subvalor);
-                break;
-            }
-            ctx.setWakeWords?.(next.join('\n'));
-            break;
-        }
-        case 'debugLogs': {
-            const enabled = parseBoolean(valor);
-            if (enabled !== null) {
-                ctx.setDebugLogsEnabled?.(enabled);
-            } else {
-                console.warn('[applyConfigAction] Booleano inválido para debugLogs:', valor);
-            }
-            break;
-        }
-        case 'clearCache': {
-            ctx.handleClearCache?.();
-            break;
-        }
-
-        default:
-            console.warn('[applyConfigAction] Handler no implementado:', entry.handler);
-    }
-}
-
-// ============================================================
-// Juegos por voz (fast-path determinista) — plan-juegos §7
-// ============================================================
-// Cada motor vive en src/core/games/* y es 100% local y
-// determinista: Gemini NUNCA arbitra el estado de la partida.
-// applyGameAction recibe el contrato ya normalizado por
-// normalizeJuego desde onContractResolved (ruta única) y ejecuta
-// el motor, aplica la emoción resultante al avatar (source='game')
-// y habla el prompt con el mismo mecanismo de la ruta de Gemini.
-// ============================================================
-
-interface ApplyGameContext {
-    languageRef: React.MutableRefObject<string>;
-    conversationActiveRef: React.MutableRefObject<boolean>;
-    speakFluRef: React.MutableRefObject<(text: string, lang: string) => Promise<void>>;
-    /** Reanuda la escucha tras hablar (useNavigationCommands, estable). */
-    scheduleResumeListening: (textLength?: number) => void;
-}
-
-/** Aplica la emoción/animación de un resultado de motor al avatar. */
-function applyGameEmotion(result: { animation?: string; emotion?: string }): void {
-    const emotionLabel = result.animation || result.emotion || '';
-    const resolvedEmotionAnims: string[] = emotionLabel
-        ? (resolveEmotionAnims(emotionLabel, EXPRESSION_MAP) ?? [])
-        : [];
-    if (resolvedEmotionAnims.length > 0) {
-        useIntegrationStore.getState().setPendingEmotionAnims(resolvedEmotionAnims, 'game', null);
-        relayLog('LOG', 'App', `[Juego] pendingEmotionAnims ← [${resolvedEmotionAnims.join(', ')}] (emotionLabel="${emotionLabel}" source='game')`);
-    }
-}
-
-/**
- * Habla el prompt del motor replicando el mecanismo de habla de
- * onContractResolved (SPEAKING → habla → LISTENING/IDLE + resume).
- */
-async function speakGameText(text: string, ctx: ApplyGameContext): Promise<void> {
-    if (!text) return;
-
-    const currentSpeakFlu = ctx.speakFluRef.current;
-    const speakPromise = currentSpeakFlu(text, ctx.languageRef.current).catch((speechErr: unknown) => {
-        console.warn('[Juego] speakFlu failed:', speechErr);
-    });
-
-    useIntegrationStore.getState().setConversationState('SPEAKING');
-    useIntegrationStore.getState().setFluSpeaking(true);
-    useIntegrationStore.getState().incrementInteractionCount();
-    useIntegrationStore.getState().pushBridgeEvent({ type: 'speaking:start', timestamp: Date.now() });
-
-    if (speakPromise) {
-        try {
-            await speakPromise;
-        } catch (speechErr) {
-            console.warn('[Juego] speakFlu failed:', speechErr);
-        }
-    }
-    const nextResumeState = ctx.conversationActiveRef.current ? 'LISTENING' : 'IDLE';
-    useIntegrationStore.getState().setConversationState(nextResumeState);
-    useIntegrationStore.getState().setFluSpeaking(false);
-    ctx.scheduleResumeListening(text.length);
-}
-
-/** Configuración de motor data-driven desde FLU_CONFIG.games. */
-function buildGameConfig(gameId: string): Record<string, unknown> {
-    const games = FLU_CONFIG.games || {};
-    const base: Record<string, unknown> = { rounds: games.defaultRounds };
-    if (gameId === 'simon_dice') {
-        const simon = games.simonDice || {};
-        return { ...base, verbos: [...(simon.verbos || [])], longMax: simon.longMax };
-    }
-    if (gameId === 'adivina_numero') {
-        const cfg = games.adivinaNumero || {};
-        return { ...base, min: cfg.min, max: cfg.max, pistasMax: cfg.pistasMax };
-    }
-    if (gameId === 'calculo_mental') {
-        const cfg = games.calculoMental || {};
-        return { ...base, maxSuma: cfg.maxSuma, operaciones: [...(cfg.operaciones || [])] };
-    }
-    return base;
-}
-
-interface NormalizedGameAction {
-    gameId: string;
-    action: string;
-    playerText?: string;
-    narrative?: { scenes: Array<{ texto: string; animacion?: string; emocion?: string }> };
-}
-
-/**
- * Ejecuta una acción de juego (start/turn/end/narrate) con el motor
- * local del catálogo. No relanza excepciones: cualquier error se
- * registra y se responde de forma amigable.
- */
-async function applyGameAction(juegoAction: NormalizedGameAction, ctx: ApplyGameContext): Promise<void> {
-    if (juegoAction.action === 'narrate') {
-        await speakGameText('La narración de historias llegará en una próxima fase. ¿Jugamos otra cosa?', ctx);
-        return;
-    }
-
-    const engine = getGameEngine(juegoAction.gameId as GameId);
-    if (!engine) {
-        await speakGameText('Ese juego todavía no está disponible. Prueba con Simón dice o adivinanzas.', ctx);
-        return;
-    }
-
-    if (juegoAction.action === 'end') {
-        clearActiveGameSession();
-        await speakGameText('¡Hasta la próxima partida! ¿Qué más hacemos?', ctx);
-        return;
-    }
-
-    if (juegoAction.action === 'start') {
-        const session = engine.createSession(buildGameConfig(juegoAction.gameId));
-        const result = engine.start(session, buildGameConfig(juegoAction.gameId));
-        setActiveGameSession(session);
-        applyGameEmotion(result);
-        await speakGameText(result.prompt, ctx);
-        return;
-    }
-
-    const activeSession = getActiveGameSession();
-    if (!activeSession) {
-        await speakGameText('No hay una partida activa. Dime a qué juego quieres jugar.', ctx);
-        return;
-    }
-    const result = engine.turn(activeSession, juegoAction.playerText || '');
-    if (result.gameOver) {
-        clearActiveGameSession();
-    }
-    applyGameEmotion(result);
-    await speakGameText(result.prompt, ctx);
-}
-
-// ============================================================
 // App
 // ============================================================
 
+// ============================================================
+// Helpers de despacho determinista (nivel módulo)
+// ============================================================
+// Se extraen a nivel módulo para que la RUTA CONVERSACIONAL (acciones del
+// LLM) y el FALLBACK OFFLINE (re-parseo del transcript crudo) compartan el
+// MISMO conjunto de manejadores __fluHandle* y las MISMAS options del
+// árbitro. Esto unifica la ejecución: el LLM decide la intención de forma
+// conversacional (Siri/Alexa/Google-style) y los parsers deterministas
+// ejecutan la intención estructurada precisa (dueAt, durationMs, etc.).
+// ============================================================
+
+/** Marca si la última acción despachada NO logró escribir (para no confirmar en falso). */
+let lastActionFailed = false;
+
+/**
+ * Adaptador OCR→horario (config-driven). Solo PROPONE si el texto parece un
+ * horario real; con documentos genéricos devuelve null (evita falsos positivos).
+ */
+const scheduleAdapter = createScheduleAdapter({
+    minEntries: Number(FLU_CONFIG?.horario?.ocrAdapter?.minEntries) || 2,
+});
+
+/** Diagnóstico del contrato resuelto (incluye la ruta de minuta). */
+interface ContractDiagnostics {
+    route?: string;
+    historyCode?: string | null;
+    [key: string]: unknown;
+}
+
+/** Workspace del contrato con el campo extra `modo` (horario). */
+type ResolvedWorkspace = NonNullable<FluContract['workspace']> & { modo?: unknown };
+
+/** Contrato FLU con los campos extra que el motor de voz adjunta. */
+type ResolvedContract = Omit<FluContract, 'workspace'> & {
+    workspace?: ResolvedWorkspace | null;
+    juego?: unknown;
+    ambiente?: unknown;
+};
+
+/** Payload entregado por el motor de voz al resolver un contrato. */
+type ContractResolution = FastPathExecutedMarks & {
+    userCommitOnly?: boolean; effectOnly?: boolean; // efecto de SERVICIO: no escribe la conversacion
+    turnId?: number | string | null; // identidad del turno: la fila se reutiliza por IDENTIDAD
+    transcript?: string;
+    speakerName?: string; evidenciaAcustica?: boolean;
+    rawOnly?: boolean;
+    phase?: string;
+    replaceLastRawLog?: boolean;
+    contract?: ResolvedContract | null;
+    diagnostics?: ContractDiagnostics;
+};
+
+/** Intención estructurada de nota aceptada por el manejador de voz. */
+
 function App() {
-    const [currentState, setCurrentState] = useState<ConversationState>('IDLE');
+    const [_currentState, setCurrentState] = useState<ConversationState>('IDLE');
+    // Foco del Pizarrón por turno (señal monotónica): garantiza que el feed
+    // salte al tipo del resultado del turno, incluso si el tipo se repite, y
+    // que una respuesta de texto regrese a "Todo".
+    const turnFocusSeqRef = useRef(0);
+    const [turnFocus, setTurnFocus] = useState<{
+        kind: 'video' | 'doc' | 'image' | 'text';
+        seq: number;
+    } | null>(null);
     const integrationStore = useIntegrationStore();
+    // Ambiente activo (rebranding por oficio): pestañas visibles derivadas del catálogo
+    const activeAmbienteId = useEnvironmentStore((s) => s.activeAmbienteId);
+    const visibleTabIds = useMemo(() => getVisibleTabIds(activeAmbienteId), [activeAmbienteId]);
+
     const auditLog = useAuditLog();
-    const minuteKnowledge = useMinuteKnowledge();
+    // Usuario activo (se declara temprano: lo consumen varios hooks con aislamiento).
+    const [activeParticipantId, setActiveParticipantId] = useState<string | undefined>(() => resolveActiveUser());
+    // Sesión con usuario ELEGIDO en esta entrada. Aunque `activeParticipantId`
+    // venga persistido de una sesión previa, mientras el onboarding esté en
+    // pantalla NO hay alcance per-usuario (las notas/agenda del usuario anterior
+    // no deben verse antes de elegir).
+    const [sessionReady, setSessionReady] = useState(false);
+    // Usuario REAL (excluye el centinela de onboarding `DEFAULT_ONBOARDING_USER`).
+    // Es el ÚNICO alcance válido para datos por-usuario: sin usuario elegido no se
+    // lee ni se escribe nada suyo (notas, agenda, documentos, historial, búsqueda).
+    const realParticipantId = useMemo(
+        () => (sessionReady && activeParticipantId && activeParticipantId !== DEFAULT_ONBOARDING_USER
+            ? activeParticipantId
+            : undefined),
+        [sessionReady, activeParticipantId],
+    );
+    const realParticipantIdRef = useRef<string | undefined>(realParticipantId);
+    const demoSeededRef = useRef<Set<string>>(new Set());
+    useEffect(() => {
+        realParticipantIdRef.current = realParticipantId;
+    }, [realParticipantId]);
+    // Aislamiento multiusuario del pizarrón: sella las entradas del historial y
+    // el artefacto del workspace con el participante activo; al cambiar de usuario
+    // el store limpia el artefacto para no mostrar el del anterior.
+    useEffect(() => {
+        useIntegrationStore.getState().setActivePersonId(realParticipantId);
+    }, [realParticipantId]);
+    const minuteKnowledge = useMinuteKnowledge(realParticipantId);
     const voiceProfiles = useVoiceProfiles();
-    useConversationPersistence();
+    // Historial de documentos/imágenes generados o cargados (por usuario).
+    const documentHistory = useDocuments({ participantId: realParticipantId });
 
     // ---- Autonomy Systems Integration ----
     const [autonomyState, autonomyActions] = useAutonomyIntegration();
@@ -734,15 +336,7 @@ function App() {
         // Configure HealthMonitor to EXCLUDE speech components from monitoring
         // Speech components are managed by the voice system and don't need autonomous health checks
         autonomyActions.updateSystemConfig('healthMonitor', {
-            monitoredComponents: [
-                'ai-service',
-                'indexed-db',
-                'network',
-                'memory',
-                'react-components'
-                // NOTE: 'speech-recognition' and 'speech-synthesis' are EXCLUDED intentionally
-                // These components are managed by the voice system (useFluVoiceAssistant)
-            ],
+            monitoredComponents: [...DEFAULT_MONITORED_COMPONENTS],
             autoRecoveryEnabled: false // Health monitor should not trigger auto-recovery
         });
         
@@ -767,32 +361,76 @@ function App() {
     }, []);
 
     // ---- OS2 parity: refs (FluShell.jsx lines 154-161) ----
-    const savedSession = useRef(loadSessionState());
+    const savedSession = useRef(defaultSessionState());
     const conversationActiveRef = useRef(false);
     const resumeListeningTimerRef = useRef<number | null>(null);
-    const lastRawLogRef = useRef<string>('');
+    /** Dueno unico de "iniciar conversacion" (reset + audit + modo + escucha). */
+    const startConversationRef = useRef<((options?: { announce?: boolean }) => Promise<void>) | null>(null);
+    // Indica si FLU ya produjo una respuesta sustantiva en ESTA carga de página.
+    // Se usa para que latestResponse NO resucite una respuesta vieja del historial
+    // persistido (IndexedDB) al recargar, antes de que FLU responda de nuevo.
+    const hasLiveResponseRef = useRef(false);
 
     // Ref for speakFlu to fix closure issue: useCallback with [] deps captures
     // speakFlu from the FIRST render's closure. Keeping a ref ensures the callback
     // always reads the latest speakFlu even across re-renders.
     const speakFluRef = useRef<(text: string, lang: string) => Promise<void>>(async () => {});
+    // Guarda "ya se anunció el saludo de cierre" para no repetirlo con cada
+    // re-render/re-efecto del mismo participante (una vez por activación).
 
-    // Cache for rawOnly speaker lookup: Map<speakerName, { index, entry }>
-    // Avoids O(n) backward scan of conversation history on every raw transcript.
-    const speakerIndexRef = useRef<Map<string, { index: number; entry: any }>>(new Map());
+    // ---- Medios (video/documento): ruta ÚNICA e idempotente ----
+    // El ASR puede re-capturar el mismo comando; sin gate, cada captura
+    // dispararía una generación PAGA nueva. `mediaGateRef` es la fuente única
+    // del criterio y `requestMediaRef` la única puerta de generación.
+    const mediaGateRef = useRef(
+        createMediaRequestGate(Number(FLU_CONFIG?.media?.dedupWindowMs) || 120000),
+    );
+    const requestMediaRef = useRef<
+        (tipo: GenerationWorkspaceTipo, commandText: string, prepare?: () => void) => boolean
+    >(() => false);
+
+    // Idempotencia por turno de la RESPUESTA: si el mismo turno (texto+respuesta)
+    // se vuelve a entregar por una re-captura/eco/re-emisión, NO se repite el
+    // habla/fila. Se recuerdan TODAS las respuestas de la ventana, no solo la
+    // última: así una re-emisión de una respuesta anterior tampoco se duplica.
+    const recentResponsesRef = useRef<Array<{ key: string; at: number }>>([]);
 
     // ---- Pestaña activa del panel derecho ----
     // Always start on Pizarron (workspace) tab as default
-    const [activeTab, setActiveTab] = useState<RightTab>('workspace');
+    const location = useLocation();
+    const navigate = useNavigate();
+    const [activeTab, setActiveTab] = useState<RightTab>(() => tabFromPath(location.pathname));
+
+    // Sincroniza la tab activa con la URL (React Router Fase 3).
+    useEffect(() => {
+        setActiveTab(tabFromPath(location.pathname));
+    }, [location.pathname]);
+
+    // Navegación de tab: actualiza la URL; el efecto superior sincroniza el estado.
+    const changeTab = useCallback(
+        (tab: RightTab) => {
+            if (tab !== tabFromPath(location.pathname)) {
+                navigate(pathForTab(tab));
+            } else {
+                setActiveTab(tab);
+            }
+        },
+        [navigate, location.pathname]
+    );
+
+    // Mantener la pestaña activa dentro de las visibles del ambiente activo
+    useEffect(() => {
+        if (visibleTabIds.length > 0 && !visibleTabIds.includes(activeTab)) {
+            changeTab(visibleTabIds[0]);
+        }
+    }, [visibleTabIds, activeTab, changeTab]);
 
     // ---- Estado para imagen subida (digitalización OCR) ----
     const [uploadedImage, setUploadedImage] = useState<{ dataUrl: string; mimeType: string; fileName: string } | null>(null);
     const [homeworkContext, setHomeworkContext] = useState<{ materia: string; problemas: string[]; instrucciones: string; nivel: string; texto_extraido: string } | null>(null);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
+    const [uploadError, setUploadError] = useState<string | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
-    const cameraInputRef = useRef<HTMLInputElement>(null);
-    const docInputRef = useRef<HTMLInputElement>(null);
-    const projectInputRef = useRef<HTMLInputElement>(null);
 
     // ---- Estado para maximizar/restaurar paneles (PanelFrame expandable) ----
     const [expandedFrameId, setExpandedFrameId] = useState<string>(savedSession.current.expandedFrameId);
@@ -802,18 +440,37 @@ function App() {
     }, []);
 
     // ---- Estado para la minuta actual en edición ----
-    const [minuteDraft, setMinuteDraft] = useState<any>(null);
+    const [minuteDraft, setMinuteDraft] = useState<MinuteDraft | null>(null);
 
     // ---- Estado para la minuta seleccionada en el historial ----
     const [selectedMinuteId, setSelectedMinuteId] = useState<string | null>(savedSession.current.selectedMinuteId);
+
+    // C9 — Hidratación asíncrona del estado de sesión desde el backend Dexie
+    // (ya no hay lectura localStorage sincrónica).
+    useEffect(() => {
+        let cancelled = false;
+        readSessionState()
+            .then((stored) => {
+                if (cancelled || !stored) return;
+                if (stored.expandedFrameId) setExpandedFrameId(stored.expandedFrameId);
+                if (stored.selectedMinuteId) setSelectedMinuteId(stored.selectedMinuteId);
+            })
+            .catch((err) => logCaughtError('[App] fallo al hidratar la sesión', err));
+        return () => {
+            cancelled = true;
+        };
+    }, []);
+
+    // ---- Sub-sección activa del panel de Ajustes (Fase A2: FLU / Mis datos / Gestión) ----
+    const [settingsGroup, setSettingsGroup] = useState<SettingsGroupId>('flu');
 
     // ---- Ref para MinuteDraftPanel (accede a .save()) ----
     const minutePanelRef = useRef<{ save: () => void }>(null);
 
     // Suscribirse a la expresión/animación actual del avatar (para mostrar en header)
-    const avatarCurrentExpression = useBunnyStore((s) => (s as any).currentExpression ?? null);
-    const avatarCurrentAnimation = useBunnyStore((s) => (s as any).currentAnimation ?? null);
-    const avatarBlendQueue = useBunnyStore((s) => (s as any).blendQueue ?? []);
+    const avatarCurrentExpression = useBunnyStore((s) => s.currentExpression ?? null);
+    const avatarCurrentAnimation = useBunnyStore((s) => s.currentAnimation ?? null);
+    const avatarBlendQueue = useBunnyStore((s) => s.blendQueue ?? []);
 
     // ---- Acciones del avatar (colores por voz — usadas en onContractResolved) ----
     const setComponentColor = useBunnyStore((s) => s.setComponentColor);
@@ -824,9 +481,12 @@ function App() {
         apiKey,
         textModel,
         textApiUrl,
+        geminiApiKey,
         imageApiKey,
         imageModel,
         imageApiUrl,
+        falApiKey,
+        falVideoModel,
         ocrApiKey,
         ocrModel,
         ocrApiUrl,
@@ -838,9 +498,12 @@ function App() {
         handleTextApiKeyCommit,
         handleTextModelCommit,
         handleTextApiUrlCommit,
+        handleGeminiApiKeyCommit,
         handleImageApiKeyCommit,
         handleImageModelCommit,
         handleImageApiUrlCommit,
+        handleFalApiKeyCommit,
+        handleFalVideoModelCommit,
         handleOcrApiKeyCommit,
         handleOcrModelCommit,
         handleOcrApiUrlCommit,
@@ -854,10 +517,332 @@ function App() {
         wakeWordsRef,
     } = useConfigPersistence();
 
+    // ---- Fase 2 — Memoria y recordatorios: hooks tempranos ----
+    // useAgenda debe declararse ANTES de useFluVoiceAssistant porque
+    // getDailyAgenda (más abajo) lo referencia. speakFlu y el servicio de
+    // notificaciones se resuelven después, así que se inyectan vía refs:
+    //   - speakFluRef (declarado arriba)
+    //   - notificationServiceRef (actualizado tras useNotificationCenter)
+    const notificationServiceRef = useRef<NotificationService | null>(null);
+    const shopping = useShoppingList({});
+
+    // ---- Calendario UNIFICADO: un solo servicio sobre la tabla `agenda` ----
+    const agendaService = useMemo(
+        () => createAgendaService({ db: fluDb.agenda, now: () => Date.now() }),
+        [],
+    );
+
+    // Color por tipo (derivado en lectura, fuente única FLU_CONFIG.agenda.colors).
+    const agendaColors = useMemo<AgendaColorMap>(
+        () => (((FLU_CONFIG.agenda as Record<string, unknown>)?.colors ?? {}) as AgendaColorMap),
+        [],
+    );
+    const agendaLabels = useMemo<Record<AgendaKind, string>>(
+        () => (((FLU_CONFIG.agenda as Record<string, unknown>)?.labels ?? {}) as Record<AgendaKind, string>),
+        [],
+    );
+
+    // Driver de audio del calendario: UN solo driver para sonar Y detener
+    // (useAgenda lo usa para stopRinging/auto-stop sobre EL MISMO tono).
+    const agendaAudioRef = useRef<AudioDriver | null>(null);
+    if (!agendaAudioRef.current) {
+        agendaAudioRef.current = createWebAudioDriver();
+    }
+    const agendaAudioDriver = agendaAudioRef.current;
+
+    // Motor ÚNICO del calendario: lista pendientes + disparo seguro (audio +
+    // notificación + voz con dedup) + detener/auto-stop. Los paneles y la voz
+    // usan SOLO los métodos del hook (`agenda.list/create/update/cancel…`),
+    // que refrescan `items` al resolverse (sin ticks de 15 s).
+    const agenda = useAgenda({
+        service: agendaService,
+        personId: realParticipantId,
+        audio: agendaAudioDriver,
+        onFire: async (action, item) => {
+            const lang = normalizeLang(languageRef.current);
+            const temporalCfg = (FLU_CONFIG.temporal || {}) as Record<string, unknown>;
+            const temporalVoice = (temporalCfg.voice || {}) as Record<string, string>;
+            const temporalUi = (temporalCfg.ui || {}) as Record<string, string>;
+            const remindersVoice = (FLU_CONFIG.reminders?.voice || {}) as Record<string, string>;
+            const sound = (temporalCfg.sound || {}) as SoundOptions;
+            const notify = notificationServiceRef.current?.notify;
+            if (action === 'sonar') {
+                // Alarma: tono + notificación + voz (como useTemporalItems).
+                const dueText = temporalVoice.alarmDue || 'Es la hora de tu alarma:';
+                const dueTitle = temporalUi.alarmsLabel || 'Alarmas';
+                const dueBody = `${dueText} ${item.label}`;
+                let deliveredByVoice = false;
+                if (typeof notify === 'function') {
+                    const delivery = notify({ category: item.kind, title: dueTitle, body: dueBody, urgent: true });
+                    deliveredByVoice = delivery === 'voice' || delivery === 'both';
+                }
+                if (!deliveredByVoice) {
+                    speakFluRef.current(dueBody, lang).catch((e) => { logCaughtError('src/App.tsx', e); });
+                }
+                agendaAudioDriver.play(sound).catch((e) => { logCaughtError('src/App.tsx', e); });
+            } else if (action === 'avisar') {
+                // Recordatorio: notificación + voz (como useReminders), sin tono.
+                const voiceDue = remindersVoice.due || 'Tienes un recordatorio pendiente:';
+                const dueTitle = pickText(lang, 'recordatorio');
+                const dueBody = `${voiceDue} ${item.label}`;
+                let deliveredByVoice = false;
+                if (typeof notify === 'function') {
+                    const delivery = notify({ category: 'reminder', title: dueTitle, body: dueBody, urgent: true });
+                    deliveredByVoice = delivery === 'voice' || delivery === 'both';
+                }
+                if (!deliveredByVoice) {
+                    speakFluRef.current(dueBody, lang).catch((e) => { logCaughtError('src/App.tsx', e); });
+                }
+            } else if (typeof notify === 'function') {
+                // Cita/junta/clase: notificación pasiva (toast), sin voz ni tono.
+                notify({ category: item.kind, title: 'Agenda', body: item.label, urgent: false });
+            }
+        },
+    });
+
+    // Métodos estables del hook de agenda: TODA mutación/lectura pasa por aquí
+    // (una sola vía; el hook refresca `items` al resolverse). Sin llamadas
+    // directas al servicio desde el adaptador de voz o los paneles.
+    const {
+        list: agendaList,
+        create: agendaCreate,
+        update: agendaUpdate,
+        cancel: agendaCancel,
+        cancelByTarget: agendaCancelByTarget,
+        updateByTarget: agendaUpdateByTarget,
+        clearAll: agendaClearAll,
+    } = agenda;
+
+    // Agenda por voz: crear/consultar/editar/cancelar + borrar todo. Motor
+    // determinista: parseAgendaCommand interpreta el transcript y ejecuta la
+    // acción sobre el servicio único de agenda (tabla `agenda`).
+    // (describeTriggerWhen vive en src/core/agenda/describeTriggerText.ts)
+    window.__fluHandleAgendaCommandText = useCallback(
+        async (input: AgendaCommand | string, _opts?: { personId?: string; personName?: string }) => {
+            const lang = normalizeLang(languageRef.current);
+            const cmd = typeof input === 'object' && input?.action
+                ? input
+                : parseAgendaCommand(String(input || ''));
+            if (!cmd?.handled || !cmd.action) return '';
+            const kind = cmd.kind;
+            switch (cmd.action) {
+                case 'agenda.clear': {
+                    // Vía el hook: vacía el usuario activo y REFRESCA el panel de
+                    // inmediato (la llamada directa al servicio dejaba la agenda
+                    // visible hasta el próximo tick de 15 s).
+                    const cleared = await agendaClearAll();
+                    lastActionFailed = cleared === 0;
+                    // Sin éxito falso: la confirmación solo se da si la escritura
+                    // ocurrió de verdad (el panel muestra lo mismo que se vació).
+                    if (cleared === 0) {
+                        return pickText(lang, 'no_habia_nada_que_vaciar');
+                    }
+                    return pickText(lang, 'listo_vacie_tu_agenda');
+                }
+                case 'agenda.list': {
+                    const items = await agendaList({ personId: realParticipantIdRef.current, status: 'pending' });
+                    const colors = ((FLU_CONFIG.agenda as Record<string, unknown>)?.colors ?? {}) as AgendaColorMap;
+                    const view = cmd.when === 'semana' ? 'week' : cmd.when === 'mes' ? 'month' : 'day';
+                    // "mañana" = ventana de día corrida un día.
+                    const refNow = cmd.when === 'mañana' ? Date.now() + MS_DAY : Date.now();
+                    const summary = summarizeAgenda(items, view, refNow, colors);
+                    const voice = ((FLU_CONFIG.agenda as Record<string, unknown>)?.voice ?? {}) as {
+                        empty?: { es?: string; en?: string };
+                    };
+                    return agendaSummaryText(summary, lang, {
+                        es: voice.empty?.es ?? 'No tienes nada programado.',
+                        en: voice.empty?.en ?? 'Nothing scheduled.',
+                    });
+                }
+                case 'agenda.create': {
+                    if (!kind) return '';
+                    if (!cmd.trigger) return askMissingInstant(lang);
+                    const result = await agendaCreate({
+                        kind,
+                        label: cmd.label || kind,
+                        trigger: cmd.trigger,
+                        personId: realParticipantIdRef.current,
+                    });
+                    if (!result.ok) {
+                        return result.reason === 'duplicado'
+                            ? (pickText(lang, 'ese_evento_ya_existe'))
+                            : (pickText(lang, 'no_pude_crearlo'));
+                    }
+                    const item = result.item;
+                    const when = item?.trigger ? describeTriggerWhen(item.trigger, lang) : '';
+                    return lang === 'en'
+                        ? `Scheduled: ${item?.label}${when ? ` ${when}` : ''}`
+                        : `Listo: ${item?.label}${when ? ` ${when}` : ''}`;
+                }
+                case 'agenda.cancel': {
+                    if (!kind) return '';
+                    const count = await agendaCancelByTarget({
+                        personId: realParticipantIdRef.current,
+                        kind,
+                        target: cmd.label || '',
+                        // Solo los días que nombró el usuario: "del jueves" no puede
+                        // llevarse el martes de la misma serie.
+                        ...(cmd.scopeDays?.length ? { daysOfWeek: cmd.scopeDays } : {}),
+                    });
+                    if (count === 0) {
+                        return pickText(lang, 'no_encontre_nada_que_cancelar');
+                    }
+                    const scoped = cmd.scopeDays?.length
+                        ? ` (${describeWeekdays(cmd.scopeDays, lang)})`
+                        : '';
+                    return pickText(lang, 'cancelado_scoped', { scoped });
+                }
+                case 'agenda.update': {
+                    if (!kind) return '';
+                    const count = await agendaUpdateByTarget(
+                        { personId: realParticipantIdRef.current, kind, target: cmd.label || '' },
+                        {
+                            ...(cmd.label ? { label: cmd.label } : {}),
+                            ...(cmd.trigger ? { trigger: cmd.trigger } : {}),
+                        },
+                    );
+                    if (count === 0) {
+                        return pickText(lang, 'no_encontre_nada_que_cambiar');
+                    }
+                    return pickText(lang, 'actualizado');
+                }
+                default:
+                    return '';
+            }
+        },
+        [agendaList, agendaCreate, agendaCancelByTarget, agendaUpdateByTarget, agendaClearAll, languageRef, realParticipantIdRef],
+    );
+
+    // ---- Horario de clases: entradas pendientes de confirmar (parseadas desde
+    // una imagen digitalizada). Nada se escribe en agenda sin el visto bueno del
+    // usuario (Regla #1: sin hardcode; el parseo es genérico vía structureHorarioText).
+    const [pendingHorarioImport, setPendingHorarioImport] = useState<HorarioClaseEstructurada[] | null>(null);
+    const [horarioImportBusy, setHorarioImportBusy] = useState(false);
+
+    // Confirma el parseo: persiste cada entrada estructurada en la tabla agenda
+    // (kind 'clase' con trigger weekly). Genérico: {materia, dia, inicio, fin, aula}.
+    const confirmHorarioImport = useCallback(async () => {
+        const entries = pendingHorarioImport;
+        if (!entries || entries.length === 0) return;
+        setHorarioImportBusy(true);
+        try {
+            for (const entry of entries) {
+                await agendaCreate({
+                    kind: 'clase',
+                    label: entry.materia,
+                    trigger: { type: 'weekly', daysOfWeek: [entry.dia % 7], timeOfDay: entry.inicio },
+                    personId: realParticipantIdRef.current,
+                    fin: entry.fin,
+                    aula: entry.aula,
+                });
+            }
+            const voice = FLU_CONFIG.horario?.voice || {};
+            const okMsg = String(
+                voice.structureOk ||
+                (pickText(language, 'registre_las_entradas_del_horario'))
+            );
+            speakFluRef.current?.(okMsg, language);
+        } finally {
+            setPendingHorarioImport(null);
+            setHorarioImportBusy(false);
+        }
+    }, [pendingHorarioImport, agendaCreate, language]);
+
+    // Descarta el parseo sin escribir nada.
+    const cancelHorarioImport = useCallback(() => {
+        setPendingHorarioImport(null);
+        setHorarioImportBusy(false);
+    }, []);
+
+    // ---- Fase 3 — Multi-usuario: participantes del hogar y materia gris ----
+    const participants = useParticipants({});
+    // Onboarding multiusuario: usuario activo (undefined/'default' → ruta legacy)
+    // y selector "¿Quién eres?" para elegir/crear el perfil que personaliza FLU.
+    // (La declaración de activeParticipantId vive arriba, antes de useAgenda.)
+    // Aislamiento por usuario: la conversación persistida se filtra por el
+    // participante activo (cada usuario ve sólo la suya).
+    useConversationPersistence(realParticipantId);
+    // Guard de montaje: el onboarding se reinicia (para pedirlo SIEMPRE al
+    // entrar) solo después de que los participantes carguen y el estado del
+    // onboarding esté resuelto (ready). Evita resetear antes de tiempo.
+    const onboardingMountSettledRef = useRef(false);
+    // Registro/activación del participante al completar el onboarding: se
+    // dispara desde el MISMO flujo que completa (onCompleted del hook), sin
+    // depender de un efecto que la lista refrescada pueda cancelar (Bug #1).
+    const handleOnboardingCompletedRef = useRef<(state: OnboardingState) => void>(() => undefined);
+    const materiaGris = useMateriaGris({});
+    // ---- FASE P — Personalización profunda por persona (nivel de explicación + tono) ----
+    const communicationProfiles = useCommunicationProfiles({});
+    // ---- Punto 2 — Navegador curado: perfil de navegador por participante ----
+    const browserProfiles = useBrowserProfiles({});
+    // ---- Punto 2 — Catálogo de sitios: catálogo fusionado del buscador ----
+    const searchSites = useSearchSites();
+    // ---- Fase 4 — Módulo G: hábitos y metas por participante ----
+    // ---- Fase 5 — Módulo H: bienestar y ánimo por participante ----
+    // ---- Fase 6 — Módulos I y J: contactos y diario personal ----
+    const contacts = useContacts({});
+    const diary = useDiary({});
+    const notes = useNotes({ participantId: realParticipantId });
+
+    // ---- DEMO (solo desarrollo): sembrar datos de ejemplo (uno de cada tipo
+    // + notas) para el participante activo, para validar el look&feel. ----
+    useEffect(() => {
+        if (!import.meta.env.DEV) return;
+        // Solo para un usuario real: el DEMO es por-usuario (no en onboarding).
+        if (!realParticipantId) return;
+        const pid = realParticipantId;
+        if (demoSeededRef.current.has(pid)) return;
+        demoSeededRef.current.add(pid);
+        let cancelled = false;
+        (async () => {
+            try {
+                // Sirve también 'deleted': un demo cancelado no debe reaparecer.
+                const existing = await agendaList({ personId: pid });
+                for (const input of selectDemoAgendaInputs(existing, Date.now())) {
+                    await agendaCreate({ ...input, personId: pid });
+                }
+                if (existing.length === 0) {
+                    for (const note of buildDemoNotes()) {
+                        await notes.add({ label: note.label, body: note.body });
+                    }
+                }
+                if (!cancelled) void notes.refresh();
+            } catch (err) {
+                logCaughtError('[App] demo seed error', err);
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [realParticipantId, agendaList, agendaCreate, notes]);
+
+    // ---- Fase 7 — Acciones de dispositivo: servicio sobre la agenda de contactos ----
+    const deviceActions = useDeviceActions({
+        service: contacts.service,
+        contacts: contacts.contacts,
+    });
+
+    // B9: cumpleaños próximos dentro de la ventana configurada (FLU_CONFIG.multiuser).
+    // Se recalcula cuando cambia el registro de participantes.
+    const [birthdayNear, setBirthdayNear] = useState<ParticipantRecord[]>([]);
+    useEffect(() => {
+        let active = true;
+        participants
+            .participantsWithBirthdayNear()
+            .then((rows) => {
+                if (active) setBirthdayNear(rows);
+            })
+            .catch((err) => logCaughtError('[App] birthdayNear error', err));
+        return () => {
+            active = false;
+        };
+    }, [participants.participants, participants.participantsWithBirthdayNear, participants]);
+
     // ---- AI Provider Selection ----
     const [aiProvider, setAiProviderState] = useState<string>(() => getPreferredAIProvider());
     const handleSetAiProvider = useCallback((provider: string) => {
-        setPreferredAIProvider(provider as any);
+        if (!isAIProvider(provider)) return;
+        setPreferredAIProvider(provider);
         setAiProviderState(provider);
     }, []);
 
@@ -868,8 +853,16 @@ function App() {
         const history = integrationStore.conversationHistory;
         return {
             texts: history.map((e) => e.text || ''),
-            speakers: history.map((e) => e.speakerName || ''),
+            speakers: history.map((e) => resolveRowSpeakerLabel(e) || ''),
         };
+    }, [integrationStore.conversationHistory]);
+
+    // Última frase completa del usuario (para el área del personaje / barra):
+    // fuente única desde el historial real, usada como fallback de transcripción
+    // cuando liveTranscript se limpió tras ejecutar el comando. La derivación vive
+    // en la lib (deriveUserLastText), no inline en el componente.
+    const avatarLastUserText = useMemo(() => {
+        return deriveUserLastText(integrationStore.conversationHistory);
     }, [integrationStore.conversationHistory]);
 
     // Cache for isDuplicateSystemEvent: store recent dedup keys in a Set to avoid
@@ -885,12 +878,9 @@ function App() {
     // Ref para enviar animaciones de emoción resueltas vía callback directo (Fase 7)
     // Reemplaza integrationStore.uiState.pendingEmotionAnims
     const emotionAnimsRef = useRef<((anims: string[]) => void) | null>(null);
-    // Ref for setRecentMemory to avoid stale closure in onEmotion callback.
-    // useFluParticipant is called BEFORE useFluVoiceAssistant, so setRecentMemory
-    // is undefined during first render. Even on subsequent renders, scheduleHandTimeout's
-    // setTimeout captures onEmotion at creation time. Using a ref ensures the callback
-    // always reads the latest setRecentMemory regardless of when it was captured.
-    const setRecentMemoryRef = useRef<((text: string) => void) | undefined>(undefined);
+    // P9.83: el ref de "memoria del turno" (setRecentMemory) se RETIRO: solo servia para
+    // FORZAR el tema del turno siguiente con un prompt hardcodeado. El contexto va por el
+    // historial (fuente unica).
     const fluParticipant = useFluParticipant({
         apiKey,
         language,
@@ -921,22 +911,16 @@ function App() {
                         dedupCacheRef.current = new Set([dedupKey]);
                         dedupCacheLastPruneRef.current = now;
                     }
-                    const entry = buildSystemConversationEntry(systemEvent, language === 'en' ? 'en' : 'es');
-                    // Update UI log
-                    integrationStore.addConversationEntry(entry);
-                    // Inject into dialogueHistoryRef so Gemini sees it as part of the
-                    // conversation context (FLU's own memory).
-                    injectDialogueEntry(entry);
-                    // FIX "¿por qué estás enojado?": además de la línea de contexto,
-                    // forzar el bloque CRÍTICO del system prompt (gemini.js:458-463) en el
-                    // SIGUIENTE contract request vía setRecentMemory, para que FLU EXPRESE
-                    // la emoción "antes que cualquier otra cosa" y no la parafrasee genérica.
-                    // setRecentMemory es ONE-SHOT: useFluVoiceAssistant.js:988-989 lee y
-                    // limpia recentMemoryRef antes de cada contract, así que NO persiste en
-                    // requests posteriores (el comentario anterior estaba obsoleto).
-                    setRecentMemoryRef.current?.(
-                        `El participante "Hablante" levantó la mano para participar y fue ignorado (no se le dio la palabra). Estás enojado por eso: debes decirlo explícitamente y explicar por qué te enojaste, ANTES de continuar con cualquier otro tema.`
-                    );
+                    const entry = buildSystemConversationEntry(systemEvent, normalizeLang(language));
+                    // Store Ãºnico (Â§9): el evento entra al historial (Ãºnica fuente de
+                    // verdad) y Gemini lo ve por derivaciÃ³n; no hay canal lateral.
+                    integrationStore.addFluEntry(entry);
+                    // P9.83: NO se fuerza el tema del turno siguiente. Antes se inyectaba
+                    // aqui un prompt HARDCODEADO ("Estas enojado por eso: debes decirlo ...
+                    // ANTES de continuar con cualquier otro tema") via setRecentMemory, y FLU
+                    // respondia "Me siento enojado..." HABLANDO DE OTRA COSA (medido por el
+                    // dueno 2026-10-12 16:34:28). La linea de contexto de arriba YA entra al
+                    // historial (fuente unica), que es de donde Gemini lo deriva.
                 }
             }
         },
@@ -949,7 +933,12 @@ function App() {
     fluParticipantRef.current = fluParticipant;
     const fluParticipantPresentation = fluParticipant.presentation;
     const [participantConfig, setParticipantConfig] = useState(() => getFluParticipantConfig());
-
+    const [searchOverrides, setSearchOverrides] = useState<SearchConfigOverrides>(() => loadSearchConfigOverrides());
+    // Ref sincronizada: permite que varios commits de la barra GLOBAL de
+    // Configuración (buscador + búsqueda web) compongan en el mismo tick sin
+    // pisarse con estado obsoleto.
+    const searchOverridesRef = useRef<SearchConfigOverrides>(searchOverrides);
+    searchOverridesRef.current = searchOverrides;
 
     // ============================================================
     // OS2: useFluVoiceAssistant — Instanciado AQUÍ en App.tsx
@@ -969,6 +958,43 @@ function App() {
     // Esto elimina los hardcodes anteriores en VoiceAssistantBar y
     // asegura que OS3 use EXACTAMENTE la misma funcionalidad de OS2.
     // ============================================================
+    // Fase E: nombre del participante activo (Juan/Luis) para sembrar
+    // sessionPrimary en la diarización. Solo perfiles reales con nombre
+    // propio (excluye legacy/default y la semilla anónima, config-driven).
+    const activeParticipantNameForVoice = useMemo(() => {
+        if (!activeParticipantId || activeParticipantId === DEFAULT_ONBOARDING_USER) return undefined;
+        const profile = participants.participants.find((p) => p.id === activeParticipantId);
+        if (!profile?.name) return undefined;
+        const skipDefaults = (FLU_CONFIG.multiuser?.skipDefaults) || {};
+        const anonymousName = String(skipDefaults.anonymousName || 'Anónimo').trim().toLowerCase();
+        if (profile.name.trim().toLowerCase() === anonymousName) return undefined;
+        return profile.name;
+    }, [activeParticipantId, participants.participants]);
+    // VOZ CONOCIDA EN LA BASE = NOMBRE INMEDIATO (mandato del dueño 2026-10-18): anclas medidas que la sesión siembra.
+    const participantVoiceAnchorsForVoice = useMemo(() => participantVoiceAnchorsForDiarization(participants.participants), [participants.participants]);
+
+    // Puente de la sesion de IDENTIDAD (clusters vivos + hablante primario): lo rellena
+    // `useFluVoiceAssistant` y lo consume el comando REGISTRAR_PARTICIPANTE, para que las
+    // DOS rutas del registro del nombre usen la MISMA evidencia (A1: casos 3 y 4).
+    const identitySessionRef = useIdentitySessionRef();
+    // Miembros ESTABLES del puerto (el objeto `participants` no lo es): la dep del efecto
+    // es el servicio y el refresco, no la identidad del contenedor.
+    const { service: participantsService, refresh: refreshParticipants } = participants;
+    // P9.79: PUERTO a la BASE de participantes. El registro del nombre por VOZ (unico
+    // dueno: registerSpeakerIdentity) escribe el participante AQUI; antes solo escribia
+    // las filas y el panel, que lee Dexie, no lo mostraba (si hay una base de
+    // participantes debe de aparecer a la derecha). Entra con su speakerLabel para que
+    // la voz quede ligada al participante.
+    useEffect(() => {
+        if (!identitySessionRef.current) return;
+        // PUERTO unico a la BASE de participantes: el registro del nombre por VOZ entra por
+        // aqui (puente de sesion) y asi su nombre se ve en la seccion de participantes.
+        identitySessionRef.current.registerParticipant = (name: string, _label?: string, voiceVector?: number[] | null) => {
+            registerParticipantVoice(participantsService, name, voiceVector)
+                .then(() => refreshParticipants())
+                .catch((err: unknown) => logCaughtError('src/App.tsx: registerParticipant (voz)', err));
+        };
+    }, [identitySessionRef, participantsService, refreshParticipants]);
     const {
         status: voiceStatus,
         error: voiceError,
@@ -981,22 +1007,18 @@ function App() {
         // fluParticipantPresentation is no longer destructured from useFluVoiceAssistant
         startListening: os2StartListening,
         stopListening: os2StopListening,
-        toggleListening: os2ToggleListening,
         showListeningAck,
         removeSessionSpeaker: os2RemoveSessionSpeaker,
         renameSessionSpeaker: os2RenameSessionSpeaker,
         // OS2 parity: additional actions from useFluVoiceAssistant (FluShell.jsx lines 3444-3457)
-        resetConversationSession: os2ResetConversationSession,
         resetVoiceDisplay: os2ResetVoiceDisplay,
-        endParticipantFloorDelivery: os2EndParticipantFloorDelivery,
         suspendRecognitionForAssistantSpeech: os2SuspendRecognition,
-        /** Inject system events into dialogueHistoryRef so Gemini sees them as FLU's own memory. */
-        injectDialogueEntry,
-        /** Set recent memory text that gets injected into the system prompt on next contract request. */
-        setRecentMemory,
+        // P9.83: setRecentMemory ya no se consume (servia para FORZAR el tema del turno).
     } = useFluVoiceAssistant({
         apiKey,
         language,
+        // Wake words configurables (Ajustes) — fuente única de resolución de comandos.
+        wakeWords,
         // OS2 parity: pass conversationActiveRef for resume logic (FluShell.jsx line 154)
         conversationActiveRef,
         // OS2 parity: pasar knowledgeBase para resolución de minutas
@@ -1006,7 +1028,7 @@ function App() {
             // Devolvemos el texto formateado de TODAS las minutas persistidas en IndexedDB
             // para inyectarlo en el prompt de Gemini como knowledgeBase2.
             // Si no hay minutas, devolvemos '' (Gemini dirá "KB minutas vacía" como en OS2).
-            return buildMinuteKnowledgeBase2(minuteKnowledge.minutes);
+            return buildMinuteKnowledgeBase2(minuteKnowledge.minutes, { diary: diary.entries || [] });
         },
         getDailyAgenda: () => {
             // Compila pendientes de todas las minutas en una "orden del día"
@@ -1014,30 +1036,142 @@ function App() {
             // Si no hay pendientes, devuelve '' (Gemini ignora el campo).
             const agendaConfig = FLU_CONFIG.agenda || {};
             if (!agendaConfig.enabled) return '';
-            const items = buildDailyAgenda(minuteKnowledge.minutes, {
+            let items = buildDailyAgenda(minuteKnowledge.minutes, {
                 maxItems: agendaConfig.maxItems,
                 minImportance: agendaConfig.minImportance,
             });
+            // Calendario unificado COMPLETO en el contexto IA: todos los kinds
+            // pendientes (alarma/recordatorio/cita/junta/clase), con su etiqueta
+            // de tipo. Antes solo entraban recordatorio/cita y la IA no podía
+            // responder por intención sobre el resto.
+            const kindLabels = (agendaConfig.labels ?? {}) as Record<string, string>;
+            items = appendPendingCalendar(
+                items,
+                (agenda.items || [])
+                    .filter((it) => it.status === 'pending')
+                    .map((it) => ({
+                        text: it.label,
+                        dueAt: nextAgendaDue(it.trigger, Date.now()),
+                        status: it.status,
+                        kindLabel: kindLabels[it.kind] || it.kind,
+                    })),
+                { maxReminders: agendaConfig.maxReminders },
+                languageRef.current as 'es' | 'en',
+            );
             if (items.length === 0) return '';
             return formatAgendaForPrompt(items, languageRef.current as 'es' | 'en');
         },
-        resolveMinuteLookup: ((query: string, lang?: string) => {
+        // Autoconocimiento (§1.4): manifiesto 1ª persona de FLU compilado desde
+        // la config real. useFluVoiceAssistant solo lo pide cuando el turno es
+        // una petición de autoconocimiento (isSelfKnowledgeRequest).
+        getSelfManifesto: () => buildSelfManifesto(languageRef.current as 'es' | 'en'),
+        // Radar de contexto (Pizarrón un solo objeto — Paso 5): bloques 6-9.
+        // Cada getter compila texto dinámico desde su fuente (Dexie) y devuelve
+        // '' si no hay datos (Rule #1). useFluVoiceAssistant los lee vía refs en
+        // el callback de contrato y los inyecta en el user prompt de Gemini.
+        getDiaryContext: () => {
+            // Bloque 7 — DIARIO (+ánimo): última entrada (una sola).
+            const entries = diary.entries || [];
+            if (entries.length === 0) return '';
+            const last = entries[0];
+            const moodTxt = last.mood ? ` (ánimo ${last.mood})` : '';
+            const titleTxt = last.title ? ` ${last.title}` : '';
+            return `[${last.date}]${titleTxt}${moodTxt}: ${last.content}`;
+        },
+        getNotesContext: () => {
+            // Bloque 8 — NOTAS: pendientes (top-N, sin hardcode de N). El contenido
+            // (body) va incluido: es donde viven los ítems de una lista (p.ej. la
+            // del súper), y sin él el modelo solo vería el nombre de la nota.
+            const pending = (notes.notes || []).filter((n) => !n.done);
+            if (pending.length === 0) return '';
+            return pending
+                .map((n) => {
+                    const items = superNoteItems(n.body);
+                    return items.length > 0 ? `- ${n.label}: ${items.join(', ')}` : `- ${n.label}`;
+                })
+                .join('\n');
+        },
+        getHorarioContext: () => {
+            // Bloque 9 — Horario del día (HOY): clases de hoy ordenadas por hora,
+            // leídas de la tabla unificada agenda (kind 'clase', trigger weekly).
+            const hoy = diaDeFecha(Date.now()); // 1=Lunes..7=Domingo
+            const dayAgenda = hoy % 7; // 0=Domingo..6=Sábado (convención agenda)
+            const clasesHoy = (agenda.items || [])
+                .filter(
+                    (it) =>
+                        it.kind === 'clase' &&
+                        it.trigger.type === 'weekly' &&
+                        it.trigger.daysOfWeek.includes(dayAgenda),
+                )
+                .sort((a, b) => {
+                    const ta = a.trigger.type === 'weekly' ? a.trigger.timeOfDay : '';
+                    const tb = b.trigger.type === 'weekly' ? b.trigger.timeOfDay : '';
+                    return ta.localeCompare(tb);
+                });
+            if (clasesHoy.length === 0) return '';
+            return clasesHoy
+                .map((c) => {
+                    const inicio = c.trigger.type === 'weekly' ? c.trigger.timeOfDay : '';
+                    const fin = c.fin ? `–${c.fin}` : '';
+                    const aula = c.aula ? ` (${c.aula})` : '';
+                    return `${inicio}${fin} ${c.label}${aula}`;
+                })
+                .join('\n');
+        },
+        getResultadosContext: () => {
+            // Bloque 6 — Resultados: última consulta/respuesta + feed reciente.
+            const parts: string[] = [];
+            const lastResp = (integrationStore.lastResponse || '').trim();
+            if (lastResp) parts.push(`Última respuesta: ${lastResp}`);
+            const artifact = integrationStore.workspaceArtifact;
+            if (artifact?.contenido) parts.push(`Contenido activo: ${artifact.contenido}`);
+            if (parts.length === 0) return '';
+            return parts.join('\n');
+        },
+        resolveMinuteLookup: (query?: string, lang?: string) => {
             // OS2 parity: useMinuteKnowledge ↔ minuteKnowledgeRef.resolveMinuteQuery
             // Intenta resolver localmente (parseMinuteSequenceFromQuery +
             // findMinuteRecordBySequence + buildMinuteLookupContract).
             // Si no hay número de secuencia, retorna { mode: 'gemini' } para fallback.
-            return resolveMinuteQuery(query, minuteKnowledge.minutes, { language: lang || languageRef.current });
-        }) as any,
+            return resolveMinuteQuery(String(query ?? ''), minuteKnowledge.minutes, { language: lang || languageRef.current });
+        },
         // Test hook e2e: exponer el callback REAL onContractResolved en window
         // (window.__fluOnContractResolved) para que las pruebas de verificación
         // puedan disparar un contrato play_music de forma determinista. Se asigna
         // en CREACIÓN (expresión de asignación), disponible desde el montaje.
-        onContractResolved: ((window as any).__fluOnContractResolved = useCallback(async (resolved: any) => {
-            const contract: any = resolved?.contract || {};
+        onContractResolved: exposeContractHookDev(useCallback(async (resolved: ContractResolution) => {
+            const contract: Partial<ResolvedContract> = resolved?.contract || {};
             const transcript: string = resolved?.transcript || '';
             const rawOnly: boolean = resolved?.rawOnly === true;
             const speakerName: string = resolved?.speakerName || '';
+            const rawSignature = (resolved as { signature?: number[] | null })?.signature || null;
+
+            // IDENTIDAD POR VOZ (diseno del dueno 2026-10-13): el VECTOR del turno se busca en
+            // la base de participantes. Si coincide, esa voz ES esa persona y deja de ser
+            // "Hablante N": su nombre, desde este turno y en TODAS sus filas (mismo dueno del
+            // registro). Sin coincidencia no se afirma nada (no se mezclan hablantes).
+            if (Array.isArray(rawSignature) && rawSignature.length && isAutoSpeakerLabel(speakerName)) {
+                // LAS DOS FUENTES POR LA MISMA REGLA (sesion + base), siempre con el MODELO.
+                const vozConocida = resolveVoiceIdentity(rawSignature, { candidates: participantVoiceAnchorsForDiarization(participants.participants) });
+                if (vozConocida?.name) {
+                    // RECONOCIMIENTO, NO REGISTRO (2026-10-19): la identidad ya existe; se
+                    // aplica con SU vector (el del match), sin reescribir base/clusters/primario.
+                    applyKnownVoiceName({
+                        name: vozConocida.name,
+                        previousLabel: speakerName,
+                        anchorVector: vozConocida.vector,
+                    });
+                }
+            }
             const phase: string = resolved?.phase || '';
+            const userCommitOnly: boolean = resolved?.userCommitOnly === true;
+
+            // §9 — la fila del USUARIO la escribe SOLO el módulo de conversación
+            // (`row.committed`, ÚNICO escritor en AMBOS modos). El escritor pasivo
+            // de App quedó retirado (2026-10-30, problema 6: era una ruta doble).
+            // Un SERVICIO (`effectOnly`) aplica su efecto y no escribe la conversación.
+            if (rawOnly && transcript && !cleanForSpeech(transcript)) return;
+            if (userCommitOnly) return;
 
             // ============================================================
             // OS2 parity: raw transcript logging with dedup
@@ -1046,77 +1180,10 @@ function App() {
             // dependencia de tipos en el barrel JS de flu-voz.
             // ============================================================
             if (rawOnly && transcript) {
-                const normalizedTranscript = cleanForSpeech(transcript);
-                if (!normalizedTranscript) return;
+                if (!cleanForSpeech(transcript)) return;
 
-                // OS2 dedup: isExactDuplicateLogEntry + rowDuplicatesPrior + phrasesEquivalent
-                // OS2 parity: scan backward for the same speaker (FluShell.jsx lines 332-448)
-                // No solo la última entrada — buscar la última entrada del mismo speaker
-                // Optimized: use speakerIndexRef Map for O(1) lookup instead of O(n) backward scan
-                const history = integrationStore.conversationHistory;
-                const speakerKey = speakerName || '__default__';
-                let lastEntryForSpeaker: any = null;
-                let lastEntryIndex = -1;
-                const cached = speakerIndexRef.current.get(speakerKey);
-                if (cached && cached.index >= 0 && cached.index < history.length && history[cached.index] === cached.entry) {
-                    lastEntryForSpeaker = cached.entry;
-                    lastEntryIndex = cached.index;
-                } else {
-                    // Cache miss or stale — fall back to backward scan and update cache
-                    for (let i = history.length - 1; i >= 0; i--) {
-                        const entry = history[i];
-                        if (entry.speakerName === speakerName || (!speakerName && !entry.speakerName)) {
-                            lastEntryForSpeaker = entry;
-                            lastEntryIndex = i;
-                            break;
-                        }
-                    }
-                    if (lastEntryForSpeaker) {
-                        speakerIndexRef.current.set(speakerKey, { index: lastEntryIndex, entry: lastEntryForSpeaker });
-                    }
-                }
-
-                if (lastEntryForSpeaker) {
-                    const lastText = cleanForSpeech(lastEntryForSpeaker.text || '');
-                    // isExactDuplicateLogEntry: mismo speaker + mismo texto normalizado
-                    if (lastText === normalizedTranscript) {
-                        return;
-                    }
-                    // rowDuplicatesPrior: el nuevo texto empieza con el anterior (ASR revision)
-                    if (lastText && normalizedTranscript.startsWith(lastText)) {
-                        // Reemplazar la última entrada del mismo speaker (OS2: replaceLastRawLog)
-                        const updated = [...history];
-                        updated[lastEntryIndex] = {
-                            ...lastEntryForSpeaker,
-                            text: transcript,
-                            speakerName: speakerName || lastEntryForSpeaker.speakerName || 'Hablante 1',
-                            timestamp: Date.now(),
-                        };
-                        integrationStore.batchLoadHistory(updated);
-                        // Update cache: the replaced entry is now at the same index with new content
-                        speakerIndexRef.current.set(speakerKey, { index: lastEntryIndex, entry: updated[lastEntryIndex] });
-                        return;
-                    }
-                    // phrasesEquivalent: foldSpeechKey (cleanForSpeech + lowercase)
-                    if (lastText && lastText.toLowerCase() === normalizedTranscript.toLowerCase()) {
-                        return;
-                    }
-                }
-
-                // Agregar entrada raw al historial (OS2: optimisticRow)
-                // Obligación #6: UUIDv4
-                integrationStore.addConversationEntry({
-                    id: uuidv4(),
-                    role: 'user',
-                    text: transcript,
-                    speakerName: speakerName || undefined,
-                    timestamp: Date.now(),
-                    sentiment: 'neutral',
-                });
-
-                // Update cache: new entry appended at the end
-                const newHistory = integrationStore.conversationHistory;
-                speakerIndexRef.current.set(speakerKey, { index: newHistory.length - 1, entry: newHistory[newHistory.length - 1] });
+                // §9 — La fila del usuario ya se registró por el punto único del
+                // módulo (`row.committed`); aquí no hay escritor paralelo.
 
                 // OS2 parity: audit log for rawOnly entries (Gap 4)
                 // FluShell.jsx lines 430-438: addAuditLog after rawOnly entry
@@ -1125,24 +1192,281 @@ function App() {
                     speaker: speakerName || undefined,
                     transcript,
                     phase,
-                }, 'Raw transcript logged').catch(console.error);
+                }, 'Raw transcript logged').catch((e) => logCaughtError('src/App.tsx: auditLog.logEvent', e));
 
-                // NOTE: Do NOT call fluParticipant.onTurnCommitted() here.
-                // conversationStreamCommit.js already calls
-                // fluParticipantRef.current?.onTurnCommitted?.() after
-                // finalizeTurnCommit() (lines 379 and 427). Calling it here
-                // would double-increment turnsSinceLastEval, causing the
-                // participant evaluation to trigger on turn 2 instead of turn 3
-                // (evaluateEveryNTurns=3), and then immediately reset the counter.
-                // This is the root cause of FLU never reaching 'raised' phase.
+                // El aviso de turno comprometido lo da `onLocucionCommiteada` del
+                // motor (ÚNICO escritor, ambos modos): una sola cuenta por turno.
 
                 return;
             }
 
-            const respuestaVoz = contract?.respuesta_voz || '';
-            const navegacion = contract?.navegacion || {};
+            let respuestaVoz = contract?.respuesta_voz || '';
+            const navegacion: FluContract['navegacion'] = contract?.navegacion || { comando: null, destino: null, parametros: {} };
             const workspace = contract?.workspace || null;
             const musica = contract?.musica || null;
+
+            // ============================================================
+            // EJECUCIÓN DE INTENCIONES — Recordatorios, compras, alarmas,
+            // temporizadores, notas, diario y horario por voz.
+            // ============================================================
+            // RUTA CONVERSACIONAL (LLM como cerebro único, estilo Siri/Alexa/
+            // Google): el LLM decide la intención de forma conversacional y la
+            // emite en su contrato como `acciones: [{dominio, texto}]`. Cada
+            // `texto` es el fragmento del mandato del usuario; aquí se re-resuelve
+            // con el árbitro determinista (para obtener la intención estructurada
+            // precisa: dueAt, durationMs, etc.) y se despacha al MISMO manejador
+            // __fluHandle* que usa el flujo offline. Así la ejecución queda
+            // UNIFICADA en un solo conjunto de manejadores.
+            //
+            // El re-parseo del transcript crudo es FALLBACK OFFLINE: solo corre cuando
+            // el LLM no produjo ninguna acción (sin API key o respuesta genérica).
+            //
+            // Gana el MANEJADOR, no el LLM: su confirmacion reemplaza a
+            // `respuesta_voz` (ver mas abajo, regla unica). Sabe lo que se
+            // escribio de verdad (hora y tipo); el LLM puede describir otra entidad.
+            //
+            // onContractResolved es useCallback con deps [] y se define ANTES
+            // de los manejadores, por lo que se invocan vía window en runtime
+            // (siempre tienen closures frescas porque se reasignan cada render).
+            // ============================================================
+            let localHandledReply = '';
+            // Resultado del Árbitro para un dominio de ESTADO (config/game/environment).
+            // Su ruta única es el fast-path correspondiente (más abajo), no el
+            // dispatcher: aquí se acarrea para no perderlo (antes se descartaba).
+            let arbiterStateAction: { domain: string; action: unknown } | null = null;
+            const acciones = Array.isArray(contract?.acciones) ? contract.acciones : null;
+            const hasAcciones = Boolean(acciones && acciones.length > 0);
+
+            // ============================================================
+            // RUTA LLM — despachar cada acción emitida por el cerebro
+            // conversacional al manejador determinista correspondiente.
+            // ============================================================
+            if (hasAcciones && !rawOnly) {
+                try {
+                    const arbiterOptions = buildArbiterOptions();
+                    lastActionFailed = false;
+                    // Paso 1 — RESOLVER: cada acción del turno se re-resuelve con el
+                    // árbitro determinista (fuente única del parseo preciso). No se
+                    // despacha todavía para poder garantizar antes que una nota del
+                    // turno no se pierda si el LLM la omitió.
+                    const resolvedActions: Array<{ result: ArbiterResult; viaDomain: boolean }> = [];
+                    // PUNTO ÚNICO DE ESTRUCTURACIÓN: el árbitro determinista resuelve
+                    // el TURNO completo. El LLM solo clasifica (`accion.dominio`); la app
+                    // estructura aquí (fecha/hora en agenda, título+body en nota). UNA
+                    // sola rama estructura el panel — sin IA-estructura ni rescate.
+                    const turnResult: ArbiterResult = resolveDeterministicCommand(transcript, arbiterOptions);
+                    // El JUEGO ya lo despachó el fast-path determinista (llega en el
+                    // contrato como `juego` o marcado `fastPathGame`): no re-despachar
+                    // el turno o se reinicia la partida (nueva semilla → otra canción).
+                    const gameAlreadyHandled =
+                        turnResult?.domain === 'game' && isTurnAlreadyExecuted(resolved, turnResult?.domain);
+                    if (turnResult?.matched && !gameAlreadyHandled) {
+                        resolvedActions.push({ result: turnResult, viaDomain: false });
+                    }
+                    // Dedup por IDENTIDAD DE LA ACCIÓN resuelta (no por texto): el
+                    // turno y el fragmento del LLM que resuelven al MISMO evento
+                    // cuentan como uno (evita "ese evento ya existe" por doble
+                    // despacho). Dos acciones distintas del mismo dominio se conservan.
+                    const coveredKeys = new Set<string>(
+                        resolvedActions.map((entry) => resolvedActionIdentity(entry.result)),
+                    );
+                    // Acciones del LLM (clasificación) para dominios que el turno no cubrió.
+                    for (const accion of acciones ?? []) {
+                        const texto = String(accion?.texto || '').trim();
+                        if (!texto) continue;
+                        // Guard anti-arrastre (Bug #5): accion.texto debe ser fragmento
+                        // del mandato ACTUAL, no de turnos anteriores (historial).
+                        const belongsToTurn = transcript.includes(texto);
+                        if (!belongsToTurn) {
+                            relayLog(
+                                'WARN',
+                                'App',
+                                `onContractResolved: acción LLM ignorada (no pertenece al turno) → "${texto.slice(0, 100)}"`,
+                            );
+                            continue;
+                        }
+                        const commandText = texto;
+                        // Mismo texto que el turno: se REUTILIZA su resolucion (el Arbitro es determinista) en vez de re-parsearlo.
+                        const arbiterResult: ArbiterResult = String(transcript).trim() === commandText ? turnResult : resolveDeterministicCommand(commandText, arbiterOptions);
+                        const effectiveResult: ArbiterResult | null = arbiterResult?.matched
+                            ? arbiterResult
+                            : resolveDomainScopedIntent(accion?.dominio, commandText, {
+                                defaultOffsetMs: (arbiterOptions)?.defaultOffsetMs,
+                                now: (arbiterOptions)?.now,
+                                language: normalizeLang(languageRef.current),
+                            });
+                        if (effectiveResult?.matched && effectiveResult.domain) {
+                            const entryKey = resolvedActionIdentity(effectiveResult);
+                            if (coveredKeys.has(entryKey)) continue;
+                            coveredKeys.add(entryKey);
+                            resolvedActions.push({
+                                result: effectiveResult,
+                                viaDomain: !arbiterResult?.matched,
+                            });
+                        }
+                    }
+
+                    // Paso 2 — DESPACHAR: punto único, en orden, por el helper único.
+                    for (const { result: effectiveResult, viaDomain } of resolvedActions) {
+                        relayLog(
+                            'LOG',
+                            'App',
+                            `onContractResolved: acción LLM → dominio "${effectiveResult.domain}" (${JSON.stringify(
+                                readStringProp(effectiveResult.action, 'action') ?? effectiveResult.action,
+                            )})${viaDomain ? ' [vía dominio LLM]' : ''}`,
+                        );
+                        const route = arbiterDomainRoute(effectiveResult.domain);
+                        if (route === 'stateFastPath') {
+                            // Ruta única del dominio de estado: su fast-path propio
+                            // (config/juego/ambiente), NO el dispatcher, que no lo
+                            // ejecuta. Antes la resolución se perdía en el `else`.
+                            arbiterStateAction = {
+                                domain: String(effectiveResult.domain),
+                                action: effectiveResult.action,
+                            };
+                            continue;
+                        }
+                        const reply = await dispatchArbiterIntent(effectiveResult, { speakerName });
+                        if (reply) {
+                            localHandledReply = reply;
+                            // El manejador determinista es la fuente de verdad de
+                            // lo que REALMENTE se escribió (recordatorio, alarma,
+                            // nota, diario, horario, agenda): su confirmación
+                            // reemplaza a la del LLM, que puede describir otra
+                            // entidad (p. ej. decir "alarma" cuando se creó una
+                            // cita). Regla única para TODAS las funciones-adición.
+                            respuestaVoz = reply;
+                        }
+                    }
+                } catch (err) {
+                    logCaughtError('[App] acciones dispatch threw (non-critical):', err);
+                    relayLog('WARN', 'App', `acciones dispatch threw: ${err}`);
+                }
+                // §1 (sin éxito falso): si la acción se despachó pero la ESCRITURA
+                // falló, la respuesta de fallo del manejador reemplaza la del LLM.
+                if (lastActionFailed && localHandledReply) {
+                    respuestaVoz = localHandledReply;
+                    relayLog(
+                        'WARN',
+                        'App',
+                        `onContractResolved: acción falló → respuesta de fallo reemplaza la del LLM → "${localHandledReply}"`,
+                    );
+                }
+            }
+
+            // ============================================================
+            // FALLBACK OFFLINE — re-parseo determinista del transcript crudo.
+            // Solo corre cuando el LLM NO emitió acciones (sin API key, etc.).
+            // ============================================================
+            if (transcript && !rawOnly && !hasAcciones) {
+                try {
+                    // ============================================================
+                    // La frase ya llega canónica desde el motor de voz (§9.2): aquí
+                    // NO se re-normaliza (sin quitar wake word ni colapsar eco); los
+                    // resolvers deterministas reciben el texto tal cual.
+                    // ============================================================
+                    const commandText = transcript;
+                    // ============================================================
+                    // DESPACHO UNIFICADO POR DOMINIO (árbitro determinista)
+                    // ============================================================
+                    // En lugar de encadenar los 5 manejadores a ciegas (cada uno
+                    // re-parseando el mandato), se consulta UNA sola vez al árbitro
+                    // unificado (deterministicArbiter.resolveDeterministicCommand),
+                    // que devuelve { matched, domain, action, channel }. El dominio
+                    // ganador decide QUÉ manejador se invoca; si ninguno matchea,
+                    // el mandato cae a la IA (flu). Esto hace que "la última frase
+                    // sea consistente": un solo camino de respuesta por mandato.
+                    //
+                    // El árbitro evalúa los dominios en orden de prioridad y ya
+                    // resuelve la ambigüedad diario-vs-nota (diario gana cuando el
+                    // texto dice "en el diario"). Los dominios de estado (config/
+                    // game/environment) y navegación NO se despachan aquí: se
+                    // resuelven por sus propios fast-paths (configAction, juegos,
+                    // navegacion) más abajo en este mismo callback.
+                    // PUNTO ÚNICO DE PARSEO (Point B): el árbitro y el manejador
+                    // __fluHandleReminderText deben usar LOS MISMOS options para no
+                    // divergir. buildArbiterOptions() deriva las options desde la
+                    // MISMA fuente que los manejadores (defaultOffsetMs, now,
+                    // defaultAlarmTimeOfDay, defaultTimerMinutes) y se pasa al
+                    // árbitro, que lo reenvía al parser.
+                    const arbiterOptions = buildArbiterOptions();
+                    const arbiterResult: ArbiterResult = resolveDeterministicCommand(commandText, arbiterOptions);
+                    const arbiterDomain = arbiterResult?.matched ? arbiterResult.domain : null;
+                    if (arbiterDomain) {
+                        relayLog(
+                            'LOG',
+                            'App',
+                            `onContractResolved: árbitro → dominio "${arbiterDomain}" (acción ${JSON.stringify(
+                                readStringProp(arbiterResult.action, 'action') ?? arbiterResult.action,
+                            )})`,
+                        );
+                    } else {
+                        relayLog(
+                            'LOG',
+                            'App',
+                            `onContractResolved: árbitro NO matcheó. commandText="${commandText}" (transcript="${String(transcript).slice(0, 80)}") → cae a IA/flu`,
+                        );
+                    }
+                    // ============================================================
+                    // DESPACHO ÚNICO POR CONTRATO ESTRUCTURADO (Point F / §Estructura)
+                    // ------------------------------------------------------------
+                    // El árbitro YA parceó el transcript una sola vez y devolvió el
+                    // intent COMPLETO en `arbiterResult.action` ({handled, action,
+                    // reply, data}). Aquí se pasa ESE intent al manejador, NO la
+                    // cadena cruda: el manejador ejecuta `intent.data` sin re-parcear.
+                    // Esto elimina la duplicación de regex/parsers (rutas dobles) y
+                    // hace del árbitro la ÚNICA fuente de verdad del parseo.
+                    // Los manejadores conservan compatibilidad con texto crudo para
+                    // su uso autónomo (E2E/integración): detectan si el primer
+                    // argumento ya es un intent ({handled, action}) o una cadena.
+                    // ============================================================
+                    // DESPACHO ÚNICO (Point F): el intent COMPLETO que devolvió el
+                    // árbitro en `arbiterResult.action` se pasa al manejador
+                    // correspondiente vía dispatchArbiterIntent (el MISMO helper que
+                    // usa la RUTA LLM). Esto unifica la ejecución: tanto las acciones
+                    // emitidas por el cerebro conversacional (contract.acciones) como
+                    // el fallback offline del transcript crudo despachan por el mismo
+                    // camino, al mismo conjunto de manejadores __fluHandle*.
+                    let reply = '';
+                    if (arbiterDomain === 'navigation') {
+                        // Navegación (BUSCAR/NAVEGAR/GENERAR_VIDEO/GENERAR_DOCUMENTO) NO se
+                        // despacha por dispatchArbiterIntent (que no tiene rama navigation):
+                        // se marca el comando en `navegacion` y lo ejecuta handleNavigationCommand
+                        // más abajo, por el MISMO camino que el contrato navegacion del LLM.
+                        navegacion.comando = typeof arbiterResult.action === 'string' ? arbiterResult.action : null;
+                        relayLog('LOG', 'App', `onContractResolved: navigation → comando="${arbiterResult.action}" (handleNavigationCommand)`);
+                    } else if (arbiterDomainRoute(arbiterDomain) === 'stateFastPath') {
+                        // El Árbitro resolvió un dominio de ESTADO en el fallback
+                        // offline (p.ej. "vamos a jugar lotería" -> game): su ruta
+                        // única es el fast-path de estado, no dispatchArbiterIntent.
+                        arbiterStateAction = {
+                            domain: String(arbiterDomain),
+                            action: arbiterResult.action,
+                        };
+                        relayLog(
+                            'LOG',
+                            'App',
+                            `onContractResolved: dominio de estado "${arbiterDomain}" -> fast-path (no dispatcher)`,
+                        );
+                    } else {
+                        reply = await dispatchArbiterIntent(arbiterResult, { speakerName });
+                    }
+                    if (reply) localHandledReply = reply;
+                } catch (err) {
+                    logCaughtError('[App] Deterministic feature interception threw (non-critical):', err);
+                    relayLog('WARN', 'App', `feature interception threw: ${err}`);
+                }
+                // Para intenciones DETERMINISTAS (agenda/notas/etc.), la
+                // confirmación del manejador es la AUTORIDAD: lleva la hora y el
+                // tipo correctos ("1:27 p.m." → 13:27, "alarma" ≠ "cita"). El LLM
+                // puede tergiversar estos detalles en `respuesta_voz` ("cita a las
+                // 1:27 de la madrugada pm"). Por eso, cuando el manejador produjo
+                // confirmación, ESA gana sobre la respuesta conversacional.
+                if (localHandledReply) {
+                    respuestaVoz = localHandledReply;
+                    relayLog('LOG', 'App', `onContractResolved: intención determinista resuelta → confirmación del manejador "${localHandledReply.slice(0, 80)}"`);
+                }
+            }
             // ============================================================
             // FAST-PATH DETERMINISTA (configuración por voz instantánea)
             // ============================================================
@@ -1152,14 +1476,35 @@ function App() {
             // inmediato, mientras la IA aún genera la confirmación verbal.
             // configAction se declara aquí (hoisted) para que el gate de abajo
             // lo admita y se REUTILIZA al final del callback (no se re-declara).
-            const configAction = contract?.configuracion;
+            const configAction =
+                contract?.configuracion ||
+                (arbiterStateAction?.domain === 'config' && !isTurnAlreadyExecuted(resolved, arbiterStateAction?.domain)
+                    ? (arbiterStateAction.action as FluContract['configuracion'])
+                    : undefined);
 
             // Juego por voz (fast-path determinista): contrato normalizado por
             // normalizeJuego (gameId del catálogo + acción válida). Se declara
             // aquí (hoisted) para que el gate de abajo lo admita y se REUTILIZA
             // al final del callback (no se re-declara). El motor local es la
             // fuente de verdad de la partida.
-            const juegoAction = normalizeJuego(contract?.juego);
+            const juegoAction =
+                normalizeJuego(contract?.juego) ||
+                // El fast-path ya despacho el motor: re-despachar aqui = DOS cartas.
+                (arbiterStateAction?.domain === 'game' && !isTurnAlreadyExecuted(resolved, arbiterStateAction?.domain)
+                    ? normalizeJuego(arbiterStateAction.action)
+                    : null);
+
+            // Ambiente por voz (fast-path determinista): contrato normalizado por
+            // normalizeEnvironment (tipo 'activar' | 'reset' + ambienteId del
+            // catálogo). Se declara aquí (hoisted) para que el gate de abajo lo
+            // admita y se REUTILIZA al final del callback (no se re-declara).
+            // El catálogo de ambientes (src/core/environments/*) es la fuente de
+            // verdad del rebranding por oficio.
+            const environmentAction =
+                normalizeEnvironment(contract?.ambiente) ||
+                (arbiterStateAction?.domain === 'environment' && !isTurnAlreadyExecuted(resolved, arbiterStateAction?.domain)
+                    ? normalizeEnvironment(arbiterStateAction.action)
+                    : null);
 
             // ============================================================
             // MÚSICA REAL (F3): ejecutar la acción de música del contrato
@@ -1181,10 +1526,21 @@ function App() {
                 relayLog('LOG', 'App', '[Música] stop_music');
             }
 
-            // Gate único: se admiten contratos con respuesta_voz, navegación o
-            // configuración. Antes, un contrato SOLO-configuración (fast-path) era
-            // descartado aquí en silencio; ahora pasa para aplicar applyConfigAction.
-            if (!respuestaVoz && !navegacion.comando && !configAction?.accion && !juegoAction?.action) return;
+            // Gate único: se admiten contratos con respuesta_voz, navegación,
+            // configuración o acciones (contract.acciones). Antes, un contrato
+            // SOLO-configuración (fast-path) era descartado aquí en silencio; ahora
+            // pasa para aplicar applyConfigAction. Los contratos con `acciones`
+            // (cerebro conversacional) también pasan aunque no traigan respuesta_voz,
+            // para que el resto del procesamiento (workspace, feed, etc.) continúe.
+            if (
+                !respuestaVoz &&
+                !navegacion.comando &&
+                !configAction?.accion &&
+                !juegoAction?.action &&
+                !environmentAction?.tipo &&
+                !hasAcciones
+            )
+                return;
 
             // ============================================================
             // OS2 parity: cuando viene de una consulta de minuta local exitosa
@@ -1194,7 +1550,7 @@ function App() {
             // activa) cambiar a la pestaña de minutas para que el usuario
             // la vea visualmente. FluShell.jsx:464-583 hace el equivalente.
             // ============================================================
-            let minuteSelection: any = null;
+            let minuteSelection: MinuteLookupSelection | null = null;
             try {
                 minuteSelection = selectMinuteForLookup({
                     diagnostics: resolved?.diagnostics,
@@ -1203,7 +1559,7 @@ function App() {
                     fallbackTheme: sessionRoleRef.current,
                 });
             } catch (err) {
-                console.warn('[App] selectMinuteForLookup threw (non-critical):', err);
+                logCaughtError('[App] selectMinuteForLookup threw (non-critical):', err);
                 relayLog('WARN', 'App', `selectMinuteForLookup threw: ${err}`);
             }
             if (minuteSelection) {
@@ -1213,37 +1569,249 @@ function App() {
                         setSelectedMinuteId(minuteSelection.matched.id);
                     }
                     if (minuteSelection.shouldSwitchTab) {
-                        setActiveTab('minutes');
+                        changeTab('minutes');
                     }
                 } catch (err) {
-                    console.warn('[App] minuteSelection handler threw (non-critical):', err);
+                    logCaughtError('[App] minuteSelection handler threw (non-critical):', err);
                     relayLog('WARN', 'App', `minuteSelection handler threw: ${err}`);
                 }
             }
 
             // ============================================================
-            // LIMPIAR IMAGEN ANTERIOR AL INICIO DE CADA CONTRATO
-            // Regla: las imágenes solo se muestran si la IA lo indica
-            // explícitamente en este turno (workspace.tipo visual). Si la IA
-            // no pide imagen (texto, sin workspace, o respuesta corta), la
-            // zona de imagen debe quedar limpia — NUNCA persistir la imagen
-            // del turno anterior.
+            // LIMPIEZA POR TURNO del estado VIVO (imagen/artifact)
+            // ACOTADA AL TIPO: el turno solo reemplaza el objeto del tipo que
+            // él mismo produce (invariante: el último objeto de cada tipo
+            // —video, imagen, todo— NO se borra por un turno de otro tipo).
+            // Antes se limpiaba la imagen en TODO turno, así que la imagen
+            // recién generada desaparecía en el turno siguiente (una carta de
+            // la partida, una respuesta de texto…) aunque siguiera siendo el
+            // último objeto de su tipo. La imagen la reemplaza su propia ruta
+            // cuando el turno SÍ pide una imagen (beginImageRequest del hook).
+            // El artifact (objeto "todo") sí se limpia: es el texto del turno
+            // y la respuesta conversacional ya lo pinta desde latestResponse.
+            // Lo persistido (Historial por usuario en `documents`) sigue
+            // intacto: es la fuente de restauración por tipo.
             // ============================================================
-            // Invalidar cualquier request de imagen pendiente (OS2 parity: requestId guard)
-            try {
-                workspaceImage.clear();
-            } catch (err) {
-                console.warn('[App] workspaceImage.clear() threw (non-critical):', err);
-                relayLog('WARN', 'App', `workspaceImage.clear() threw: ${err}`);
+            const turnKind = resolveTurnArtifactKind(workspace?.tipo, navegacion?.comando);
+            // La imagen NO se limpia aqui: su ruta unica (generateFromContract ->
+            // beginImageRequest) ya invalida la anterior; limpiarla en todo turno de
+            // tipo imagen borraba el ultimo objeto de su tipo cuando no habia
+            // prompt_visual con el que reemplazarla.
+            integrationStore.setWorkspaceArtifact(null);
+
+            // ============================================================
+            // PROCESAR WORKSPACE ARTIFACT — INMEDIATAMENTE (en paralelo con la voz)
+            // ============================================================
+            // OS2 parity: procesar workspace artifact. Este bloque corre ANTES del
+            // bloque de habla (if respuestaVoz) para que la petición de imagen
+            // (workspaceImage.generateFromContract) se dispare EN EL MOMENTO en que
+            // la IA responde, en paralelo con (incluso antes de) que FLU hable.
+            // generateFromContract es async fire-and-forget: no bloquea el habla.
+            // El artifact/imagen vivos se limpian al iniciar el turno (arriba).
+
+            // Limpiar también el estado de búsqueda del Pizarrón al iniciar un
+            // turno real: si el turno anterior fue una búsqueda web (BUSCAR/
+            // NAVEGAR o manual), sus resultados y la consulta de la barra NO deben
+            // quedar "pegados" cuando la IA responde otra cosa (conversación,
+            // generación de imagen, etc.). WorkspaceHub escucha RESET_SEARCH y
+            // llama a resetSearch(). Si este turno SÍ es una búsqueda, el
+            // dispatchFluSearch posterior (más abajo) re-puebla resultados frescos.
+            // Invariante (searchSingleRouteGuard G8): en un turno de BÚSQUEDA el
+            // FILL (`dispatchFluSearch`) es el ÚNICO escritor del estado de Buscar.
+            // Limpiar aquí borraba los resultados recién pintados cuando el ASR
+            // emitía más revisiones del mismo comando (barra con query, grilla vacía).
+            const comandoNavegacion = String((navegacion)?.comando || '').toUpperCase();
+            const isSearchFillTurn = comandoNavegacion === COMMAND_IDS.BUSCAR || comandoNavegacion === COMMAND_IDS.NAVEGAR;
+            if (!isSearchFillTurn) dispatchFluResetSearch();
+            // Foco del turno: el feed del Pizarrón salta al tipo del resultado.
+            // `text` (respuesta conversacional) → vuelve a "Todo". El tipo sale
+            // del MISMO criterio que la limpieza por turno (turnKind de arriba).
+            {
+                turnFocusSeqRef.current += 1;
+                setTurnFocus({ kind: turnKind, seq: turnFocusSeqRef.current });
+            }
+            if (workspace) {
+                const tipo = String(workspace.tipo || 'text').trim().toLowerCase();
+                // Fuente única de normalización: si el cuerpo (carta/documento)
+                // llega en `titulo` y `contenido` viene vacío, se reasigna aquí
+                // para que todo el pipeline reciba body no vacío y título corto.
+                const { titulo, contenido } = normalizeWorkspaceDocumentFields({
+                    titulo: workspace.titulo || '',
+                    contenido: workspace.contenido || '',
+                });
+                const promptVisual = workspace.prompt_visual || '';
+                const puntos_clave = Array.isArray(workspace.puntos_clave)
+                    ? workspace.puntos_clave.map((item: string) => String(item || '').trim()).filter(Boolean)
+                    : [];
+
+                const isVisualTipo = isVisualWorkspaceTipo(tipo);
+                if (isVisualTipo) {
+                    const visualCore = promptVisual || contenido || titulo;
+                    if (visualCore && visualCore.length >= 5) {
+                        // Obligación #6: UUIDv4
+                        const wsId = uuidv4();
+                        integrationStore.setWorkspaceArtifact({
+                            id: wsId,
+                            respuesta: contenido || titulo || respuestaVoz,
+                            titulo: titulo || visualCore,
+                            tipo: tipo as 'text' | VisualTipo | null,
+                            contenido: contenido || visualCore,
+                            prompt_visual: visualCore,
+                            puntos_clave,
+                            origen: 'ia',
+                            timestamp: Date.now(),
+                        });
+
+                        // SOLO usar workspace.prompt_visual (lo que Gemini diseña específicamente como prompt de imagen).
+                        // NO caer en contenido/titulo — eso es texto para mostrar, NO para generar imagen.
+                        // Si prompt_visual está vacío, NO generar imagen (fail-fast con mensaje claro).
+                        if (promptVisual && promptVisual.length >= 5) {
+                            workspaceImage.generateFromContract(promptVisual, workspace.tipo as string | null);
+                        }
+                    }
+                } else if (tipo === 'horario' && (titulo || contenido || puntos_clave.length > 0 || promptVisual)) {
+                    // Horario de clases en el Pizarrón: preservar tipo + modo
+                    // (semana/dia/proxima/recordatorios). Los modos válidos vienen de
+                    // FLU_CONFIG.horario.modos — nada hardcodeado.
+                    const horarioConfig = FLU_CONFIG.horario || {};
+                    const modoValido = horarioConfig.modos ? Object.keys(horarioConfig.modos) : ['semana', 'dia', 'proxima', 'recordatorios'];
+                    const rawModo = String(workspace.modo || '').trim().toLowerCase();
+                    const modo = (modoValido.includes(rawModo) ? rawModo : 'semana') as 'semana' | 'dia' | 'proxima' | 'recordatorios';
+                    // Obligación #6: UUIDv4
+                    integrationStore.setWorkspaceArtifact({
+                        id: uuidv4(),
+                        respuesta: contenido || titulo || respuestaVoz,
+                        titulo: titulo || 'Horario de clases',
+                        tipo: 'horario',
+                        contenido: contenido || '',
+                        prompt_visual: promptVisual || '',
+                        modo,
+                        puntos_clave,
+                        origen: 'ia',
+                        timestamp: Date.now(),
+                    });
+                } else if (tipo === 'doc' || tipo === 'video') {
+                    // Una petición de MINUTA no es un documento: se genera la minuta
+                    // (comando determinista GENERAR_RESUMEN) y se OMITE el PDF/video.
+                    if (isMinuteGenerationRequest(transcript)) {
+                        relayLog('LOG', 'App', 'onContractResolved: petición de minuta → GENERATE_SUMMARY (se omite documento)');
+                        dispatchFluEvent(FLU_EVENTS.GENERATE_SUMMARY);
+                    } else {
+                    // RUTA ÚNICA de medios: se crea el artifact (fuente de
+                    // buildGenerationTopic) y se genera por `requestMediaRef`
+                    // (idempotente por comando). NO se despacha evento: el bus
+                    // era la segunda ruta y permitía re-generar (fuga de crédito).
+                    const isVideo = tipo === 'video';
+                    const ran = requestMediaRef.current(isVideo ? 'video' : 'doc', transcript, () => {
+                        integrationStore.setWorkspaceArtifact({
+                            id: uuidv4(),
+                            respuesta: contenido || titulo || respuestaVoz,
+                            titulo: titulo || (isVideo ? 'Video' : 'Documento'),
+                            tipo: isVideo ? 'video' : 'doc',
+                            contenido: contenido || '',
+                            prompt_visual: promptVisual || '',
+                            puntos_clave,
+                            origen: 'ia',
+                            timestamp: Date.now(),
+                        });
+                    });
+                    if (ran) {
+                        relayLog('LOG', 'App', `onContractResolved: workspace ${isVideo ? 'video' : 'doc'} → generación ÚNICA (ruta idempotente)`);
+                        // Bug #5: para un video, además del guion/ensamblado se genera
+                        // una ESCENA visual del asunto (imagen real en el Pizarrón).
+                        if (isVideo) {
+                            const scenePrompt = cleanForSpeech(promptVisual || contenido || titulo || '');
+                            if (scenePrompt.length >= 5) {
+                                workspaceImage.generateFromContract(scenePrompt, 'image_prompt');
+                            }
+                        }
+                    }
+                    }
+                } else if (titulo || contenido || puntos_clave.length > 0 || promptVisual) {
+                    // Guard anti-duplicado: si el workspace de tipo 'text' es una
+                    // respuesta conversacional redundante (el contenido escrito
+                    // replica la respuesta hablada y no hay puntos clave reales),
+                    // NO crear un artifact. La pestaña «respuesta» ya muestra la
+                    // respuesta hablada (latestResponse); crearlo duplicaría el
+                    // texto en 2 lugares del Pizarrón.
+                    const redundantText = isRedundantTextWorkspace({
+                        contenido,
+                        titulo,
+                        puntosClave: puntos_clave,
+                        respuestaVoz,
+                    });
+                    if (redundantText) {
+                        relayLog('LOG', 'App', 'onContractResolved: workspace text redundante (duplica respuesta_voz) — se omite artifact para evitar doble render en Pizarrón');
+                    } else {
+                        // Obligación #6: UUIDv4
+                        integrationStore.setWorkspaceArtifact({
+                            id: uuidv4(),
+                            respuesta: contenido || titulo || respuestaVoz,
+                            titulo: titulo || 'Contenido',
+                            tipo: 'text',
+                            contenido: contenido || '',
+                            prompt_visual: promptVisual || '',
+                            puntos_clave,
+                            origen: 'ia',
+                            timestamp: Date.now(),
+                        });
+                    }
+                }
             }
 
             // Si hay respuesta de voz, actualizar el store.
             // En juegos por voz la voz es SIEMPRE del motor local (determinista):
             // se suprime la respuesta_voz de cortesía de Gemini para evitar doble
             // habla (juegoAction) y la del contrato fast-path (fastPathGame).
-            if (respuestaVoz && !juegoAction?.action && !(resolved as any)?.fastPathGame) {
+            // El cambio de ambiente (environmentAction) también suprime la respuesta
+            // SOLO cuando el ambiente va a CAMBIAR de verdad (el bloque de ambiente
+            // hablará su bienvenida como reemplazo). Si el ambiente objetivo ya está
+            // activo (reset idempotente a "asistente" que el LLM manda por defecto),
+            // NO hay bienvenida que hablar: la respuesta_voz conversacional debe
+            // hablarse normal. Un reset espurio NO debe dejar el turno mudo.
+            const environmentTargetId =
+                environmentAction?.tipo === 'reset'
+                    ? DEFAULT_AMBIENTE_ID
+                    : environmentAction?.tipo === 'activar'
+                        ? environmentAction.ambienteId
+                        : null;
+            const environmentWillChange =
+                environmentTargetId !== null &&
+                environmentTargetId !== useEnvironmentStore.getState().activeAmbienteId;
+            // Idempotencia por turno: la MISMA respuesta para el mismo texto en una
+            // ventana corta es una re-captura/eco → se omite (no repite el habla).
+            const responseKey = buildResponseKey(String(transcript || ''), String(respuestaVoz || ''));
+            const responseWindowMs = Number(FLU_CONFIG?.timing?.responseDedupWindowMs) || 8000;
+            const nowMs = Date.now();
+            const dupResponse = isDuplicateResponseIn(
+                recentResponsesRef.current,
+                responseKey,
+                nowMs,
+                responseWindowMs,
+            );
+            if (dupResponse) {
+                relayLog(
+                    'WARN',
+                    'App',
+                    'respuesta duplicada del mismo turno → se omite (evita repetir el habla)',
+                );
+            }
+            if (
+                respuestaVoz &&
+                !dupResponse &&
+                !juegoAction?.action &&
+                !environmentWillChange &&
+                !isTurnAlreadyExecuted(resolved, 'game') &&
+                !isTurnAlreadyExecuted(resolved, 'environment')
+            ) {
+                recentResponsesRef.current = pushResponseState(
+                    recentResponsesRef.current,
+                    responseKey,
+                    nowMs,
+                    responseWindowMs,
+                );
                 integrationStore.setLastResponse(respuestaVoz);
-                integrationStore.addFluMessage(respuestaVoz);
+                logFluReply(respuestaVoz);
 
                 // ============================================================
                 // APLICAR EMOCIÓN DE GEMINI ANTES DE SPEAKING
@@ -1290,19 +1858,28 @@ function App() {
                     geminiEmocion = undefined;
                 }
 
-                // Fuente de análisis para alinear emociones/acciones al evento REAL:
-                // se escanea tanto el transcript (lo que dijo el usuario) como la
-                // respuesta_voz de FLU (ej. anuncio de canción "¡vamos a bailar!" → Dance).
+                                // ACCION y EMOCION salen de fuentes distintas: el transcript (lo que dijo el
+                // USUARIO) manda para ACTUAR y para el auto-play del baile; la respuesta de FLU
+                // solo alimenta la EMOCION del avatar. Medido 2026-10-05: un "sing/dance" de la
+                // propia respuesta de FLU en clase de ingles arrancaba la pista sobre la tarea.
                 const speechSource = [transcript, respuestaVoz].filter(Boolean).join(' ');
                 if (speechSource) {
                     // 1. Detectar acciones físicas (baila→Dance, salta→Jump_in_place, etc.)
-                    const detectedAnim = detectActionInTranscript(speechSource);
+                    const detectedAnim = detectActionInTranscript(String(transcript || ''));
                     if (detectedAnim) {
                         // Acción física → forzar animacion y limpiar emocion
                         geminiAnimacion = detectedAnim;
                         geminiEmocion = undefined;
+                        // "BAILA" también SUENA: si el usuario pide bailar y no hay
+                        // canción en curso, arranca la pista de baile del catálogo
+                        // (config: MUSIC_CATALOG, id "baila"). El caso inverso
+                        // (música -> Dance) ya se cubre arriba con musica.accion.
+                        if (shouldAutoPlayDanceTrack({ detectedAnim, musicaAccion: musica?.accion ?? null, musicPlaying: isMusicPlaying() })) {
+                            playSong('baila').catch((err: unknown) =>
+                                logCaughtError('[App] baile sin musica', err),
+                            );
+                        }
                         if (integrationStore.config.debug) {
-                            console.log(`[App] Post-processing: "${speechSource}" → forzando animacion="${detectedAnim}", emocion=undefined`);
                         }
                     }
 
@@ -1325,7 +1902,6 @@ function App() {
                                 geminiAnimacion = undefined;
                             }
                             if (integrationStore.config.debug) {
-                                console.log(`[App] Post-processing: "${speechSource}" → forzando emocion="${detectedEmotion}"${musica?.accion !== 'play_music' ? ', animacion=undefined (la emoción definida gana)' : ' (modo canción: se conserva Dance)'}`);
                             }
                         }
                     }
@@ -1396,9 +1972,6 @@ function App() {
                 // La emoción de Gemini (emocion/animacion) se guarda SOLO para
                 // diagnóstico en el header chip, NO se aplica al avatar.
                 // ============================================================
-                const hasEmotion = Boolean(geminiEmocion || geminiAnimacion);
-                const isSpeakingExpression = isNeutralSpeakingEmotion;
-                console.log(`[DIAG App] contract.emocion="${geminiEmocionRaw}", contract.animacion="${geminiAnimacionRaw}", emotionLabel="${emotionLabel}", hasEmotion=${hasEmotion}, isSpeakingExpression=${isSpeakingExpression}`);
                 relayLog('LOG', 'App', `onContractResolved: emocion="${geminiEmocionRaw}", animacion="${geminiAnimacionRaw}", emotionLabel="${emotionLabel}" — yendo directo a SPEAKING`);
 
                 let speakPromise: Promise<void> | null = null;
@@ -1407,13 +1980,23 @@ function App() {
                     // regardless of useCallback stale closure
                     const currentSpeakFlu = speakFluRef.current;
                     speakPromise = currentSpeakFlu(respuestaVoz, languageRef.current).catch((speechErr: unknown) => {
-                        console.warn('[App] speakFlu failed:', speechErr);
+                        logCaughtError('[App] speakFlu failed', speechErr);
                     });
                 }
 
                 // Ir directo a SPEAKING — syncAvatarToState aplicará
                 // setExpression('hablando')/etc. que da ['Idle_2', 'MouthMove'].
                 // Una sola recarga de BunnyViewer, sin doble carga.
+                if (!respuestaVoz) {
+                    // Diagnóstico de latencia: entrar en SPEAKING sin nada que decir
+                    // deja el turno "hablando" en vacío (medido: 3,1 s) hasta que se
+                    // reanuda la escucha. Se marca para que el hueco tenga nombre.
+                    relayLog(
+                        'WARN',
+                        'App',
+                        `turnTiming: SPEAKING sin respuesta_voz (turno mudo) transcript="${String(transcript || '').slice(0, 60)}"`,
+                    );
+                }
                 relayLog('LOG', 'App', `onContractResolved: calling setConversationState('SPEAKING')`);
                 integrationStore.setConversationState('SPEAKING');
                 integrationStore.setFluSpeaking(true);
@@ -1434,7 +2017,7 @@ function App() {
                     try {
                         await speakPromise;
                     } catch (speechErr) {
-                        console.warn('[App] speakFlu failed:', speechErr);
+                        logCaughtError('[App] speakFlu failed', speechErr);
                     }
                 }
                 // Continuous mode: SPEAKING → LISTENING directly (no frozen IDLE
@@ -1447,61 +2030,6 @@ function App() {
                 scheduleResumeListening(respuestaVoz?.length);
             }
 
-            // OS2 parity: procesar workspace artifact
-            // Si el nuevo contrato NO tiene workspace, limpiar el artifact anterior
-            // para que no persista contenido visual/textual del turno previo.
-            if (!workspace) {
-                integrationStore.setWorkspaceArtifact(null);
-            }
-            if (workspace) {
-                const tipo = String(workspace.tipo || 'text').trim().toLowerCase();
-                const titulo = workspace.titulo || '';
-                const contenido = workspace.contenido || '';
-                const promptVisual = workspace.prompt_visual || '';
-                const puntos_clave = Array.isArray(workspace.puntos_clave)
-                    ? workspace.puntos_clave.map((item: string) => String(item || '').trim()).filter(Boolean)
-                    : [];
-
-                const VISUAL_TIPOS = ['image_prompt', 'diagram', '3d'];
-                const isVisualTipo = VISUAL_TIPOS.includes(tipo);
-                if (isVisualTipo) {
-                    const visualCore = promptVisual || contenido || titulo;
-                    if (visualCore && visualCore.length >= 5) {
-                        // Obligación #6: UUIDv4
-                        const wsId = uuidv4();
-                        integrationStore.setWorkspaceArtifact({
-                            id: wsId,
-                            respuesta: contenido || titulo || respuestaVoz,
-                            titulo: titulo || visualCore,
-                            tipo: tipo as 'text' | 'image_prompt' | 'diagram' | '3d' | null,
-                            contenido: contenido || visualCore,
-                            prompt_visual: visualCore,
-                            puntos_clave,
-                            timestamp: Date.now(),
-                        });
-
-                        // SOLO usar workspace.prompt_visual (lo que Gemini diseña específicamente como prompt de imagen).
-                        // NO caer en contenido/titulo — eso es texto para mostrar, NO para generar imagen.
-                        // Si prompt_visual está vacío, NO generar imagen (fail-fast con mensaje claro).
-                        if (promptVisual && promptVisual.length >= 5) {
-                            workspaceImage.generateFromContract(promptVisual, workspace.tipo as string | null);
-                        }
-                    }
-                } else if (titulo || contenido || puntos_clave.length > 0 || promptVisual) {
-                    // Obligación #6: UUIDv4
-                    integrationStore.setWorkspaceArtifact({
-                        id: uuidv4(),
-                        respuesta: contenido || titulo || respuestaVoz,
-                        titulo: titulo || 'Contenido',
-                        tipo: 'text',
-                        contenido: contenido || '',
-                        prompt_visual: promptVisual || '',
-                        puntos_clave,
-                        timestamp: Date.now(),
-                    });
-                }
-            }
-
             // OS2 parity: detectar emoción del transcript
             if (transcript) {
                 integrationStore.detectAndSetEmotion(transcript);
@@ -1511,7 +2039,6 @@ function App() {
                 const sentiment = detectSentiment(transcript);
                 contextualEmotionRef.current?.(sentiment);
             }
-
 
             // ============================================================
             // OS2 parity: unified navigation command handler
@@ -1532,6 +2059,8 @@ function App() {
                     auditLog,
                     fluParticipant,
                     os2ResetVoiceDisplay,
+                    requestMedia: (tipo, text) => requestMediaRef.current(tipo, text),
+                    identitySession: identitySessionRef,
                 });
             }
 
@@ -1542,15 +2071,16 @@ function App() {
             if (respuestaVoz && transcript) {
                 // OS2 parity: buildFluSpeechAuditRows creates separate rows for human and FLU
                 // FluShell.jsx lines 638-647
-                const auditRows = (buildFluSpeechAuditRows as any)({
+                const auditInput = {
                     timestamp: new Date().toISOString(),
-                    humanSpeaker: speakerName || 'Hablante 1',
+                    humanSpeaker: speakerName || FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker,
                     humanTranscript: transcript,
                     fluText: respuestaVoz,
                     phase,
                     navigation: navegacion,
                     navigationComando: navegacion.comando || null,
-                });
+                };
+                const auditRows = buildFluSpeechAuditRows(auditInput);
 
                 // OS2 parity: addAuditLog for each row (FluShell.jsx lines 688-693)
                 // Obligación #6: UUIDv4
@@ -1561,7 +2091,7 @@ function App() {
                         uuidv4(),
                         row,
                         `${row.speaker} transcript logged`,
-                    ).catch(console.error);
+                    ).catch((e) => logCaughtError('src/App.tsx: auditLog.logEvent', e));
                 }
             }
 
@@ -1575,14 +2105,68 @@ function App() {
             // ============================================================
             if (juegoAction?.action) {
                 try {
-                    await applyGameAction(juegoAction, {
+                    // Diarización: el dueño del turno es el HABLANTE real, no el
+                    // participante activo. Se reutiliza el mapeo único
+                    // etiqueta→participante del servicio de participantes.
+                    let playerId = (juegoAction as { playerId?: string }).playerId;
+                    let playerName = (juegoAction as { playerName?: string }).playerName;
+                    if (speakerName) {
+                        const speakerParticipant =
+                            await participants.service.resolveParticipantBySpeakerLabel(speakerName);
+                        playerId = playerId || speakerParticipant?.id;
+                        // Nombre legible del ganador: evita anunciar un id/UUID.
+                        playerName = playerName || speakerParticipant?.name;
+                    }
+                    await applyGameAction({ ...juegoAction, playerId, playerName }, {
                         languageRef,
                         conversationActiveRef,
                         speakFluRef,
                         scheduleResumeListening,
+                        participantIdRef: realParticipantIdRef, turnText: transcript,
                     });
                 } catch (err) {
-                    console.error('[App] applyGameAction failed (non-critical):', err);
+                    logCaughtError('[App] applyGameAction failed (non-critical)', err);
+                }
+            }
+
+            // ============================================================
+            // APPLY ENVIRONMENT ACTION — Ambientes por voz (fast-path)
+            // ============================================================
+            // El catálogo de ambientes (src/core/environments/*) es la fuente de
+            // verdad del rebranding por oficio (Identidad, Tema visual, Escena 3D,
+            // Atuendo, Voz/personalidad, Pestañas/contenido). `reset` devuelve al
+            // ambiente por defecto (asistente). Se aplica ANTES que la configuración
+            // para que el rebranding se refleje de inmediato y FLU salude con la
+            // bienvenida del ambiente. Si falla, no afecta el resto del contrato.
+            // ============================================================
+            if (environmentAction?.tipo) {
+                try {
+                    // Idempotencia: si el ambiente resuelto YA es el activo, no se
+                    // re-aplica (evita que un `ambiente: "asistente"` espurio del LLM
+                    // dispare un reset innecesario que re-activa el perfil por defecto).
+                    // Un cambio legítimo de rol sigue funcionando porque el id objetivo
+                    // difiere del activo (ej. en "chef" + "vuelve al modo asistente").
+                    const resolvedId =
+                        environmentAction.tipo === 'reset'
+                            ? DEFAULT_AMBIENTE_ID
+                            : environmentAction.ambienteId;
+                    const currentId = useEnvironmentStore.getState().activeAmbienteId;
+                    if (resolvedId === currentId) {
+                        relayLog(
+                            'LOG',
+                            'App',
+                            `[Ambiente] "${resolvedId}" ya activo — se omite re-aplicación (idempotente).`
+                        );
+                    } else {
+                        const ambiente =
+                            environmentAction.tipo === 'reset'
+                                ? resetEnvironment()
+                                : applyEnvironment(environmentAction.ambienteId);
+                        const envLang = normalizeLang(languageRef.current);
+                        await speakFluRef.current?.(ambiente.bienvenida[envLang], envLang);
+                    }
+                } catch (err) {
+                    logCaughtError('[App] applyEnvironment failed (non-critical)', err);
                 }
             }
 
@@ -1629,20 +2213,26 @@ function App() {
                         setDebugLogsEnabled,
                     });
                 } catch (err) {
-                    console.error('[App] applyConfigAction failed (non-critical):', err);
+                    logCaughtError('[App] applyConfigAction failed (non-critical)', err);
                     // No relanzar — el contrato ya se procesó exitosamente
                 }
             }
+
+            // Devolver la respuesta hablada (respuestaVoz) para que los llamadores
+            // (y las pruebas E2E de intercepción) puedan conocer qué dijo FLU.
+            // Puede ser '' si no hubo respuesta hablada (p. ej. solo navegación).
+            return respuestaVoz;
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- dispatcher central: parte de sus dependencias (showListeningAck, workspaceImage...) se declaran DEBAJO (TDZ, tsc lo confirmo) y listarlas aqui no compila; moverlo cambiaria el orden de hooks.
         }, [])),
         // OS2 parity: inject the local useFluParticipant instance so OS2's voice commands
         // (FLU_ADELANTE) use the same participant state as the UI button.
         // Fixes: voice "ok flu adelante" responding "No tengo nada pendiente por ahora"
         participantRef: fluParticipantRef,
-    });
-
-    // Keep the ref in sync so onEmotion (captured by useFluParticipant before
-    // useFluVoiceAssistant) always reads the latest setRecentMemory.
-    setRecentMemoryRef.current = setRecentMemory;
+        // Fase E: nombre del participante activo (Juan/Luis) para sembrar
+        // sessionPrimary en la diarización (config-gated en el hook).
+        activeParticipantName: activeParticipantNameForVoice,
+        participantVoiceAnchors: participantVoiceAnchorsForVoice,
+        identitySession: identitySessionRef,    });
 
     // ---- Navigation commands (extraído a hook) ----
     const navigationCommands = useNavigationCommands(
@@ -1651,22 +2241,740 @@ function App() {
         os2SuspendRecognition,
         os2StartListening,
         voiceStatus,
+        startConversationRef,
     );
     const {
         speakFlu,
-        clearResumeListeningTimer,
         scheduleResumeListening,
         handleNavigationCommand,
     } = navigationCommands;
 
+    // Dueño ÚNICO del modo conversación: nadie más escribe
+    // `conversationActiveRef.current`. Abrir la escucha en conversación pasa
+    // siempre por aquí (botón y arranque automático tras onboarding).
+    const conversationMode = useMemo(
+        () =>
+            createConversationModeController({
+                conversationActiveRef,
+                startListening: os2StartListening,
+                // El modo es la ÚNICA fuente también de lo visible: entrar/abrir
+                // refleja LISTENING y salir refleja IDLE (fin del desalineo que
+                // hacía hablar creyendo que se transcribía y descartar la frase).
+                setConversationState: (state) => integrationStore.setConversationState(state),
+                onTransition: ({ event, active }) =>
+                    relayLog('LOG', 'conversationMode', `[MODE] ${event} active=${active}`),
+            }),
+        [os2StartListening, integrationStore],
+    );
+
+    // Entrada ÚNICA de "abrir escucha" desde la UI (puente del avatar):
+    // delega en el dueño del modo para no abrir en comando por accidente.
+    const openListeningFromUi = useCallback(() => conversationMode.open(), [conversationMode]);
+
     // Keep speakFluRef in sync so onContractResolved always reads the latest speakFlu
     speakFluRef.current = speakFlu;
 
+    // ---- Asistente personal (Fase 1): DND, onboarding y notificaciones ----
+    // Regla #1: el estado vive en hooks config-driven (FLU_CONFIG + STORAGE_KEYS),
+    // sin valores hardcodeados en este componente.
+    const [dnd, dndActions] = useDoNotDisturb();
+    // Puente para romper la dependencia circular: `onboarding.speak` necesita
+    // suspender/reanudar el micrófono del onboarding, pero el hook de voz
+    // necesita `onboarding.answer`. El ref se sincroniza tras crear ambos.
+    const onboardingVoiceControlRef = useRef<{ suspend: () => void; resume: () => void }>({
+        suspend: () => undefined,
+        resume: () => undefined,
+    });
+    // Escucha activa (mismo modelo anti-eco que FLU): antes de que FLU hable
+    // se SUSPENDE el micrófono del onboarding y al terminar el TTS se REANUDA.
+    const onboardingSpeak = useCallback(
+        async (text: string, lang: string) => {
+            onboardingVoiceControlRef.current.suspend();
+            try {
+                await speakFlu(text, lang);
+            } finally {
+                onboardingVoiceControlRef.current.resume();
+            }
+        },
+        [speakFlu],
+    );
+    const onboarding = useOnboarding({
+        speak: onboardingSpeak,
+        language,
+        participantId: activeParticipantId,
+        onCompleted: (completed) => {
+            handleOnboardingCompletedRef.current?.(completed);
+        },
+    });
+    // Embudo ÚNICO de respuestas del onboarding (teclado, chip y voz). Atajo
+    // para perfiles EXISTENTES: si la respuesta del paso de captura del NOMBRE
+    // coincide con un participante ya registrado (p. ej. tocar el chip "luis"
+    // en vez de teclear), se completa de inmediato (completeWithName) y se
+    // OMITE la pregunta "¿Eres niño o adulto?" — el rol de ese perfil ya está
+    // guardado y no se vuelve a preguntar (kind→role solo se usa al REGISTRAR
+    // un perfil NUEVO en el efecto de completado). Los nombres nuevos siguen
+    // por kind (niño/adulto) para derivar su rol inicial.
+    const handleOnboardingAnswer = useCallback(
+        (text: string) => {
+            const step = onboarding.currentStep;
+            const nameKey = nameCaptureKey(onboarding.config.steps);
+            const isKindStep = !!step && step.type === 'capture' && (step.options?.length || 0) > 0;
+            const isNameStep =
+                !isKindStep && !!step && step.type === 'capture' && !!step.key && step.key === nameKey;
+            if (isNameStep) {
+                const typed = String(text || '').trim().toLowerCase();
+                const exists =
+                    typed !== '' &&
+                    participants.participants.some((p) => p.name.trim().toLowerCase() === typed);
+                if (exists) {
+                    onboarding.completeWithName(String(text || '').trim());
+                    return;
+                }
+            }
+            onboarding.answer(text);
+        },
+        [onboarding, participants.participants],
+    );
+    // Rescate: si el onboarding quedó (p. ej. de una sesión previa ya abierta)
+    // en la pregunta redundante "¿Eres niño o adulto?" (kind) con un NOMBRE ya
+    // capturado que pertenece a un perfil EXISTENTE, se completa al instante
+    // para no volver a pedir un rol que el perfil ya tiene guardado.
+    useEffect(() => {
+        const step = onboarding.currentStep;
+        const nameKey = nameCaptureKey(onboarding.config.steps);
+        const capturedName = nameKey ? onboarding.state.captured[nameKey] : undefined;
+        let reason = '';
+        if (!onboarding.visible) reason = '!visible';
+        else if (!step || step.type !== 'capture' || !(step.options && step.options.length > 0))
+            reason = 'not-a-kind-step';
+        else if (!capturedName) reason = 'no-captured-name';
+        else if (
+            !participants.participants.some(
+                (p) => p.name.trim().toLowerCase() === capturedName.trim().toLowerCase(),
+            )
+        )
+            reason = 'name-not-existing';
+        if (reason) {
+            return;
+        }
+        onboarding.completeWithName(capturedName as string);
+    }, [onboarding.visible, onboarding.currentStep, onboarding.state.captured, participants.participants, activeParticipantId, onboarding]);
+    // Captura dual TEXTO + VOZ: la voz alimenta el MISMO embudo `answer`
+    // del teclado. Solo se activa en pasos capture/decision con
+    // acceptVoice !== false (config-driven, sin hardcode). Escucha activa:
+    // el micrófono se abre automáticamente al activarse el paso y se
+    // suspende mientras FLU habla (anti-eco). `listening` solo es true
+    // con onstart real del navegador.
+    const onboardingVoiceEnabled =
+        onboarding.visible &&
+        ((onboarding.currentStep?.type === 'capture' ||
+            onboarding.currentStep?.type === 'decision') &&
+            onboarding.currentStep.acceptVoice !== false);
+    const onboardingVoice = useOnboardingVoiceCapture({
+        enabled: onboardingVoiceEnabled,
+        language: normalizeLang(language),
+        onFinal: handleOnboardingAnswer,
+    });
+    // Mantener el ref en sync con los métodos reales del hook de voz.
+    onboardingVoiceControlRef.current = {
+        suspend: onboardingVoice.suspend,
+        resume: onboardingVoice.resume,
+    };
+    const notificationCenter = useNotificationCenter({
+        speak: speakFlu,
+        language,
+        dnd: { isActive: dnd.active, allowUrgent: dnd.allowUrgent },
+    });
+    // Sincroniza el servicio de notificaciones en el ref temprano para que
+    // useAgenda (declarado antes de useFluVoiceAssistant) pueda notificar
+    // los vencimientos del calendario.
+    notificationServiceRef.current = notificationCenter.service;
+
+    // ---- Onboarding multiusuario: selección/creación de participante ----
+    const handleSelectActiveUser = useCallback(
+        (participantId: string) => {
+            setSessionReady(true);
+            setActiveUser(undefined, participantId);
+            setActiveParticipantId(participantId);
+        },
+        [],
+    );
+
+    /**
+     * Borra un participante de forma consistente (lo usa el botón del perfil
+     * activo y el botón de cada fila del panel). Al eliminar se limpian:
+     *  - su perfil de navegador (browserProfiles),
+     *  - su registro Dexie + onboarding per-user + estado huérfano,
+     *  - ACTIVE_USER / activeParticipantId si era el usuario activo (para que
+     *    el onboarding siguiente NO herede el id borrado ni su nombre capturado),
+     *  - la referencia "pending" y el estado legacy, para que la próxima
+     *    entrada vuelva a preguntar "¿Quién eres?" SIN sugerencias fantasma.
+     */
+    const handleRemoveMultiuserParticipant = useCallback(
+        async (id: string): Promise<void> => {
+            if (!id || id === DEFAULT_ONBOARDING_USER) return;
+            await browserProfiles.reset(id);
+            // ÚNICA cascada: el hook borra registro + onboarding per-user +
+            // ACTIVE_USER y decide si era el activo (storage o estado React).
+            const { removed, wasActive } = await participants.remove(id, activeParticipantId);
+            if (removed && wasActive) {
+                setActiveUser(undefined);
+                setActiveParticipantId(undefined);
+                onboarding.resetSession();
+            }
+        },
+        [activeParticipantId, browserProfiles, participants, onboarding, setActiveParticipantId],
+    );
+
+    const handleRemoveActiveUser = useCallback(async () => {
+        if (!activeParticipantId || activeParticipantId === DEFAULT_ONBOARDING_USER) return;
+        const id = activeParticipantId;
+        await handleRemoveMultiuserParticipant(id);
+    }, [activeParticipantId, handleRemoveMultiuserParticipant]);
+
+    const handleCreateNewProfile = useCallback(() => {
+        // Crea un perfil nuevo: vuelve a la ruta legacy (aún sin registro Dexie)
+        // para capturar el nombre; al completar se registra el participante.
+        // Se limpia el estado legacy para que el onboarding de la persona nueva
+        // arranque de cero y no herede la sesión anterior.
+        const wasLegacy =
+            !activeParticipantId || activeParticipantId === DEFAULT_ONBOARDING_USER;
+        setActiveUser(undefined);
+        setActiveParticipantId(undefined);
+        if (wasLegacy) {
+            // Ruta legacy (sin perfil Dexie): re-inicializa el onboarding para
+            // que las preguntas vuelvan a aparecer (no hereda "completado").
+            onboarding.reset();
+        }
+    }, [activeParticipantId, onboarding]);
+
+    // "Siempre que se entre a la aplicación se pide el onboarding" (también
+    // hablado): al montar, una vez que los participantes cargaron y el estado
+    // del onboarding está resuelto (ready), si el onboarding ya estaba
+    // completado (onboarding.visible es false porque el perfil ya se configuró
+    // en una sesión anterior), se reinicia el onboarding para volver a pedirlo
+    // en esta entrada. onboarding.reset() borra el estado per-user en Dexie y
+    // vuelve a hablar la bienvenida (el hook solo habla al montar si NO estaba
+    // completado, por lo que aquí no hay doble habla). En el PRIMER arranque
+    // (onboarding pendiente → visible true) no se fuerza nada: corre el
+    // onboarding completo de configuración. Solo se dispara una vez por montaje
+    // (onboardingMountSettledRef).
+    useEffect(() => {
+        if (participants.loading) return;
+        if (!onboarding.ready) return;
+        if (onboardingMountSettledRef.current) return;
+        onboardingMountSettledRef.current = true;
+        if (!onboarding.visible) {
+            // Ya hay un perfil configurado de una sesión previa: se vuelve a
+            // pedir el onboarding en esta entrada.
+            onboarding.reset();
+        }
+    }, [participants.loading, onboarding.ready, onboarding.visible, onboarding]);
+
+    // Activa a un participante tras resolver el completado del onboarding:
+    // lo escribe como ACTIVE_USER + usuario activo del header y enciende la
+    // escucha principal (si el TTS de cierre ya terminó, el micrófono del
+    // onboarding se suspendió; la escucha principal queda activa para que la
+    // frase "Háblame cuando quieras" no sea una invitación sin micrófono).
+    // Política de autoplay: si el navegador rechaza abrir el micrófono sin
+    // gesto del usuario, se reintenta con el PRIMER gesto durante 10 s.
+    const activateParticipant = useCallback(
+        (id: string) => {
+            setSessionReady(true);
+            setActiveUser(undefined, id);
+            setActiveParticipantId(id);
+            // El modo conversación se fija YA (dueño único): durante el saludo de
+            // cierre y la espera de idle el flag debe estar encendido. Si se deja
+            // en modo comando, la primera frase tras el onboarding se publica viva
+            // y se descarta (no entra a la conversación).
+            conversationMode.enter();
+            const tryStartListening = async () => {
+                try {
+                    // El TTS de cierre ("Háblame cuando quieras") puede seguir
+                    // sonando cuando este arranque se dispara: si la reconocedora
+                    // se abre durante el habla, el anti-eco la aborta y nadie la
+                    // restaura (Bug #2: "detenido"). Se espera el fin REAL del
+                    // habla del asistente antes de intentar abrir el micrófono.
+                    await waitForSpeechIdle();
+                } catch (e) {
+        logCaughtError('src/App.tsx', e);
+                    // Sin habla activa / timeout: continuar igual.
+                }
+                // Abre la escucha EN MODO CONVERSACIÓN (dueño único del modo):
+                // antes se arrancaba sin fijar el modo y quedaba en comando
+                // (wake word + temporizadores de dictado → tarde y de golpe).
+                conversationMode.open({ resume: true }).catch((err: unknown) => {
+                    const errorName = err instanceof Error ? err.name : '';
+                    const blocked =
+                        errorName === 'not-allowed' ||
+                        errorName === 'aborted' ||
+                        errorName === 'not-allowed-error';
+                    if (blocked) {
+                        const cleanup = () => {
+                            window.removeEventListener('pointerdown', startOnGesture);
+                            window.removeEventListener('keydown', startOnGesture);
+                            window.removeEventListener('touchstart', startOnGesture);
+                        };
+                        const startOnGesture = () => {
+                            cleanup();
+                            conversationMode.open({ resume: true }).catch((err2: unknown) =>
+                                logCaughtError('[App] escucha tras gesto del usuario falló', err2),
+                            );
+                        };
+                        window.addEventListener('pointerdown', startOnGesture);
+                        window.addEventListener('keydown', startOnGesture);
+                        window.addEventListener('touchstart', startOnGesture);
+                        window.setTimeout(cleanup, TIMEOUT_POLICY_MS.onboardingGestureCleanup);
+                    } else {
+                        logCaughtError('[App] fallo al iniciar escucha tras onboarding', err);
+                    }
+                });
+            };
+            window.setTimeout(
+                tryStartListening,
+                Number(FLU_CONFIG.timing.onboardingStartListeningDelayMs),
+            );
+        },
+        [conversationMode],
+    );
+
+    // Al COMPLETAR el onboarding (primer arranque, perfil nuevo o re-entrega en
+    // cada entrada) se resuelve el nombre capturado a un participante: si ya
+    // existe uno con ese nombre se selecciona (sin duplicar); si coincide con
+    // el anónimo por defecto se selecciona el Anónimo; si no, se registra un
+    // participante nuevo. Se siembra su onboarding (completado) en Dexie y
+    // queda como usuario activo. Corre desde onCompleted (el MISMO flujo que
+    // completa), NO desde un efecto: antes, el refresco de la lista disparado
+    // por el propio registro cancelaba la cadena (cleanup del efecto) y el
+    // participante se persistía sin activarse ni aparecer en el selector
+    // (Bug #1). Las búsquedas por nombre leen el registro REAL (IndexedDB)
+    // para no depender de una lista en memoria desactualizada.
+    const handleOnboardingCompleted = useCallback(
+        async (completed: OnboardingState) => {
+            const captureKey = nameCaptureKey(onboarding.config.steps);
+            const name = captureKey ? completed.captured[captureKey] : undefined;
+            if (!name) {
+                return;
+            }
+            try {
+                // El rol se deriva de la respuesta "¿Niño o adulto?"
+                // (config-driven vía multiuser.kindToRole).
+                const kind = completed.captured['kind'];
+                const kindToRole = FLU_CONFIG.multiuser?.kindToRole || {};
+                const role = resolveKindRole(kind, kindToRole);
+                const skipDefaults = (FLU_CONFIG.multiuser?.skipDefaults) || {};
+                const anonymousName = String(skipDefaults.anonymousName || 'Anónimo');
+                const normalized = name.trim().toLowerCase();
+                // Nombre = perfil anónimo por defecto: NO se registra un
+                // participante nuevo; se activa el Anónimo ya sembrado.
+                if (normalized === anonymousName.toLowerCase()) {
+                    const anon = await participants.findAnonymous();
+                    if (anon) {
+                        await onboarding.persistForParticipant(anon.id, completed);
+                        activateParticipant(anon.id);
+                    }
+                    return;
+                }
+                // Perfil existente con el mismo nombre: se activa sin duplicar.
+                const rows = await participants.service.list();
+                const existing = rows.find((p) => p.name.trim().toLowerCase() === normalized);
+                if (existing) {
+                    await onboarding.persistForParticipant(existing.id, completed);
+                    activateParticipant(existing.id);
+                    return;
+                }
+                const result = await participants.register({ name, role });
+                if (result.ok && result.record) {
+                    await onboarding.persistForParticipant(result.record.id, completed);
+                    activateParticipant(result.record.id);
+                    return;
+                }
+                // Carrera de duplicado: el perfil ya está en la BD pero la
+                // lectura previa no lo vio. Se relee y se activa el existente.
+                const after = await participants.service.list();
+                const byName = after.find((p) => p.name.trim().toLowerCase() === normalized);
+                if (byName) {
+                    await onboarding.persistForParticipant(byName.id, completed);
+                    activateParticipant(byName.id);
+                    return;
+                }
+            } catch (err) {
+                logCaughtError('[App] error al resolver el completado del onboarding', err);
+            }
+        },
+        [onboarding, participants, activateParticipant],
+    );
+    handleOnboardingCompletedRef.current = handleOnboardingCompleted;
+
+    // Fase 2 — Exponer manejador de recordatorios por texto en window (E2E + integración).
+    // Lista de compras por voz (dominio `shopping`, separado del calendario).
+    window.__fluHandleShoppingText = useCallback(
+        async (input: ShoppingIntent | string) => {
+            const lang = normalizeLang(languageRef.current);
+            const intent = (
+                input && typeof input === 'object' && typeof input.action === 'string'
+            )
+                ? input
+                : parseShoppingIntent(String(input || '').trim());
+            if (!intent || !intent.handled || !intent.action) return '';
+            const data = intent.data || {};
+            switch (intent.action) {
+                case 'shopping.add': {
+                    const labels = String(data.label || '')
+                        .split(',')
+                        .map((s) => s.trim())
+                        .filter(Boolean);
+                    if (labels.length === 0) return '';
+                    await shopping.addMany(labels);
+                    return lang === 'en'
+                        ? `Added to the shopping list: ${labels.join(', ')}`
+                        : `Agregué a la lista de compras: ${labels.join(', ')}`;
+                }
+                case 'shopping.toggle': {
+                    const label = String(data.label || '').trim();
+                    const item = shopping.items.find(
+                        (i) => i.label.toLowerCase() === label.toLowerCase(),
+                    );
+                    if (!item) {
+                        return pickText(lang, 'label_no_esta_en_la_lista_de_compras', { label });
+                    }
+                    await shopping.toggle(item.id);
+                    return pickText(lang, 'actualice_label', { label: item.label });
+                }
+                case 'shopping.remove': {
+                    const label = String(data.label || '').trim();
+                    const item = shopping.items.find(
+                        (i) => i.label.toLowerCase() === label.toLowerCase(),
+                    );
+                    if (!item) {
+                        return pickText(lang, 'label_no_esta_en_la_lista_de_compras', { label });
+                    }
+                    await shopping.remove(item.id);
+                    return pickText(lang, 'quite_label_de_la_lista_de_compras', { label: item.label });
+                }
+                case 'shopping.list': {
+                    const pending = shopping.items.filter((i) => !i.checked);
+                    if (pending.length === 0) {
+                        return pickText(lang, 'tu_lista_de_compras_esta_vacia');
+                    }
+                    const lines = pending.map((i) => i.label).join(' | ');
+                    return pickText(lang, 'lista_de_compras_lines', { lines });
+                }
+                default:
+                    return '';
+            }
+        },
+        [shopping, languageRef],
+    );
+
+    // P1-C (§1.3.4) — autoconocimiento por texto (E2E + integración).
+    // Fast-path local sin Gemini: detecta CONOCER_FLU, construye el manifiesto
+    // compilado desde la configuración y lo devuelve como respuesta hablada.
+    exposeDevHook('__fluHandleConocerFluText', useCallback(
+        async (text: string) => {
+            const lang = normalizeLang(languageRef.current);
+            const clean = String(text || '').trim();
+            if (!clean || !isSelfKnowledgeRequest(clean, lang)) return '';
+            const manifesto = buildSelfManifesto(lang);
+            auditLog.logEvent(
+                'command:conocer_flu',
+                'navigation',
+                uuidv4(),
+                {
+                    transcript: clean,
+                    response: manifesto,
+                    comando: COMMAND_IDS.CONOCER_FLU,
+                    phase: 'local-fast-path',
+                },
+                'CONOCER_FLU command executed (local)',
+            ).catch((e) => logCaughtError('src/App.tsx: auditLog.logEvent', e));
+            return manifesto;
+        },
+        [languageRef, auditLog],
+    ));
+
+    // Fase 7 — Acciones de dispositivo — manejador por texto (E2E + integración).
+    // Resuelve el contacto en la agenda y abre el esquema de URL estándar
+    // (tel:, wa.me, sms:, mailto:) vía el servicio inyectado en el hook.
+    exposeDevHook('__fluHandleDeviceActionText', useCallback(
+        async (text: string) => {
+            const lang = normalizeLang(languageRef.current);
+            const intent = parseDeviceActionIntent(String(text || ''));
+            if (!intent.handled) return '';
+            if (!intent.action) return intent.reply;
+            const data: DeviceActionIntentData = intent.data || {
+                contactName: '',
+                message: undefined,
+            };
+            const name = data.contactName || '';
+            const result = await deviceActions.service.execute({
+                kind: intent.action.replace(/\.(start|send)$/, '') as
+                    | 'call'
+                    | 'whatsapp'
+                    | 'sms'
+                    | 'email',
+                contactName: name,
+                message: data.message,
+            });
+            if (result.ok) return intent.reply;
+            const voice = FLU_CONFIG.deviceActions?.voice?.[lang] || {};
+            const fill = (tpl?: string) => String(tpl || '').replace('{name}', name);
+            if (result.reason === 'missing-phone') {
+                return (
+                    fill(voice.missingPhone) ||
+                    (pickText(lang, 'no_tengo_telefono_de_name', { name }))
+                );
+            }
+            if (result.reason === 'missing-email') {
+                return (
+                    fill(voice.missingEmail) ||
+                    (pickText(lang, 'no_tengo_correo_de_name', { name }))
+                );
+            }
+            return (
+                fill(voice.contactNotFound) ||
+                (pickText(lang, 'no_tengo_a_name_en_tus_contactos', { name }))
+            );
+        },
+        [deviceActions, languageRef],
+    ));
+
+    // Fase 6 — Notas por voz (E2E + integración + dictado por voz).
+    // Detecta intenciones de nota ("nota para el super", "nota para recordar un
+    // negocio", "apunta/anota {texto}", "nota: {texto}") y crea la nota vía
+    // notes.add. Devuelve la confirmación hablada (o '' si no aplica).
+    window.__fluHandleNoteText = useCallback(
+        async (input: NoteVoiceIntent | string, opts?: { personId?: string; personName?: string }) => {
+            const lang = normalizeLang(languageRef.current);
+            const notesVoice = FLU_CONFIG.notes?.voice || {};
+            const addedMsg =
+                notesVoice.added ||
+                (pickText(lang, 'listo_lo_agregue_a_las_notas'));
+            const removedMsg =
+                notesVoice.removed ||
+                (pickText(lang, 'listo_lo_quite_de_las_notas'));
+
+            // Punto único de parseo: si el despacho ya pasó el intent estructurado
+            // (del árbitro, que ya extrajo data.label), se ejecuta DIRECTAMENTE sin
+            // re-parcear la cadena. Si se llama con texto crudo (uso autónomo
+            // E2E/integración), se parcea aquí con la lógica de reconocimiento.
+            const isIntent =
+                input &&
+                typeof input === 'object' &&
+                typeof input.action === 'string' &&
+                input.handled !== false;
+
+            // Ruta cruda (E2E/integración/uso autónomo): el MISMO parser ÚNICO de
+            // notas deriva el intent (alta / borrado / quitar ítem), sin regex
+            // paralelas en App. Antes la ruta cruda solo entendía el alta, así que
+            // "borra el cloro de la nota del súper" no tenía rama y se perdía.
+            const intent: NoteVoiceIntent | null = isIntent
+                ? (input as NoteVoiceIntent)
+                : (resolveNoteVoiceIntent(String(input || '')) as NoteVoiceIntent | null);
+
+            // Borrado por voz (vaciar todo / borrar por destino / quitar un ítem):
+            // despacho ÚNICO en src/app/noteRemovalActions (0 llamadas a IA). La
+            // confirmación del manejador es la autoridad del turno.
+            const removal = await runNoteRemovalIntent(intent, notes, notes?.notes ?? [], lang, {
+                cleared: pickText(lang, 'listo_borre_todas_tus_notas'),
+                clearedEmpty: pickText(lang, 'no_habia_nada_que_borrar'),
+                removed: removedMsg,
+                notFound: pickText(lang, 'no_encontre_esa_nota'),
+            });
+            if (removal) {
+                lastActionFailed = removal.failed;
+                return removal.text;
+            }
+
+            let label: string | null = null;
+            let body: string | null = null;
+            if (intent) {
+                const data = intent.data || {};
+                label = data.label ? String(data.label).trim() : null;
+                body = data.body ? String(data.body).trim() : null;
+            }
+
+            if (!label) return '';
+            // Lista del súper: los ítems van al CONTENIDO de la nota, nunca al
+            // nombre (superNoteTarget/superNoteActions: única definición del
+            // destino, que además absorbe etiquetas heredadas y duplicados).
+            if (isSuperNoteLabel(label)) {
+                const written = await writeSuperNoteList(
+                    notes,
+                    notes?.notes ?? [],
+                    superNoteIncoming(label, body),
+                    opts,
+                );
+                lastActionFailed = !written.ok;
+                if (!written.ok) {
+                    return pickText(lang, 'no_pude_actualizar_la_nota');
+                }
+                return addedMsg;
+            }
+            const result = await notes.add({
+                label,
+                body: body || undefined,
+                personId: opts?.personId,
+                personName: opts?.personName,
+            });
+            lastActionFailed = !result.ok;
+            if (!result.ok) {
+                return pickText(lang, 'no_pude_crear_la_nota');
+            }
+            return addedMsg;
+        },
+        [notes, languageRef],
+    );
+
+    // Fase 6 — Diario por voz (E2E + integración + dictado por voz).
+    // Detecta intenciones de diario ("escribe en el diario {contenido}",
+    // "guarda en el diario {contenido}", "diario: {contenido}") y crea la
+    // entrada de hoy vía diary.addEntry. Devuelve la confirmación hablada.
+    window.__fluHandleDiaryText = useCallback(
+        async (input: DiaryVoiceIntent | string, opts?: { personId?: string; personName?: string }) => {
+            // El diario se activa por config (diary.enabled), no por codigo.
+            if (!FLU_CONFIG.diary?.enabled) return '';
+            const lang = normalizeLang(languageRef.current);
+            const diaryVoice = FLU_CONFIG.diary?.voice || {};
+            const addedMsg =
+                diaryVoice.entryAdded ||
+                (pickText(lang, 'listo_he_guardado_tu_entrada_del_diario'));
+
+            // Punto único de parseo: si el despacho ya pasó el intent estructurado
+            // (del árbitro, que ya extrajo data.content), se ejecuta DIRECTAMENTE
+            // sin re-parcear la cadena. Si se llama con texto crudo (uso autónomo
+            // E2E/integración), se parcea aquí.
+            const isIntent =
+                input &&
+                typeof input === 'object' &&
+                typeof input.action === 'string' &&
+                input.handled !== false;
+
+            let content: string | null = null;
+            if (isIntent) {
+                const data = input.data || {};
+                content = data.content ? String(data.content).trim() : null;
+            } else {
+                // Fuente unica: el MISMO resolver que el rescate por dominio.
+                content = resolveDiaryVoiceIntent(String(input || ''), { language: lang })?.data.content ?? null;
+            }
+
+            if (!content) return '';
+            const dateKey = dayKey();
+            const result = await diary.addEntry({
+                date: dateKey,
+                content,
+                title: opts?.personName || undefined,
+            });
+            if (!result.ok) {
+                return pickText(lang, 'no_pude_guardar_la_entrada_del_diario');
+            }
+            return addedMsg;
+        },
+        [diary, languageRef],
+    );
+    useFluBridgesLifecycle();
+
+    // Horario por dictado de voz (agregar / consultar / quitar). Motor
+    // determinista: parseAgendaCommand interpreta el transcript y ejecuta la
+    // acción sobre el servicio único de agenda (tabla `agenda`).
+    const onboardingOverlayLabels = FLU_CONFIG.onboarding?.overlay || {};
+    const onboardingPrompt = onboarding.currentStep
+        ? promptForStep(
+              onboarding.currentStep,
+              normalizeLang(language),
+              onboarding.state.captured,
+          )
+        : '';
+
+    // Selector de usuario del encabezado (dropdown persistente): perfil activo
+    // + participantes registrados. No es la minipantalla "¿Quién eres?" (que se
+    // eliminó); es el control de sesión del header.
+    const userPickerConfig = (FLU_CONFIG.onboarding?.userPicker) || {};
+    const activeParticipantName = useMemo(() => {
+        if (!activeParticipantId || activeParticipantId === DEFAULT_ONBOARDING_USER) return undefined;
+        return participants.participants.find((p) => p.id === activeParticipantId)?.name;
+    }, [activeParticipantId, participants.participants]);
+    const activeParticipant = useMemo(
+        () => participants.participants.find((p) => p.id === activeParticipantId),
+        [activeParticipantId, participants.participants]
+    );
+    // Sugerencias de la minipantalla de captura del nombre: SOLO perfiles reales.
+    // La lista se lee del registro de participantes (IndexedDB). Ese registro puede
+    // contener basura/duplicados de corridas anteriores (p. ej. participantes cuyo
+    // nombre quedó como la etiqueta de "¿Niño o adulto?" → "Niño / Niña", "Adulto /
+    // Adulta"). Para que la lista muestre NOMBRES y no opciones de rol ni repetidos:
+    //  - se excluye el anónimo por defecto (no es una persona a elegir),
+    //  - se excluye cualquier nombre que sea una etiqueta de rol (niño/niña/adulto/
+    //    adulta y variantes),
+    //  - se deduplican nombres repetidos (case-insensitive).
+    const onboardingUserSuggestions = useMemo(() => {
+        const skipDefaults = (FLU_CONFIG.multiuser?.skipDefaults) || {};
+        const anonymousName = String(skipDefaults.anonymousName || 'Anónimo').toLowerCase();
+        const kindStep = (FLU_CONFIG.onboarding?.steps || []).find(
+            (s) => s.key === 'kind',
+        );
+        const kindTokens = new Set<string>();
+        (kindStep?.options || []).forEach((opt) => {
+            [opt.value, opt.es, opt.en]
+                .filter(Boolean)
+                .forEach((t: string) => kindTokens.add(String(t).toLowerCase()));
+        });
+        const seen = new Set<string>();
+        return participants.participants
+            .map((p) => p.name)
+            .filter((name) => {
+                const n = name.trim().toLowerCase();
+                if (!n) return false;
+                if (n === anonymousName) return false;
+                if (kindTokens.has(n)) return false;
+                if (seen.has(n)) return false;
+                seen.add(n);
+                return true;
+            });
+    }, [participants.participants]);
+
+    // Allowlist efectiva del Navegador Curado para el participante activo:
+    // perfil guardado > defaults por rol > perfil por defecto > fallback mínimo.
+    // Todo config-driven (FLU_CONFIG.browser), sin hardcode (Regla #1).
+    const resolvedBrowserAllowlist = useMemo<string[]>(() => {
+        const manual = browserProfiles.profiles.find((p) => p.id === activeParticipantId)?.allowlist;
+        if (Array.isArray(manual) && manual.length) return manual;
+        const defaultsByRole: Record<string, { allowlist?: string[] }> =
+            FLU_CONFIG.browser?.defaultsByRole ?? {};
+        const roleAllowlist = activeParticipant?.role
+            ? defaultsByRole[activeParticipant.role]?.allowlist
+            : undefined;
+        if (Array.isArray(roleAllowlist) && roleAllowlist.length) return roleAllowlist;
+        const defaultAllowlist = FLU_CONFIG.browser?.defaultProfile?.allowlist;
+        return Array.isArray(defaultAllowlist) ? defaultAllowlist : [];
+    }, [browserProfiles.profiles, activeParticipantId, activeParticipant]);
     // ---- Branding Inteligente por Temporalidad + Ecológico ----
     const branding = useEnhancedBranding();
 
+    // ---- Ajustes · catálogos dinámicos (ambientes + paletas) extraído a hook ----
+    const {
+        ambientes,
+        dynamicAmbienteIds,
+        paletas,
+        dynamicPaletaIds,
+        handleActivateAmbiente,
+        handleRegisterAmbiente,
+        handleUpdateAmbiente,
+        handleRemoveAmbiente,
+        handleActivatePaleta,
+        handleRegisterPaleta,
+        handleUpdatePaleta,
+        handleRemovePaleta,
+    } = useCatalogsSettings({
+        activeAmbienteId,
+        languageRef,
+        speakFluRef,
+        branding,
+    });
+
     // ---- Handlers para digitalización OCR (tutor experience) ----
-    // These must be declared AFTER speakFlu and injectDialogueEntry are available.
+    // These must be declared AFTER speakFlu is available.
     const processImageFile = useCallback(async (file: File) => {
         if (!file || !file.type.startsWith('image/')) return;
         const reader = new FileReader();
@@ -1675,6 +2983,7 @@ function App() {
             const mimeType = file.type;
             setUploadedImage({ dataUrl, mimeType, fileName: file.name });
             setIsAnalyzing(true);
+            setUploadError(null);
             try {
                 const profile = integrationStore.profile || 'tutor';
                 const result = await geminiService.generateVisionAnalysis(
@@ -1694,32 +3003,30 @@ function App() {
                         const ocr = await extractTextFromImage(dataUrl);
                         if (ocr.text) {
                             result.texto_extraido = ocr.text;
-                            console.log('[App] OCR local extrajo texto (visión vacía):', ocr.engine);
                         }
                     } catch (ocrErr) {
-                        console.warn('[App] OCR fallback failed:', ocrErr);
+                        logCaughtError('[App] OCR fallback failed', ocrErr);
+                    }
+                }
+
+                // ── Adaptador de dominio (horario): SOLO propone si el texto
+                //    parece un horario real (≥ minEntries). Documentos genéricos
+                //    NO disparan importación (evita falsos positivos). La
+                //    escritura requiere confirmación del usuario.
+                if (result.texto_extraido) {
+                    const proposal = scheduleAdapter.propose(result.texto_extraido);
+                    if (proposal) {
+                        setPendingHorarioImport(proposal.items);
                     }
                 }
 
                 // ── Tutor experience: FLU speaks proactively after analysis ──
-                if (result.texto_extraido) {
-                    // 1. Inject context into dialogueHistoryRef so Gemini sees it as
-                    //    FLU's own memory (preferred over addConversationEntry because
-                    //    injectDialogueEntry adds it as a regular conversation entry
-                    //    that Gemini sees in-context but does NOT persist beyond the
-                    //    context window).
-                    const contextLabel = language === 'en'
-                        ? `[Document context uploaded by user: ${result.texto_extraido}]`
-                        : `[Contexto de documento subido por el usuario: ${result.texto_extraido}]`;
-                    const entry = {
-                        id: uuidv4(),
-                        role: 'system' as const,
-                        text: contextLabel,
-                        timestamp: Date.now(),
-                        speakerName: 'system',
-                    };
-                    integrationStore.addConversationEntry(entry);
-                    injectDialogueEntry(entry);
+                const insumoImagen = buildImageInsumo(result, language);
+                if (insumoImagen) {
+                    // 1. El contexto entra al historial (única fuente de verdad); Gemini
+                    //    lo ve por derivación del store, sin canal lateral.
+                    const contextLabel = insumoImagen;
+                    integrationStore.addSystemMessage(contextLabel);
 
                     // 2. Store analysis in workspaceArtifact for persistence across
                     //    conversation turns (so the Pizarrón tab shows the analysis
@@ -1727,10 +3034,11 @@ function App() {
                     integrationStore.setWorkspaceArtifact({
                         id: uuidv4(),
                         respuesta: '',
-                        titulo: result.materia || result.texto_extraido.slice(0, 60),
+                        titulo: result.materia || result.texto_extraido.slice(0, 60) || result.instrucciones.slice(0, 60),
                         tipo: 'text',
                         contenido: result.texto_extraido,
                         puntos_clave: result.problemas.length > 0 ? result.problemas : (result.instrucciones ? [result.instrucciones] : []),
+                        origen: 'ia',
                         timestamp: Date.now(),
                     });
 
@@ -1739,15 +3047,15 @@ function App() {
                     //    Placeholders: {materia}, {nivel}, {items} are replaced with actual analysis data.
                     const greetingCfg = FLU_CONFIG.vision?.visionGreeting;
                     const profileTemplates = greetingCfg?.[profile] || greetingCfg?.default || {};
-                    const template = profileTemplates[language === 'en' ? 'en' : 'es'] || profileTemplates.es || '';
+                    const template = profileTemplates[normalizeLang(language)] || profileTemplates.es || '';
                     const itemsLabel = result.problemas.length > 0
-                        ? (language === 'en' ? `I found ${result.problemas.length} items.` : `Encontré ${result.problemas.length} elementos.`)
+                        ? (pickText(language, 'encontre_length_elementos', { length: result.problemas.length }))
                         : '';
                     const materiaLabel = result.materia
-                        ? (language === 'en' ? `about ${result.materia}` : `sobre ${result.materia}`)
+                        ? (pickText(language, 'sobre_materia', { materia: result.materia }))
                         : '';
                     const nivelLabel = result.nivel
-                        ? (language === 'en' ? `at ${result.nivel} level` : `de nivel ${result.nivel}`)
+                        ? (pickText(language, 'de_nivel_nivel', { nivel: result.nivel }))
                         : '';
                     const greeting = template
                         .replace(/\{materia\}/g, materiaLabel)
@@ -1758,18 +3066,26 @@ function App() {
                     speakFlu(greeting, language);
                 }
             } catch (err) {
-                console.warn('[App] Vision analysis failed:', err);
+                logCaughtError('[App] Vision analysis failed', err);
+                setUploadError(
+                    pickLabel(
+                        FLU_CONFIG.ui?.workspace?.uploadErrorImage,
+                        language,
+                        '⚠️ No se pudo leer la imagen. Verifica que sea un archivo JPG o PNG e inténtalo de nuevo.'
+                    )
+                );
             } finally {
                 setIsAnalyzing(false);
             }
         };
         reader.readAsDataURL(file);
-    }, [language, integrationStore, speakFlu, injectDialogueEntry]);
+    }, [language, integrationStore, speakFlu]);
 
     const handleClearImage = useCallback(() => {
         setUploadedImage(null);
         setHomeworkContext(null);
         setIsAnalyzing(false);
+        setUploadError(null);
     }, []);
 
     // ---- Gemini error state (OS2 parity: geminiError) ----
@@ -1797,10 +3113,101 @@ function App() {
     // ---- Workspace image (extraído a hook) ----
     const workspaceImage = useWorkspaceImage(language);
 
+    // Historial: registrar la IMAGEN generada como PUNTERO (su URL o data URL).
+    // Se dispara cuando aparece una URL nueva; la misma URL no se re-registra.
+    const lastHistoryImageRef = useRef<string>('');
+    useEffect(() => {
+        const url = workspaceImage.imageUrl;
+        if (!url || lastHistoryImageRef.current === url) return;
+        lastHistoryImageRef.current = url;
+        const prompt = String(integrationStore.workspaceArtifact?.prompt_visual || '').trim();
+        void documentHistory.add({
+            kind: 'generated',
+            formato: 'image',
+            titulo: prompt.slice(0, 80) || 'Imagen',
+            nombre: prompt.slice(0, 60) || 'imagen',
+            ref: url,
+        });
+    }, [workspaceImage.imageUrl, integrationStore.workspaceArtifact, documentHistory]);
+
     // ---- Análisis de documentos (F1) / análisis de app (F2) / generación (F3/F4) ----
     const documentAnalysis = useDocumentAnalysis(language);
     const appAnalysis = useAppAnalysis(language);
     const documentGeneration = useDocumentGeneration(language);
+
+    // RUTA ÚNICA de generación de medios (video/documento), idempotente por
+    // comando. Es la única puerta: el contrato (workspace) y el comando de
+    // navegación llaman acá; ya NO hay despacho de eventos GENERATE_*.
+    requestMediaRef.current = (tipo, commandText, prepare) => {
+        if (!mediaGateRef.current.shouldRun(tipo, commandText)) {
+            relayLog(
+                'WARN',
+                'App',
+                `requestMedia: ${tipo} repetido (mismo comando en ventana) → se omite generación (evita re-cobrar)`,
+            );
+            return false;
+        }
+        prepare?.();
+        const state = useIntegrationStore.getState() as GenerationConversationSlice;
+        const { tema, contenido } = buildGenerationTopic(state);
+        const formato = tipo === 'doc' ? 'pdf' : 'video';
+        // TÍTULO del documento ≠ TEMA de generación: el título sale del artifact
+        // normalizado (rótulo corto). Si el artifact solo trae un placeholder de
+        // tipo, cae al tema. Evita que el CUERPO quede como título (caso 5).
+        const tituloDocumento = resolveDocumentTitle(
+            state.workspaceArtifact?.titulo,
+            tema || (formato === 'video' ? 'Video' : 'Documento'),
+        );
+        // `doc` se genera como PDF (mismo comportamiento previo del bridge).
+        // El historial se escribe al RESOLVER la generación para guardar el
+        // CONTENIDO REAL (la carta/documento), no solo el tema de entrada.
+        // Antes se guardaba `contenido` = insumo (≤1200 chars) y el texto de la
+        // carta se perdía al limpiar/reiniciar: la carta no tenía hogar durable.
+        void documentGeneration
+            .generate(formato, {
+                parametros: tema ? { tema } : {},
+                contenido: contenido || undefined,
+            })
+            .then((generated) => {
+                // Puntero al artefacto (lo que va al Historial): para video es la
+                // URL real del mp4 (fal.ai/ffmpeg) expuesta en generationJob;
+                // para documento/PDF es el data URL (va en `contenido`).
+                const pointerUrl =
+                    useIntegrationStore.getState().generationJob?.url_resultado || '';
+                // El binario serializado (data URL) va en `ref` (descarga); el
+                // TEXTO del cuerpo va en `contenido` (legible/narrable).
+                const binario = isDataUrl(generated?.content) ? generated?.content : undefined;
+                void documentHistory.add({
+                    kind: 'generated',
+                    formato,
+                    titulo: tituloDocumento,
+                    nombre: tituloDocumento || formato,
+                    contenido: generated?.text || contenido || '',
+                    ref: pointerUrl || generated?.url || binario,
+                });
+            });
+        return true;
+    };
+
+    // Documento soportado → análisis F1 → INSUMO para la conversación.
+    // Simétrico al flujo de imagen: el contexto del documento entra al historial
+    // (única fuente de verdad) para que las respuestas siguientes lo usen.
+    const processDocumentFile = useCallback(async (file: File) => {
+        if (!file) return;
+        const contract = await documentAnalysis.analyzeFile(file, language);
+        // Historial: registrar el archivo CARGADO por el usuario.
+        void documentHistory.add({
+            kind: 'uploaded',
+            formato: (file.name.split('.').pop() || 'file').toLowerCase(),
+            titulo: file.name,
+            nombre: file.name,
+            mime: file.type,
+            tamaño: file.size,
+        });
+        const insumo = buildDocumentInsumo(contract, language);
+        if (!insumo) return;
+        integrationStore.addSystemMessage(insumo);
+    }, [documentAnalysis, language, integrationStore, documentHistory]);
 
     // Ruta genérica de archivo: imagen → OCR (processImageFile); documento → análisis F1.
     const processAnyFile = useCallback(async (file: File) => {
@@ -1810,11 +3217,11 @@ function App() {
             return;
         }
         if (isSupportedDocument(file)) {
-            await documentAnalysis.analyzeFile(file, language);
+            await processDocumentFile(file);
         } else {
             console.warn('[App] Tipo de archivo no soportado:', file.name, file.type);
         }
-    }, [processImageFile, documentAnalysis, language]);
+    }, [processImageFile, processDocumentFile]);
 
     const handleFileSelected = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -1831,9 +3238,9 @@ function App() {
 
     const handleDocumentFileSelected = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
-        if (file) documentAnalysis.analyzeFile(file, language);
+        if (file) processDocumentFile(file);
         e.target.value = '';
-    }, [documentAnalysis, language]);
+    }, [processDocumentFile]);
 
     const handleProjectFolderSelected = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = Array.from(e.target.files || []);
@@ -1864,28 +3271,14 @@ function App() {
         e.target.value = '';
     }, [appAnalysis, language]);
 
-    // Comandos de voz → eventos de ventana (dispatch en useNavigationCommands).
-    // Nombres centralizados en FLU_EVENTS (single source of truth, sin drift).
-    useEffect(() => {
-        const onAnalyzeDocument = () => { docInputRef.current?.click(); };
-        const onAnalyzeApp = () => { projectInputRef.current?.click(); };
-        const onGenerateDocument = () => { documentGeneration.generate('pdf'); };
-        const onGenerateVideo = () => { documentGeneration.generate('video'); };
-        const offs = [
-            onFluEvent(FLU_EVENTS.ANALYZE_DOCUMENT, onAnalyzeDocument),
-            onFluEvent(FLU_EVENTS.ANALYZE_APP, onAnalyzeApp),
-            onFluEvent(FLU_EVENTS.GENERATE_DOCUMENT, onGenerateDocument),
-            onFluEvent(FLU_EVENTS.GENERATE_VIDEO, onGenerateVideo),
-        ];
-        return () => offs.forEach((off) => off());
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [documentGeneration.generate]);
+    // ---- Workspace · generación: puente de eventos doc/app/video (extraído a hook) ----
+    const { docInputRef, projectInputRef } = useDocumentGenerationBridge({
+        generation: documentGeneration,
+    });
 
     // ---- Auto-save session state on changes ----
     useSessionPersistence({
         activeTab,
-        language,
-        sessionRole,
         expandedFrameId,
         selectedMinuteId,
         participantPhase: fluParticipantPresentation.phase,
@@ -1893,61 +3286,45 @@ function App() {
         workspaceImageExpanded: workspaceImage.isExpanded,
     });
 
-    const stats = integrationStore.sessionStats;
-    const config = integrationStore.config;
-
-
     // ---- Sync minutes from DB to store on mount ----
     useEffect(() => {
         if (minuteKnowledge.minutes.length > 0) {
             // Sync from DB to store if store is empty
             if (integrationStore.minuteHistory.length === 0) {
-                minuteKnowledge.minutes.forEach((m) => {
-                    // m is MinuteUIEntry with summarySnapshot nested
-                    integrationStore.addMinute(m);
-                });
+                // C10 - el dueno de la minuta publica; App solo pide la hidratacion.
+                minuteKnowledge.publishAllToStore();
             }
         }
-    }, [minuteKnowledge.minutes.length]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [minuteKnowledge.minutes.length, integrationStore.minuteHistory.length, minuteKnowledge]);
 
     // ---- Handlers ----
 
-
-    const handleParticipantConfigChange = useCallback((overrides: Record<string, any>) => {
+    const handleParticipantConfigChange = useCallback((overrides: Record<string, unknown>) => {
         const prev = participantConfig;
         const newConfig = setFluParticipantOverrides(overrides);
         setParticipantConfig(newConfig);
         // Audit log
-        auditLog.logChange('config', 'flu-participant', prev, newConfig, 'Participant config updated').catch(console.error);
+        auditLog.logChange('config', 'flu-participant', prev, newConfig, 'Participant config updated').catch((e) => logCaughtError('src/App.tsx: auditLog.logChange', e));
     }, [participantConfig, auditLog]);
 
-    const handleParticipantReset = useCallback(() => {
-        const prev = participantConfig;
-        const defaults = resetFluParticipantOverrides();
-        setParticipantConfig(defaults);
+    const handleSearchConfigChange = useCallback((next: SearchConfigOverrides | ((prev: SearchConfigOverrides) => SearchConfigOverrides)) => {
+        const prev = searchOverridesRef.current;
+        const resolved = typeof next === 'function' ? next(prev) : next;
+        searchOverridesRef.current = resolved;
+        setSearchOverrides(resolved);
+        saveSearchConfigOverrides(resolved);
         // Audit log
-        auditLog.logChange('config', 'flu-participant', prev, defaults, 'Participant config reset to defaults').catch(console.error);
-    }, [participantConfig, auditLog]);
+        auditLog.logChange('config', 'search', prev, resolved, 'Search config updated').catch((e) => logCaughtError('src/App.tsx: auditLog.logChange', e));
+    }, [auditLog]);
 
-    const handleToggleAutoCycle = useCallback(() => {
-        integrationStore.setConfig({ autoCycle: !integrationStore.config.autoCycle });
-    }, [integrationStore]);
-
-    const handleTogglePushToTalk = useCallback(() => {
-        integrationStore.setConfig({ pushToTalk: !integrationStore.config.pushToTalk });
-    }, [integrationStore]);
-
-    const handleReset = useCallback(() => {
-        integrationStore.reset();
-        setMinuteDraft(null);
-        setSelectedMinuteId(null);
-        fluParticipant.resetParticipant();
-        // OS2 parity: clear workspace image URL
-        workspaceImage.clear();
-        setGeminiError({ show: false, message: '', hint: '', detail: '' });
-        // OS2 parity: reset conversation session (FluShell.jsx line 1154-1176)
-        os2ResetConversationSession?.();
-    }, [integrationStore, os2ResetConversationSession, fluParticipant, workspaceImage]);
+    const handleSearchConfigReset = useCallback(() => {
+        const prev = searchOverridesRef.current;
+        searchOverridesRef.current = {};
+        clearSearchConfigOverrides();
+        setSearchOverrides({});
+        // Audit log
+        auditLog.logChange('config', 'search', prev, {}, 'Search config reset to defaults').catch((e) => logCaughtError('src/App.tsx: auditLog.logChange', e));
+    }, [auditLog]);
 // ---- Minute handlers (extraído a hook) ----
 const minuteHandlers = useMinuteHandlers({
     integrationStore,
@@ -1965,14 +3342,102 @@ const minuteHandlers = useMinuteHandlers({
     getCommandSpeech,
 });
 const {
-    isGeneratingMinute,
     isSummarizing,
-    handleGenerateMinute,
     handleGenerateSummary,
     handleSaveMinute,
+    handleSaveConversationSummary,
     handleSelectMinuteHistory,
 } = minuteHandlers;
 
+    // ============================================================
+    // §2 Corte por día: si al iniciar quedó conversación de un día anterior sin
+    // cerrar, se genera su minuta (queda archivada) y se marca el día nuevo para
+    // que arranque limpio y no se mezcle con el anterior.
+    // ============================================================
+    const dayRolloverDoneRef = useRef<Set<string>>(new Set());
+    useEffect(() => {
+        const history = integrationStore.conversationHistory;
+        if (!history.length) return; // aún no cargó: se reevalúa al hidratar
+        // NO cerrar el día hasta saber QUIÉN entra: la minuta es POR usuario.
+        // Sin participante activo no se lee/guarda/limpia nada (se reevalúa al resolverse).
+        if (!realParticipantId) return;
+        // Cierre POR USUARIO: este guard era un booleano único de la app, así que el
+        // centinela de onboarding lo consumía y el usuario real no cerraba su día.
+        if (dayRolloverDoneRef.current.has(realParticipantId)) return;
+        dayRolloverDoneRef.current.add(realParticipantId);
+        // Conversación de ESTE usuario: turnos de rol 'user' cuyo hablante coincide
+        // con el nombre del participante activo. Sin coincidencia, se usa el global
+        // (evita que el cierre de día deje de disparar si el nombre no matchea).
+        const activeName = String(
+            participants.participants.find((p) => p.id === realParticipantId)?.name || '',
+        ).trim();
+        const userHistory = activeName
+            ? history.filter((e) => e.role === 'user' && String(resolveRowSpeakerLabel(e) || '').trim() === activeName)
+            : [];
+        const scopedHistory = userHistory.length ? userHistory : history;
+        const lastAt = Number(scopedHistory[scopedHistory.length - 1]?.timestamp) || 0;
+        // Clave de día POR USUARIO: cada participante cierra su día por separado.
+        const dayStorageKey = `${STORAGE_KEYS.LAST_SESSION_DAY}:${realParticipantId}`;
+        let lastSessionDay = '';
+        try {
+            lastSessionDay = localGet(dayStorageKey) || '';
+        } catch (e) {
+        logCaughtError('src/App.tsx', e);
+            lastSessionDay = '';
+        }
+        void (async () => {
+            if (shouldRolloverDay(lastAt, Date.now(), lastSessionDay)) {
+                relayLog(
+                    'WARN',
+                    'App',
+                    `rollover de día: minuta del día anterior + inicio limpio (last=${dayKey(lastAt)}, user=${realParticipantId})`,
+                );
+                // Cierre real: se GENERA y se GUARDA la minuta. El día se marca
+                // sólo si se guardó; si no, se reintenta en el próximo arranque.
+                const saved = await handleGenerateSummary({ announce: false, save: true });
+                if (!saved) {
+                    relayLog(
+                        'WARN',
+                        'App',
+                        'rollover de día: la minuta no se guardó → no se marca el día (se reintentará)',
+                    );
+                    return;
+                }
+            }
+            try {
+                localSet(dayStorageKey, dayKey(Date.now()));
+            } catch (e) {
+                // La marca del día es la EVIDENCIA del cierre: NO se traga el fallo
+                // (misma política que localStore). Si no se puede escribir (cuota),
+                // el día queda sin marcar, se reintentará al arrancar y puede
+                // duplicar la minuta: hay que poder enterarse.
+                logCaughtError('src/App.tsx', e);
+                relayLog(
+                    'WARN',
+                    'App',
+                    `rollover de día: no se pudo marcar el día (${dayStorageKey}) -> se reintentará y puede duplicar la minuta`,
+                );
+            }
+        })();
+    }, [integrationStore.conversationHistory, realParticipantId, participants.participants, handleGenerateSummary]);
+
+    // ============================================================
+    // Paso 6: guardar el resumen de conversación UNA vez al cerrar
+    // la app (pagehide) como conocimiento de tipo 'conversacion'.
+    // ============================================================
+    const conversationSummarySavedRef = useRef(false);
+    useEffect(() => {
+        const onPageHide = () => {
+            if (conversationSummarySavedRef.current) return;
+            conversationSummarySavedRef.current = true;
+            // No bloquear el cierre: disparar en background y capturar errores.
+            handleSaveConversationSummary({ announce: false }).catch((err) => {
+                logCaughtError('[App] Conversation summary save on close failed', err);
+            });
+        };
+        window.addEventListener('pagehide', onPageHide);
+        return () => window.removeEventListener('pagehide', onPageHide);
+    }, [handleSaveConversationSummary]);
 
     // ============================================================
     // OS2 parity: handleToggleListening (Gap D)
@@ -1982,51 +3447,47 @@ const {
         if (voiceStatus === 'processing') return;
 
         if (voiceStatus === 'listening') {
-            // OS2 parity: conversationActiveRef.current = false on close (FluShell.jsx line 1021)
-            conversationActiveRef.current = false;
+            // OS2 parity: se sale del modo conversación (dueño único: el controlador)
+            conversationMode.exit();
             
             // Solo cancelar si realmente hay speech activo y es necesario
-            const synth = window.speechSynthesis;
-            if (synth && (synth.speaking || synth.pending)) {
-                // En lugar de cancelar inmediatamente, esperar un momento breve
-                // para permitir que la animación de boca termine naturalmente
-                synth.cancel();
-                // Pequeña pausa para permitir transición de estado
-                await new Promise(resolve => setTimeout(resolve, 100));
+            if (isSpeechBusy()) {
+                cancelSpeech();
+
+                await waitForSpeechIdle();
             }
             
-            const commandSpeech = getCommandSpeech('CERRAR_ESCUCHA', language);
+            const commandSpeech = getCommandSpeech(COMMAND_IDS.CERRAR_ESCUCHA, language);
             if (commandSpeech) {
                 try {
                     await speakResponse(commandSpeech, language);
                 } catch (speechErr) {
-                    console.warn('[App] CERRAR_ESCUCHA speech failed:', speechErr);
+                    logCaughtError('[App] CERRAR_ESCUCHA speech failed', speechErr);
                 }
             }
             await os2StopListening({ closing: true });
             return;
         }
 
-        // OS2 parity: conversationActiveRef.current = true on open (FluShell.jsx line 1030 via openListeningSession)
-        conversationActiveRef.current = true;
+        // El modo conversación lo fija `conversationMode.open()` (dueño único).
         
         // Solo cancelar si realmente hay speech activo
-        const synth = window.speechSynthesis;
-        if (synth && (synth.speaking || synth.pending)) {
-            synth.cancel();
-            await new Promise(resolve => setTimeout(resolve, 100));
+        if (isSpeechBusy()) {
+            cancelSpeech();
+
+            await waitForSpeechIdle();
         }
         
-        const commandSpeech = getCommandSpeech('ABRIR_ESCUCHA', language);
+        const commandSpeech = getCommandSpeech(COMMAND_IDS.ABRIR_ESCUCHA, language);
         if (commandSpeech) {
             try {
                 await speakResponse(commandSpeech, language);
             } catch (speechErr) {
-                console.warn('[App] ABRIR_ESCUCHA speech failed:', speechErr);
+                logCaughtError('[App] ABRIR_ESCUCHA speech failed', speechErr);
             }
         }
-        await os2StartListening({ resume: true });
-    }, [voiceStatus, language, os2StartListening, os2StopListening]);
+        await conversationMode.open({ resume: true });
+    }, [voiceStatus, language, conversationMode, os2StopListening]);
 
     // ============================================================
     // OS2 parity: handleStartConversation (Gap E)
@@ -2035,73 +3496,132 @@ const {
     const handleStartConversation = useCallback(async ({ announce = false }: { announce?: boolean } = {}) => {
         if (announce) {
             // Solo cancelar si realmente hay speech activo
-            const synth = window.speechSynthesis;
-            if (synth && (synth.speaking || synth.pending)) {
-                synth.cancel();
-                await new Promise(resolve => setTimeout(resolve, 100));
+            if (isSpeechBusy()) {
+                cancelSpeech();
+
+                await waitForSpeechIdle();
             }
-            const commandSpeech = getCommandSpeech('INICIAR_CONVERSACION', language);
+            const commandSpeech = getCommandSpeech(COMMAND_IDS.INICIAR_CONVERSACION, language);
             if (commandSpeech) {
                 try {
                     await speakResponse(commandSpeech, language);
                 } catch (speechErr) {
-                    console.warn('[App] INICIAR_CONVERSACION speech failed:', speechErr);
+                    logCaughtError('[App] INICIAR_CONVERSACION speech failed', speechErr);
                 }
             }
         }
 
         const wasListening = voiceStatus === 'listening';
         integrationStore.resetConversationHistory();
-        auditLog.clearAll().catch(console.error);
+        auditLog.clearAll().catch((e) => logCaughtError('src/App.tsx: auditLog.clearAll', e));
 
-        // OS2 parity: conversationActiveRef.current = true (FluShell.jsx line 999)
-        conversationActiveRef.current = true;
+        // OS2 parity: se entra al modo conversación (dueño único: el controlador)
+        conversationMode.enter();
 
         if (wasListening) {
-            await os2StopListening({ closing: false }).catch(() => { });
-            await os2StartListening({ resume: true }).catch(() => { });
+            await os2StopListening({ closing: false }).catch((err) => logCaughtError('[App] fallo al detener la escucha', err));
+            await conversationMode.open({ resume: true }).catch((err) => logCaughtError('[App] fallo al reiniciar la escucha', err));
             return;
         }
 
-        await os2StartListening({ resume: true }).catch(() => { });
-    }, [language, voiceStatus, integrationStore, auditLog, os2StartListening, os2StopListening]);
+        await conversationMode.open({ resume: true }).catch((err) => logCaughtError('[App] fallo al reiniciar la escucha', err));
+    }, [language, voiceStatus, integrationStore, auditLog, conversationMode, os2StopListening]);
+
+    // El comando de navegacion delega en el MISMO dueno de "iniciar conversacion".
+    useEffect(() => {
+        startConversationRef.current = handleStartConversation;
+    }, [handleStartConversation]);
 
     // ============================================================
     // OS2 parity: handleRemoveParticipant (Gap G)
     // FluShell.jsx lines 1216-1232: handleRemoveParticipant
     // ============================================================
-    const handleRemoveParticipant = useCallback(async (row: any) => {
+    const handleRemoveParticipant = useCallback(async (row: VoiceProfileRow) => {
         const label = String(row?.label || '').trim();
         if (!label) return;
 
+        // 1) Perfil de voz (flu-os3 DB) — borrado lógico vía el único escritor
+        //    (useVoiceProfiles). refresh() filtra sync.deleted, así que no
+        //    reaparece tras recargar.
         if (row.profileId) {
             await voiceProfiles.removeProfile(row.profileId);
+        } else {
+            // Sin profileId (p.ej. "conejo" que nunca tuvo perfil): borrar por label.
+            const orphan = await voiceProfiles.findProfileByLabel(label);
+            if (orphan) {
+                await voiceProfiles.removeProfile(orphan.id);
+            }
         }
 
+        // 2) Historial de conversación en memoria (Zustand) — quitar entradas del hablante.
+        integrationStore.removeConversationEntriesBySpeaker(label);
+
+        // 3) Filas de conversacion persistidas: UN solo barrido por el dueno del borrado logico.
+        const participantRows = await listarConversaciones()
+            .then((rows) => rows
+                .filter((r) => isLiveRecord(r) && String(resolveRowSpeakerLabel(r) || '').trim() === label)
+                .map((r) => r.id))
+            .catch((e) => { logCaughtError('src/App.tsx', e); return [] as string[]; });
+        if (participantRows.length > 0) {
+            await softDeleteConversationRows(participantRows).catch((e) => logCaughtError('src/App.tsx: softDeleteConversationRows', e));
+        }
+
+        // 4) Perfil de voz: la cascada de voz ya lo borró en el paso 1
+        //    (removeProfile/findProfileByLabel del hook, dueño único).
+
+        // 5) Speaker de sesión en memoria (diarización) + auditoría.
         os2RemoveSessionSpeaker(label);
-        // OS2 parity: delete audit logs for the removed speaker (FluShell.jsx lines 1226-1228)
-        deleteAuditLogsBySpeaker(label).catch(console.error);
+        forgetVoiceName(label); // el directorio de sesion tambien guarda el nombre por VOZ
         auditLog.logEvent('participant:removed', 'config', uuidv4(), {
             label,
-        }, 'Participant removed').catch(console.error);
-    }, [voiceProfiles, os2RemoveSessionSpeaker, auditLog]);
+        }, 'Participant removed').catch((e) => logCaughtError('src/App.tsx: auditLog.logEvent', e));
+
+        // 6) Registro multiusuario homónimo (Dexie participants + onboarding).
+        //    Causa raíz de "borré ratón/conejo y sigue apareciendo en el
+        //    onboarding": este panel borra el PERFIL DE VOZ pero NO la fila del
+        //    registro multiusuario (la que alimenta las sugerencias del nombre y
+        //    la activación). Si existe un participante con el mismo nombre se
+        //    elimina también de verdad y, si era el usuario activo, se sale a la
+        //    ruta legacy limpiando ACTIVE_USER/estado legacy.
+        const participantMatch = participants.participants.find(
+            (p) => p.name.trim().toLowerCase() === label.trim().toLowerCase(),
+        );
+        if (participantMatch) {
+            const { removed, wasActive } = await participants.remove(participantMatch.id, activeParticipantId);
+            if (removed && wasActive) {
+                setActiveUser(undefined);
+                setActiveParticipantId(undefined);
+                onboarding.resetSession();
+            }
+        }
+    }, [
+        voiceProfiles,
+        integrationStore,
+        os2RemoveSessionSpeaker,
+        auditLog,
+        participants,
+        activeParticipantId,
+        onboarding,
+        setActiveParticipantId,
+    ]);
 
     // ============================================================
     // OS2 parity: handleRenameProfile (Gap H)
     // FluShell.jsx lines 1196-1214: handleRenameVoiceProfile
     // ============================================================
     const handleRenameProfile = useCallback(async (profileId: string, label: string) => {
-        const saved: any = await voiceProfiles.renameProfile(profileId, label);
-        if (!saved?.label) return;
+        const saved: unknown = await voiceProfiles.renameProfile(profileId, label);
+        if (!saved || typeof saved !== 'object' || !('label' in saved) || !saved.label) return;
+        const savedLabel = String(saved.label);
 
         os2RenameSessionSpeaker(
-            String(voiceProfiles.profiles.find((p: any) => p.id === profileId)?.label || '').trim(),
-            saved.label,
+            String(voiceProfiles.profiles.find((p) => p.id === profileId)?.label || '').trim(),
+            savedLabel,
         );
         auditLog.logEvent('profile:renamed', 'config', uuidv4(), {
             profileId,
-            newLabel: saved.label,
-        }, 'Voice profile renamed').catch(console.error);
+            newLabel: savedLabel,
+        }, 'Voice profile renamed').catch((e) => logCaughtError('src/App.tsx: auditLog.logEvent', e));
     }, [voiceProfiles, os2RenameSessionSpeaker, auditLog]);
 
     // ============================================================
@@ -2110,32 +3630,23 @@ const {
     const listenParity = useMemo(() => {
         const history = integrationStore.conversationHistory;
         const lastLog = history.length > 0 ? history[history.length - 1]?.text || '' : '';
-        const live = liveTranscript || '';
-        if (!live && !lastLog) return null;
-        // OS2 parity: evaluateListenParity from listenParity.js
-        // Compare live transcript with last log entry
-        const liveNorm = live.replace(/\s+/g, ' ').trim().toLowerCase();
-        const lastNorm = lastLog.replace(/\s+/g, ' ').trim().toLowerCase();
-        if (liveNorm && lastNorm && liveNorm !== lastNorm) {
-            return { level: 'info', message: 'Nuevo transcript en vivo' };
-        }
-        return null;
+        // §9.3: la normalización/derivación de paridad vive en la lib única
+        // (evaluateListenParity). App no re-normaliza inline.
+        const parity = evaluateListenParity({ live: liveTranscript || '', lastLog });
+        if (parity.level !== 'warn') return null;
+        return { level: 'info', message: parity.message };
     }, [liveTranscript, integrationStore.conversationHistory]);
 
     // ============================================================
-    // OS2 parity: phraseDisplay (Gap B)
+    // §9.3: ÚNICA derivación de la frase visible. Avatar, bitácora y barra
+    // consumen esta MISMA cadena; ningún consumidor la re-deriva.
     // ============================================================
-    const phraseDisplay = useMemo(() => {
-        const live = liveTranscript || '';
-        if (live) return live;
-        const history = integrationStore.conversationHistory;
-        if (history.length > 0) {
-            const last = history[history.length - 1];
-            const text = last?.text || '';
-            if (text) return text;
-        }
-        return '\u00a0';
-    }, [liveTranscript, integrationStore.conversationHistory]);
+    const visiblePhrase = useMemo(() => selectVisiblePhrase({
+        live: liveTranscript,
+        lastTranscript,
+        lastUserText: avatarLastUserText,
+        currentTranscript: integrationStore.currentTranscript,
+    }), [liveTranscript, lastTranscript, avatarLastUserText, integrationStore.currentTranscript]);
 
     // ============================================================
     // OS2 parity: latestResponse (Gap C)
@@ -2144,20 +3655,54 @@ const {
     // Usa WELCOME_MESSAGE desde appConfig (Rule #1: NO HARDCODE)
     // Selecciona el idioma según la configuración actual del usuario
     // ============================================================
-    const welcomeText = language === 'en' ? WELCOME_MESSAGE.en : WELCOME_MESSAGE.es;
+    const welcomeText = pickLabel(WELCOME_MESSAGE, language, WELCOME_MESSAGE.es);
+    // Frases de acuse transitorias (p. ej. "Preparando el video.") que FLU
+    // dice al reconocer un comando, pero que NO son una respuesta sustantiva.
+    // Se excluyen del campo de Respuesta para que, tras recargar la página,
+    // no quede un acuse de procesamiento como si fuera la última respuesta.
+    // Provienen de FLU_CONFIG.ui.commandSpeech (Rule #1: NO HARDCODE).
+    const transientAckPhrases = useMemo(() => {
+        const set = new Set<string>();
+        const speech = FLU_CONFIG.ui?.commandSpeech;
+        if (speech && typeof speech === 'object') {
+            Object.values(speech).forEach((phrase) => {
+                if (phrase && typeof phrase === 'object') {
+                    if (phrase.es) set.add(phrase.es);
+                    if (phrase.en) set.add(phrase.en);
+                } else if (typeof phrase === 'string' && phrase) {
+                    set.add(phrase);
+                }
+            });
+        }
+        return set;
+    }, []);
     const latestResponse = useMemo(() => {
+        const isTransient = (text: string) => !text || text === welcomeText || transientAckPhrases.has(text);
         const lastResp = integrationStore.lastResponse;
-        if (lastResp && lastResp !== welcomeText) return lastResp;
+        if (lastResp && !isTransient(lastResp)) {
+            // Respuesta sustantiva en vivo: marcamos que FLU ya respondió en esta
+            // carga de página (habilita el puente transitorio del historial).
+            hasLiveResponseRef.current = true;
+            return lastResp;
+        }
+        // Si FLU aún no ha respondido en ESTA carga de página (p. ej. tras un
+        // reload, donde lastResponse no se persiste), NO resucitar una respuesta
+        // vieja del historial persistido en IndexedDB. La pestaña «respuesta»
+        // debe quedar vacía hasta que FLU vuelva a hablar.
+        if (!hasLiveResponseRef.current) return '';
+        // Puente transitorio: dentro de una sesión activa, si la última respuesta
+        // fue un acuse transitorio (p. ej. "Preparando el video."), seguimos
+        // mostrando la última respuesta sustantiva del historial.
         const history = integrationStore.conversationHistory;
         for (let i = history.length - 1; i >= 0; i--) {
             const entry = history[i];
             if (entry.role === 'flu' || entry.speakerName === 'FLU') {
                 const text = entry.text || '';
-                if (text && text !== welcomeText) return text;
+                if (!isTransient(text)) return text;
             }
         }
         return '';
-    }, [integrationStore.lastResponse, integrationStore.conversationHistory, welcomeText]);
+    }, [integrationStore.lastResponse, integrationStore.conversationHistory, welcomeText, transientAckPhrases]);
 
     // ============================================================
     // OS2 parity: knowledgeBaseLabel
@@ -2177,7 +3722,6 @@ const {
         // by the conditional rendering below (sttUi.label ? ...).
         const sttUi = formatStreamSttUiStatus('', {
             listening: voiceStatus === 'listening',
-            transcriptSource: getTranscriptSource(),
         });
         return sttUi.label || null;
     }, [voiceStatus]);
@@ -2203,35 +3747,17 @@ const {
     // Avoids recomputing on every render (forEach + map + find over
     // conversationHistory and voiceProfiles).
     // ============================================================
-    const voiceParticipants = useMemo(() => {
-        const historyLabels = new Set<string>();
-        const history = integrationStore.conversationHistory;
-        for (let i = 0; i < history.length; i++) {
-            const e = history[i] as any;
-            const label = e.speakerName || e.role || '';
-            if (label) historyLabels.add(label);
-        }
-        const profiles = voiceProfiles.profiles;
-        const profileLabels = new Set<string>();
-        for (let i = 0; i < profiles.length; i++) {
-            const p = profiles[i] as any;
-            if (p.label) profileLabels.add(p.label);
-        }
-        const allLabels = new Set([...historyLabels, ...profileLabels]);
-        const result: { label: string; profileId: string | undefined }[] = [];
-        for (const label of allLabels) {
-            let profileId: string | undefined;
-            for (let i = 0; i < profiles.length; i++) {
-                const p = profiles[i] as any;
-                if (p.label === label) {
-                    profileId = p.id || undefined;
-                    break;
-                }
-            }
-            result.push({ label, profileId });
-        }
-        return result;
-    }, [integrationStore.conversationHistory, voiceProfiles.profiles]);
+    // Dueno unico de la lista del panel (`resolveVoiceParticipants`): historial + BASE de
+    // participantes + perfiles de voz. La vista NO la recalcula.
+    const voiceParticipants = useMemo(
+        () =>
+            resolveVoiceParticipants({
+                history: integrationStore.conversationHistory,
+                profiles: voiceProfiles.profiles,
+                base: participants.participants,
+            }),
+        [integrationStore.conversationHistory, voiceProfiles.profiles, participants.participants],
+    );
 
     // ============================================================
     // Render
@@ -2291,7 +3817,7 @@ const {
                             <div className="session-chip">
                                 <span className="session-chip__icon">🌐</span>
                                 <span className="session-chip__label">Idioma</span>
-                                <select value={language} onChange={(e) => setLanguage(e.target.value as 'es' | 'en' | 'both')}>
+                                <select aria-label="Idioma" value={language} onChange={(e) => setLanguage(e.target.value as 'es' | 'en' | 'both')}>
                                     <option value="both">Ambos</option>
                                     <option value="es">Español</option>
                                     <option value="en">Inglés</option>
@@ -2301,6 +3827,7 @@ const {
                                 <span className="session-chip__icon">👤</span>
                                 <span className="session-chip__label">Perfil</span>
                                 <select
+                                    aria-label="Perfil"
                                     value={integrationStore.profile}
                                     onChange={(e) => {
                                         integrationStore.applyProfile(e.target.value as FluProfile);
@@ -2316,7 +3843,60 @@ const {
                                     ))}
                                 </select>
                             </div>
+                            <div className="session-chip">
+                                <span className="session-chip__icon">🧑</span>
+                                <span className="session-chip__label">Usuario</span>
+                                <select
+                                    aria-label={userPickerConfig.title || 'Elegir usuario'}
+                                    value={
+                                        participants.participants.some((p) => p.id === activeParticipantId)
+                                            ? activeParticipantId
+                                            : ''
+                                    }
+                                    onChange={(e) => {
+                                        if (e.target.value === '__new__') {
+                                            handleCreateNewProfile();
+                                        } else if (e.target.value) {
+                                            handleSelectActiveUser(e.target.value);
+                                        }
+                                    }}
+                                    data-testid="user-picker-select"
+                                >
+                                    <option value="">
+                                        {activeParticipantName || userPickerConfig.selectPlaceholder || 'Elegir usuario'}
+                                    </option>
+                                    {participants.participants.map((p) => (
+                                        <option key={p.id} value={p.id}>
+                                            {p.name}
+                                            {p.role ? ` · ${p.role}` : ''}
+                                        </option>
+                                    ))}
+                                    <option value="__new__">
+                                        {userPickerConfig.createShortLabel || '+ Nuevo'}
+                                    </option>
+                                </select>
+                                {participants.participants.some((p) => p.id === activeParticipantId) && (
+                                    <button
+                                        type="button"
+                                        className="session-chip__button session-chip__button--remove"
+                                        onClick={handleRemoveActiveUser}
+                                        data-testid="user-picker-remove"
+                                        aria-label={userPickerConfig.removeLabel || 'Borrar usuario'}
+                                        title={userPickerConfig.removeLabel || 'Borrar usuario'}
+                                    >
+                                        ×
+                                    </button>
+                                )}
+                            </div>
                         </div>
+                        <NotificationCenterBell
+                            items={notificationCenter.history}
+                            unread={notificationCenter.unread}
+                            onMarkAllRead={notificationCenter.markAllRead}
+                            onClear={notificationCenter.clear}
+                            onDismiss={notificationCenter.dismiss}
+                            language={language}
+                        />
                     </div>
                 </header>
 
@@ -2346,12 +3926,12 @@ const {
                             try {
                                 await speakResponse(draft, language);
                             } catch (err) {
-                                console.warn('[App] speakResponse failed for participant draft:', err);
+                                logCaughtError('[App] speakResponse failed for participant draft', err);
                             }
                             fluParticipant.endFloorDelivery();
                             fluParticipant.recordInterventionDelivered();
                         },
-                    } as any)} />
+                    })} />
                 </header>
 
                 {/* ── OS3 Browser: Avatar Column + Tabs ── */}
@@ -2363,7 +3943,8 @@ const {
                                 voiceStatus,
                                 voiceError,
                                 liveTranscript,
-                                onStartListening: os2StartListening,
+                                lastTranscript,
+                                onStartListening: openListeningFromUi,
                                 onStopListening: os2StopListening,
                                 onToggleListening: handleToggleListening,
                                 onParticipantEmotionRef: participantEmotionRef,
@@ -2375,16 +3956,32 @@ const {
                                 onStateChange: setCurrentState,
                                 onGeminiError: (error: string | null) => {
                                     if (error) {
+                                        // Errores de reconocimiento RECUPERABLES (network/
+                                        // no-speech/aborted): se reintentan solos. NO ocupan
+                                        // la barra (solo consola) para no robar espacio.
+                                        const code = String(error).split(':').pop()?.trim() || '';
+                                        if (
+                                            /^Error de reconocimiento:/i.test(String(error)) &&
+                                            isRecoverableRecognitionError(code, true)
+                                        ) {
+                                            console.warn(
+                                                '[App] error de reconocimiento recuperable (no se muestra):',
+                                                error,
+                                            );
+                                            setGeminiError({ show: false, message: '', hint: '', detail: '' });
+                                            return;
+                                        }
                                         setGeminiError({ show: true, message: error, hint: '', detail: '' });
                                     } else {
                                         setGeminiError({ show: false, message: '', hint: '', detail: '' });
                                     }
                                 },
                             }}>
-                                <FluAvatarVoiceBridge
-                                    height="100%"
-                                    width="100%"
-                                    // ---- Branding Inteligente por Temporalidad ----
+                                 <FluAvatarVoiceBridge
+                                     height="100%"
+                                     width="100%"
+                                     visiblePhrase={visiblePhrase}
+                                     // ---- Branding Inteligente por Temporalidad ----
                                     brandingMode={branding.config.mode}
                                     brandingSeason={branding.config.activeSeason}
                                     brandingIsBirthday={branding.isBirthday}
@@ -2400,443 +3997,323 @@ const {
 
                         {/* Panels Column (right) */}
                         <div className="app-panels-column">
-                            <FluShellTabs activeTab={activeTab} onTabChange={setActiveTab} />
+                            <FluShellTabs activeTab={activeTab} onTabChange={changeTab} visibleIds={visibleTabIds} />
 
                             <div className="flu-shell__tab-content">
+                                <Suspense fallback={null}>
                                 {/* Pizarron Tab (renamed from Workspace) */}
-                            <FluTabPanel tabId="workspace" activeTab={activeTab} className="flu-tab-panel--workspace">
-                                <PanelFrame
-                                    frameId={FLU_CONFIG.frames?.workspace || 'workspace'}
-                                    title={FLU_CONFIG.ui?.workspace?.title || ''}
-                                    className="panel-frame--workspace"
-                                    expandable={true}
-                                    {...{
-                                        expandedFrameId,
-                                        onToggleExpand: handleToggleExpand,
-                                    } as any}
-                                >
-                                    <div className="frame-content frame-content--workspace">
-                                        <div className={`conversation-live-phrase${liveTranscript || integrationStore.currentTranscript ? '' : ' is-empty'}`}>
-                                            <div className="conversation-live-phrase__scroll">
-                                                <span>{liveTranscript || integrationStore.currentTranscript || '\u00a0'}</span>
-                                            </div>
-                                        </div>
-                                        <div className={`frame-content__response${latestResponse ? '' : ' is-empty'}`}>
-                                            <div className="frame-content__response-scroll">
-                                                <span>{latestResponse || '\u00a0'}</span>
-                                            </div>
-                                        </div>
-                                        <p className="frame-content__contenido">{integrationStore.workspaceArtifact?.contenido || FLU_CONFIG.ui?.workspace?.emptyContent || 'Sin contenido'}</p>
-                                        {/* ---- Generated Image Section (Pollinations) ---- */}
-                                        {workspaceImage.imageUrl && (
-                                            <div className="frame-content__generated-image">
-                                                <div className="generated-image__header">
-                                                    <h4 className="generated-image__title">Imagen Generada</h4>
-                                                    <button
-                                                        type="button"
-                                                        className="flu-btn flu-btn--small"
-                                                        onClick={() => workspaceImage.expand()}
-                                                        title="Ampliar imagen"
-                                                    >
-                                                        🔍 Ampliar
-                                                    </button>
-                                                </div>
-                                                <div className="generated-image__preview">
-                                                    <img
-                                                        className="generated-image__img"
-                                                        src={workspaceImage.imageUrl}
-                                                        alt={integrationStore.workspaceArtifact?.prompt_visual || 'Visual generado por Flu'}
-                                                        onLoad={() => {
-                                                            if (workspaceImage.loadTimeoutRef.current) {
-                                                                clearTimeout(workspaceImage.loadTimeoutRef.current);
-                                                                workspaceImage.loadTimeoutRef.current = 0;
-                                                            }
-                                                        }}
-                                                        onError={() => {
-                                                            console.warn('[App] Generated image failed to load:', workspaceImage.imageUrl);
-                                                            if (workspaceImage.loadTimeoutRef.current) {
-                                                                clearTimeout(workspaceImage.loadTimeoutRef.current);
-                                                                workspaceImage.loadTimeoutRef.current = 0;
-                                                            }
-                                                            workspaceImage.markFailed();
-                                                        }}
-                                                    />
-                                                    {workspaceImage.isLoading && (
-                                                        <div className="generated-image__loading">🔄 Generando imagen...</div>
-                                                    )}
-                                                    {workspaceImage.isFailed && (
-                                                        <div className="generated-image__error">
-                                                            <p>No se pudo cargar la imagen</p>
-                                                            <button
-                                                                type="button"
-                                                                className="flu-btn flu-btn--small"
-                                                                onClick={() => workspaceImage.retry()}
-                                                            >
-                                                                Reintentar
-                                                            </button>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        {/* ---- Workspace Image Overlay (Ampliar) ---- */}
-                                        {workspaceImage.isExpanded && workspaceImage.imageUrl && (
-                                            <div
-                                                className="workspace-image-overlay"
-                                                role="dialog"
-                                                aria-modal="true"
-                                                aria-label="Imagen ampliada"
-                                                onClick={() => workspaceImage.close()}
-                                            >
-                                                <div
-                                                    className="workspace-image-container"
-                                                    onClick={(event) => event.stopPropagation()}
-                                                >
-                                                    <button
-                                                        type="button"
-                                                        className="workspace-image-close"
-                                                        onClick={() => workspaceImage.close()}
-                                                        aria-label="Cerrar imagen ampliada"
-                                                        title="Cerrar"
-                                                    >
-                                                        ✕
-                                                    </button>
-                                                    <img
-                                                        src={workspaceImage.imageUrl}
-                                                        alt={integrationStore.workspaceArtifact?.prompt_visual || 'Visual generado por Flu'}
-                                                    />
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        {Array.isArray(integrationStore.workspaceArtifact?.puntos_clave) && integrationStore.workspaceArtifact.puntos_clave.length > 0 ? (
-                                            <ul className="frame-content__list">
-                                                {integrationStore.workspaceArtifact.puntos_clave.map((item: string, index: number) => (
-                                                    <li key={`${item}-${index}`}>{item}</li>
-                                                ))}
-                                            </ul>
-                                        ) : (
-                                            <p className="frame-content__empty">{FLU_CONFIG.ui?.workspace?.keyPointsEmpty || 'Sin puntos clave'}</p>
-                                        )}
-                                        {homeworkContext && (
-                                            <div className="frame-content__homework-analysis">
-                                                <h4 className="homework-analysis__title">📚 {homeworkContext.materia}</h4>
-                                                <p className="homework-analysis__detail"><span className="homework-analysis__label">Nivel:</span> {homeworkContext.nivel}</p>
-                                                <p className="homework-analysis__detail"><span className="homework-analysis__label">Instrucciones:</span> {homeworkContext.instrucciones}</p>
-                                                {homeworkContext.problemas.length > 0 && (
-                                                    <ul className="homework-analysis__list">
-                                                        {homeworkContext.problemas.map((p, i) => (
-                                                            <li key={i}>{p}</li>
-                                                        ))}
-                                                    </ul>
-                                                )}
-                                            </div>
-                                        )}
-
-                                        {/* ---- F1: Análisis de documentos ---- */}
-                                        <DocumentResultPanel
-                                            document={integrationStore.documentArtifact}
-                                            isAnalyzing={documentAnalysis.isAnalyzing}
-                                            warnings={documentAnalysis.warnings}
-                                            error={documentAnalysis.error}
-                                            onClear={documentAnalysis.clear}
-                                            language={language}
-                                        />
-
-                                        {/* ---- F2: Análisis de app ---- */}
-                                        <AppAnalysisPanel
-                                            analysis={integrationStore.appAnalysisArtifact}
-                                            isAnalyzing={appAnalysis.isAnalyzing}
-                                            error={appAnalysis.error}
-                                            onClear={appAnalysis.clear}
-                                            language={language}
-                                        />
-
-                                        {/* ---- F3/F4: Generación de documentos y video ---- */}
-                                        <GenerationProgressPanel
-                                            job={integrationStore.generationJob}
-                                            result={documentGeneration.result}
-                                            videoResult={documentGeneration.videoResult}
-                                            isGenerating={documentGeneration.isGenerating}
-                                            error={documentGeneration.error}
-                                            language={language}
-                                            onClear={documentGeneration.clear}
-                                        />
-
-                                        {/* ---- Upload zone for image digitalization (OCR) — AL FINAL ---- */}
-                                        <div className="frame-content__upload-zone">
-                                            {!uploadedImage ? (
-                                                <div
-                                                    className="flu-upload-zone__drop"
-                                                    onDragOver={(e) => e.preventDefault()}
-                                                    onDrop={handleFileDrop}
-                                                >
-                                                    <p className="flu-upload-zone__hint">Arrastra una imagen aquí</p>
-                                                    <p className="flu-upload-zone__or">— o —</p>
-                                                    <div className="flu-upload-zone__buttons">
-                                                        <button
-                                                            type="button"
-                                                            className="flu-btn"
-                                                            onClick={() => fileInputRef.current?.click()}
-                                                        >
-                                                            📁 Seleccionar archivo
-                                                        </button>
-                                                        <button
-                                                            type="button"
-                                                            className="flu-btn flu-btn--camera"
-                                                            onClick={() => cameraInputRef.current?.click()}
-                                                        >
-                                                            📷 Tomar foto
-                                                        </button>
-                                                        <button
-                                                            type="button"
-                                                            className="flu-btn"
-                                                            onClick={() => docInputRef.current?.click()}
-                                                        >
-                                                            📄 Analizar documento
-                                                        </button>
-                                                        <button
-                                                            type="button"
-                                                            className="flu-btn"
-                                                            onClick={() => projectInputRef.current?.click()}
-                                                        >
-                                                            🧭 Analizar app
-                                                        </button>
-                                                    </div>
-                                                    <input
-                                                        ref={fileInputRef}
-                                                        type="file"
-                                                        accept="image/*"
-                                                        hidden
-                                                        onChange={handleFileSelected}
-                                                    />
-                                                    <input
-                                                        ref={cameraInputRef}
-                                                        type="file"
-                                                        accept="image/*"
-                                                        capture="environment"
-                                                        hidden
-                                                        onChange={handleFileSelected}
-                                                    />
-                                                    <input
-                                                        ref={docInputRef}
-                                                        type="file"
-                                                        accept=".xlsx,.xlsm,.pdf,.docx,.pptx,.csv,.txt,.md,text/*,application/pdf"
-                                                        hidden
-                                                        onChange={handleDocumentFileSelected}
-                                                    />
-                                                    <input
-                                                        ref={projectInputRef}
-                                                        type="file"
-                                                        multiple
-                                                        hidden
-                                                        onChange={handleProjectFolderSelected}
-                                                        {...({ webkitdirectory: '', directory: '' } as any)}
-                                                    />
-                                                </div>
-                                            ) : (
-                                                <div className="flu-upload-zone__preview">
-                                                    <img
-                                                        className="flu-upload-zone__img"
-                                                        src={uploadedImage.dataUrl}
-                                                        alt="Tarea subida"
-                                                    />
-                                                    <div className="flu-upload-zone__actions">
-                                                        {isAnalyzing && (
-                                                            <span className="flu-upload-zone__analyzing">🔍 Analizando con IA...</span>
-                                                        )}
-                                                        <button
-                                                            type="button"
-                                                            className="flu-btn flu-btn--danger"
-                                                            onClick={handleClearImage}
-                                                        >
-                                                            ✕ Quitar
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                </PanelFrame>
-                            </FluTabPanel>
+                                <FluWorkspaceTabView
+                                    activeTab={activeTab}
+                                    expandedFrameId={expandedFrameId}
+                                    onToggleExpand={handleToggleExpand}
+                                    hub={{
+                                        searchAllowlist: resolvedBrowserAllowlist,
+                                        searchOverrides,
+                                        participantId: activeParticipantId,
+                                        workspaceArtifact: integrationStore.workspaceArtifact,
+                                        latestResponse,
+                                        livePhrase: visiblePhrase,
+                                        isListening: voiceStatus === 'listening',
+                                        homeworkContext,
+                                        image: workspaceImage,
+                                        document: {
+                                            isAnalyzing: documentAnalysis.isAnalyzing,
+                                            error: documentAnalysis.error,
+                                            warnings: documentAnalysis.warnings,
+                                            artifact: integrationStore.documentArtifact,
+                                            clear: documentAnalysis.clear,
+                                        },
+                                        app: {
+                                            isAnalyzing: appAnalysis.isAnalyzing,
+                                            error: appAnalysis.error,
+                                            artifact: integrationStore.appAnalysisArtifact,
+                                            clear: appAnalysis.clear,
+                                        },
+                                        generation: {
+                                            isGenerating: documentGeneration.isGenerating,
+                                            error: documentGeneration.error,
+                                            job: integrationStore.generationJob,
+                                            result: documentGeneration.result,
+                                            videoResult: documentGeneration.videoResult,
+                                            clear: documentGeneration.clear,
+                                        },
+                                        // Historial por usuario (punteros a artefactos
+                                        // generados/cargados) → pestaña "Historial" del Pizarrón.
+                                        documents: {
+                                            documents: documentHistory.documents,
+                                            loading: documentHistory.loading,
+                                            onRemove: (id) => {
+                                                void documentHistory.remove(id);
+                                            },
+                                            language,
+                                        },
+                                        turnFocus,
+                                        horarioImport: {
+                                            pending: pendingHorarioImport,
+                                            busy: horarioImportBusy,
+                                            onConfirm: confirmHorarioImport,
+                                            onCancel: cancelHorarioImport,
+                                        },
+                                        upload: {
+                                            uploadedImage,
+                                            isAnalyzing,
+                                            error: uploadError,
+                                            fileInputRef,
+                                            docInputRef,
+                                            projectInputRef,
+                                            onFileDrop: handleFileDrop,
+                                            onFileSelected: handleFileSelected,
+                                            onDocumentFileSelected: handleDocumentFileSelected,
+                                            onProjectFolderSelected: handleProjectFolderSelected,
+                                            onClearImage: handleClearImage,
+                                        },
+                                        agenda: {
+                                            items: agenda.items,
+                                            colors: agendaColors,
+                                            onCancel: async (id) => {
+                                                await agendaCancel(id);
+                                            },
+                                            labels: agendaLabels,
+                                            ringing: agenda.ringing,
+                                            onStop: agenda.stopRinging,
+                                            onAdd: async (input) => {
+                                                await agendaCreate({ ...input, personId: realParticipantId });
+                                            },
+                                            onEdit: async (id, patch) => {
+                                                await agendaUpdate(id, patch);
+                                            },
+                                            notes: {
+                                                items: notes.notes.map((n) => ({ id: n.id, label: n.label, body: n.body })),
+                                                onAdd: async (label) => {
+                                                    await notes.add({ label });
+                                                },
+                                                onEdit: async (id, label) => {
+                                                    await notes.rename(id, label);
+                                                },
+                                                onEditBody: async (id, body) => {
+                                                    await notes.setBody(id, body);
+                                                },
+                                                onRemove: async (id) => {
+                                                    await notes.remove(id);
+                                                },
+                                            },
+                                        },
+                                        language,
+                                    }}
+                                />
 
                             {/* Conversation Tab */}
-                            <FluTabPanel tabId="conversation" activeTab={activeTab} className="flu-tab-panel--conversation">
-                                <PanelFrame
-                                    frameId={FLU_CONFIG.frames?.conversation || 'conversation'}
-                                    title={FLU_CONFIG.ui?.workspace?.visibleLabels?.log || 'Bitácora'}
-                                    subtitle={FLU_CONFIG.ui?.workspace?.conversationSubtitle || 'Transcripción en vivo de la conversación'}
-                                    className="panel-frame--log"
-                                    expandable={true}
-                                    {...{
-                                        expandedFrameId,
-                                        onToggleExpand: handleToggleExpand,
-                                    } as any}
-                                >
-                                    {/* OS3 parity: live phrase display above conversation log — sin label para ahorrar espacio */}
-                                    <div className="conversation-live-phrase frame-content__response">
-                                        <div className="conversation-live-phrase__scroll">
-                                            <span>{liveTranscript || integrationStore.currentTranscript || '\u00a0'}</span>
-                                        </div>
-                                    </div>
-                                    <ConversationLogAny
-                                        entries={integrationStore.conversationHistory}
-                                        emptyLabel={FLU_CONFIG.ui?.workspace?.conversationEmpty || 'Sin conversación'}
-                                    />
-                                </PanelFrame>
-
-                                <PanelFrame
-                                    frameId={FLU_CONFIG.frames?.voiceProfiles || 'voiceProfiles'}
-                                    title={FLU_CONFIG.ui?.workspace?.participantsTitle || 'Participantes'}
-                                    className="panel-frame--participants"
-                                    expandable={true}
-                                    {...{
-                                        expandedFrameId,
-                                        onToggleExpand: handleToggleExpand,
-                                    } as any}
-                                >
-                                    {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                                    <VoiceProfilesPanel {...({
-                                        // OS2 parity: sessionParticipants = history participants + voice profiles
-                                        // Memoized via voiceParticipants useMemo to avoid recomputation on every render.
-                                        participants: voiceParticipants,
-                                        onRenameProfile: handleRenameProfile,
-                                        onRenameSessionSpeaker: handleRenameProfile,
-                                        onRemoveParticipant: handleRemoveParticipant,
-                                    } as any)} />
-                                </PanelFrame>
-                            </FluTabPanel>
+                            <FluConversationTabView
+                                activeTab={activeTab}
+                                expandedFrameId={expandedFrameId}
+                                onToggleExpand={handleToggleExpand}
+                                visiblePhrase={visiblePhrase}
+                                conversationHistory={integrationStore.conversationHistory}
+                                voiceParticipants={voiceParticipants}
+                                onRenameProfile={handleRenameProfile}
+                                onRemoveParticipant={handleRemoveParticipant}
+                            />
 
                             {/* Minutes Tab */}
-                            <FluTabPanel tabId="minutes" activeTab={activeTab} className="flu-tab-panel--minutes">
-                                <PanelFrame
-                                    frameId={FLU_CONFIG.frames?.minute || 'minute'}
-                                    title={FLU_CONFIG.ui?.workspace?.visibleLabels?.summary || 'Minuta'}
-                                    className="panel-frame--minute"
-                                    expandable={true}
-                                    {...{
-                                        expandedFrameId,
-                                        onToggleExpand: handleToggleExpand,
-                                    } as any}
-                                >
-                                    <div className="minute-actions-row" style={{ display: 'flex', gap: 6, marginBottom: 4 }}>
-                                        <button
-                                            type="button"
-                                            className="flu-btn flu-btn--primary"
-                                            onClick={() => handleGenerateSummary({ announce: true })}
-                                            disabled={!isSupported || isSummarizing}
-                                        >
-                                            {isSummarizing
-                                                ? `${FLU_CONFIG.ui?.buttons?.generateMinute || 'Generar Minuta'}...`
-                                                : FLU_CONFIG.ui?.buttons?.generateMinute || 'Generar Minuta'}
-                                        </button>
-                                        <button
-                                            type="button"
-                                            className="flu-btn"
-                                            onClick={() => minutePanelRef.current?.save()}
-                                        >
-                                            {FLU_CONFIG.ui?.buttons?.saveMinute || 'Guardar Minuta'}
-                                        </button>
-                                    </div>
-                                    <MinuteDraftPanelAny
-                                        ref={minutePanelRef}
-                                        draft={minuteDraft}
-                                        onChange={setMinuteDraft}
-                                        onSave={handleSaveMinute}
-                                        emptyLabel={FLU_CONFIG.ui?.workspace?.minuteDraftEmpty || 'Sin borrador de minuta'}
-                                    />
-                                </PanelFrame>
-
-                                <PanelFrame
-                                    frameId={FLU_CONFIG.frames?.history || 'history'}
-                                    title={FLU_CONFIG.ui?.workspace?.visibleLabels?.history || 'Historial de minutas'}
-                                    className="panel-frame--history"
-                                    expandable={true}
-                                    {...{
-                                        expandedFrameId,
-                                        onToggleExpand: handleToggleExpand,
-                                    } as any}
-                                >
-                                    <MinuteHistoryPanel
-                                        entries={minuteKnowledge.minutes as any}
-                                        selectedId={selectedMinuteId || undefined}
-                                        onSelect={handleSelectMinuteHistory}
-                                        emptyLabel={FLU_CONFIG.ui?.workspace?.minuteHistoryEmpty || 'Sin minutas guardadas'}
-                                    />
-                                </PanelFrame>
-                            </FluTabPanel>
+                            <FluMinutesTabView
+                                activeTab={activeTab}
+                                expandedFrameId={expandedFrameId}
+                                onToggleExpand={handleToggleExpand}
+                                isSupported={isSupported}
+                                isSummarizing={isSummarizing}
+                                onGenerateSummary={handleGenerateSummary}
+                                draft={minuteDraft}
+                                onDraftChange={setMinuteDraft}
+                                onSaveMinute={handleSaveMinute}
+                                minutePanelRef={minutePanelRef}
+                                history={minuteKnowledge.minutes}
+                                selectedId={selectedMinuteId}
+                                onSelect={handleSelectMinuteHistory}
+                            />
 
                             {/* Settings Tab — OS2 parity structure */}
-                            <FluTabPanel tabId="settings" activeTab={activeTab} className="flu-tab-panel--settings">
-                                <PanelFrame
-                                    frameId="settings"
-                                    title="Configuración"
-                                    className="panel-frame--settings"
-                                    expandable={true}
-                                    {...{
-                                        expandedFrameId,
-                                        onToggleExpand: handleToggleExpand,
-                                    } as any}
-                                >
-                                    <FluSettingsPanel
-                                        language={language}
-                                        apiKey={apiKey}
-                                        textModel={textModel}
-                                        textApiUrl={textApiUrl}
-                                        imageModel={imageModel}
-                                        imageApiKey={imageApiKey}
-                                        imageApiUrl={imageApiUrl}
-                                        ocrApiKey={ocrApiKey}
-                                        ocrModel={ocrModel}
-                                        ocrApiUrl={ocrApiUrl}
-                                        voices={voices}
-                                        handleTextModelCommit={handleTextModelCommit}
-                                        handleTextApiKeyCommit={handleTextApiKeyCommit}
-                                        handleTextApiUrlCommit={handleTextApiUrlCommit}
-                                        handleImageModelCommit={handleImageModelCommit}
-                                        handleImageApiKeyCommit={handleImageApiKeyCommit}
-                                        handleImageApiUrlCommit={handleImageApiUrlCommit}
-                                        handleOcrApiKeyCommit={handleOcrApiKeyCommit}
-                                        handleOcrModelCommit={handleOcrModelCommit}
-                                        handleOcrApiUrlCommit={handleOcrApiUrlCommit}
-                                        onClearCache={handleClearCache}
-                                        wakeWords={wakeWords}
-                                        setWakeWords={setWakeWords}
-                                        debugLogsEnabled={debugLogsEnabled}
-                                        setDebugLogsEnabled={setDebugLogsEnabled}
-                                        handleParticipantConfigChange={handleParticipantConfigChange}
-                                        // ---- Branding Inteligente por Temporalidad ----
-                                        brandingMode={branding.config.mode}
-                                        brandingSeason={branding.config.activeSeason}
-                                        brandingBirthday={branding.config.birthday}
-                                        brandingCelebrateAchievements={branding.config.celebrateAchievements}
-                                        onBrandingModeChange={branding.seasonalActions.setMode}
-                                        onBrandingSeasonChange={branding.seasonalActions.setActiveSeason}
-                                        onBrandingBirthdayChange={branding.seasonalActions.setBirthday}
-                                        onBrandingCelebrateAchievementsChange={branding.seasonalActions.setCelebrateAchievements}
-                                        // ---- AI Provider Selection ----
-                                        aiProvider={aiProvider}
-                                        setAiProvider={handleSetAiProvider}
-                                    />
-                                </PanelFrame>
-                            </FluTabPanel>
+                            <FluSettingsTabView
+                                activeTab={activeTab}
+                                expandedFrameId={expandedFrameId}
+                                onToggleExpand={handleToggleExpand}
+                                group={settingsGroup}
+                                onGroupChange={setSettingsGroup}
+                                flu={{
+                                    language,
+                                    apiKey,
+                                    textModel,
+                                    textApiUrl,
+                                    geminiApiKey,
+                                    imageModel,
+                                    imageApiKey,
+                                    imageApiUrl,
+                                    falApiKey,
+                                    falVideoModel,
+                                    ocrApiKey,
+                                    ocrModel,
+                                    ocrApiUrl,
+                                    voices,
+                                    handleTextModelCommit,
+                                    handleTextApiKeyCommit,
+                                    handleTextApiUrlCommit,
+                                    handleGeminiApiKeyCommit,
+                                    handleImageModelCommit,
+                                    handleImageApiKeyCommit,
+                                    handleImageApiUrlCommit,
+                                    handleFalApiKeyCommit,
+                                    handleFalVideoModelCommit,
+                                    handleOcrApiKeyCommit,
+                                    handleOcrModelCommit,
+                                    handleOcrApiUrlCommit,
+                                    onClearCache: handleClearCache,
+                                    wakeWords,
+                                    setWakeWords,
+                                    debugLogsEnabled,
+                                    setDebugLogsEnabled,
+                                    handleParticipantConfigChange,
+                                    searchOverrides,
+                                    onSearchOverridesChange: handleSearchConfigChange,
+                                    brandingMode: branding.config.mode,
+                                    brandingSeason: branding.config.activeSeason,
+                                    brandingBirthday: branding.config.birthday,
+                                    brandingCelebrateAchievements: branding.config.celebrateAchievements,
+                                    onBrandingModeChange: branding.seasonalActions.setMode,
+                                    onBrandingSeasonChange: branding.seasonalActions.setActiveSeason,
+                                    onBrandingBirthdayChange: branding.seasonalActions.setBirthday,
+                                    onBrandingCelebrateAchievementsChange: branding.seasonalActions.setCelebrateAchievements,
+                                    aiProvider,
+                                    setAiProvider: handleSetAiProvider,
+                                }}
+                                ambientes={{
+                                    ambientes,
+                                    activeAmbienteId,
+                                    onActivate: handleActivateAmbiente,
+                                    dynamicIds: dynamicAmbienteIds,
+                                    onRegister: handleRegisterAmbiente,
+                                    onUpdate: handleUpdateAmbiente,
+                                    onRemove: handleRemoveAmbiente,
+                                }}
+                                paletas={{
+                                    paletas,
+                                    activeSeason: branding.config.activeSeason,
+                                    onActivate: handleActivatePaleta,
+                                    dynamicIds: dynamicPaletaIds,
+                                    onRegister: handleRegisterPaleta,
+                                    onUpdate: handleUpdatePaleta,
+                                    onRemove: handleRemovePaleta,
+                                }}
+                                assistant={{
+                                    channel: notificationCenter.channel,
+                                    onChannelChange: notificationCenter.setChannel,
+                                    dnd,
+                                    onSetDndEnabled: dndActions.setEnabled,
+                                    onSetDndSchedule: dndActions.setSchedule,
+                                    onSetDndAllowUrgent: dndActions.setAllowUrgent,
+                                    onReplayOnboarding: onboarding.reset,
+                                }}
+                                participants={{
+                                    items: participants.participants,
+                                    loading: participants.loading,
+                                    birthdayNear,
+                                    profiles: communicationProfiles.profiles,
+                                    onSetManual: communicationProfiles.setManual,
+                                    onResetPerson: communicationProfiles.resetPerson,
+                                    onRegister: async (input) => {
+                                        return participants.register(input);
+                                    },
+                                    onRemove: async (id) => {
+                                        await handleRemoveMultiuserParticipant(id);
+                                    },
+                                }}
+                                browser={{
+                                    items: participants.participants,
+                                    loading: participants.loading,
+                                    profiles: browserProfiles.profiles,
+                                    onUpdate: browserProfiles.update,
+                                    onReset: browserProfiles.reset,
+                                }}
+                                search={{
+                                    overrides: searchOverrides,
+                                    onChange: handleSearchConfigChange,
+                                    onReset: handleSearchConfigReset,
+                                    allowlist: resolvedBrowserAllowlist,
+                                    sites: searchSites.sites,
+                                    dynamicDomains: searchSites.dynamicDomains,
+                                    loading: searchSites.loading,
+                                    onRegister: searchSites.register,
+                                    onUpdate: searchSites.update,
+                                    onRemove: searchSites.remove,
+                                }}
+                                contacts={{
+                                    participants: participants.participants,
+                                    contacts: contacts.contacts,
+                                    birthdayNear: contacts.birthdayNear,
+                                    loading: contacts.loading,
+                                    onAdd: async (input) => {
+                                        await contacts.addContact(input);
+                                    },
+                                    onRemove: async (id) => {
+                                        await contacts.removeContact(id);
+                                    },
+                                }}
+                                agenda={{
+                                    items: agenda.items,
+                                    colors: agendaColors,
+                                    onCancel: async (id) => {
+                                        await agendaCancel(id);
+                                    },
+                                    labels: agendaLabels,
+                                    ringing: agenda.ringing,
+                                    onStop: agenda.stopRinging,
+                                    onAdd: async (input) => {
+                                        await agendaCreate({ ...input, personId: realParticipantId });
+                                    },
+                                    onEdit: async (id, patch) => {
+                                        await agendaUpdate(id, patch);
+                                    },
+                                }}
+                                shopping={{
+                                    items: shopping.items,
+                                    loading: shopping.loading,
+                                    remainingCount: shopping.remainingCount,
+                                    onAdd: async (label) => {
+                                        await shopping.addMany(
+                                            label
+                                                .split(',')
+                                                .map((s) => s.trim())
+                                                .filter(Boolean),
+                                        );
+                                    },
+                                    onToggle: async (id) => {
+                                        await shopping.toggle(id);
+                                    },
+                                    onRemove: async (id) => {
+                                        await shopping.remove(id);
+                                    },
+                                    onClearChecked: async () => {
+                                        await shopping.clearChecked();
+                                    },
+                                }}
+                                materiaGris={{
+                                    participants: participants.participants,
+                                    leaderboard: materiaGris.leaderboard,
+                                    history: materiaGris.history,
+                                    loading: materiaGris.loading,
+                                    onAward: async (input) => {
+                                        await materiaGris.awardPoints(input);
+                                    },
+                                }}
+                            />
 
                             {/* System Tab — Autonomous Systems Monitoring */}
-                            <FluTabPanel tabId="system" activeTab={activeTab} className="flu-tab-panel--system">
-                                <PanelFrame
-                                    frameId="autonomy"
-                                    title="Sistemas Autónomos"
-                                    className="panel-frame--autonomy"
-                                    expandable={true}
-                                    {...{
-                                        expandedFrameId,
-                                        onToggleExpand: handleToggleExpand,
-                                    } as any}
-                                >
-                                    <AutonomyStatusPanel />
-                                </PanelFrame>
-                            </FluTabPanel>
+                            <FluSystemTabView
+                                activeTab={activeTab}
+                                expandedFrameId={expandedFrameId}
+                                onToggleExpand={handleToggleExpand}
+                                state={autonomyState}
+                                actions={autonomyActions}
+                            />
+                                </Suspense>
                         </div>
                     </div>
                 </div>
@@ -2844,6 +4321,59 @@ const {
 
             {/* Indicador visual de procesamiento de IA (FLU pensando) */}
             <ThinkingIndicator />
+
+            {/* Onboarding de configuración (no bloqueante) */}
+            <OnboardingOverlay
+                visible={onboarding.visible}
+                prompt={onboardingPrompt}
+                stepType={onboarding.currentStep?.type}
+                progress={onboarding.progress}
+                skipLabel={onboardingOverlayLabels.skipLabel || 'Omitir'}
+                progressLabel={onboardingOverlayLabels.progressLabel || 'Paso {current} de {total}'}
+                listeningHint={onboardingOverlayLabels.listeningHint || 'Escucho…'}
+                typingHint={onboardingOverlayLabels.typingHint || 'Escribe tu respuesta…'}
+                listening={onboardingVoice.listening}
+                interim={onboardingVoice.interim}
+                canVoice={onboardingVoiceEnabled && onboardingVoice.supported}
+                micLabel={onboardingOverlayLabels.micLabel || 'Hablar'}
+                stopLabel={onboardingOverlayLabels.stopLabel || 'Detener'}
+                onVoiceStart={onboardingVoice.start}
+                onVoiceStop={onboardingVoice.stop}
+                submitLabel={onboardingOverlayLabels.submitLabel || 'Enviar'}
+                continueLabel={onboardingOverlayLabels.continueLabel || 'Continuar'}
+                acceptLabel={onboardingOverlayLabels.acceptLabel || 'Sí'}
+                rejectLabel={onboardingOverlayLabels.rejectLabel || 'No'}
+                accept={onboarding.currentStep?.accept}
+                reject={onboarding.currentStep?.reject}
+                stepOptions={onboarding.currentStep?.options?.map((o) => ({
+                    value: o.value,
+                    label: pickLabel(o, language, o.es),
+                }))}
+                userSuggestions={onboardingUserSuggestions}
+                onAnswer={handleOnboardingAnswer}
+                onSkip={() => { onboarding.skip(); setSessionReady(true); }}
+            />
+
+            {/* Stack de notificaciones (toasts) */}
+            {notificationCenter.toasts.length > 0 && (
+                <div className="flu-notifications" data-testid="notification-toasts">
+                    {notificationCenter.toasts.map((toast) => (
+                        <button
+                            key={toast.id}
+                            type="button"
+                            className={
+                                'flu-notification' +
+                                (toast.urgent ? ' flu-notification--urgent' : '')
+                            }
+                            onClick={() => notificationCenter.dismiss(toast.id)}
+                            data-testid={`notification-toast-${toast.id}`}
+                        >
+                            <strong>{toast.title}</strong>
+                            <span>{toast.body}</span>
+                        </button>
+                    ))}
+                </div>
+            )}
                 </main>
 
             {/* Workspace Image Overlay removed - now displayed in workspace panel */}

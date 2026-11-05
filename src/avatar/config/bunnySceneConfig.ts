@@ -82,3 +82,13 @@ export const BUNNY_STATE_INDICATOR = {
         COMPUTING: '#00ffff',
     } as Record<string, string>,
 };
+
+/**
+ * Color del indicador para un estado del avatar. DUENO UNICO (P7.83): antes el
+ * mismo mapa de 8 colores y el mismo fallback estaban repetidos en la UI, asi que
+ * cambiar un color obligaba a acordarse de los dos sitios. La resolucion vive aqui,
+ * junto al mapa, y los consumidores (BunnyViewer) solo aplican el valor.
+ */
+export function bunnyStateColor(state: string): string {
+    return BUNNY_STATE_INDICATOR.colors[state] || BUNNY_STATE_INDICATOR.fallbackColor;
+}

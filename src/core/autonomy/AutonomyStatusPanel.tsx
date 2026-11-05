@@ -5,11 +5,27 @@
 // y permite interacción con ellos.
 // ============================================================
 
-import React from 'react';
-import { useAutonomyIntegration } from './useAutonomyIntegration';
+import type { AutonomyState, AutonomyActions } from './useAutonomyIntegration';
 
-export function AutonomyStatusPanel() {
-    const [state, actions] = useAutonomyIntegration();
+/** Filas de sistemas del panel (dueño único de etiquetas y claves). */
+const SYSTEM_ROWS: ReadonlyArray<{
+    key: keyof AutonomyState['activeSystems'];
+    label: string;
+}> = [
+    { key: 'healthMonitor', label: 'Health Monitor' },
+    { key: 'autoRecovery', label: 'Auto Recovery' },
+    { key: 'decisionEngine', label: 'Decision Engine' },
+    { key: 'autoOptimization', label: 'Auto Optimization' },
+    { key: 'backupSystem', label: 'Backup System' },
+];
+
+export function AutonomyStatusPanel({
+    state,
+    actions,
+}: {
+    state: AutonomyState;
+    actions: AutonomyActions;
+}) {
     
     const getStatusColor = (status: string) => {
         switch (status) {
@@ -44,40 +60,14 @@ export function AutonomyStatusPanel() {
             </div>
             
             <div className="flu-autonomy-panel__systems">
-                <div className="flu-autonomy-panel__system">
-                    <span className="flu-autonomy-panel__system-name">Health Monitor</span>
-                    <div className={`flu-autonomy-panel__system-status ${state.activeSystems.healthMonitor ? 'active' : 'inactive'}`}>
-                        {state.activeSystems.healthMonitor ? '●' : '○'}
+                {SYSTEM_ROWS.map((row) => (
+                    <div key={row.key} className="flu-autonomy-panel__system">
+                        <span className="flu-autonomy-panel__system-name">{row.label}</span>
+                        <div className={`flu-autonomy-panel__system-status ${state.activeSystems[row.key] ? 'active' : 'inactive'}`}>
+                            {state.activeSystems[row.key] ? '●' : '○'}
+                        </div>
                     </div>
-                </div>
-                
-                <div className="flu-autonomy-panel__system">
-                    <span className="flu-autonomy-panel__system-name">Auto Recovery</span>
-                    <div className={`flu-autonomy-panel__system-status ${state.activeSystems.autoRecovery ? 'active' : 'inactive'}`}>
-                        {state.activeSystems.autoRecovery ? '●' : '○'}
-                    </div>
-                </div>
-                
-                <div className="flu-autonomy-panel__system">
-                    <span className="flu-autonomy-panel__system-name">Decision Engine</span>
-                    <div className={`flu-autonomy-panel__system-status ${state.activeSystems.decisionEngine ? 'active' : 'inactive'}`}>
-                        {state.activeSystems.decisionEngine ? '●' : '○'}
-                    </div>
-                </div>
-                
-                <div className="flu-autonomy-panel__system">
-                    <span className="flu-autonomy-panel__system-name">Auto Optimization</span>
-                    <div className={`flu-autonomy-panel__system-status ${state.activeSystems.autoOptimization ? 'active' : 'inactive'}`}>
-                        {state.activeSystems.autoOptimization ? '●' : '○'}
-                    </div>
-                </div>
-                
-                <div className="flu-autonomy-panel__system">
-                    <span className="flu-autonomy-panel__system-name">Backup System</span>
-                    <div className={`flu-autonomy-panel__system-status ${state.activeSystems.backupSystem ? 'active' : 'inactive'}`}>
-                        {state.activeSystems.backupSystem ? '●' : '○'}
-                    </div>
-                </div>
+                ))}
             </div>
             
             {state.healthMetrics && (

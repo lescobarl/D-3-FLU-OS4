@@ -13,6 +13,7 @@
 
 import type { GeneratedDocumentResult } from '../core/ai/IAIService';
 import type { GenerationFormato } from '../types/documentContracts';
+import { logCaughtError } from './caughtError';
 
 // ------------------------------------------------------------
 // Tabla central de formatos (extensión + MIME)
@@ -20,6 +21,19 @@ import type { GenerationFormato } from '../types/documentContracts';
 export interface FormatInfo {
   ext: string;
   mime: string;
+}
+
+/** Definición de hoja admitida en el JSON de entrada para XLSX. */
+interface XlsxSheetDefinition {
+  name?: string;
+  rows?: unknown[][];
+}
+
+/** Payload JSON admitido por el serializador XLSX. */
+interface XlsxPayload {
+  sheets?: XlsxSheetDefinition[];
+  rows?: unknown[][];
+  filas?: unknown[][];
 }
 
 export const FORMAT_INFO: Record<GenerationFormato, FormatInfo> = {
@@ -35,10 +49,42 @@ export const FORMAT_INFO: Record<GenerationFormato, FormatInfo> = {
   video: { ext: 'md', mime: 'text/markdown' },
 };
 
-function safeFileName(nombre: string, ext: string): string {
+export function safeFileName(nombre: string, ext: string): string {
   const base = (nombre || 'flu-documento').replace(/[^\w\-\u00C0-\uFFFF. ]+/g, '').trim() || 'flu-documento';
   const clean = base.replace(/\.(pdf|docx|xlsx|pptx|md|html|csv|json|ics)$/i, '');
   return `${clean}.${ext}`;
+}
+
+/**
+ * true si el valor es un data URL (artefacto binario serializado), no contenido
+ * textual narrable/legible. Fuente única para que TTS y UI no traten un binario
+ * como texto (p. ej. narrar la base64 de un PDF).
+ */
+export function isDataUrl(value?: string): boolean {
+  return /^data:[^,]*[,;]/.test(String(value || '').trim());
+}
+
+/**
+ * Decodifica un data URL a Blob real (base64 o percent-encoded). Devuelve `null`
+ * si no es un data URL válido o la decodificación falla. Evita descargar el
+ * string del data URL como si fuera contenido (PDF ilegible).
+ */
+export function dataUrlToBlob(dataUrl: string): Blob | null {
+  const m = /^data:([^;,]*)(;base64)?,([\s\S]*)$/.exec(String(dataUrl || '').trim());
+  if (!m) return null;
+  const mime = m[1] || 'application/octet-stream';
+  try {
+    if (m[2]) {
+      const binary = atob(m[3]);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+      return new Blob([bytes], { type: mime });
+    }
+    return new Blob([decodeURIComponent(m[3])], { type: mime });
+  } catch (e) {
+        logCaughtError('[catch] src/lib/formatAdapters.ts', e);
+    return null;
+  }
 }
 
 function toBlobUrl(content: string, mime: string): string {
@@ -48,7 +94,8 @@ function toBlobUrl(content: string, mime: string): string {
     }
     const blob = new Blob([content], { type: mime });
     return URL.createObjectURL(blob);
-  } catch {
+  } catch (e) {
+        logCaughtError('[catch] src/lib/formatAdapters.ts', e);
     return '';
   }
 }
@@ -62,20 +109,20 @@ function textResult(content: string, mime: string, ext: string, nombre: string):
     nombre: safeFileName(nombre, ext),
     bytes: trimmed.length,
     url: toBlobUrl(trimmed, mime),
+    text: trimmed,
   };
 }
 
 // ------------------------------------------------------------
 // Serialización binaria (import dinámico + degradación)
 // ------------------------------------------------------------
-function fallbackMarkdown(content: string, nombre: string, target: FormatInfo): GeneratedDocumentResult {
+function fallbackMarkdown(content: string, nombre: string, _target: FormatInfo): GeneratedDocumentResult {
   return textResult(content, FORMAT_INFO.md.mime, FORMAT_INFO.md.ext, nombre);
 }
 
 async function serializePdf(content: string, nombre: string): Promise<GeneratedDocumentResult> {
   try {
-    // @ts-ignore - biblioteca opcional (pdfkit), cargada dinámicamente
-    const mod: any = await import('pdfkit/js/pdfkit.standalone');
+    const mod = await import('pdfkit/js/pdfkit.standalone');
     const PDFDocument = mod.default || mod;
     if (typeof PDFDocument !== 'function') throw new Error('pdfkit no disponible');
     const doc = new PDFDocument({ margin: 48 });
@@ -116,20 +163,19 @@ async function serializePdf(content: string, nombre: string): Promise<GeneratedD
       ext: FORMAT_INFO.pdf.ext,
       nombre: safeFileName(nombre, FORMAT_INFO.pdf.ext),
       bytes: bytes.length,
+      text: content,
     };
   } catch (e) {
-    console.warn('[formatAdapters] PDF serialization unavailable, falling back to markdown:', e);
+    logCaughtError('[formatAdapters] PDF serialization unavailable, falling back to markdown', e);
     return fallbackMarkdown(content, nombre, FORMAT_INFO.pdf);
   }
 }
 
 async function serializeDocx(content: string, nombre: string): Promise<GeneratedDocumentResult> {
   try {
-    // @ts-ignore - biblioteca opcional (docx), cargada dinámicamente
     const { Document, Packer, Paragraph, TextRun, HeadingLevel } = await import('docx');
     const lines = String(content || '').split(/\r?\n/).map((l) => l.trim());
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const children: any[] = [];
+    const children: InstanceType<typeof Paragraph>[] = [];
     for (const line of lines) {
       if (!line) continue;
       if (/^#\s/.test(line)) {
@@ -152,21 +198,22 @@ async function serializeDocx(content: string, nombre: string): Promise<Generated
       ext: FORMAT_INFO.docx.ext,
       nombre: safeFileName(nombre, FORMAT_INFO.docx.ext),
       bytes: bytes.length,
+      text: content,
     };
   } catch (e) {
-    console.warn('[formatAdapters] DOCX serialization unavailable, falling back to markdown:', e);
+    logCaughtError('[formatAdapters] DOCX serialization unavailable, falling back to markdown', e);
     return fallbackMarkdown(content, nombre, FORMAT_INFO.docx);
   }
 }
 
 async function serializeXlsx(content: string, nombre: string): Promise<GeneratedDocumentResult> {
   try {
-    // @ts-ignore - biblioteca opcional (SheetJS), cargada dinámicamente
-    const XLSX: any = await import('xlsx');
-    let parsed: any;
+    const XLSX = await import('xlsx');
+    let parsed: XlsxPayload;
     try {
       parsed = JSON.parse(String(content || '{}'));
-    } catch {
+    } catch (e) {
+        logCaughtError('[catch] src/lib/formatAdapters.ts', e);
       parsed = { rows: String(content || '').split(/\r?\n/).map((l) => l.split('\t')) };
     }
     const wb = XLSX.utils.book_new();
@@ -187,17 +234,17 @@ async function serializeXlsx(content: string, nombre: string): Promise<Generated
       ext: FORMAT_INFO.xlsx.ext,
       nombre: safeFileName(nombre, FORMAT_INFO.xlsx.ext),
       bytes: bytes.length,
+      text: content,
     };
   } catch (e) {
-    console.warn('[formatAdapters] XLSX serialization unavailable, falling back to markdown:', e);
+    logCaughtError('[formatAdapters] XLSX serialization unavailable, falling back to markdown', e);
     return fallbackMarkdown(content, nombre, FORMAT_INFO.xlsx);
   }
 }
 
 async function serializePptx(content: string, nombre: string): Promise<GeneratedDocumentResult> {
   try {
-    // @ts-ignore - biblioteca opcional (pptxgenjs), cargada dinámicamente
-    const PptxGenJS: any = await import('pptxgenjs');
+    const PptxGenJS = await import('pptxgenjs');
     const PptxGen = PptxGenJS.default || PptxGenJS;
     const pptx = new PptxGen();
     const slidesRaw = String(content || '').split(/(?=^#\s)/m);
@@ -215,7 +262,8 @@ async function serializePptx(content: string, nombre: string): Promise<Generated
         if (y > 6.8) break;
       }
     }
-    const data = await pptx.write('arraybuffer');
+    const data = await pptx.write({ outputType: 'arraybuffer' });
+    if (!(data instanceof ArrayBuffer)) throw new Error('pptx no devolvió un ArrayBuffer');
     const bytes = new Uint8Array(data);
     const dataUrl = `data:${FORMAT_INFO.pptx.mime};base64,${bytesToBase64(bytes)}`;
     return {
@@ -224,9 +272,10 @@ async function serializePptx(content: string, nombre: string): Promise<Generated
       ext: FORMAT_INFO.pptx.ext,
       nombre: safeFileName(nombre, FORMAT_INFO.pptx.ext),
       bytes: bytes.length,
+      text: content,
     };
   } catch (e) {
-    console.warn('[formatAdapters] PPTX serialization unavailable, falling back to markdown:', e);
+    logCaughtError('[formatAdapters] PPTX serialization unavailable, falling back to markdown', e);
     return fallbackMarkdown(content, nombre, FORMAT_INFO.pptx);
   }
 }

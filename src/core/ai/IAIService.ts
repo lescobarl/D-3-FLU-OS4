@@ -10,7 +10,6 @@
 //   - Obligación #1: Inyección de Dependencias
 // ============================================================
 
-import type { FluContract } from '../../types/bridge';
 import type {
     AppAnalysisContract,
     DocumentContract,
@@ -25,10 +24,18 @@ export interface AIRequestOptions {
     language?: string;
     role?: string;
     theme?: string;
+    /**
+     * Temperatura (creatividad) resuelta en el BORDE a partir de la fuente
+     * canónica, y que el adapter debe usar tal cual. Los motores NO releen la
+     * configuracion por su cuenta: si falta, cada uno aplica su propio default.
+     */
+    temperature?: number;
     /** Personality traits to inject into the system prompt (Phase 1) */
     traits?: string[];
     /** Communication tone to inject into the system prompt (Phase 1) */
     tone?: string;
+    /** Nivel de explicación (FASE P: simple | detallado | avanzado) */
+    explanationLevel?: string;
 }
 
 /**
@@ -54,6 +61,11 @@ export interface AIMinuteResult {
     pendientes: string[];
     siguientes_pasos: string[];
     tema_sesion?: string;
+    /**
+     * Aciertos/errores de la practica de la sesion (P8.63), cuando el tutor los
+     * cuenta al resumir. Es la fuente del DOMINIO por destreza (opcional).
+     */
+    practica?: { aciertos: number; errores: number };
 }
 
 /**
@@ -67,6 +79,8 @@ export interface AISummaryResult {
     acuerdos: string[];
     pendientes: string[];
     siguientes_pasos: string[];
+    /** Aciertos/errores de la practica de la sesion (P8.63). */
+    practica?: { aciertos: number; errores: number };
 }
 
 /**
@@ -136,19 +150,50 @@ export interface GenerationInput {
  * Resultado de generateDocument (F3) — contenido serializado listo para descargar.
  */
 export interface GeneratedDocumentResult {
+    /** Artefacto serializado: texto plano para formatos nativos, data URL para binarios. */
     content: string;
     mime: string;
     ext: string;
     nombre: string;
     bytes?: number;
     url?: string;
+    /**
+     * Contenido textual de origen (el cuerpo que produjo el LLM), independiente
+     * del serializado. Es la fuente narrable/legible cuando `content` es un
+     * binario (p. ej. data URL de PDF); sin él, TTS y descarga no tienen texto.
+     */
+    text?: string;
 }
+
+/** Argumentos de `generateResponse` (dueño único de la firma). */
+export type FetchResponseArgs = [
+    options: AIRequestOptions,
+    userText: string,
+    botName: string,
+    history: AIHistoryEntry[],
+];
+
+/** Argumentos de `fetchVision` (dueño único de la firma). */
+export type FetchVisionArgs = [
+    imageBase64: string,
+    mimeType: string,
+    language: string,
+    profile: string,
+];
 
 /**
  * AI Service Interface — all AI operations.
  * Implementations: GeminiService, FallbackService, MockService
  */
 export interface IAIService {
+    /**
+     * ¿Hay backend de texto usable ahora mismo (api key o endpoint local sin clave)?
+     * Es una consulta de CAPACIDAD del sistema: la responde el proveedor SELECCIONADO.
+     * Los consumidores preguntan aqui, no a un proveedor concreto (p.ej. deepseek),
+     * que obligaba a conocer el cableado de proveedores desde fuera.
+     */
+    canUseTextBackend(): boolean;
+
     /** Generate a minute from conversation history */
     generateMinute(
         options: AIRequestOptions,
@@ -157,12 +202,7 @@ export interface IAIService {
     ): Promise<AIMinuteResult>;
 
     /** Generate a contextual response */
-    generateResponse(
-        options: AIRequestOptions,
-        userText: string,
-        botName: string,
-        history: AIHistoryEntry[],
-    ): Promise<string>;
+    generateResponse(...args: FetchResponseArgs): Promise<string>;
 
     /** Evaluate whether FLU should intervene */
     generateParticipantEvaluation(
@@ -176,13 +216,6 @@ export interface IAIService {
         options: AIRequestOptions,
         history: AIHistoryEntry[],
     ): Promise<AISummaryResult>;
-
-    /** Generate a Gemini contract for conversation */
-    generateFluContract(
-        options: AIRequestOptions,
-        transcript: string,
-        history: AIHistoryEntry[],
-    ): Promise<FluContract>;
 
     /** Generate a workspace image from a prompt */
     generateWorkspaceImage(

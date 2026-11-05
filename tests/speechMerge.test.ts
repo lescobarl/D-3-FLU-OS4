@@ -6,7 +6,6 @@
 import { describe, it, expect } from 'vitest';
 import {
     collapseRepeatedSpeech,
-    collapseMisorderedMicMerge,
     collapseEchoPhrase,
     collapseAsrStutter,
     normalizeMicText,
@@ -17,8 +16,9 @@ import {
     wouldShrinkLog,
     micPublishedParityOk,
     hasSpeechAnchor,
+    fraseDelEventoAsr,
+    mergeIntoOpenLine,
 } from '../src/voice/lib/speechMerge.js';
-import { collectBrowserResultChunks } from '../src/voice/lib/transcriptIngress.js';
 
 describe('speechMerge — collapseRepeatedSpeech', () => {
     it('colapsa bloque contiguo repetido', () => {
@@ -27,12 +27,6 @@ describe('speechMerge — collapseRepeatedSpeech', () => {
 
     it('texto corto sin repetición se conserva', () => {
         expect(collapseRepeatedSpeech('hola como estas')).toBe('hola como estas');
-    });
-});
-
-describe('speechMerge — collapseMisorderedMicMerge', () => {
-    it('quita el prefijo huérfano inicial «ahí» y conserva el sufijo «estás ahí»', () => {
-        expect(collapseMisorderedMicMerge('ahí estás ahí')).toBe('estás ahí');
     });
 });
 
@@ -51,14 +45,30 @@ describe('speechMerge — collapseAsrStutter', () => {
 });
 
 describe('speechMerge — normalizeMicText', () => {
-    it('corto: pipeline quita el prefijo huérfano inicial y conserva el sufijo', () => {
-        expect(normalizeMicText('ahí estás ahí')).toBe('estás ahí');
-    });
-
     it('largo: colapsa stutter ASR sin perder el resto', () => {
         expect(
             normalizeMicText('hoy vamos a la escuela hoy vamos a la escuela y luego jugamos'),
         ).toBe('hoy vamos a la escuela y luego jugamos');
+    });
+});
+
+describe('speechMerge — invariante: no eliminar una palabra cuya repetición no es contigua', () => {
+    it('conserva la primera palabra legítima («hola ya hola»)', () => {
+        expect(normalizeMicText('hola ya hola')).toBe('hola ya hola');
+    });
+
+    it('conserva el arranque aunque la frase sea más larga', () => {
+        expect(normalizeMicText('hola ya estamos listos hola')).toBe('hola ya estamos listos hola');
+    });
+
+    it('no recorta nada cuando no hay duplicado contiguo', () => {
+        expect(normalizeMicText('ahí estás ahí')).toBe('ahí estás ahí');
+    });
+});
+
+describe('speechMerge — prefijo huérfano se descarta en el empalme (no en el texto)', () => {
+    it('un fragmento de una palabra que reaparece al final de la frase completa se descarta', () => {
+        expect(mergeMicChunks(['ahí', 'estás ahí'])).toBe('estás ahí');
     });
 });
 
@@ -115,8 +125,8 @@ describe('speechMerge — wouldShrinkLog', () => {
 });
 
 describe('speechMerge — micPublishedParityOk', () => {
-    it('detecta prefijo huérfano «ahí estás ahí» vs mic «estás ahí»', () => {
-        expect(micPublishedParityOk('ahí estás ahí', 'estás ahí')).toBe(true);
+    it('detecta prefijo huérfano «ahí estás ahí» vs mic «estás ahí» (ya no se enmascara)', () => {
+        expect(micPublishedParityOk('ahí estás ahí', 'estás ahí')).toBe(false);
     });
 
     it('marca no paridad cuando no hay relación', () => {
@@ -161,39 +171,64 @@ describe('speechMerge — reempalme por re-escucha del ASR (wake word duplicado)
     });
 });
 
-describe('transcriptIngress — collectBrowserResultChunks', () => {
-    it('separa interinos y finales respetando resultIndex', () => {
-        const event = {
-            resultIndex: 0,
-            results: {
-                length: 2,
-                0: { isFinal: false, 0: { transcript: 'hola como', confidence: 0.9 }, length: 1 },
-                1: { isFinal: true, 0: { transcript: 'hola como estas', confidence: 0.95 }, length: 1 },
-            },
-        };
-        expect(collectBrowserResultChunks(event)).toEqual({
-            interimChunks: ['hola como'],
-            finalChunks: ['hola como estas'],
-        });
-    });
-
-    it('salta chunks previos a resultIndex', () => {
-        const event = {
+describe('fraseDelEventoAsr  trozo del evento con los resultados NUEVOS', () => {
+    it('respeta resultIndex: el final retenido delante no entra', () => {
+        const evento = {
             resultIndex: 1,
             results: {
                 length: 2,
-                0: { isFinal: false, 0: { transcript: 'hola como', confidence: 0.9 }, length: 1 },
-                1: { isFinal: true, 0: { transcript: 'hola como estas', confidence: 0.95 }, length: 1 },
+                0: { isFinal: true, 0: { transcript: 'frase del enunciado anterior', confidence: 0.9 }, length: 1 },
+                1: { isFinal: false, 0: { transcript: 'frase nueva', confidence: 0.9 }, length: 1 },
             },
         };
-        expect(collectBrowserResultChunks(event)).toEqual({
-            interimChunks: [],
-            finalChunks: ['hola como estas'],
-        });
+        expect(fraseDelEventoAsr(evento.results, evento.resultIndex)).toBe('frase nueva');
     });
 
-    it('evento vacío → listas vacías sin pérdida de datos', () => {
-        expect(collectBrowserResultChunks({})).toEqual({ interimChunks: [], finalChunks: [] });
-        expect(collectBrowserResultChunks(null)).toEqual({ interimChunks: [], finalChunks: [] });
+    it('une los finales hermanos del MISMO evento sin perder palabras', () => {
+        const evento = {
+            resultIndex: 0,
+            results: [
+                { isFinal: true, 0: { transcript: 'pon la musica esto', confidence: 0.9 }, length: 1 },
+                { isFinal: true, 0: { transcript: 'pon la musica escucha', confidence: 0.9 }, length: 1 },
+            ],
+        };
+        const trozo = fraseDelEventoAsr(evento.results, evento.resultIndex);
+        expect(trozo).toContain('pon la musica');
+        expect(trozo).toContain('esto');
+        expect(trozo).toContain('escucha');
+    });
+
+    it('evento vacio o sin texto: sin trozo (no abre fila vacia)', () => {
+        expect(fraseDelEventoAsr(undefined, 0)).toBe('');
+        expect(fraseDelEventoAsr({ length: 0 }, 0)).toBe('');
+    });
+});
+
+describe('mergeIntoOpenLine  una hipotesis por hueco (libro)', () => {
+    it('acumula el tramo real: prefijo + cola que crece, la revision no duplica', () => {
+        let fusion = mergeIntoOpenLine('', null, 'bien');
+        expect(fusion.linea).toBe('bien');
+        fusion = mergeIntoOpenLine(fusion.linea, fusion.libro, 'bien Vamos');
+        expect(fusion.linea).toBe('bien Vamos');
+        fusion = mergeIntoOpenLine(fusion.linea, fusion.libro, 'a hacer');
+        expect(fusion.linea).toBe('bien Vamos a hacer');
+        const antes = fusion.linea;
+        fusion = mergeIntoOpenLine(antes, fusion.libro, 'a hacer algo');
+        expect(fusion.linea).toBe('bien Vamos a hacer algo');
+        expect(fusion.linea).not.toContain('a hacer a hacer');
+    });
+
+    it('un trozo ajeno se ANADE y abre hueco nuevo', () => {
+        const fusion = mergeIntoOpenLine('hola mundo', null, 'esto es una prueba');
+        expect(fusion.linea).toBe('hola mundo esto es una prueba');
+        expect(fusion.libro?.base).toBe('hola mundo');
+        expect(fusion.libro?.chunk).toBe('esto es una prueba');
+    });
+
+    it('el libro caduco se ignora: la linea la reescribio otro camino', () => {
+        const libro = { base: '', chunk: 'hola', line: 'hola' };
+        const fusion = mergeIntoOpenLine('otra cosa distinta', libro, 'nueva');
+        expect(fusion.linea).toBe('otra cosa distinta nueva');
+        expect(fusion.linea).not.toBe('hola nueva');
     });
 });

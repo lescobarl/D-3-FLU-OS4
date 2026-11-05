@@ -9,7 +9,8 @@
 // Adding a new expression = adding data here, NOT modifying IF chains.
 // ============================================================
 
-import type { ConversationState, EmotionalState } from '../../types/bridge';
+import type { ConversationState, EmotionalState } from '../../types/bridge.ts';
+import { pickText } from '../../lib/uiStrings.ts';
 /**
  * A single expression definition.
  * Each entry maps an expression name to its animations, context description,
@@ -563,15 +564,15 @@ export function buildAnimPrompt(language: 'es' | 'en' = 'es'): string {
 
     const animList = Array.from(animSet).sort();
     const animDescriptions: Record<string, string> = {
-        'Dance': language === 'en' ? 'dance' : 'bailar',
-        'Jump_in_place': language === 'en' ? 'jump in place' : 'saltar en su lugar',
-        'Jump_while_run': language === 'en' ? 'jump while running' : 'saltar mientras corre',
-        'Walk': language === 'en' ? 'walk' : 'caminar',
-        'Run': language === 'en' ? 'run' : 'correr',
-        'Walk_sneaky': language === 'en' ? 'sneaky walk' : 'caminar sigilosamente',
-        'Cap_back': language === 'en' ? 'lower ears / ears back' : 'bajar las orejas / orejas hacia atrás',
-        'Cap_front': language === 'en' ? 'ears forward / ears up' : 'orejas hacia adelante / orejas arriba',
-        'Emo_blink': language === 'en' ? 'blink / close eyes' : 'parpadeo / cerrar los ojos',
+        'Dance': pickText(language, 'bailar'),
+        'Jump_in_place': pickText(language, 'saltar_en_su_lugar'),
+        'Jump_while_run': pickText(language, 'saltar_mientras_corre'),
+        'Walk': pickText(language, 'caminar'),
+        'Run': pickText(language, 'correr'),
+        'Walk_sneaky': pickText(language, 'caminar_sigilosamente'),
+        'Cap_back': pickText(language, 'bajar_las_orejas_orejas_hacia_atras'),
+        'Cap_front': pickText(language, 'orejas_hacia_adelante_orejas_arriba'),
+        'Emo_blink': pickText(language, 'parpadeo_cerrar_los_ojos'),
     };
 
     const animLines = animList.map((a) => {

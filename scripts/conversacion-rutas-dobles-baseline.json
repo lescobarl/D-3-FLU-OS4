@@ -1,0 +1,188 @@
+{
+  "fecha": "2026-11-04",
+  "dueno": "src/voice/conversation",
+  "nota": "Linea base de rutas dobles del modulo CONVERSACION. Solo baja: si una metrica baja, se actualiza aqui en el mismo cambio; si sube respecto a HEAD/origin base, el guard falla. `funciones` congela los nombres de funciones: una funcion nueva obliga a decidir su dueno (docs/OWNERS.md) y a actualizar esta linea base en el mismo commit.",
+  "metricas": {
+    "timeConfigLiterals": 2,
+    "timeConfigReads": 1,
+    "closureConditionOwners": 1,
+    "finalResultIndex": 0,
+    "staleMeasureReads": 0,
+    "voiceChangeSameTramoOnly": 0,
+    "finalWholeLineReplace": 0,
+    "identityDurationFromTramo": 0,
+    "syntheticZeroOneTramo": 0,
+    "broadTextDedupe": 0,
+    "cierreDecisionOwners": 1,
+    "syntheticWindowOwners": 1,
+    "syntheticWrappers": 1,
+    "reentregaOwners": 1,
+    "directSilenceCloses": 0,
+    "continuidadOwners": 1
+  },
+  "funciones": {
+    "adapters.ts": [
+      "crearAlmacenDexieProducto",
+      "crearAlmacenMemoria",
+      "crearConfigFlu",
+      "crearEmbebedorProducto",
+      "crearIdUuid",
+      "crearMedidorTramo",
+      "crearPartidorWake",
+      "crearPuertoVistaFilasProducto",
+      "crearRegistroCaughtError",
+      "crearRelojSistema",
+      "crearResolucionPasivaProducto",
+      "crearUtilidadesFilaProducto",
+      "crearVadProducto",
+      "ejecutarRegistrando",
+      "normalizarParaComparar",
+      "registrarFallo",
+      "renameRowSpeakerName",
+      "vista"
+    ],
+    "adaptersAlmacen.ts": [
+      "aFila",
+      "aRegistro",
+      "crearAlmacenDexie"
+    ],
+    "cierre.ts": [
+      "abrirLocucion",
+      "aplicarRevision",
+      "cerrarDescartada",
+      "cerrarLocucion",
+      "commitar",
+      "componerTramos",
+      "contieneTexto",
+      "crearReglasCierre",
+      "emitirCierre",
+      "guardarFila",
+      "medirTramoCerrado",
+      "medirVozAlCerrar",
+      "reetiquetarFila",
+      "registrarCierre",
+      "registrarEventoVoz",
+      "resolverVoz",
+      "tramoYaCommiteado"
+    ],
+    "cola.ts": [
+      "crearCola",
+      "crearPendientes",
+      "mismoEnunciado"
+    ],
+    "eco.ts": [
+      "esEcoDeTts",
+      "palabrasNormalizadas"
+    ],
+    "fila.ts": [
+      "construirFila",
+      "fusionarVoz",
+      "resolverEtiqueta",
+      "ventanaDentroDe"
+    ],
+    "frontera.ts": [
+      "decidirFrontera"
+    ],
+    "fusion.ts": [
+      "perteneceALineaAbierta"
+    ],
+    "identidad.ts": [
+      "decidirIdentidad",
+      "plantillasDe"
+    ],
+    "index.ts": [],
+    "ingesta.ts": [
+      "abrirCaparazon",
+      "aplicarIdentidadAlTramoAbierto",
+      "aplicarMedidaVoz",
+      "cerrarPendienteAsr",
+      "conIdentidadVoz",
+      "crearIngesta",
+      "decidirIdentidadSesion",
+      "drenarResultadosAsr",
+      "esReentregaDeLaFila",
+      "fronteraPorVoz",
+      "ingestaAsr",
+      "ingestaAudio",
+      "lanzarMedidaSiCorresponde",
+      "partirLocucionPorCambioDeVoz",
+      "reetiquetarConMedidaTardia",
+      "retenerTramo",
+      "sumarAudioAtribuido",
+      "tramoDestinoDeTexto",
+      "tramoSinteticoParaTexto",
+      "tramoVigente",
+      "verificarCambioVoz"
+    ],
+    "motor.ts": [
+      "crearConversacion",
+      "detener",
+      "elegirMotor",
+      "iniciar",
+      "registrarNombre",
+      "suscribir"
+    ],
+    "muestras.ts": [
+      "duracionMsDeMuestras",
+      "retenerCola"
+    ],
+    "pasivo.ts": [
+      "crearResolucionPasiva",
+      "renombrarFilaDeUsuario",
+      "resolverHablante"
+    ],
+    "ports.ts": [
+      "asrEmpujaAudio",
+      "medir",
+      "silenceCloseMs"
+    ],
+    "producto.ts": [
+      "crearMotorConversacionProducto",
+      "encadenar",
+      "traeFinal"
+    ],
+    "revision.ts": [
+      "contarPalabras",
+      "decidirRevision",
+      "unirRevision"
+    ],
+    "sesion.ts": [
+      "contarDescarte",
+      "crearEstadoSesion",
+      "crearSesion",
+      "emitir",
+      "emitirCaja",
+      "exigirActiva",
+      "fraseActual",
+      "registrarMedidaVoz",
+      "reiniciar",
+      "snapshot"
+    ],
+    "texto.ts": [
+      "abrirDesde",
+      "aplicarTextoDeLaAbierta",
+      "cerrarPorFrontera",
+      "crearFlujoTexto",
+      "datosPendiente",
+      "drenarPendientes",
+      "encolar",
+      "finalDentroDeLaAbierta",
+      "finalizarPendientes",
+      "flushPendientes",
+      "idiomaDe",
+      "ordenDePendiente",
+      "procesarResultadoAsr",
+      "sinPrefijoDeLaFilaAnterior"
+    ],
+    "tipos.ts": [],
+    "tramos.ts": [
+      "crearBufferAsr",
+      "crearRegistroTramos"
+    ],
+    "turnSnapshot.js": [
+      "grabarRevisionDeFila",
+      "grabarSnapshotDeTurno",
+      "snapshotDeTurno"
+    ]
+  }
+}

@@ -17,56 +17,19 @@
 import { geminiService } from './gemini';
 import { deepseekService } from './deepseek';
 import type { IAIService } from '../core/ai/IAIService';
+import { logCaughtError } from '../lib/caughtError';
+import { AI_PROVIDER_ROUTES, type AIProvider } from '../core/config/sharedConfig';
+import {
+    getPreferredAIProvider,
+    setPreferredAIProvider,
+} from '../core/ai/providerPreference';
 
-// Storage key for AI provider preference
-const AI_PROVIDER_KEY = 'flu-ai-provider';
+// Re-export del tipo canónico (fuente única: sharedConfig.ts) para no romper
+// a los importadores históricos de aiServiceFactory.
+export type { AIProvider };
 
-// Available AI providers
-// 'openrouter' = default: OpenAI-compatible gateway → Google Gemini 2.5 Flash Lite
-// 'gemini'     = Google Gemini nativo (Generative Language API)
-// 'local'      = any OpenAI-compatible local endpoint (Ollama, LM Studio, localhost)
-//                that routes text operations through the same text engine (F1/F2/F3).
-// 'deepseek'   = legacy alias (mismo motor de texto; se conserva por compatibilidad)
-export type AIProvider = 'openrouter' | 'gemini' | 'deepseek' | 'local';
-
-/**
- * Get the preferred AI provider from configuration.
- * Priority:
- * 1. localStorage preference
- * 2. Environment variable (VITE_PREFERRED_AI_PROVIDER)
- * 3. Default to 'openrouter' (Gemini 2.5 Flash Lite via OpenRouter)
- */
-export function getPreferredAIProvider(): AIProvider {
-    try {
-        // Check localStorage
-        const stored = localStorage.getItem(AI_PROVIDER_KEY);
-        if (stored === 'openrouter' || stored === 'gemini' || stored === 'deepseek' || stored === 'local') {
-            return stored;
-        }
-    } catch {
-        // ignore
-    }
-
-    // Check environment variable
-    const envProvider = import.meta.env.VITE_PREFERRED_AI_PROVIDER;
-    if (envProvider === 'openrouter' || envProvider === 'gemini' || envProvider === 'deepseek' || envProvider === 'local') {
-        return envProvider;
-    }
-
-    // Default: Gemini 2.5 Flash Lite via OpenRouter (motor de texto único)
-    return 'openrouter';
-}
-
-/**
- * Set the preferred AI provider.
- */
-export function setPreferredAIProvider(provider: AIProvider): void {
-    try {
-        localStorage.setItem(AI_PROVIDER_KEY, provider);
-    } catch {
-        // ignore
-    }
-}
+// Re-export del dueño único de la preferencia del proveedor.
+export { getPreferredAIProvider, setPreferredAIProvider };
 
 /**
  * Get the appropriate AI service instance based on configuration.
@@ -77,22 +40,12 @@ export function setPreferredAIProvider(provider: AIProvider): void {
  */
 export function getAIService(): IAIService {
     const provider = getPreferredAIProvider();
-    
-    switch (provider) {
-        case 'gemini':
-            // Gemini nativo (solo si el usuario elige la API directa de Google)
-            return geminiService;
-        case 'openrouter':
-        case 'deepseek':
-        case 'local':
-            // Motor de texto OpenAI-compatible (OpenRouter → Gemini 2.5 Flash Lite
-            // por defecto; 'local' enruta a Ollama / LM Studio / localhost).
-            // 'deepseek' es un alias legacy del mismo motor.
-            return createIntelligentAIService();
-        default:
-            // Fallback al motor de texto por defecto (provider siempre resuelve a un valor válido)
-            return createIntelligentAIService();
-    }
+
+    // Ruta de despacho declarada en config (AI_PROVIDER_ROUTES); el motor de
+    // texto OpenAI-compatible cubre openrouter/deepseek/local, y 'native'
+    // resuelve a Gemini nativo (API directa de Google).
+    const route = AI_PROVIDER_ROUTES[provider];
+    return route === 'native' ? geminiService : createIntelligentAIService();
 }
 
 /**
@@ -110,8 +63,11 @@ function createIntelligentAIService(): IAIService {
         generateResponse: primaryService.generateResponse.bind(primaryService),
         generateParticipantEvaluation: primaryService.generateParticipantEvaluation.bind(primaryService),
         generateConversationSummary: primaryService.generateConversationSummary.bind(primaryService),
-        generateFluContract: primaryService.generateFluContract.bind(primaryService),
         generateVisionAnalysis: primaryService.generateVisionAnalysis.bind(primaryService),
+
+        // Capacidad del SISTEMA (no del adapter): el gate de texto pregunta por el
+        // proveedor activo. Se delega para que la respuesta sea unica.
+        canUseTextBackend: primaryService.canUseTextBackend.bind(primaryService),
         
         // F1/F2/F3 — text-only operations (text engine)
         analyzeDocument: primaryService.analyzeDocument.bind(primaryService),
@@ -124,7 +80,7 @@ function createIntelligentAIService(): IAIService {
             try {
                 return await fallbackService.generateWorkspaceImage(prompt, tipo, language);
             } catch (error) {
-                console.error('[Intelligent AI Service] Error generating workspace image:', error);
+                logCaughtError('[Intelligent AI Service] Error generating workspace image:', error);
                 // Return a graceful fallback instead of throwing
                 return {
                     image_url: '',
@@ -137,35 +93,6 @@ function createIntelligentAIService(): IAIService {
                 };
             }
         },
-    };
-}
-
-/**
- * Get statistics about AI providers for comparison.
- */
-export function getAIProviderStats() {
-    return {
-        openrouter: {
-            name: 'Gemini 2.5 Flash Lite (OpenRouter)',
-            costPerMillionTokens: 0.30,
-            speedTokensPerSec: '40-60',
-            co2Emissions: 'Low',
-            spanishSupport: 'Excellent'
-        },
-        gemini: {
-            name: 'Google Gemini (nativo)',
-            costPerMillionTokens: 0.50,
-            speedTokensPerSec: '15-30',
-            co2Emissions: 'High',
-            spanishSupport: 'Good'
-        },
-        deepseek: {
-            name: 'DeepSeek-v3.2 (legacy)',
-            costPerMillionTokens: 0.14,
-            speedTokensPerSec: '40-60',
-            co2Emissions: 'Low (60% less)',
-            spanishSupport: 'Excellent'
-        }
     };
 }
 

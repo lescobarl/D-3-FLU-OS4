@@ -1,0 +1,576 @@
+{
+  "_nota": "Linea base de rutas dobles en codigo. Cada caso declara su dueno unico, el patron que lo detecta, los ficheros permitidos y el techo. El techo solo baja: si un fichero deja de casar, se borra aqui en el mismo cambio. Un fichero nuevo que case es ROJO.",
+  "minSources": 400,
+  "cases": [
+    {
+      "id": "apertura-locucion",
+      "owner": "src/voice/conversation/cierre.ts",
+      "description": "El ensamblado de DatosApertura vive en el dueno; cada flujo (texto, ingesta) tiene UN unico sitio que lo pide.",
+      "pattern": "abrirLocucion\\(\\s*\\{",
+      "roots": [
+        "src/voice/conversation"
+      ],
+      "kind": "sites",
+      "allowed": {
+        "src/voice/conversation/texto.ts": 1,
+        "src/voice/conversation/ingesta.ts": 1
+      },
+      "goal": 2
+    },
+    {
+      "id": "hooks-lista",
+      "owner": "src/hooks/pendingListCore.ts",
+      "description": "La mecanica de lista pendiente (estado, orden, restantes) tiene un solo dueno.",
+      "pattern": "setRemainingCount\\(",
+      "roots": [
+        "src/hooks"
+      ],
+      "kind": "files",
+      "allowed": {
+        "src/hooks/pendingListCore.ts": 1
+      },
+      "goal": 1
+    },
+    {
+      "id": "panel-analisis",
+      "owner": "src/components/AnalysisPanelShell.tsx",
+      "description": "El bloque de error/analizando de un panel de analisis se renderiza en un solo dueno.",
+      "pattern": "import[^\\n]*AnalysisErrorBlock",
+      "roots": [
+        "src/components"
+      ],
+      "kind": "files",
+      "allowed": {
+        "src/components/AnalysisPanelShell.tsx": 1
+      },
+      "goal": 1
+    },
+    {
+      "id": "personalizacion",
+      "owner": "src/core/ai/personalization.ts",
+      "description": "traits/tone/explanationLevel se traducen a payload/prompt en un solo dueno.",
+      "pattern": "options\\.(?:traits|tone|explanationLevel)",
+      "roots": [
+        "src"
+      ],
+      "kind": "files",
+      "allowed": {
+        "src/core/ai/personalization.ts": 1
+      },
+      "goal": 1
+    },
+    {
+      "id": "panel-catalogo",
+      "owner": "src/hooks/useCatalogPanel.ts",
+      "description": "El estado de edicion de un catalogo (create/edit/submit/cancel) tiene un solo dueno.",
+      "pattern": "\\[editor, setEditor\\]\\s*=\\s*useState",
+      "roots": [
+        "src"
+      ],
+      "kind": "files",
+      "allowed": {
+        "src/hooks/useCatalogPanel.ts": 1
+      },
+      "goal": 1
+    },
+    {
+      "id": "server-json-sender",
+      "owner": "src/server/httpJson.ts",
+      "description": "El respondedor JSON de un proxy se crea en httpJson; ningun proxy reimporta sendJsonShared.",
+      "pattern": "sendJsonShared\\(",
+      "roots": [
+        "src/server"
+      ],
+      "kind": "files",
+      "allowed": {},
+      "goal": 0
+    },
+    {
+      "id": "lectura-viva",
+      "owner": "src/core/db/recordCopy.ts",
+      "description": "El patron get + descartar deleted + copiar vive en recordCopy.",
+      "pattern": "isLiveRecord\\(row\\) \\? copyRecord\\(row",
+      "roots": [
+        "src"
+      ],
+      "kind": "files",
+      "allowed": {
+        "src/core/db/recordCopy.ts": 1
+      },
+      "goal": 1
+    },
+    {
+      "id": "juego-estado-barajado",
+      "owner": "src/core/games/gameUtils.ts",
+      "description": "El estado barajado inicial de un motor se construye con el helper del dueno.",
+      "pattern": "buildShuffledState\\(\\{",
+      "roots": [
+        "src/core/games"
+      ],
+      "kind": "files",
+      "allowed": {
+        "src/core/games/gameUtils.ts": 1
+      },
+      "goal": 1
+    },
+    {
+      "id": "health-monitor-cierre",
+      "owner": "src/core/autonomy/healthMonitor.ts",
+      "description": "El cierre de un chequeo de salud se construye en componentHealth.",
+      "pattern": "determineComponentStatus\\(responseTime, hasError, thresholds\\)",
+      "roots": [
+        "src/core/autonomy"
+      ],
+      "kind": "sites",
+      "allowed": {
+        "src/core/autonomy/healthMonitor.ts": 1
+      },
+      "goal": 1
+    },
+    {
+      "id": "auto-recovery-cierre",
+      "owner": "src/core/autonomy/autoRecovery.ts",
+      "description": "El resultado de una accion de recuperacion se construye en finishRecovery.",
+      "pattern": "recordExecution\\(incident\\.id, ",
+      "roots": [
+        "src/core/autonomy"
+      ],
+      "kind": "sites",
+      "allowed": {
+        "src/core/autonomy/autoRecovery.ts": 1
+      },
+      "goal": 1
+    },
+    {
+      "id": "catalogo-proyeccion",
+      "owner": "src/core/catalogs/catalogRegistry.ts",
+      "description": "La proyeccion fila->CatalogRecord vive en catalogRecordFromRow.",
+      "pattern": "const toCatalogRecord = ",
+      "roots": [
+        "src"
+      ],
+      "kind": "files",
+      "allowed": {},
+      "goal": 0
+    },
+    {
+      "id": "nav-registro-medios",
+      "owner": "src/hooks/useNavigationCommands.ts",
+      "description": "Las ordenes de medios registran por registrarYHablarAsync, no con un log inline.",
+      "pattern": "auditLog\\.logEvent\\('command:(?:analizar_documento|analizar_app|generar_documento|generar_video)'",
+      "roots": [
+        "src/hooks"
+      ],
+      "kind": "sites",
+      "allowed": {},
+      "goal": 0
+    },
+    {
+      "id": "frontera-dia",
+      "owner": "src/lib/dayBoundary.ts",
+      "description": "La frontera de dia local tiene un solo dueno.",
+      "pattern": "(?:function|const) startOfDay\\b",
+      "roots": [
+        "src"
+      ],
+      "kind": "files",
+      "allowed": {
+        "src/lib/dayBoundary.ts": 1
+      },
+      "goal": 1
+    },
+    {
+      "id": "etiqueta-idioma",
+      "owner": "src/lib/languageLabel.ts",
+      "description": "La etiqueta de un codigo de idioma tiene un solo dueno.",
+      "pattern": "(?:function|const) languageLabel\\b",
+      "roots": [
+        "src"
+      ],
+      "kind": "files",
+      "allowed": {
+        "src/lib/languageLabel.ts": 1
+      },
+      "goal": 1
+    },
+    {
+      "id": "normalizacion-lookup",
+      "owner": "src/lib/lookupText.ts",
+      "description": "La normalizacion lower/collapse/trim para comparar nombres tiene un solo dueno.",
+      "pattern": "String\\([^)]*\\)\\.toLowerCase\\(\\)\\.replace\\(/\\\\s\\+/g, ' '\\)\\.trim\\(\\)",
+      "roots": [
+        "src"
+      ],
+      "kind": "files",
+      "allowed": {},
+      "goal": 0
+    },
+    {
+      "id": "mutacion-contada",
+      "owner": "src/hooks/pendingListCore.ts",
+      "description": "El patron contar-y-refrescar de las listas tiene un solo dueno.",
+      "pattern": "if \\(count > 0\\) await refresh\\(\\)",
+      "roots": [
+        "src/hooks"
+      ],
+      "kind": "files",
+      "allowed": {
+        "src/hooks/pendingListCore.ts": 1
+      },
+      "goal": 1
+    },
+    {
+      "id": "emocion-resolucion",
+      "owner": "src/core/anim/emotionEngine.ts",
+      "description": "La resolucion de expresion por candidatos tiene un solo dueno.",
+      "pattern": "pickBestExpressionForPersonality\\(candidates, ",
+      "roots": [
+        "src/core/anim"
+      ],
+      "kind": "sites",
+      "allowed": {
+        "src/core/anim/emotionEngine.ts": 1
+      },
+      "goal": 1
+    },
+    {
+      "id": "avatar-alternativas",
+      "owner": "src/hooks/useAvatarVoiceSync.ts",
+      "description": "Las alternativas por grupo se derivan con alternativesFor, no inline.",
+      "pattern": "getGroupExpressions\\('(?:listening|speaking|participant)'\\)",
+      "roots": [
+        "src"
+      ],
+      "kind": "sites",
+      "allowed": {},
+      "goal": 0
+    },
+    {
+      "id": "gemini-transporte",
+      "owner": "src/services/gemini.ts",
+      "description": "El manejo ok/JSON del proxy vive en el dueno de transporte de cada adaptador.",
+      "pattern": "if \\(!response\\.ok\\)",
+      "roots": [
+        "src/services"
+      ],
+      "kind": "sites",
+      "allowed": {
+        "src/services/gemini.ts": 1,
+        "src/services/deepseek.ts": 1
+      },
+      "goal": 2
+    },
+    {
+      "id": "search-provider-map",
+      "owner": "src/core/search/searchSession.ts",
+      "description": "El bucle de normalizacion de proveedores vive en mapProviderResults.",
+      "pattern": "const mapped = map\\(item as Record<string, unknown>\\)",
+      "roots": [
+        "src/core/search"
+      ],
+      "kind": "files",
+      "allowed": {
+        "src/core/search/searchSession.ts": 1
+      },
+      "goal": 1
+    },
+    {
+      "id": "animator-main-action",
+      "owner": "src/avatar/model/bunnyAnimator.ts",
+      "description": "La accion principal del avatar se prepara en prepareMainAction.",
+      "pattern": "const mainAction = this\\.mixer\\.clipAction",
+      "roots": [
+        "src/avatar"
+      ],
+      "kind": "sites",
+      "allowed": {
+        "src/avatar/model/bunnyAnimator.ts": 1
+      },
+      "goal": 1
+    },
+    {
+      "id": "borrado-logico",
+      "owner": "src/core/db/recordCopy.ts",
+      "description": "El predicado de fila viva (sync.deleted) tiene un solo dueno; los lectores lo consumen.",
+      "pattern": "\\.sync\\?\\.deleted",
+      "roots": [
+        "src"
+      ],
+      "kind": "sites",
+      "allowed": {
+        "src/core/db/recordCopy.ts": 1
+      },
+      "goal": 1
+    },
+    {
+      "id": "perfil-participante",
+      "owner": "src/lib/profileLookup.ts",
+      "description": "La busqueda del perfil de un participante tiene un solo dueno.",
+      "pattern": "profiles\\.find\\(\\(profile\\) => profile\\.participantId === participantId\\)",
+      "roots": [
+        "src/components",
+        "src/lib"
+      ],
+      "kind": "files",
+      "allowed": {
+        "src/lib/profileLookup.ts": 1
+      },
+      "goal": 1
+    },
+    {
+      "id": "etiqueta-fuente",
+      "owner": "src/lib/sourceLabel.ts",
+      "description": "La etiqueta de una fuente de resultados tiene un solo dueno.",
+      "pattern": "function sourceLabel(?:For)?\\(",
+      "roots": [
+        "src/components",
+        "src/lib"
+      ],
+      "kind": "files",
+      "allowed": {
+        "src/lib/sourceLabel.ts": 1
+      },
+      "goal": 1
+    },
+    {
+      "id": "etiquetas-lista",
+      "owner": "src/hooks/pendingListCore.ts",
+      "description": "La higiene de etiquetas de una lista tiene un solo dueno.",
+      "pattern": "map\\(\\(l\\) => l\\.trim\\(\\)\\)\\.filter\\(Boolean\\)",
+      "roots": [
+        "src/hooks"
+      ],
+      "kind": "files",
+      "allowed": {},
+      "goal": 0
+    },
+    {
+      "id": "lectura-lista-viva",
+      "owner": "src/core/db/recordCopy.ts",
+      "description": "La lectura de filas vivas de una lista vive en listAliveRecords; solo las mutaciones leen la tabla cruda.",
+      "pattern": "const all = await db\\.toArray\\(\\)",
+      "roots": [
+        "src/core/notes",
+        "src/core/reminders"
+      ],
+      "kind": "sites",
+      "allowed": {
+        "src/core/notes/notesService.ts": 1,
+        "src/core/reminders/shoppingService.ts": 1
+      },
+      "goal": 2
+    },
+    {
+      "id": "lista-filtrada",
+      "owner": "src/core/db/recordCopy.ts",
+      "description": "El lector filtrado de una lista viva se crea con createFilteredAliveList; ningun servicio reimplementa el cuerpo.",
+      "pattern": "const listFiltered = async",
+      "roots": [
+        "src/core/notes",
+        "src/core/reminders"
+      ],
+      "kind": "files",
+      "allowed": {},
+      "goal": 0
+    },
+    {
+      "id": "lista-restantes",
+      "owner": "src/core/db/recordCopy.ts",
+      "description": "El recuento de pendientes se calcula sobre listAliveRecords; ningun servicio lo reimplementa con un 'all' crudo.",
+      "pattern": "return (?:notesRemaining|itemsRemaining)\\(all\\)",
+      "roots": [
+        "src/core/notes",
+        "src/core/reminders"
+      ],
+      "kind": "files",
+      "allowed": {},
+      "goal": 0
+    },
+    {
+      "id": "panel-ajustes",
+      "owner": "src/components/SettingsPanelShell.tsx",
+      "description": "El contenedor plegable de ajustes se usa desde su dueno; ningun panel repite el details.",
+      "pattern": "<details className=.flu-settings-image-config",
+      "roots": [
+        "src/components"
+      ],
+      "kind": "sites",
+      "allowed": {
+        "src/components/SettingsPanelShell.tsx": 1
+      },
+      "goal": 1
+    },
+    {
+      "id": "accion-refresco-ok",
+      "owner": "src/hooks/refreshOnOk.ts",
+      "description": "El wrapper de accion -> refresh tiene un solo dueno (refreshIf).",
+      "pattern": "if \\(shouldRefresh\\(value\\)\\) await refresh\\(\\)",
+      "roots": [
+        "src/hooks"
+      ],
+      "kind": "sites",
+      "allowed": {
+        "src/hooks/refreshOnOk.ts": 1
+      },
+      "goal": 1
+    },
+    {
+      "id": "cierre-registro",
+      "owner": "src/voice/conversation/cierre.ts",
+      "description": "La emision y registro del cierre descartado tiene un solo dueno local.",
+      "pattern": "registro\\.registrar\\('conversacion\\.locucion\\.cerrada'",
+      "roots": [
+        "src/voice/conversation"
+      ],
+      "kind": "sites",
+      "allowed": {
+        "src/voice/conversation/cierre.ts": 5
+      },
+      "goal": 1
+    },
+    {
+      "id": "avatar-log",
+      "owner": "src/avatar/store/bunnyStore.ts",
+      "description": "El append de log del avatar se hace con el helper unico.",
+      "pattern": "state\\.logsEnabled\\s*\\r?\\n?\\s*\\?",
+      "roots": [
+        "src/avatar"
+      ],
+      "kind": "sites",
+      "allowed": {
+        "src/avatar/store/bunnyStore.ts": 1
+      },
+      "goal": 1
+    },
+    {
+      "id": "catalogo-guardado",
+      "owner": "src/components/catalogPanelEditors.ts",
+      "description": "El guardado editor+payload+registro se crea con catalogPanelSave.",
+      "pattern": "submitCatalogPanel\\(\\{",
+      "roots": ["src/components"],
+      "kind": "sites",
+      "allowed": {
+        "src/components/catalogPanelEditors.ts": 1
+      },
+      "goal": 1
+    },
+    {
+      "id": "catalogo-editor-props",
+      "owner": "src/components/catalogPanelEditors.ts",
+      "description": "Las props comunes del formulario de catalogo se crean con catalogEditorProps.",
+      "pattern": "submitLabel=\\{\\s*\\r?\\n?\\s*editor\\.mode === 'create'",
+      "roots": ["src/components"],
+      "kind": "sites",
+      "allowed": {},
+      "goal": 0
+    },
+    {
+      "id": "catalogo-acciones",
+      "owner": "src/components/CatalogCardActions.tsx",
+      "description": "Las acciones de una tarjeta de catalogo viven en CatalogCardActions.",
+      "pattern": "data-testid=\\{`(?:ambiente|paleta)-(?:clone|edit|remove)-",
+      "roots": ["src/components"],
+      "kind": "sites",
+      "allowed": {},
+      "goal": 0
+    },
+    {
+      "id": "catalogo-tarjeta-owner",
+      "owner": "src/components/CatalogCardShell.tsx",
+      "description": "El articulo de la tarjeta y su vista previa se renderizan en CatalogCardShell.",
+      "pattern": "data-testid=\\{`(?:ambiente|paleta)-card-",
+      "roots": ["src/components"],
+      "kind": "sites",
+      "allowed": {},
+      "goal": 0
+    },
+    {
+      "id": "catalogo-preview-owner",
+      "owner": "src/components/CatalogCardShell.tsx",
+      "description": "La vista previa de la tarjeta se renderiza con la clase del dueno.",
+      "pattern": "flu-(?:ambientes|paletas)-card__preview",
+      "roots": ["src/components"],
+      "kind": "sites",
+      "allowed": {},
+      "goal": 0
+    },
+    {
+      "id": "config-numerico",
+      "owner": "src/core/games/gameUtils.ts",
+      "description": "La lectura numerica de config con clamp vive en readNumberCfg/readLongMaxCfg.",
+      "pattern": "clamp\\(Number\\(cfg\\?\\.",
+      "roots": ["src/core/games"],
+      "kind": "sites",
+      "allowed": {},
+      "goal": 0
+    },
+    {
+      "id": "hora-hhmm",
+      "owner": "src/lib/timeOfDay.ts",
+      "description": "El parseo de HH:MM tiene un solo dueno; agenda y DND delegan.",
+      "pattern": "TIME_PATTERN\\.exec|\\^\\(\\[01\\]\\?\\\\d\\|2\\[0-3\\]\\):",
+      "roots": ["src"],
+      "kind": "files",
+      "allowed": {
+        "src/lib/timeOfDay.ts": 1
+      },
+      "goal": 1
+    },
+    {
+      "id": "tarjeta-multimedia",
+      "owner": "src/components/MediaResultItem.tsx",
+      "description": "El enlace y la tarjeta de un resultado multimedia viven en MediaResultItem.",
+      "pattern": "className=\"workspace-search__(?:grid|video)-link\"",
+      "roots": ["src/components"],
+      "kind": "sites",
+      "allowed": {},
+      "goal": 0
+    },
+    {
+      "id": "analisis-errores",
+      "owner": "src/components/AnalysisErrorList.tsx",
+      "description": "La lista de errores de un analisis vive en AnalysisErrorList.",
+      "pattern": "document-analysis__error-list",
+      "roots": ["src/components"],
+      "kind": "sites",
+      "allowed": {
+        "src/components/AnalysisErrorList.tsx": 1
+      },
+      "goal": 1
+    },
+    {
+      "id": "analisis-seccion",
+      "owner": "src/components/AnalysisSection.tsx",
+      "description": "La seccion titulada de un analisis vive en AnalysisSection.",
+      "pattern": "className=\"document-analysis__errors\"",
+      "roots": ["src/components"],
+      "kind": "sites",
+      "allowed": {
+        "src/components/AnalysisSection.tsx": 1
+      },
+      "goal": 1
+    },
+    {
+      "id": "form-catalogo-hook",
+      "owner": "src/hooks/useCatalogEditorForm.ts",
+      "description": "El estado y envio del editor de catalogo viven en useCatalogEditorForm.",
+      "pattern": "submitCatalogEditor\\(event,",
+      "roots": ["src/components", "src/hooks"],
+      "kind": "sites",
+      "allowed": {
+        "src/hooks/useCatalogEditorForm.ts": 1
+      },
+      "goal": 1
+    },
+    {
+      "id": "form-nombre-slug",
+      "owner": "src/components/CatalogEditorNameField.tsx",
+      "description": "El campo nombre + slug de un editor de catalogo vive en CatalogEditorNameField.",
+      "pattern": "<code className=\"flu-(?:ambientes|paletas)-editor__slug\"",
+      "roots": ["src/components"],
+      "kind": "sites",
+      "allowed": {},
+      "goal": 0
+    }
+  ]
+}

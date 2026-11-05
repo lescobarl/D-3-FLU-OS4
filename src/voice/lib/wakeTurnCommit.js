@@ -3,11 +3,13 @@
  * Ingress, hook y comandos delegan aquí — una sola ruta, sin duplicar split/commit.
  */
 import { FLU_CONFIG } from './fluConfig.js'
+import { resolveEchoSources } from './echoPolicy.js'
+import { resolveWakeWords } from './wakeWords.js'
 import {
   cleanForSpeech,
   splitTranscriptAtWakeWord,
   peelWakeQuestionEcho,
-  resolveFinalConversationAction,
+  planConversationDispatch,
   resolveCommandConversationLogText,
 } from './audioMath.js'
 
@@ -16,7 +18,10 @@ import {
  * @returns {string[]}
  */
 export function getWakeWords(config = FLU_CONFIG) {
-  return config.voiceCommands?.wakeWords || []
+  // La regla de respaldo (lista de Ajustes -> default de FLU_CONFIG) vive en UN
+  // solo sitio, `resolveWakeWords`: antes estaba reimplementada aqui y en el hook,
+  // asi que una copia podia divergir de la otra sin que nadie lo notara.
+  return resolveWakeWords(config.voiceCommands?.wakeWords)
 }
 
 /**
@@ -32,7 +37,7 @@ export function getWakeWords(config = FLU_CONFIG) {
  *   afterWake: string,
  *   question: string,
  *   commandLogText: string,
- *   action: ReturnType<typeof resolveFinalConversationAction>,
+ *   action: ReturnType<typeof planConversationDispatch>['action'],
  *   split: ReturnType<typeof splitTranscriptAtWakeWord>,
  *   commitCapture: string,
  *   fluTail: { fullCapture: string, action: object } | null,
@@ -60,12 +65,14 @@ export function analyzeWakeTurn(capture = '', { lastCommitted = '', wakeWords = 
   const split = splitTranscriptAtWakeWord(cleaned, wakeWords)
   const passiveOnly = cleanForSpeech(split.beforeWake || '')
   const hasInlineBoundary = Boolean(split.wakeWordMatched && passiveOnly)
-  const echoSources = [passiveOnly, cleanForSpeech(lastCommitted)].filter(Boolean)
+  // B2: la fuente del eco es el texto REAL de FLU (no la ultima fila del log de usuario),
+  // y solo si su ventana de eco sigue abierta (anclada al fin de su habla).
+  const echoSources = resolveEchoSources({ passiveText: passiveOnly })
   const afterWakeRaw = cleanForSpeech(split.afterWake || split.commandText || '')
   const afterWake = peelWakeQuestionEcho(afterWakeRaw, echoSources)
-  const action = resolveFinalConversationAction(cleaned, FLU_CONFIG.voiceCommands, {
+  const action = planConversationDispatch(cleaned, FLU_CONFIG.voiceCommands, {
     lastCommitted: passiveOnly || cleanForSpeech(lastCommitted),
-  })
+  }).action
   const commandLogText = resolveCommandConversationLogText(cleaned, split, passiveOnly)
   const question =
     action.kind === 'flu'
@@ -93,74 +100,53 @@ export function analyzeWakeTurn(capture = '', { lastCommitted = '', wakeWords = 
 }
 
 /**
- * Parte pasiva → scheduleTurnCommit; cola flu → tryDispatch (wake-tail).
+ * ¿Hay que EXIGIR la wake word en este punto de la escucha? DUENO UNICO de la
+ * decision: antes estaba reimplementada en TRES sitios (dos identicos en el hook y
+ * uno reducido en el commit del stream), que podian divergir. `conversationActive`
+ * es el contexto de escucha; con la conversacion INACTIVA siempre se exige.
  *
- * @param {object} ctx — contexto ingress (scheduleTurnCommit, tryDispatch, logRowsTextRef)
- * @param {string} capture
- * @param {object} [commitOpts]
- * @returns {{ handled: boolean, reason?: string, capture?: string, analysis?: object }}
+ * @param {boolean} conversationActive
+ * @param {import('./fluConfig.js').typeof FLU_CONFIG} [config]
+ * @returns {boolean}
  */
-export function applyWakeTurnCommit(ctx, capture, commitOpts = {}) {
-  const lastCommitted = ctx.logRowsTextRef?.current?.at(-1) || ''
-  const analysis = analyzeWakeTurn(capture, { lastCommitted })
-
-  if (!analysis.hasInlineBoundary) {
-    return { handled: false, reason: 'no-inline-wake', capture: analysis.cleaned, analysis }
-  }
-
-  const { passiveOnly, afterWake, action } = analysis
-  const baseOpts = {
-    turnCommit: true,
-    turnBoundary: true,
-    atTurnBoundary: true,
-    freshUtterance: true,
-    ...commitOpts,
-  }
-
-  ctx.scheduleTurnCommit?.({
-    ...baseOpts,
-    capture: passiveOnly,
-    utterance: passiveOnly,
-    forceNewRow: commitOpts.forceNewRow,
-  })
-
-  if (afterWake && action.kind === 'flu') {
-    ctx.tryDispatch?.(analysis.cleaned, {
-      interim: false,
-      source: `${commitOpts.source || 'commit'}-wake-tail`,
-    })
-    return { handled: true, reason: 'wake-split-flu', capture: analysis.cleaned, analysis }
-  }
-
-  if (afterWake) {
-    ctx.scheduleTurnCommit?.({
-      ...baseOpts,
-      capture: afterWake,
-      utterance: afterWake,
-      forceNewRow: true,
-    })
-  }
-
-  return { handled: true, reason: 'wake-split-passive', capture: analysis.cleaned, analysis }
+export function requiresWakeWord(conversationActive = false, config = FLU_CONFIG) {
+  return config.voiceCommands?.requireWakeAlways !== false || !conversationActive
 }
-
-export { applyWakeTurnCommit as commitCaptureRespectingWakeBoundary }
 
 /**
  * Guardia de commit: separa pasivo TV de cola flu si la captura aún llega mezclada.
  *
+ * El corte en la wake SOLO procede cuando hay COLA FLU que despachar (`fluTail`): esa
+ * cola se entrega a la IA por su propia ruta y no se pierde. En un COMANDO no hay cola
+ * flu: el texto tras la wake ES la orden y recortarlo la borraba de la transcripcion y
+ * de la fila (medido 2026-10-19 21:20:48: "Okay flu soy Luis" cortado a "digo El
+ * Comando para que le ponga nombre"). Sin cola flu la captura va COMPLETA.
+ *
+ * `wakeWordMatched` viaja con el resultado: es el MISMO analisis del turno
+ * (no un segundo criterio) el que decide si la captura lleva la wake word, que es
+ * lo que separa un turno de usuario del ruido de fondo en conversacion activa.
+ *
  * @param {string} capture
  * @param {string} [lastCommitted]
- * @returns {{ capture: string, fluTail: { fullCapture: string, action: object } | null }}
+ * @returns {{ capture: string, fluTail: { fullCapture: string, action: object } | null, wakeWordMatched: boolean }}
  */
 export function resolveInlineWakeAtCommit(capture = '', lastCommitted = '') {
   const wakeAnalysis = analyzeWakeTurn(capture, { lastCommitted })
   if (
     wakeAnalysis.hasInlineBoundary &&
     wakeAnalysis.passiveOnly &&
-    wakeAnalysis.passiveOnly.length < wakeAnalysis.cleaned.length
+    wakeAnalysis.passiveOnly.length < wakeAnalysis.cleaned.length &&
+    wakeAnalysis.fluTail
   ) {
-    return { capture: wakeAnalysis.passiveOnly, fluTail: wakeAnalysis.fluTail }
+    return {
+      capture: wakeAnalysis.passiveOnly,
+      fluTail: wakeAnalysis.fluTail,
+      wakeWordMatched: wakeAnalysis.wakeWordMatched,
+    }
   }
-  return { capture: cleanForSpeech(capture), fluTail: null }
+  return {
+    capture: cleanForSpeech(capture),
+    fluTail: null,
+    wakeWordMatched: wakeAnalysis.wakeWordMatched,
+  }
 }

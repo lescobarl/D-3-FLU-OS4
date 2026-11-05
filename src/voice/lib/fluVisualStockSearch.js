@@ -3,35 +3,31 @@
  */
 import { VISUAL_CONFIG } from './visualConfig.js'
 import { getVisualPipelineConfig, resolveVisualBriefCore } from './fluVisualPipeline.js'
-
-function normalizeText(value = '') {
-  return String(value || '')
-    .replace(/\s+/g, ' ')
-    .trim()
-}
+import { fetchTextEngine } from '../../core/ai/httpClient'
+import { normalizeSpaces } from '../../lib/textUtils'
+import { logCaughtError } from '../../lib/caughtError';
+import { defaultLanguage } from './languageDefault.ts'
 
 async function fetchJsonWithTimeout(url, timeoutMs) {
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), timeoutMs)
   try {
-    const response = await fetch(url, {
-      signal: controller.signal,
-      headers: { Accept: 'application/json' },
-    })
+    const response = await fetchTextEngine(
+      url,
+      { headers: { Accept: 'application/json' } },
+      timeoutMs,
+    )
     if (!response.ok) return null
     return await response.json()
-  } catch {
+  } catch (e) {
+        logCaughtError('[catch] src/voice/lib/fluVisualStockSearch.js', e);
     return null
-  } finally {
-    clearTimeout(timer)
   }
 }
 
 function scoreOpenverseResult(result = {}, brief = '') {
-  const title = normalizeText(result.title || '').toLowerCase()
-  const creator = normalizeText(result.creator || '').toLowerCase()
+  const title = normalizeSpaces(result.title || '').toLowerCase()
+  const creator = normalizeSpaces(result.creator || '').toLowerCase()
   const haystack = `${title} ${creator}`
-  const briefNorm = normalizeText(brief).toLowerCase()
+  const briefNorm = normalizeSpaces(brief).toLowerCase()
   const briefTokens = briefNorm.split(/\s+/).filter((token) => token.length > 2)
 
   let score = 0
@@ -52,7 +48,7 @@ function scoreOpenverseResult(result = {}, brief = '') {
  * @param {object} workspace
  * @param {string} language
  */
-export async function resolveOpenverseStockArtifact(workspace = {}, language = 'es') {
+export async function resolveOpenverseStockArtifact(workspace = {}, language = defaultLanguage()) {
   const c = getVisualPipelineConfig()
   if (!c.stockSearchEnabled) return null
 

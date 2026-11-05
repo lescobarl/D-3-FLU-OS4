@@ -14,23 +14,47 @@
 // ============================================================
 
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { STORAGE_KEYS, UI_DEFAULTS, resolveTextApiKey } from '../core/config/appConfig';
-import { FLU_CONFIG } from '../voice/lib/fluConfig';
+import { STORAGE_KEYS, UI_DEFAULTS, resolveTextApiKey, resolveDedicatedGeminiApiKey, resolveFalVideoModel } from '../core/config/appConfig';
+import { FLU_CONFIG } from '../voice/api/config'
+import { getSpeechVoices, subscribeSpeechVoices } from '../voice/api/speech';
 import { useAuditLog } from './useAuditLog';
+import { logCaughtError } from '../lib/caughtError';
+import { localGet, localKeys, localRemove, localSetSafe } from '../core/storage/localStore';
+import { UI_LANGUAGES } from '../core/config/voiceConfigCatalog';
+import { useIntegrationStore } from '../store/integrationStore';
 
 // ============================================================
 // Tipos
 // ============================================================
+
+/** Idioma de UI: derivado de la lista UNICA (`UI_LANGUAGES`), no re-enumerado. */
+export type UiLanguage = (typeof UI_LANGUAGES)[number];
+
+/**
+ * Normaliza el idioma guardado contra la lista unica de idiomas.
+ * @param value valor de localStorage (o undefined)
+ * @returns idioma valido de `UI_LANGUAGES`, o el default de UI
+ */
+function normalizeUiLanguage(value?: string | null): UiLanguage {
+    const candidate = String(value || '');
+    if ((UI_LANGUAGES as readonly string[]).includes(candidate)) return candidate as UiLanguage;
+    return UI_DEFAULTS.LANGUAGE as UiLanguage;
+}
 
 export interface ConfigPersistence {
     // Text (Gemini) Config
     apiKey: string;
     textModel: string;
     textApiUrl: string;
+    // Gemini nativo (paso 5): clave dedicada para el fallback de imagen
+    geminiApiKey: string;
     // Image (Pollinations) Config
     imageApiKey: string;
     imageModel: string;
     imageApiUrl: string;
+    // Video (fal.ai) — key para video real text-to-video
+    falApiKey: string;
+    falVideoModel: string;
     // OCR Config (local Tesseract default + endpoint remoto opcional)
     ocrApiKey: string;
     ocrModel: string;
@@ -47,9 +71,12 @@ export interface ConfigPersistence {
     handleTextApiKeyCommit: (key: string) => void;
     handleTextModelCommit: (model: string) => void;
     handleTextApiUrlCommit: (url: string) => void;
+    handleGeminiApiKeyCommit: (key: string) => void;
     handleImageApiKeyCommit: (key: string) => void;
     handleImageModelCommit: (model: string) => void;
     handleImageApiUrlCommit: (url: string) => void;
+    handleFalApiKeyCommit: (key: string) => void;
+    handleFalVideoModelCommit: (model: string) => void;
     handleOcrApiKeyCommit: (key: string) => void;
     handleOcrModelCommit: (model: string) => void;
     handleOcrApiUrlCommit: (url: string) => void;
@@ -75,22 +102,20 @@ export interface ConfigPersistence {
  */
 function loadString(key: string, fallback = ''): string {
     try {
-        const val = localStorage.getItem(key);
+        const val = localGet(key);
         return val ?? fallback;
-    } catch {
+    } catch (e) {
+        logCaughtError('src/hooks/useConfigPersistence.ts', e);
         return fallback;
     }
 }
 
 /**
- * Save a string value to localStorage with error handling.
+ * Save a string value to localStorage tolerando el fallo del almacen.
+ * Envoltorio del dueno unico `localSetSafe` (el try/catch vivia copiado aqui).
  */
 function saveString(key: string, value: string): void {
-    try {
-        localStorage.setItem(key, value);
-    } catch {
-        // Silently ignore storage errors (quota exceeded, private mode, etc.)
-    }
+    localSetSafe(key, value, 'src/hooks/useConfigPersistence.ts');
 }
 
 // ============================================================
@@ -108,10 +133,17 @@ export function useConfigPersistence(): ConfigPersistence {
     const [textModel, setTextModel] = useState<string>(() => loadString(STORAGE_KEYS.TEXT_MODEL));
     const [textApiUrl, setTextApiUrl] = useState<string>(() => loadString(STORAGE_KEYS.TEXT_API_URL));
 
+    // ---- Gemini nativo (paso 5): clave dedicada + toggle del fallback de imagen ----
+    // Usa resolveDedicatedGeminiApiKey() centralizado desde appConfig (Rule #1: NO HARDCODE).
+    const [geminiApiKey, setGeminiApiKey] = useState<string>(() => resolveDedicatedGeminiApiKey());
+
     // ---- Image (Pollinations) Config ----
     const [imageApiKey, setImageApiKey] = useState<string>(() => loadString(STORAGE_KEYS.IMAGE_API_KEY));
     const [imageModel, setImageModel] = useState<string>(() => loadString(STORAGE_KEYS.IMAGE_MODEL));
     const [imageApiUrl, setImageApiUrl] = useState<string>(() => loadString(STORAGE_KEYS.IMAGE_API_URL));
+    // ---- Video (fal.ai) ----
+    const [falApiKey, setFalApiKey] = useState<string>(() => loadString(STORAGE_KEYS.FALAI_API_KEY));
+    const [falVideoModel, setFalVideoModel] = useState<string>(() => resolveFalVideoModel());
 
     // ---- OCR Config (local Tesseract default + endpoint remoto opcional) ----
     const [ocrApiKey, setOcrApiKey] = useState<string>(() => loadString(STORAGE_KEYS.OCR_API_KEY));
@@ -119,12 +151,13 @@ export function useConfigPersistence(): ConfigPersistence {
     const [ocrApiUrl, setOcrApiUrl] = useState<string>(() => loadString(STORAGE_KEYS.OCR_API_URL));
 
     // ---- Language ----
-    const [language, setLanguage] = useState<'es' | 'en' | 'both'>(() => {
+    const [language, setLanguage] = useState<UiLanguage>(() => {
         try {
-            const saved = localStorage.getItem(STORAGE_KEYS.LANGUAGE);
-            if (saved === 'es' || saved === 'en' || saved === 'both') return saved;
-        } catch { /* ignore */ }
-        return UI_DEFAULTS.LANGUAGE;
+            return normalizeUiLanguage(localGet(STORAGE_KEYS.LANGUAGE));
+            // El idioma ya quedo normalizado contra la lista unica arriba.
+        } catch (e) {
+        logCaughtError('src/hooks/useConfigPersistence.ts', e); /* ignore */ }
+        return normalizeUiLanguage(UI_DEFAULTS.LANGUAGE);
     });
 
     // ---- Session Role ----
@@ -138,7 +171,7 @@ export function useConfigPersistence(): ConfigPersistence {
     );
     const [debugLogsEnabled, setDebugLogsEnabledState] = useState<boolean>(() => {
         const saved = loadString(STORAGE_KEYS.DEBUG_LOGS_ENABLED);
-        return saved === '' ? (FLU_CONFIG.debug.enabled ?? true) : saved === 'true';
+        return saved === '' ? (FLU_CONFIG.debug.enabled ?? false) : saved === 'true';
     });
     const wakeWordsRef = useRef(wakeWords);
     wakeWordsRef.current = wakeWords;
@@ -153,12 +186,11 @@ export function useConfigPersistence(): ConfigPersistence {
     const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
     useEffect(() => {
         const load = () => {
-            const available = window.speechSynthesis.getVoices();
+            const available = getSpeechVoices();
             if (available.length > 0) setVoices(available);
         };
         load();
-        window.speechSynthesis.onvoiceschanged = load;
-        return () => { window.speechSynthesis.onvoiceschanged = null; };
+        return subscribeSpeechVoices(load);
     }, []);
 
     // ---- Persist language changes ----
@@ -196,48 +228,87 @@ export function useConfigPersistence(): ConfigPersistence {
         if (FLU_CONFIG.debug) FLU_CONFIG.debug.enabled = debugLogsEnabled;
     }, [debugLogsEnabled]);
 
+    // ---- Bandera de wake (piso cerrado/abierto): el configurador (integrationStore)
+    // es el UNICO almacen de registro; aqui se ESPEJA al runtime que lee el dueno
+    // unico de la decision (requiresWakeWord -> FLU_CONFIG.voiceCommands.requireWakeAlways).
+    useEffect(() => {
+        const apply = (wakeAlways: boolean | undefined) => {
+            // Solo un valor REAL del configurador pisa el default de la config: antes
+            // `wakeAlways === true` estampaba `false` cuando el checkbox jamas se habia
+            // tocado (valor ausente), y la puerta de wake quedaba abierta sin que el
+            // usuario lo pidiera (medido 2026-10-20, sesion 97f86c73).
+            if (FLU_CONFIG.voiceCommands && typeof wakeAlways === 'boolean') {
+                FLU_CONFIG.voiceCommands.requireWakeAlways = wakeAlways;
+            }
+        };
+        apply(useIntegrationStore.getState().voiceConfig?.requireWakeAlways);
+        return useIntegrationStore.subscribe((state) => apply(state.voiceConfig?.requireWakeAlways));
+    }, []);
+
     // ---- Text (Gemini) config handlers ----
     const handleTextApiKeyCommit = useCallback((key: string) => {
         const prev = apiKey;
         setApiKey(key);
         saveString(STORAGE_KEYS.TEXT_API_KEY, key);
-        auditLog.logChange('config', 'text-api-key', prev, key, 'Text API Key updated').catch(console.error);
+        auditLog.logChange('config', 'text-api-key', prev, key, 'Text API Key updated').catch((e) => logCaughtError('src/hooks/useConfigPersistence.ts: auditLog.logChange', e));
     }, [apiKey, auditLog]);
 
     const handleTextModelCommit = useCallback((model: string) => {
         const prev = textModel;
         setTextModel(model);
         saveString(STORAGE_KEYS.TEXT_MODEL, model);
-        auditLog.logChange('config', 'text-model', prev, model, 'Text Model updated').catch(console.error);
+        auditLog.logChange('config', 'text-model', prev, model, 'Text Model updated').catch((e) => logCaughtError('src/hooks/useConfigPersistence.ts: auditLog.logChange', e));
     }, [textModel, auditLog]);
 
     const handleTextApiUrlCommit = useCallback((url: string) => {
         const prev = textApiUrl;
         setTextApiUrl(url);
         saveString(STORAGE_KEYS.TEXT_API_URL, url);
-        auditLog.logChange('config', 'text-api-url', prev, url, 'Text API URL updated').catch(console.error);
+        auditLog.logChange('config', 'text-api-url', prev, url, 'Text API URL updated').catch((e) => logCaughtError('src/hooks/useConfigPersistence.ts: auditLog.logChange', e));
     }, [textApiUrl, auditLog]);
+
+    // ---- Gemini nativo (paso 5) config handlers ----
+    const handleGeminiApiKeyCommit = useCallback((key: string) => {
+        const prev = geminiApiKey;
+        setGeminiApiKey(key);
+        saveString(STORAGE_KEYS.GEMINI_API_KEY, key);
+        auditLog.logChange('config', 'gemini-api-key', prev, key, 'Gemini API Key updated').catch((e) => logCaughtError('src/hooks/useConfigPersistence.ts: auditLog.logChange', e));
+    }, [geminiApiKey, auditLog]);
 
     // ---- Image (Pollinations) config handlers ----
     const handleImageApiKeyCommit = useCallback((key: string) => {
         const prev = imageApiKey;
         setImageApiKey(key);
         saveString(STORAGE_KEYS.IMAGE_API_KEY, key);
-        auditLog.logChange('config', 'image-api-key', prev, key, 'Image API Key updated').catch(console.error);
+        auditLog.logChange('config', 'image-api-key', prev, key, 'Image API Key updated').catch((e) => logCaughtError('src/hooks/useConfigPersistence.ts: auditLog.logChange', e));
     }, [imageApiKey, auditLog]);
+
+    const handleFalApiKeyCommit = useCallback((key: string) => {
+        const prev = falApiKey;
+        setFalApiKey(key);
+        saveString(STORAGE_KEYS.FALAI_API_KEY, key);
+        auditLog.logChange('config', 'falai-api-key', prev, key, 'Fal.ai Video API Key updated').catch((e) => logCaughtError('src/hooks/useConfigPersistence.ts: auditLog.logChange', e));
+    }, [falApiKey, auditLog]);
+
+    const handleFalVideoModelCommit = useCallback((model: string) => {
+        const prev = falVideoModel;
+        setFalVideoModel(model);
+        saveString(STORAGE_KEYS.FALAI_VIDEO_MODEL, model);
+        auditLog.logChange('config', 'falai-video-model', prev, model, 'Fal.ai Video model updated').catch((e) => logCaughtError('src/hooks/useConfigPersistence.ts: auditLog.logChange', e));
+    }, [falVideoModel, auditLog]);
 
     const handleImageModelCommit = useCallback((model: string) => {
         const prev = imageModel;
         setImageModel(model);
         saveString(STORAGE_KEYS.IMAGE_MODEL, model);
-        auditLog.logChange('config', 'image-model', prev, model, 'Image Model updated').catch(console.error);
+        auditLog.logChange('config', 'image-model', prev, model, 'Image Model updated').catch((e) => logCaughtError('src/hooks/useConfigPersistence.ts: auditLog.logChange', e));
     }, [imageModel, auditLog]);
 
     const handleImageApiUrlCommit = useCallback((url: string) => {
         const prev = imageApiUrl;
         setImageApiUrl(url);
         saveString(STORAGE_KEYS.IMAGE_API_URL, url);
-        auditLog.logChange('config', 'image-api-url', prev, url, 'Image API URL updated').catch(console.error);
+        auditLog.logChange('config', 'image-api-url', prev, url, 'Image API URL updated').catch((e) => logCaughtError('src/hooks/useConfigPersistence.ts: auditLog.logChange', e));
     }, [imageApiUrl, auditLog]);
 
     // ---- OCR config handlers (local Tesseract default + endpoint remoto opcional) ----
@@ -245,21 +316,21 @@ export function useConfigPersistence(): ConfigPersistence {
         const prev = ocrApiKey;
         setOcrApiKey(key);
         saveString(STORAGE_KEYS.OCR_API_KEY, key);
-        auditLog.logChange('config', 'ocr-api-key', prev, key, 'OCR API Key updated').catch(console.error);
+        auditLog.logChange('config', 'ocr-api-key', prev, key, 'OCR API Key updated').catch((e) => logCaughtError('src/hooks/useConfigPersistence.ts: auditLog.logChange', e));
     }, [ocrApiKey, auditLog]);
 
     const handleOcrModelCommit = useCallback((model: string) => {
         const prev = ocrModel;
         setOcrModel(model);
         saveString(STORAGE_KEYS.OCR_MODEL, model);
-        auditLog.logChange('config', 'ocr-model', prev, model, 'OCR Model updated').catch(console.error);
+        auditLog.logChange('config', 'ocr-model', prev, model, 'OCR Model updated').catch((e) => logCaughtError('src/hooks/useConfigPersistence.ts: auditLog.logChange', e));
     }, [ocrModel, auditLog]);
 
     const handleOcrApiUrlCommit = useCallback((url: string) => {
         const prev = ocrApiUrl;
         setOcrApiUrl(url);
         saveString(STORAGE_KEYS.OCR_API_URL, url);
-        auditLog.logChange('config', 'ocr-api-url', prev, url, 'OCR API URL updated').catch(console.error);
+        auditLog.logChange('config', 'ocr-api-url', prev, url, 'OCR API URL updated').catch((e) => logCaughtError('src/hooks/useConfigPersistence.ts: auditLog.logChange', e));
     }, [ocrApiUrl, auditLog]);
 
     // ---- Rehidratar apiKey desde localStorage cuando cambia (storage event) ----
@@ -283,6 +354,7 @@ export function useConfigPersistence(): ConfigPersistence {
             STORAGE_KEYS.TEXT_API_KEY,
             STORAGE_KEYS.TEXT_MODEL,
             STORAGE_KEYS.TEXT_API_URL,
+            STORAGE_KEYS.GEMINI_API_KEY,
             STORAGE_KEYS.IMAGE_API_KEY,
             STORAGE_KEYS.IMAGE_MODEL,
             STORAGE_KEYS.IMAGE_API_URL,
@@ -293,15 +365,15 @@ export function useConfigPersistence(): ConfigPersistence {
             STORAGE_KEYS.SESSION_ROLE,
             STORAGE_KEYS.WAKE_WORDS,
             STORAGE_KEYS.DEBUG_LOGS_ENABLED,
+            // Config del buscador (llaves/modelo de proveedores web). Sin esto,
+            // "Limpiar caché" borraba la key de OpenRouter/Tavily.
+            STORAGE_KEYS.SEARCH_CONFIG_OVERRIDES,
         ]);
         try {
-            const toRemove: string[] = [];
-            for (let i = 0; i < localStorage.length; i++) {
-                const key = localStorage.key(i);
-                if (key && !keep.has(key)) toRemove.push(key);
-            }
-            toRemove.forEach((k) => localStorage.removeItem(k));
-        } catch { /* ignore */ }
+            const toRemove = localKeys().filter((key) => !keep.has(key));
+            toRemove.forEach((k) => localRemove(k));
+        } catch (e) {
+        logCaughtError('src/hooks/useConfigPersistence.ts', e); /* ignore */ }
         // Rehidratar el estado desde la fuente de verdad (localStorage)
         setApiKey(resolveTextApiKey());
         window.location.reload();
@@ -311,9 +383,12 @@ export function useConfigPersistence(): ConfigPersistence {
         apiKey,
         textModel,
         textApiUrl,
+        geminiApiKey,
         imageApiKey,
         imageModel,
         imageApiUrl,
+        falApiKey,
+        falVideoModel,
         ocrApiKey,
         ocrModel,
         ocrApiUrl,
@@ -325,9 +400,12 @@ export function useConfigPersistence(): ConfigPersistence {
         handleTextApiKeyCommit,
         handleTextModelCommit,
         handleTextApiUrlCommit,
+        handleGeminiApiKeyCommit,
         handleImageApiKeyCommit,
         handleImageModelCommit,
         handleImageApiUrlCommit,
+        handleFalApiKeyCommit,
+        handleFalVideoModelCommit,
         handleOcrApiKeyCommit,
         handleOcrModelCommit,
         handleOcrApiUrlCommit,

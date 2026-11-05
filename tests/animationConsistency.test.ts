@@ -51,9 +51,27 @@ const GROUP_MAP_KEYS: Record<'listening' | 'speaking' | 'participant', string[]>
     participant: ['palabra', 'Palabra2'],
 };
 
+/** Marcas exigidas a BunnyModel (extraidas para poder probar el DETECTOR, P2.4). */
+const SNIPPETS_BUNNY_MODEL = [
+    'const [preloaded, setPreloaded] = useState(false);',
+    'setLoading(false);',
+    'setPreloaded(true); // habilita la reproducción',
+    'if (!animator || !preloaded) return;',
+    '}, [currentAnimation, blendQueue, isPlaying, preloaded]);',
+] as const;
+
 const mapAnimations = (): Set<string> => {
     return new Set(Object.values(EXPRESSION_MAP).flat());
 };
+
+describe('P2.4 animationConsistency - el detector no es decorativo', () => {
+    it('marca el snippet ausente en un fuente sintetico mutilado', () => {
+        const completo = SNIPPETS_BUNNY_MODEL.join('\n');
+        const mutilado = SNIPPETS_BUNNY_MODEL.slice(0, -1).join('\n');
+        expect(SNIPPETS_BUNNY_MODEL.every((m) => completo.includes(m))).toBe(true);
+        expect(SNIPPETS_BUNNY_MODEL.every((m) => mutilado.includes(m))).toBe(false);
+    });
+});
 
 describe('animationConsistency — canon 17 (modelo Bunny)', () => {
     it('todas las animaciones del EXPRESSION_MAP pertenecen al canon', () => {
@@ -131,20 +149,9 @@ describe('animationConsistency — Pensando y claves compartidas', () => {
 describe('animationConsistency — BunnyModel capa única anti-congelamiento (preload gate)', () => {
     const source = readFileSync('./src/avatar/model/BunnyModel.tsx', 'utf-8');
 
-    it('declara el estado preloaded (se activa al terminar preloadAll)', () => {
-        expect(source).toContain('const [preloaded, setPreloaded] = useState(false);');
-    });
-
-    it('setPreloaded(true) junto a setLoading(false) en preloadAll().then()', () => {
-        expect(source).toContain('setLoading(false);');
-        expect(source).toContain('setPreloaded(true); // habilita la reproducción');
-    });
-
-    it('el efecto de animación está bloqueado por el gate preloaded', () => {
-        expect(source).toContain('if (!animator || !preloaded) return;');
-    });
-
-    it('el efecto de animación depende de preloaded (re-ejecuta al terminar la precarga)', () => {
-        expect(source).toContain('}, [currentAnimation, blendQueue, isPlaying, preloaded]);');
+    it('declara el gate de precarga completo (estado, setLoading, setPreloaded, efecto y dependencias)', () => {
+        for (const marca of SNIPPETS_BUNNY_MODEL) {
+            expect(source, `falta en BunnyModel: ${marca}`).toContain(marca);
+        }
     });
 });

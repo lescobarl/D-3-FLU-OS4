@@ -24,3 +24,29 @@ debug.log
 
 # Backups (safety net — excluded from git)
 backups/
+
+# Playwright output reglamentario
+test-output.txt
+
+# Evidencia E2E regenerable (los specs escriben los PNG en cada corrida)
+reports/
+
+# TypeScript incremental (cache en node_modules/.cache/ts)
+tsconfig.tsbuildinfo
+.agent_tmp/
+
+# FLU Playback (audio/transcripcion de soporte; nunca se commitea)
+playbacks/
+
+# Volcados de stdout de runners externos en la raiz del repo
+guards-output.txt
+guards-result.txt
+last-result.txt
+*-result.txt
+*-output.txt
+
+# --- basura del entorno local (no se commitea: se ignora) ---
+devserver.out
+dscode/
+pnpm-lock.yaml
+pnpm-workspace.yaml

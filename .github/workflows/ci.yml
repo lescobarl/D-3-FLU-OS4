@@ -1,0 +1,96 @@
+# ============================================================
+# CI — Validación funcional (lint + tipos + tests + build + E2E)
+# ============================================================
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+jobs:
+  quality:
+    name: Unit + Lint + Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          # jsdom 30 declara engines ^22.22.2 || ^24.15.0 || >=26. Hay guards con
+          # '// @vitest-environment jsdom' (p.ej. minutosSinglePublisherGuard): con Node 20
+          # jsdom no carga y TODA la corrida de guards muere con
+          # 'TypeError: webidl.util.markAsUncloneable is not a function'.
+          node-version: 22
+          cache: npm
+
+      - name: Guard de dueños (archivos nuevos)
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE="${{ github.event.pull_request.base.sha }}"
+          else
+            BASE="${{ github.event.before }}"
+          fi
+          if [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ]; then
+            echo "[owner-gate] Sin base comparable; se omite."
+            exit 0
+          fi
+          if [ "${{ github.event_name }}" != "pull_request" ] && ! git rev-parse --verify --end-of-options "$BASE^{commit}" >/dev/null 2>&1; then
+            echo "[owner-gate] Base de push no disponible; se omite."
+            exit 0
+          fi
+          node scripts/owner-gate.mjs --diff "$BASE"
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Guard de arquitectura
+        run: npm run guard:arch
+
+      - name: Linters
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Tests funcionales
+        run: npm run test:full
+
+      - name: Build
+        run: npm run build
+
+  e2e:
+    name: E2E Playwright (UI)
+    runs-on: ubuntu-latest
+    needs: quality
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # jsdom 30 declara engines ^22.22.2 || ^24.15.0 || >=26. Hay guards con
+          # '// @vitest-environment jsdom' (p.ej. minutosSinglePublisherGuard): con Node 20
+          # jsdom no carga y TODA la corrida de guards muere con
+          # 'TypeError: webidl.util.markAsUncloneable is not a function'.
+          node-version: 22
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Instalar navegadores Playwright
+        run: npx playwright install --with-deps chromium
+
+      - name: E2E (portal en 5173, reuse del dev server)
+        run: npx playwright test
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: |
+            reports/
+            playwright-report/
+          retention-days: 7

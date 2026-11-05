@@ -1,0 +1,5 @@
+{
+  "_nota": "Barrera del write-path de la fila de usuario: un solo escritor efectivo. El modulo escribe la fila canonica; el hook solo puede reescribirla si debePersistirEntrada lo autoriza. unsafeWrites debe ser 0 y solo baja.",
+  "unsafeWrites": 0,
+  "minSources": 400
+}

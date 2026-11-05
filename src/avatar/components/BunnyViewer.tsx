@@ -17,7 +17,7 @@
 // ============================================================
 
 import { useEffect, useMemo } from 'react';
-import { Canvas, useThree } from '@react-three/fiber';
+import { Canvas, useThree, type RootState } from '@react-three/fiber';
 import { OrbitControls, Html } from '@react-three/drei';
 import { useBunnyStore } from '../store/bunnyStore';
 import BunnyModel from '../model/BunnyModel';
@@ -28,6 +28,7 @@ import {
     BUNNY_SCENE,
     BUNNY_SIGNAL_OVERLAY,
     BUNNY_STATE_INDICATOR,
+    bunnyStateColor,
 } from '../config/bunnySceneConfig';
 
 // -----------------------------------------------------------
@@ -47,13 +48,12 @@ function SignalOverlay() {
     return (
         <Html position={BUNNY_SIGNAL_OVERLAY.position} center>
             <div
+                className="bunny-signal-overlay"
                 style={{
-                    fontSize: BUNNY_SIGNAL_OVERLAY.fontSize,
-                    filter: `drop-shadow(0 0 20px ${signalConfig.color})`,
-                    animation: BUNNY_SIGNAL_OVERLAY.pulse,
-                    pointerEvents: 'none',
-                    userSelect: 'none',
-                }}
+                    '--bunny-signal-font': BUNNY_SIGNAL_OVERLAY.fontSize,
+                    '--bunny-signal-pulse': BUNNY_SIGNAL_OVERLAY.pulse,
+                    '--bunny-signal-color': signalConfig.color,
+                } as React.CSSProperties}
             >
                 {signalConfig.icon}
             </div>
@@ -68,24 +68,16 @@ function SignalOverlay() {
 function StateIndicator() {
     const currentState = useBunnyStore((s) => s.currentState);
 
-    const stateColors: Record<string, string> = BUNNY_STATE_INDICATOR.colors;
-
     return (
         <Html position={BUNNY_STATE_INDICATOR.position} center>
             <div
+                className="bunny-state-indicator"
                 style={{
-                    background: BUNNY_STATE_INDICATOR.background,
-                    color: stateColors[currentState] || BUNNY_STATE_INDICATOR.fallbackColor,
-                    padding: '4px 12px',
-                    borderRadius: '12px',
-                    fontSize: '12px',
-                    fontFamily: 'monospace',
-                    fontWeight: 'bold',
-                    border: `1px solid ${stateColors[currentState] || BUNNY_STATE_INDICATOR.fallbackColor}`,
-                    whiteSpace: 'nowrap',
-                    pointerEvents: 'none',
-                    userSelect: 'none',
-                }}
+                    '--bunny-state-bg': BUNNY_STATE_INDICATOR.background,
+                    // El mapa y el fallback se resuelven en SU dueno (bunnySceneConfig): este
+                    // fichero solo aplica el valor.
+                    '--bunny-state-color': bunnyStateColor(currentState),
+                } as React.CSSProperties}
             >
                 {currentState}
             </div>
@@ -157,7 +149,6 @@ function WebGLContextManager() {
         };
 
         const handleContextRestored = () => {
-            console.log('[BunnyViewer] WebGL context restored');
             invalidate();
         };
 
@@ -243,7 +234,7 @@ export default function BunnyViewer({ orientation = BUNNY_SCENE.orientationDefau
                     preserveDrawingBuffer: true,
                 }}
                 style={{ background: `var(--bg-secondary, ${BUNNY_SCENE.background})` }}
-                onCreated={(state: any) => {
+                onCreated={(state: RootState) => {
                     const gl = state.gl;
                     // Con alpha:false, el clear color del WebGL es lo que se ve;
                     // lo reaplica SceneBackgroundSync según la paleta de branding.
@@ -252,7 +243,6 @@ export default function BunnyViewer({ orientation = BUNNY_SCENE.orientationDefau
                         console.warn('[BunnyViewer] WebGL context lost');
                     });
                     gl.domElement.addEventListener('webglcontextrestored', () => {
-                        console.log('[BunnyViewer] WebGL context restored');
                         state.invalidate();
                     });
                 }}

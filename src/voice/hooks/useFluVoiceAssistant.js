@@ -1,34 +1,35 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { tramoDelTurno } from '../core/tramo.js'
 import {
   computeAudioSignature,
   cleanForSpeech,
-  detectIntroducedName,
   detectWakeIntroducedName,
-  detectRole,
+  detectListeningControl,
   detectTranscriptLanguage,
-  extractTheme,
   formatClock,
-  extractFluVoiceCommand,
-  compareAudioSignatures,
   getRecognitionRetryDelay,
+  getRecognitionErrorMessage,
   isRecoverableRecognitionError,
-  isMinuteGenerationRequest,
-  isMinuteSaveRequest,
   isMinuteKnowledgeRequest,
-  isPlausiblePersonName,
-  normalizeSpaces,
-  pickRichestVoiceCommandCapture,
-  resolveFinalConversationAction,
-  stripDiacritics,
+  splitTranscriptAtWakeWord,
 } from '../lib/audioMath'
-import { getFluTimingCfg, getProfileMatchCfg } from '../lib/fluTranscriptMotor.js'
-import { analyzeWakeTurn } from '../lib/wakeTurnCommit.js'
-import { handleConversationStreamSync } from '../lib/conversationStreamCommit.js'
-import { listVoiceProfiles, loadSessionState, saveSessionState, saveVoiceProfile } from '../lib/fluStorage'
+import { getFluTimingCfg } from '../lib/fluTranscriptMotor.js'
+import { analyzeWakeTurn, requiresWakeWord } from '../lib/wakeTurnCommit.js'
+import { loadSessionState, saveSessionState } from '../lib/fluStorage'
 import { requestFluContract } from '../lib/gemini'
-import { resolveConfigCommandFromText } from '../lib/configCommands'
-import { resolveGameCommandFromText } from '../lib/gameCommands'
+import { buildContractParams } from '../lib/contractParams'
+import {
+  isCommandAuthorized,
+  resolveDeterministicCommand,
+  resolveDeterministicSkipGeminiContract,
+  resolveStatefulDomains,
+  musicActionSpeech,
+} from '../lib/deterministicArbiter'
+import { noteGameTurn } from '../../core/games/gameSessionStore'
+import { consumesGameTurn, isCatalogLevelGameAction } from '../lib/gameCommands'
 import { relayLog } from '../../lib/clientLogRelay'
+import { recordSessionTurn } from '../lib/sessionRecorder.js'
+import { captureTurnAudioSnapshot, probePcmBlock, turnAudioForDiarize } from '../lib/turnAudioSnapshot.js'
 import { useIntegrationStore } from '../../store/integrationStore'
 import { fluAsyncErrorHandler } from '../lib/fluAsyncError.js'
 import {
@@ -36,294 +37,81 @@ import {
   getActiveListenConfig,
   getConversationRestartConfig,
   getConversationConfig,
-  isSessionResetCommand,
 } from '../lib/fluConfig'
 import {
   getCommandSpeech,
   planVoiceCommandDispatch,
-  resolveNavigationCommand,
-  resolveNavigationCommandFromTexts,
 } from '../lib/voiceCommands'
 import {
-  flattenChunksTail,
   flattenChunksWindow,
   nextAvailableSpeakerLabel,
   normalizeSpeakerLabel,
   pruneGhostSpeakerClusters,
   trimAudioChunkBuffer,
 } from '../lib/voiceIdentity'
+import { setSessionPrimarySpeaker } from '../lib/sessionPrimarySpeaker'
+import { applySessionCommandToPrimary } from '../lib/sessionLifecycle.js'
+import { resetVoiceDirectory } from '../lib/speakerDirectory.js'
+import { participantRegisterPort, registerSpeakerIdentity } from '../lib/speakerIdentityRegister'
 import {
-  getConversationMinVoicedSamples,
   getConversationSpeakerTailMs,
-  getDiarizeIntervalMs,
-  getLastTurnSignatureContinuityDistance,
-  getMaxSilenceWindowsForHold,
-  getVoiceDetectionThreshold,
+  resolveCaptureAudioConstraints,
+  resolveCaptureGain,
 } from '../lib/micCapture.js'
+import { buildResolvedContract } from '../lib/resolvedContract.js'
 import {
-  resolveMicCommitAction,
-} from '../lib/turnStream.js'
-import {
-  computeSpillAfterLog,
-  isDuplicateLogPhrase,
-  listSessionSpeakers,
-  readCommandSnapshot,
-  readTurnCapture,
-} from '../lib/conversationSession'
-import {
-  advanceSpeaker,
-  advancePublishedDisplay,
-  confirmFinal,
-  createActiveListenState,
-  detectNextSpeakerPhrase,
-  isRedundantFinal,
-  matchesListeningAck,
-  pickLongestFinal,
-  pickBestMicInterim,
-  mergeMicChunks,
-  processListenPacket,
-  wouldShrinkLog,
-  nextSpeakerLabel,
-  readCommandText,
-  readDisplayText,
-  readStreamDisplay,
-  archiveCommittedTurn,
-  buildPriorRowsForStrip,
-  trimCommittedRowsRef,
-  readSession,
-  getSpeakerLabel,
-  resetActiveListenState,
+  acquireSpeechRecognition,
   getRecognitionLanguage,
   isBilingualListenMode,
   resolveRecognitionLocale,
-  resolveConversationSpeaker as resolveConversationSpeakerLabel,
-  sealPendingInterim,
-  shouldRefreshStream,
-  syncSpeakerIndexFromLabel,
-  resolveCommitCapture,
-  resolveLogParagraphBreak,
-  utterancesRelate,
-  utterancesSameRevision,
-  phrasesEquivalent,
-  micPublishedParityOk,
-  collapseMisorderedMicMerge,
-} from '../lib/activeListen.js'
-import {
-  createSpeechRecognition,
-  ensureSpeechRecognitionLocales,
   startSpeechRecognition,
   stopSpeechRecognition,
 } from '../lib/speechRecognitionLocal'
-import { fluEvent, logMicRaw, getListenLogRing, clearListenLogRing } from '../lib/listenLog'
+import { logChromeSpeechResult, getListenLogRing, clearListenLogRing } from '../lib/listenLog'
 import {
   debugHotPath,
   fluDebugHot,
   getFluDebugApi,
 } from '../lib/fluDebug'
-import { buildChromeLikeEvents } from '../dev/bookRecognitionSim.js'
-import {
-  appendSpillText,
-  applyRecognitionResult,
-  applyRecognitionResultWithBoundary,
-  collapseInlineRepeat,
-  createTurnState,
-  getTranscriptDelta,
-  getTurnDisplay,
-  monotonicDisplay,
-  normalizeTranscriptText,
-  readTurnCaptureForCommit,
-  resetTurnState,
-  waitForCaptureSettle,
-} from '../lib/turnTranscript'
 import { wireMicCapturePipeline } from '../lib/micCaptureBridge.js'
-import { createConversationIngressRuntime } from '../lib/conversationIngressBridge.js'
 import { formatGeminiUserMessage, buildGeminiDiagnosticsFromError } from '../lib/geminiDiagnostics.js'
-import { convertSimEventsToBrowserBursts } from '../lib/micEventProducer.js'
-import { collectBrowserResultChunks } from '../lib/transcriptIngress.js'
+import { resolveWakeWords } from '../lib/wakeWords.js'
 import {
-  flushTranscriptStateOnFinal,
-  flushPcmStateAfterCommit,
-} from '../lib/recognitionBufferFlush.js'
-import { finalizeTurnIdentityPipeline, startContinuousIdentityPipeline, stopAllContinuousIdentityPipelines } from '../lib/turnIdentityPipeline.js'
-import {
-  createTurnSpeakerAudioResolver,
-  peekTurnSpeakerPreflight,
-} from '../lib/turnSpeakerPreflight.js'
-import { planAsrTurnSegments, segmentPlanCoversCapture } from '../lib/asrTurnSegmentation.js'
-import { resolveTurnSpeakerAtCommit, applyResolvedSpeakerToSessionRefs } from '../lib/turnSpeakerCommit.js'
-import {
-  anchorResolvedToLastLogged,
-  resolveCommitStickyFallback,
-  isWeakAsrSpeakerEvidence,
-  shouldSkipPreviewDiarize,
+  blindSpeakerFallback,
+  resolveSpeakerNameFromUtterance,
 } from '../lib/speakerPolicy.js'
-import { markCommitPerfNow } from '../lib/audioSegmentClock.js'
-import { labelToSpeakerId } from '../lib/conversationRow.js'
-import { getTranscriptPauseCfg, countSpeechWords } from '../lib/fluTranscriptPause.js'
+import { WAKE_POLICY_ORDER, applyWakePolicyOrder, resolveWakePolicyOrder, wakePolicySpeech } from '../lib/wakePolicy.js'
+import { normalizeLang } from '../../core/config/localeConfig.ts'
 // Ruta única: useFluParticipant vive solo en src/hooks/useFluParticipant.ts.
-// El motor de voz la importa aquí solo como fallback defensivo; en producción
-// App.tsx inyecta su instancia vía participantRef (mismo módulo).
+// El motor de voz la importa aquí solo como fallback defensivo; en producción App.tsx inyecta su instancia vía participantRef (mismo módulo).
 import { useFluParticipant } from '../../hooks/useFluParticipant'
-import { isSpeechSynthesisSpeaking, isSpeechBusy, waitForSpeechIdle } from '../lib/fluSpeech.js'
+import { isSpeechSynthesisSpeaking, isFluSpeaking, waitForSpeechIdle } from '../lib/fluSpeech.js'
+import { resumeAfterSpeechSuspend, releaseStalledTurn } from '../lib/voiceStallPolicy.js'
+import { isLocalFallbackEnabled, prewarmLocalRecognition, shouldUseLocalFallback } from '../lib/voiceLocalFallback'
+import { useLocalAsrFallback } from './useLocalAsrFallback'
+import { logCaughtError } from '../../lib/caughtError';
+import { clearAnimationFrameRef, clearTimeoutRef } from '../../lib/timerRefs'
+import { useTurnLifecycleSync, useOffPathSessionWriter } from './useTurnInfrastructure'
+import { useSessionSpeakerClusters } from './useSessionSpeakerClusters'
+import { AI_PROVIDER_IDS } from '../../core/config/sharedConfig'
 import {
   FLU_DIALOGUE_SPEAKER,
-  appendDialogueEntry,
+  deriveDialogueHistory,
+  deriveUserRowSpeakers,
+  deriveUserRowTexts,
   getDialogueContextSlice,
   isFluSpeaker,
-  recordConversationExchange,
-  recordConversationTurn,
-  DIALOGUE_SOURCE,
 } from '../lib/conversationDialogue.js'
-
+import { getFallbackSpeaker, isAutoSpeakerLabel, payloadSeparacionDeTurno } from '../lib/speakerCore.js';
+import { selectVoicedWindow } from '../lib/voicedActivity.js';
+import { COMMAND_IDS } from '../lib/commandIds.js'
+import { voiceProbe, isVoiceProbeEnabled } from '../lib/voiceProbe'
+import { defaultLanguage } from '../lib/languageDefault.ts'
+import { crearMotorConversacionHook } from '../compose/conversationMotorProducto'
+import { crearResolucionPasivaProducto, grabarSnapshotDeTurno } from '../conversation/index'
 const CONTEXT_HISTORY_LIMIT = FLU_CONFIG.limits.contextHistoryMax
-
-function getSpeechRecognition() {
-  if (typeof window === 'undefined') return null
-  return window.SpeechRecognition || window.webkitSpeechRecognition || null
-}
-
-function flattenChunks(chunks) {
-  const length = chunks.reduce((sum, chunk) => sum + chunk.length, 0)
-  const result = new Float32Array(length)
-  let offset = 0
-  chunks.forEach((chunk) => {
-    result.set(chunk, offset)
-    offset += chunk.length
-  })
-  return result
-}
-
-function segmentAudio(samples, sampleRate, threshold) {
-  const voiceThreshold = threshold ?? getVoiceDetectionThreshold()
-  if (!samples.length) return []
-
-  const windowSize = Math.max(1024, Math.floor(sampleRate * 0.04))
-  const hopSize = Math.max(512, Math.floor(sampleRate * 0.02))
-  const voicedSegments = []
-  const maxSilenceWindows = getMaxSilenceWindowsForHold(sampleRate)
-
-  let currentStart = null
-  let silenceWindows = 0
-
-  for (let index = 0; index + windowSize <= samples.length; index += hopSize) {
-    let sumSquares = 0
-    for (let sampleIndex = index; sampleIndex < index + windowSize; sampleIndex += 1) {
-      const value = samples[sampleIndex]
-      sumSquares += value * value
-    }
-
-    const rms = Math.sqrt(sumSquares / windowSize)
-    const isVoiced = rms >= voiceThreshold
-
-    if (isVoiced && currentStart === null) {
-      currentStart = index
-      silenceWindows = 0
-    }
-
-    if (currentStart !== null) {
-      if (isVoiced) {
-        silenceWindows = 0
-      } else {
-        silenceWindows += 1
-      }
-
-      if (silenceWindows >= maxSilenceWindows) {
-        const end = index + windowSize
-        if (end > currentStart + windowSize) {
-          voicedSegments.push(samples.slice(currentStart, end))
-        }
-        currentStart = null
-        silenceWindows = 0
-      }
-    }
-  }
-
-  if (currentStart !== null && currentStart < samples.length) {
-    voicedSegments.push(samples.slice(currentStart))
-  }
-
-  if (!voicedSegments.length) {
-    voicedSegments.push(samples)
-  }
-
-  return voicedSegments
-}
-
-async function matchSegmentNames(segments, sampleRate, speakerClusters = [], cachedProfiles = []) {
-  if (!segments.length) return 'Hablante 1'
-
-  const profiles = Array.isArray(cachedProfiles) ? cachedProfiles : []
-
-  const segmentResults = await Promise.all(
-    segments.map((segment) => computeAudioSignature(segment, sampleRate)),
-  )
-  const segmentSignatures = segmentResults.map((result, i) => ({
-    vector: result.vector,
-    length: segments[i].length,
-  }))
-  const signature = segmentSignatures.reduce(
-    (acc, current) => {
-      const weight = Math.max(1, current.length)
-      current.vector.forEach((value, index) => {
-        acc.vector[index] = (acc.vector[index] || 0) + value * weight
-      })
-      acc.totalWeight += weight
-      return acc
-    },
-    { vector: [], totalWeight: 0 },
-  )
-  const signatureVector =
-    signature.totalWeight > 0
-      ? signature.vector.map((value) => value / signature.totalWeight)
-      : [0, 0, 0, 0]
-
-  let bestMatch = null
-  let bestDistance = Number.POSITIVE_INFINITY
-
-  profiles.forEach((profile) => {
-    if (!Array.isArray(profile.signature)) return
-    const distance = compareAudioSignatures(signatureVector, profile.signature)
-    if (distance < bestDistance) {
-      bestDistance = distance
-      bestMatch = profile
-    }
-  })
-
-  if (bestMatch && bestDistance < getProfileMatchCfg().registeredProfileMaxDistance && isPlausiblePersonName(bestMatch.label || '')) {
-    return bestMatch.label || 'Hablante 1'
-  }
-
-  let clusterMatch = null
-  let clusterDistance = Number.POSITIVE_INFINITY
-  speakerClusters.forEach((cluster) => {
-    if (!Array.isArray(cluster?.signature)) return
-    const distance = compareAudioSignatures(signatureVector, cluster.signature)
-    if (distance < clusterDistance) {
-      clusterDistance = distance
-      clusterMatch = cluster
-    }
-  })
-
-  const profileMatch = getProfileMatchCfg()
-  const MATCH_THRESHOLD = profileMatch.clusterMatchMaxDistance
-  const blendWeight = profileMatch.clusterSignatureBlendWeight
-
-  if (clusterMatch && clusterDistance < MATCH_THRESHOLD) {
-    const label = clusterMatch.label || 'Hablante 1'
-    if (isPlausiblePersonName(label) || /^Hablante\s+\d+$/i.test(label)) {
-      clusterMatch.signature = clusterMatch.signature.map((value, index) => {
-        const previous = Number(value || 0)
-        const next = Number(signatureVector[index] || 0)
-        return previous * (1 - blendWeight) + next * blendWeight
-      })
-      return label
-    }
-  }
-
-  const label = nextAvailableSpeakerLabel(speakerClusters)
-  speakerClusters.push({ label, signature: signatureVector })
-  return label
-}
+// Sample rate de captura: fuente única en FLU_CONFIG.audio.sampleRate (sin hardcode).
+const AUDIO_SAMPLE_RATE = FLU_CONFIG.audio?.sampleRate ?? 0
 
 async function stopMediaStream(stream) {
   if (!stream) return
@@ -331,35 +119,73 @@ async function stopMediaStream(stream) {
 }
 
 function createRecognition(language, activeLocale = '') {
-  return createSpeechRecognition(language, activeLocale)
-}
-
-function deriveSession(transcript, currentRole = '', language = 'es') {
-  const role = detectRole(transcript, language) || currentRole || FLU_CONFIG.sessionDefaults.role
-  const theme = extractTheme(transcript, role, FLU_CONFIG.voiceCommands.wakeWords)
-  return {
-    role,
-    theme,
-  }
+  // §9 Motor de escucha: Chrome SpeechRecognition (Google, online) — en vivo y
+  // preciso. El resto del pipeline (ingress/commit/query/display/diarización) sigue unificado y es agnóstico al motor.
+  return acquireSpeechRecognition(language, activeLocale)
 }
 
 export function useFluVoiceAssistant({
   apiKey,
   onContractResolved,
-  language = 'es',
+  language = defaultLanguage(),
   conversationActiveRef,
   knowledgeBase = '',
   getMinuteKnowledgeBase = () => '',
   getDailyAgenda = () => '',
+  getSelfManifesto = () => '',
+  getDiaryContext = () => '',
+  getNotesContext = () => '',
+  getHorarioContext = () => '',
+  getResultadosContext = () => '',
   resolveMinuteLookup = () => ({ mode: 'gemini' }),
   participantRef,
+  activeParticipantName = '',
+  wakeWords = '',
+  participantVoiceAnchors = /** @type {Array<{ name?: string, vector?: number[], model?: string }>} */ ([]),
+  identitySession = /** @type {{ current: unknown } | null} */ (null),
 }) {
   const [status, setStatus] = useState('idle')
   const [phase, setPhase] = useState('CONFIGURACION')
   const [error, setError] = useState('')
   const [activeKnowledgeBase, setActiveKnowledgeBase] = useState('general')
   const [liveTranscript, setLiveTranscript] = useState('')
-  const [lastTranscript, setLastTranscript] = useState('')
+  // §9 FUENTE ÚNICA de la frase visible: `lastTranscript` vive en el store, sin espejo local.
+  const lastTranscript = useIntegrationStore((state) => state.lastCommittedTranscript)
+  const commitVisibleTranscript = useCallback((text) => {
+    useIntegrationStore.getState().setLastCommittedTranscript(typeof text === 'string' ? text : '')
+  }, [])
+  // §9 ÚNICO punto de commit de la locución: la frase llega YA canónica del
+  // MÓDULO (Anexo B 2/6); `trim` es identidad, así display === fila por construcción.
+  const commitTurnPhrase = useCallback((text, fallback = '') => {
+    return String(text || '').trim() || String(fallback || '').trim()
+  }, [])
+  // Wake words efectivas (Ajustes o default): UN solo criterio.
+  const resolvedWakeWords = resolveWakeWords(wakeWords)
+  const activeTurnIdRef = useRef(0)
+  const sessionTurnRecordedRef = useRef('') // ultimo turnId de fila ya registrado (Paso 0: sin snapshots duplicados)
+  const sessionLocutionsRecordedRef = useRef(new Set())
+  const lastEmittedTurnRef = useRef(0) // turno de la ultima locucion emitida: resolucion tardia idempotente
+  // §9 par ÚNICO `commit + resolución`: TODAS las ramas cierran aquí; la fila
+  // es SIEMPRE el valor commiteado y el display no diverge.
+  const commitAndResolveTurn = useCallback(
+    async ({ capture, fallbackCapture = '', contract, commitOnly = false, ...payload } = {}) => {
+      // ÚNICA frase canónica del turno (display === fila), la del MÓDULO (Anexo B 2/6).
+      const canonicalPhrase = commitTurnPhrase(capture, fallbackCapture)
+      const evidenciaAcustica = payload.evidenciaAcustica === true // solo la DECLARA quien midio VOZ
+      // Garbage descartada (anti-alucinación): no se commitea ni se consulta a IA.
+      if (!canonicalPhrase) return
+      // `commitOnly`: fila del USUARIO inmediata; la resolución posterior re-commitea el MISMO valor.
+      if (commitOnly) {
+        await onContractResolved?.({ contract: null, userCommitOnly: true, transcript: canonicalPhrase, speakerName: payload.speakerName, evidenciaAcustica, phase: payload.phase, turnId: activeTurnIdRef.current })
+        return canonicalPhrase
+      }
+      // El turno de la fila es el de la FRASE (no el vivo): la resolucion tardia escribe SU fila.
+      const turnIdDeLaFrase = canonicalPhrase && canonicalPhrase === lastEmittedTranscriptRef.current && lastEmittedTurnRef.current ? lastEmittedTurnRef.current : activeTurnIdRef.current
+      const result = await onContractResolved?.({ contract, ...payload, evidenciaAcustica, transcript: canonicalPhrase, turnId: turnIdDeLaFrase })
+      return result
+    },
+    [commitTurnPhrase, onContractResolved],
+  )
   const [lastContract, setLastContract] = useState(null)
   const [lastDiagnostics, setLastDiagnostics] = useState(null)
   const [lastErrorEvent, setLastErrorEvent] = useState(null)
@@ -405,57 +231,115 @@ export function useFluVoiceAssistant({
   const autoProcessTimerRef = useRef(null)
   const recognitionRetryTimerRef = useRef(null)
   const recognitionRetryCountRef = useRef(0)
-  const turnRef = useRef(createTurnState())
-  const publishedLiveRef = useRef('')
-  const pendingSpillRef = useRef('')
   const lastLoggedCaptureRef = useRef('')
-  const finalizeGraceUsedRef = useRef(false)
-  const sampleRateRef = useRef(48000)
+  const sampleRateRef = useRef(AUDIO_SAMPLE_RATE)
   const chunksRef = useRef([])
   const sessionLoadedRef = useRef(false)
-  const dialogueHistoryRef = useRef([])
+  // §9 vistas de SOLO LECTURA del store `conversationHistory` (sin setter: escribir lanza).
+  const dialogueView = useMemo(
+    () => ({
+      get current() {
+        return deriveDialogueHistory(useIntegrationStore.getState().conversationHistory)
+      },
+    }),
+    [],
+  )
+  // §9 El ref y su setter: `useSessionSpeakerClusters` siembra las anclas medidas
+  // de la base en TODA escritura (voz conocida = nombre inmediato).
   const speakerClustersRef = useRef([])
+  const { setClusters: setSpeakerClusters } = useSessionSpeakerClusters(speakerClustersRef, participantVoiceAnchors)
+  // Ciclo de vida del turno (overlay + cronómetro) y persistencia fuera del camino
+  // crítico: viven en `useTurnInfrastructure` para no engordar este hook.
+  const turnLifecycleRef = useTurnLifecycleSync()
+  const { write: persistSessionOffPath } = useOffPathSessionWriter(
+    saveSessionState,
+    fluAsyncErrorHandler('useFluVoiceAssistant'),
+  )
+  /**
+   * §9 ÚNICO punto de cálculo de la firma de voz por turno.
+   * Cachea por snapshot (WeakMap): el MISMO audio no se re-embebe dos veces,
+   * y todas las ramas pasan por aquí. Devuelve el mismo shape que
+   * `computeAudioSignature` (`{ vector, stats }`).
+   */
+  const turnSignatureCacheRef = useRef(new WeakMap())
+  const computeTurnSignature = useCallback((snapshot, sampleRate) => {
+    if (!snapshot?.length) {
+      return Promise.resolve({ vector: [], stats: { empty: true, dim: 0 } })
+    }
+    const cache = turnSignatureCacheRef.current
+    const cached = cache.get(snapshot)
+    if (cached) return cached
+    // BANDERA DE DIAGNÓSTICO: ¿el modelo de voz cargó y produjo vector?
+    const promise = computeAudioSignature(snapshot, sampleRate)
+      .then((res) => {
+        relayLog(
+          'LOG',
+          'VoiceId',
+          `signature dim=${res?.stats?.dim ?? res?.vector?.length ?? 0} empty=${res?.stats?.empty === true} snap=${snapshot.length} sr=${sampleRate}`,
+        )
+        return res
+      })
+      .catch((err) => {
+        relayLog('ERROR', 'VoiceId', `signature FAILED: ${err?.message || err}`)
+        throw err
+      })
+    cache.set(snapshot, promise)
+    return promise
+  }, [])
   const knowledgeBaseRef = useRef(knowledgeBase)
   const getMinuteKnowledgeBaseRef = useRef(getMinuteKnowledgeBase)
   const getDailyAgendaRef = useRef(getDailyAgenda)
+  const getSelfManifestoRef = useRef(getSelfManifesto)
+  const getDiaryContextRef = useRef(getDiaryContext)
+  const getNotesContextRef = useRef(getNotesContext)
+  const getHorarioContextRef = useRef(getHorarioContext)
+  const getResultadosContextRef = useRef(getResultadosContext)
   const resolveMinuteLookupRef = useRef(resolveMinuteLookup)
-  const voiceProfilesRef = useRef([])
   const chunkTotalSamplesRef = useRef(0)
-  /** Muestras acumuladas al abrir turno (diarización alineada al turno). */
-  const turnAudioStartSampleRef = useRef(0)
+  const turnAudioStartSampleRef = useRef(0) // muestras al abrir turno (diarizacion alineada)
   const lastSpeakerRef = useRef('')
   const lastLoggedSpeakerRef = useRef('')
+  const lastResolvedSpeakerRef = useRef('') // Ultima voz RESUELTA POR MEDIDA (unico escritor: resolveSpeaker); el sticky la prefiere a lastLogged (d4c1c8f3)
   const lastTurnSignatureRef = useRef(null)
   const isCommittingRef = useRef(false)
-  const commitBaselineRef = useRef('')
   const liveDebounceTimerRef = useRef(null)
-  const livePendingCaptureRef = useRef('')
   const liveRafRef = useRef(null)
-  const pendingStreamLogRef = useRef(null)
-  const streamLogTimerRef = useRef(null)
-  const lastDiarizeUtteranceRef = useRef('')
   const lastEmittedTranscriptRef = useRef('')
   /** Hay preview interino abierto (sin commit al log aún). */
   const openPreviewTurnRef = useRef(false)
-  /** Textos de filas cerradas (para recortar interinos acumulativos). */
-  const logRowsTextRef = useRef([])
-  const logRowSpeakersRef = useRef([])
+  const userRowsTextView = useMemo(
+    () => ({
+      get current() {
+        return deriveUserRowTexts(useIntegrationStore.getState().conversationHistory)
+      },
+    }),
+    [],
+  )
+  const userSpeakersView = useMemo(
+    () => ({
+      get current() {
+        return deriveUserRowSpeakers(useIntegrationStore.getState().conversationHistory)
+      },
+    }),
+    [],
+  )
 
   /** Evita re-sync si Chrome repite el mismo interino. */
   const lastStreamPreviewRef = useRef('')
-  const listenStateRef = useRef(createActiveListenState())
   const lastLogLineTextRef = useRef('')
+  // Procedencia de `lastLogLineTextRef`: la escribio una ORDEN cuya locucion sigue viva.
+  const lastLogLineWasCommandRef = useRef(false)
   const lastLogLineAtRef = useRef(0)
   const recognitionRestartPendingRef = useRef(false)
   const consecutiveEndsWithoutResultRef = useRef(0)
   const stopListeningRef = useRef(async () => { })
   const startListeningRef = useRef(async () => { })
-  const flushPassiveConversationRef = useRef(async () => { })
   const dispatchPassiveVoiceCommandRef = useRef(async () => { })
   const processConversationFluQueryRef = useRef(async () => { })
   const tryDispatchConversationActionRef = useRef(() => false)
   const lastConversationActionRef = useRef({ signature: '', at: 0 })
   const rebuildRecognitionRef = useRef(() => false)
+  const wireRecognitionEventsRef = useRef(() => { })
   const maybeSwitchRecognitionLocaleRef = useRef(() => { })
   const recognitionLocaleRef = useRef(getRecognitionLanguage(language))
   const localeSwitchDetectRef = useRef('')
@@ -464,76 +348,163 @@ export function useFluVoiceAssistant({
   const lastOnresultAtRef = useRef(0)
   const lastMeaningfulIngressAtRef = useRef(0)
   const lastStallRebuildAtRef = useRef(0)
-  const lastSpeakerDiarizeAtRef = useRef(0)
-  const lastLogEmitAtRef = useRef(0)
+  // Reloj del ULTIMO RESULTADO (solo onresult; sobrevive a rebuilds): "SR mudo de verdad".
+  const lastSrResultAtRef = useRef(0)
+  // Ref (no dep): las deps por IDENTIDAD re-montaban el efecto en bucle (1419/289 s, cero ticks).
+  const requestRecognitionRestartRef = useRef(null)
   const passiveAudioDelayTimerRef = useRef(null)
-  const audioProcessSkipRef = useRef(0)
-  const lastDiarizeAtRef = useRef(0)
+  const passiveSetupPromiseRef = useRef(null)
   const listeningAckTimerRef = useRef(null)
-  const lastTurnHadFinalRef = useRef(false)
-  const allowStableCommitRef = useRef(false)
-  const turnCommitIdRef = useRef(0)
-  const activeTurnIdRef = useRef(0)
-  const lastCommitAtRef = useRef(0)
-  const preflightScheduledForTurnRef = useRef(false)
-  const turnBridgeTextRef = useRef('')
   const sessionPrimarySpeakerRef = useRef('')
+  if (identitySession) identitySession.current = { ...(identitySession.current || {}), speakerClustersRef, sessionPrimarySpeakerRef, setClusters: setSpeakerClusters, getLastTurnSignature: () => lastTurnSignatureRef.current }
   const turnSegmentStartedAtRef = useRef(0)
-  const ingressEchoStreakRef = useRef(0)
-  const lastEchoAtRef = useRef(0)
-  const srGapFiredForOpenLineRef = useRef(false)
-  const ingressBindingsRef = useRef({})
-  const ingressRuntimeRef = useRef(null)
 
-  if (!ingressRuntimeRef.current) {
-    ingressRuntimeRef.current = createConversationIngressRuntime({
-      getBindings: () => ingressBindingsRef.current,
-      onAfterBrowserEvent: (event, bindings) => {
-        if (!import.meta.env.DEV || !bindings.debugHotPath) return
-        bindings.fluDebugHot?.('mic', {
-          interim: event.kind === 'interim' ? event.text : '',
-          final: event.kind === 'final' ? event.text : '',
-        })
-      },
-    })
-  }
+  /** Motor CONVERSACIÓN del producto: única ruta de escritura de filas. */
+  const motorConversacionRef = useRef(null)
+  // ESTADO DE LA MEDIDA PASIVA (decisión A): el resolver del módulo es SIN estado;
+  // el hook conserva las plantillas por voz y su tamaño cuenta las voces nuevas.
+  const resolverPasivoRef = useRef(null)
+  if (!resolverPasivoRef.current) resolverPasivoRef.current = crearResolucionPasivaProducto()
+  const plantillasPasivasRef = useRef(new Map())
+  /** Etiqueta resuelta por el MÓDULO al cerrar la última locución (`row.committed`). */
+  const lastModuleLabelRef = useRef('')
+  const languageRef = useRef(language)
+  languageRef.current = language
+  const abrirMotorConversacion = useCallback(() => {
+    if (!motorConversacionRef.current) {
+      // El turno del preflight es un número POSITIVO: el pipeline de identidad
+      // ignora 0, así que la primera locución de la sesión necesita id 1.
+      if (activeTurnIdRef.current < 1) activeTurnIdRef.current = 1
+      motorConversacionRef.current = crearMotorConversacionHook({
+        idioma: normalizeLang(languageRef.current),
+        turnId: () => activeTurnIdRef.current,
+        onLiveTranscript: setLiveTranscript,
+        // B.6: la query de la IA sale de la MISMA frase canónica del módulo; el
+        // planificador único decide revisión y dedup sobre ese texto.
+        onFraseCanonica: (frase, opciones = {}) => {
+          const interim = opciones.interim === true
+          // El turno de la FRASE se captura ANTES del commit (el despacho corre con la locución abierta).
+          lastEmittedTranscriptRef.current = frase
+          lastEmittedTurnRef.current = activeTurnIdRef.current
+          tryDispatchConversationActionRef.current(frase, {
+            interim,
+            source: interim ? 'asr-interim' : 'asr-final',
+          })
+        },
+        // Frontera de TURNO (locución nueva): la siguiente frase es otro turno.
+        onLocucionCommiteada: (fila) => {
+          // Paso 0: UNA instantánea por locución commiteada, con los campos
+          // REALES de la fila; la revisión del mismo turnId no añade snapshot.
+          const turnId = String(fila?.turnId ?? '').trim()
+          const locutionId = String(fila?.locutionId ?? '').trim()
+          const yaRegistrada = locutionId
+            ? sessionLocutionsRecordedRef.current.has(locutionId)
+            : turnId !== '' && turnId === sessionTurnRecordedRef.current
+          if (!yaRegistrada) {
+            if (locutionId) sessionLocutionsRecordedRef.current.add(locutionId)
+            sessionTurnRecordedRef.current = turnId
+            grabarSnapshotDeTurno(fila, {
+              fallback: tramoDelTurno({ chunks: chunksRef.current, totalSamples: chunkTotalSamplesRef.current, sinceSample: turnAudioStartSampleRef.current, sampleRate: sampleRateRef.current }),
+              signature: lastTurnSignatureRef.current,
+              clusters: speakerClustersRef.current,
+              lastSpeaker: lastSpeakerRef.current,
+              primary: sessionPrimarySpeakerRef.current,
+              turnId,
+              locutionId,
+              sampleRate: sampleRateRef.current,
+            })
+          }
+          activeTurnIdRef.current += 1
+          lastModuleLabelRef.current = String(fila?.etiqueta || '')
+          turnSegmentStartedAtRef.current = Date.now()
+          turnAudioStartSampleRef.current = chunkTotalSamplesRef.current
+          fluParticipantRef.current?.onTurnCommitted?.(fila?.turnId)
+        },
+      })
+    }
+    motorConversacionRef.current.abrir()
+  }, [])
+  const cerrarMotorConversacion = useCallback((motivo) => {
+    if (!motorConversacionRef.current) return
+    motorConversacionRef.current.cerrar(motivo)
+    motorConversacionRef.current = null
+  }, [])
+  useEffect(() => () => cerrarMotorConversacion('system'), [cerrarMotorConversacion])
 
-  getParticipantLogSnapshotRef.current = () => ({
-    texts: logRowsTextRef.current,
-    speakers: logRowSpeakersRef.current,
+  // Fallback LOCAL del ASR (degradar a Whisper, gatear sus resultados y recuperar
+  // Chrome): dueno unico en `useLocalAsrFallback`. El cableado se pasa por ref para
+  // no crear una dependencia circular con `wireRecognitionEvents`.
+  const fallback = useLocalAsrFallback({
+    recognitionRef,
+    wireRecognitionEventsRef,
+    createRecognition,
+    startRecognition: startSpeechRecognition,
+    language,
+    recognitionLocaleRef,
+    isListeningRef,
+    isStoppingRef,
+    chunksRef,
+    sampleRateRef,
+    lastSrResultAtRef,
+    lastOnresultAtRef,
+    lastMeaningfulIngressAtRef,
+    lastRecognitionEndAtRef,
+    lastStallRebuildAtRef,
+    recognitionActiveRef,
+    recognitionRestartPendingRef,
+    rebuildRecognitionRef,
+    requestRecognitionRestartRef,
+    relayLog,
+    audioSampleRate: AUDIO_SAMPLE_RATE,
+    getRestartConfig: getConversationRestartConfig,
+    degradeEnabled: isLocalFallbackEnabled(),
   })
 
-  // OS3 parity: if an external participantRef is provided, use it instead of creating a new instance.
-  // This ensures voice commands (FLU_ADELANTE) and the UI button share the same participant state.
-  const fluParticipant = participantRef?.current
-    ? participantRef.current
-    : useFluParticipant({
-      apiKey,
-      language,
-      conversationActiveRef,
-      session,
-      getLogSnapshot: () => getParticipantLogSnapshotRef.current(),
-    })
+  // ---- Fase E: vincular la voz del participante activo (Juan/Luis) a su nombre ----
+  // Si hay un participante real con nombre propio activo, se siembra como sessionPrimary
+  // para que la diarización etiquete sus turnos con su nombre (no «Hablante N»).
+  // Config-gated (roomCapture.seedSessionPrimaryFromActiveParticipant) y solo con
+  // participante real (no anónimo/default) para no introducir regresiones.
+  const seedSessionPrimaryFromActiveName = useCallback(() => {
+    const captureCfg = FLU_CONFIG.voiceIdentity?.capture || {}
+    const roomCfg = captureCfg.roomCapture || {}
+    if (roomCfg.seedSessionPrimaryFromActiveParticipant !== true) return
+    const name = String(activeParticipantName || '').trim()
+    if (!name) return
+    // Solo nombres propios reales (no «Hablante N» ni anónimo genérico).
+    if (isAutoSpeakerLabel(name)) return
+    const skipDefaults = FLU_CONFIG.multiuser?.skipDefaults || {}
+    const anonymousName = String(skipDefaults.anonymousName || 'Anónimo').trim().toLowerCase()
+    if (name.toLowerCase() === anonymousName) return
+    // El PARTICIPANTE ACTIVO es un DATO de la persona, no la identidad de una VOZ (mandato
+    // 2026-10-13: "la etiqueta y el participante activo no nombran a nadie"). Antes esto
+    // registraba su nombre para la voz de su `speakerLabel` SIN medida -> "Luis a la chica".
+    // Solo se fija como primario de la sesion (dato), sin nombrar ninguna voz.
+    setSessionPrimarySpeaker(sessionPrimarySpeakerRef, name, 'participant')
+  }, [activeParticipantName])
+
+  useEffect(() => {
+    seedSessionPrimaryFromActiveName()
+  }, [seedSessionPrimaryFromActiveName])
+
+  getParticipantLogSnapshotRef.current = () => ({
+    texts: userRowsTextView.current,
+    speakers: userSpeakersView.current,
+  })
+
+  // OS3 parity: if an external participantRef is provided, use it instead of creating a new
+  // instance (voz y boton de UI comparten estado). El hook SIEMPRE se invoca (orden estable);
+  // la instancia propia queda inerte cuando App.tsx inyecta la suya -> no omitirlo.
+  const ownParticipant = useFluParticipant({
+    apiKey,
+    language,
+    conversationActiveRef,
+    session,
+    getLogSnapshot: () => getParticipantLogSnapshotRef.current(),
+  })
+  const fluParticipant = participantRef?.current ?? ownParticipant
   const fluParticipantRef = useRef(fluParticipant)
   fluParticipantRef.current = fluParticipant
-
-  const flushTranscriptOnFinal = useCallback(() => {
-    flushTranscriptStateOnFinal({
-      listenState: listenStateRef.current,
-      publishedLiveRef,
-      openPreviewTurnRef,
-      lastStreamPreviewRef,
-    })
-  }, [])
-
-  const flushPcmAfterTurnCommit = useCallback(() => {
-    flushPcmStateAfterCommit({
-      chunksRef,
-      chunkTotalSamplesRef,
-      turnAudioStartSampleRef,
-      micBridgeRef: processorRef,
-    })
-  }, [])
 
   useEffect(() => {
     knowledgeBaseRef.current = knowledgeBase
@@ -546,6 +517,26 @@ export function useFluVoiceAssistant({
   useEffect(() => {
     getDailyAgendaRef.current = getDailyAgenda
   }, [getDailyAgenda])
+
+  useEffect(() => {
+    getSelfManifestoRef.current = getSelfManifesto
+  }, [getSelfManifesto])
+
+  useEffect(() => {
+    getDiaryContextRef.current = getDiaryContext
+  }, [getDiaryContext])
+
+  useEffect(() => {
+    getNotesContextRef.current = getNotesContext
+  }, [getNotesContext])
+
+  useEffect(() => {
+    getHorarioContextRef.current = getHorarioContext
+  }, [getHorarioContext])
+
+  useEffect(() => {
+    getResultadosContextRef.current = getResultadosContext
+  }, [getResultadosContext])
 
   useEffect(() => {
     resolveMinuteLookupRef.current = resolveMinuteLookup
@@ -561,17 +552,10 @@ export function useFluVoiceAssistant({
   }, [language])
 
   useEffect(() => {
-    listVoiceProfiles()
-      .then((profiles) => {
-        voiceProfilesRef.current = profiles
-      })
-      .catch(fluAsyncErrorHandler('useFluVoiceAssistant'))
-  }, [])
-
-  useEffect(() => {
     const hasGetUserMedia = Boolean(navigator.mediaDevices?.getUserMedia)
     const hasSpeechRecognition = Boolean(window.SpeechRecognition || window.webkitSpeechRecognition)
     const hasAudioContext = Boolean(window.AudioContext)
+    // §9 Motor: Chrome SpeechRecognition (Google, online) + AudioContext para la captura PCM (identidad de voz). El resto del pipeline es agnóstico.
     const supported = hasGetUserMedia && hasSpeechRecognition && hasAudioContext
     setIsSupported(supported)
     if (!supported) {
@@ -582,9 +566,9 @@ export function useFluVoiceAssistant({
       const isSecureContext = typeof window !== 'undefined' && window.isSecureContext
       let hint = ''
       if (!isSecureContext) {
-        hint = ' Chrome requiere un contexto seguro (HTTPS o localhost) para estas APIs. Accede vía https:// o http://localhost.'
+        hint = ' Requiere un contexto seguro (HTTPS o localhost) para estas APIs. Accede vía https:// o http://localhost.'
       } else if (!hasSpeechRecognition) {
-        hint = ' Verifica que Chrome esté actualizado o usa chrome://flags/#speech-recognition.'
+        hint = ' Usá Chrome actualizado para el reconocimiento de voz.'
       }
       setError(`Este navegador necesita: ${missing.join(', ')}.${hint}`)
     }
@@ -602,53 +586,14 @@ export function useFluVoiceAssistant({
             theme: saved.theme || FLU_CONFIG.sessionDefaults.theme,
           })
         }
-        if (Array.isArray(saved.history) && saved.history.length) {
-          // Filter out system event entries (participant_ignored, etc.) from
-          // restored dialogue history so Gemini doesn't see old emotional events
-          // and respond to them as if they were current conversation context.
-          // This covers both the raw system event text and Gemini's responses
-          // to those events (which contain the emotional language but without
-          // the [FLU recuerda] prefix).
-          const SYSTEM_EVENT_PATTERNS = [
-            '[FLU recuerda]',
-            '[FLU remembers]',
-            'Me enojé porque levanté la mano',
-            'I got upset because I raised my hand',
-            'Me siento realmente molesto y triste porque levanté la mano',
-            'I feel really upset and sad because I raised my hand',
-          ]
-          const filtered = saved.history.filter(
-            (entry) =>
-              entry &&
-              !SYSTEM_EVENT_PATTERNS.some((pattern) =>
-                String(entry.text || '').includes(pattern)
-              )
-          )
-          const removedCount = saved.history.length - filtered.length
-          if (removedCount > 0) {
-            console.log(`[FluVoice] Filtered ${removedCount} system event(s) from restored dialogue history`)
-          }
-          dialogueHistoryRef.current = filtered
-        }
+        // §9: el historial restaurado lo carga `useConversationPersistence` en el store; el motor NO mantiene diálogo propio. El filtrado de eventos de
+        // sistema pertenece a la persistencia, no a este hook.
         if (saved.phase === 'SESION_ACTIVA' || saved.phase === 'CONFIGURACION') {
           setPhase(saved.phase)
         }
       })
       .catch(fluAsyncErrorHandler('useFluVoiceAssistant'))
   }, [])
-
-  const readCaptureSnapshot = useCallback(
-    () => readTurnCapture(turnRef.current, pendingSpillRef.current),
-    [],
-  )
-
-  const readActiveSnapshot = useCallback(() => {
-    if (conversationActiveRef?.current) {
-      return readCommandText(listenStateRef.current)
-    }
-    return readCommandSnapshot(turnRef.current, pendingSpillRef.current)
-  }, [conversationActiveRef])
-
 
   const clearListeningAck = useCallback(() => {
     if (typeof window === 'undefined') return
@@ -661,9 +606,9 @@ export function useFluVoiceAssistant({
 
   const showListeningAck = useCallback(() => {
     const { listeningAck: ackCfg } = getConversationConfig()
-    setListeningAck(ackCfg.message)
-    if (typeof window === 'undefined') return
     clearListeningAck()
+    if (typeof window === 'undefined') return
+    setListeningAck(ackCfg.message)
     listeningAckTimerRef.current = window.setTimeout(() => {
       listeningAckTimerRef.current = null
       setListeningAck('')
@@ -671,256 +616,97 @@ export function useFluVoiceAssistant({
   }, [clearListeningAck])
 
   const clearLiveTranscriptTimers = useCallback(() => {
-    if (typeof window === 'undefined') return
-    if (liveDebounceTimerRef.current) {
-      window.clearTimeout(liveDebounceTimerRef.current)
-      liveDebounceTimerRef.current = null
-    }
-    if (liveRafRef.current) {
-      window.cancelAnimationFrame(liveRafRef.current)
-      liveRafRef.current = null
-    }
+    clearTimeoutRef(liveDebounceTimerRef)
+    clearAnimationFrameRef(liveRafRef)
   }, [])
 
-  const clearStreamLogTimer = useCallback(() => {
-    if (typeof window === 'undefined') return
-    if (streamLogTimerRef.current) {
-      window.clearTimeout(streamLogTimerRef.current)
-      streamLogTimerRef.current = null
-    }
-  }, [])
-
-  const flushPendingStreamLog = useCallback(() => {
-    clearStreamLogTimer()
-    const pending = pendingStreamLogRef.current
-    if (!pending) return
-    pendingStreamLogRef.current = null
-    const { __fluDebug, ...payload } = pending
-    void onContractResolved?.(payload)
-    if (import.meta.env.DEV && debugHotPath && __fluDebug) {
-      fluDebugHot('log-emit', __fluDebug)
-    }
-  }, [clearStreamLogTimer, onContractResolved])
-
-  const scheduleLiveTranscriptUpdate = useCallback(
-    (capture = '') => {
-      if (!capture) return
-      livePendingCaptureRef.current = capture
-      const debounceMs = Math.max(0, FLU_CONFIG.timing.liveTranscriptDebounceMs)
-      if (typeof window === 'undefined') {
-        setLiveTranscript(capture)
-        return
-      }
-      if (debounceMs > 0) {
-        clearLiveTranscriptTimers()
-        liveDebounceTimerRef.current = window.setTimeout(() => {
-          liveDebounceTimerRef.current = null
-          setLiveTranscript(livePendingCaptureRef.current)
-        }, debounceMs)
-        return
-      }
-      if (liveRafRef.current) return
-      liveRafRef.current = window.requestAnimationFrame(() => {
-        liveRafRef.current = null
-        setLiveTranscript(livePendingCaptureRef.current)
-      })
-    },
-    [clearLiveTranscriptTimers],
-  )
-
-  const flushLiveTranscript = useCallback(() => {
-    if (conversationActiveRef?.current) {
-      const capture = readStreamDisplay(listenStateRef.current)
-      if (capture && capture !== publishedLiveRef.current) {
-        publishedLiveRef.current = capture
-        setLiveTranscript(capture)
-      }
-      return
-    }
-
-    const raw = readCommandSnapshot(turnRef.current, pendingSpillRef.current)
-    const turnPreview = raw ? cleanForSpeech(raw) : ''
-
-    if (turnPreview) {
-      const stable = monotonicDisplay(publishedLiveRef.current, turnPreview)
-      if (stable === publishedLiveRef.current) return
-      publishedLiveRef.current = stable
-      setLiveTranscript(stable)
-      return
-    }
-
-    if (isListeningRef.current && publishedLiveRef.current) {
-      return
-    }
-
-    publishedLiveRef.current = ''
-    setLiveTranscript('')
-  }, [conversationActiveRef])
-
-  const publishLive = useCallback(() => {
-    if (typeof window === 'undefined') {
-      flushLiveTranscript()
-      return
-    }
-    if (liveDebounceTimerRef.current) {
-      window.clearTimeout(liveDebounceTimerRef.current)
-    }
-    liveDebounceTimerRef.current = window.setTimeout(() => {
-      liveDebounceTimerRef.current = null
-      flushLiveTranscript()
-    }, FLU_CONFIG.timing.liveTranscriptDebounceMs)
-  }, [flushLiveTranscript])
-
-  const publishLiveImmediate = useCallback(() => {
-    if (typeof window !== 'undefined' && liveDebounceTimerRef.current) {
-      window.clearTimeout(liveDebounceTimerRef.current)
-      liveDebounceTimerRef.current = null
-    }
-    flushLiveTranscript()
-  }, [flushLiveTranscript])
-
-  const publishLiveFromTurn = useCallback(() => {
-    const debounceMs = FLU_CONFIG.timing.liveTranscriptDebounceMs
-    if (!debounceMs) {
-      publishLiveImmediate()
-      return
-    }
-    publishLive()
-  }, [publishLive, publishLiveImmediate])
-
-  const clearTurnBuffers = useCallback(() => {
-    resetTurnState(turnRef.current)
-    finalizeGraceUsedRef.current = false
-  }, [])
-
+  // Estado de captura: el turno vive en el MÓDULO; aquí solo se descarta el PCM.
   const clearCaptureState = useCallback(() => {
-    clearTurnBuffers()
     chunksRef.current = []
     chunkTotalSamplesRef.current = 0
-  }, [clearTurnBuffers])
+  }, [])
 
   const resetVoiceDisplay = useCallback(() => {
     clearCaptureState()
-    pendingSpillRef.current = ''
     lastLoggedCaptureRef.current = ''
     lastEmittedTranscriptRef.current = ''
     openPreviewTurnRef.current = false
-    logRowsTextRef.current = []
-    logRowSpeakersRef.current = []
     turnAudioStartSampleRef.current = 0
     lastStreamPreviewRef.current = ''
-    resetActiveListenState(listenStateRef.current)
     lastLogLineTextRef.current = ''
+    lastLogLineWasCommandRef.current = false
     lastLogLineAtRef.current = 0
     lastTurnSignatureRef.current = null
-    publishedLiveRef.current = ''
-    setLastTranscript('')
-    setLiveTranscript('')
-  }, [clearCaptureState])
+    commitVisibleTranscript('')
+  }, [clearCaptureState, commitVisibleTranscript])
 
   const resetConversationSession = useCallback(() => {
     resetVoiceDisplay()
     clearListeningAck()
-    speakerClustersRef.current = []
-    const { speakers } = getConversationConfig()
-    lastSpeakerRef.current = speakers.defaultLabel
-    lastLoggedSpeakerRef.current = speakers.defaultLabel
+    setSpeakerClusters([])
+    // UNA sola fuente de la etiqueta inicial (auditoria 2026-10-23): getFallbackSpeaker.
+    lastSpeakerRef.current = getFallbackSpeaker()
+    lastLoggedSpeakerRef.current = getFallbackSpeaker()
     lastTurnSignatureRef.current = null
-    dialogueHistoryRef.current = []
-  }, [clearListeningAck, resetVoiceDisplay])
+  }, [clearListeningAck, resetVoiceDisplay, setSpeakerClusters])
 
   const advanceConversationSpeaker = useCallback(() => {
-    if (conversationActiveRef?.current) {
-      const next = advanceSpeaker(listenStateRef.current)
-      lastSpeakerRef.current = next
-      lastLoggedSpeakerRef.current = next
-      return next
-    }
-
-    const known = listSessionSpeakers(dialogueHistoryRef.current)
-    const labels = [
-      lastSpeakerRef.current,
-      lastLoggedSpeakerRef.current,
-      ...known,
-    ].filter(Boolean)
-    const next = nextSpeakerLabel(labels)
+    // Etiqueta nueva de la VISTA: el tope lo da el plan de escucha; la identidad de
+    // la fila la resuelve el MÓDULO por su propia medida (decisión A, Paso 5).
+    const cap = getActiveListenConfig().speakers?.maxSpeakers ?? 0
+    const next = nextAvailableSpeakerLabel([], [lastSpeakerRef.current, ...userSpeakersView.current].filter(Boolean), { maxSpeakers: cap })
     lastSpeakerRef.current = next
     lastLoggedSpeakerRef.current = next
     return next
-  }, [conversationActiveRef])
+  }, [userSpeakersView])
 
   const renameSessionSpeaker = useCallback((fromLabel = '', toLabel = '') => {
     const source = String(fromLabel || '').trim()
     const target = String(toLabel || '').trim()
     if (!source || !target || source === target) return
 
-    speakerClustersRef.current = speakerClustersRef.current.map((cluster) =>
-      String(cluster?.label || '').trim() === source ? { ...cluster, label: target } : cluster,
+    setSpeakerClusters((prev) =>
+      prev.map((cluster) =>
+        String(cluster?.label || '').trim() === source ? { ...cluster, label: target } : cluster,
+      ),
     )
 
     if (lastSpeakerRef.current === source) lastSpeakerRef.current = target
     if (lastLoggedSpeakerRef.current === source) lastLoggedSpeakerRef.current = target
-  }, [])
+  }, [setSpeakerClusters])
 
   const removeSessionSpeaker = useCallback((label = '') => {
     const source = String(label || '').trim()
     if (!source) return
 
-    speakerClustersRef.current = speakerClustersRef.current.filter(
-      (cluster) => String(cluster?.label || '').trim() !== source,
+    setSpeakerClusters((prev) =>
+      prev.filter((cluster) => String(cluster?.label || '').trim() !== source),
     )
 
     if (lastSpeakerRef.current === source) lastSpeakerRef.current = ''
     if (lastLoggedSpeakerRef.current === source) lastLoggedSpeakerRef.current = ''
-  }, [])
+  }, [setSpeakerClusters])
 
   const reconcileSpeakerClusters = useCallback((committedSpeakers = []) => {
     const roomCfg = FLU_CONFIG.voiceIdentity?.capture?.roomCapture || {}
     if (roomCfg.pruneGhostClusters === false) return
 
     const before = speakerClustersRef.current.map((cluster) => cluster.label)
-    speakerClustersRef.current = pruneGhostSpeakerClusters(
-      speakerClustersRef.current,
-      committedSpeakers,
-      {
+    setSpeakerClusters((prev) =>
+      pruneGhostSpeakerClusters(prev, committedSpeakers, {
         keepLabels: [lastSpeakerRef.current, lastLoggedSpeakerRef.current].filter(Boolean),
-      },
+      }),
     )
     const after = speakerClustersRef.current.map((cluster) => cluster.label)
     const removed = before.filter((label) => !after.includes(label))
     if (import.meta.env.DEV && debugHotPath && removed.length) {
       fluDebugHot('speaker-prune', { removed, kept: after })
     }
-  }, [])
-
-  const releaseTurnAfterLog = useCallback(
-    (loggedCapture = '') => {
-      pendingSpillRef.current = computeSpillAfterLog(
-        turnRef.current,
-        pendingSpillRef.current,
-        loggedCapture,
-      )
-      lastLoggedCaptureRef.current = ''
-      resetTurnState(turnRef.current)
-      finalizeGraceUsedRef.current = false
-
-      const spillPreview = pendingSpillRef.current ? cleanForSpeech(pendingSpillRef.current) : ''
-      publishedLiveRef.current = spillPreview
-      flushLiveTranscript()
-    },
-    [flushLiveTranscript],
-  )
+  }, [setSpeakerClusters])
 
   const clearAutoProcessTimer = useCallback(() => {
-    if (typeof window === 'undefined') return
-    if (autoProcessTimerRef.current) {
-      window.clearTimeout(autoProcessTimerRef.current)
-      autoProcessTimerRef.current = null
-    }
-    if (liveDebounceTimerRef.current) {
-      window.clearTimeout(liveDebounceTimerRef.current)
-      liveDebounceTimerRef.current = null
-    }
+    clearTimeoutRef(autoProcessTimerRef)
+    clearTimeoutRef(liveDebounceTimerRef)
   }, [])
 
   const clearAllCommitTimers = useCallback(() => {
@@ -928,11 +714,7 @@ export function useFluVoiceAssistant({
   }, [clearAutoProcessTimer])
 
   const clearRecognitionRetryTimer = useCallback(() => {
-    if (typeof window === 'undefined') return
-    if (recognitionRetryTimerRef.current) {
-      window.clearTimeout(recognitionRetryTimerRef.current)
-      recognitionRetryTimerRef.current = null
-    }
+    clearTimeoutRef(recognitionRetryTimerRef)
   }, [])
 
   const clearPassiveAudioDelayTimer = useCallback(() => {
@@ -944,8 +726,8 @@ export function useFluVoiceAssistant({
   }, [])
 
   const getConversationContext = useCallback(
-    () => getDialogueContextSlice(dialogueHistoryRef.current, CONTEXT_HISTORY_LIMIT),
-    [],
+    () => getDialogueContextSlice(dialogueView.current, CONTEXT_HISTORY_LIMIT),
+    [dialogueView],
   )
 
   const requestFluContractForTranscript = useCallback(
@@ -960,7 +742,7 @@ export function useFluVoiceAssistant({
     }) => {
       if (knowledgeMode === 'minutes') {
         const local = resolveMinuteLookupRef.current(transcript, language)
-        if (local?.mode === 'local' && local.contract) {
+        if (local?.mode === AI_PROVIDER_IDS.LOCAL && local.contract) {
           return {
             contract: local.contract,
             diagnostics: local.diagnostics || { provider: 'minute-store', route: 'minute-lookup' },
@@ -968,45 +750,8 @@ export function useFluVoiceAssistant({
         }
       }
 
-      // Read personality + creativity from FLU Configurator (integrationStore)
-      const integrationState = useIntegrationStore.getState?.()
-      const personality = integrationState?.config?.personality
-        ? {
-          traits: integrationState.config.personality.traits || [],
-          tone: integrationState.config.personality.tone || 'friendly',
-          customInstructions: integrationState.config.personality.customInstructions || '',
-        }
-        : null
-      const creativity = integrationState?.advancedConfig?.creativity ?? null
-
-      // Read startupPrompt from the active profile definition
-      const currentProfile = integrationState?.availableProfiles?.find(
-        (p) => p.id === integrationState?.profile
-      )
-      const startupPrompt = currentProfile?.startupPrompt || ''
-
-      // Read recentMemory from ref (set by OS3's onEmotion callback via setRecentMemory)
-      // Clear it immediately after reading so it only fires once (avoids repeating the
-      // same emotion across multiple subsequent contract requests).
-      const recentMemory = recentMemoryRef.current || ''
-      recentMemoryRef.current = ''
-
-      // Build daily agenda from minutes (pending items from previous sessions)
-      const agendaText = getDailyAgendaRef.current()
-        ? getDailyAgendaRef.current()
-        : ''
-
-      // FLU "thinking" (Pensando / Idle_1) while the AI processes the request —
-      // deterministic per definition: when the user asks the AI something (or it
-      // learns/generates) FLU must show Pensando. Local minute lookups above
-      // return instantly, so they correctly skip this.
-      useIntegrationStore.getState?.().setConversationState?.('THINKING')
-      // Indicador visual de procesamiento: se enciende al iniciar la llamada
-      // a la IA y se apaga SIEMPRE al resolver (éxito o error) en el finally.
-      useIntegrationStore.getState?.().setThinking?.(true)
-
-      try {
-        return await requestFluContract({
+      const contractParams = buildContractParams(
+        {
           apiKey,
           transcript,
           intent,
@@ -1015,18 +760,46 @@ export function useFluVoiceAssistant({
           role,
           phase: contractPhase,
           language,
+          knowledgeMode,
           history: getConversationContext(),
           knowledgeBase: knowledgeBaseRef.current,
           knowledgeBase2: knowledgeMode === 'minutes' ? getMinuteKnowledgeBaseRef.current() : '',
-          knowledgeMode,
-          personality,
-          creativity,
-          recentMemory,
-          startupPrompt,
-          agendaText,
-        })
-      } finally {
-        useIntegrationStore.getState?.().setThinking?.(false)
+        },
+        {
+          consumeRecentMemory: () => {
+            const value = recentMemoryRef.current || ''
+            recentMemoryRef.current = ''
+            return value
+          },
+          getAgenda: getDailyAgendaRef.current,
+          getSelfManifesto: getSelfManifestoRef.current,
+          getDiaryContext: getDiaryContextRef.current,
+          getNotesContext: getNotesContextRef.current,
+          getHorarioContext: getHorarioContextRef.current,
+          getResultadosContext: getResultadosContextRef.current,
+        },
+      )
+
+      // FLU "thinking": gobierna la EXPRESIÓN del avatar (el overlay es del turno);
+      // las consultas locales de minuta resuelven antes y se lo saltan.
+      useIntegrationStore.getState?.().setConversationState?.('THINKING')
+      // El indicador "Pensando" (overlay) lo gobierna el TURNO (turnWorkIndicator),
+      // no esta llamada: al resolver la IA el turno sigue trabajando (escrituras,
+      // despacho de la acción y locución), así que apagarlo aquí lo quitaba
+      // mientras FLU seguía haciendo cosas.
+      const iaStartMs = Date.now()
+      try {
+        const iaResult = await requestFluContract(contractParams)
+        // Instrumentación de latencia (diagnóstico): permite medir el tiempo real
+        // de la intervención con IA sin adivinar.
+        relayLog(
+          'LOG',
+          'useFluVoiceAssistant',
+          `latencia IA: ${Date.now() - iaStartMs}ms (phase=${contractPhase}, model=${iaResult?.diagnostics?.model || iaResult?.diagnostics?.provider || 'n/d'})`,
+        )
+        return iaResult
+      } catch (err) {
+        relayLog('ERROR', 'useFluVoiceAssistant', `latencia IA (fallo) tras ${Date.now() - iaStartMs}ms`); throw err
       }
     },
     [apiKey, getConversationContext, language],
@@ -1040,44 +813,21 @@ export function useFluVoiceAssistant({
     })
   }, [getConversationContext, phase, session])
 
-  const scheduleAutoProcess = useCallback(
-    (delay = getFluTimingCfg().scheduleAutoProcessDelayMs) => {
-      if (typeof window === 'undefined') return
-      clearAutoProcessTimer()
-      autoProcessTimerRef.current = window.setTimeout(() => {
-        if (!isListeningRef.current || isStoppingRef.current) return
-
-        if (isCommittingRef.current) {
-          scheduleAutoProcess(getFluTimingCfg().scheduleAutoProcessWhileCommittingMs)
-          return
-        }
-
-        if (conversationActiveRef?.current) {
-          return
-        } else {
-          const pendingInterim = cleanForSpeech(turnRef.current.interim)
-          if (pendingInterim && !finalizeGraceUsedRef.current) {
-            finalizeGraceUsedRef.current = true
-            scheduleAutoProcess(FLU_CONFIG.timing.interimFinalizeGraceMs)
-            return
-          }
-        }
-
-        finalizeGraceUsedRef.current = false
-        stopListeningRef.current({ closing: false }).catch(fluAsyncErrorHandler('useFluVoiceAssistant'))
-      }, delay)
-    },
-    [clearAutoProcessTimer, conversationActiveRef],
-  )
-
   const requestRecognitionRestart = useCallback(
-    (delay = getFluTimingCfg().recognitionRestartDefaultDelayMs) => {
+    (motivo, delay = getFluTimingCfg().recognitionRestartDefaultDelayMs) => {
+      // Caso 13: un reinicio de la escucha SOLO se agenda con motivo declarado.
+      const motivoDeclarado = String(motivo || '').trim()
+      if (!motivoDeclarado) {
+        logCaughtError('escucha.reinicio.sinMotivo', new Error('reinicio de la escucha sin motivo declarado'))
+        return
+      }
       if (typeof window === 'undefined') return
       if (!isListeningRef.current || !recognitionRef.current || isStoppingRef.current) return
 
       clearRecognitionRetryTimer()
       recognitionRestartPendingRef.current = true
       recognitionRetryTimerRef.current = window.setTimeout(() => {
+        fluDebugHot('recognition-restart', { motivo: motivoDeclarado, delay })
         recognitionRetryTimerRef.current = null
         recognitionRestartPendingRef.current = false
         if (!isListeningRef.current || !recognitionRef.current || isStoppingRef.current) return
@@ -1092,7 +842,8 @@ export function useFluVoiceAssistant({
           }
           try {
             stopSpeechRecognition(recognitionRef.current)
-          } catch {
+          } catch (e) {
+        logCaughtError('[catch] src/voice/hooks/useFluVoiceAssistant.js', e, e?.stack);
             // ignore
           }
           const retryCount = recognitionRetryCountRef.current + 1
@@ -1108,7 +859,8 @@ export function useFluVoiceAssistant({
         const restartCfg = getActiveListenConfig().restart
         try {
           stopSpeechRecognition(recognitionRef.current)
-        } catch {
+        } catch (e) {
+        logCaughtError('[catch] src/voice/hooks/useFluVoiceAssistant.js', e, e?.stack);
           // ignore
         }
         const retryCount = recognitionRetryCountRef.current + 1
@@ -1124,18 +876,25 @@ export function useFluVoiceAssistant({
               restartCfg.retryBackoffMs * Math.min(retryCount, 8),
             )
             : Math.min(220 + retryCount * 40, 800)
-          requestRecognitionRestart(backoff)
+          requestRecognitionRestart('reintento', backoff)
         } else if (conversationActiveRef?.current) {
           recognitionRetryCountRef.current = 0
-          requestRecognitionRestart(restartCfg.maxBackoffMs)
+          requestRecognitionRestart('bucle-lento', restartCfg.maxBackoffMs)
         }
       }, delay)
     },
     [clearRecognitionRetryTimer, conversationActiveRef],
   )
 
+  requestRecognitionRestartRef.current = requestRecognitionRestart
+
   const finalizeRecognition = useCallback(async () => {
     if (!recognitionRef.current) return
+
+    relayLog('LOG', 'useFluVoiceAssistant', '[REC] stop: finalizeRecognition', {
+      isListening: isListeningRef.current,
+      conversationActive: Boolean(conversationActiveRef?.current),
+    })
 
     const finalizeMs = conversationActiveRef?.current
       ? FLU_CONFIG.timing.recognitionFinalizeMs
@@ -1148,7 +907,7 @@ export function useFluVoiceAssistant({
 
     try {
       recognitionRef.current.stop()
-    } catch { }
+    } catch (err) { logCaughtError('[catch] src/voice/hooks/useFluVoiceAssistant.js', err, err?.stack) }
 
     await Promise.race([
       waitForEnd,
@@ -1163,6 +922,11 @@ export function useFluVoiceAssistant({
   const suspendRecognitionForAssistantSpeech = useCallback(async () => {
     if (!recognitionRef.current || !recognitionActiveRef.current) return
 
+    // La escucha estaba activa antes de hablar: al terminar la suspensión se
+    // debe volver a encender (log evidencia: onend con isStopping=true y luego
+    // nadie reabría → "se cierra la conversación").
+    const wasListeningBefore = isListeningRef.current || recognitionActiveRef.current
+
     isStoppingRef.current = true
     const waitForEnd = new Promise((resolve) => {
       recognitionEndResolverRef.current = resolve
@@ -1174,7 +938,8 @@ export function useFluVoiceAssistant({
       } else {
         recognitionRef.current.stop()
       }
-    } catch {
+    } catch (e) {
+        logCaughtError('[catch] src/voice/hooks/useFluVoiceAssistant.js', e, e?.stack);
       // ignore
     }
 
@@ -1185,50 +950,23 @@ export function useFluVoiceAssistant({
     ])
     isStoppingRef.current = false
     recognitionEndResolverRef.current = null
-  }, [])
 
-  const restartRecognition = useCallback(() => {
-    requestRecognitionRestart(0)
-  }, [requestRecognitionRestart])
-
-  const resolveConversationSpeakerSync = useCallback(
-    (
-      transcriptForIntro = '',
-      audioSnapshot,
-      sampleRate,
-      fallbackSpeaker,
-      { atTurnBoundary = false, allowNewCluster = true } = {},
-    ) => {
-      const captureCfg = FLU_CONFIG.voiceIdentity?.capture || {}
-      const canDiarize = conversationActiveRef?.current === true && captureCfg.conversationAutoDiarize === true
-      if (!audioSnapshot?.length) {
-        return lastSpeakerRef.current || fallbackSpeaker
-      }
-      // Embeddings async (worker): el preflight ya resolvió identidad por audio
-      // (assignSpeakerStrictCosine, signatureVector 512-D). Se consulta el slot del
-      // turno activo para que la vista previa NO rompa la diarización de conversación:
-      // con evidencia lista se usa el hablante real; sin ella se mantiene sticky.
-      if (canDiarize) {
-        const preflight = peekTurnSpeakerPreflight(activeTurnIdRef.current)
-        if (preflight?.ready && preflight.speakerName) {
-          return preflight.speakerName
-        }
-        if (lastLoggedSpeakerRef.current) {
-          return lastLoggedSpeakerRef.current
-        }
-      }
-      return fallbackSpeaker || lastLoggedSpeakerRef.current || lastSpeakerRef.current || 'Hablante 1'
-    },
-    [conversationActiveRef],
-  )
+    // Reanudar la escucha si estaba activa antes del habla. SOLO en modo pasivo: en conversación
+    // activa lo hace App (onContractResolved → scheduleResumeListening); reabrir aqui forzaba LISTENING.
+    resumeAfterSpeechSuspend({ wasListeningBefore, isConversationActive: () => Boolean(conversationActiveRef?.current), requestRestart: requestRecognitionRestart }) // (a) dueno unico: voiceStallPolicy
+  }, [conversationActiveRef, requestRecognitionRestart])
 
   const getContinuousBufferAdapter = useCallback(() => ({
     getTurnStartSample: () => turnAudioStartSampleRef.current,
-    snapshotTurnWindow: ({ turnAudioStartSample, atTurnBoundary = false } = {}) => {
-      const rate = sampleRateRef.current || 48000
+    /** Cuenta de muestras capturadas: la revision de AUDIO del turno (su unico dueño). */
+    getTotalSamples: () => chunkTotalSamplesRef.current,
+    snapshotTurnWindow: ({ turnAudioStartSample, atTurnBoundary = false, minSamplesMs = 0 } = {}) => {
+      const rate = sampleRateRef.current || AUDIO_SAMPLE_RATE
       const tailMs = getConversationSpeakerTailMs(FLU_CONFIG, { atTurnBoundary })
       const maxSamples = Math.floor(rate * (tailMs / 1000))
-      const minVoiced = getConversationMinVoicedSamples(rate)
+      // `minSamplesMs` (captura del turno) garantiza MINIMO de audio: sin el, la
+      // ventana salia de ~8 ms (medido: `snap=384` -> `vec=0` -> sin clusters).
+      const minVoiced = Math.floor(rate * (Number(minSamplesMs) / 1000))
       return flattenChunksWindow(chunksRef.current, {
         totalSamples: chunkTotalSamplesRef.current,
         sinceSample: Number.isFinite(turnAudioStartSample)
@@ -1240,339 +978,110 @@ export function useFluVoiceAssistant({
     },
   }), [])
 
-  const createSpeakerAudioResolver = useCallback(
-    ({ atTurnBoundary = false, allowNewCluster = false, utterance = '' } = {}) =>
-      createTurnSpeakerAudioResolver({
-        getAudioBuffer: () => getContinuousBufferAdapter(),
-        getSampleRate: () => sampleRateRef.current || 48000,
-        getTurnStartSample: () => turnAudioStartSampleRef.current,
-        getAudioStartSample: () => turnAudioStartSampleRef.current,
-        getAudioStartedAtMs: () => turnSegmentStartedAtRef.current,
-        getSpeakerClusters: () => speakerClustersRef.current,
-        getLastSpeaker: () => lastLoggedSpeakerRef.current || lastSpeakerRef.current,
-        getLastSignature: () => lastTurnSignatureRef.current,
-        getFallbackSpeaker: () =>
-          lastLoggedSpeakerRef.current || lastSpeakerRef.current || 'Hablante 1',
-        getUtteranceText: () => cleanForSpeech(utterance) || lastDiarizeUtteranceRef.current,
-        atTurnBoundary,
-        allowNewCluster,
-        getPreferSpeaker: () => lastLoggedSpeakerRef.current || '',
-        getSessionPrimary: () => sessionPrimarySpeakerRef.current || '',
-        getReservedLabels: () => [...logRowSpeakersRef.current].filter(Boolean),
-      }),
+  /** §9 Captura el audio del turno (turnAudioSnapshot.js) antes de vaciar el buffer. */
+  const captureTurnAudio = useCallback(
+    () => captureTurnAudioSnapshot(activeTurnIdRef.current, {
+      buildWindow: () => getContinuousBufferAdapter().snapshotTurnWindow({ turnAudioStartSample: turnAudioStartSampleRef.current, atTurnBoundary: true, minSamplesMs: getConversationSpeakerTailMs(FLU_CONFIG, { atTurnBoundary: true }) }),
+      meta: { total: chunkTotalSamplesRef.current, since: turnAudioStartSampleRef.current, chunks: chunksRef.current.length, sampleRate: sampleRateRef.current || AUDIO_SAMPLE_RATE },
+    }),
     [getContinuousBufferAdapter],
-  )
-
-  const scheduleIdentityPreflight = useCallback(
-    ({ utterance = '' } = {}) => {
-      if (!conversationActiveRef?.current) return
-      const captureCfg = FLU_CONFIG.voiceIdentity?.capture || {}
-      if (captureCfg.conversationAutoDiarize !== true) return
-
-      const phrase = cleanForSpeech(utterance)
-      if (phrase) lastDiarizeUtteranceRef.current = phrase
-
-      if (preflightScheduledForTurnRef.current) {
-        return
-      }
-
-      preflightScheduledForTurnRef.current = true
-      activeTurnIdRef.current += 1
-      const turnId = activeTurnIdRef.current
-      startContinuousIdentityPipeline(
-        turnId,
-        () => createSpeakerAudioResolver({ atTurnBoundary: true, allowNewCluster: true, utterance: phrase }),
-        {
-          onClusters: (clusters) => {
-            if (captureCfg.roomCapture?.deferClusterWritesUntilCommit !== false) return
-            speakerClustersRef.current = clusters
-          },
-        },
-      )
-    },
-    [conversationActiveRef, createSpeakerAudioResolver],
-  )
-
-  const resolveSpeakerWithAudio = useCallback(
-    (utterance = '', fallbackSpeaker = '', { atTurnBoundary = false, allowNewCluster = false } = {}) => {
-      const captureCfg = FLU_CONFIG.voiceIdentity?.capture || {}
-      if (!conversationActiveRef?.current || captureCfg.conversationAutoDiarize !== true) {
-        return fallbackSpeaker
-      }
-      const tailMs = getConversationSpeakerTailMs(FLU_CONFIG, { atTurnBoundary })
-      const sampleRate = sampleRateRef.current || 48000
-      const maxSamples = Math.floor(sampleRate * (tailMs / 1000))
-      const minVoiced = getConversationMinVoicedSamples(sampleRate)
-      let tail = flattenChunksTail(chunksRef.current, maxSamples)
-      if (captureCfg.conversationTurnAlignedDiarize !== false) {
-        const turnWindow = flattenChunksWindow(chunksRef.current, {
-          totalSamples: chunkTotalSamplesRef.current,
-          sinceSample: turnAudioStartSampleRef.current,
-          maxSamples,
-          minSamples: minVoiced,
-        })
-        if (turnWindow.length >= minVoiced) tail = turnWindow
-      }
-      if (!tail.length) return fallbackSpeaker
-      return resolveConversationSpeakerSync(utterance, tail, sampleRate, fallbackSpeaker, {
-        atTurnBoundary,
-        allowNewCluster,
-      })
-    },
-    [conversationActiveRef, resolveConversationSpeakerSync],
-  )
-
-  const applyConversationSpeaker = useCallback(
-    (utterance = '', fallbackSpeaker = '', { force = false, atTurnBoundary = false, allowNewCluster = false } = {}) => {
-      const fallback = cleanForSpeech(fallbackSpeaker) || getSpeakerLabel(listenStateRef.current)
-      const captureCfg = FLU_CONFIG.voiceIdentity?.capture || {}
-      if (
-        shouldSkipPreviewDiarize({
-          forceWakeDiarize: force,
-          conversationActive: Boolean(conversationActiveRef?.current),
-        })
-      ) {
-        syncSpeakerIndexFromLabel(listenStateRef.current, fallback)
-        lastSpeakerRef.current = fallback
-        return fallback
-      }
-      const now = Date.now()
-      const diarizeMs = getDiarizeIntervalMs()
-      const canDiarize =
-        captureCfg.conversationAutoDiarize === true &&
-        (force ||
-          atTurnBoundary ||
-          utterance !== lastDiarizeUtteranceRef.current ||
-          now - lastSpeakerDiarizeAtRef.current >= diarizeMs)
-
-      if (!canDiarize) {
-        syncSpeakerIndexFromLabel(listenStateRef.current, fallback)
-        lastSpeakerRef.current = fallback
-        lastLoggedSpeakerRef.current = fallback
-        return fallback
-      }
-
-      lastSpeakerDiarizeAtRef.current = now
-      lastDiarizeUtteranceRef.current = cleanForSpeech(utterance)
-      const prevSpeaker = lastLoggedSpeakerRef.current || lastSpeakerRef.current
-      const canCreateCluster = allowNewCluster || force || atTurnBoundary
-      const speaker =
-        cleanForSpeech(
-          resolveSpeakerWithAudio(utterance, fallback, {
-            atTurnBoundary,
-            allowNewCluster: canCreateCluster,
-          }),
-        ) || fallback
-      syncSpeakerIndexFromLabel(listenStateRef.current, speaker)
-      lastSpeakerRef.current = speaker
-      lastLoggedSpeakerRef.current = speaker
-      if (import.meta.env.DEV && debugHotPath) {
-        if (atTurnBoundary && speaker === prevSpeaker) {
-          fluDebugHot('speaker-sticky', { speaker: prevSpeaker, utterance })
-        } else if (canCreateCluster && speaker !== prevSpeaker && prevSpeaker) {
-          fluDebugHot('speaker-new', { from: prevSpeaker, to: speaker, atTurnBoundary })
-        }
-      }
-      return speaker
-    },
-    [resolveSpeakerWithAudio],
   )
 
   const resolveSpeaker = useCallback(
     async (transcriptForIntro = '', audioSnapshot, sampleRate, fallbackSpeaker) => {
-      const signatureVector = audioSnapshot.length
-        ? (await computeAudioSignature(audioSnapshot, sampleRate)).vector
-        : [0, 0, 0, 0]
+      // Firma SOLO del tramo con VOZ (dueno unico `selectVoicedWindow`): la ventana completa
+      // embebia audio ajeno y envenenaba el ancla de "soy X" (d4c1c8f3: Luis 0.495 vs SU ancla).
+      const ventanaVoz = audioSnapshot?.length ? selectVoicedWindow(audioSnapshot, { sampleRate }) : audioSnapshot
+      const signatureVector = ventanaVoz.length ? (await computeTurnSignature(ventanaVoz, sampleRate)).vector : [0, 0, 0, 0]
 
       if (conversationActiveRef?.current) {
-        const resolvedSpeakerName = resolveConversationSpeakerSync(
-          transcriptForIntro,
-          audioSnapshot,
-          sampleRate,
-          fallbackSpeaker,
-        )
+        // CONVERSACIÓN: la etiqueta de la fila la resolvió el MÓDULO por su propia
+        // medida (decisión A). El hook solo aporta la firma para el puente de App.
+        const resolvedSpeakerName = lastModuleLabelRef.current || fallbackSpeaker
+        // BANDERA DE DIAGNÓSTICO: decisión de hablante del turno.
+        voiceProbe('identity', { path: 'conversacion', vec: signatureVector.length, snap: audioSnapshot.length, sr: sampleRate, clusters: speakerClustersRef.current?.length ?? 0, ...payloadSeparacionDeTurno(signatureVector, speakerClustersRef.current, audioSnapshot, sampleRate), resolved: resolvedSpeakerName, fallback: fallbackSpeaker, last: lastSpeakerRef.current || '' })
         return {
           signatureVector,
-          speakerName: resolvedSpeakerName,
+          speakerName: audioSnapshot.length ? resolvedSpeakerName : '',
+          evidenciaAcustica: false,
           introducedName: null,
-          resolvedSpeakerName,
+          resolvedSpeakerName: audioSnapshot.length ? resolvedSpeakerName : '',
           speakerAlias: null,
         }
       }
 
+      // MODO PASIVO: UNA decisión de hablante delegada al resolver del MÓDULO
+      // (decisión A). Una medida por turno: la identidad y la firma salen de la
+      // MISMA medida (EmbebedorPort); el resolver es sin estado y el hook
+      // conserva la cadena de evidencia entre turnos (voz/vector/contador).
+      const fallbackCiego = blindSpeakerFallback(lastResolvedSpeakerRef.current || lastSpeakerRef.current || fallbackSpeaker)
       if (!audioSnapshot.length) {
+        // SIN AUDIO no hay diarización posible: fallback ciego, sin evidencia.
+        relayLog(
+          'LOG',
+          'SpeakerTrace',
+          `pasivo SIN AUDIO (snap=0) → fallback="${fallbackSpeaker}" (no se puede separar voces)`,
+        )
         return {
           signatureVector,
-          speakerName: fallbackSpeaker,
+          speakerName: fallbackCiego,
           introducedName: null,
-          resolvedSpeakerName: fallbackSpeaker,
+          resolvedSpeakerName: fallbackCiego,
           speakerAlias: null,
+          evidenciaAcustica: false,
         }
       }
 
-      const segments = segmentAudio(audioSnapshot, sampleRate)
-      const speakerName = await matchSegmentNames(
-        segments,
+      const plantillasPasivas = [...plantillasPasivasRef.current.values()]
+      const resolucion = await resolverPasivoRef.current({
+        muestras: audioSnapshot,
         sampleRate,
-        speakerClustersRef.current,
-        voiceProfilesRef.current,
-      )
+        plantillas: plantillasPasivas,
+        contadorVoces: plantillasPasivasRef.current.size,
+      })
 
-      const introducedName = detectIntroducedName(transcriptForIntro)
-      let resolvedSpeakerName = introducedName || speakerName
-      if (
-        !introducedName &&
-        Array.isArray(lastTurnSignatureRef.current) &&
-        lastTurnSignatureRef.current.length
-      ) {
-        const distanceToLast = compareAudioSignatures(signatureVector, lastTurnSignatureRef.current)
-        if (distanceToLast < getLastTurnSignatureContinuityDistance()) {
-          resolvedSpeakerName = lastSpeakerRef.current || speakerName
-        }
-      }
-      const speakerAlias = introducedName && introducedName !== speakerName ? speakerName : null
-
-      if (introducedName && introducedName !== speakerName) {
-        speakerClustersRef.current = speakerClustersRef.current.filter(
-          (cluster) => String(cluster.label || '').trim() !== speakerName,
-        )
-        speakerClustersRef.current.push({
-          label: introducedName,
-          signature: signatureVector,
-        })
-        saveVoiceProfile({
-          label: introducedName,
-          signature: signatureVector,
-        })
-          .then((profile) => {
-            voiceProfilesRef.current = [
-              profile,
-              ...voiceProfilesRef.current.filter((item) => item.label !== profile.label),
-            ]
-          })
-          .catch(fluAsyncErrorHandler('useFluVoiceAssistant'))
-      } else if (speakerName) {
-        const clusterExists = speakerClustersRef.current.some(
-          (cluster) => String(cluster.label || '').trim() === String(speakerName || '').trim(),
-        )
-        if (!clusterExists) {
-          speakerClustersRef.current.push({
-            label: speakerName,
-            signature: signatureVector,
-          })
+      if (!resolucion?.evidencia) {
+        return {
+          signatureVector,
+          speakerName: fallbackCiego,
+          introducedName: null,
+          resolvedSpeakerName: fallbackCiego,
+          speakerAlias: null,
+          evidenciaAcustica: false,
         }
       }
 
+      // Con evidencia la cadena avanza: la voz ya plantillada refresca su vector y CONSERVA su etiqueta (problema 4); la voz nueva acuña su plantilla.
+      const plantillaPrevia = plantillasPasivasRef.current.get(resolucion.vozId)
+      if (plantillaPrevia) {
+        if (resolucion.vector) plantillaPrevia.vector = resolucion.vector
+        if (resolucion.hablante) plantillaPrevia.etiqueta = resolucion.hablante
+      } else {
+        plantillasPasivasRef.current.set(resolucion.vozId, { vozId: resolucion.vozId, vector: resolucion.vector, etiqueta: resolucion.hablante })
+      }
+      const resolvedSpeakerName = resolucion.continuidad ? (resolucion.hablante || lastResolvedSpeakerRef.current || lastSpeakerRef.current) : resolucion.hablante
+      const introducedName = resolveSpeakerNameFromUtterance(transcriptForIntro)
+      const speakerAlias = introducedName && introducedName !== resolvedSpeakerName ? resolvedSpeakerName : null
+
+      // La base de participantes se re-ancla por la MISMA via en todas las rutas de "soy X" (2026-10-18).
+      registerSpeakerIdentity({ name: introducedName, clusters: speakerClustersRef.current, signatureVector, refs: { sessionPrimarySpeakerRef, registerParticipant: participantRegisterPort(identitySession) } })
       lastSpeakerRef.current = resolvedSpeakerName
+      lastResolvedSpeakerRef.current = resolvedSpeakerName
       lastTurnSignatureRef.current = signatureVector
       return {
         signatureVector,
-        speakerName,
+        speakerName: resolvedSpeakerName,
         introducedName,
         resolvedSpeakerName,
         speakerAlias,
+        evidenciaAcustica: true,
       }
     },
-    [conversationActiveRef, resolveConversationSpeakerSync],
-  )
-
-  const emitConversationLog = useCallback(
-    (
-      turnCapture,
-      {
-        fallbackSpeaker,
-        speakerName: explicitSpeaker,
-        currentClock,
-        replaceLastRawLog = false,
-        streamUpdate = false,
-        turnCommit = false,
-      } = {},
-    ) => {
-      const capture = conversationActiveRef?.current
-        ? cleanForSpeech(turnCapture)
-        : normalizeTranscriptText(turnCapture)
-      if (!capture) return false
-      if (
-        !replaceLastRawLog &&
-        isDuplicateLogPhrase(capture, lastEmittedTranscriptRef.current)
-      ) {
-        return false
-      }
-
-      const speakerName = normalizeSpeakerLabel(
-        cleanForSpeech(explicitSpeaker) ||
-        resolveConversationSpeakerLabel(
-          capture,
-          fallbackSpeaker || lastLoggedSpeakerRef.current || lastSpeakerRef.current,
-        ),
-      )
-
-      lastLoggedCaptureRef.current = capture
-      lastLoggedSpeakerRef.current = speakerName
-      lastSpeakerRef.current = speakerName
-      if (conversationActiveRef?.current) {
-        setLastTranscript(capture)
-      }
-      if (!conversationActiveRef?.current) {
-        setLastTranscript(capture)
-        lastEmittedTranscriptRef.current = capture
-      }
-
-      lastLogEmitAtRef.current = Date.now()
-
-      const payload = {
-        contract: null,
-        rawOnly: true,
-        replaceLastRawLog,
-        streamUpdate,
-        transcript: capture,
-        speakerName,
-        speakerAlias: null,
-        phase,
-        timestamp: currentClock,
-        signature: lastTurnSignatureRef.current,
-        language: detectTranscriptLanguage(capture),
-      }
-      const debugMeta = { text: capture, speaker: speakerName, replaceLast: replaceLastRawLog }
-      const throttleMs = Math.max(0, FLU_CONFIG.timing.streamLogThrottleMs)
-
-      if (
-        streamUpdate &&
-        !turnCommit &&
-        throttleMs > 0 &&
-        conversationActiveRef?.current
-      ) {
-        pendingStreamLogRef.current = { ...payload, __fluDebug: debugMeta }
-        if (!streamLogTimerRef.current) {
-          streamLogTimerRef.current = window.setTimeout(flushPendingStreamLog, throttleMs)
-        }
-        if (import.meta.env.DEV && debugHotPath) {
-          fluDebugHot('log-emit', { ...debugMeta, throttled: true })
-        }
-        return false
-      }
-
-      pendingStreamLogRef.current = null
-      clearStreamLogTimer()
-      void onContractResolved?.(payload)
-      if (import.meta.env.DEV && debugHotPath) {
-        fluDebugHot('log-emit', debugMeta)
-      }
-      return true
-    },
-    [clearStreamLogTimer, conversationActiveRef, flushPendingStreamLog, onContractResolved, phase],
+    [conversationActiveRef, computeTurnSignature, identitySession],
   )
 
   const commitSessionTurn = useCallback(
-    (
-      text,
-      speakerName,
-      {
-        replaceLast = false,
-        phase = 'SESION_ACTIVA',
-        source = DIALOGUE_SOURCE.LOG,
-      } = {},
-    ) => {
+    (text, speakerName) => {
       const capture = cleanForSpeech(text)
       if (!capture) return
 
@@ -1580,144 +1089,66 @@ export function useFluVoiceAssistant({
         cleanForSpeech(speakerName) ||
         lastLoggedSpeakerRef.current ||
         lastSpeakerRef.current ||
-        getSpeakerLabel(listenStateRef.current),
+        FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker,
       )
+      const tramoFila = tramoDelTurno({ chunks: chunksRef.current, totalSamples: chunkTotalSamplesRef.current, sinceSample: turnAudioStartSampleRef.current, sampleRate: sampleRateRef.current })
+      recordSessionTurn({ kind: 'commit', text: capture, speaker, signature: lastTurnSignatureRef.current, clusters: speakerClustersRef.current, lastSpeaker: lastSpeakerRef.current, primary: sessionPrimarySpeakerRef.current, audioStartSample: tramoFila.audioStartSample, audioEndSample: tramoFila.audioEndSample, tramoValido: tramoFila.tramoValido, sessionTurnId: activeTurnIdRef.current })
 
       if (!isFluSpeaker(speaker)) {
-        archiveCommittedTurn(listenStateRef.current, capture, {
-          maxChars: FLU_CONFIG.limits.sessionTranscriptMaxChars,
-        })
-      }
-
-      dialogueHistoryRef.current = recordConversationTurn(
-        logRowsTextRef.current,
-        logRowSpeakersRef.current,
-        dialogueHistoryRef.current,
-        {
-          speaker,
-          text: capture,
-          phase,
-          source,
-        },
-        {
-          replaceLast,
-          maxLogRows: FLU_CONFIG.limits.priorRowsMax,
-          maxDialogue: CONTEXT_HISTORY_LIMIT,
-        },
-      )
-
-      if (!isFluSpeaker(speaker)) {
-        reconcileSpeakerClusters(logRowSpeakersRef.current)
+        reconcileSpeakerClusters(userSpeakersView.current)
       }
     },
-    [reconcileSpeakerClusters],
+    [reconcileSpeakerClusters, userSpeakersView],
   )
 
-  /**
-   * Injects an external entry into dialogueHistoryRef so Gemini sees it as part
-   * of the conversation context. Used by OS3 to inject system events (1st person
-   * FLU memories) that are not part of the regular voice pipeline.
-   *
-   * The entry.role should be 'flu' (OS3 convention) which maps to 'assistant'.
-   * The entry.speakerName becomes the dialogue speaker label.
-   */
-  const injectDialogueEntry = useCallback((entry) => {
-    if (!entry || !entry.text) return
-    dialogueHistoryRef.current = appendDialogueEntry(
-      dialogueHistoryRef.current,
-      {
-        role: entry.role === 'flu' ? 'assistant' : entry.role || 'user',
-        speaker: entry.speakerName || 'FLU',
-        text: entry.text,
-        phase: entry.phase || 'SESION_ACTIVA',
-        source: DIALOGUE_SOURCE.LOG,
-      },
-      CONTEXT_HISTORY_LIMIT,
-    )
+  // §9: `injectDialogueEntry` se eliminó: App persiste en el store y el diálogo se DERIVA de él.
+
+  // UN dueno de desconectar el grafo de audio del micro; antes eran DOS copias.
+  const disconnectAudioGraph = useCallback(async () => {
+    if (processorRef.current) {
+      try {
+        processorRef.current.disconnect?.()
+      } catch (err) { logCaughtError('[catch] src/voice/hooks/useFluVoiceAssistant.js', err, err?.stack) }
+      processorRef.current = null
+    }
+
+    if (sourceRef.current) {
+      try {
+        sourceRef.current.disconnect()
+      } catch (err) { logCaughtError('[catch] src/voice/hooks/useFluVoiceAssistant.js', err, err?.stack) }
+      sourceRef.current = null
+    }
+
+    if (analyserRef.current) {
+      try {
+        analyserRef.current.disconnect()
+      } catch (err) { logCaughtError('[catch] src/voice/hooks/useFluVoiceAssistant.js', err, err?.stack) }
+      analyserRef.current = null
+    }
+
+    if (zeroGainRef.current) {
+      try {
+        zeroGainRef.current.disconnect()
+      } catch (err) { logCaughtError('[catch] src/voice/hooks/useFluVoiceAssistant.js', err, err?.stack) }
+      zeroGainRef.current = null
+    }
+
+    if (audioContextRef.current) {
+      try {
+        await audioContextRef.current.close()
+      } catch (err) { logCaughtError('[catch] src/voice/hooks/useFluVoiceAssistant.js', err, err?.stack) }
+      audioContextRef.current = null
+    }
+
+    await stopMediaStream(mediaStreamRef.current)
+    mediaStreamRef.current = null
   }, [])
-
-  const commitTurnToSessionRows = useCallback(
-    (capture, speakerName, { replaceLast = true } = {}) => {
-      commitSessionTurn(capture, speakerName, {
-        replaceLast,
-        phase: 'SESION_ACTIVA',
-        source: DIALOGUE_SOURCE.LOG,
-      })
-    },
-    [commitSessionTurn],
-  )
-
-  const syncConversationStream = useCallback(
-    (payload = {}) =>
-      handleConversationStreamSync(
-        {
-          conversationActiveRef,
-          publishedLiveRef,
-          listenStateRef,
-          openPreviewTurnRef,
-          setLiveTranscript,
-          scheduleLiveTranscriptUpdate,
-          applyConversationSpeaker,
-          flushPendingStreamLog,
-          logRowsTextRef,
-          turnCommitIdRef,
-          activeTurnIdRef,
-          flushPcmAfterTurnCommit,
-          lastCommitAtRef,
-          turnAudioStartSampleRef,
-          chunkTotalSamplesRef,
-          preflightScheduledForTurnRef,
-          srGapFiredForOpenLineRef,
-          processConversationFluQueryRef,
-          lastEmittedTranscriptRef,
-          emitConversationLog,
-          createSpeakerAudioResolver,
-          sessionPrimarySpeakerRef,
-          lastLoggedSpeakerRef,
-          logRowSpeakersRef,
-          speakerClustersRef,
-          lastSpeakerRef,
-          lastTurnSignatureRef,
-          lastLogLineTextRef,
-          commitTurnToSessionRows,
-          fluParticipantRef,
-        },
-        payload,
-      ),
-    [
-      applyConversationSpeaker,
-      commitTurnToSessionRows,
-      conversationActiveRef,
-      createSpeakerAudioResolver,
-      emitConversationLog,
-      flushPendingStreamLog,
-      flushPcmAfterTurnCommit,
-      scheduleLiveTranscriptUpdate,
-    ],
-  )
-
-  const flushListenStateBeforeRebuild = useCallback(() => {
-    if (!conversationActiveRef?.current) return
-    const capture =
-      readStreamDisplay(listenStateRef.current) ||
-      cleanForSpeech(listenStateRef.current.pendingInterim)
-    if (!capture) return
-    const result = sealPendingInterim(listenStateRef.current)
-    syncConversationStream({
-      capture,
-      newParagraph: result.newParagraph,
-      speaker: result.speaker,
-      utterance: capture,
-      turnCommit: true,
-    })
-  }, [conversationActiveRef, syncConversationStream])
 
   const cleanupAudio = useCallback(async () => {
     clearPassiveAudioDelayTimer()
     clearAllCommitTimers()
     clearRecognitionRetryTimer()
     clearLiveTranscriptTimers()
-    flushPendingStreamLog()
     isListeningRef.current = false
     recognitionActiveRef.current = false
     clearCaptureState()
@@ -1728,90 +1159,19 @@ export function useFluVoiceAssistant({
       recognitionRef.current.onend = null
       try {
         recognitionRef.current.stop()
-      } catch {
+      } catch (e) {
+        logCaughtError('[catch] src/voice/hooks/useFluVoiceAssistant.js', e, e?.stack);
         // Ignore stop errors.
       }
       recognitionRef.current = null
     }
 
-    if (processorRef.current) {
-      try {
-        processorRef.current.disconnect()
-      } catch { }
-      processorRef.current = null
-    }
-
-    if (sourceRef.current) {
-      try {
-        sourceRef.current.disconnect()
-      } catch { }
-      sourceRef.current = null
-    }
-
-    if (analyserRef.current) {
-      try {
-        analyserRef.current.disconnect()
-      } catch { }
-      analyserRef.current = null
-    }
-
-    if (zeroGainRef.current) {
-      try {
-        zeroGainRef.current.disconnect()
-      } catch { }
-      zeroGainRef.current = null
-    }
-
-    if (audioContextRef.current) {
-      try {
-        await audioContextRef.current.close()
-      } catch { }
-      audioContextRef.current = null
-    }
-
-    await stopMediaStream(mediaStreamRef.current)
-    mediaStreamRef.current = null
-  }, [clearAllCommitTimers, clearLiveTranscriptTimers, clearPassiveAudioDelayTimer, clearRecognitionRetryTimer, flushPendingStreamLog])
+    await disconnectAudioGraph()
+  }, [clearAllCommitTimers, clearLiveTranscriptTimers, clearPassiveAudioDelayTimer, clearRecognitionRetryTimer, clearCaptureState, disconnectAudioGraph])
 
   const releasePassiveAudioCapture = useCallback(async () => {
-    if (processorRef.current) {
-      try {
-        processorRef.current.disconnect?.()
-      } catch { }
-      processorRef.current = null
-    }
-
-    if (sourceRef.current) {
-      try {
-        sourceRef.current.disconnect()
-      } catch { }
-      sourceRef.current = null
-    }
-
-    if (analyserRef.current) {
-      try {
-        analyserRef.current.disconnect()
-      } catch { }
-      analyserRef.current = null
-    }
-
-    if (zeroGainRef.current) {
-      try {
-        zeroGainRef.current.disconnect()
-      } catch { }
-      zeroGainRef.current = null
-    }
-
-    if (audioContextRef.current) {
-      try {
-        await audioContextRef.current.close()
-      } catch { }
-      audioContextRef.current = null
-    }
-
-    await stopMediaStream(mediaStreamRef.current)
-    mediaStreamRef.current = null
-  }, [])
+    await disconnectAudioGraph()
+  }, [disconnectAudioGraph])
 
   const needsConversationPassiveAudio = useCallback(() => {
     const captureCfg = FLU_CONFIG.voiceIdentity?.capture || {}
@@ -1823,6 +1183,10 @@ export function useFluVoiceAssistant({
   }, [conversationActiveRef])
 
   const setupPassiveAudioCapture = useCallback(async () => {
+    // Single-flight: dos arranques concurrentes pasaban el guard de refs (se
+    // fijan tras los await) y creaban DOS pipelines: PCM duplicado (alucinaba).
+    if (passiveSetupPromiseRef.current) return passiveSetupPromiseRef.current
+    const job = (async () => {
     const captureCfg = FLU_CONFIG.voiceIdentity?.capture || {}
     if (!needsConversationPassiveAudio()) {
       return
@@ -1835,40 +1199,33 @@ export function useFluVoiceAssistant({
     const conversationAudio = captureCfg.conversationAudio
     const roomCapture =
       conversationActiveRef?.current && captureCfg.captureRoomAudio !== false
+    // Decision unica (micCapture): `maxSensitivity` extiende la captura CRUDA de
+    // sala tambien fuera de la conversacion; antes el navegador metia AGC/NS/EC y
+    // atenuaba las voces lejanas del aula ("se pierde conversacion").
     const stream = await navigator.mediaDevices.getUserMedia({
-      audio: conversationActiveRef?.current
-        ? {
-          echoCancellation: roomCapture
-            ? (conversationAudio?.echoCancellation ?? false)
-            : true,
-          noiseSuppression: roomCapture
-            ? (conversationAudio?.noiseSuppression ?? false)
-            : true,
-          autoGainControl: roomCapture
-            ? (conversationAudio?.autoGainControl ?? false)
-            : true,
-        }
-        : {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        },
+      audio: resolveCaptureAudioConstraints({
+        conversationActive: Boolean(conversationActiveRef?.current),
+        roomCapture,
+        maxSensitivity: captureCfg.maxSensitivity === true,
+        audio: conversationAudio,
+      }),
     })
     mediaStreamRef.current = stream
     const AudioContextClass = window.AudioContext || window.webkitAudioContext
     const audioContext = new AudioContextClass()
     audioContextRef.current = audioContext
-    sampleRateRef.current = audioContext.sampleRate || 48000
+    sampleRateRef.current = audioContext.sampleRate || AUDIO_SAMPLE_RATE
 
     await audioContext.resume()
 
     const source = audioContext.createMediaStreamSource(stream)
     sourceRef.current = source
 
-    const captureGain =
-      conversationActiveRef?.current
-        ? Number(FLU_CONFIG.voiceIdentity?.capture?.conversationAudio?.captureGain) || 8
-        : 1
+    const captureGain = resolveCaptureGain({
+      conversationActive: Boolean(conversationActiveRef?.current),
+      maxSensitivity: captureCfg.maxSensitivity === true,
+      audio: conversationAudio,
+    })
 
     const inputGain = audioContext.createGain()
     inputGain.gain.value = captureGain
@@ -1881,39 +1238,43 @@ export function useFluVoiceAssistant({
     source.connect(inputGain)
     inputGain.connect(analyser)
 
-    const processEvery = Math.max(
-      1,
-      Number(conversationAudio?.processEvery) ||
-      Number(captureCfg.conversationAudioProcessEvery) ||
-      1,
-    )
+    const processEvery = Math.max(1, Number(conversationAudio?.processEvery) ||
+      Number(captureCfg.conversationAudioProcessEvery) || 1)
 
     const micBridge = await wireMicCapturePipeline({
       audioContext,
-      source: inputGain,
-      sampleRate: sampleRateRef.current || 48000,
+      source: inputGain, // STT amplificado (sala)
+      recordSource: source, // grabación CRUDA pre-ganancia: silencios reales, sonido natural
+      sampleRate: sampleRateRef.current || AUDIO_SAMPLE_RATE,
       processEvery,
+      onRawPcmBlock: (input, meta) => motorConversacionRef.current?.audio(input, sampleRateRef.current || AUDIO_SAMPLE_RATE, meta?.sampleIndex),
       onPcmBlock: (input) => {
         chunksRef.current.push(new Float32Array(input))
         chunkTotalSamplesRef.current += input.length
+        probePcmBlock({ total: chunkTotalSamplesRef.current, chunks: chunksRef.current.length, listening: isListeningRef.current, conversation: Boolean(conversationActiveRef?.current) })
         trimAudioChunkBuffer(
           chunksRef,
-          sampleRateRef.current || 48000,
+          sampleRateRef.current || AUDIO_SAMPLE_RATE,
           FLU_CONFIG.voiceIdentity?.capture?.passiveBufferMs,
           chunkTotalSamplesRef,
         )
+        // Fallback OFFLINE: Whisper WASM se alimenta del MISMO PCM cuando es la instancia activa.
+        if (fallback.isLocal(recognitionRef.current)) {
+          recognitionRef.current.pushAudio(input, sampleRateRef.current || AUDIO_SAMPLE_RATE)
+        }
       },
     })
 
     processorRef.current = micBridge
     zeroGainRef.current = micBridge.zeroGain
-  }, [needsConversationPassiveAudio])
+    })()
+    passiveSetupPromiseRef.current = job.finally(() => { passiveSetupPromiseRef.current = null })
+    return passiveSetupPromiseRef.current
+  }, [conversationActiveRef, fallback, needsConversationPassiveAudio])
 
   const schedulePassiveAudioCapture = useCallback(() => {
     const runCapture = () => {
-      void setupPassiveAudioCapture().catch((error) => {
-        // audio opcional; SR sigue sin segundo stream
-      })
+      void setupPassiveAudioCapture().catch((e) => { logCaughtError('[catch] src/voice/hooks/useFluVoiceAssistant.js', e, e?.stack) })
     }
 
     if (!conversationActiveRef?.current) {
@@ -1952,10 +1313,10 @@ export function useFluVoiceAssistant({
 
   const wireRecognitionEvents = useCallback(
     (Recognition) => {
-      const requireWake = !conversationActiveRef?.current
-
       Recognition.onstart = () => {
         recognitionActiveRef.current = true
+        // El motor del producto abre con CADA onstart (corte de Chrome): un solo camino en ambos modos; la sesión del módulo sobrevive a los reinicios (Caso 13).
+        abrirMotorConversacion()
         recognitionRetryCountRef.current = 0
         recognitionRestartPendingRef.current = false
         consecutiveEndsWithoutResultRef.current = 0
@@ -1971,121 +1332,84 @@ export function useFluVoiceAssistant({
             logRowCount: -1,
           })
         }
-        publishLiveImmediate()
       }
 
       Recognition.onresult = (event) => {
-        logMicRaw(event)
+        // UNICO predicado de motor local (dueno: voiceLocalFallback).
+        const localEngineActive = fallback.isLocal(recognitionRef.current)
+        if (isVoiceProbeEnabled()) voiceProbe('asrRaw', { engine: localEngineActive ? 'whisper' : 'chrome', metrics: event?.metrics ?? null, turn: activeTurnIdRef.current, items: Array.from(event.results || []).map((r) => { const t = String(r?.[0]?.transcript || ''); return { f: r?.isFinal ? 1 : 0, t, l: t.length } }) })
+        // El eco lo gana el MÓDULO por su único dueño (`ultimoTextoDicho`): aquí no
+        // se re-gatea por contenido; el evento CRUDO entra tal cual en ambos modos.
+        logChromeSpeechResult(event)
         lastOnresultAtRef.current = Date.now()
+        lastSrResultAtRef.current = Date.now()
+        // Texto real del reconocedor: es el reloj de "silencio significativo" del
+        // watchdog/fallback (antes lo tocaba el runtime de ingress, retirado).
+        lastMeaningfulIngressAtRef.current = Date.now()
         recognitionRetryCountRef.current = 0
         consecutiveEndsWithoutResultRef.current = 0
+        // Chrome produjo un RESULTADO (o hubo texto real): el contador de rebuilds
+        // sin resultado vuelve a cero y, si habia ventana de prueba, queda activo.
+        fallback.noteResult()
         let interim = ''
+        let finalText = ''
         for (let index = event.resultIndex; index < event.results.length; index += 1) {
           const result = event.results[index]
           const transcript = cleanForSpeech(result?.[0]?.transcript || '')
           if (!transcript) continue
 
-          if (conversationActiveRef?.current) {
-            continue
-          }
-
-          const boundary = ''
-          if (result.isFinal) {
-            applyRecognitionResultWithBoundary(turnRef.current, {
-              finalText: transcript,
-              interimText: '',
-              committedBoundary: boundary,
+          // GATE DEL MOTOR LOCAL: Whisper alucina con audio sin habla. Evidencia
+          // ACUSTICA (`metrics`), no la forma del texto: garbageTranscript (B3)
+          // intacto; la wake y los comandos conservan su excepcion.
+          if (localEngineActive && event?.metrics) {
+            const discarded = fallback.gateResult({
+              isFinal: result.isFinal,
+              transcript,
+              metrics: event.metrics,
+              wakeWords: resolvedWakeWords,
             })
-          } else {
-            interim = transcript
+            if (discarded) continue
           }
+          // Un FINAL que se emite alimenta el UNICO reloj de recuperacion.
+          if (result.isFinal) fallback.noteFinalAccepted()
+
+          if (result.isFinal) finalText = transcript
+          else interim = transcript
         }
 
+        // El modo bilingüe cambia el locale del ASR: es conducta de la ESCUCHA
+        // (del hook), no de la conversación. Se decide con el texto del evento,
+        // en AMBOS modos.
+        if (interim || finalText) maybeSwitchRecognitionLocaleRef.current(interim || finalText)
+        if (finalText) { const w = analyzeWakeTurn(finalText, { lastCommitted: userRowsTextView.current.at(-1) || '' }); voiceProbe('asrFinal', { engine: localEngineActive ? 'whisper' : 'chrome', ms: event?.metrics?.durationMs ?? null, speechLikeMs: event?.metrics?.speechLikeMs ?? null, rms: event?.metrics?.rms ?? null, turn: activeTurnIdRef.current, wake: w.wakeWordMatched, inline: w.hasInlineBoundary, before: w.passiveOnly.slice(0, 80), after: w.afterWake.slice(0, 80), len: w.cleaned.length, text: w.cleaned }) }
+        // MOTOR del producto: ÚNICA ruta de la frase y de la fila en AMBOS modos.
+        // Evento CRUDO adentro; la rama activa TERMINA tras delegar.
         if (conversationActiveRef?.current) {
-          try {
-            if (import.meta.env.DEV && debugHotPath) {
-              const { interimChunks, finalChunks } = collectBrowserResultChunks(event)
-              fluDebugHot('mic-fragments', {
-                rawInterims: interimChunks,
-                rawFinals: finalChunks,
-                mergedInterim: pickBestMicInterim(interimChunks),
-              })
-            }
-            ingressRuntimeRef.current.pushBrowserRecognitionEvent(event)
-          } catch (error) {
-            console.error('[Flu][mic] onresult-conversation-failed', error)
-            if (import.meta.env.DEV) {
-              fluDebugHot('history-error', { detail: String(error?.message || error) })
-            }
-          }
+          if (motorConversacionRef.current) motorConversacionRef.current.evento(event)
           return
         }
-
-        if (interim) {
-          applyRecognitionResultWithBoundary(turnRef.current, {
-            interimText: interim,
-            committedBoundary: '',
-          })
-        }
-        if (!conversationActiveRef?.current) {
-          publishLiveFromTurn()
-        }
-
-        if (
-          !conversationActiveRef?.current &&
-          (isCommittingRef.current || isProcessingRef.current)
-        ) {
-          const lateText = getTranscriptDelta(
-            commitBaselineRef.current,
-            readCommandSnapshot(turnRef.current, pendingSpillRef.current),
-          )
-          if (lateText) {
-            pendingSpillRef.current = appendSpillText(pendingSpillRef.current, lateText)
-          }
-        }
-
-        finalizeGraceUsedRef.current = false
-
-        const turnPhrase = readActiveSnapshot()
-        const uiCommand = resolveNavigationCommand(turnPhrase)
-        const validation = extractFluVoiceCommand(turnPhrase, {
-          requireWake,
-          wakeWords: FLU_CONFIG.voiceCommands.wakeWords,
-        })
-        if (uiCommand === 'CERRAR_ESCUCHA') {
-          scheduleAutoProcess(0)
-          return
-        }
-
-        if (uiCommand) {
-          scheduleAutoProcess(0)
-          return
-        }
-
-        if (!turnPhrase) {
-          clearAutoProcessTimer()
-          return
-        }
-
-        if (validation.wakeWordMatched && !validation.commandText) {
-          if (!conversationActiveRef?.current) {
-            clearAutoProcessTimer()
-          }
-          return
-        }
-
-        const pauseDelay = validation.wakeWordMatched
-          ? FLU_CONFIG.timing.wakeWordCommandDelayMs
-          : FLU_CONFIG.timing.interimCommandDelayMs
-        scheduleAutoProcess(pauseDelay)
+        if (motorConversacionRef.current) motorConversacionRef.current.evento(event)
       }
 
       Recognition.onerror = (event) => {
         const errorCode = String(event.error || '').trim()
 
+        // Fallback OFFLINE (§1/§9): 'network'/'no-speech' degradan al motor
+        // local Whisper WASM (config `fallbackErrors`) por el punto unico.
+        if (
+          isLocalFallbackEnabled() &&
+          shouldUseLocalFallback(errorCode) &&
+          !fallback.isLocal(recognitionRef.current)
+        ) {
+          if (!fallback.degradeRef.current?.()) {
+            requestRecognitionRestart('fallback', getRecognitionRetryDelay(errorCode))
+          }
+          return
+        }
+
         if (errorCode === 'no-speech' || errorCode === 'aborted') {
-          if (isListeningRef.current && !isStoppingRef.current) {
-            requestRecognitionRestart(FLU_CONFIG.listening?.restartAfterNoSpeechMs)
+          if ((isListeningRef.current || (conversationActiveRef?.current && !isStoppingRef.current)) && !isStoppingRef.current) {
+            requestRecognitionRestart('no-speech', FLU_CONFIG.listening?.restartAfterNoSpeechMs)
           }
           return
         }
@@ -2101,7 +1425,16 @@ export function useFluVoiceAssistant({
             setError('Micrófono o reconocimiento interrumpido. Reintentando…')
             window.setTimeout(() => setError(''), getFluTimingCfg().errorBannerClearMs)
           }
-          requestRecognitionRestart(getRecognitionRetryDelay(errorCode))
+          requestRecognitionRestart('error-captura', getRecognitionRetryDelay(errorCode))
+          return
+        }
+
+        // Errores del motor local de transcripción (worker/WASM): se reintentan
+        // solos; no son fallo del micrófono ni del usuario.
+        if (errorCode === 'engine-error') {
+          setError('')
+          isProcessingRef.current = false
+          requestRecognitionRestart('error-motor', getRecognitionRetryDelay(errorCode))
           return
         }
 
@@ -2109,12 +1442,14 @@ export function useFluVoiceAssistant({
         if (recoverableError) {
           setError('')
           isProcessingRef.current = false
-          requestRecognitionRestart(getRecognitionRetryDelay(errorCode))
+          requestRecognitionRestart('error-recuperable', getRecognitionRetryDelay(errorCode))
           return
         }
 
         if (errorCode !== 'not-allowed' && errorCode !== 'service-not-allowed') {
-          setError(`Error de reconocimiento: ${errorCode}`)
+          setError(
+            getRecognitionErrorMessage(errorCode, FLU_CONFIG.ui?.recognitionErrors || {}),
+          )
         }
         setStatus('idle')
         isProcessingRef.current = false
@@ -2135,11 +1470,9 @@ export function useFluVoiceAssistant({
           return
         }
 
-        if (!isListeningRef.current) return
-
-        if (conversationActiveRef?.current && !isStoppingRef.current) {
-          ingressRuntimeRef.current?.pushRecognitionEndEvent({ immediate: true })
-        }
+        if (!isListeningRef.current && !(conversationActiveRef?.current && !isStoppingRef.current)) return
+        // La sesión del módulo vive mientras la escucha vive: Chrome reinicia el reconocedor cada pocos
+        // segundos y cerrar aquí partía la conversación en una sesión por reinicio (medido 2026-10-25).
 
         const streak = consecutiveEndsWithoutResultRef.current + 1
         consecutiveEndsWithoutResultRef.current = streak
@@ -2156,34 +1489,29 @@ export function useFluVoiceAssistant({
 
         if (conversationActiveRef?.current) {
           const restartCfg = getConversationRestartConfig(true)
-          requestRecognitionRestart(restartCfg.retryBackoffMs)
+          requestRecognitionRestart('onend-conversacion', restartCfg.retryBackoffMs)
           return
         }
 
-        requestRecognitionRestart(delay)
+        requestRecognitionRestart('onend-pasivo', delay)
       }
     },
     [
+      abrirMotorConversacion,
       cleanupAudio,
-      clearAutoProcessTimer,
       conversationActiveRef,
-      publishLiveFromTurn,
-      publishLiveImmediate,
+      fallback,
       requestRecognitionRestart,
-      scheduleAutoProcess,
-      readActiveSnapshot,
-      applyConversationSpeaker,
-      commitTurnToSessionRows,
-      syncConversationStream,
       setError,
-      showListeningAck,
+      resolvedWakeWords,
+      userRowsTextView,
     ],
   )
 
+  wireRecognitionEventsRef.current = wireRecognitionEvents
+
   const rebuildRecognition = useCallback(() => {
     if (!isListeningRef.current || isStoppingRef.current) return false
-
-    flushListenStateBeforeRebuild()
 
     const Recognition = createRecognition(language, recognitionLocaleRef.current)
     if (!Recognition) return false
@@ -2195,6 +1523,7 @@ export function useFluVoiceAssistant({
       previous.onerror = null
       previous.onend = null
       stopSpeechRecognition(previous)
+      previous.dispose?.()
     }
 
     recognitionRef.current = Recognition
@@ -2210,7 +1539,7 @@ export function useFluVoiceAssistant({
       fluDebugHot('stall-rebuild', { reason: 'rebuild-recognition' })
     }
     return true
-  }, [flushListenStateBeforeRebuild, language, wireRecognitionEvents])
+  }, [language, wireRecognitionEvents])
 
   rebuildRecognitionRef.current = rebuildRecognition
 
@@ -2257,33 +1586,6 @@ export function useFluVoiceAssistant({
   )
   maybeSwitchRecognitionLocaleRef.current = maybeSwitchRecognitionLocale
 
-  const injectSimulatedRecognition = useCallback(
-    (events = []) => {
-      if (!conversationActiveRef?.current) {
-        fluEvent('sim-abort', { reason: 'conversation-not-active' })
-        return { ok: false, accumulated: '' }
-      }
-
-      clearListenLogRing()
-      ingressRuntimeRef.current?.reset()
-      fluEvent('sim-start', { events: events.length })
-
-      for (const mockEvent of convertSimEventsToBrowserBursts(events)) {
-        ingressRuntimeRef.current?.pushBrowserRecognitionEvent(mockEvent)
-      }
-
-      ingressRuntimeRef.current?.drainAll()
-
-      const accumulated = listenStateRef.current.transcript
-      fluEvent('sim-done', { accumulatedLen: accumulated.length })
-      if (import.meta.env.DEV) {
-        window.__fluListenLog = getListenLogRing()
-      }
-      return { ok: true, accumulated }
-    },
-    [conversationActiveRef],
-  )
-
   useEffect(() => {
     if (!import.meta.env.DEV) return undefined
     window.__fluDev = {
@@ -2293,8 +1595,6 @@ export function useFluVoiceAssistant({
       enableListenTrace: () => {
         window.__FLU_LISTEN_DEBUG = true
       },
-      simulateRecognition: injectSimulatedRecognition,
-      simulateBook: () => injectSimulatedRecognition(buildChromeLikeEvents()),
       debug: getFluDebugApi(),
     }
     return () => {
@@ -2302,15 +1602,18 @@ export function useFluVoiceAssistant({
         delete window.__fluDev.getListenLog
         delete window.__fluDev.clearListenLog
         delete window.__fluDev.enableListenTrace
-        delete window.__fluDev.simulateRecognition
-        delete window.__fluDev.simulateBook
         delete window.__fluDev.debug
       }
     }
-  }, [injectSimulatedRecognition])
+  }, [])
 
   const startListening = useCallback(async ({ resume = false } = {}) => {
     setError('')
+    // Cada sesion arranca con Chrome SR; el piso de elegibilidad se ancla una vez.
+    fallback.resetSession()
+    if (!resume || !fallback.degradeEligibleSinceRef.current) {
+      fallback.degradeEligibleSinceRef.current = Date.now()
+    }
     if (!isSupported) {
       setError('El navegador no soporta el flujo de voz de Flu.')
       return
@@ -2343,10 +1646,10 @@ export function useFluVoiceAssistant({
         } else if (rebuildRecognitionRef.current()) {
           recognitionRetryCountRef.current = 0
         } else {
-          requestRecognitionRestart(0)
+          requestRecognitionRestart('reanudar', 0)
         }
       } else if (!recognitionActiveRef.current) {
-        requestRecognitionRestart(0)
+        requestRecognitionRestart('reanudar', 0)
       }
       schedulePassiveAudioCapture()
       return
@@ -2354,19 +1657,11 @@ export function useFluVoiceAssistant({
 
     try {
 
-      const requireWake = !conversationActiveRef?.current
       if (!resume) {
         lastTurnSignatureRef.current = null
       }
-      clearTurnBuffers()
       chunksRef.current = []
       chunkTotalSamplesRef.current = 0
-      if (!resume) {
-        resetActiveListenState(listenStateRef.current)
-        pendingSpillRef.current = ''
-        publishedLiveRef.current = ''
-        setLiveTranscript('')
-      }
       clearAllCommitTimers()
       clearRecognitionRetryTimer()
       isListeningRef.current = false
@@ -2375,8 +1670,6 @@ export function useFluVoiceAssistant({
       recognitionLocaleRef.current = getRecognitionLanguage(language)
       localeSwitchDetectRef.current = ''
       localeSwitchCountRef.current = 0
-
-      await ensureSpeechRecognitionLocales(language)
 
       const Recognition = createRecognition(language, recognitionLocaleRef.current)
       if (!Recognition) {
@@ -2390,11 +1683,13 @@ export function useFluVoiceAssistant({
       setStatus('listening')
       isProcessingRef.current = false
       isListeningRef.current = true
+      // Precalienta el motor local SOLO si la politica lo habilita: en
+      // produccion Chrome-only no se carga Whisper (backup `rescate/wip-pre-s9`).
+      if (isLocalFallbackEnabled()) prewarmLocalRecognition()
 
       if (!startSpeechRecognition(Recognition)) {
-        requestRecognitionRestart(getActiveListenConfig().restart.retryBackoffMs)
+        requestRecognitionRestart('arranque', getActiveListenConfig().restart.retryBackoffMs)
       }
-
 
       schedulePassiveAudioCapture()
     } catch (caughtError) {
@@ -2408,81 +1703,28 @@ export function useFluVoiceAssistant({
     }
   }, [
     clearAllCommitTimers,
-    clearTurnBuffers,
     cleanupAudio,
     conversationActiveRef,
+    fallback,
     isSupported,
     language,
-    publishLive,
-    publishLiveFromTurn,
-    publishLiveImmediate,
-    scheduleAutoProcess,
     wireRecognitionEvents,
     schedulePassiveAudioCapture,
     requestRecognitionRestart,
-    releasePassiveAudioCapture,
     status,
     clearRecognitionRetryTimer,
   ])
 
-  const commitConversationTurn = useCallback(
-    async ({ closing = false } = {}) => {
-      clearAutoProcessTimer()
-
-      try {
-        if (closing && recognitionRef.current) {
-          isStoppingRef.current = true
-          await finalizeRecognition()
-          isStoppingRef.current = false
-        }
-
-        const capture =
-          readStreamDisplay(listenStateRef.current) ||
-          cleanForSpeech(listenStateRef.current.pendingInterim)
-        const result = sealPendingInterim(listenStateRef.current)
-        if (capture) {
-          syncConversationStream({
-            capture,
-            newParagraph: result.newParagraph,
-            speaker: result.speaker,
-            utterance: capture,
-            turnCommit: true,
-          })
-        }
-
-        if (closing) {
-          isListeningRef.current = false
-          await cleanupAudio()
-          setStatus('idle')
-        }
-      } catch (error) {
-        if (closing) {
-          isListeningRef.current = false
-          await cleanupAudio().catch(fluAsyncErrorHandler('useFluVoiceAssistant'))
-          setStatus('idle')
-        }
-      } finally {
-        if (isListeningRef.current && !isStoppingRef.current && !recognitionActiveRef.current) {
-          requestRecognitionRestart(0)
-        }
-      }
-    },
-    [
-      cleanupAudio,
-      clearAutoProcessTimer,
-      finalizeRecognition,
-      syncConversationStream,
-      requestRecognitionRestart,
-    ],
-  )
+  // UN emisor de la respuesta hablada de un comando (dueno 2026-10-12: UNA orden dijo DOS "Registrado ...").
+  const buildCommandSpeech = useCallback((command, transcript, lang) => getCommandSpeech(command, lang || language, FLU_CONFIG, { name: detectWakeIntroducedName(transcript, resolvedWakeWords) }), [language, resolvedWakeWords])
 
   const emitActiveConversationCommand = useCallback(
-    async (command, transcript, { conversationCommandPreLogged = false } = {}) => {
+    async (command, transcript) => {
       const cleaned = cleanForSpeech(transcript)
       clearAutoProcessTimer()
 
       const commandSpeaker =
-        lastLoggedSpeakerRef.current || lastSpeakerRef.current || 'Hablante 1'
+        lastLoggedSpeakerRef.current || lastSpeakerRef.current || FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker
 
       const shouldBlockParticipantFloorGrant = () => {
         const participant = fluParticipantRef.current
@@ -2492,71 +1734,62 @@ export function useFluVoiceAssistant({
         return false
       }
 
-      if (command === 'INICIAR_CONVERSACION') {
-        resetActiveListenState(listenStateRef.current)
+      if (command === FLU_CONFIG.navigation.sessionResetCommand) {
         lastEmittedTranscriptRef.current = ''
         openPreviewTurnRef.current = false
-        logRowsTextRef.current = []
-        logRowSpeakersRef.current = []
-        dialogueHistoryRef.current = []
-        turnAudioStartSampleRef.current = 0
+        turnAudioStartSampleRef.current = chunkTotalSamplesRef.current = 0
         lastStreamPreviewRef.current = ''
         lastLogLineTextRef.current = ''
+        lastLogLineWasCommandRef.current = false
         lastLogLineAtRef.current = 0
         lastLoggedCaptureRef.current = ''
-        speakerClustersRef.current = []
-        lastSpeakerRef.current = 'Hablante 1'
-        lastLoggedSpeakerRef.current = 'Hablante 1'
-        sessionPrimarySpeakerRef.current = ''
+        setSpeakerClusters([])
+        resetVoiceDirectory() // el nombre por VOZ es de la sesion (como los clusters)
+        lastSpeakerRef.current = FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker
+        lastLoggedSpeakerRef.current = FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker
+        // La cadena de evidencia PASIVA también es de la sesión.
+        plantillasPasivasRef.current.clear()
+        lastResolvedSpeakerRef.current = ''
+        lastModuleLabelRef.current = ''
+        applySessionCommandToPrimary({ transcript: cleaned, sessionPrimarySpeakerRef })
+        // Fase E: tras reiniciar la sesion, re-sembrar el participante activo como sessionPrimary.
+        seedSessionPrimaryFromActiveName()
         activeTurnIdRef.current = 0
-        preflightScheduledForTurnRef.current = false
-        stopAllContinuousIdentityPipelines()
         lastTurnSignatureRef.current = null
-        resetTurnState(turnRef.current)
-        pendingSpillRef.current = ''
-        publishedLiveRef.current = ''
-        setLiveTranscript('')
         fluParticipantRef.current?.resetParticipant?.()
-      } else if (cleaned) {
-        releaseTurnAfterLog(cleaned)
-      } else {
-        releaseTurnAfterLog('')
       }
 
-      if (command === 'FLU_ESPERA') {
+      if (command === COMMAND_IDS.FLU_ESPERA) {
         fluParticipantRef.current?.dismissRaisedHand?.()
-        setLastTranscript(cleaned)
-        await onContractResolved?.({
+        await commitAndResolveTurn({
+          capture: cleaned,
           contract: {
-            respuesta_voz: getCommandSpeech('FLU_ESPERA', language),
+            respuesta_voz: getCommandSpeech(COMMAND_IDS.FLU_ESPERA, language),
             navegacion: { comando: null, destino: null, parametros: {} },
           },
           diagnostics: null,
-          transcript: cleaned,
           speakerName: commandSpeaker,
           speakerAlias: null,
           phase,
           timestamp: formatClock(),
           signature: null,
           language: detectTranscriptLanguage(transcript),
-          conversationCommandPreLogged,
         })
         return
       }
 
-      if (command === 'FLU_ADELANTE') {
+      if (command === COMMAND_IDS.FLU_ADELANTE) {
         const commandSpeaker =
-          lastLoggedSpeakerRef.current || lastSpeakerRef.current || 'Hablante 1'
+          lastLoggedSpeakerRef.current || lastSpeakerRef.current || FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker
         const participant = fluParticipantRef.current
         const respondParticipantFloor = async (speechText, { floor = false } = {}) => {
-          setLastTranscript(cleaned)
-          await onContractResolved?.({
+          await commitAndResolveTurn({
+            capture: cleaned,
             contract: {
               respuesta_voz: speechText,
               navegacion: { comando: null, destino: null, parametros: {} },
             },
             diagnostics: null,
-            transcript: cleaned,
             speakerName: commandSpeaker,
             speakerAlias: null,
             phase,
@@ -2564,7 +1797,6 @@ export function useFluVoiceAssistant({
             signature: null,
             language: detectTranscriptLanguage(transcript),
             participantFloor: floor,
-            conversationCommandPreLogged,
           })
         }
 
@@ -2578,7 +1810,7 @@ export function useFluVoiceAssistant({
         // Si el participante tiene la mano alzada y el TTS está ocupado, ESPERAR a que
         // termine el habla actual y revalidar la concesión en lugar de tragar el turno.
         const handRaised = participant?.hasRaisedHand?.() === true
-        if (handRaised && isSpeechBusy()) {
+        if (handRaised && isFluSpeaking()) {
           if (import.meta.env.DEV && debugHotPath) {
             fluDebugHot('participant-floor-queued-wait', {
               speaking: isSpeechSynthesisSpeaking(),
@@ -2594,21 +1826,18 @@ export function useFluVoiceAssistant({
               speaking: isSpeechSynthesisSpeaking(),
             })
           }
-          await respondParticipantFloor(getCommandSpeech('FLU_ADELANTE_EMPTY', language))
+          await respondParticipantFloor(getCommandSpeech(COMMAND_IDS.FLU_ADELANTE_EMPTY, language))
           return
         }
 
         const draft = participant?.consumeRaisedDraft?.() || ''
         if (!draft) {
-          await respondParticipantFloor(getCommandSpeech('FLU_ADELANTE_EMPTY', language))
+          await respondParticipantFloor(getCommandSpeech(COMMAND_IDS.FLU_ADELANTE_EMPTY, language))
           return
         }
 
         participant?.beginFloorDelivery?.()
-        commitSessionTurn(draft, FLU_DIALOGUE_SPEAKER, {
-          phase: 'SESION_ACTIVA',
-          source: DIALOGUE_SOURCE.PARTICIPANT,
-        })
+        commitSessionTurn(draft, FLU_DIALOGUE_SPEAKER)
         try {
           await respondParticipantFloor(draft, { floor: true })
           participant?.recordInterventionDelivered?.()
@@ -2619,10 +1848,10 @@ export function useFluVoiceAssistant({
         return
       }
 
-      setLastTranscript(cleaned)
-      await onContractResolved?.({
+      await commitAndResolveTurn({
+        capture: cleaned,
         contract: {
-          respuesta_voz: getCommandSpeech(command, language),
+          respuesta_voz: buildCommandSpeech(command, cleaned, language),
           navegacion: {
             comando: command,
             destino: null,
@@ -2630,106 +1859,80 @@ export function useFluVoiceAssistant({
           },
         },
         diagnostics: null,
-        transcript,
         speakerName: commandSpeaker,
         speakerAlias: null,
         phase,
         timestamp: formatClock(),
         signature: null,
         language: detectTranscriptLanguage(transcript),
-        conversationCommandPreLogged,
       })
     },
-    [commitSessionTurn, language, onContractResolved, persistDialogueSession, phase, releaseTurnAfterLog],
+    [commitAndResolveTurn, commitSessionTurn, language, persistDialogueSession, phase, clearAutoProcessTimer, seedSessionPrimaryFromActiveName, setSpeakerClusters, buildCommandSpeech],
   )
 
   const dispatchPassiveVoiceCommand = useCallback(
     async (uiCommand, transcript) => {
-      if (!uiCommand || !conversationActiveRef?.current) return
+      if (!uiCommand) return
 
       clearAutoProcessTimer()
-      clearStreamLogTimer()
-      pendingStreamLogRef.current = null
 
+      // La frase del comando ES la frase canónica del módulo (Anexo B 6): aquí no
+      // se elige entre copias del stream. `commandLogPreserveWake` decide solo la
+      // presentación del mandato (con o sin wake), nunca su contenido.
       const preserveWake = FLU_CONFIG.voiceCommands.commandLogPreserveWake !== false
       const phrase = preserveWake
-        ? pickRichestVoiceCommandCapture(transcript, {
-          publishedLive: publishedLiveRef.current,
-          lastEmitted: lastEmittedTranscriptRef.current,
-          streamDisplay: readStreamDisplay(listenStateRef.current),
-        }) || cleanForSpeech(transcript)
-        : cleanForSpeech(transcript)
-      const wakeAnalysis = analyzeWakeTurn(phrase, {
-        lastCommitted: logRowsTextRef.current.at(-1) || '',
-      })
-      const passivePrefix = wakeAnalysis.passiveOnly
-      const commandLogText = wakeAnalysis.commandLogText
-      let conversationCommandPreLogged = false
-
-      if (passivePrefix) {
-        syncConversationStream({
-          capture: passivePrefix,
-          utterance: passivePrefix,
-          turnCommit: true,
-          diarize: true,
-          atTurnBoundary: true,
-        })
-      }
-
-      if (
-        commandLogText &&
-        commandLogText !== passivePrefix &&
-        !isSessionResetCommand(uiCommand)
-      ) {
-        syncConversationStream({
-          capture: commandLogText,
-          utterance: commandLogText,
-          turnCommit: true,
-          diarize: true,
-          atTurnBoundary: true,
-        })
-        conversationCommandPreLogged = true
-      }
-
-      openPreviewTurnRef.current = false
-      listenStateRef.current.openLine = ''
-      listenStateRef.current.pendingInterim = ''
-      publishedLiveRef.current = ''
-      setLiveTranscript('')
+        ? cleanForSpeech(transcript)
+        : cleanForSpeech(splitTranscriptAtWakeWord(transcript, resolvedWakeWords).commandText || transcript)
 
       if (import.meta.env.DEV && debugHotPath) {
         fluDebugHot('conversation-command', { command: uiCommand, phrase })
       }
 
-      await emitActiveConversationCommand(uiCommand, phrase, { conversationCommandPreLogged })
+      await emitActiveConversationCommand(uiCommand, phrase)
     },
     [
       clearAutoProcessTimer,
-      clearStreamLogTimer,
-      conversationActiveRef,
       emitActiveConversationCommand,
-      syncConversationStream,
+      resolvedWakeWords,
     ],
   )
 
   const grantParticipantFloor = useCallback(async () => {
     if (fluParticipantRef.current?.shouldIgnoreDuplicateFloorGrant?.()) return
-    const wakeWord = String(FLU_CONFIG.voiceCommands.wakeWords?.[0] || 'flu').trim()
-    const phrase = `ok ${wakeWord} adelante`
-    await emitActiveConversationCommand('FLU_ADELANTE', phrase)
-  }, [emitActiveConversationCommand])
+    // Frase compuesta SOLO desde config (sin literales): wake + concesión de
+    // palabra (`grantFloor`). Antes: `ok ${wakeWords[0]} adelante` quemaba "ok"
+    // y "adelante" y producía "ok oye flu adelante".
+    const wakeWord = String(resolvedWakeWords[0] || '').trim()
+    const grantWord = String(FLU_CONFIG.voiceCommands?.grantFloor?.[0] || '').trim()
+    const phrase = [wakeWord, grantWord].filter(Boolean).join(' ')
+    await emitActiveConversationCommand(COMMAND_IDS.FLU_ADELANTE, phrase)
+  }, [emitActiveConversationCommand, resolvedWakeWords])
 
-  // ============================================================
-  // FAST-PATH DETERMINISTA (configuración por voz instantánea)
-  // ============================================================
-  // resolveConfigCommandFromText() resuelve comandos de configuración de forma
-  // DETERMINISTA y síncrona (sin red). Este helper los despacha por la MISMA ruta
-  // única (onContractResolved → applyConfigAction) apenas se captura el transcript,
-  // en paralelo con la llamada a la IA: la configuración se aplica de inmediato
-  // mientras la IA solo genera la confirmación verbal. El contrato tardío (con
-  // respuesta_voz) llega después con configuracion anulada (idempotencia: sin
-  // doble aplicación). Nunca dispara en conversación casual: el resolver tiene
-  // triple guardia (verbo + nombre + contexto) y aquí se exige det.accion.
+  // FAST-PATH DETERMINISTA: resuelve y despacha configuración por la MISMA ruta
+  // (onContractResolved → applyConfigAction) sin red; la IA solo confirma. El
+  // contrato tardío llega con configuración anulada (idempotencia) y se exige acción.
+  /** Orden de politica de wake por voz (P8.68): aplica la bandera y confirma el turno. */
+  const handleWakePolicyOrder = useCallback(
+    async (text, { requireWake = false } = {}) => {
+      const order = resolveWakePolicyOrder(text, FLU_CONFIG, { requireWake })
+      if (!order || !applyWakePolicyOrder(order)) return false
+      useIntegrationStore.getState?.().setVoiceConfig?.({ requireWakeAlways: order === WAKE_POLICY_ORDER.ON })
+      await commitAndResolveTurn({
+        capture: cleanForSpeech(text),
+        contract: {
+          respuesta_voz: wakePolicySpeech(order, language),
+          navegacion: { comando: null, destino: null, parametros: {} },
+        },
+        diagnostics: null,
+        speakerName: lastSpeakerRef.current || FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker,
+        speakerAlias: null,
+        phase, session, timestamp: formatClock(), signature: null, language,
+      })
+      return true
+    },
+    [commitAndResolveTurn, language, phase, session],
+  )
+
   const dispatchFastConfigCommand = useCallback(
     async (
       configuracion,
@@ -2745,7 +1948,8 @@ export function useFluVoiceAssistant({
           configuracion,
           metadata: { provider: 'deterministic-fast-path', transcript, rawText: '' },
         },
-        diagnostics: { route: 'deterministic-fast-path', provider: 'local', fastPath: true },
+        diagnostics: { route: 'deterministic-fast-path', provider: AI_PROVIDER_IDS.LOCAL, fastPath: true },
+        effectOnly: true,
         transcript,
         speakerName,
         speakerAlias,
@@ -2771,7 +1975,8 @@ export function useFluVoiceAssistant({
       juego,
       { speakerName = null, speakerAlias = null, phase = 'SESION_ACTIVA', session = null, language = null, transcript = '', timestamp = '' } = {},
     ) => {
-      if (!juego?.gameId) return null
+      // `unavailable` es del dominio de juegos aunque no traiga gameId (la respuesta la da el catalogo).
+      if (!juego?.gameId && !isCatalogLevelGameAction(juego)) return null
       await onContractResolved?.({
         contract: {
           respuesta_voz: '',
@@ -2782,7 +1987,8 @@ export function useFluVoiceAssistant({
           juego,
           metadata: { provider: 'deterministic-fast-path', transcript, rawText: '' },
         },
-        diagnostics: { route: 'deterministic-fast-path', provider: 'local', fastPath: true },
+        diagnostics: { route: 'deterministic-fast-path', provider: AI_PROVIDER_IDS.LOCAL, fastPath: true },
+        effectOnly: true,
         transcript,
         speakerName,
         speakerAlias,
@@ -2798,61 +2004,229 @@ export function useFluVoiceAssistant({
     [onContractResolved],
   )
 
+  // Fast-path de AMBIENTE y MÚSICA: despacha el contrato ya resuelto por la ÚNICA
+  // ruta (onContractResolved); catálogo y marcos son la fuente. NO escribe la
+  // conversación (`effectOnly`).
+  const dispatchFastEnvironmentCommand = useCallback(
+    async (
+      intent,
+      { speakerName = null, speakerAlias = null, phase = 'SESION_ACTIVA', session = null, language = null, transcript = '', timestamp = '' } = {},
+    ) => {
+      const isMusicAction = Boolean(intent?.accion) && !intent?.tipo
+      if (!intent?.tipo && !isMusicAction) return null
+      await onContractResolved?.({
+        contract: {
+          respuesta_voz: isMusicAction ? musicActionSpeech(intent.accion, normalizeLang(language)) : '',
+          navegacion: { comando: null, destino: null, parametros: {} },
+          workspace: null,
+          musica: isMusicAction ? { accion: intent.accion, ...(intent.cancion ? { cancion: intent.cancion } : {}) } : null,
+          configuracion: null,
+          juego: null,
+          ambiente: isMusicAction ? null : intent,
+          metadata: { provider: 'deterministic-fast-path', transcript, rawText: '' },
+        },
+        diagnostics: { route: 'deterministic-fast-path', provider: AI_PROVIDER_IDS.LOCAL, fastPath: true },
+        effectOnly: true,
+        transcript,
+        speakerName,
+        speakerAlias,
+        phase,
+        session,
+        timestamp,
+        signature: null,
+        language,
+        fastPathEnvironment: !isMusicAction,
+      })
+      return intent
+    },
+    [onContractResolved],
+  )
+
+  // §3.1 — Árbitro determinista UNIFICADO: resuelve config/juego/ambiente y los
+  // despacha por la ÚNICA ruta (onContractResolved); devuelve los resueltos y un
+  // `dispatch` que nunca rechaza para que cada llamador decida cuándo esperarlo.
+  const evaluateDeterministicFastPaths = useCallback(
+    async ({
+      text,
+      speakerName = null,
+      speakerAlias = null,
+      phase = 'SESION_ACTIVA',
+      session = null,
+      language = null,
+      timestamp = '',
+      // Texto de la LOCUCIÓN del turno (frase canónica). Los fast-paths de estado
+      // son EFECTOS del turno: reenviar una re-derivación (texto post-wake) haría
+      // que el escritor de filas la tomara por otra frase y duplicara la fila.
+      utterance = null,
+    }) => {
+      const transcript = cleanForSpeech(text)
+      const utteranceTranscript = cleanForSpeech(utterance) || transcript
+      // §1A: la resolución de los dominios con efecto de estado (config/juego/
+      // ambiente) se delega al árbitro puro (src/voice/lib/deterministicArbiter.js).
+      // El hook conserva SOLO la orquestación del despacho (onContractResolved).
+      const { config, game, env, music } = resolveStatefulDomains(text, { language })
+      if (transcript) noteGameTurn(consumesGameTurn(game))
+      const dispatch = Promise.allSettled([
+        config?.accion
+          ? dispatchFastConfigCommand(config, {
+              speakerName,
+              speakerAlias,
+              phase,
+              session,
+              language,
+              timestamp,
+              transcript: utteranceTranscript,
+            })
+          : Promise.resolve(null),
+        game?.gameId || isCatalogLevelGameAction(game)
+          ? dispatchFastGameCommand(game, {
+              speakerName,
+              speakerAlias,
+              phase,
+              session,
+              language,
+              timestamp,
+              transcript: utteranceTranscript,
+            })
+          : Promise.resolve(null),
+        env?.tipo
+          ? dispatchFastEnvironmentCommand(env, {
+              speakerName,
+              speakerAlias,
+              phase,
+              session,
+              language,
+              timestamp,
+              transcript: utteranceTranscript,
+            })
+          : Promise.resolve(null),
+        music
+          ? dispatchFastEnvironmentCommand(music, {
+              speakerName,
+              speakerAlias,
+              phase,
+              session,
+              language,
+              timestamp,
+              transcript: utteranceTranscript,
+            })
+          : Promise.resolve(null),
+      ])
+      return { config, game, env, music, dispatch }
+    },
+    [dispatchFastConfigCommand, dispatchFastGameCommand, dispatchFastEnvironmentCommand],
+  )
+
   const processConversationFluQuery = useCallback(
-    async (fullTranscript, { beforeWake = '', question = '' } = {}) => {
+    async (fullTranscript, { question = '' } = {}) => {
       relayLog('LOG', 'useFluVoiceAssistant', `processConversationFluQuery ENTER: conversationActiveRef.current=${conversationActiveRef?.current}, question="${(question || '').slice(0, 60)}"`)
-      if (!conversationActiveRef?.current || !question) {
-        relayLog('WARN', 'useFluVoiceAssistant', `processConversationFluQuery EXIT EARLY: conversationActiveRef.current=${conversationActiveRef?.current}, question="${(question || '').slice(0, 60)}"`)
+      if (!question) {
+        relayLog('WARN', 'useFluVoiceAssistant', `processConversationFluQuery EXIT EARLY: question="${(question || '').slice(0, 60)}"`)
         return
       }
 
+      // El turno queda resuelto; la LOCUCION EN VUELO no se vacia (su cierre real la commitea).
       openPreviewTurnRef.current = false
-      listenStateRef.current.openLine = ''
-      listenStateRef.current.pendingInterim = ''
-      const displayPhrase = cleanForSpeech(fullTranscript || question)
-      setLastTranscript(displayPhrase)
-      publishedLiveRef.current = ''
-      setLiveTranscript('')
+      captureTurnAudio() // §9 sella el audio ANTES del commit-only (que vacía el buffer)
+      // §9: una sola frase canónica para el turno (display y fila salen de ESTE valor).
+      const canonicalPhrase = await commitAndResolveTurn({
+        capture: fullTranscript || question,
+        fallbackCapture: question, // texto validado del turno (si la captura cruda es basura)
+        commitOnly: true,
+      })
+      if (!canonicalPhrase) return
 
-      const sampleRate = sampleRateRef.current || 48000
-      const streamSamples = flattenChunks(chunksRef.current)
+      // B.6: la IA recibe la MISMA frase commiteada, sin la wake (splitter unico, Anexo B.11).
+      const transcriptForAi = cleanForSpeech(splitTranscriptAtWakeWord(canonicalPhrase, FLU_CONFIG.voiceCommands?.wakeWords || []).commandText || '') || question
+      // §9: la query ya viene derivada por el derivador único
+      const sampleRate = sampleRateRef.current || AUDIO_SAMPLE_RATE
+      const streamSamples = turnAudioForDiarize(activeTurnIdRef.current, { chunks: chunksRef.current, activeTurnId: activeTurnIdRef.current })
       const audioSnapshot = streamSamples.length ? new Float32Array(streamSamples) : new Float32Array(0)
-      const fallbackSpeaker = lastSpeakerRef.current || 'Hablante 1'
+      const fallbackSpeaker = lastSpeakerRef.current || FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker
       const currentClock = formatClock()
-      const detectedLanguage = detectTranscriptLanguage(question)
+      const detectedLanguage = detectTranscriptLanguage(transcriptForAi)
 
       setStatus('processing')
       isProcessingRef.current = true
+      // Turno vivo: overlay "Pensando" hasta terminar (IA + escrituras + acción +
+      // voz) + cronómetro del turno.
+      turnLifecycleRef.current?.startTurn('voz')
       setError('')
-      // FIX estabilidad: `resolvedSpeakerName`, `speakerAlias` y `audioSignatureVector`
-      // se declaran FUERA del try porque el bloque catch los referencia. En JS
-      // let/const tienen ámbito de bloque, así que declararlos dentro del try lanzaba
-      // `ReferenceError: ... is not defined` en el path de error (cuando la IA falla),
-      // tumbando la UI de React.
+      // Declarados FUERA del try: el catch los referencia y `let/const` tienen
+      // ámbito de bloque (declararlos dentro lanzaba ReferenceError al fallar la IA).
       let resolvedSpeakerName = fallbackSpeaker
       let speakerAlias = null
       let audioSignatureVector = null
       try {
-        // Fase 2: la conversación está SIEMPRE activa aquí (early-return arriba), así
-        // que applyConversationSpeaker es la fuente de verdad del orador. Se aplica de
-        // forma síncrona ANTES del lote paralelo para que la API ya reciba el speaker.
-        if (conversationActiveRef?.current) {
-          resolvedSpeakerName = applyConversationSpeaker(fullTranscript || question, fallbackSpeaker, {
-            atTurnBoundary: true,
-            allowNewCluster: true,
-            force: true,
+        // El orador lo decide `resolveSpeaker` (UNA medida por turno, decisión A):
+        // en conversación la etiqueta es la del módulo; en pasivo, la del resolver.
+
+        // §2B — Con match determinista de estado NO se llama a Gemini si el flag
+        // `arbiter.skipGeminiOnMatch` está activo; el contrato lo decide la función pura
+        // y, en juego/ambiente, la cortesía es '' porque el motor ya habla su voz.
+        const skipGemini = resolveDeterministicSkipGeminiContract({
+          text: transcriptForAi,
+          language: detectedLanguage,
+          skipGeminiOnMatch: Boolean(FLU_CONFIG.arbiter?.skipGeminiOnMatch),
+        })
+        if (skipGemini) {
+          const { domain: statefulDomain, contract: deterministicContract } = skipGemini
+          const courtesy = deterministicContract.respuesta_voz || ''
+          setLastContract(deterministicContract)
+          setLastDiagnostics({ route: 'deterministic-arbiter', provider: AI_PROVIDER_IDS.LOCAL, skipGemini: true })
+          setError('')
+          setLastErrorEvent(null)
+          // La respuesta ya está resuelta: la persistencia va DESPUÉS de la voz.
+          persistSessionOffPath({
+            phase: 'SESION_ACTIVA',
+            ...session,
+            history: getConversationContext(),
           })
-          speakerAlias = null
+          relayLog('LOG', 'useFluVoiceAssistant', `processConversationFluQuery §2B deterministic (skip Gemini): domain="${statefulDomain}", respuesta_voz="${courtesy.slice(0, 80)}"`)
+          await commitAndResolveTurn({
+            capture: canonicalPhrase,
+            contract: deterministicContract,
+            diagnostics: { route: 'deterministic-arbiter', provider: AI_PROVIDER_IDS.LOCAL, skipGemini: true },
+            speakerName: resolvedSpeakerName,
+            speakerAlias,
+            phase: 'SESION_ACTIVA',
+            session,
+            timestamp: currentClock,
+            signature: (await computeTurnSignature(audioSnapshot, sampleRate)).vector,
+            language: detectedLanguage,
+            fastPathConfig: statefulDomain === 'config',
+            fastPathGame: statefulDomain === 'game',
+            fastPathEnvironment: statefulDomain === 'environment',
+          })
+          return
         }
+
+        // TRACE escenario: ¿el árbitro determinista matchearía reminder/temporal/
+        // nota/horario sobre la question ANTES de llamar a Gemini? Esto muestra si el
+        // mandato ("crea una cita...", "pon una alarma...") debía despacharse sin IA.
+        try {
+          const probe = resolveDeterministicCommand(transcriptForAi, {
+            language: detectedLanguage,
+          })
+          relayLog(
+            'LOG',
+            'useFluVoiceAssistant',
+            `processConversationFluQuery TRACE: determinista sobre question="${(question || '').slice(0, 80)}" → matched=${Boolean(probe?.matched)} domain="${probe?.domain || ''}" action="${JSON.stringify(probe?.action?.action ?? probe?.action ?? null)?.slice(0, 120)}"`,
+          )
+        } catch (probeError) {
+    logCaughtError('[catch] src/voice/hooks/useFluVoiceAssistant.js', probeError, probeError?.stack);
+          relayLog('WARN', 'useFluVoiceAssistant', `processConversationFluQuery TRACE determinista lanzó: ${probeError?.message || probeError}`)
+        }
+
         const knowledgeMode = isMinuteKnowledgeRequest(question) ? 'minutes' : 'general'
         setActiveKnowledgeBase(knowledgeMode)
 
         // Fase 2: orador + llamada API + firma de audio en PARALELO. La firma se
         // calcula UNA vez y se reutiliza en ambos caminos de onContractResolved.
         const [speakerResult, contractResult, signatureResult, fastPathResult] = await Promise.allSettled([
-          resolveSpeaker(question, audioSnapshot, sampleRate, fallbackSpeaker),
+          resolveSpeaker(transcriptForAi, audioSnapshot, sampleRate, fallbackSpeaker),
           requestFluContractForTranscript({
-            transcript: question,
+            transcript: transcriptForAi,
             knowledgeMode,
             intent: { comando: null, destino: null, parametros: {} },
             speaker: resolvedSpeakerName,
@@ -2860,44 +2234,33 @@ export function useFluVoiceAssistant({
             role: session.role,
             phase: 'SESION_ACTIVA',
           }),
-          computeAudioSignature(audioSnapshot, sampleRate).then((s) => s.vector),
-          // Fast-path determinista: si el transcript es un comando de configuración,
-          // se despacha al instante (onContractResolved → applyConfigAction) MIENTRAS
-          // la IA aún genera la confirmación verbal. Es la 4ª tarea del lote: corre en
-          // paralelo con la llamada a la API y no añade latencia a la confirmación.
+          computeTurnSignature(audioSnapshot, sampleRate).then((s) => s.vector),
+          // Fast-path determinista UNIFICADO (§3.1): el árbitro resuelve y despacha
+          // configuración/juego/ambiente desde un único punto, en paralelo con la IA.
+          // Se espera su `dispatch` para garantizar el orden: el efecto del fast-path
+          // queda aplicado ANTES de que el contrato tardío (con idempotencia) llegue a
+          // onContractResolved.
           (async () => {
-            const det = resolveConfigCommandFromText(question || fullTranscript)
-            if (!det?.accion) return null
-            await dispatchFastConfigCommand(det, {
+            const result = await evaluateDeterministicFastPaths({
+              text: transcriptForAi,
+              // La fila del usuario es la MISMA frase canónica del turno: el
+              // fast-path no debe registrar otra (defecto: fila duplicada sin wake).
+              utterance: canonicalPhrase,
               speakerName: resolvedSpeakerName,
               speakerAlias,
               phase: 'SESION_ACTIVA',
               session,
               language: detectedLanguage,
               timestamp: currentClock,
-              transcript: cleanForSpeech(question) || cleanForSpeech(fullTranscript),
             })
-            return det
-          })(),
-          // Fast-path determinista de JUEGO (5ª tarea): si el transcript es un comando
-          // de juego (start/turn/end), se despacha al instante con el motor local — la
-          // fuente de verdad de la partida. La IA sigue generando en paralelo, pero su
-          // `juego` se anula (idempotencia) y su voz se suprime vía fastPathGame.
-          (async () => {
-            const game = resolveGameCommandFromText(question || fullTranscript)
-            if (!game?.gameId) return null
-            await dispatchFastGameCommand(game, {
-              speakerName: resolvedSpeakerName,
-              speakerAlias,
-              phase: 'SESION_ACTIVA',
-              session,
-              language: detectedLanguage,
-              timestamp: currentClock,
-              transcript: cleanForSpeech(question) || cleanForSpeech(fullTranscript),
-            })
-            return game
+            await result.dispatch
+            return result
           })(),
         ])
+        const fastPath = fastPathResult?.status === 'fulfilled' ? fastPathResult.value : null
+        const fastPathConfig = fastPath?.config
+        const fastGame = fastPath?.game
+        const fastEnv = fastPath?.env
 
         // La llamada API es el único resultado obligatorio: si falla, propagar al catch.
         if (contractResult.status === 'rejected') {
@@ -2906,8 +2269,7 @@ export function useFluVoiceAssistant({
         const contract = contractResult.value
 
         // Mantener fallback del plan: si resolveSpeaker falla se usa fallbackSpeaker.
-        // En modo conversación (siempre activo aquí) applyConversationSpeaker ya decidió.
-        if (speakerResult.status === 'fulfilled' && speakerResult.value && !conversationActiveRef?.current) {
+        if (speakerResult.status === 'fulfilled' && speakerResult.value) {
           resolvedSpeakerName =
             speakerResult.value.resolvedSpeakerName || speakerResult.value.speakerName || resolvedSpeakerName
           speakerAlias = speakerResult.value.speakerAlias ?? speakerAlias
@@ -2916,81 +2278,65 @@ export function useFluVoiceAssistant({
         // Firma de audio reutilizable; fallback perezoso si el cálculo paralelo falló.
         audioSignatureVector = signatureResult.status === 'fulfilled' ? signatureResult.value : null
 
-        const resolvedContract = {
-          ...contract.contract,
-          respuesta_voz: contract.contract.respuesta_voz,
-          navegacion: contract?.contract?.navegacion || {
-            comando: null,
-            destino: null,
-            parametros: {},
-          },
-          // Idempotencia fast-path: si la tarea rápida ya aplicó la configuración,
-          // se anula la del contrato tardío para NO duplicar el efecto. Si no hubo
-          // fast-path, se conserva la resolución determinista sobre la del modelo.
-          configuracion:
-            fastPathResult?.status === 'fulfilled' && fastPathResult?.value?.accion
-              ? null
-              : resolveConfigCommandFromText(question || fullTranscript) ??
-                contract?.contract?.configuracion,
-          // Idempotencia de juego: si el fast-path de juego ya despachó (start/turn/
-          // end), se anula el `juego` del contrato tardío para NO duplicar el efecto.
-          // La voz del turno ya la habló el motor local (determinista).
-          juego:
-            fastGameResult?.status === 'fulfilled' && fastGameResult?.value?.gameId
-              ? null
-              : contract?.contract?.juego ?? null,
-        }
+        // §1A: re-resolución determinista tardía (config/ambiente) para la idempotencia
+        // del contrato. Se delega al árbitro puro; solo se usa cuando el fast-path NO
+        // despachó (para que la resolución determinista gane sobre la del modelo).
+        const lateStateful = resolveStatefulDomains(transcriptForAi, { language: detectedLanguage })
 
-        setLastTranscript(fullTranscript)
+        // Reparto real del tiempo del turno: la fase paralela (IA + orador +
+        // firma + fast-path) se mide como UNA marca; antes se atribuía a ojo el
+        // hueco post-IA. El resumen se emite en el finally, con el total.
+        turnLifecycleRef.current?.lap('ia+orador+firma+fastpath')
+        const resolvedContract = buildResolvedContract({
+          contract,
+          lateStateful,
+          fastPathConfig,
+          fastGame,
+          fastEnv,
+        })
+
         setLastContract(resolvedContract)
         setLastDiagnostics(contract.diagnostics || null)
         setError('')
         setLastErrorEvent(null)
-        dialogueHistoryRef.current = recordConversationExchange(
-          logRowsTextRef.current,
-          logRowSpeakersRef.current,
-          dialogueHistoryRef.current,
-          {
-            user: { speaker: resolvedSpeakerName, text: question },
-            assistant: { text: resolvedContract.respuesta_voz },
-            phase: 'SESION_ACTIVA',
-            userSource: DIALOGUE_SOURCE.QUERY,
-            assistantSource: DIALOGUE_SOURCE.QUERY,
-          },
-          {
-            maxDialogue: CONTEXT_HISTORY_LIMIT,
-            maxLogRows: FLU_CONFIG.limits.priorRowsMax,
-          },
-        )
-        await saveSessionState({
+        // La respuesta ya está resuelta: la persistencia de sesión NO puede
+        // adelantar a la voz (el usuario esperaba al disco para oír algo listo).
+        // Se encola en orden y el turno sigue hasta la locución.
+        persistSessionOffPath({
           phase: 'SESION_ACTIVA',
           ...session,
           history: getConversationContext(),
         })
 
-        relayLog('LOG', 'useFluVoiceAssistant', `processConversationFluQuery calling onContractResolved with respuesta_voz="${(resolvedContract.respuesta_voz || '').slice(0, 80)}"`)
-        await onContractResolved?.({
+        relayLog('LOG', 'useFluVoiceAssistant', `processConversationFluQuery calling commitAndResolveTurn with respuesta_voz="${(resolvedContract.respuesta_voz || '').slice(0, 80)}"`)
+        turnLifecycleRef.current?.lap('contrato+escrituras')
+        const turnSignature = audioSignatureVector ?? (await computeTurnSignature(audioSnapshot, sampleRate)).vector
+        turnLifecycleRef.current?.lap('firma')
+        await commitAndResolveTurn({
+          capture: canonicalPhrase,
           contract: resolvedContract,
           diagnostics: contract.diagnostics || null,
-          transcript: cleanForSpeech(question) || cleanForSpeech(fullTranscript),
-          conversationCommandPreLogged: Boolean(cleanForSpeech(beforeWake)),
           speakerName: resolvedSpeakerName,
           speakerAlias,
           phase: 'SESION_ACTIVA',
           session,
           timestamp: currentClock,
-          signature: audioSignatureVector ?? (await computeAudioSignature(audioSnapshot, sampleRate)).vector,
+          signature: turnSignature,
           language: detectedLanguage,
           // En juegos por voz la voz es SIEMPRE del motor local (determinista).
-          fastPathGame: Boolean(fastGameResult?.status === 'fulfilled' && fastGameResult?.value?.gameId),
+          fastPathGame: Boolean(fastGame?.gameId),
+          // En ambientes por voz la bienvenida la habla SIEMPRE el motor local.
+          fastPathEnvironment: Boolean(fastEnv?.tipo),
         })
       } catch (error) {
+    logCaughtError('[catch] src/voice/hooks/useFluVoiceAssistant.js', error, error?.stack);
         relayLog('ERROR', 'useFluVoiceAssistant', `processConversationFluQuery CATCH: message="${error?.message || error}", code="${error?.code}", status="${error?.status}"`)
         reportGeminiFailure(error, { phase: 'SESION_ACTIVA', transcript: fullTranscript })
         // Also notify the UI (FluShell) so FLU speaks the error to the user
         const errorMessage = formatGeminiUserMessage(error, language, { fallback: true })
-        relayLog('LOG', 'useFluVoiceAssistant', `processConversationFluQuery catch calling onContractResolved with errorMessage="${(errorMessage || '').slice(0, 80)}"`)
-        await onContractResolved?.({
+        relayLog('LOG', 'useFluVoiceAssistant', `processConversationFluQuery catch calling commitAndResolveTurn with errorMessage="${(errorMessage || '').slice(0, 80)}"`)
+        await commitAndResolveTurn({
+          capture: canonicalPhrase,
           contract: {
             respuesta_voz: errorMessage,
             navegacion: { comando: null, destino: null, parametros: {} },
@@ -2998,21 +2344,21 @@ export function useFluVoiceAssistant({
             metadata: { provider: 'error', transcript: fullTranscript, rawText: '' },
           },
           diagnostics: buildGeminiDiagnosticsFromError(error),
-          transcript: cleanForSpeech(fullTranscript),
-          conversationCommandPreLogged: Boolean(cleanForSpeech(beforeWake)),
           speakerName: resolvedSpeakerName || 'FLU',
           speakerAlias: null,
           phase: 'SESION_ACTIVA',
           session,
           timestamp: currentClock,
-          signature: audioSignatureVector ?? (await computeAudioSignature(audioSnapshot, sampleRate)).vector,
+          signature: audioSignatureVector ?? (await computeTurnSignature(audioSnapshot, sampleRate)).vector,
           language: detectedLanguage,
         })
+        turnLifecycleRef.current?.lap('commit(accion+voz)')
         if (isListeningRef.current && !recognitionActiveRef.current) {
-          requestRecognitionRestart(FLU_CONFIG.timing.resumeAfterSpeechMs)
+          requestRecognitionRestart('tras-habla', FLU_CONFIG.timing.resumeAfterSpeechMs)
         }
       } finally {
         isProcessingRef.current = false
+        turnLifecycleRef.current?.endTurn('voz')
         if (isListeningRef.current) {
           setStatus('listening')
         } else {
@@ -3021,34 +2367,46 @@ export function useFluVoiceAssistant({
       }
     },
     [
+      captureTurnAudio,
       conversationActiveRef,
+      commitAndResolveTurn,
       getConversationContext,
-      onContractResolved,
       requestFluContractForTranscript,
       requestRecognitionRestart,
       reportGeminiFailure,
       resolveSpeaker,
-      applyConversationSpeaker,
+      turnLifecycleRef,
+      persistSessionOffPath,
       session,
-      dispatchFastConfigCommand,
-      dispatchFastGameCommand,
+      evaluateDeterministicFastPaths,
+      computeTurnSignature,
+      language,
     ],
   )
 
   const runConversationActionDispatch = useCallback(
     async (text, { interim = false, source = 'interim', awaitHandlers = false } = {}) => {
-      if (!conversationActiveRef?.current) return false
       const phrase = cleanForSpeech(text)
-      const lastCommitted = logRowsTextRef.current.at(-1) || ''
-      if (isSpeechBusy()) {
-        return false
-      }
+      const lastCommitted = userRowsTextView.current.at(-1) || ''
+      // El eco lo gana el MÓDULO por su único dueño (`ultimoTextoDicho`): el
+      // despacho recibe solo la frase canónica ya gated.
+
+      if (await handleWakePolicyOrder(text, { requireWake: true })) return true
 
       const plan = planVoiceCommandDispatch(text, {
         interim,
         lastSignature: lastConversationActionRef.current.signature,
         lastAt: lastConversationActionRef.current.at,
+        // La REVISION DEL ASR la decide el planificador (dueno unico de la
+        // decision): aqui solo se le pasa la memoria de la ultima peticion
+        // aceptada (texto + instante). Antes esta regla vivia en el hook con
+        // la ventana como literal (1600) y el planificador con su propia dedupe.
+        lastPhrase: lastConversationActionRef.current.text,
         lastCommitted,
+        // Piso: la wake es obligatoria? (dueno unico: requiresWakeWord). Decide si
+        // una captura sin wake es turno; antes el despacho la descartaba SIEMPRE
+        // aunque el stream le hubiera abierto fila (P8.49) -> peticion pendiente.
+        wakeRequired: requiresWakeWord(conversationActiveRef?.current),
       })
 
       if (import.meta.env.DEV && debugHotPath) {
@@ -3067,7 +2425,7 @@ export function useFluVoiceAssistant({
       if (plan.plan === 'skip') return false
       if (plan.plan === 'dedup') return true
 
-      lastConversationActionRef.current = { signature: plan.signature, at: Date.now() }
+      lastConversationActionRef.current = { signature: plan.signature, at: Date.now(), text: phrase }
 
       const invoke = async (handler) => {
         if (awaitHandlers) await handler()
@@ -3075,6 +2433,24 @@ export function useFluVoiceAssistant({
       }
 
       if (plan.action.kind === 'command') {
+        // §9/F: cada comando exige la wake en SU enunciado (excepto control de escucha).
+        const listeningControl = detectListeningControl(text, FLU_CONFIG.voiceCommands)
+        const authorized = isCommandAuthorized(text, {
+          wakeWords: resolvedWakeWords,
+          allowWithoutWake: Boolean(listeningControl),
+        })
+        if (!authorized) {
+          relayLog('LOG', 'useFluVoiceAssistant', '[WAKE] comando sin wake en su enunciado: no se despacha', {
+            phrase: phrase.slice(0, 60),
+          })
+          return false
+        }
+        // Problema 5: «ok flu soy X» bautiza la VOZ también en el motor (sus
+        // filas siguientes llevan el nombre); el registro sigue en su dueño.
+        if (plan.action.command === COMMAND_IDS.REGISTRAR_PARTICIPANTE) {
+          const nombreBautizo = resolveSpeakerNameFromUtterance(text)
+          if (nombreBautizo) motorConversacionRef.current?.registrarNombre?.(nombreBautizo)
+        }
         await invoke(() => dispatchPassiveVoiceCommand(plan.action.command, plan.phrase))
         return true
       }
@@ -3084,11 +2460,20 @@ export function useFluVoiceAssistant({
       }
       return false
     },
-    [conversationActiveRef, debugHotPath, dispatchPassiveVoiceCommand, processConversationFluQuery],
+    [conversationActiveRef, dispatchPassiveVoiceCommand, processConversationFluQuery, resolvedWakeWords, userRowsTextView, handleWakePolicyOrder],
   )
 
+  // Despacho en SEGUNDO PLANO del motor de conversación: el módulo no espera la
+  // Promise (`onFraseCanonica`), así que un rechazo quedaría como promesa suelta.
+  // Se registra con contexto y se PROPAGA: quien sí espere recibe el rechazo.
   const tryDispatchConversationAction = useCallback(
-    (text, options = {}) => runConversationActionDispatch(text, { ...options, awaitHandlers: false }),
+    (text, options = {}) => {
+      const pending = runConversationActionDispatch(text, { ...options, awaitHandlers: false })
+      void Promise.resolve(pending).catch((error) =>
+        logCaughtError('useFluVoiceAssistant.tryDispatchConversationAction', error, { text, options }),
+      )
+      return pending
+    },
     [runConversationActionDispatch],
   )
 
@@ -3107,693 +2492,33 @@ export function useFluVoiceAssistant({
     }
   }, [awaitConversationAction])
 
-  const processCapture = useCallback(async ({ closing = false } = {}) => {
-    const snapshot = readCommandSnapshot(turnRef.current, pendingSpillRef.current)
-    relayLog('LOG', 'useFluVoiceAssistant', `processCapture ENTER: snapshot="${(snapshot || '').slice(0, 60)}", closing=${closing}, conversationActiveRef.current=${conversationActiveRef?.current}`)
-    if (!snapshot && !closing) return
-
-    const requireWake = !conversationActiveRef?.current
-    const wakeWords = FLU_CONFIG.voiceCommands.wakeWords
-
-    if (conversationActiveRef?.current && snapshot) {
-      relayLog('LOG', 'useFluVoiceAssistant', `processCapture CONVERSATION MODE: calling awaitConversationAction with text="${(snapshot || '').slice(0, 60)}"`)
-      const handled = await awaitConversationAction(snapshot, { interim: false, source: 'capture' })
-      relayLog('LOG', 'useFluVoiceAssistant', `processCapture CONVERSATION MODE: awaitConversationAction returned handled=${handled}`)
-      return
-    }
-
-    if (!snapshot) {
-      if (closing) {
-        isListeningRef.current = false
-        await cleanupAudio()
-        setStatus('idle')
-      }
-      return
-    }
-
-    setStatus('processing')
-    isProcessingRef.current = true
-    isStoppingRef.current = true
-    clearAutoProcessTimer()
-
-    try {
-      commitBaselineRef.current = snapshot
-      await finalizeRecognition()
-
-      const readTurnCaptureSnapshot = () =>
-        appendSpillText(commitBaselineRef.current, readCaptureSnapshot())
-
-      let capturedTranscript = readTurnCaptureSnapshot()
-      if (capturedTranscript && turnRef.current.interim) {
-        capturedTranscript = await waitForCaptureSettle(readTurnCaptureSnapshot, FLU_CONFIG.timing)
-      }
-
-      const sampleRate = sampleRateRef.current || 48000
-      const streamSamples = flattenChunks(chunksRef.current)
-      const currentClock = formatClock()
-      const fallbackSpeaker = lastSpeakerRef.current || 'Hablante 1'
-      const audioSnapshot = streamSamples.length ? new Float32Array(streamSamples) : new Float32Array(0)
-
-      const finishTurn = () => {
-        releaseTurnAfterLog(lastLoggedCaptureRef.current)
-      }
-
-      const logContext = {
-        audioSnapshot,
-        sampleRate,
-        fallbackSpeaker,
-        currentClock,
-      }
-
-      let passivePrefix = ''
-      if (conversationActiveRef?.current && capturedTranscript) {
-        const wakeAnalysis = analyzeWakeTurn(capturedTranscript, {
-          lastCommitted: logRowsTextRef.current.at(-1) || '',
-        })
-        if (wakeAnalysis.hasInlineBoundary) {
-          passivePrefix = wakeAnalysis.passiveOnly
-          capturedTranscript = cleanForSpeech(wakeAnalysis.afterWake || wakeAnalysis.question)
-        }
-      }
-
-      const detectedLanguage = detectTranscriptLanguage(capturedTranscript || passivePrefix)
-
-      if (passivePrefix) {
-        await emitConversationLog(passivePrefix, logContext)
-      }
-
-      const bufferedValidation = extractFluVoiceCommand(capturedTranscript, {
-        requireWake,
-        wakeWords,
-      })
-      relayLog('LOG', 'useFluVoiceAssistant', `processCapture wake validation: accepted=${bufferedValidation.accepted}, reason="${bufferedValidation.reason}", requireWake=${requireWake}, requireWake?current=${conversationActiveRef?.current}`)
-      if (!bufferedValidation.accepted) {
-        if (
-          bufferedValidation.reason === 'empty_after_wake_word' &&
-          conversationActiveRef?.current
-        ) {
-          finishTurn()
-          restartRecognition()
-          setLastTranscript(cleanForSpeech(capturedTranscript))
-          return
-        }
-
-        const toLog = cleanForSpeech(capturedTranscript)
-        if (toLog) {
-          await emitConversationLog(toLog, logContext)
-        }
-        finishTurn()
-        await cleanupAudio()
-        setStatus('idle')
-        isListeningRef.current = false
-        if (bufferedValidation.reason === 'missing_wake_word' && conversationActiveRef?.current) {
-          window.setTimeout(() => {
-            if (conversationActiveRef?.current) {
-              startListeningRef.current({ resume: true }).catch(fluAsyncErrorHandler('useFluVoiceAssistant'))
-            }
-          }, FLU_CONFIG.timing.resumeListeningMs)
-        }
-        return
-      }
-
-      // OPTIMIZACIÓN LATENCIA (sin afectación funcional): bufferedTranscript, comando
-      // directo e intent son TEXTO PURO (sin I/O ni efectos laterales), así que se
-      // calculan ANTES de la diarización pesada. La diarización (resolveSpeaker) arranca
-      // EN PARALELO con la llamada a la API y se reconcilia justo antes de
-      // onContractResolved — mismo patrón que processConversationFluQuery (lote paralelo).
-      const bufferedTranscript = bufferedValidation.commandText
-      const directCommand = resolveNavigationCommandFromTexts([
-        bufferedTranscript,
-        capturedTranscript,
-      ])
-      const intent = directCommand
-        ? {
-          comando: directCommand,
-          destino: null,
-          parametros: {},
-        }
-        : { comando: null, destino: null, parametros: {} }
-
-      // Orador rápido basado en texto para el prompt de la API y el fast-path
-      // (instantáneo): nombre introducido por voz > último orador conocido > fallback.
-      // La diarización real (audio) reconcilia el orador definitivo antes de hablar.
-      const fastSpeakerName =
-        detectIntroducedName(bufferedTranscript || capturedTranscript) ||
-        lastSpeakerRef.current ||
-        fallbackSpeaker
-
-      // Diarización pesada corriendo EN PARALELO con la API. .catch(() => null) la hace
-      // no-fatal (mismo policy que el lote conversacional vía Promise.allSettled): si la
-      // diarización fallara, se degrada al orador rápido + firma calculada bajo demanda.
-      const speakerPromise = resolveSpeaker(
-        capturedTranscript,
-        audioSnapshot,
-        sampleRate,
-        fallbackSpeaker,
-      ).catch((speakerError) => {
-        console.log('[FLU-DEBUG] processCapture resolveSpeaker falló; se usa orador rápido:', speakerError?.message || speakerError)
-        return null
-      })
-
-      const resolveTurnSpeaker = async () => {
-        const turnSpeaker = await speakerPromise
-        if (!turnSpeaker) {
-          return {
-            signatureVector: null,
-            resolvedSpeakerName: fastSpeakerName,
-            speakerAlias: null,
-          }
-        }
-        return {
-          signatureVector: turnSpeaker.signatureVector,
-          resolvedSpeakerName:
-            turnSpeaker.resolvedSpeakerName || turnSpeaker.speakerName || fastSpeakerName,
-          speakerAlias: turnSpeaker.speakerAlias ?? null,
-        }
-      }
-
-      if (directCommand) {
-        // El comando directo espera la diarización (ya en curso) para conservar el
-        // orador real y la firma; si ésta fallara, se degrada al orador rápido.
-        const { signatureVector, resolvedSpeakerName, speakerAlias } = await resolveTurnSpeaker()
-
-        if (directCommand === 'INICIAR_CONVERSACION' && conversationActiveRef?.current) {
-          await emitActiveConversationCommand('INICIAR_CONVERSACION', capturedTranscript)
-          return
-        }
-
-        finishTurn()
-        await cleanupAudio()
-        setStatus('idle')
-        isListeningRef.current = false
-        setActiveKnowledgeBase('general')
-        setLastTranscript(capturedTranscript)
-        relayLog('LOG', 'useFluVoiceAssistant', `processCapture DIRECT COMMAND: calling onContractResolved with command="${directCommand}"`)
-        await onContractResolved?.({
-          contract: {
-            respuesta_voz: getCommandSpeech(directCommand, detectedLanguage || language),
-            navegacion: {
-              comando: directCommand,
-              destino: null,
-              parametros: {},
-            },
-          },
-          diagnostics: null,
-          transcript: capturedTranscript,
-          speakerName: resolvedSpeakerName,
-          speakerAlias,
-          phase,
-          timestamp: currentClock,
-          signature: signatureVector ?? (await computeAudioSignature(audioSnapshot, sampleRate)).vector,
-          language: detectedLanguage,
-        })
-        return
-      }
-
-      if (!bufferedTranscript) {
-        finishTurn()
-        if (conversationActiveRef?.current) {
-          restartRecognition()
-        } else {
-          await cleanupAudio()
-          setStatus('idle')
-          isListeningRef.current = false
-        }
-        return
-      }
-
-      setError('')
-
-      const knowledgeMode =
-        !isMinuteGenerationRequest(bufferedTranscript) &&
-          !isMinuteGenerationRequest(capturedTranscript) &&
-          !isMinuteSaveRequest(bufferedTranscript) &&
-          !isMinuteSaveRequest(capturedTranscript) &&
-          isMinuteKnowledgeRequest(bufferedTranscript)
-          ? 'minutes'
-          : 'general'
-      setActiveKnowledgeBase(knowledgeMode)
-
-      if (phase === 'CONFIGURACION') {
-        const derivedSession = deriveSession(bufferedTranscript, session.role, language)
-        const nextSession = {
-          role: derivedSession.role,
-          theme: derivedSession.theme,
-        }
-        setSession(nextSession)
-        setPhase('SESION_ACTIVA')
-        await saveSessionState({
-          phase: 'SESION_ACTIVA',
-          ...nextSession,
-          history: getConversationContext(),
-        })
-
-        // FAST-PATH DETERMINISTA (configuración por voz instantánea): si el
-        // transcript es un comando de configuración, se resuelve sin IA y se
-        // despacha al instante por la MISMA ruta (onContractResolved) mientras
-        // la API genera la confirmación verbal. Fire-and-forget con .catch para
-        // nunca dejar una promesa sin manejar.
-        const fastPathConfig = resolveConfigCommandFromText(capturedTranscript)
-        const fastPathDispatch =
-          fastPathConfig?.accion
-            ? dispatchFastConfigCommand(fastPathConfig, {
-                speakerName: fastSpeakerName,
-                speakerAlias: null,
-                phase: 'CONFIGURACION',
-                session: nextSession,
-                language: detectedLanguage,
-                timestamp: currentClock,
-                transcript: cleanForSpeech(capturedTranscript) || cleanForSpeech(bufferedTranscript),
-              }).catch(() => null)
-            : Promise.resolve(null)
-        // FAST-PATH DETERMINISTA DE JUEGO: misma estrategia que la configuración —
-        // el motor local (fuente de verdad) arranca la partida al instante por la
-        // MISMA ruta (onContractResolved → applyGameAction). Sin dependencia de la IA.
-        const fastGame = resolveGameCommandFromText(capturedTranscript)
-        const fastGameDispatch =
-          fastGame?.gameId
-            ? dispatchFastGameCommand(fastGame, {
-                speakerName: fastSpeakerName,
-                speakerAlias: null,
-                phase: 'CONFIGURACION',
-                session: nextSession,
-                language: detectedLanguage,
-                timestamp: currentClock,
-                transcript: cleanForSpeech(capturedTranscript) || cleanForSpeech(bufferedTranscript),
-              }).catch(() => null)
-            : Promise.resolve(null)
-
-        let contract
-        try {
-          contract = await requestFluContractForTranscript({
-            transcript: bufferedTranscript,
-            knowledgeMode,
-            intent,
-            speaker: fastSpeakerName,
-            theme: nextSession.theme,
-            role: nextSession.role,
-            phase: 'CONFIGURACION',
-          })
-        } catch (error) {
-          console.log('[FLU-DEBUG] processCapture CONFIGURACION catch. error:', error?.message || error, 'code:', error?.code, 'status:', error?.status, 'apiKeySource:', error?.apiKeySource)
-          const errorMessage = formatGeminiUserMessage(error, language, { fallback: true })
-          console.log('[FLU-DEBUG] processCapture CONFIGURACION error message:', errorMessage)
-          // La diarización (en paralelo) ya terminó en el caso común; se reconcilia el
-          // orador real para el commit y la voz de error (mismo patrón conversacional).
-          const { resolvedSpeakerName, speakerAlias } = await resolveTurnSpeaker()
-          setError(errorMessage)
-          setLastDiagnostics({
-            provider: 'error',
-            reason: errorMessage,
-            apiKeySource: error?.apiKeySource || (apiKey ? 'localStorage' : 'missing'),
-            message: error?.bodyPreview || error?.message || errorMessage,
-            model: error?.model || 'unknown',
-          })
-          setLastErrorEvent({
-            timestamp: currentClock,
-            phase: 'CONFIGURACION',
-            transcript: bufferedTranscript,
-            error: errorMessage,
-          })
-          setLastTranscript(capturedTranscript)
-          setLastContract(null)
-          if (bufferedTranscript) {
-            commitSessionTurn(bufferedTranscript, resolvedSpeakerName, {
-              replaceLast: false,
-              phase: 'CONFIGURACION',
-              source: DIALOGUE_SOURCE.CAPTURE,
-            })
-            await saveSessionState({
-              phase: 'SESION_ACTIVA',
-              ...nextSession,
-              history: getConversationContext(),
-            })
-            // Speak the error to the user so FLU explains what went wrong
-            relayLog('LOG', 'useFluVoiceAssistant', `processCapture CONFIGURACION ERROR: calling onContractResolved with errorMessage="${(errorMessage || '').slice(0, 80)}"`)
-            await onContractResolved?.({
-              contract: {
-                respuesta_voz: errorMessage,
-                navegacion: { comando: null, destino: null, parametros: {} },
-                workspace: null,
-                metadata: { provider: 'error', transcript: bufferedTranscript, rawText: '' },
-              },
-              diagnostics: buildGeminiDiagnosticsFromError(error),
-              transcript: bufferedTranscript,
-              speakerName: resolvedSpeakerName,
-              speakerAlias,
-              phase: 'CONFIGURACION',
-              session: nextSession,
-              timestamp: currentClock,
-              signature: (await computeAudioSignature(audioSnapshot, sampleRate)).vector,
-              language: detectedLanguage,
-              // Si el fast-path de juego ya arrancó la partida, la voz es la del motor.
-              fastPathGame: Boolean(fastGame?.gameId),
-            })
-          }
-          finishTurn()
-          await cleanupAudio()
-          setStatus('idle')
-          isListeningRef.current = false
-          return
-        }
-
-        // Reconciliar el orador diarizado (ya resuelto en paralelo) antes de persistir.
-        const { resolvedSpeakerName, speakerAlias } = await resolveTurnSpeaker()
-
-        const finalContract = {
-          ...contract.contract,
-          respuesta_voz: contract.contract.respuesta_voz,
-          // Idempotencia fast-path: si el fast-path ya aplicó la configuración,
-          // se anula la del contrato tardío para NO duplicar el efecto.
-          configuracion:
-            fastPathConfig?.accion
-              ? null
-              : resolveConfigCommandFromText(capturedTranscript) ??
-                contract?.contract?.configuracion,
-          // Idempotencia de juego: si el fast-path de juego ya despachó (start),
-          // se anula el `juego` del contrato tardío para NO duplicar el arranque.
-          juego: fastGame?.gameId ? null : contract?.contract?.juego ?? null,
-        }
-
-        setLastTranscript(capturedTranscript)
-        setLastContract(finalContract)
-        setLastDiagnostics(contract.diagnostics || null)
-        setLastErrorEvent(null)
-        dialogueHistoryRef.current = recordConversationExchange(
-          logRowsTextRef.current,
-          logRowSpeakersRef.current,
-          dialogueHistoryRef.current,
-          {
-            user: { speaker: resolvedSpeakerName, text: bufferedTranscript },
-            assistant: { text: finalContract.respuesta_voz },
-            phase: 'CONFIGURACION',
-            userSource: DIALOGUE_SOURCE.CAPTURE,
-            assistantSource: DIALOGUE_SOURCE.CAPTURE,
-          },
-          {
-            maxDialogue: CONTEXT_HISTORY_LIMIT,
-            maxLogRows: FLU_CONFIG.limits.priorRowsMax,
-          },
-        )
-
-        await saveSessionState({
-          phase: 'SESION_ACTIVA',
-          ...nextSession,
-          history: getConversationContext(),
-        })
-
-        finishTurn()
-        await cleanupAudio()
-        setStatus('idle')
-        isListeningRef.current = false
-        relayLog('LOG', 'useFluVoiceAssistant', `processCapture CONFIGURACION SUCCESS: calling onContractResolved with respuesta_voz="${(finalContract.respuesta_voz || '').slice(0, 80)}"`)
-        // Esperar el fast-path (ya resuelto) para garantizar el orden: la configuración
-        // y el arranque de juego se aplican ANTES de hablar la confirmación verbal.
-        await Promise.allSettled([fastPathDispatch, fastGameDispatch])
-        await onContractResolved?.({
-          contract: finalContract,
-          diagnostics: contract.diagnostics || null,
-          transcript: capturedTranscript,
-          speakerName: resolvedSpeakerName,
-          speakerAlias,
-          phase: 'CONFIGURACION',
-          session: nextSession,
-          timestamp: currentClock,
-          signature: (await computeAudioSignature(audioSnapshot, sampleRate)).vector,
-          language: detectedLanguage,
-          // En juegos por voz la voz es SIEMPRE del motor local (determinista).
-          fastPathGame: Boolean(fastGame?.gameId),
-        })
-        return
-      }
-
-      // FAST-PATH DETERMINISTA (configuración por voz instantánea): misma estrategia
-      // que en CONFIGURACION — resolución sin IA + despacho inmediato por la MISMA
-      // ruta onContractResolved mientras la API genera la confirmación verbal.
-      const fastPathConfig = resolveConfigCommandFromText(capturedTranscript)
-      const fastPathDispatch =
-        fastPathConfig?.accion
-          ? dispatchFastConfigCommand(fastPathConfig, {
-              speakerName: fastSpeakerName,
-              speakerAlias: null,
-              phase: 'SESION_ACTIVA',
-              session,
-              language: detectedLanguage,
-              timestamp: currentClock,
-              transcript: cleanForSpeech(capturedTranscript) || cleanForSpeech(bufferedTranscript),
-            }).catch(() => null)
-          : Promise.resolve(null)
-      // FAST-PATH DETERMINISTA DE JUEGO: misma estrategia — el motor local resuelve el
-      // turno (o fin de partida) al instante por la MISMA ruta (onContractResolved →
-      // applyGameAction). La partida avanza sin depender de la IA.
-      const fastGame = resolveGameCommandFromText(capturedTranscript)
-      const fastGameDispatch =
-        fastGame?.gameId
-          ? dispatchFastGameCommand(fastGame, {
-              speakerName: fastSpeakerName,
-              speakerAlias: null,
-              phase: 'SESION_ACTIVA',
-              session,
-              language: detectedLanguage,
-              timestamp: currentClock,
-              transcript: cleanForSpeech(capturedTranscript) || cleanForSpeech(bufferedTranscript),
-            }).catch(() => null)
-          : Promise.resolve(null)
-
-      let contract
-      try {
-        contract = await requestFluContractForTranscript({
-          transcript: bufferedTranscript,
-          knowledgeMode,
-          intent,
-          speaker: fastSpeakerName,
-          theme: session.theme,
-          role: session.role,
-          phase: 'SESION_ACTIVA',
-        })
-      } catch (error) {
-        console.log('[FLU-DEBUG] processCapture SESION_ACTIVA catch. error:', error?.message || error, 'code:', error?.code, 'status:', error?.status, 'apiKeySource:', error?.apiKeySource)
-        const errorMessage = formatGeminiUserMessage(error, language, { fallback: true })
-        console.log('[FLU-DEBUG] processCapture SESION_ACTIVA error message:', errorMessage)
-        // Reconciliar el orador diarizado (resuelto en paralelo) para commit y voz de error.
-        const { resolvedSpeakerName, speakerAlias, signatureVector } = await resolveTurnSpeaker()
-        setError(errorMessage)
-        setLastDiagnostics({
-          provider: 'error',
-          reason: errorMessage,
-          apiKeySource: error?.apiKeySource || (apiKey ? 'localStorage' : 'missing'),
-          message: error?.bodyPreview || error?.message || errorMessage,
-          model: error?.model || 'unknown',
-        })
-        setLastErrorEvent({
-          timestamp: currentClock,
-          phase: 'SESION_ACTIVA',
-          transcript: bufferedTranscript,
-          error: errorMessage,
-        })
-        setLastTranscript(capturedTranscript)
-        setLastContract(null)
-        if (bufferedTranscript) {
-          commitSessionTurn(bufferedTranscript, resolvedSpeakerName, {
-            replaceLast: false,
-            phase: 'SESION_ACTIVA',
-            source: DIALOGUE_SOURCE.CAPTURE,
-          })
-          await saveSessionState({
-            phase: 'SESION_ACTIVA',
-            ...session,
-            history: getConversationContext(),
-          })
-          // Speak the error to the user so FLU explains what went wrong
-          relayLog('LOG', 'useFluVoiceAssistant', `processCapture SESION_ACTIVA ERROR: calling onContractResolved with errorMessage="${(errorMessage || '').slice(0, 80)}"`)
-          await onContractResolved?.({
-            contract: {
-              respuesta_voz: errorMessage,
-              navegacion: { comando: null, destino: null, parametros: {} },
-              workspace: null,
-              metadata: { provider: 'error', transcript: bufferedTranscript, rawText: '' },
-            },
-            diagnostics: buildGeminiDiagnosticsFromError(error),
-            transcript: capturedTranscript,
-            speakerName: resolvedSpeakerName,
-            speakerAlias,
-            phase: 'SESION_ACTIVA',
-            session,
-            timestamp: currentClock,
-            signature: signatureVector ?? (await computeAudioSignature(audioSnapshot, sampleRate)).vector,
-            language: detectedLanguage,
-            // Si el fast-path de juego ya despachó el turno, la voz es la del motor.
-            fastPathGame: Boolean(fastGame?.gameId),
-          })
-        }
-        finishTurn()
-        await cleanupAudio()
-        setStatus('idle')
-        isListeningRef.current = false
-        return
-      }
-
-      // Reconciliar el orador diarizado (resuelto en paralelo) antes de persistir/hablar.
-      const { resolvedSpeakerName, speakerAlias, signatureVector } = await resolveTurnSpeaker()
-
-      const resolvedContract = {
-        ...contract.contract,
-        navegacion: {
-          comando: contract?.contract?.navegacion?.comando || intent.comando || null,
-          destino: contract?.contract?.navegacion?.destino || intent.destino || null,
-          parametros: {
-            ...(intent.parametros || {}),
-            ...(contract?.contract?.navegacion?.parametros || {}),
-          },
-        },
-        respuesta_voz: contract.contract.respuesta_voz,
-        // Idempotencia fast-path: si el fast-path ya aplicó la configuración,
-        // se anula la del contrato tardío para NO duplicar el efecto.
-        configuracion:
-          fastPathConfig?.accion
-            ? null
-            : resolveConfigCommandFromText(capturedTranscript) ??
-              contract?.contract?.configuracion,
-        // Idempotencia de juego: si el fast-path de juego ya despachó (turn/end),
-        // se anula el `juego` del contrato tardío para NO duplicar el efecto.
-        juego: fastGame?.gameId ? null : contract?.contract?.juego ?? null,
-      }
-
-      setLastTranscript(capturedTranscript)
-      setLastContract(resolvedContract)
-      setLastDiagnostics(contract.diagnostics || null)
-      setLastErrorEvent(null)
-      dialogueHistoryRef.current = recordConversationExchange(
-        logRowsTextRef.current,
-        logRowSpeakersRef.current,
-        dialogueHistoryRef.current,
-        {
-          user: { speaker: resolvedSpeakerName, text: capturedTranscript },
-          assistant: { text: resolvedContract.respuesta_voz },
-          phase: 'SESION_ACTIVA',
-          userSource: DIALOGUE_SOURCE.CAPTURE,
-          assistantSource: DIALOGUE_SOURCE.CAPTURE,
-        },
-        {
-          maxDialogue: CONTEXT_HISTORY_LIMIT,
-          maxLogRows: FLU_CONFIG.limits.priorRowsMax,
-        },
-      )
-
-      await saveSessionState({
-        phase: 'SESION_ACTIVA',
-        ...session,
-        history: getConversationContext(),
-      })
-      finishTurn()
-      await cleanupAudio()
-      setStatus('idle')
-      isListeningRef.current = false
-      relayLog('LOG', 'useFluVoiceAssistant', `processCapture SESION_ACTIVA SUCCESS: calling onContractResolved with respuesta_voz="${(resolvedContract.respuesta_voz || '').slice(0, 80)}"`)
-      // Esperar el fast-path (ya resuelto) para garantizar el orden: la configuración
-      // y el turno de juego se aplican ANTES de hablar la confirmación verbal.
-      await Promise.allSettled([fastPathDispatch, fastGameDispatch])
-      await onContractResolved?.({
-        contract: resolvedContract,
-        diagnostics: contract.diagnostics || null,
-        transcript: capturedTranscript,
-        speakerName: resolvedSpeakerName,
-        speakerAlias,
-        phase: 'SESION_ACTIVA',
-        session,
-        timestamp: currentClock,
-        signature: signatureVector ?? (await computeAudioSignature(audioSnapshot, sampleRate)).vector,
-        language: detectedLanguage,
-        // En juegos por voz la voz es SIEMPRE del motor local (determinista).
-        fastPathGame: Boolean(fastGame?.gameId),
-      })
-    } catch (error) {
-      setError(error?.message || 'No se pudo procesar la captura.')
-      await cleanupAudio().catch(fluAsyncErrorHandler('useFluVoiceAssistant'))
-      setStatus('idle')
-      isListeningRef.current = false
-    } finally {
-      isStoppingRef.current = false
-      isProcessingRef.current = false
-      isCommittingRef.current = false
-      commitBaselineRef.current = ''
-      recognitionEndResolverRef.current = null
-    }
-  }, [
-    apiKey,
-    cleanupAudio,
-    clearAutoProcessTimer,
-    commitConversationTurn,
-    conversationActiveRef,
-    dispatchFastConfigCommand,
-    dispatchFastGameCommand,
-    dispatchPassiveVoiceCommand,
-    emitActiveConversationCommand,
-    emitConversationLog,
-    finalizeRecognition,
-    getConversationContext,
-    language,
-    onContractResolved,
-    phase,
-    processConversationFluQuery,
-    readCaptureSnapshot,
-    releaseTurnAfterLog,
-    requestFluContractForTranscript,
-    resolveSpeaker,
-    restartRecognition,
-    session,
-  ])
-
-  const flushPassiveConversation = useCallback(async () => {
-    if (!isListeningRef.current || isStoppingRef.current) return
-
-    const snapshot = readActiveSnapshot()
-    if (!snapshot) return
-
-    if (detectNextSpeakerPhrase(snapshot)) {
-      advanceConversationSpeaker()
-      listenStateRef.current.pendingInterim = ''
-      listenStateRef.current.openLine = ''
-      return
-    }
-
-    const uiCommand = resolveNavigationCommand(snapshot)
-
-    if (uiCommand) {
-      await dispatchPassiveVoiceCommand(uiCommand, snapshot)
-      return
-    }
-
-    await awaitConversationAction(snapshot, { interim: false, source: 'flush' })
-  }, [
-    advanceConversationSpeaker,
-    awaitConversationAction,
-    dispatchPassiveVoiceCommand,
-    processCapture,
-    readActiveSnapshot,
-  ])
-
   const stopListening = useCallback(async ({ closing = false } = {}) => {
-    if (!isListeningRef.current && !readActiveSnapshot()) {
-      return
-    }
-
-    if (conversationActiveRef?.current) {
+    // La sesión del módulo se CIERRA siempre que esté abierta: `cerrar` finaliza
+    // la locución abierta con su texto fusionado y publica su fila (Anexo B 1/2).
+    // OJO: `conversationMode.exit()` apaga la bandera ANTES de llamar aquí, así
+    // que la bandera no dice si hay una sesión de conversación viva.
+    if (motorConversacionRef.current) {
+      if (closing && recognitionRef.current) await finalizeRecognition()
+      cerrarMotorConversacion(closing ? 'user' : 'system')
       if (closing) {
-        await commitConversationTurn({ closing: true })
-      } else {
-        await flushPassiveConversation()
+        isListeningRef.current = false
+        await cleanupAudio()
+        setStatus('idle')
       }
       return
     }
 
-    await processCapture({ closing })
+    // SIN motor (onstart nunca llegó): apagar la escucha sin parseo local. El
+    // despacho pasivo vive en el módulo (`onFraseCanonica`); aquí no se procesa
+    // captura propia (processCapture retirado con la tubería vieja).
+    if (!isListeningRef.current) return
+    isListeningRef.current = false
+    await cleanupAudio()
+    setStatus('idle')
   }, [
-    commitConversationTurn,
-    conversationActiveRef,
-    flushPassiveConversation,
-    processCapture,
-    readActiveSnapshot,
+    cerrarMotorConversacion,
+    cleanupAudio,
+    finalizeRecognition,
   ])
 
   const toggleListening = useCallback(async () => {
@@ -3812,13 +2537,11 @@ export function useFluVoiceAssistant({
   useEffect(() => {
     startListeningRef.current = startListening
     stopListeningRef.current = stopListening
-    flushPassiveConversationRef.current = flushPassiveConversation
     dispatchPassiveVoiceCommandRef.current = dispatchPassiveVoiceCommand
     processConversationFluQueryRef.current = processConversationFluQuery
     tryDispatchConversationActionRef.current = tryDispatchConversationAction
   }, [
     dispatchPassiveVoiceCommand,
-    flushPassiveConversation,
     processConversationFluQuery,
     startListening,
     stopListening,
@@ -3835,159 +2558,22 @@ export function useFluVoiceAssistant({
 
       if (conversationActiveRef?.current) {
         const restartCfg = getConversationRestartConfig(true)
-        const now = Date.now()
-        const sinceMeaningful = now - (lastMeaningfulIngressAtRef.current || 0)
-        const sinceEnd = now - (lastRecognitionEndAtRef.current || 0)
-        const sinceRebuild = now - (lastStallRebuildAtRef.current || 0)
-        const deadMs = restartCfg.deadRecognitionMs
-        const rebuildCooldown = restartCfg.stallRebuildMinMs
-
-        if (
-          recognitionActiveRef.current &&
-          sinceMeaningful >= restartCfg.silentMicStallMs &&
-          sinceRebuild >= rebuildCooldown
-        ) {
-          lastStallRebuildAtRef.current = now
-          if (!rebuildRecognitionRef.current()) {
-            requestRecognitionRestart(restartCfg.retryBackoffMs)
-          }
-          return
-        }
-
-        if (
-          !recognitionActiveRef.current &&
-          !recognitionRestartPendingRef.current &&
-          sinceEnd >= deadMs
-        ) {
-          if (!rebuildRecognitionRef.current()) {
-            requestRecognitionRestart(restartCfg.retryBackoffMs)
-          }
-          return
-        }
-
-        if (sinceMeaningful >= restartCfg.stallMs && sinceRebuild >= rebuildCooldown) {
-          lastStallRebuildAtRef.current = now
-          if (!rebuildRecognitionRef.current()) {
-            requestRecognitionRestart(restartCfg.retryBackoffMs)
-          }
-        }
-
-        const pauseCfg = getTranscriptPauseCfg()
-        const srGapMs = Number(pauseCfg.srGapCommitMs) || 0
-        const srGapMinWords = Number(pauseCfg.srGapCommitMinWords) || 0
-        const sinceResult = now - (lastOnresultAtRef.current || 0)
-        if (
-          srGapMs > 0 &&
-          sinceResult >= srGapMs &&
-          !srGapFiredForOpenLineRef.current
-        ) {
-          const openLine = cleanForSpeech(
-            listenStateRef.current?.openLine ||
-            publishedLiveRef.current ||
-            readStreamDisplay(listenStateRef.current),
-          )
-          if (openLine && countSpeechWords(openLine) >= srGapMinWords) {
-            srGapFiredForOpenLineRef.current = true
-            ingressRuntimeRef.current?.pushSrGapEvent?.({ sinceLastResultMs: sinceResult })
-          }
-        }
+        const idleMs = Date.now() - (lastOnresultAtRef.current || 0)
+        releaseStalledTurn({ openPreviewTurnRef, sinceResult: idleMs, stallMs: restartCfg.stallMs }) // (b) dueno unico, ANTES de los rebuilds
+        // Fallback local (recuperacion -> rebuild -> degradacion): decide y ejecuta
+        // el dueno unico `useLocalAsrFallback`; aqui solo se respeta el orden.
+        fallback.watchdogTick()
         return
       }
 
       if (recognitionActiveRef.current || !recognitionRef.current) return
-      requestRecognitionRestart(listeningCfg.restartAfterEndMs)
+      requestRecognitionRestartRef.current?.('watchdog', listeningCfg.restartAfterEndMs)
     }, conversationActiveRef?.current
       ? getActiveListenConfig().restart.stallCheckMs
       : watchdogMs)
 
     return () => window.clearInterval(timerId)
-  }, [conversationActiveRef, requestRecognitionRestart, status])
-
-  ingressBindingsRef.current = {
-    conversationActiveRef,
-    listenStateRef,
-    publishedLiveRef,
-    openPreviewTurnRef,
-    logRowsTextRef,
-    logRowSpeakersRef,
-    lastEmittedTranscriptRef,
-    lastLoggedSpeakerRef,
-    lastStreamPreviewRef,
-    lastCommitAtRef,
-    preflightScheduledForTurnRef,
-    syncConversationStream,
-    tryDispatchConversationAction,
-    maybeSwitchRecognitionLocale,
-    flushTranscriptOnFinal,
-    flushPcmAfterTurnCommit,
-    commitTurnToSessionRows,
-    showListeningAck,
-    debugHotPath,
-    fluDebugHot,
-    getIngressVoiceContext: () => ({
-      previewSpeaker: lastLoggedSpeakerRef.current,
-      interimSpeaker: lastLoggedSpeakerRef.current,
-      finalSpeaker: lastLoggedSpeakerRef.current,
-      lastSignature: lastTurnSignatureRef.current,
-      previewSignature: lastTurnSignatureRef.current,
-      finalSignature: lastTurnSignatureRef.current,
-    }),
-    peekTurnBridgeText: () => turnBridgeTextRef.current,
-    stashTurnBridgeText: (text) => {
-      turnBridgeTextRef.current = cleanForSpeech(text)
-    },
-    consumeTurnBridgeText: () => {
-      const bridge = turnBridgeTextRef.current
-      turnBridgeTextRef.current = ''
-      return bridge
-    },
-    onTurnFinalized: () => {
-      preflightScheduledForTurnRef.current = false
-    },
-    markAudioSegmentStart: (atMs) => {
-      turnSegmentStartedAtRef.current = Number(atMs) || Date.now()
-      turnAudioStartSampleRef.current = chunkTotalSamplesRef.current
-    },
-    scheduleIdentityPreflight,
-    touchMeaningfulIngress: ({ meaningful = true, reason = '' } = {}) => {
-      const now = Date.now()
-      const echoWindowMs =
-        Number(FLU_CONFIG.voiceIdentity?.capture?.committedEchoStreakWindowMs) || 1200
-      if (meaningful) {
-        ingressEchoStreakRef.current = 0
-        lastEchoAtRef.current = 0
-        lastMeaningfulIngressAtRef.current = now
-        return
-      }
-      // Solo cuenta como ráfaga de eco si viene encadenada RÁPIDO (loop ASR real).
-      // Si entre eco y eco pasa más que la ventana, es repetición genuina: reinicia.
-      const sinceLastEcho = lastEchoAtRef.current ? now - lastEchoAtRef.current : echoWindowMs
-      lastEchoAtRef.current = now
-      if (sinceLastEcho > echoWindowMs) {
-        ingressEchoStreakRef.current = 1
-        return
-      }
-      ingressEchoStreakRef.current += 1
-      const echoLimit =
-        Number(FLU_CONFIG.voiceIdentity?.capture?.committedEchoRebuildAfter) || 3
-      if (ingressEchoStreakRef.current >= echoLimit && conversationActiveRef?.current) {
-        const restartCfg = getConversationRestartConfig(true)
-        // Respeta el cooldown de rebuild: si sigue atascado, el watchdog se encarga.
-        if (
-          lastStallRebuildAtRef.current &&
-          now - lastStallRebuildAtRef.current < (restartCfg.stallRebuildMinMs || 1600)
-        ) {
-          return
-        }
-        ingressEchoStreakRef.current = 0
-        lastEchoAtRef.current = 0
-        lastStallRebuildAtRef.current = now
-        if (!rebuildRecognitionRef.current()) {
-          requestRecognitionRestart(restartCfg.retryBackoffMs)
-        }
-      }
-    },
-  }
+  }, [conversationActiveRef, fallback, status])
 
   const setRecentMemory = useCallback((text) => {
     recentMemoryRef.current = text || ''
@@ -4021,10 +2607,13 @@ export function useFluVoiceAssistant({
     grantParticipantFloor,
     endParticipantFloorDelivery: () => fluParticipantRef.current?.endFloorDelivery?.(),
     suspendRecognitionForAssistantSpeech,
-    /** Inject an external entry into dialogueHistoryRef (Gemini context). */
-    injectDialogueEntry,
+    /**
+     * Resolución de hablante del turno (paso el pipeline). Expuesta como entrada
+     * pública del motor de identidad para que la rama PASIVA se pueda ejercitar
+     * de verdad en pruebas (sin simular el resolver).
+     */
+    resolveSpeaker,
     /** Set a recent memory text that gets injected into the system prompt on next contract request. */
     setRecentMemory,
   }
 }
-

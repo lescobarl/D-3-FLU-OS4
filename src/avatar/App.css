@@ -12,25 +12,23 @@
 }
 
 :root {
-  --bg-primary: #0f0f1a;
-  --bg-secondary: #1a1a2e;
+  /* P9.44: los tokens COMPARTIDOS tienen un solo dueno: src/styles/unified.css (que index.css
+     ya importa), donde salen de la paleta (--flu-*). Aqui vivian copias hardcodeadas que
+     tapaban la paleta segun el orden de carga, y --radius-sm/-md DISCREPABAN (6/10px frente a
+     los 4/6px del dueno). Este bloque conserva SOLO lo propio del lienzo del avatar. */
   --bg-tertiary: #16213e;
-  --bg-card: #1e1e36;
-  --text-primary: #e0e0e0;
-  --text-secondary: #8888aa;
   --text-muted: #555;
-  --accent-cyan: #00d4ff;
   --accent-green: #00ff88;
   --accent-orange: #ffaa00;
   --accent-red: #ff4444;
   --accent-pink: #ff66ff;
-  --border-color: #2a2a4a;
-  --radius-sm: 6px;
-  --radius-md: 10px;
   --radius-lg: 16px;
   --shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
   --font-mono: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', monospace;
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  /* .hoy-panel (unified.css) referencia --font-ui: alias a la misma familia
+     para que el panel lateral NO caiga a system-ui (tipografía divergente). */
+  --font-ui: var(--font-sans);
 
   /* ---- Unified Typography Scale (settings module standard) ---- */
   --text-xs:   10px;  /* badges, vector previews, error details */
@@ -64,136 +62,6 @@ body,
   height: 100%;
   display: flex;
   flex-direction: column;
-}
-
-/* ============================================================
-   BunnyControlCenter — Layout Principal
-   ============================================================ */
-
-.bunny-control-center {
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-  width: 100vw;
-  overflow: hidden;
-  background: var(--bg-primary);
-}
-
-/* --- Header --- */
-.bcc-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 20px;
-  background: var(--bg-secondary);
-  border-bottom: 1px solid var(--border-color);
-  flex-shrink: 0;
-  z-index: 10;
-}
-
-.bcc-header-left {
-  display: flex;
-  align-items: baseline;
-  gap: 12px;
-}
-
-.bcc-title {
-  font-size: var(--text-2xl);
-  font-weight: var(--weight-bold);
-  color: var(--text-primary);
-  letter-spacing: -0.5px;
-}
-
-.bcc-subtitle {
-  font-size: var(--text-base);
-  color: var(--text-secondary);
-  font-family: var(--font-mono);
-}
-
-.bcc-header-right {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-
-.bcc-status-bar {
-  display: flex;
-  gap: 16px;
-  font-size: var(--text-base);
-  font-family: var(--font-mono);
-  color: var(--text-secondary);
-}
-
-.status-item strong {
-  color: var(--text-primary);
-}
-
-.btn-reset {
-  padding: 6px 14px;
-  background: transparent;
-  border: 1px solid var(--border-color);
-  color: var(--text-secondary);
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  font-size: var(--text-base);
-  font-family: var(--font-mono);
-  transition: all 0.2s;
-}
-
-.btn-reset:hover {
-  background: rgba(255, 68, 68, 0.15);
-  border-color: var(--accent-red);
-  color: var(--accent-red);
-}
-
-/* --- Main Layout --- */
-.bcc-main {
-  display: flex;
-  flex: 1;
-  overflow: hidden;
-  gap: 0;
-}
-
-/* --- Viewer (Left) --- */
-.bcc-viewer {
-  flex: 1;
-  min-width: 0;
-  position: relative;
-  background: var(--bg-primary);
-}
-
-/* --- Controls (Right) --- */
-.bcc-controls {
-  width: 380px;
-  min-width: 380px;
-  overflow-y: auto;
-  overflow-x: hidden;
-  background: var(--bg-secondary);
-  border-left: 1px solid var(--border-color);
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-}
-
-.bcc-controls::-webkit-scrollbar {
-  width: 6px;
-}
-
-.bcc-controls::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.bcc-controls::-webkit-scrollbar-thumb {
-  background: var(--border-color);
-  border-radius: 3px;
-}
-
-/* --- Footer (Logs) --- */
-.bcc-footer {
-  flex-shrink: 0;
-  max-height: 200px;
-  border-top: 1px solid var(--border-color);
-  background: var(--bg-tertiary);
 }
 
 /* ============================================================
@@ -248,14 +116,7 @@ body,
   width: 100%;
   padding: 8px 12px;
   margin-bottom: 4px;
-  background: transparent;
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-sm);
-  color: var(--text-primary);
-  cursor: pointer;
-  transition: all 0.2s;
   font-size: var(--text-md);
-  font-family: var(--font-sans);
 }
 
 .btn-component:hover {
@@ -327,6 +188,7 @@ body,
   margin-bottom: 8px;
 }
 
+.category-label,
 .control-category-label {
   font-size: var(--text-xs);
   font-weight: var(--weight-bold);
@@ -343,19 +205,25 @@ body,
   gap: 3px;
 }
 
-.btn-control {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 6px;
+.btn-control,
+.btn-animation,
+.btn-signal,
+.btn-component {
   background: transparent;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
   color: var(--text-primary);
   cursor: pointer;
   transition: all 0.2s;
-  font-size: var(--text-sm);
   font-family: var(--font-sans);
+}
+
+.btn-control {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 6px;
+  font-size: var(--text-sm);
 }
 
 .btn-control:hover {
@@ -382,20 +250,15 @@ body,
   margin-bottom: 8px;
 }
 
-.category-label {
-  font-size: var(--text-xs);
-  font-weight: var(--weight-bold);
-  font-family: var(--font-mono);
-  letter-spacing: 1px;
-  text-transform: uppercase;
-  margin-bottom: 4px;
-  padding-left: 2px;
-}
-
 .anim-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 4px;
+}
+
+.btn-animation,
+.btn-signal {
+  font-size: var(--text-base);
 }
 
 .btn-animation {
@@ -403,14 +266,6 @@ body,
   align-items: center;
   gap: 6px;
   padding: 6px 8px;
-  background: transparent;
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-sm);
-  color: var(--text-primary);
-  cursor: pointer;
-  transition: all 0.2s;
-  font-size: var(--text-base);
-  font-family: var(--font-sans);
 }
 
 .btn-animation:hover:not(:disabled) {
@@ -473,14 +328,6 @@ body,
   align-items: center;
   gap: 4px;
   padding: 8px 4px;
-  background: transparent;
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-sm);
-  color: var(--text-primary);
-  cursor: pointer;
-  transition: all 0.2s;
-  font-size: var(--text-base);
-  font-family: var(--font-sans);
 }
 
 .btn-signal:hover {
@@ -663,36 +510,28 @@ body,
   }
 }
 
-/* ============================================================
-   Responsive
-   ============================================================ */
 
-@media (max-width: 900px) {
-  .bcc-main {
-    flex-direction: column;
-  }
+/* --- BunnyViewer: overlays de senal y de estado (P6.12) ---
+   Los valores que salen de bunnySceneConfig.ts entran como variables CSS: la
+   config sigue siendo la unica fuente, y el estilo vive aqui. */
+.bunny-signal-overlay {
+    font-size: var(--bunny-signal-font);
+    animation: var(--bunny-signal-pulse);
+    filter: drop-shadow(0 0 20px var(--bunny-signal-color));
+    pointer-events: none;
+    user-select: none;
+}
 
-  .bcc-controls {
-    width: 100%;
-    min-width: 0;
-    max-height: 50vh;
-    border-left: none;
-    border-top: 1px solid var(--border-color);
-  }
-
-  .bcc-header {
-    flex-direction: column;
-    gap: 8px;
-    align-items: flex-start;
-  }
-
-  .bcc-header-right {
-    width: 100%;
-    justify-content: space-between;
-  }
-
-  .bcc-status-bar {
-    flex-wrap: wrap;
-    gap: 8px;
-  }
+.bunny-state-indicator {
+    background: var(--bunny-state-bg);
+    color: var(--bunny-state-color);
+    border: 1px solid var(--bunny-state-color);
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-family: monospace;
+    font-weight: bold;
+    white-space: nowrap;
+    pointer-events: none;
+    user-select: none;
 }

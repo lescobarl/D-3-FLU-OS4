@@ -2,15 +2,13 @@
  * Pausa / cola ASR débil — lee SOLO fluConfig.transcript.pauseAndWeakAsr (sin fallbacks numéricos aquí).
  * Inventario: docs/reglas-duras.md · listConfiguredTranscriptHardRules()
  */
-import { FLU_CONFIG } from './fluConfig.js'
 import { cleanForSpeech } from './audioMath.js'
+import { requireConfigBlock } from './configGuard.js'
+import { voiceProbe } from './voiceProbe.ts'
 
 export const TRANSCRIPT_PAUSE_KEYS = [
   'interimOpenLineFlushMs',
   'srGapCommitMs',
-  'srGapCommitMinWords',
-  'srGapCommitExtensionMinChars',
-  'srGapCommitNoNewContentMinChars',
   'postCommitCooldownMs',
   'staleFlushMinWords',
   'staleFlushMinWordsDuringCooldown',
@@ -30,14 +28,11 @@ export const TRANSCRIPT_PAUSE_KEYS = [
   'shortCommitMaxChars',
   'skipDiarizeOnStaleFlush',
   'treatEmptyPhraseAsWeak',
+  'committedReplayMaxDroppedWords',
 ]
 
 export function getTranscriptPauseCfg() {
-  const cfg = FLU_CONFIG.transcript?.pauseAndWeakAsr
-  if (!cfg || typeof cfg !== 'object') {
-    throw new Error('fluConfig.transcript.pauseAndWeakAsr es obligatorio')
-  }
-  return cfg
+  return requireConfigBlock(['transcript', 'pauseAndWeakAsr'], 'fluConfig.transcript.pauseAndWeakAsr')
 }
 
 export function listConfiguredTranscriptHardRules() {
@@ -49,7 +44,87 @@ export function listConfiguredTranscriptHardRules() {
   }))
 }
 
+/**
+ * Disparador del cierre de SEGMENTO vivo (`srGap`): dos caminos, la MISMA regla
+ * ("el ASR no va a cerrar esta locucion"):
+ *   1) el ASR lleva `srGapCommitMs` sin onresult (Chrome mudo / TV), o
+ *   2) la LOCUCION VIVA lleva `srGapCommitMs` sin cerrar: Chrome puede emitir
+ *      interinos durante minutos y no entregar nunca un final.
+ * El caso 2 se midio el 2026-10-07 (debug.log): 76 s de audio continuo con
+ * interinos -> UNA fila "mientras"; el texto vivia solo en ULTIMA FRASE y se
+ * perdia. Devuelve el valor sintetico de silencio para reutilizar el MISMO
+ * cierre (`evaluateSrGapSegmentCommit`), sin una segunda ruta de commit.
+ */
+/**
+ * Sonda `srGap` con FRENO: el disparador se evalua en cada tick del watchdog
+ * (~350 ms). Sin freno, un turno que no cierra emite la sonda ~3 veces por
+ * segundo durante minutos y ENTIERRA el log (medido 2026-10-08: 421 de 421
+ * eventos eran `srGap`, cero `commit`/`row`). Un log que inunda es un defecto
+ * (§10.7): se emite una vez por motivo y como maximo cada 5 s.
+ */
+let lastSrGapProbeAt = 0
+let lastSrGapProbeReason = ''
+function emitSrGapProbe(reason, data) {
+  const now = Date.now()
+  if (reason === lastSrGapProbeReason && now - lastSrGapProbeAt < 5000) return
+  lastSrGapProbeAt = now
+  lastSrGapProbeReason = reason
+  voiceProbe('srGap', { reason, ...data })
+}
+
+/** DUENO UNICO del tiempo del silencio: srGapCommitMs se lee SOLO aqui. */
+export function srGapSilenceReached(sinceLastResultMs = 0) {
+  const gapMs = Number(getTranscriptPauseCfg()?.srGapCommitMs) || 0
+  return gapMs > 0 && Number(sinceLastResultMs) >= gapMs
+}
+
+export function resolveSrGapTrigger({ sinceLastResultMs = 0, sinceLastCommitMs = 0, hasOpenLine = true, openLineAgeMs = 0, speakerChanged = false } = {}) {
+  // El trigger PREGUNTA al dueno del tiempo (srGapSilenceReached); NO re-decide el cierre.
+  // P11.12 (mandato del dueno 2026-10-13): el cierre de la ULTIMA FRASE es por SILENCIO real
+  // (`srGapCommitMs` sin onresult) o por CAMBIO DE HABLANTE (otra puerta). Se RETIRA el camino
+  // 'SIN CONTENIDO NUEVO' (el texto lleva `srGapCommitMs` sin cambiar aunque Chrome siga
+  // entregando interinos repetidos): cerraba a MITAD del dictado cuando el ASR iba por detras
+  // (medido en su log 03:35:57: sinceResult=1114 ms y la persona seguia hablando) y la fila
+  // escrita entonces habia que ACTUALIZARLA con la cola. El caso 'Chrome repite lo mismo' ya
+  // tiene dueno: el detector de eco committed-echo + rebuild del reconocimiento.
+  // P4 - LAS DOS PUERTAS DEL CIERRE REAL: SILENCIO o CAMBIO DE HABLANTE. El cambio de hablante
+  // cierra YA (no espera al silencio): era el "se congela y escribe de golpe" cuando hablaba el
+  // siguiente. Sin locucion viva no hay nada que cerrar.
+  if (speakerChanged && hasOpenLine) {
+    emitSrGapProbe('sr-speaker-change', { sinceResult: Number(sinceLastResultMs) || 0, sinceCommit: Number(sinceLastCommitMs) || 0, openLineAge: Number(openLineAgeMs) || 0 })
+    return { fire: true, sinceLastResultMs: Number(sinceLastResultMs) || 0, reason: 'sr-speaker-change' }
+  }
+  const silence = srGapSilenceReached(sinceLastResultMs)
+  if (!silence) {
+    return { fire: false, sinceLastResultMs: Number(sinceLastResultMs) || 0, reason: 'sr-active' }
+  }
+  // Sin locucion viva no hay nada que cerrar: no se sondea. En reposo el srGap
+  // emitia `sr-live-turn-stale` cada 5 s durante minutos (medido 2026-10-08) con
+  // cero `commit`/`row`; un log que inunda es un defecto (§10.7).
+  if (!hasOpenLine) {
+    return { fire: false, sinceLastResultMs: Number(sinceLastResultMs) || 0, reason: 'sr-no-open-line' }
+  }
+  // SOLO SILENCIO (spec del dueno, 2026-10-10): "la ultima frase es para ACUMULAR y una
+  // vez que se termine, que haya espacio o cambio de hablante, es cuando lo debe vaciar a
+  // la conversacion". Se RETIRA la rama 'turno viejo' que entro en P9.55: con el ASR
+  // entregando onresult, cerrar por `sinceCommitMs` vaciaba a mitad del dictado (medido en
+  // su sesion del 2026-10-10 15:02-15:14: 26 de 26 srGap por 'sr-live-turn-stale', fila
+  // nacida en el "10" y reemplazada 3 veces). El sintoma que perseguia P9.55 (texto que no
+  // llegaba a fila) tenia su causa en el DESCARTE del rebuild, cerrado en P9.60.
+  // P11.12: el temprano return cubre `!silence`; aqui el cierre SIEMPRE es por silencio.
+  const reason = 'sr-silence'
+  emitSrGapProbe(reason, { sinceResult: Number(sinceLastResultMs) || 0, sinceCommit: Number(sinceLastCommitMs) || 0, openLineAge: Number(openLineAgeMs) || 0 })
+  return {
+    fire: true,
+    sinceLastResultMs: Number(sinceLastResultMs) || 0,
+    reason,
+  }}
+
 export function countSpeechWords(text = '') {
+  // Recuento de "palabras habladas": el tokenizador tiene dueno unico
+  // (audioMath.speechWords, minusculas). Aqui solo se usa el NUMERO, invariante a
+  // la normalizacion, y el guard speechWordsSingleOwnerGuard fija la equivalencia
+  // countSpeechWords(t) === speechWords(t).length (P8.10).
   return cleanForSpeech(text).split(/\s+/).filter(Boolean).length
 }
 

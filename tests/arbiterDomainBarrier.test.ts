@@ -1,0 +1,341 @@
+/**
+ * arbiterDomainBarrier — Barrera de COMPORTAMIENTO de la resolución por dominio.
+ *
+ * MOTIVO (riesgo estructural medido): `lint:guards` corre 56 archivos de HIGIENE
+ * (rutas, fuentes, hardcode) y NO incluía ninguna prueba de COMPORTAMIENTO del
+ * árbitro. `deterministicArbiter.test.ts` quedaba FUERA de la barrera, así que una
+ * regresión de precedencia pasaba con "typecheck + guardias en verde" y solo se
+ * veía en la suite completa (que exige autorización). Ocurrió de verdad: en
+ * 3b66634 el alta genérica de notas se llevó los verbos de la agenda y
+ * "agrega matemáticas el lunes" (clase sin hora) se guardaba como NOTA.
+ *
+ * Esta barrera fija la PRECEDENCIA por dueño: cada dominio conserva sus comandos
+ * y ninguno invade al vecino. Usa los resolutores de PRODUCCIÓN (sin mocks).
+ *
+ * Cubre dos regresiones reales:
+ *   1. El alta genérica de notas se llevaba los verbos de la agenda (3b66634).
+ *   2. Con partida activa, una intención pendiente de OTRO dominio (crear en
+ *      agenda sin instante) caía en `game/turn` y el juego se la tragaba. Se
+ *      comprueban las DOS vías que ofrecen el turno: el paso 13 del árbitro y el
+ *      fast-path `resolveStatefulDomains` del hook.
+ */
+import { describe, expect, it } from 'vitest'
+import { resolveDeterministicCommand, resolveStatefulDomains } from '../src/voice/lib/deterministicArbiter'
+import { resolveGameCommandFromText } from '../src/voice/lib/gameCommands'
+import { buildResolvedContract } from '../src/voice/lib/resolvedContract'
+import { musicActionSpeech } from '../src/core/media/musicActions'
+import { resolveAgendaDomainIntent } from '../src/core/agenda/domainScopedIntent'
+import { getGameEngine } from '../src/core/games/gameCatalog'
+import { setActiveGameSession, clearActiveGameSession } from '../src/core/games/gameSessionStore'
+
+function conLoteriaActiva(fn: () => void) {
+  const engine = getGameEngine('loteria' as Parameters<typeof getGameEngine>[0])
+  expect(engine, 'el motor de loteria existe').toBeTruthy()
+  if (!engine) return
+  const session = engine.createSession({})
+  engine.start(session, {})
+  setActiveGameSession(session)
+  try {
+    fn()
+  } finally {
+    clearActiveGameSession()
+  }
+}
+
+/** Acción que el fast-path de estado ofrece para la frase (undefined si ninguna). */
+function statefulGameAction(frase: string): string | undefined {
+  const game = resolveStatefulDomains(frase).game as { action?: string } | null
+  return game?.action
+}
+
+describe('arbiterDomainBarrier — cada dominio conserva sus comandos', () => {
+  it('la agenda con hora crea; sin hora NO la roba otro dominio', () => {
+    const conHora = resolveDeterministicCommand('agrega matemáticas el lunes a las 8')
+    expect(conHora.matched).toBe(true)
+    expect(conHora.domain).toBe('agendaCommand')
+
+    // Sin hora el parser NO detecta el tipo: el turno es para la aclaración
+    // conversacional. Lo que NO puede pasar es que otro dominio (nota) lo tome
+    // como acción y guarde una nota con el texto de una clase.
+    const sinHora = resolveDeterministicCommand('agrega matemáticas el lunes')
+    expect(sinHora.matched, 'una clase sin hora no es una acción ejecutable').toBe(false)
+    expect(sinHora.domain, 'la nota no debe apropiarse de "agrega X el lunes"').not.toBe('note')
+  })
+
+  it('la nota conserva su alta y su destino explícito', () => {
+    for (const frase of [
+      'apunta comprar pan',
+      'anota guitarra',
+      'agrega guitarra en la nota',
+    ]) {
+      expect(resolveDeterministicCommand(frase).domain, `"${frase}" es nota`).toBe('note')
+    }
+  })
+
+  it('compra, diario y configuración resuelven en su dueño', () => {
+    expect(resolveDeterministicCommand('agrega leche a la lista de compras').domain).toBe('shopping')
+    expect(resolveDeterministicCommand('anota en el diario que hoy fue un buen día').domain).toBe('diary')
+    expect(resolveDeterministicCommand('restablece los colores del avatar').domain).toBe('config')
+  })
+
+  it('con partida activa, los comandos de otros dominios NO se vuelven jugada', () => {
+    conLoteriaActiva(() => {
+      expect(resolveDeterministicCommand('restablece los colores del avatar').domain).toBe('config')
+      expect(resolveDeterministicCommand('agrega leche a la lista de compras').domain).toBe('shopping')
+      expect(resolveDeterministicCommand('apunta comprar pan').domain).toBe('note')
+      expect(resolveDeterministicCommand('agrega matemáticas el lunes a las 8').domain).toBe(
+        'agendaCommand',
+      )
+    })
+  })
+
+  it('con partida activa, el motor sigue mandando en los suyos', () => {
+    conLoteriaActiva(() => {
+      const propio = resolveDeterministicCommand('siguiente carta')
+      expect(propio.domain).toBe('game')
+      expect((propio.action as { action?: string })?.action).toBe('turn')
+      // Cambiar de juego y terminarlo siguen siendo del motor.
+      expect((resolveDeterministicCommand('cambia a trivia').action as { action?: string })?.action).toBe(
+        'switch',
+      )
+      expect((resolveDeterministicCommand('terminar el juego').action as { action?: string })?.action).toBe(
+        'end',
+      )
+    })
+  })
+
+  it('una intención pendiente de agenda NO se convierte en jugada con partida activa', () => {
+    // Regresión real (2026-09-28): con la lotería abierta estas tres frases caían
+    // en `game/turn` — el juego se las tragaba y la agenda nunca pedía la hora.
+    // Sin partida iban al carril que pregunta; con partida deben ir IGUAL
+    // (el significado no cambia porque haya un juego abierto).
+    conLoteriaActiva(() => {
+      for (const frase of [
+        'agrega matemáticas el lunes',
+        'recuérdame comprar el pan',
+        'cita con el dentista',
+      ]) {
+        const r = resolveDeterministicCommand(frase)
+        expect(r.domain, `"${frase}" no es una jugada`).not.toBe('game')
+        expect(r.matched, `"${frase}" va al carril que pide la hora`).toBe(false)
+      }
+    })
+  })
+
+  it('el fast-path de estado tampoco le ofrece el turno del juego a ese texto', () => {
+    // Segunda vía real: el hook despacha el turno por `resolveStatefulDomains`
+    // (fastPathGame). Guardar solo el paso 13 del árbitro dejaba este hueco.
+    conLoteriaActiva(() => {
+      expect(resolveStatefulDomains('agrega matemáticas el lunes').game).toBeNull()
+      expect(resolveStatefulDomains('recuérdame comprar el pan').game).toBeNull()
+      // Los comandos EXPLÍCITOS del motor no se tocan.
+      expect(statefulGameAction('terminar el juego')).toBe('end')
+      expect(statefulGameAction('cambia a trivia')).toBe('switch')
+      // Y una jugada real sigue llegando como turno.
+      expect(statefulGameAction('siguiente carta')).toBe('turn')
+    })
+  })
+
+  it('el detector no es decorativo: los dos casos se distinguen de verdad', () => {
+    // Con hora hay acción de agenda; sin hora no la hay. Si el resolutor
+    // devolviera lo mismo para ambos, este caso cae.
+    const conHora = resolveDeterministicCommand('agrega matemáticas el lunes a las 8')
+    const sinHora = resolveDeterministicCommand('agrega matemáticas el lunes')
+    expect(conHora.matched).not.toBe(sinHora.matched)
+    // Marca inversa: la barrera no puede "arreglar" lo anterior rompiendo el
+    // juego, así que la jugada real se comprueba en el mismo caso.
+    conLoteriaActiva(() => {
+      expect(resolveDeterministicCommand('siguiente carta').domain).toBe('game')
+      expect(resolveDeterministicCommand('agrega matemáticas el lunes').domain).not.toBe('game')
+    })
+  })
+})
+
+describe('arbiterDomainBarrier — crear exige hora explícita (no se inventa)', () => {
+  it('ni 09:00 (recurrente) ni 00:00 (fecha pelada): sin hora se pregunta', () => {
+    // Dos invenciones silenciosas distintas, la misma regla: rellenar la hora
+    // fijaba "reunión los lunes" a las 09:00 y "recuérdame … mañana" a las 00:00.
+    for (const frase of [
+      'crea una clase los lunes',
+      'reunión los lunes',
+      'recuérdame comprar el pan los lunes',
+      'cita los martes',
+      'clase de historia todos los días',
+      'recuérdame comprar el pan mañana',
+      'crea una cita para mañana',
+      'junta mañana',
+    ]) {
+      const r = resolveDeterministicCommand(frase)
+      expect(r.matched, `"${frase}" pide la hora en vez de inventarla`).toBe(false)
+    }
+  })
+
+  it('con la hora dicha se crea igual que siempre', () => {
+    for (const frase of [
+      'crea una clase los lunes a las 9',
+      'agrega matemáticas el lunes a las 8',
+      'recuérdame comprar el pan mañana a las 4 de la tarde',
+      'crea una junta para mañana a las 11',
+      'recuérdame todos los días a las 8',
+    ]) {
+      const r = resolveDeterministicCommand(frase)
+      expect(r.matched, `"${frase}" crea`).toBe(true)
+      expect(r.domain).toBe('agendaCommand')
+    }
+  })
+
+  it('la vía del LLM (dominio horario/recordatorio) también pide la hora', () => {
+    // Hueco real: el árbitro no matcheaba y la clasificación del LLM creaba la
+    // clase a las 09:00 por defecto. Ahora propaga la pista para preguntar.
+    const sinHora = resolveAgendaDomainIntent('horario', 'agrega matemáticas el lunes')
+    expect(sinHora?.needsInstant).toBe(true)
+    const conHora = resolveAgendaDomainIntent('horario', 'agrega matemáticas el lunes a las 8')
+    expect(conHora?.matched).toBe(true)
+    expect((conHora?.action as { trigger?: unknown })?.trigger).toBeTruthy()
+  })
+})
+
+// P8.53 - CONTROL DE MUSICA: la accion la ejecuta su dueno (no el LLM).
+describe('P8.53 - "para/deten/pausa la musica" resuelve la ACCION (dueno determinista)', () => {
+  const controles: Array<[string, string]> = [
+    ['para la música', 'stop_music'],
+    ['detén la música', 'stop_music'],
+    ['apaga la música', 'stop_music'],
+    ['quita la música', 'stop_music'],
+    ['pausa la música', 'pause_music'],
+  ]
+
+  it('el fast-path devuelve la accion concreta (misma forma que los otros dominios)', () => {
+    for (const [frase, accion] of controles) {
+      expect(resolveStatefulDomains(frase).music, frase).toEqual({ accion })
+    }
+  })
+
+  it('una PETICION de reproduccion NO se resuelve como parada (son acciones distintas)', () => {
+    for (const frase of ['pon música', 'ponme una canción', 'reproduce la canción']) {
+      expect(resolveStatefulDomains(frase).music?.accion, frase).toBe('play_music')
+    }
+  })
+
+  it('el detector no es decorativo: distingue el control de la reproduccion', () => {
+    expect(resolveStatefulDomains('detén la música').music).toEqual({ accion: 'stop_music' })
+    expect(resolveStatefulDomains('pausa la música').music).toEqual({ accion: 'pause_music' })
+    expect(resolveStatefulDomains('reproduce la canción').music?.accion).toBe('play_music')
+  })
+})
+
+// P8.54 — PALABRA SUELTA DE PARADA: el mandato ENTERO es "alto"/"stop".
+// Defecto del dueño (log 19:32): "okay flow alto" → el LLM respondió "Alto." y la
+// música SIGUIÓ. "alto" es AMBIGUA ("habla más alto"), así que solo cuenta cuando el
+// mandato entero es la palabra (opcionalmente con el objeto de la música).
+describe('P8.54 - "alto"/"stop" a secas DETIENEN la musica (mandato entero, no subcadena)', () => {
+  it('el fast-path devuelve stop_music para la palabra suelta (con o sin objeto)', () => {
+    for (const frase of ['alto', 'Alto', '¡Alto!', 'alto.', 'stop', 'STOP!', 'alto a la música', '¡alto la música!']) {
+      expect(resolveStatefulDomains(frase).music, frase).toEqual({ accion: 'stop_music' })
+    }
+  })
+
+  it('la palabra DENTRO de otra frase NO detiene nada (ambiguedad conservada)', () => {
+    for (const frase of ['habla mas alto', 'el arbol es alto', 'salto', 'un salto alto', 'alto al juego']) {
+      expect(resolveStatefulDomains(frase).music, frase).toBeNull()
+    }
+  })
+
+  it('el detector no es decorativo: la palabra suelta dispara y dentro de frase no', () => {
+    expect(resolveStatefulDomains('alto').music).toEqual({ accion: 'stop_music' })
+    expect(resolveStatefulDomains('y un salto alto').music).toBeNull()
+  })
+
+  it('NO le roba la salida de partida a su dueno: con partida activa "alto" cierra la partida', () => {
+    conLoteriaActiva(() => {
+      expect(resolveGameCommandFromText('alto', {})?.action).toBe('end')
+    })
+  })
+})
+
+// P8.56 — REPRODUCCION con dueno determinista. Defecto medido (log del dueño 19:33):
+// "canta la cancion de Las mananitas" con música sonando → FLU contestó "Claro,
+// poniendo Las Mananitas" y NO emitió el campo 'musica' (ninguna linea [Musica]
+// play_music en el relay). Aqui la accion la resuelve su dueno, no el modelo.
+describe('P8.56 - reproducir una cancion lo resuelve su dueno (no depende del LLM)', () => {
+  it('"canta la cancion de X" / "pon una cancion de X" traen el NOMBRE', () => {
+    expect(resolveStatefulDomains('canta la canción de Las mañanitas').music).toEqual({ accion: 'play_music', cancion: 'las mananitas' })
+    expect(resolveStatefulDomains('ponme una canción de cuna').music).toEqual({ accion: 'play_music', cancion: 'cuna' })
+    expect(resolveStatefulDomains('pon música relajante').music).toEqual({ accion: 'play_music', cancion: 'relajante' })
+  })
+
+  it('sin cancion concreta la pista la elige el catalogo (accion sin nombre)', () => {
+    for (const frase of ['pon música', 'reproduce la canción', 'quiero escuchar música']) {
+      expect(resolveStatefulDomains(frase).music, frase).toEqual({ accion: 'play_music' })
+    }
+  })
+
+  it('no se lleva por delante lo que NO es musica, ni la orden de la LOTERIA ("canta otra")', () => {
+    for (const frase of ['pon la mesa', 'dame agua', 'toca la guitarra', 'canta otra']) {
+      expect(resolveStatefulDomains(frase).music, frase).toBeNull()
+    }
+    conLoteriaActiva(() => {
+      expect(resolveGameCommandFromText('canta otra', {})?.action, 'la loteria conserva su orden').toBe('turn')
+    })
+  })
+
+  it('UN SOLO DUENO del turno: el contrato resuelto anula la musica del modelo si el determinista ya la resolvio', () => {
+    const delModelo = { contract: { respuesta_voz: 'ok', musica: { accion: 'play_music', cancion: 'otra' } } }
+    const resuelto = buildResolvedContract({
+      contract: delModelo,
+      lateStateful: resolveStatefulDomains('alto', { language: 'es' }),
+      fastPathConfig: null,
+      fastGame: null,
+      fastEnv: null,
+    })
+    expect(resuelto.musica).toBeNull()
+    const sinDeterminista = buildResolvedContract({
+      contract: delModelo,
+      lateStateful: { config: null, game: null, env: null, music: null },
+      fastPathConfig: null,
+      fastGame: null,
+      fastEnv: null,
+    })
+    expect(sinDeterminista.musica).toEqual({ accion: 'play_music', cancion: 'otra' })
+  })
+
+  it('el detector no es decorativo: el dueno resuelve la accion y su nombre', () => {
+    expect(resolveStatefulDomains('canta la canción de Las mañanitas').music?.cancion).toBe('las mananitas')
+    expect(resolveStatefulDomains('alto').music).toEqual({ accion: 'stop_music' })
+  })
+})
+
+// P8.55 — LA VOZ DEL TURNO DE MUSICA la dice su dueno (no el LLM).
+// Defecto medido (log del dueno): a "okay flow alto" el modelo contesto "Alto."
+// aunque la musica SI se detuviera. El fast-path era mudo y la respuesta_voz del
+// modelo sobrevivia; ahora el dueño dice la frase y la del modelo se anula.
+describe('P8.55 - el turno de musica tiene UN dueño de la voz', () => {
+  it('con la musica resuelta por su dueno, el contrato resuelto anula la voz del modelo', () => {
+    const resuelto = buildResolvedContract({
+      contract: { contract: { respuesta_voz: 'Alto.', musica: { accion: 'stop_music' } } },
+      lateStateful: resolveStatefulDomains('alto', { language: 'es' }),
+      fastPathConfig: null,
+      fastGame: null,
+      fastEnv: null,
+    })
+    expect(resuelto.respuesta_voz).toBe('')
+    expect(resuelto.musica).toBeNull()
+  })
+
+  it('sin musica resuelta, la voz del modelo se conserva (no se muda el turno)', () => {
+    const resuelto = buildResolvedContract({
+      contract: { contract: { respuesta_voz: 'Claro, aqui tienes una idea.' } },
+      lateStateful: { config: null, game: null, env: null, music: null },
+      fastPathConfig: null,
+      fastGame: null,
+      fastEnv: null,
+    })
+    expect(resuelto.respuesta_voz).toBe('Claro, aqui tienes una idea.')
+  })
+
+  it('el detector no es decorativo: distingue el turno de musica del conversacional', () => {
+    expect(resolveStatefulDomains('para la música').music?.accion).toBe('stop_music')
+    expect(musicActionSpeech('stop_music', 'es')).toBe('Música detenida.')
+    expect(musicActionSpeech('stop_music', 'en')).toBe('Music stopped.')
+  })
+})

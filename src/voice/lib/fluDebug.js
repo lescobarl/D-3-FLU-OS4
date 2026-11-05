@@ -8,8 +8,33 @@
  * - Dev encendido: solo contadores + comprobaciones ligeras; ring solo en violaciones.
  */
 import { FLU_CONFIG } from './fluConfig.js'
-import { rowDuplicatesPrior, utterancesRelate, validateLogRowsNoPrefixDup } from './conversationStream.js'
+import { cleanForSpeech } from './audioMath.js'
+import { utterancesRelate } from './speechMerge.js'
 import { sortSessionSpeakers } from './voiceIdentity.js'
+import { logCaughtError } from '../../lib/caughtError';
+import { parseSpeakerIndex } from './speakerCore.js';
+
+/**
+ * ABSORBIDOS del módulo retirado `conversationStream.js` (tubería vieja): este
+ * archivo era su ÚNICO consumidor vivo y no justifica mantener el import a un
+ * god-file que quedó roto al retirar `ingressGuards`. Un solo dueño: fluDebug.
+ */
+/** Nueva fila no debe empezar con el texto completo de la fila anterior. */
+function rowDuplicatesPrior(prior = '', next = '') {
+  const p = cleanForSpeech(prior)
+  const n = cleanForSpeech(next)
+  if (!p || !n || p === n) return false
+  return n.startsWith(p)
+}
+
+function validateLogRowsNoPrefixDup(rows = []) {
+  for (let i = 1; i < rows.length; i += 1) {
+    const prev = cleanForSpeech(rows[i - 1])
+    const cur = cleanForSpeech(rows[i])
+    if (prev && cur && rowDuplicatesPrior(prev, cur)) return false
+  }
+  return true
+}
 
 const IS_DEV = Boolean(import.meta.env?.DEV)
 const VIOLATION_RING = 40
@@ -54,11 +79,6 @@ const state = {
   finalShorterThanInterim: 0,
   commandDispatches: 0,
   commandSkips: 0,
-  streamSttConnected: false,
-  streamSttProvider: '',
-  streamSttEvents: 0,
-  streamSttErrors: 0,
-  lastStreamSttText: '',
   lastCommandPlan: '',
   lastCommandId: '',
   /** @type {string[]} */
@@ -544,21 +564,6 @@ export function fluDebugHot(action, payload = {}) {
           reason: String(payload.reason || ''),
         })
         break
-      case 'stream-stt-status':
-        state.streamSttConnected = Boolean(payload.connected)
-        state.streamSttProvider = String(payload.provider || '')
-        break
-      case 'stream-stt-transcript':
-        state.streamSttEvents += 1
-        state.lastStreamSttText = String(payload.text || '')
-        break
-      case 'stream-stt-error':
-        state.streamSttErrors += 1
-        recordViolation('stream-stt-error', payload)
-        break
-      case 'ingress-browser-blocked':
-        recordViolation('ingress-browser-blocked', payload)
-        break
       case 'speaker-change-commit':
         state.speakerChangeCommits = (state.speakerChangeCommits || 0) + 1
         break
@@ -579,6 +584,7 @@ export function fluDebugHot(action, payload = {}) {
         break
     }
   } catch (error) {
+        logCaughtError('[catch] src/voice/lib/fluDebug.js', error);
     recordViolation('debug-hot-crash', {
       action,
       message: String(error?.message || error),
@@ -741,9 +747,8 @@ export function runFluDebugChecks() {
   })
 
   const speakerIndexes = state.clusterLabels
-    .map((label) => String(label || '').match(/^Hablante\s+(\d+)$/i)?.[1])
-    .filter(Boolean)
-    .map(Number)
+    .map((label) => parseSpeakerIndex(label))
+    .filter((n) => n !== null)
     .sort((a, b) => a - b)
   let gapFree = true
   for (let i = 1; i < speakerIndexes.length; i += 1) {
@@ -798,28 +803,6 @@ export function runFluDebugChecks() {
     detail: state.workspaceImageRequests
       ? `${state.workspaceImageSuccess}/${state.workspaceImageRequests} ok, ${state.workspaceImageFail} fail · ${state.workspaceImageLastSource || 'n/a'}`
       : 'sin requests',
-  })
-
-  checks.push({
-    id: 'stream-stt-pipeline',
-    label: 'STT streaming (mic nativo)',
-    pass:
-      !state.streamSttErrors ||
-      state.streamSttEvents > 0 ||
-      (state.streamSttProvider === 'mock' && state.streamSyncs > 0),
-    detail: state.streamSttConnected
-      ? `${state.streamSttProvider || 'connected'} / ${state.streamSttEvents} evt stream, ${state.streamSyncs} sync UI`
-      : 'sin conexión stream',
-  })
-
-  checks.push({
-    id: 'hybrid-mock-chrome',
-    label: 'Hybrid mock: Chrome alimenta UI',
-    pass: !state.violations.some((v) => v.checkId === 'ingress-browser-blocked'),
-    detail:
-      state.streamSttProvider === 'mock'
-        ? `${state.streamSyncs} sync · mic ${(state.lastMicFinal || state.lastMicInterim || '').slice(0, 28)}`
-        : state.streamSttProvider || 'n/a',
   })
 
   const tvStallMs = FLU_CONFIG.activeListen?.restart?.stallMs || 28000
@@ -886,7 +869,15 @@ export function getFluDebugReport() {
   }
 }
 
+/**
+ * Reinicia la SESION de diagnostico: contadores, colecciones, ultimo valor
+ * visto y CONTEXTO. Un clear a medias dejaba el informe verde por herencia:
+ * 'log-rows-tracked' y 'recognition-alive' leen campos de contexto
+ * (logRowCount, listeningStatus) que antes sobrevivian al clear, asi que la
+ * sesion nueva arrancaba con el estado de la anterior.
+ */
 export function clearFluDebug() {
+  // Contadores de la sesion
   state.micEvents = 0
   state.streamSyncs = 0
   state.logEmits = 0
@@ -897,23 +888,47 @@ export function clearFluDebug() {
   state.recognitionEnds = 0
   state.speakerNews = 0
   state.speakerPrunes = 0
+  state.speakerRegisters = 0
+  state.speakerChangeCommits = 0
+  state.finalShorterThanInterim = 0
+  state.commandDispatches = 0
+  state.commandSkips = 0
+  state.commandLogCommits = 0
+  state.historyErrors = 0
+  state.liveShrinks = 0
+  state.logShrinks = 0
+  state.workspaceImageRequests = 0
+  state.workspaceImageSuccess = 0
+  state.workspaceImageFail = 0
+  // Colecciones
   state.logSpeakerLabels = []
   state.clusterLabels = []
+  state.violations = []
+  state.logRowTexts = []
+  state.logRowsPrefixChainOk = true
+  // Ultimo valor visto (lo que el panel muestra como "ahora")
+  state.lastMicAt = 0
+  state.lastMicInterim = ''
+  state.lastMicFinal = ''
+  state.lastLive = ''
+  state.lastLogText = ''
+  state.lastLogSpeaker = ''
+  state.lastSession = ''
+  state.lastCommandPlan = ''
+  state.lastCommandId = ''
+  state.lastOnresultAt = 0
+  state.workspaceImageLastSource = ''
   state.maxLiveLen = 0
   state.maxLogLen = 0
   state.minuteKnowledgeRows = 0
   state.minuteKnowledgePromptRows = 0
   state.minuteKnowledgePromptChars = 0
   state.minuteKnowledgeTrimmed = false
-  state.liveShrinks = 0
-  state.logShrinks = 0
-  state.violations = []
-  state.logRowTexts = []
-  state.logRowsPrefixChainOk = true
-  state.lastMicInterim = ''
-  state.lastMicFinal = ''
-  state.lastLive = ''
-  state.lastLogText = ''
+  // Contexto: la sesion nueva no hereda el estado de la anterior
+  state.recognitionActive = false
+  state.listeningStatus = 'idle'
+  state.conversationActive = false
+  state.logRowCount = 0
   state.startedAt = Date.now()
 }
 

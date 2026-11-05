@@ -18,6 +18,8 @@
 // ============================================================
 
 import { STORAGE_KEYS, readStorage } from '../core/config/appConfig';
+import { fetchTextEngine } from '../core/ai/httpClient';
+import { logCaughtError } from '../lib/caughtError';
 
 export interface OcrResult {
     text: string;
@@ -45,14 +47,13 @@ export function resolveOcrConfig(): OcrConfig {
  * Carga dinámica lazy: la biblioteca pesada solo se descarga bajo demanda.
  */
 export async function extractWithLocal(dataUrl: string): Promise<string> {
-    // @ts-ignore - biblioteca pesada, cargada dinámicamente bajo demanda
-    const Tesseract: any = await import('tesseract.js');
+    const Tesseract = await import('tesseract.js');
     const worker = await Tesseract.createWorker('spa+eng');
     try {
         const { data } = await worker.recognize(dataUrl);
         return String(data?.text || '').trim();
     } finally {
-        await worker.terminate().catch(() => undefined);
+        await worker.terminate().catch((e) => { logCaughtError('[catch] src/services/ocrService.ts', e); });
     }
 }
 
@@ -61,7 +62,7 @@ export async function extractWithLocal(dataUrl: string): Promise<string> {
  * Contrato documentado para que cualquier proxy/backend compatible pueda servir OCR.
  */
 async function extractWithRemote(dataUrl: string, cfg: OcrConfig): Promise<string> {
-    const res = await fetch(cfg.apiUrl, {
+    const res = await fetchTextEngine(cfg.apiUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -71,7 +72,7 @@ async function extractWithRemote(dataUrl: string, cfg: OcrConfig): Promise<strin
         }),
     });
     if (!res.ok) throw new Error(`OCR remoto respondió ${res.status}`);
-    const payload: any = await res.json();
+    const payload: { text?: unknown; texto_extraido?: unknown } = await res.json();
     const text = payload?.text ?? payload?.texto_extraido ?? '';
     return String(text || '').trim();
 }
@@ -89,10 +90,12 @@ export async function extractTextFromImage(dataUrl: string): Promise<OcrResult> 
             const text = await extractWithRemote(dataUrl, cfg);
             if (text) return { text, engine: 'remote', warnings: [] };
         } catch (err) {
+        logCaughtError('[catch] src/services/ocrService.ts', err);
             const warnings = [`OCR remoto falló (${String(err)}); usando OCR local.`];
             try {
                 return { text: await extractWithLocal(dataUrl), engine: 'local', warnings };
             } catch (localErr) {
+        logCaughtError('[catch] src/services/ocrService.ts', localErr);
                 return { text: '', engine: 'local', warnings: [...warnings, String(localErr)] };
             }
         }
@@ -100,6 +103,7 @@ export async function extractTextFromImage(dataUrl: string): Promise<OcrResult> 
     try {
         return { text: await extractWithLocal(dataUrl), engine: 'local', warnings: [] };
     } catch (err) {
+        logCaughtError('[catch] src/services/ocrService.ts', err);
         return { text: '', engine: 'local', warnings: [String(err)] };
     }
 }
@@ -114,8 +118,7 @@ export async function extractTextFromPdf(data: ArrayBuffer, maxPages = 5): Promi
     if (typeof document === 'undefined') {
         return { text: '', engine: 'local', warnings: ['OCR de PDF requiere entorno de navegador.'] };
     }
-    // @ts-ignore - biblioteca opcional (pdfjs-dist), cargada dinámicamente
-    const pdfjs: any = await import('pdfjs-dist');
+    const pdfjs = await import('pdfjs-dist');
     if (!pdfjs || typeof pdfjs.getDocument !== 'function') {
         throw new Error('módulo pdfjs-dist no disponible');
     }
@@ -125,11 +128,13 @@ export async function extractTextFromPdf(data: ArrayBuffer, maxPages = 5): Promi
                 'pdfjs-dist/build/pdf.worker.min.mjs',
                 import.meta.url,
             ).toString();
-        } catch {
+        } catch (e) {
+        logCaughtError('[catch] src/services/ocrService.ts', e);
             /* sin worker configurado: se intenta igual; degradación si falla */
         }
     }
-    const doc = await pdfjs.getDocument({ data: new Uint8Array(data) }).promise;
+    const loadingTask = pdfjs.getDocument({ data: new Uint8Array(data) });
+    const doc = await loadingTask.promise;
     const pagesToScan = Math.min(doc.numPages, maxPages);
     const chunks: string[] = [];
     try {
@@ -144,11 +149,11 @@ export async function extractTextFromPdf(data: ArrayBuffer, maxPages = 5): Promi
                 warnings.push(`No se pudo rasterizar la página ${pageNum}.`);
                 continue;
             }
-            await page.render({ canvasContext: ctx, viewport }).promise;
+            await page.render({ canvasContext: ctx, canvas, viewport }).promise;
             chunks.push(await extractWithLocal(canvas.toDataURL('image/png')));
         }
     } finally {
-        await doc.destroy().catch(() => undefined);
+        await loadingTask.destroy().catch((e) => { logCaughtError('[catch] src/services/ocrService.ts', e); });
     }
     return { text: chunks.join('\n').trim(), engine: 'local', warnings };
 }

@@ -8,7 +8,9 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { aiService } from '../services/aiServiceFactory';
-import { hasUsableTextBackend } from '../services/deepseek';
+import { isSpeechBusy } from '../voice/api/speech';
+import { logCaughtError } from '../lib/caughtError';
+import { resolveConfiguredTemperature } from '../services/aiTemperature';
 import {
     applyParticipantEvaluation,
     advanceParticipantTurnCounter,
@@ -26,9 +28,10 @@ import {
     canGrantParticipantFloor,
     shouldIgnoreParticipantFloorGrant,
     DEFAULT_PARTICIPANT_CONFIG,
-    type ParticipantConfig,
+    type ParticipantEvaluationConfig,
     type ParticipantState,
     type ParticipantUiPresentation,
+    evaluatesOnTurnCommit,
 } from '../lib/fluParticipant';
 
 export interface UseFluParticipantOptions {
@@ -37,7 +40,7 @@ export interface UseFluParticipantOptions {
     conversationActiveRef?: React.RefObject<boolean>;
     session?: { role?: string; theme?: string };
     getLogSnapshot?: () => { texts: string[]; speakers: string[] };
-    config?: Partial<ParticipantConfig>;
+    config?: Partial<ParticipantEvaluationConfig>;
     /**
      * Callback for avatar emotional reactions to participant events.
      * event: 'granted' | 'ignored' | 'rejected' | 'raised' | 'dismissed'
@@ -49,7 +52,12 @@ export interface UseFluParticipantOptions {
 export interface UseFluParticipantReturn {
     presentation: ParticipantUiPresentation;
     evaluateOnDemand: () => Promise<boolean>;
-    onTurnCommitted: () => void;
+    /**
+     * Notifica UN turno comprometido. `turnId` es la identidad del turno: la MISMA
+     * identidad dos veces (activo + pasivo, una revision ASR) cuenta UNA vez. Sin
+     * `turnId` se cuenta la llamada (solo uso manual/tests).
+     */
+    onTurnCommitted: (turnId?: string | number | null) => void;
     resetParticipant: () => void;
     dismissRaisedHand: () => void;
     consumeRaisedDraft: () => string;
@@ -78,17 +86,24 @@ export function useFluParticipant({
 
     /**
      * Contador monotónico de turnos comprometidos (incrementa en onTurnCommitted).
-     * Es independiente del store (integrationStore.conversationHistory): el pipeline
-     * de voz (conversationStreamCommit) REEMPLAZA la última fila ante revisiones ASR
-     * o se salta la escritura cuando refreshNeeded=false, por lo que el conteo de filas
-     * diverge del número real de turnos. Como canScheduleParticipantEvaluation exige
+     * Es independiente del store (integrationStore.conversationHistory): el motor
+     * de conversación reutiliza la fila del turno ante revisiones ASR y el escritor
+     * pasivo puede reemplazarla, por lo que el conteo de filas diverge del número
+     * real de turnos. Como canScheduleParticipantEvaluation exige
      * turnCount>=evaluateEveryNTurns, contar el store hacía que en el 3er commit hubiera
      * <3 filas y FLU nunca evaluara (regresión vs OS3, donde cada turno agregaba una fila).
      */
     const committedTurnsRef = useRef(0);
+    /**
+     * Identidades ya contadas. El aviso llega desde DOS modos excluyentes (motor
+     * activo y escritor pasivo de App) y una revision puede repetirlo; el `turnId`
+     * es la identidad unica: se cuenta una sola vez. Se limpia al reiniciar la
+     * sesion (los ids de turno vuelven a empezar).
+     */
+    const committedTurnIdsRef = useRef<Set<string>>(new Set());
 
     // Merge config with overrides
-    const cfgRef = useRef<ParticipantConfig>({
+    const cfgRef = useRef<ParticipantEvaluationConfig>({
         ...DEFAULT_PARTICIPANT_CONFIG,
         ...configOverrides,
     });
@@ -162,7 +177,7 @@ export function useFluParticipant({
                 // Sin backend de texto (ni clave ni endpoint local) la llamada a
                 // generateParticipantEvaluation lanzaría "API key de texto no
                 // configurada"; se bloquea ANTES de disparar la petición inútil.
-                textBackendUsable: hasUsableTextBackend(),
+                textBackendUsable: aiService.canUseTextBackend(),
             })
         ) {
             if (import.meta.env.DEV) {
@@ -198,6 +213,7 @@ export function useFluParticipant({
                     language,
                     role: session.role || '',
                     theme: session.theme || '',
+                    temperature: resolveConfiguredTemperature(),
                 },
                 conversationLog,
                 cfg.maxDraftChars,
@@ -205,7 +221,7 @@ export function useFluParticipant({
 
             if (generation !== evalGenerationRef.current) return false;
 
-            const normalized = normalizeParticipantEvaluation(result as unknown as Record<string, unknown>, cfg);
+            const normalized = normalizeParticipantEvaluation(result, cfg);
             stateRef.current = applyParticipantEvaluation(stateRef.current, normalized);
 
             if (stateRef.current.phase === 'raised') {
@@ -219,14 +235,14 @@ export function useFluParticipant({
             if (generation !== evalGenerationRef.current) return false;
             stateRef.current = { ...stateRef.current, phase: 'idle' };
             if (import.meta.env.DEV) {
-                console.warn('[Flu][participant] evaluation failed', error);
+                logCaughtError('[Flu][participant] evaluation failed', error);
             }
         } finally {
             bumpUi();
         }
 
         return false;
-    }, [apiKey, bumpUi, conversationActiveRef, getLogSnapshot, language, scheduleHandTimeout, session.role, session.theme]);
+    }, [apiKey, bumpUi, conversationActiveRef, getLogSnapshot, language, scheduleHandTimeout, session.role, session.theme, onEmotion]);
 
     // -----------------------------------------------------------
     // Evaluate on demand (manual "Flu Participa" click)
@@ -241,16 +257,16 @@ export function useFluParticipant({
     // -----------------------------------------------------------
     // On turn committed (called after each conversation turn)
     // -----------------------------------------------------------
-    const onTurnCommitted = useCallback(() => {
+    const onTurnCommitted = useCallback((turnId?: string | number | null) => {
         const cfg = cfgRef.current;
-        if (!cfg.enabled || cfg.evaluateOnTurnCommit === false) {
+        if (!cfg.enabled || !evaluatesOnTurnCommit(cfg)) {
             if (import.meta.env.DEV) {
-                console.warn(`[Flu][participant] onTurnCommitted: BAIL (enabled=${cfg.enabled}, evaluateOnTurnCommit=${cfg.evaluateOnTurnCommit})`);
+                console.warn(`[Flu][participant] onTurnCommitted: BAIL (enabled=${cfg.enabled}, evaluateOnTurnCommit=${evaluatesOnTurnCommit(cfg)})`);
             }
             return;
         }
-        // conversationOnly=true exige sesión «Iniciar conversación» activa; con
-        // conversationOnly=false FLU evalúa también en escucha pasiva (OS3 parity).
+        // conversationOnly=true exige sesiÃ³n Â«Iniciar conversaciÃ³nÂ» activa; con
+        // conversationOnly=false FLU evalÃºa tambiÃ©n en escucha pasiva (OS3 parity).
         // Antes este gate era incondicional y anulaba la config conversationOnly.
         const conversationActive = Boolean(conversationActiveRef?.current);
         if (!conversationActive && cfg.conversationOnly !== false) {
@@ -260,9 +276,19 @@ export function useFluParticipant({
             return;
         }
 
-        // Cada turno comprometido cuenta como turno de conversación real,
-        // independientemente de si se escribió/actualizó una fila en el store.
+        // IDENTIDAD DEL TURNO (dueÃ±o UNICO del conteo): el aviso puede llegar por el
+        // motor activo y por el escritor pasivo de App para el MISMO turno, y una
+        // revision ASR lo repite. Contar por `turnId` una sola vez evita la ruta doble.
+        const clave = String(turnId ?? '').trim();
+        if (clave) {
+            if (committedTurnIdsRef.current.has(clave)) return;
+            committedTurnIdsRef.current.add(clave);
+        }
+
+        // Cada turno comprometido cuenta como turno de conversaciÃ³n real,
+        // independientemente de si se escribiÃ³/actualizÃ³ una fila en el store.
         committedTurnsRef.current += 1;
+
 
         if (!shouldEvaluateParticipantOnTurn(stateRef.current, cfg)) {
             stateRef.current = advanceParticipantTurnCounter(stateRef.current, cfg);
@@ -282,6 +308,8 @@ export function useFluParticipant({
         stateRef.current = createFluParticipantState();
         lastFloorGrantAtRef.current = 0;
         deliveringSpeechRef.current = false;
+        committedTurnsRef.current = 0;
+        committedTurnIdsRef.current.clear();
         bumpUi();
         // FIX 2026-08-12 (mano congelada): resetParticipant (INICIAR_CONVERSACION,
         // reset del sistema) no disparaba emoción → si la mano estaba arriba
@@ -341,8 +369,7 @@ export function useFluParticipant({
         // solo mirara `speaking`, el click/la orden cederían la palabra y el borrador se
         // consumiría SIN hablarse (intervención tragada). Bloquear la concesión mientras
         // pending evita ese hueco: el usuario reintenta cuando el TTS esté libre.
-        const synth = window.speechSynthesis;
-        const speechActive = Boolean(synth && (synth.speaking || synth.pending));
+        const speechActive = isSpeechBusy();
         return shouldIgnoreParticipantFloorGrant(stateRef.current, {
             speechActive,
             lastGrantAt: lastFloorGrantAtRef.current,

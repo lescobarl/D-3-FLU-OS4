@@ -14,6 +14,7 @@
 // ============================================================
 
 import React, { createContext, useContext, useMemo } from 'react';
+import type { ConversationState } from '../types/bridge';
 
 // -----------------------------------------------------------
 // Types
@@ -23,6 +24,9 @@ export interface FluBridgeContextValue {
     voiceStatus?: string;
     voiceError?: string | null;
     liveTranscript?: string;
+    /** Última frase completa confirmada por el hook (fuente canónica compartida
+        con la bitácora — regla: burbuja y transcripción muestran lo mismo). */
+    lastTranscript?: string;
 
     // Voice actions
     onStartListening?: () => Promise<void>;
@@ -41,7 +45,7 @@ export interface FluBridgeContextValue {
     welcomeMessage?: string;
 
     // Callbacks
-    onStateChange?: (state: any) => void;
+    onStateChange?: (state: ConversationState) => void;
     onFluParticipa?: () => void;
     onWorkspaceImage?: (imageUrl: string) => void;
     onGeminiError?: (error: string | null) => void;
@@ -64,22 +68,7 @@ export function FluBridgeProvider({
 }) {
     // Memoize to prevent unnecessary re-renders
     const ctx = useMemo(() => value, [
-        value.voiceStatus,
-        value.voiceError,
-        value.liveTranscript,
-        value.onStartListening,
-        value.onStopListening,
-        value.onToggleListening,
-        value.onParticipantEmotionRef,
-        value.onContextualEmotionRef,
-        value.onEmotionAnimsRef,
-        value.apiKey,
-        value.language,
-        value.welcomeMessage,
-        value.onStateChange,
-        value.onFluParticipa,
-        value.onWorkspaceImage,
-        value.onGeminiError,
+      value,
     ]);
 
     return (

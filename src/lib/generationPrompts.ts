@@ -13,6 +13,7 @@
 import type { GenerationInput } from '../core/ai/IAIService';
 import type { GenerationFormato } from '../types/documentContracts';
 
+import { pickText } from './uiStrings';
 /** Instrucción de formato del contenido que debe devolver el LLM por tipo de formato. */
 function formatContentInstruction(formato: GenerationFormato): string {
     switch (formato) {
@@ -42,14 +43,12 @@ function formatContentInstruction(formato: GenerationFormato): string {
 
 /** Prompt de sistema para generación de contenido. */
 export function buildGenerationSystemPrompt(language = 'es'): string {
-    return language === 'en'
-        ? 'You are FLU, a document-generation assistant. Produce precise, executive content following the requested format exactly.'
-        : 'Eres FLU, un asistente de generación de documentos. Produce contenido preciso y ejecutivo siguiendo exactamente el formato solicitado.';
+    return pickText(language, 'eres_flu_un_asistente_de_generacion_de_doc');
 }
 
 /** Prompt de usuario para generación de contenido a partir de fuentes/parámetros. */
 export function buildGenerationPrompt(payload: GenerationInput, language = 'es'): string {
-    const langInstr = language === 'en' ? 'Respond in English only.' : 'Responde únicamente en español.';
+    const langInstr = pickText(language, 'responde_unicamente_en_espanol');
     const fuentes = Array.isArray(payload.fuentes) && payload.fuentes.length
         ? payload.fuentes.map((f, i) => `${i + 1}. [${f.tipo}] ${f.ref}`).join('\n')
         : 'Ninguna fuente explícita (genera contenido general).';
@@ -72,11 +71,23 @@ export function buildGenerationPrompt(payload: GenerationInput, language = 'es')
     ].join('\n');
 }
 
+/** Ref seguro para el cuerpo del documento de respaldo: la conversación nunca
+    se vuelca en crudo (evita que el PDF salga con el texto de una respuesta
+    anterior de FLU, p. ej. "Procederé a generar un video…" — Bug #6). */
+function safeFuenteLabel(fuente: { tipo?: string; ref?: string } | undefined, index: number): string {
+    if (!fuente) return '';
+    const tipo = String(fuente.tipo || '').toLowerCase();
+    const ref = String(fuente.ref || '').trim();
+    if (tipo === 'conversacion') {
+        // La conversación se cita como referencia genérica, nunca su texto.
+        return `Conversación reciente (${index + 1})`;
+    }
+    return ref ? `${tipo}: ${ref.slice(0, 160)}` : `${tipo} (${index + 1})`;
+}
+
 /** Contenido de respaldo cuando no hay LLM disponible (degradación elegante). */
 export function buildGenerationFallbackContent(payload: GenerationInput, language = 'es'): string {
-    const langInstr = language === 'en'
-        ? 'Generated without AI (offline fallback).'
-        : 'Generado sin IA (respaldo sin conexión).';
+    const langInstr = pickText(language, 'generado_sin_ia_respaldo_sin_conexion');
     const tema = payload.parametros?.tema || 'Documento';
     if (payload.formato === 'xlsx') {
         return JSON.stringify({
@@ -86,7 +97,7 @@ export function buildGenerationFallbackContent(payload: GenerationInput, languag
                     rows: [
                         ['Sección', 'Detalle'],
                         ['Tema', tema],
-                        ['Fuente', (payload.fuentes || []).map((f) => f.ref).join(', ') || '—'],
+                        ['Fuente', 'Conversación reciente'],
                         ['Estado', langInstr],
                     ],
                 },
@@ -101,7 +112,7 @@ export function buildGenerationFallbackContent(payload: GenerationInput, languag
         return JSON.stringify({
             tema,
             formato: payload.formato,
-            fuentes: payload.fuentes || [],
+            fuentes: (payload.fuentes || []).map((f, i) => safeFuenteLabel(f, i)),
             nota: langInstr,
         });
     }
@@ -122,28 +133,45 @@ export function buildGenerationFallbackContent(payload: GenerationInput, languag
         ].join('\r\n');
     }
     if (payload.formato === 'pptx') {
-        const fuentes = (payload.fuentes || []).map((f) => f.ref).join(', ') || '—';
         return [
             `# ${tema}`,
             `- ${langInstr}`,
-            `- Fuentes: ${fuentes}`,
             `## Contexto`,
-            `- Documento generado por FLU sin conexión a IA.`,
+            `- Documento generado por FLU sin conexión a IA sobre el tema "${tema}".`,
+            `## Fuentes`,
+            ...(payload.fuentes || []).map((f, i) => `- ${safeFuenteLabel(f, i)}`),
             `## Siguientes pasos`,
             `- Proporciona una clave de API para generar contenido completo.`,
         ].join('\n');
     }
-    const fuentes = (payload.fuentes || []).map((f) => f.ref).join(', ') || '—';
+    if (payload.formato === 'video') {
+        return [
+            `# ${tema}`,
+            ``,
+            `## Escena 1 — Introducción`,
+            `Hoy te contamos sobre "${tema}".`,
+            ``,
+            `## Escena 2 — Explicación`,
+            `Repasamos los puntos principales del tema "${tema}" de forma sencilla.`,
+            ``,
+            `## Escena 3 — Cierre`,
+            `Recuerda: pregunta a FLU para profundizar en "${tema}".`,
+        ].join('\n');
+    }
+    const fuentes = (payload.fuentes || []).map((f, i) => safeFuenteLabel(f, i));
     return [
         `# ${tema}`,
         ``,
         `> ${langInstr}`,
         ``,
-        `## Resumen`,
-        `Documento generado por FLU en formato ${payload.formato} sin conexión a IA.`,
+        `## Introducción`,
+        `Este documento de FLU aborda el tema "${tema}".`,
         ``,
-        `## Fuentes`,
-        fuentes,
+        `## Desarrollo`,
+        `Respaldo sin conexión: se incluye el encuadre del tema; para un desarrollo completo conecta una clave de API de IA.`,
+        ``,
+        `## Fuentes consultadas`,
+        ...(fuentes.length ? fuentes : ['Ninguna fuente explícita']),
         ``,
         `## Estado`,
         `Proporciona una clave de API para generar contenido completo enriquecido.`,

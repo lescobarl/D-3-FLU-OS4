@@ -1,0 +1,60 @@
+# CODEOWNERS — el criterio/gate es INMUTABLE sin aprobación del dueño.
+# Objetivo: evitar RUTAS DOBLES impidiendo que el agente edite el criterio que lo juzga.
+# Solo tiene efecto en GitHub con: Settings > Branches > main >
+#   "Require a pull request before merging" + "Require review from Code Owners".
+
+# Criterio: qué cuenta como duplicado y qué guards corren
+/AGENTS.md                    @lescobarl
+/scripts/auditoria.mjs        @lescobarl
+/scripts/guard-files.mjs      @lescobarl
+/scripts/guard-duplicados.mjs @lescobarl
+/scripts/duplicados-allowlist.json @lescobarl
+/scripts/guard-literales.mjs @lescobarl
+/scripts/literales-allowlist.json @lescobarl
+/scripts/guard-hardcodes.mjs   @lescobarl
+/scripts/hardcode-dictamen.json @lescobarl
+/scripts/rutas-dobles.mjs     @lescobarl
+/scripts/rutas-dobles-baseline.json @lescobarl
+/scripts/guard-duplicados25.mjs @lescobarl
+/scripts/duplicados25-baseline.json @lescobarl
+/scripts/persist-row-baseline.json @lescobarl
+/scripts/participant-remove-baseline.json @lescobarl
+/scripts/voice-profile-owner-baseline.json @lescobarl
+/scripts/baja-rutas-baseline.json @lescobarl
+/scripts/audit-detectors.mjs @lescobarl
+/tests/searchOverridesStorage.test.ts @lescobarl
+
+# Guards de comportamiento (tests/*Guard*)
+/tests/*Guard*.test.ts        @lescobarl
+/tests/*Guard*.test.tsx       @lescobarl
+/tests/conversacionApi.test.ts             @lescobarl
+/tests/conversacionAcumulacionAsr.test.ts  @lescobarl
+/tests/conversacionRevision.test.ts        @lescobarl
+/tests/conversacionContinuidad.test.ts     @lescobarl
+/tests/conversacionEtiquetasYMezclaGuard.test.ts @lescobarl
+/tests/conversacionRutasDoblesGuard.test.ts @lescobarl
+/scripts/conversacion-rutas-dobles-baseline.json @lescobarl
+
+# Gate de dueños (archivos nuevos)
+/docs/OWNERS.md               @lescobarl
+/scripts/owner-gate.mjs       @lescobarl
+/.claude/settings.json        @lescobarl
+/.githooks/pre-commit         @lescobarl
+
+# Módulo CONVERSACIÓN — dueño del módulo y sus consumidores externos
+/src/voice/conversation/**              @lescobarl
+/src/voice/lib/conversationRow.js       @lescobarl
+/src/voice/lib/speakerDirectory.js      @lescobarl
+/src/core/db/conversationRowWriter.ts   @lescobarl
+/src/hooks/useConversationPersistence.ts @lescobarl
+
+# Gate y hooks
+/scripts/guard-architecture.mjs @lescobarl
+/scripts/task-gate.mjs         @lescobarl
+/scripts/task-gate-baseline.mjs @lescobarl
+/scripts/install-hooks.mjs     @lescobarl
+/.task/**                      @lescobarl
+/.github/**                    @lescobarl
+
+# Definición del gate (aquí vive el orden de `lint`)
+/package.json                  @lescobarl

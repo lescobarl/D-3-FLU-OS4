@@ -1,9 +1,13 @@
+import { pickText } from '../../lib/uiStrings';
+import { normalizeLang } from '../../core/config/localeConfig';
 /**
  * Mensajes de error Gemini legibles para la UI (es/en).
  */
-// URL oficial para crear/gestionar la Gemini API key. Centralizada para no
-// repetir la ruta hardcodeada en los mensajes (Rule #1: NO HARDCODE).
-const GEMINI_API_KEY_URL = 'https://aistudio.google.com/apikey'
+import { REMOTE_RESOURCE_URLS } from '../../core/config/sharedConfig'
+import { defaultLanguage } from './languageDefault.ts'
+
+// URL oficial para crear/gestionar la Gemini API key (Rule #1: NO HARDCODE).
+const GEMINI_API_KEY_URL = REMOTE_RESOURCE_URLS.GEMINI_API_KEY_PAGE
 
 const HINTS = {
   missing_api_key: {
@@ -36,12 +40,26 @@ const HINTS = {
   },
 }
 
-function pickLang(language = 'es') {
-  return language === 'en' ? 'en' : 'es'
+function pickLang(language = defaultLanguage()) {
+  return normalizeLang(language)
 }
 
 const GENERIC_FAILURE_ES = 'Gemini no respondió.'
 const GENERIC_FAILURE_EN = 'Gemini did not respond.'
+
+/**
+ * Señales de fallo normalizadas (texto, evento y codigo). Dueno unico del
+ * sondeo: la deteccion y la presentacion leen la MISMA terna.
+ * @param {{ error?: string, diagnostics?: object|null, lastErrorEvent?: object|null }} input
+ * @returns {{ errorText: string, eventError: string, diagCode: string }}
+ */
+function readFailureSignal({ error = '', diagnostics = null, lastErrorEvent = null } = {}) {
+  return {
+    errorText: String(error || '').trim(),
+    eventError: String(lastErrorEvent?.error || '').trim(),
+    diagCode: String(diagnostics?.code || lastErrorEvent?.code || '').trim(),
+  }
+}
 
 /** Señal explícita de fallo — evita mensajes por defecto en estado idle. */
 export function hasGeminiFailureSignal({
@@ -55,9 +73,7 @@ export function hasGeminiFailureSignal({
     const raw = String(failure?.message || failure?.error || '').trim()
     if (code || raw) return true
   }
-  const errorText = String(error || '').trim()
-  const eventError = String(lastErrorEvent?.error || '').trim()
-  const diagCode = String(diagnostics?.code || lastErrorEvent?.code || '').trim()
+  const { errorText, eventError, diagCode } = readFailureSignal({ error, diagnostics, lastErrorEvent })
   return (
     Boolean(errorText) ||
     Boolean(eventError) ||
@@ -66,7 +82,7 @@ export function hasGeminiFailureSignal({
   )
 }
 
-export function formatGeminiUserMessage(error = null, language = 'es', { fallback = false } = {}) {
+export function formatGeminiUserMessage(error = null, language = defaultLanguage(), { fallback = false } = {}) {
   const lang = pickLang(language)
   const code = String(error?.code || '').trim()
   const raw = String(error?.message || error?.error || '').trim()
@@ -74,46 +90,38 @@ export function formatGeminiUserMessage(error = null, language = 'es', { fallbac
   // Timeout del motor de texto (fetchTextEngine aborta a los 45s y normaliza
   // el fallo a code 'gemini_timeout' / status 408). Ya no es un "Failed to fetch".
   if (code === 'gemini_timeout') {
-    return lang === 'en'
-      ? 'Gemini: the AI service took too long to respond. Wait a moment and retry.'
-      : 'Gemini: el servicio de IA tardó demasiado en responder. Espera un momento y reintenta.'
+    return pickText(lang, 'gemini_el_servicio_de_ia_tardo_demasiado_e')
   }
   // Fallo de transporte normalizado por fetchTextEngineResilient (cliente):
   // ya fue reintentado 1 vez; aquí solo se presenta el mensaje accionable.
   if (code === 'gemini_network') {
-    return lang === 'en'
-      ? 'Gemini: could not reach the AI server. If you just restarted it, reload the page (F5) to reconnect.'
-      : 'Gemini: no se pudo conectar con el servidor de IA. Si acabas de reiniciarlo, recarga la página (F5) para reconectar.'
+    return pickText(lang, 'gemini_no_se_pudo_conectar_con_el_servidor')
   }
   // Handle TypeError (network errors like "Failed to fetch") — no .code property
   // (transport error residual: el servidor real no respondió a tiempo)
   if (!code && raw === 'Failed to fetch') {
-    return lang === 'en'
-      ? 'Gemini: the connection to the AI service was interrupted. Check that the dev server is running (npm run dev), retry, and verify the API key in settings.'
-      : 'Gemini: la conexión con el servicio de IA se interrumpió. Verifica que el servidor esté activo (npm run dev), reintenta y revisa la API key en ajustes.'
+    return pickText(lang, 'gemini_la_conexion_con_el_servicio_de_ia_s')
   }
   // Handle raw "missing_api_key" message (from processCapture path that uses error.message directly)
   if (raw === 'missing_api_key') {
-    return lang === 'en' ? 'Gemini: missing API key.' : 'Gemini: falta la API key.'
+    return pickText(lang, 'gemini_falta_la_api_key')
   }
 
   if (code === 'missing_api_key') {
-    return lang === 'en' ? 'Gemini: missing API key.' : 'Gemini: falta la API key.'
+    return pickText(lang, 'gemini_falta_la_api_key')
   }
   if (code === 'gemini_quota_429') {
-    return lang === 'en' ? 'Gemini: quota exceeded (429).' : 'Gemini: cuota agotada (429).'
+    return pickText(lang, 'gemini_cuota_agotada_429')
   }
   if (code === 'gemini_403') {
-    return lang === 'en' ? 'Gemini: access denied (403).' : 'Gemini: acceso denegado (403).'
+    return pickText(lang, 'gemini_acceso_denegado_403')
   }
   if (code === 'invalid_json') {
-    return lang === 'en' ? 'Gemini: invalid response.' : 'Gemini: respuesta inválida.'
+    return pickText(lang, 'gemini_respuesta_invalida')
   }
   if (code.startsWith('gemini_http_')) {
     const status = error?.status || code.replace('gemini_http_', '')
-    return lang === 'en'
-      ? `Gemini HTTP error ${status}.`
-      : `Error HTTP de Gemini (${status}).`
+    return pickText(lang, 'error_http_de_gemini_status', { status })
   }
   if (raw.startsWith('Gemini error')) {
     return raw.length > 120 ? `${raw.slice(0, 117)}…` : raw
@@ -125,23 +133,19 @@ export function formatGeminiUserMessage(error = null, language = 'es', { fallbac
   return lang === 'en' ? GENERIC_FAILURE_EN : GENERIC_FAILURE_ES
 }
 
-export function formatGeminiErrorHint(error = null, language = 'es', { fallback = false } = {}) {
+export function formatGeminiErrorHint(error = null, language = defaultLanguage(), { fallback = false } = {}) {
   const lang = pickLang(language)
   const code = String(error?.code || '').trim()
   const entry = HINTS[code]
   if (entry) return entry[lang]
   if (code.startsWith('gemini_http_400')) {
-    return lang === 'en'
-      ? 'Check that your API key is correct.'
-      : 'Revisa que la API key sea correcta.'
+    return pickText(lang, 'revisa_que_la_api_key_sea_correcta')
   }
   const raw = String(error?.message || error?.error || '').trim()
   if (!fallback && !code && !raw) return ''
   if (!raw || raw === GENERIC_FAILURE_ES || raw === GENERIC_FAILURE_EN) {
     if (!fallback) return ''
-    return lang === 'en'
-      ? 'Voice capture still works. Check your API key, quota, and browser console (F12).'
-      : 'La transcripción sigue funcionando. Revisa la API key, la cuota y la consola del navegador (F12).'
+    return pickText(lang, 'la_transcripcion_sigue_funcionando_revisa_')
   }
   return ''
 }
@@ -165,7 +169,7 @@ export function resolveGeminiErrorPresentation({
   error = '',
   diagnostics = null,
   lastErrorEvent = null,
-  language = 'es',
+  language = defaultLanguage(),
 } = {}) {
   const hasFailure = hasGeminiFailureSignal({ error, diagnostics, lastErrorEvent })
 
@@ -173,9 +177,7 @@ export function resolveGeminiErrorPresentation({
     return { message: '', hint: '', detail: '', code: '', show: false }
   }
 
-  const errorText = String(error || '').trim()
-  const eventError = String(lastErrorEvent?.error || '').trim()
-  const diagCode = String(diagnostics?.code || lastErrorEvent?.code || '').trim()
+  const { errorText, eventError, diagCode } = readFailureSignal({ error, diagnostics, lastErrorEvent })
 
   const syntheticError = {
     message: errorText || eventError,

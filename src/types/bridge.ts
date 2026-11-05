@@ -5,7 +5,9 @@
 // el avatar 3D (OS1) con los servicios de voz (OS2).
 // ============================================================
 
-import type { AvatarState, AvatarExpression } from '../avatar';
+import type { AvatarState, AvatarExpression } from '../avatar/index.ts';
+import type { VisualTipo, WorkspaceTipo } from '../core/config/sharedConfig.ts';
+import type { MusicAction } from '../core/media/musicActions.ts';
 
 /**
  * Estados del ciclo de conversación integrado.
@@ -40,6 +42,58 @@ export interface VoiceBridgeEvent {
 }
 
 /**
+ * Metadatos canónicos de una fila del motor de conversación.
+ * Se persisten TIPADOS (no como JSON opaco) y se leen de vuelta con la MISMA
+ * función de mapeo (`src/core/db/conversationRowMapping.ts`).
+ */
+export interface ConversationMetaFila {
+    /** Tramo de audio de la locución, en muestras del `sampleRate`. */
+    tramo: { inicio: number; fin: number };
+    /** Frecuencia de captura del tramo. */
+    sampleRate: number;
+    /** Turno que agrupó la locución. */
+    turnId: string;
+    /** Etiqueta afirmada de la voz (nunca `?`). */
+    etiqueta: string;
+    /** Evidencia con la que se afirmó la etiqueta. */
+    evidencia: 'nombre' | 'medida' | 'continuidad' | 'semilla';
+    /** Idioma de la locución. */
+    idioma: 'es' | 'en';
+    /** ¿Hubo solape de voces? */
+    overlap: boolean;
+    /** Cierre humano o de sistema, promovible con el final del mismo tramo. */
+    provisional: boolean;
+    /** Motivo declarado del cierre. */
+    reason: 'user' | 'system' | 'watchdog';
+}
+
+/** Metadatos adicionales de una entrada (OS2: meta.response). */
+export interface ConversationMeta {
+    response?: string;
+    /** P9.83: esta fila es la RESPUESTA a un evento de sistema (la marca el escritor) */
+    systemEventReply?: boolean;
+    /** Marcador de evento del sistema (no controlado por Gemini) */
+    systemEvent?: {
+        type: 'participant_ignored' | 'participant_rejected' | 'participant_granted'
+        | 'user_praise' | 'user_criticism' | 'topic_change' | 'interruption_detected';
+        participantName?: string;
+        waitedMs?: number;
+        reason?: string;
+        praiseText?: string;
+        criticismText?: string;
+        previousTopic?: string;
+        newTopic?: string;
+        interruptionText?: string;
+    };
+    /** Campos de la fila del motor de conversación, TIPADOS. */
+    conversacion?: ConversationMetaFila;
+    /** Ruta que escribió la fila: módulo nuevo o importación. */
+    origin?: 'conversation-module' | 'import';
+    /** Sesión del motor que produjo la fila. */
+    sessionId?: string;
+}
+
+/**
  * Una entrada en el historial de conversación.
  * Compatible con OS2: speakerName, response, meta, signature, phase, navigation.
  */
@@ -54,27 +108,57 @@ export interface ConversationEntry {
     sentiment?: 'positive' | 'negative' | 'neutral' | 'question';
     /** ID único */
     id: string;
+    /**
+     * EPOCH de conversacion al que pertenece la fila (`useIntegrationStore.conversationEpoch`).
+     * El renombre por voz (`renameVoiceRowsByKey`) y el freeze SOLO tocan el epoch actual:
+     * una fila de una conversacion anterior no se reescribe. Las filas legacy sin epoch se
+     * estampan en UN punto (carga/insercion del store), no en cada consumidor.
+     */
+    epoch?: number;
     /** Nombre del hablante (OS2: speakerName / speaker) */
     speakerName?: string;
+    /**
+     * LA VOZ de la fila (id del hablante en la sesión). El NOMBRE no vive aquí: se resuelve
+     * al mostrar (`resolveRowSpeakerLabel`), por la VOZ y contra el directorio/base.
+     */
+    speakerId?: string;
+    /**
+     * Participante dueño de la entrada (aislamiento multiusuario del pizarrón).
+     * Se sella al crear la fila con el participante activo; sin participante
+     * queda sin definir (ruta legacy/global).
+     */
+    personId?: string;
     /** Respuesta de FLU a este mensaje (OS2: response) */
     response?: string;
     /** Metadatos adicionales (OS2: meta.response) */
-    meta?: {
-        response?: string;
-        /** Marcador de evento del sistema (no controlado por Gemini) */
-        systemEvent?: {
-            type: 'participant_ignored' | 'participant_rejected' | 'participant_granted'
-            | 'user_praise' | 'user_criticism' | 'topic_change' | 'interruption_detected';
-            participantName?: string;
-            waitedMs?: number;
-            reason?: string;
-            praiseText?: string;
-            criticismText?: string;
-            previousTopic?: string;
-            newTopic?: string;
-            interruptionText?: string;
-        };
-    };
+    meta?: ConversationMeta;
+    /** Sesión del motor de conversación que produjo la fila (si aplica). */
+    sessionId?: string;
+    /**
+     * IDENTIDAD DEL TURNO que escribio la fila (auditoria 2026-10-23): la acuña el dueno del
+     * turno ANTES del commit y es el UNICO criterio para reutilizar/completar una fila.
+     * Sin este dato una fila no se puede reutilizar: un commit sin turno no toca la de otro.
+     */
+    turnId?: number | string | null;
+    /**
+     * La fila nacio SIN identidad de voz y lleva la etiqueta de CONTINUIDAD (nunca "?"): el
+     * resolutor la completa cuando llega la medida de su turno y limpia esta marca.
+     */
+    speakerPending?: boolean;
+    /**
+     * SOLO store, no se persiste: una actualizacion de nombre marcada `false` viene del
+     * reetiquetado tardio del modulo, que YA escribio la fila canonica. El hook de
+     * persistencia no debe reescribirla desde la vista parcial del store.
+     */
+    persistSpeakerName?: boolean;
+    /**
+     * VENTANA DE AUDIO DEL TURNO (muestras absolutas): dato informativo. NO es identidad:
+     * dos locuciones del MISMO turno comparten esta ventana, y por eso no puede decidir la
+     * reutilizacion/creacion de fila. La identidad de la fila es el TURNO (`turnId`); la
+     * separacion de locuciones la pone la frontera de audio del ingress. Se llamaba `tramo`
+     * y esa identidad se retiro (2026-10-24).
+     */
+    turnWindow?: { inicio: number; fin: number } | null;
     /** Firma de embedding (OS2: signature) */
     signature?: number[] | null;
     /** Fase de la conversación (OS2: phase) */
@@ -102,7 +186,8 @@ export type EmotionalState =
 export type FluProfile =
     | 'administrativo'
     | 'profesor'
-    | 'estudiante';
+    | 'estudiante'
+    | 'animador';
 
 /**
  * Configuración de imagen del avatar (componentes visuales).
@@ -131,6 +216,13 @@ export interface VoiceConfig {
     pitch: number;
     /** Volumen de voz (0.0 - 1.0, default 1.0) */
     volume: number;
+    /**
+     * Bandera de wake: true exige decir la palabra de activacion en cada frase
+     * (piso cerrado, para juntas/aula); false la deja abierta (piso abierto, 1 a 1).
+     * El configurador es el UNICO almacen de registro; el runtime la espeja en
+     * `FLU_CONFIG.voiceCommands.requireWakeAlways`, que lee `requiresWakeWord`.
+     */
+    requireWakeAlways?: boolean;
 }
 
 /**
@@ -317,18 +409,28 @@ export interface MinuteEntry {
  */
 export interface WorkspaceEntry {
     id: string;
+    /**
+     * Participante dueño del artefacto (aislamiento multiusuario del pizarrón).
+     * Se sella al establecer el artefacto con el participante activo; sin
+     * participante queda sin definir (ruta legacy/global).
+     */
+    personId?: string;
     /** Texto de la respuesta de FLU */
     respuesta: string;
     /** Título del contenido workspace (desde Gemini contract) */
     titulo?: string;
     /** Tipo de contenido workspace (desde Gemini contract) */
-    tipo?: 'text' | 'image_prompt' | 'diagram' | '3d' | null;
+    tipo?: WorkspaceTipo | null;
+    /** Modo de visualización del horario de clases (solo cuando tipo === 'horario') */
+    modo?: 'semana' | 'dia' | 'proxima' | 'recordatorios';
     /** Contenido textual del workspace (desde Gemini contract) */
     contenido?: string;
     /** Prompt visual para generación de imágenes (desde Gemini contract) */
     prompt_visual?: string;
     /** Puntos clave extraídos de la conversación */
     puntos_clave: string[];
+    /** Origen del contenido: 'web' (navegación/búsqueda) o 'ia' (respuesta de Gemini) */
+    origen?: 'web' | 'ia';
     /** Timestamp de generación */
     timestamp: number;
 }
@@ -356,6 +458,24 @@ export interface FluDiagnostics {
 }
 
 /**
+ * Acción estructurada emitida por la IA (el "cerebro conversacional") cuando el
+ * usuario pide, de forma natural, crear/consultar recordatorios, compras,
+ * alarmas, temporizadores, notas, diario u horario.
+ *
+ * La IA decide la INTENCIÓN (dominio) y deja el TEXTO del mandato tal como lo
+ * dijo el usuario; el despacho re-resuelve ese texto con los parsers
+ * deterministas (fuente de verdad del parseo temporal/preciso) y ejecuta el
+ * mismo manejador __fluHandle* que usa el modo offline. Así FLU es
+ * conversacional (la IA entiende y responde) pero la ejecución es precisa.
+ */
+export interface FluAccion {
+    /** Dominio al que pertenece la acción (calendario, compras, diario, nota). */
+    dominio: 'agenda' | 'shopping' | 'diary' | 'note';
+    /** Fragmento del mandato del usuario que dispara la acción (ej. "recuérdame comprar leche a las 7"). */
+    texto: string;
+}
+
+/**
  * FLU Contract — structured response from AI (Gemini).
  * Contains spoken response, navigation commands, and optional workspace content.
  */
@@ -368,11 +488,19 @@ export interface FluContract {
     };
     workspace: {
         titulo: string;
-        tipo: 'text' | 'image_prompt' | 'diagram' | '3d' | null;
+        tipo: 'text' | VisualTipo | null;
         contenido: string;
         prompt_visual: string;
         puntos_clave: string[];
     } | null;
+    /**
+     * Acciones estructuradas que la IA emite cuando el usuario pide, de forma
+     * conversacional, crear/consultar recordatorios, compras, alarmas,
+     * temporizadores, notas, diario u horario. Cada acción lleva el dominio y
+     * el texto del mandato; el despacho las ejecuta con los parsers
+     * deterministas (misma fuente de verdad que el modo offline).
+     */
+    acciones?: FluAccion[];
     /** Animación sugerida por Gemini para el avatar (darle vida) */
     animacion?: string;
     /** Expresión sugerida por Gemini para el avatar (darle vida) */
@@ -385,9 +513,22 @@ export interface FluContract {
      * público) en src/services/musicPlayer.ts (playSong).
      */
     musica?: {
-        accion: 'play_music' | 'pause_music' | 'stop_music';
+        accion: MusicAction;
         cancion?: string;
     };
+    /**
+     * Juego solicitado por el usuario. Lo emite la IA (igual que `musica`) y
+     * tambien el fast-path determinista. `normalizeJuego` lo valida contra el
+     * catalogo (gameId + accion) antes de applyGameAction.
+     */
+    juego?: {
+        gameId: string;
+        // `unavailable`: el juego pedido NO esta en el catalogo. Lo responde el
+        // dominio de juegos con la lista real (gameMenuNames) y no arranca nada:
+        // el LLM nunca puede anunciar una partida que no existe.
+        action: 'start' | 'turn' | 'end' | 'narrate' | 'menu' | 'switch' | 'unavailable';
+        playerText?: string;
+    } | null;
     /** Diagnostics metadata (OS2 parity) */
     diagnostics?: FluDiagnostics;
     /**

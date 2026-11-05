@@ -11,25 +11,56 @@
 // ============================================================
 
 import { useEffect, useRef } from 'react';
-import { fluDb, newSyncTuple } from '../core/db/fluDatabase';
+import { isLiveRecord } from '../core/db/recordCopy';
+import type { ConversationRow } from '../core/db/fluDatabase';
+import { buildSyncTuple } from '../core/db/syncTuple';
+import {
+    bulkPutConversationRecords,
+    leerConversacionesPorIds,
+    listarConversaciones,
+    softDeleteConversationRows,
+} from '../core/db/conversationRowWriter';
 import { useIntegrationStore } from '../store/integrationStore';
 import type { ConversationEntry } from '../types/bridge';
+import { logCaughtError } from '../lib/caughtError';
+import { SYSTEM_EVENT_PREFIX } from '../lib/systemEventLog';
+import { sessionSpeakerHighWater } from '../voice/api/identity';
 
 const MAX_LOADED_ROWS = 180; // OS2: conversationLogMax
 
 /**
+ * C8 — el escritor ÚNICO vive en `core/db/conversationRowWriter.ts`.
+ * App importa el borrado lógico desde aquí por compatibilidad; el punto de
+ * escritura sigue siendo el mismo (una sola fuente por intención).
+ */
+export { softDeleteConversationRows };
+
+/**
+ * Normaliza el campo `sentiment` persistido (string libre en la fila) al
+ * conjunto cerrado que admite `ConversationEntry`.
+ */
+function toConversationSentiment(value: string | undefined): ConversationEntry['sentiment'] {
+    if (value === 'positive' || value === 'negative' || value === 'neutral' || value === 'question') {
+        return value;
+    }
+    return undefined;
+}
+
+/**
  * Convert a DB ConversationRow to a ConversationEntry (store format).
  */
-function rowToEntry(row: any): ConversationEntry {
+function rowToEntry(row: ConversationRow): ConversationEntry {
     return {
         id: row.id,
         role: row.role,
         text: row.text,
         timestamp: row.timestamp,
-        sentiment: row.sentiment,
+        sentiment: toConversationSentiment(row.sentiment),
+        // La VOZ de la fila; el nombre se resuelve al MOSTRAR (no se persiste como dato).
+        speakerId: row.speakerId,
         speakerName: row.speakerName,
-        response: row.response || '',
-        meta: row.meta || (row.response ? { response: row.response } : undefined),
+        sessionId: row.sessionId,
+        meta: row.meta || undefined,
         signature: row.signature || null,
         phase: row.phase || '',
         navigation: row.navigation || null,
@@ -38,23 +69,113 @@ function rowToEntry(row: any): ConversationEntry {
 
 /**
  * Convert a ConversationEntry to a DB row format.
+ * @param entry Entrada del store.
+ * @param participantId Participante del scope actual.
+ * @param syncPrevio Tupla de la fila que ya existía (o `null`).
+ * @param existente Fila ya persistida; conserva los campos que la entrada no trae
+ *   (respuesta, firma, fase…) y evita perder `sessionId`.
  */
-function entryToRow(entry: ConversationEntry) {
-    return {
+function entryToRow(
+    entry: ConversationEntry,
+    participantId: string,
+    syncPrevio?: { revision: number; updated_at: string; deleted: boolean } | null,
+    existente?: ConversationRow | null,
+) {
+    const fila = {
         id: entry.id,
         role: entry.role,
         text: entry.text,
-        timestamp: entry.timestamp,
+        timestamp: existente?.timestamp ?? entry.timestamp,
         sentiment: entry.sentiment || '',
-        speakerId: entry.role === 'flu' ? 'flu' : (entry.speakerName || 'usuario'),
-        speakerName: entry.speakerName || (entry.role === 'flu' ? 'FLU' : 'Usuario'),
-        response: entry.response || '',
+        // La VOZ de la fila (el nombre se resuelve al MOSTRAR, no se persiste en el texto).
+        speakerId: entry.role === 'flu' ? 'flu' : (entry.speakerId || existente?.speakerId || 'usuario'),
+        // FLU/Sistema se identifican; una fila de usuario NO lleva nombre inventado.
+        speakerName: entry.role === 'flu' ? 'FLU' : (entry.speakerName || existente?.speakerName || ''),
+
         meta: entry.meta || null,
-        signature: entry.signature || null,
+        signature: entry.signature ?? existente?.signature ?? null,
         phase: entry.phase || '',
         navigation: entry.navigation || null,
-        sync: newSyncTuple(),
+        participantId: entry.personId || participantId,
+        sessionId: entry.sessionId || existente?.sessionId,
+        // REVISION QUE SE CONSERVA: la tupla incrementa sobre la fila que ya existe. Antes se
+        // reiniciaba en 1 en CADA escritura (auditoria 2026-10-22) y la sincronizacion perdia el
+        // rastro de las revisiones anteriores.
+        sync: buildSyncTuple(syncPrevio ?? undefined, Date.now()),
     };
+    if (!existente) return fila;
+    // La entrada es la vista PARCIAL del store: no borra lo que solo vive en la fila.
+    return {
+        ...existente,
+        ...fila,
+        // La fila del módulo es la fuente de verdad: la vista parcial del store
+        // no puede reponer evidencia/meta vieja sobre ella.
+        meta: existente?.meta ?? fila.meta ?? null,
+        sessionId: fila.sessionId || existente.sessionId,
+        sync: fila.sync,
+    };
+}
+
+/**
+ * Serializa un valor con las claves de objeto ordenadas recursivamente.
+ * Dos metadatos equivalentes con distinto orden de inserción (por ejemplo, tras
+ * parsear un backup) producen la MISMA cadena; los arrays conservan su orden
+ * porque ahí el orden es significativo. No es un deep-equal: compara contenido
+ * serializado de forma canónica.
+ * @param valor Valor a serializar.
+ * @returns Cadena canónica (misma entrada → misma salida).
+ */
+function serializarCanonica(valor: unknown): string {
+    if (valor === undefined) return 'null';
+    if (valor === null || typeof valor !== 'object') return JSON.stringify(valor) ?? 'null';
+    if (Array.isArray(valor)) {
+        return `[${valor.map((item) => serializarCanonica(item)).join(',')}]`;
+    }
+    const objeto = valor as Record<string, unknown>;
+    const claves = Object.keys(objeto)
+        .filter((clave) => objeto[clave] !== undefined)
+        .sort();
+    return `{${claves
+        .map((clave) => `${JSON.stringify(clave)}:${serializarCanonica(objeto[clave])}`)
+        .join(',')}}`;
+}
+
+/**
+ * ¿La fila persistida ya representa EXACTAMENTE esta entrada?
+ * Se usa con `engine: new` para no reescribir la fila que el módulo acaba de
+ * escribir (misma locución = una sola escritura). Un renombre de voz, una fila
+ * importada que falte o cualquier cambio real NO coinciden y sí se persisten.
+ */
+function mismaFilaPersistida(entry: ConversationEntry, row: ConversationRow): boolean {
+    const speakerId = entry.role === 'flu' ? 'flu' : (entry.speakerId || 'usuario');
+    const speakerName = entry.role === 'flu' ? 'FLU' : (entry.speakerName || '');
+    return (
+        row.role === entry.role &&
+        row.text === entry.text &&
+        Number(row.timestamp) === Number(entry.timestamp) &&
+        row.speakerId === speakerId &&
+        row.speakerName === speakerName &&
+        (row.sessionId || '') === (entry.sessionId || '') &&
+        serializarCanonica(row.meta || null) === serializarCanonica(entry.meta || null)
+    );
+}
+
+/**
+ * Decide si el hook debe persistir una entrada de usuario. Las filas del MODULO
+ * ya las escribio `cierre.ts` (fila completa); el store solo refleja el nombre
+ * cuando llega `speaker.labeled` con `persistSpeakerName=false`. Reescribirlas
+ * desde la vista parcial borraba meta/evidencia/timestamp (auditoria 2026-11-01).
+ * El renombre externo (`renombrarFilaDeUsuario`) llega con `persist` distinto de
+ * `false`, asi que sigue persistiendo.
+ */
+export function debePersistirEntrada(
+    entry: Pick<ConversationEntry, 'role' | 'persistSpeakerName'>,
+    row: { meta?: { origin?: string } | null } | null | undefined,
+): boolean {
+    if (!row) return true;
+    if (entry.role !== 'user') return true;
+    if (row.meta?.origin !== 'conversation-module') return true;
+    return entry.persistSpeakerName !== false;
 }
 
 /**
@@ -62,26 +183,49 @@ function entryToRow(entry: ConversationEntry) {
  * history on mount. Works with integrationStore.addUserMessage
  * and addFluMessage.
  */
-export function useConversationPersistence() {
+export function useConversationPersistence(participantId?: string) {
     const integrationStore = useIntegrationStore();
+    // Alcance por usuario: cada participante sólo ve SU conversación.
+    const scope = participantId || 'global';
     const loadedRef = useRef(false);
+    const loadedScopeRef = useRef<string>('');
+    // Último usuario REAL observado (independiente del bucket `'global'` de la DB).
+    const previousUserRef = useRef<string | undefined>(undefined);
 
-    // ---- Load persisted history on mount ----
+    // ---- Load persisted history on mount / al cambiar de usuario ----
     useEffect(() => {
-        if (loadedRef.current) return;
+        const previousUser = previousUserRef.current;
+        previousUserRef.current = participantId;
+
+        // Sin usuario real: NO se carga y —NUNCA— se borra la conversación EN VIVO.
+        // (Antes hacía batchLoadHistory([]) y borraba el turno recién dicho cuando
+        // el usuario real era transitorio, p. ej. durante el onboarding.)
+        if (!participantId) {
+            loadedRef.current = false;
+            loadedScopeRef.current = '';
+            return;
+        }
+        if (loadedRef.current && loadedScopeRef.current === scope) return;
         loadedRef.current = true;
+        loadedScopeRef.current = scope;
 
         (async () => {
             try {
-                const rows = await fluDb.conversations
-                    .orderBy('timestamp')
-                    .reverse()
-                    .limit(MAX_LOADED_ROWS)
-                    .toArray();
+                // Solo se vacía al cambiar entre DOS usuarios reales distintos
+                // (para no mezclar conversaciones). Hacia/desde "sin usuario" NO
+                // se toca lo que está en pantalla.
+                const switchedRealUser = Boolean(previousUser) && previousUser !== participantId;
+                if (switchedRealUser && useIntegrationStore.getState().conversationHistory.length > 0) {
+                    useIntegrationStore.getState().batchLoadHistory([]);
+                }
+                const rows = (await listarConversaciones())
+                    .filter((row) => (row.participantId || 'global') === scope && isLiveRecord(row))
+                    .sort((a, b) => a.timestamp - b.timestamp)
+                    .slice(-MAX_LOADED_ROWS);
 
                 if (rows.length > 0) {
-                    // Reverse back to chronological order
-                    const allEntries = rows.reverse().map(rowToEntry);
+                    // Ya vienen en orden cronológico (ascendente).
+                    const allEntries = rows.map(rowToEntry);
 
                     // Filter out system events (participant_ignored, etc.) so they
                     // don't reappear in the UI after a page reload. These are ephemeral
@@ -90,25 +234,19 @@ export function useConversationPersistence() {
                     // Also filter out any entries that contain system event text patterns,
                     // including Gemini's responses TO system events (which don't have
                     // meta.systemEvent marker but contain the emotional text).
-                    const SYSTEM_EVENT_PATTERNS = [
-                        '[FLU recuerda]',
-                        '[FLU remembers]',
-                        'Me enojé porque levanté la mano',
-                        'I got upset because I raised my hand',
-                        'Me siento realmente molesto y triste porque levanté la mano',
-                        'I feel really upset and sad because I raised my hand',
-                    ];
+                    // P9.83: el filtro es ESTRUCTURAL. Fuera la lista de literales (6 textos
+                    // que habia que mantener a mano y se rompia al reescribir una frase): se
+                    // descartan el PROPIO evento (marca `systemEvent`), su RESPUESTA (marca
+                    // `systemEventReply`, la pone el escritor unico) y, por compatibilidad con
+                    // filas ya guardadas, el texto que abre con el prefijo del dueno.
                     const entries = allEntries.filter((entry) => {
-                        if (entry.meta?.systemEvent) return false;
+                        if (entry.meta?.systemEvent || entry.meta?.systemEventReply) return false;
                         const text = entry.text || '';
-                        return !SYSTEM_EVENT_PATTERNS.some((pattern) =>
-                            text.includes(pattern)
-                        );
+                        return !text.includes(SYSTEM_EVENT_PREFIX.es) && !text.includes(SYSTEM_EVENT_PREFIX.en);
                     });
 
                     const filteredCount = allEntries.length - entries.length;
                     if (filteredCount > 0) {
-                        console.log(`[ConversationPersistence] Filtered out ${filteredCount} system event entries from loaded history`);
                         // Clean up the DB by removing these entries so they don't
                         // accumulate on future reloads
                         const idsToRemove = allEntries
@@ -116,8 +254,8 @@ export function useConversationPersistence() {
                             .map((e) => e.id)
                             .filter(Boolean);
                         if (idsToRemove.length > 0) {
-                            fluDb.conversations.bulkDelete(idsToRemove).catch((err) => {
-                                console.error('[ConversationPersistence] Error cleaning up system events from DB:', err);
+                            softDeleteConversationRows(idsToRemove).catch((err) => {
+                                logCaughtError('[ConversationPersistence] Error cleaning up system events from DB', err);
                             });
                         }
                     }
@@ -127,14 +265,23 @@ export function useConversationPersistence() {
                         // Use batchLoadHistory to set all entries at once
                         // without triggering side effects (TTS, state changes)
                         integrationStore.batchLoadHistory(entries);
-                        console.log(`[ConversationPersistence] Loaded ${entries.length} entries from DB`);
+
+                        // HIGH-WATER de la sesion tras restaurar: las filas llevan su clave
+                        // (`speaker_N`), asi que el siguiente numero no reutiliza uno usado.
+                        const restaurado = useIntegrationStore.getState();
+                        restaurado.noteSpeakerHighWater(
+                            sessionSpeakerHighWater({
+                                rows: restaurado.conversationHistory,
+                                epoch: restaurado.conversationEpoch,
+                            }),
+                        );
                     }
                 }
             } catch (err) {
-                console.error('[ConversationPersistence] Error loading history:', err);
+                logCaughtError('[ConversationPersistence] Error loading history', err);
             }
         })();
-    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [scope, integrationStore, participantId]);
 
     // ---- Save each new entry to DB ----
     // Subscribe to conversationHistory.length only (not the full array) to avoid
@@ -143,19 +290,81 @@ export function useConversationPersistence() {
     // Using a selector that returns the length ensures the component only
     // re-renders when entries are actually added or removed.
     const historyLength = useIntegrationStore((s) => s.conversationHistory.length);
+    const conversationEpoch = useIntegrationStore((s) => s.conversationEpoch);
     const savedLengthRef = useRef(historyLength);
+    const savedEpochRef = useRef(conversationEpoch);
+
+    // P4 - CONSOLIDACION: la fila se escribe en la base cuando se CONSOLIDA (su voz o su texto
+    // cambian: nombrar una voz, completar un fragmento), no solo al insertarse. Suscripcion SIN
+    // render (no toca el estado de React) y solo se suben las entradas que CAMBIARON de objeto.
+    useEffect(() => {
+        const persistidas = new Map<string, object>();
+        // Tupla de sync por fila: la escritura siguiente incrementa sobre la anterior.
+        const syncPorFila = new Map<string, { revision: number; updated_at: string; deleted: boolean }>();
+        const guardarCambiadas = (historial: ConversationEntry[]) => {
+            const cambiadas = historial.filter((e) => persistidas.get(String(e.id)) !== e);
+            if (!cambiadas.length) return;
+            cambiadas.forEach((e) => persistidas.set(String(e.id), e));
+            const persistir = async () => {
+                // La fila de usuario la escribe el módulo de conversación por el
+                // MISMO escritor. Solo se persiste si falta (import/backup) o si la
+                // entrada cambió de verdad (renombre de voz).
+                const ids = cambiadas.map((entry) => String(entry.id));
+                const existentes = new Map<string, ConversationRow>();
+                const filasGuardadas = await leerConversacionesPorIds(ids);
+                filasGuardadas.forEach((fila, indice) => {
+                    if (fila) existentes.set(ids[indice], fila);
+                });
+                const filas: ConversationRow[] = [];
+                for (const entry of cambiadas) {
+                    const id = String(entry.id);
+                    const existente = existentes.get(id) || null;
+                    if (entry.role === 'user' && existente) {
+                        if (!debePersistirEntrada(entry, existente)) continue;
+                        if (mismaFilaPersistida(entry, existente)) continue;
+                    }
+                    const previa = syncPorFila.get(id) || existente?.sync || null;
+                    const fila = entryToRow(entry, scope, previa, existente);
+                    syncPorFila.set(id, fila.sync);
+                    filas.push(fila);
+                }
+                if (!filas.length) return;
+                await bulkPutConversationRecords(filas);
+            };
+            persistir().catch((err) => {
+                logCaughtError('[ConversationPersistence] Error consolidando la fila', err);
+            });
+        };
+        guardarCambiadas(useIntegrationStore.getState().conversationHistory);
+        const soltar = useIntegrationStore.subscribe((estado) => guardarCambiadas(estado.conversationHistory));
+        return () => soltar();
+    }, [scope]);
 
     useEffect(() => {
-        if (historyLength > savedLengthRef.current) {
-            // New entries were added — batch save all at once
-            // Access the full history directly from the store to avoid stale closures
-            const fullHistory = useIntegrationStore.getState().conversationHistory;
-            const newEntries = fullHistory.slice(savedLengthRef.current);
-            const rows = newEntries.map(entryToRow);
-            fluDb.conversations.bulkPut(rows).catch((err) => {
-                console.error('[ConversationPersistence] Error saving entries:', err);
+        // UN SOLO ESCRITOR: la suscripcion de arriba ya persiste las entradas nuevas (y las
+        // consolidadas). Escribirlas tambien aqui era la MISMA fila dos veces por insercion
+        // (auditoria 2026-10-22). Este efecto solo mantiene el contador que usa el reset.
+        savedLengthRef.current = historyLength;
+    }, [historyLength, scope]);
+
+    // ---- Borrado explícito de lo persistido ----
+    // Se borra SOLO cuando el store anuncia un reset INTENCIONAL del historial
+    // (conversationEpoch: "iniciar conversación"/"limpiar"). Un historial vacío
+    // transitorio (onboarding, carga asíncrona) NO borra nada: ese efecto colateral
+    // era la causa de "me borra lo que digo".
+    useEffect(() => {
+        if (conversationEpoch === savedEpochRef.current) return;
+        savedEpochRef.current = conversationEpoch;
+        savedLengthRef.current = 0;
+        listarConversaciones()
+            .then((all) => {
+                const ids = all
+                    .filter((row) => (row.participantId || 'global') === scope && isLiveRecord(row))
+                    .map((row) => row.id);
+                return ids.length ? softDeleteConversationRows(ids) : undefined;
+            })
+            .catch((err) => {
+                logCaughtError('[ConversationPersistence] Error clearing persisted history', err);
             });
-            savedLengthRef.current = historyLength;
-        }
-    }, [historyLength]);
+    }, [conversationEpoch, scope]);
 }

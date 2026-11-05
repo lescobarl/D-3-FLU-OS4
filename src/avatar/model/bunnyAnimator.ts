@@ -52,16 +52,6 @@ const ANIMATION_PATHS: Record<string, string> = {
     'Dance': '/models/Animations/Bunny@Dance.fbx',
 };
 
-const ANIMATION_NAMES: BunnyAnimation[] = [
-    'Idle_1', 'Idle_2', 'Idle_3', 'Bind-pose',
-    'Walk', 'Walk_sneaky', 'Run', 'Jump_in_place', 'Jump_while_run',
-    'Emo_blink', 'Emo_neutral',
-    'Cap_back', 'Cap_front',
-    'Dance',
-    'MouthMove', // synthetic — no FBX file
-    'Palabra',  // synthetic — no FBX file
-];
-
 // ============================================================
 // shiftClipToZero — Desplaza todos los keyframes al origen
 // ============================================================
@@ -100,7 +90,6 @@ function shiftClipToZero(clip: THREE.AnimationClip): void {
 
     clip.duration -= minTime;
 
-    console.log(`[Animator] Shifted clip "${clip.name}" by ${minTime.toFixed(4)}s → new duration: ${clip.duration.toFixed(4)}s`);
 }
 
 // ============================================================
@@ -160,6 +149,72 @@ export class BunnyAnimator {
     /** Called each frame by useFrame to advance the mixer */
     update(delta: number): void {
         this.mixer.update(delta);
+    }
+
+    /**
+     * Clip por nombre: los sintéticos se generan al vuelo. Lanza si no existe
+     * (antes se asertaba con `!`, así que un clip ausente explotaba más tarde
+     * y con un error peor, dentro del mixer).
+     */
+    private resolveClip(name: BunnyAnimation): THREE.AnimationClip {
+        const clip = this.isSynthetic(name)
+            ? (name === 'MouthMove' ? this.ensureMouthClip() : this.ensurePalabraClip())
+            : this.clips.get(name) ?? null;
+        if (!clip) {
+            throw new Error(`[Animator] clip no disponible: ${name}`);
+        }
+        return clip;
+    }
+
+    /**
+     * Resuelve el clip de una animación sin lanzar (sintética o FBX precargada).
+     * Dueño unico de esa resolución: play/crossFadeTo/validación lo consumen.
+     * @param name Animación pedida.
+     * @returns Clip o null si no existe.
+     */
+    private findClip(name: BunnyAnimation): THREE.AnimationClip | null {
+        return this.isSynthetic(name)
+            ? (name === 'MouthMove' ? this.ensureMouthClip() : this.ensurePalabraClip())
+            : this.clips.get(name) ?? null;
+    }
+
+    /**
+     * Valida que todos los clips de la lista existan, avisando igual que antes.
+     * @param anims Animaciones a validar.
+     * @returns true si todas están disponibles.
+     */
+    private validateAnimations(anims: BunnyAnimation[]): boolean {
+        for (const name of anims) {
+            const sintetica = this.isSynthetic(name);
+            const disponible = sintetica ? this.findClip(name) !== null : this.clips.has(name);
+            if (!disponible) {
+                console.warn(sintetica
+                    ? `[Animator] Cannot create synthetic clip: ${name}`
+                    : `[Animator] Clip not preloaded: ${name}`);
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Crea las acciones de blend de `anims` desde `from`. Dueño unico del lazo.
+     * @param anims Animaciones ya validadas.
+     * @param from Índice desde el que se crean acciones de blend.
+     * @returns Acciones creadas y en reproducción.
+     */
+    private buildBlendActions(anims: BunnyAnimation[], from: number): THREE.AnimationAction[] {
+        const actions: THREE.AnimationAction[] = [];
+        for (let i = from; i < anims.length; i++) {
+            const clip = this.resolveClip(anims[i]);
+            const action = this.mixer.clipAction(clip);
+            action.reset();
+            action.setLoop(THREE.LoopRepeat, Infinity);
+            action.setEffectiveWeight(1.0);
+            action.play();
+            actions.push(action);
+        }
+        return actions;
     }
 
     /**
@@ -244,6 +299,7 @@ export class BunnyAnimator {
     private ensurePalabraClip(): THREE.AnimationClip | null {
         if (this.palabraClip) return this.palabraClip;
         if (!this.armRestPose) return null;
+        const rest = this.armRestPose;
 
         const duration = 2.0;
         const times = new Float32Array([0, 0.5, 2.0]);
@@ -269,27 +325,27 @@ export class BunnyAnimator {
         // Compute raised pose by applying scaled delta rotations to rest pose.
         // raisedPose = scaledDelta * restQuat (world-space delta)
         const raisedPose: ArmPose = {
-            clavicle_r: this.armRestPose!.clavicle_r.clone(),
+            clavicle_r: rest.clavicle_r.clone(),
             upperarm_r: (() => {
                 const capDelta = new THREE.Quaternion(
                     ...CAP_FRONT_DELTAS.upperarm_r);
                 const scaled = new THREE.Quaternion().slerpQuaternions(
                     IDENTITY, capDelta, SCALE);
-                return scaled.multiply(this.armRestPose!.upperarm_r);
+                return scaled.multiply(rest.upperarm_r);
             })(),
             lowerarm_r: (() => {
                 const capDelta = new THREE.Quaternion(
                     ...CAP_FRONT_DELTAS.lowerarm_r);
                 const scaled = new THREE.Quaternion().slerpQuaternions(
                     IDENTITY, capDelta, SCALE);
-                return scaled.multiply(this.armRestPose!.lowerarm_r);
+                return scaled.multiply(rest.lowerarm_r);
             })(),
             hand_r: (() => {
                 const capDelta = new THREE.Quaternion(
                     ...CAP_FRONT_DELTAS.hand_r);
                 const scaled = new THREE.Quaternion().slerpQuaternions(
                     IDENTITY, capDelta, SCALE);
-                return scaled.multiply(this.armRestPose!.hand_r);
+                return scaled.multiply(rest.hand_r);
             })(),
         };
 
@@ -352,18 +408,11 @@ export class BunnyAnimator {
                             if (name === 'Idle_2' || name === 'Emo_blink') {
                                 for (const track of clip.tracks) {
                                     if (track.name === 'jaw_01.quaternion' && track.times.length > 0) {
-                                        const quat = new THREE.Quaternion(
-                                            track.values[0],
-                                            track.values[1],
-                                            track.values[2],
-                                            track.values[3],
-                                        );
+                                        const quat = this.quatFromTrack(track);
                                         if (name === 'Idle_2') {
                                             this.mouthClosedPose = { jawQuat: quat };
-                                            console.log(`[Animator] Mouth CLOSED pose (Idle_2): [${quat.toArray().map(v => v.toFixed(4)).join(', ')}]`);
                                         } else {
                                             this.mouthOpenPose = { jawQuat: quat };
-                                            console.log(`[Animator] Mouth OPEN pose (Emo_blink): [${quat.toArray().map(v => v.toFixed(4)).join(', ')}]`);
                                         }
                                     }
                                 }
@@ -381,23 +430,13 @@ export class BunnyAnimator {
                                 for (const track of clip.tracks) {
                                     for (const boneName of armBoneNames) {
                                         if (track.name === `${boneName}.quaternion` && track.times.length > 0) {
-                                            armQuats[boneName] = new THREE.Quaternion(
-                                                track.values[0],
-                                                track.values[1],
-                                                track.values[2],
-                                                track.values[3],
-                                            );
+                                            armQuats[boneName] = this.quatFromTrack(track);
                                         }
                                     }
                                 }
-                                if (armQuats.clavicle_r && armQuats.upperarm_r && armQuats.lowerarm_r && armQuats.hand_r) {
-                                    this.armRestPose = {
-                                        clavicle_r: armQuats.clavicle_r!,
-                                        upperarm_r: armQuats.upperarm_r!,
-                                        lowerarm_r: armQuats.lowerarm_r!,
-                                        hand_r: armQuats.hand_r!,
-                                    };
-                                    console.log(`[Animator] Arm REST pose (Idle_2): clavicle_r=[${armQuats.clavicle_r!.toArray().map(v => v.toFixed(4)).join(', ')}], upperarm_r=[${armQuats.upperarm_r!.toArray().map(v => v.toFixed(4)).join(', ')}], lowerarm_r=[${armQuats.lowerarm_r!.toArray().map(v => v.toFixed(4)).join(', ')}], hand_r=[${armQuats.hand_r!.toArray().map(v => v.toFixed(4)).join(', ')}]`);
+                                const { clavicle_r, upperarm_r, lowerarm_r, hand_r } = armQuats;
+                                if (clavicle_r && upperarm_r && lowerarm_r && hand_r) {
+                                    this.armRestPose = { clavicle_r, upperarm_r, lowerarm_r, hand_r };
                                 }
                             }
                         }
@@ -437,17 +476,7 @@ export class BunnyAnimator {
      * Los IK/FK bones se agregan desde el caché.
      */
     play(name: BunnyAnimation): boolean {
-        let clip: THREE.AnimationClip | null = null;
-
-        if (this.isSynthetic(name)) {
-            if (name === 'MouthMove') {
-                clip = this.ensureMouthClip();
-            } else if (name === 'Palabra') {
-                clip = this.ensurePalabraClip();
-            }
-        } else {
-            clip = this.clips.get(name) || null;
-        }
+        const clip = this.findClip(name);
 
         if (!clip) {
             console.warn(`[Animator] Clip not available: ${name}`);
@@ -457,22 +486,14 @@ export class BunnyAnimator {
         // Stop all current actions (both main and blend)
         this.stopAllActions();
 
-        // Remove previously added animation bones
-        this.clearAnimBones();
-
-        // Add cached IK/FK bones to the model (instant, no FBX reload)
-        this.ensureAnimBones();
-
-        // Create and play action
-        const action = this.mixer.clipAction(clip);
-        action.reset();
-        action.setLoop(THREE.LoopRepeat, Infinity);
+        // Crea y prepara la acción con el dueño único (huesos + loop + peso)
+        const action = this.prepareMainAction([name]);
         action.play();
 
         this.currentAction = action;
 
         this.onLog(`[Animator] Playing: ${name} (${clip.duration.toFixed(2)}s, ${clip.tracks.length} tracks)` +
-            (this.animBones.length > 0 ? `, ${this.animBones.length} IK/FK bones added` : ''));
+            this.boneSuffix());
 
         return true;
     }
@@ -481,6 +502,49 @@ export class BunnyAnimator {
      * Reproduce 2 animaciones simultáneamente (blending).
      * Soporta animaciones FBX y sintéticas (MouthMove).
      */
+    /**
+     * Cuaternión a partir de los cuatro valores de una pista.
+     * @param track Pista de rotación.
+     * @returns Cuaternión de la pista.
+     */
+    private quatFromTrack(track: THREE.VectorKeyframeTrack): THREE.Quaternion {
+        return new THREE.Quaternion(track.values[0], track.values[1], track.values[2], track.values[3]);
+    }
+
+    /**
+     * Valida una lista de animaciones para blending.
+     * @param anims Lista de animaciones.
+     * @returns true si la lista es válida.
+     */
+    private validBlendList(anims: BunnyAnimation[]): boolean {
+        return anims.length > 0 && this.validateAnimations(anims);
+    }
+
+    /**
+     * Sufijo de log con el número de huesos animados.
+     * @returns Texto del sufijo.
+     */
+    private boneSuffix(): string {
+        return this.animBones.length > 0 ? `, ${this.animBones.length} IK/FK bones added` : '';
+    }
+
+    /**
+     * Prepara la acción principal de una lista: refresca huesos y crea/reinicia
+     * la acción del primer clip. Dueño único que comparten play y cross-fade.
+     * @param anims Animaciones ya validadas.
+     * @returns Acción principal lista para play/cross-fade.
+     */
+    private prepareMainAction(anims: BunnyAnimation[]): THREE.AnimationAction {
+        this.clearAnimBones();
+        this.ensureAnimBones();
+        const firstClip = this.resolveClip(anims[0]);
+        const mainAction = this.mixer.clipAction(firstClip);
+        mainAction.reset();
+        mainAction.setLoop(THREE.LoopRepeat, Infinity);
+        mainAction.setEffectiveWeight(1.0);
+        return mainAction;
+    }
+
     playBlended(bodyAnim: BunnyAnimation, faceAnim: BunnyAnimation): boolean {
         return this.playBlendedList([bodyAnim, faceAnim]);
     }
@@ -491,64 +555,19 @@ export class BunnyAnimator {
      * Cada animación se reproduce como una acción independiente en el mixer.
      */
     playBlendedList(anims: BunnyAnimation[]): boolean {
-        if (anims.length === 0) return false;
-
-        // Validate all clips are available
-        for (const name of anims) {
-            if (this.isSynthetic(name)) {
-                if (name === 'MouthMove') {
-                    if (!this.ensureMouthClip()) {
-                        console.warn(`[Animator] Cannot create synthetic clip: ${name}`);
-                        return false;
-                    }
-                } else if (name === 'Palabra') {
-                    if (!this.ensurePalabraClip()) {
-                        console.warn(`[Animator] Cannot create synthetic clip: ${name}`);
-                        return false;
-                    }
-                }
-            } else if (!this.clips.has(name)) {
-                console.warn(`[Animator] Clip not preloaded: ${name}`);
-                return false;
-            }
-        }
+        if (!this.validBlendList(anims)) return false;
 
         // Stop all current actions
         this.stopAllActions();
 
-        // Remove previously added animation bones
-        this.clearAnimBones();
-
-        // Add cached IK/FK bones to the model
-        this.ensureAnimBones();
-
-        // --- First animation: main action ---
-        const firstClip = this.isSynthetic(anims[0])
-            ? (anims[0] === 'MouthMove' ? this.ensureMouthClip()! : this.ensurePalabraClip()!)
-            : this.clips.get(anims[0])!;
-        const mainAction = this.mixer.clipAction(firstClip);
-        mainAction.reset();
-        mainAction.setLoop(THREE.LoopRepeat, Infinity);
-        mainAction.setEffectiveWeight(1.0);
+        const mainAction = this.prepareMainAction(anims);
         mainAction.play();
         this.currentAction = mainAction;
 
         // --- Remaining animations: blend actions ---
-        this.blendActions = [];
-        for (let i = 1; i < anims.length; i++) {
-            const clip = this.isSynthetic(anims[i])
-                ? (anims[i] === 'MouthMove' ? this.ensureMouthClip()! : this.ensurePalabraClip()!)
-                : this.clips.get(anims[i])!;
-            const action = this.mixer.clipAction(clip);
-            action.reset();
-            action.setLoop(THREE.LoopRepeat, Infinity);
-            action.setEffectiveWeight(1.0);
-            action.play();
-            this.blendActions.push(action);
-        }
+        this.blendActions = this.buildBlendActions(anims, 1);
 
-        this.onLog(`[Animator] Blended: ${anims.join(' + ')}` +
-            (this.animBones.length > 0 ? `, ${this.animBones.length} IK/FK bones added` : ''));
+        this.onLog(`[Animator] Blended: ${anims.join(' + ')}` + this.boneSuffix());
 
         return true;
     }
@@ -559,28 +578,15 @@ export class BunnyAnimator {
      * over `fadeDuration` seconds using THREE.AnimationMixer cross-fade.
      */
     crossFadeTo(name: BunnyAnimation, fadeDuration: number = 0.3): boolean {
-        let clip: THREE.AnimationClip | null = null;
-
-        if (this.isSynthetic(name)) {
-            if (name === 'MouthMove') {
-                clip = this.ensureMouthClip();
-            } else if (name === 'Palabra') {
-                clip = this.ensurePalabraClip();
-            }
-        } else {
-            clip = this.clips.get(name) || null;
-        }
+        const clip = this.findClip(name);
 
         if (!clip) {
             console.warn(`[Animator] Clip not available for cross-fade: ${name}`);
             return false;
         }
 
-        // Create the new action
-        const newAction = this.mixer.clipAction(clip);
-        newAction.reset();
-        newAction.setLoop(THREE.LoopRepeat, Infinity);
-        newAction.setEffectiveWeight(1.0);
+        // Create the new action with the single owner (bones + loop + weight)
+        const newAction = this.prepareMainAction([name]);
 
         // If there's a current action, cross-fade from it
         if (this.currentAction) {
@@ -607,27 +613,7 @@ export class BunnyAnimator {
      * Smoothly transitions from current blend to the new blend.
      */
     crossFadeToBlended(anims: BunnyAnimation[], fadeDuration: number = 0.3): boolean {
-        if (anims.length === 0) return false;
-
-        // Validate all clips are available
-        for (const name of anims) {
-            if (this.isSynthetic(name)) {
-                if (name === 'MouthMove') {
-                    if (!this.ensureMouthClip()) {
-                        console.warn(`[Animator] Cannot create synthetic clip: ${name}`);
-                        return false;
-                    }
-                } else if (name === 'Palabra') {
-                    if (!this.ensurePalabraClip()) {
-                        console.warn(`[Animator] Cannot create synthetic clip: ${name}`);
-                        return false;
-                    }
-                }
-            } else if (!this.clips.has(name)) {
-                console.warn(`[Animator] Clip not preloaded: ${name}`);
-                return false;
-            }
-        }
+        if (!this.validBlendList(anims)) return false;
 
         // Stop old blend actions FIRST to avoid Three.js clipAction() cache conflict.
         // Three.js AnimationMixer.clipAction() returns a CACHED AnimationAction for the
@@ -640,18 +626,7 @@ export class BunnyAnimator {
         }
         this.blendActions = [];
 
-        // Remove previously added animation bones
-        this.clearAnimBones();
-        this.ensureAnimBones();
-
-        // --- First animation: main action ---
-        const firstClip = this.isSynthetic(anims[0])
-            ? (anims[0] === 'MouthMove' ? this.ensureMouthClip()! : this.ensurePalabraClip()!)
-            : this.clips.get(anims[0])!;
-        const mainAction = this.mixer.clipAction(firstClip);
-        mainAction.reset();
-        mainAction.setLoop(THREE.LoopRepeat, Infinity);
-        mainAction.setEffectiveWeight(1.0);
+        const mainAction = this.prepareMainAction(anims);
 
         // Cross-fade main action if there's a current action
         if (this.currentAction) {
@@ -661,18 +636,7 @@ export class BunnyAnimator {
         mainAction.play();
 
         // --- Remaining animations: blend actions ---
-        const newBlendActions: THREE.AnimationAction[] = [];
-        for (let i = 1; i < anims.length; i++) {
-            const clip = this.isSynthetic(anims[i])
-                ? (anims[i] === 'MouthMove' ? this.ensureMouthClip()! : this.ensurePalabraClip()!)
-                : this.clips.get(anims[i])!;
-            const action = this.mixer.clipAction(clip);
-            action.reset();
-            action.setLoop(THREE.LoopRepeat, Infinity);
-            action.setEffectiveWeight(1.0);
-            action.play();
-            newBlendActions.push(action);
-        }
+        const newBlendActions = this.buildBlendActions(anims, 1);
 
         this.currentAction = mainAction;
         this.blendActions = newBlendActions;

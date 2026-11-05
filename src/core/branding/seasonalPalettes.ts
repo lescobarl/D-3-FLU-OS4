@@ -33,6 +33,61 @@ export interface Palette {
     cssClass?: string;
 }
 
+/**
+ * Definición de paleta con id canónico (slug). Es la forma con la que
+ * operan los catálogos dinámicos (tabla `paletas`) y la caché fusionada
+ * de built-ins + dinámicas (B2).
+ */
+export type PaletteDefinition = Palette & { id: string };
+
+/**
+ * Claves canónicas del set de variables CSS de una paleta (13). Se derivan
+ * de Palette y sirven como contrato de validación (B1): una paleta dinámica
+ * debe contener EXACTAMENTE estas claves, cada una con valor #RRGGBB.
+ */
+export const PALETTE_COLOR_KEYS = [
+    '--bg-primary',
+    '--bg-secondary',
+    '--bg-tertiary',
+    '--bg-card',
+    '--text-primary',
+    '--text-secondary',
+    '--text-muted',
+    '--accent-cyan',
+    '--accent-green',
+    '--accent-orange',
+    '--accent-red',
+    '--accent-pink',
+    '--border-color',
+] as const;
+
+/** Colores compartidos de las paletas cálidas (muertos/madres). */
+const WARM_SHARED = {
+    '--bg-secondary': '#2e1a2e',
+    '--bg-tertiary': '#1a0f1a',
+    '--bg-card': '#362036',
+    '--text-primary': '#e0e0e0',
+    '--text-secondary': '#aa88aa',
+    '--text-muted': '#553355',
+    '--accent-orange': '#ffaa00',
+    '--accent-red': '#ff4444',
+} satisfies Partial<Palette['colors']>;
+
+/** Colores compartidos de las paletas verdes (patrio/san patricio). */
+const GREEN_SHARED = {
+    '--bg-secondary': '#1a2e1a',
+    '--bg-tertiary': '#0f1a0f',
+    '--bg-card': '#1e361e',
+    '--text-primary': '#e0e0e0',
+    '--text-secondary': '#88aa88',
+    '--text-muted': '#335533',
+    '--accent-cyan': '#00ff88',
+    '--accent-orange': '#ffaa00',
+    '--accent-red': '#ff4444',
+    '--accent-pink': '#ff66ff',
+    '--border-color': '#2a4a2a',
+} satisfies Partial<Palette['colors']>;
+
 // ============================================================
 // Paletas predefinidas
 // ============================================================
@@ -91,16 +146,9 @@ export const PALETTES: Record<string, Palette> = {
         name: 'Día de Muertos',
         colors: {
             '--bg-primary': '#0f0f1a',
-            '--bg-secondary': '#2e1a2e',
-            '--bg-tertiary': '#1a0f1a',
-            '--bg-card': '#362036',
-            '--text-primary': '#e0e0e0',
-            '--text-secondary': '#aa88aa',
-            '--text-muted': '#553355',
+            ...WARM_SHARED,
             '--accent-cyan': '#ff6600',
             '--accent-green': '#ff8800',
-            '--accent-orange': '#ffaa00',
-            '--accent-red': '#ff4444',
             '--accent-pink': '#ff66ff',
             '--border-color': '#4a2a4a',
         },
@@ -115,18 +163,8 @@ export const PALETTES: Record<string, Palette> = {
         name: 'Patrio',
         colors: {
             '--bg-primary': '#0f1a0f',
-            '--bg-secondary': '#1a2e1a',
-            '--bg-tertiary': '#0f1a0f',
-            '--bg-card': '#1e361e',
-            '--text-primary': '#e0e0e0',
-            '--text-secondary': '#88aa88',
-            '--text-muted': '#335533',
-            '--accent-cyan': '#00ff88',
+            ...GREEN_SHARED,
             '--accent-green': '#ff4444',
-            '--accent-orange': '#ffaa00',
-            '--accent-red': '#ff4444',
-            '--accent-pink': '#ff66ff',
-            '--border-color': '#2a4a2a',
         },
         decoration: 'flag',
         cssClass: 'season-patrio',
@@ -305,18 +343,8 @@ export const PALETTES: Record<string, Palette> = {
         name: 'San Patricio',
         colors: {
             '--bg-primary': '#0f1a0f',
-            '--bg-secondary': '#1a2e1a',
-            '--bg-tertiary': '#0f1a0f',
-            '--bg-card': '#1e361e',
-            '--text-primary': '#e0e0e0',
-            '--text-secondary': '#88aa88',
-            '--text-muted': '#335533',
-            '--accent-cyan': '#00ff88',
+            ...GREEN_SHARED,
             '--accent-green': '#ffd700',
-            '--accent-orange': '#ffaa00',
-            '--accent-red': '#ff4444',
-            '--accent-pink': '#ff66ff',
-            '--border-color': '#2a4a2a',
         },
         decoration: 'clover',
         cssClass: 'season-san-patricio',
@@ -376,16 +404,9 @@ export const PALETTES: Record<string, Palette> = {
         name: 'Día de las Madres',
         colors: {
             '--bg-primary': '#1a0f1a',
-            '--bg-secondary': '#2e1a2e',
-            '--bg-tertiary': '#1a0f1a',
-            '--bg-card': '#362036',
-            '--text-primary': '#e0e0e0',
-            '--text-secondary': '#aa88aa',
-            '--text-muted': '#553355',
+            ...WARM_SHARED,
             '--accent-cyan': '#ff88cc',
             '--accent-green': '#ff69b4',
-            '--accent-orange': '#ffaa00',
-            '--accent-red': '#ff4444',
             '--accent-pink': '#ff99ff',
             '--border-color': '#4a2a4a',
         },
@@ -542,11 +563,58 @@ export const PALETTES: Record<string, Palette> = {
 // Helpers
 // ============================================================
 
+// -----------------------------------------------------------
+// Caché fusionada (built-ins + dinámicas) — recargable tras mutación
+// -----------------------------------------------------------
+// PALETTES es un Record<string, Palette> sin id; la caché arranca con una
+// lista DERIVADA de entries (id + palette) y se sustituye por una NUEVA
+// lista fusionada al hidratar/CRUD dinámico (B2). Nunca se muta PALETTES.
+
+/** Lista de built-ins como PaletteDefinition (derivada de PALETTES, no hardcode). */
+const builtinEntries: readonly PaletteDefinition[] = Object.entries(PALETTES).map(([id, palette]) => ({
+    id,
+    ...palette,
+}));
+
+let mergedPalettesCache: readonly PaletteDefinition[] = builtinEntries;
+
+/** Sustituye la caché fusionada (usado por la hidratación del catálogo dinámico). */
+export function setMergedPalettes(palettes: readonly PaletteDefinition[]): void {
+    mergedPalettesCache = palettes;
+}
+
+/** Restaura la caché al catálogo built-in (reset/limpieza). */
+export function resetMergedPalettes(): void {
+    mergedPalettesCache = builtinEntries;
+}
+
+/** Lista completa de paletas (built-ins + dinámicas fusionadas). */
+export function getFusedPalettes(): readonly PaletteDefinition[] {
+    return mergedPalettesCache;
+}
+
+/** Paletas built-in como PaletteDefinition (para mergeCatalog desde el catálogo). */
+export function builtinPaletteEntries(): readonly PaletteDefinition[] {
+    return builtinEntries;
+}
+
+/** Todas las paletas del catálogo (built-ins + dinámicas) en orden canónico. */
+export function getAllPalettes(): readonly PaletteDefinition[] {
+    return mergedPalettesCache;
+}
+
+/** Keys (ids canónicos) de todas las paletas del catálogo fusionado. */
+export function getPaletteKeys(): readonly string[] {
+    return mergedPalettesCache.map((palette) => palette.id);
+}
+
 /**
- * Obtiene una paleta por su key. Si no existe, devuelve la paleta default.
+ * Obtiene una paleta por su key (id). Resuelve contra la caché fusionada
+ * (built-ins + dinámicas). Si no existe, devuelve la paleta default.
  */
 export function getPalette(key: string): Palette {
-    return PALETTES[key] || PALETTES.default;
+    const palette = mergedPalettesCache.find((entry) => entry.id === key);
+    return palette ?? PALETTES.default;
 }
 
 /**
@@ -597,7 +665,7 @@ export function applyPaletteToCSS(palette: Palette): void {
     // Agregar/quitar clase CSS de temporada para animaciones
     if (palette.cssClass) {
         // Remover clases de temporada anteriores
-        for (const existing of Object.values(PALETTES)) {
+        for (const existing of getFusedPalettes()) {
             if (existing.cssClass) {
                 for (const scope of scopes) {
                     scope.classList.remove(existing.cssClass);

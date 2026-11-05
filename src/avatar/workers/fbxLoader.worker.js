@@ -1,7 +1,7 @@
 /**
  * Web Worker de parseo FBX.
  *
- * Recibe { id, url }, descarga el buffer y ejecuta parseFbxBuffer (que usa
+ * Recibe { id, url }, descarga el buffer y ejecuta fetchFbxJson (que usa
  * THREE.FBXLoader.parse — síncrono) FUERA del hilo principal. Devuelve el
  * árbol serializado (group.toJSON()) para reconstruir con THREE.ObjectLoader
  * en el hilo principal.
@@ -13,19 +13,16 @@
  * Archivo `.js` a propósito: coincide con la convención de voiceId.worker.js y
  * evita que tsc (lib DOM-only) tipifique el contexto de worker.
  */
-import { parseFbxBuffer } from '../lib/fbxParse';
+import { fetchFbxJson } from '../lib/fbxParse';
+import { logCaughtError } from '../../lib/caughtError';
 
 self.onmessage = async (event) => {
   const { id, url } = event.data || {};
   try {
-    const response = await fetch(url);
-    if (!response.ok) {
-      throw new Error(`fetch FBX falló: HTTP ${response.status} para ${url}`);
-    }
-    const buffer = await response.arrayBuffer();
-    const group = parseFbxBuffer(buffer, url);
-    self.postMessage({ id, ok: true, json: group.toJSON() });
+    const json = await fetchFbxJson(url);
+    self.postMessage({ id, ok: true, json });
   } catch (err) {
+        logCaughtError('[catch] src/avatar/workers/fbxLoader.worker.js', err);
     self.postMessage({
       id,
       ok: false,

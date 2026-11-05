@@ -11,9 +11,10 @@
 // ============================================================
 
 import { useCallback, useEffect, useMemo } from 'react';
-import { useSeasonalBranding, type BrandingConfig, type SeasonalBrandingState } from './useSeasonalBranding';
-import { getPalette, applyPaletteToCSS, toggleBrandingClass, type Palette } from './seasonalPalettes';
+import { useSeasonalBranding, type SeasonalBrandingState } from './useSeasonalBranding';
+import { getPalette, applyPaletteToCSS, toggleBrandingClass } from './seasonalPalettes';
 import { getPreferredAIProvider, type AIProvider } from '../../services/aiServiceFactory';
+import { isTextEngineProvider } from '../../core/config/sharedConfig';
 
 // ============================================================
 // Types
@@ -64,7 +65,7 @@ export function useEnhancedBranding(): EnhancedBrandingState & EnhancedBrandingA
         const specialSeasons = ['navidad', 'halloween', 'muertos', 'patrio', 'infantil'];
         const isSpecialSeason = specialSeasons.includes(seasonalBranding.config.activeSeason);
         
-        return (aiProvider === 'openrouter' || aiProvider === 'deepseek') &&
+        return isTextEngineProvider(aiProvider) &&
                seasonalBranding.config.mode === 'auto' &&
                !isSpecialSeason;
     }, [aiProvider, seasonalBranding.config.mode, seasonalBranding.config.activeSeason]);
@@ -135,20 +136,7 @@ export function useEnhancedBranding(): EnhancedBrandingState & EnhancedBrandingA
 // Helper: Obtener mensaje de branding ecológico
 // ============================================================
 
-export function getEcologicalBrandingMessage(language: 'es' | 'en' = 'es'): string {
-    if (language === 'en') {
-        return '🌱 Using DeepSeek: 72% cheaper, 2-3x faster, 60% less CO₂ emissions';
-    }
-    return '🌱 Usando DeepSeek: 72% más barato, 2-3x más rápido, 60% menos emisiones de CO₂';
-}
-
 // ============================================================
 // Helper: Verificar si el pizarrón verde está activo
 // ============================================================
-
-export function isGreenBoardActive(): boolean {
-    // El pizarrón verde siempre está activo en el tab de workspace
-    // Verificamos si el elemento existe en el DOM
-    const workspaceTab = document.querySelector('.flu-tab-panel--workspace');
-    return workspaceTab !== null;
-}
+

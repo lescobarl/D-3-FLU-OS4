@@ -1,29 +1,20 @@
 import { computeSpeakerEmbedding } from './speakerEmbedding.js'
 import { FLU_CONFIG } from './fluConfig.js'
+import { echoChunkCovers, echoCoverageFloor, resolveEchoSources } from './echoPolicy.js'
 import { detectParticipantFloorCommand } from './participantFloor.js'
-import { looksLikeTrailingFragment, mergeTranscriptText } from './transcriptDelta.js'
+import { compareCosineSignatures, normalizeEmbeddingVector } from './speakerCore.js'
+import { buildWakeWordPattern } from './wakeWord.js'
+import { cleanForSpeech, normalizeSpaces, stripDiacriticsLower as stripDiacritics } from '../../lib/textUtils.ts'
+import { SPEECH_LOCALES, normalizeLang } from '../../core/config/localeConfig.ts'
+import { DEFAULT_SAMPLE_RATE } from './audioConstants.js'
+import { COMMAND_IDS } from './commandIds.js'
+import { isTutoringGlobalProgressQuery, isTutoringProgressQuery, isTutoringReviewQuery } from '../../core/tutoring/tutoringModel.ts'
+import { CONFIRMATION_SUFFIXES } from '../../lib/confirmationSuffix.ts'
 
-const ACCENT_MAP = {
-  á: 'a',
-  é: 'e',
-  í: 'i',
-  ó: 'o',
-  ú: 'u',
-  ü: 'u',
-  ñ: 'n',
-}
-
-export function stripDiacritics(text = '') {
-  return String(text)
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[áéíóúüñ]/g, (char) => ACCENT_MAP[char] || char)
-}
-
-export function normalizeSpaces(text = '') {
-  return String(text).replace(/\s+/g, ' ').trim()
-}
+// Fuente única de normalización de espacios y del plegado NFD
+// (src/lib/textUtils.ts). `stripDiacritics` se re-exporta con el contrato
+// histórico de este módulo (minúsculas) sin definir algoritmo propio.
+export { cleanForSpeech, normalizeSpaces, stripDiacritics }
 
 export function detectTranscriptLanguage(text = '') {
   const normalized = stripDiacritics(text)
@@ -62,43 +53,15 @@ export function detectTranscriptLanguage(text = '') {
 export function resolveAppLanguage(mode = 'es', text = '') {
   const normalized = String(mode || '').trim()
   if (normalized === 'en' || normalized === 'es') return normalized
-  if (normalized === 'both') return detectTranscriptLanguage(text) || 'es'
+  if (normalized === 'both') return normalizeLang(detectTranscriptLanguage(text))
   return 'es'
-}
-
-export function looksLikeEchoResponse(responseText = '', transcriptText = '') {
-  const response = stripDiacritics(normalizeSpaces(responseText))
-  const transcript = stripDiacritics(normalizeSpaces(transcriptText))
-  if (!response || !transcript) return true
-  if (response === transcript) return true
-
-  const responseTokens = response.split(' ').filter(Boolean)
-  const transcriptTokens = new Set(transcript.split(' ').filter(Boolean))
-  if (!responseTokens.length || !transcriptTokens.size) return true
-
-  let overlap = 0
-  responseTokens.forEach((token) => {
-    if (transcriptTokens.has(token)) overlap += 1
-  })
-
-  const overlapRatio = overlap / responseTokens.length
-  return overlapRatio >= 0.55 || responseTokens.length < 3
 }
 
 export function isVisualRequestText(text = '') {
   const normalized = cleanForSpeech(String(text || ''))
   if (!normalized) return false
-  return /\b(im[aá]gen(?:es)?|fotos?|image|visual|diagrama|diagram|illustration|ilustraci[oó]n|grafico|gr[aá]fico|dibuj\w*|render)\b/i.test(
+  return /\b(im[aá]gen(?:es)?|fotos?|images?|photos?|pictures?|image|visual|diagrama|diagram|illustration|ilustraci[oó]n|grafico|gr[aá]fico|dibuj\w*|render)\b/i.test(
     normalized,
-  )
-}
-
-export function cleanForSpeech(text = '') {
-  return normalizeSpaces(
-    String(text)
-      .replace(/[\n\r]+/g, ' ')
-      .replace(/[*_`~>#-]+/g, ' ')
-      .replace(/\s+/g, ' '),
   )
 }
 
@@ -110,29 +73,44 @@ export function normalizeVoiceCommandText(text = '') {
   )
 }
 
-function levenshteinDistance(left = '', right = '') {
-  const a = String(left)
-  const b = String(right)
-  if (!a.length) return b.length
-  if (!b.length) return a.length
+// Palabras vacías mínimas (es/en) para comparar acciones LLM contra el
+// transcript del turno: no aportan contenido y solo añadirían ruido.
+const COMMAND_STOPWORDS = new Set([
+  'a', 'al', 'la', 'las', 'el', 'los', 'lo', 'le', 'les', 'de', 'del', 'para', 'por',
+  'con', 'sin', 'en', 'y', 'o', 'u', 'que', 'una', 'un', 'unos', 'unas', 'hoy',
+  'the', 'and', 'for', 'to', 'of', 'in', 'on', 'at', 'an', 'a',
+])
 
-  const matrix = Array.from({ length: a.length + 1 }, (_, row) => [row])
-  for (let column = 1; column <= b.length; column += 1) {
-    matrix[0][column] = column
-  }
+/**
+ * Determina si el `texto` de una acción emitida por el LLM pertenece al
+ * turno actual (transcript). El contrato exige que accion.texto sea un
+ * fragmento del mandato del usuario; al validarlo se evita re-ejecutar
+ * acciones de turnos ANTERIORES que el LLM repita por el contexto (Bug #5).
+ * Heurística: solape de tokens significativos (sin acentos/puntuación y sin
+ * stopwords). Devuelve true si el texto es subcadena del transcript o si
+ * comparten al menos un token significativo real.
+ */
+export function actionBelongsToTranscript(actionText = '', transcript = '', wakeWords = []) {
+  const action = String(actionText || '').trim()
+  const spoken = String(transcript || '').trim()
+  if (!action) return false
+  if (!spoken) return true // sin transcript no hay base para descartar
 
-  for (let row = 1; row <= a.length; row += 1) {
-    for (let column = 1; column <= b.length; column += 1) {
-      const substitutionCost = a[row - 1] === b[column - 1] ? 0 : 1
-      matrix[row][column] = Math.min(
-        matrix[row - 1][column] + 1,
-        matrix[row][column - 1] + 1,
-        matrix[row - 1][column - 1] + substitutionCost,
-      )
-    }
-  }
+  const cleanAction = normalizeCommandForDeterministic(action, wakeWords)
+  const cleanSpoken = normalizeCommandForDeterministic(spoken, wakeWords)
+  const normAction = normalizeVoiceCommandText(cleanAction)
+  const normSpoken = normalizeVoiceCommandText(cleanSpoken)
+  if (!normAction) return false
 
-  return matrix[a.length][b.length]
+  // Subcadena directa (caso más común: el LLM copia el fragmento exacto).
+  if (normSpoken.includes(normAction) || normAction.includes(normSpoken)) return true
+
+  const tokens = (raw) => raw.split(' ').filter((word) => word && !COMMAND_STOPWORDS.has(word))
+  const actionTokens = tokens(normAction)
+  if (actionTokens.length === 0) return false
+  const spokenTokens = new Set(tokens(normSpoken))
+  const overlap = actionTokens.filter((word) => spokenTokens.has(word))
+  return overlap.length >= Math.min(2, actionTokens.length)
 }
 
 function scoreRecognitionAlternative(text = '', confidence = 0) {
@@ -170,6 +148,8 @@ function collectVoiceCommandPhrases(voiceCommands = {}) {
     ...(voiceCommands.analyzeApp || []),
     ...(voiceCommands.generateDocument || []),
     ...(voiceCommands.generateVideo || []),
+    // P1-C (§1.3.3, opcional): incluir CONOCER_FLU en "esperar frase incompleta".
+    ...(voiceCommands.conocerFlu || []),
   ]
 }
 
@@ -201,11 +181,219 @@ function shouldAckFluWake(afterWake = '', voiceCommands = {}) {
   return isListeningAckPhrase(text, voiceCommands.listeningAckPhrases)
 }
 
-function matchesCommandPhrase(text = '', phrases = []) {
+export function matchesCommandPhrase(text = '', phrases = [], options = {}) {
   const normalizedText = normalizeVoiceCommandText(text)
   if (!normalizedText || !phrases.length) return false
 
-  return phrases.some((phrase) => normalizedText === normalizeVoiceCommandText(phrase))
+  const exact = phrases.some((phrase) => normalizedText === normalizeVoiceCommandText(phrase))
+  if (exact) return true
+
+  // Coincidencia tolerante (solo para navegación): si la frase canónica es
+  // suficientemente larga y aparece dentro del texto, se considera un match.
+  // Evita falsos positivos con frases cortas o ambiguas.
+  if (options.tolerant) {
+    return phrases.some((phrase) => {
+      const normalizedPhrase = normalizeVoiceCommandText(phrase)
+      return normalizedPhrase.length >= 6 && normalizedText.includes(normalizedPhrase)
+    })
+  }
+
+  return false
+}
+
+/**
+ * Comandos de generación de contenido (video/documento) que requieren que el
+ * usuario describa QUÉ generar. Si la frase es SOLO el gatillo ("generame un
+ * video") sin contenido, FLU debe ESPERAR (kind 'wait') a que el usuario
+ * complete la instrucción en vez de disparar "Preparando el video." de inmediato
+ * y truncar la descripción. Si hay contenido tras el gatillo ("generame un video
+ * sobre la historia de México"), NO es un gatillo pelado y debe ir a la IA.
+ */
+function isBareContentGenerationTrigger(text = '', voiceCommands = {}) {
+  const snapshot = cleanForSpeech(text)
+  if (!snapshot) return false
+
+  const wakeWords = voiceCommands.wakeWords || []
+  const split = splitTranscriptAtWakeWord(snapshot, wakeWords)
+  const afterWake = cleanForSpeech(split.afterWake || split.commandText || snapshot)
+
+  const triggerPhrases = [
+    ...(voiceCommands.generateVideo || []),
+    ...(voiceCommands.generateDocument || []),
+  ]
+  if (!triggerPhrases.length) return false
+
+  const norm = normalizeVoiceCommandText(afterWake)
+  if (!norm) return false
+
+  // Gatillo pelado: el texto (tras wake word) coincide EXACTAMENTE con una de
+  // las frases canónicas de generación, sin contenido adicional.
+  return triggerPhrases.some(
+    (phrase) => normalizeVoiceCommandText(phrase) === norm,
+  )
+}
+
+/**
+ * Comandos que ESPERAN contenido tras el gatillo (búsqueda web, generación de
+ * video/documento). Si el turno (tras wake word) es SOLO uno de esos gatillos
+ * (o termina en una palabra de gatillo sin contenido), el ASR aún puede estar
+ * enviando el resto en un fragmento final posterior ("ok flu busca en la web"
+ * + pausa + "cómo saltan los conejos"). Disparar ahí produce consultas vacías
+ * o truncadas.
+ */
+function isIncompleteContentTurn(afterWake = '', voiceCommands = {}) {
+  const norm = normalizeVoiceCommandText(afterWake).toLowerCase()
+  if (!norm) return false
+
+  // 1) El turno ES EXACTAMENTE un gatillo canónico que espera contenido.
+  const contentTriggers = [
+    ...(voiceCommands.buscar || []),
+    ...(voiceCommands.generateVideo || []),
+    ...(voiceCommands.generateDocument || []),
+  ]
+  if (contentTriggers.some((phrase) => normalizeVoiceCommandText(phrase).toLowerCase() === norm)) {
+    return true
+  }
+
+  // 2) El turno termina en una palabra de gatillo suelta (aún sin contenido):
+  //    "ok flu busca", "ok flu navega", "genera", "crea"…
+  if (/(?:busca|buscar|buscame|navega|navegar|busqueda|genera|generar|generame|crea|crear|creame|haz|hacer|search|find|browse|navigate|look\s+up)\s*$/i.test(norm)) {
+    return true
+  }
+
+  // 3) El turno termina en el DESTINO de búsqueda sin la consulta: "busca en la
+  //    web", "busca en internet", "navega en la web" (el ASR cortó ahí por la
+  //    pausa y la consulta llega en el siguiente fragmento final). Antes esta
+  //    forma disparaba con query vacía ("Bug #3": búsqueda de nada).
+  const searchVerb = /(?:busca|buscar|buscame|busquedame|navega|navegar|busqueda|search|find|browse|navigate|look\s+up)\b/i.test(norm)
+  const endsOnWebTarget = /(?:\bweb\b|\binternet\b|\bweb\s*)$/i.test(norm)
+  if (searchVerb && endsOnWebTarget) return true
+
+  // 4) Resto de la búsqueda compuesto SOLO por cabezas genéricas ("información",
+  //    "datos", "algo"): el tema aún no llegó y el ASR lo manda en el fragmento
+  //    siguiente. Las cabezas vienen de config (sin hardcode).
+  if (searchVerb && Array.isArray(voiceCommands.searchPlaceholderHeads)) {
+    const { matched, rest } = queryAfterTrigger(norm, voiceCommands)
+    if (matched && rest && !stripSearchQueryLeadFillers(rest, voiceCommands)) {
+      return true
+    }
+  }
+  return false
+}
+
+/**
+ * Quita del inicio de una query las "cabezas" genéricas de config
+ * ("información", "datos"…) y un conector de enlace ("sobre", "de"…). Con esto
+ * "... en la web información lenguaje de programación clipper" queda como
+ * "lenguaje de programación clipper".
+ */
+function stripSearchQueryLeadFillers(rest = '', voiceCommands = {}) {
+  const heads = new Set(
+    (voiceCommands.searchPlaceholderHeads || [])
+      .map((head) => normalizeVoiceCommandText(head).toLowerCase().trim())
+      .filter(Boolean),
+  )
+  if (heads.size === 0) return String(rest || '').trim()
+
+  const words = String(rest || '').trim().split(/\s+/).filter(Boolean)
+  while (words.length) {
+    const head = normalizeVoiceCommandText(words[0]).toLowerCase()
+    if (heads.has(head)) {
+      words.shift()
+      continue
+    }
+    break
+  }
+  const connectors = new Set(['sobre', 'de', 'del', 'acerca', 'respecto'])
+  while (words.length && connectors.has(normalizeVoiceCommandText(words[0]).toLowerCase())) {
+    words.shift()
+  }
+  return words.join(' ').trim()
+}
+
+/**
+ * DECISIÓN ÚNICA de turno de voz (fuente única para estabilización de
+ * fragmentos): dado el transcript COMPLETO acumulado hasta ahora, ¿el turno
+ * está LISTO para ejecutarse o falta contenido (esperar el siguiente fragmento
+ * final antes de despachar)?
+ *
+ * @param {string} fullTranscript Transcript acumulado (fragmentos finales ya
+ *   unidos por el motor de turnos), con o sin wake word.
+ * @param {object} [voiceCommands] Comandos de voz configurados
+ *   (FLU_CONFIG.voiceCommands).
+ * @param {object} [options]
+ * @param {boolean} [options.requireWake=true] true si el turno debe llevar
+ *   wake word (modo pasivo). Con false se evalúa igualmente el texto tras la
+ *   wake si la hubiera.
+ * @returns {{ ready: boolean, reason?: string, text?: string }}
+ */
+export function decideVoiceTurnDispatch(fullTranscript = '', voiceCommands = {}, options = {}) {
+  const { requireWake = true } = options || {}
+  const snapshot = cleanForSpeech(fullTranscript)
+  if (!snapshot) return { ready: true }
+
+  const wakeWords = voiceCommands.wakeWords || []
+  const split = splitTranscriptAtWakeWord(snapshot, wakeWords)
+  const afterWake = cleanForSpeech(split.afterWake || split.commandText || snapshot)
+
+  // Modo pasivo sin wake word: no es un comando de wake; quien decide el
+  // destino es el flujo conversacional, no esta estabilización.
+  if (requireWake && !split.wakeWordMatched) return { ready: true }
+
+  if (!afterWake) return { ready: true }
+  if (!isIncompleteContentTurn(afterWake, voiceCommands)) {
+    return { ready: true }
+  }
+  return { ready: false, reason: 'incomplete-content-command', text: afterWake }
+}
+
+/**
+ * Extrae la CONSULTA real de una frase de búsqueda web quitando el gatillo
+ * reconocido ("busca en la web cómo saltan los conejos" → "cómo saltan los
+ * conejos"). Sin hardcode: los gatillos vienen de voiceCommands.buscar.
+ */
+export function extractQueryFromWebSearchPhrase(phrase = '', voiceCommands = {}) {
+  const snapshot = cleanForSpeech(phrase)
+  if (!snapshot) return ''
+  const split = splitTranscriptAtWakeWord(snapshot, voiceCommands.wakeWords || [])
+  const body = cleanForSpeech(split.afterWake || split.commandText || snapshot)
+  if (!body) return snapshot
+  const { matched, rest } = queryAfterTrigger(body, voiceCommands)
+  return matched ? stripSearchQueryLeadFillers(rest, voiceCommands) : body
+}
+
+/**
+ * Resto CRUDO (sin limpiar) tras el gatillo de búsqueda. Necesario para
+ * distinguir "el usuario aún no dijo el tema" (resto = partícula genérica) de
+ * "el tema es X". Fuente única del recorte del gatillo.
+ */
+function queryAfterTrigger(body = '', voiceCommands = {}) {
+  const buscar = (voiceCommands.buscar || [])
+    .slice()
+    .sort((a, b) => normalizeVoiceCommandText(b).length - normalizeVoiceCommandText(a).length)
+  for (const trigger of buscar) {
+    const target = normalizeVoiceCommandText(trigger).toLowerCase()
+    if (!target) continue
+    const norm = normalizeVoiceCommandText(body).toLowerCase()
+    if (!norm.startsWith(target)) continue
+    const triggerWords = target.split(/\s+/).filter(Boolean).length
+    const restWords = body.split(/\s+/).filter(Boolean).slice(triggerWords)
+    return { matched: true, rest: restWords.join(' ') }
+  }
+  return { matched: false, rest: body }
+}
+
+/**
+ * §9 ÚNICA derivación de la query de búsqueda web.
+ *
+ * Recibe los parámetros del LLM (si los hay) o el transcript canónico y
+ * devuelve la consulta limpia usando UN SOLO limpiador
+ * (`extractQueryFromWebSearchPhrase`), sin el `||` de dos derivadores.
+ */
+export function deriveSearchQuery({ provided = '', transcript = '', voiceCommands = {} } = {}) {
+  const source = cleanForSpeech(provided) || cleanForSpeech(transcript)
+  if (!source) return ''
+  return cleanForSpeech(extractQueryFromWebSearchPhrase(source, voiceCommands) || source)
 }
 
 const RECOVERABLE_RECOGNITION_ERRORS = new Set(['no-speech', 'aborted', 'network'])
@@ -215,17 +403,10 @@ export function matchWakeWordPrefix(text = '', wakeWords = []) {
   if (!value || !wakeWords.length) return null
 
   const normalizedWakeWords = wakeWords.map((wakeWord) => normalizeVoiceCommandText(wakeWord)).filter(Boolean)
-  if (!normalizedWakeWords.length) return null
-
-  const wakeWordPattern = new RegExp(
-    `^(?:${normalizedWakeWords.map((wakeWord) => wakeWord.replace(/\s+/g, '\\s+')).join('|')})(?:\\b|$)`,
-  )
+  const wakeWordPattern = buildWakeWordPattern(normalizedWakeWords)
+  if (!wakeWordPattern) return null
 
   return value.match(wakeWordPattern)?.[0] || null
-}
-
-export function hasStrictWakeWordPrefix(text = '', wakeWords = []) {
-  return Boolean(matchWakeWordPrefix(text, wakeWords))
 }
 
 export function matchWakeWordInText(text = '', wakeWords = []) {
@@ -233,11 +414,9 @@ export function matchWakeWordInText(text = '', wakeWords = []) {
   if (!value || !wakeWords.length) return null
 
   const normalizedWakeWords = wakeWords.map((wakeWord) => normalizeVoiceCommandText(wakeWord)).filter(Boolean)
-  if (!normalizedWakeWords.length) return null
+  const wakeWordPattern = buildWakeWordPattern(normalizedWakeWords, { anywhere: true })
+  if (!wakeWordPattern) return null
 
-  const wakeWordPattern = new RegExp(
-    `(?:^|\\s)(?:${normalizedWakeWords.map((wakeWord) => wakeWord.replace(/\s+/g, '\\s+')).join('|')})(?:\\b|$)`,
-  )
   const match = value.match(wakeWordPattern)
   if (!match) return null
 
@@ -252,38 +431,147 @@ export function matchWakeWordInText(text = '', wakeWords = []) {
   }
 }
 
-function speechWords(text = '') {
+/** Palabras normalizadas (sin acentos, minúsculas) de un texto de voz. Dueño único (V18). */
+/**
+ * Trozo de una lista de palabras como texto normalizado (minusculas, unidas por espacio).
+ * DUENO UNICO (P9.43): `slice(...).join(' ').toLowerCase()` estaba copiado 14 veces en
+ * varios consumidores de voz, cada uno con su rebanada.
+ * @param {string[]} words palabras ya normalizadas (ver speechWords)
+ * @param {number} start desde (negativo = desde el final, como Array.slice)
+ * @param {number} [end] hasta (undefined = final de la lista)
+ * @returns {string}
+ */
+export function sliceWordsLower(words, start, end) {
+  return words.slice(start, end).join(' ').toLowerCase()
+}
+
+export function speechWords(text = '') {
   return cleanForSpeech(text).toLowerCase().split(/\s+/).filter(Boolean)
 }
 
-/** Quita eco TV/ASR repetido al inicio de la pregunta tras «ok flu» (p. ej. «primeros partidos platicame…»). */
-export function peelWakeQuestionEcho(question = '', echoSources = []) {
-  let words = speechWords(question)
-  if (words.length < 2) return cleanForSpeech(question)
+/**
+ * Palabras de `next` que NO aparecen en `prior`. Dueño único (P9.24): estaba copiado
+ * como `novelWords` (ingressGuards) y `novelWordsInShortFinal` (speechMerge).
+ */
+export function novelWords(next = '', prior = '') {
+  const priorSet = new Set(speechWords(prior))
+  return speechWords(next).filter((word) => !priorSet.has(word))
+}
 
+/**
+ * Quita el eco TV/ASR repetido al inicio de la pregunta tras «ok flu» (p. ej. «primeros
+ * partidos platicame…»).
+ *
+ * B2: solo recorta si el trozo CUBRE al menos `coverageFloor` de las palabras de la
+ * fuente (dueno unico del criterio: echoPolicy.`echoChunkCovers`): un eco de verdad
+ * repite casi todo lo anterior; repetir la COLA de lo ultimo dicho es habla nueva y se
+ * conserva entera (medido: «el elote y el maiz» se truncaba a «y el maiz»).
+ */
+export function peelWakeQuestionEcho(
+  question = '',
+  echoSources = [],
+  { coverageFloor = echoCoverageFloor() } = {},
+) {
+  // §9.6: la comparación es insensible a acentos/mayúsculas, pero el texto que
+  // se devuelve conserva la forma original de la frase (no se pasa a minúsculas).
+  const originalWords = cleanForSpeech(question).split(/\s+/).filter(Boolean)
+  if (originalWords.length < 2) return cleanForSpeech(question)
+
+  let words = originalWords
   for (const source of echoSources) {
     const srcWords = speechWords(source)
     if (!srcWords.length) continue
+    // La COMPARACION se hace normalizada en AMBOS lados (minusculas + sin
+    // acentos): la fuente viene de `speechWords` (minúsculas con acentos) y el
+    // prefijo conservaba mayúsculas, así que un eco con mayúsculas ("Error HTTP
+    // de Gemini...") no casaba NUNCA y pasaba entero (medido 2026-10-20, sesion
+    // 97f86c73: el 402 de FLU se despacho como pregunta del usuario).
+    const srcText = srcWords.map((w) => normalizeVoiceCommandText(w).toLowerCase()).join(' ')
+    // ECO COMPLETO (el ASR repite TODO el mensaje de FLU, 11 palabras): el tope
+    // de 8 palabras dejaba viva la cola ("creditos en openrouter") como pregunta
+    // despachada. Si la pregunta ENTERA cubre la fuente y es un tramo contiguo
+    // de ella, no queda pregunta: se pela completa (la forma devuelta conserva
+    // la original del resto, aquí vacía).
+    const probe = words.map((w) => normalizeVoiceCommandText(w).toLowerCase()).join(' ')
+    if (echoChunkCovers(words, srcWords, coverageFloor) && srcText.includes(probe)) {
+      return ''
+    }
     for (let len = Math.min(8, words.length - 1); len >= 1; len -= 1) {
-      const prefixStr = words.slice(0, len).join(' ')
-      const srcTail = srcWords.slice(-len).join(' ')
-      const srcHead = srcWords.slice(0, len).join(' ')
-      if (prefixStr === srcTail || prefixStr === srcHead) {
-        words = words.slice(len)
-        break
-      }
+      const prefixStr = normalizeVoiceCommandText(words.slice(0, len).join(' ')).toLowerCase()
+      const srcTail = srcText.split(' ').slice(-len).join(' ')
+      const srcHead = srcText.split(' ').slice(0, len).join(' ')
+      if (prefixStr !== srcTail && prefixStr !== srcHead) continue
+      // B2: el trozo debe CUBRIR la fuente (eco real) para poder recortarse.
+      if (!echoChunkCovers(words.slice(0, len), srcWords, coverageFloor)) continue
+      words = words.slice(len)
+      break
     }
   }
   return cleanForSpeech(words.join(' '))
 }
 
-export function hasInlineWakeBoundary(text = '', wakeWords = []) {
-  const split = splitTranscriptAtWakeWord(text, wakeWords)
-  return Boolean(split.wakeWordMatched && cleanForSpeech(split.beforeWake))
+/**
+ * §9.5/§9.6: localiza la wake word sobre el texto ORIGINAL y devuelve los
+ * recortes conservando acentos y mayúsculas. La detección se hace con el texto
+ * normalizado ya probado; los wake words son ASCII, así que se ubican por
+ * índice insensible a mayúsculas y se recorta el original.
+ */
+function sliceWakeWordFromSource(source = '', wakeWords = []) {
+  const text = typeof source === 'string' ? source : ''
+  if (!text.trim() || !wakeWords.length) {
+    return { matched: false, beforeWakeText: cleanForSpeech(text), afterWakeText: '' }
+  }
+
+  const candidates = wakeWords
+    .map((wakeWord) => normalizeVoiceCommandText(wakeWord))
+    .filter(Boolean)
+    .sort((a, b) => b.length - a.length) // primero los compuestos ("oye flu")
+  const lower = text.toLowerCase()
+  let foundIndex = -1
+  let foundLength = 0
+  for (const candidate of candidates) {
+    const index = lower.indexOf(candidate)
+    if (index < 0) continue
+    const before = index === 0 ? '' : lower[index - 1]
+    const after = lower[index + candidate.length] || ''
+    if (before && /\w/.test(before)) continue // parte de otra palabra
+    if (after && /\w/.test(after)) continue // parte de otra palabra
+    if (foundIndex < 0 || index < foundIndex) {
+      foundIndex = index
+      foundLength = candidate.length
+    }
+  }
+  if (foundIndex < 0) {
+    return { matched: false, beforeWakeText: cleanForSpeech(text), afterWakeText: '' }
+  }
+
+  const beforeWakeText = cleanForSpeech(text.slice(0, foundIndex))
+  const afterWakeText = cleanForSpeech(
+    text.slice(foundIndex + foundLength).replace(/^[\s,.;:!?\-—]+/, ''),
+  )
+  return { matched: true, beforeWakeText, afterWakeText }
+}
+
+/**
+ * Consume repeticiones de la wake al INICIO del mandato. El eco (FLU oyéndose,
+ * o el hablante repitiendo la wake: "okay flow okay flow <orden>") dejaba la
+ * segunda wake DENTRO del mandato, porque solo se recortaba la primera. La
+ * invariante 11 exige que el mandato empiece en la wake: la wake repetida es
+ * ruido por delante, no contenido.
+ */
+function stripLeadingWakeRepeats(text = '', wakeWords = []) {
+  let rest = normalizeSpaces(text)
+  for (let i = 0; i < 4; i += 1) {
+    const prefix = matchWakeWordPrefix(rest, wakeWords)
+    if (!prefix) break
+    rest = normalizeSpaces(rest.slice(prefix.length))
+  }
+  return rest
 }
 
 export function splitTranscriptAtWakeWord(text = '', wakeWords = []) {
   const normalizedText = normalizeVoiceCommandText(text)
+  const sliced = sliceWakeWordFromSource(text, wakeWords)
   if (!normalizedText) {
     return {
       wakeWordMatched: false,
@@ -291,18 +579,22 @@ export function splitTranscriptAtWakeWord(text = '', wakeWords = []) {
       afterWake: '',
       commandText: '',
       normalizedText: '',
+      beforeWakeText: '',
+      afterWakeText: '',
     }
   }
 
   const prefix = matchWakeWordPrefix(normalizedText, wakeWords)
   if (prefix) {
-    const afterWake = normalizeSpaces(normalizedText.slice(prefix.length))
+    const afterWake = stripLeadingWakeRepeats(normalizedText.slice(prefix.length), wakeWords)
     return {
       wakeWordMatched: true,
       beforeWake: '',
       afterWake,
       commandText: afterWake,
       normalizedText,
+      beforeWakeText: '',
+      afterWakeText: stripLeadingWakeRepeats(sliced.afterWakeText, wakeWords),
     }
   }
 
@@ -314,53 +606,29 @@ export function splitTranscriptAtWakeWord(text = '', wakeWords = []) {
       afterWake: '',
       commandText: '',
       normalizedText,
+      beforeWakeText: sliced.beforeWakeText,
+      afterWakeText: '',
     }
   }
 
   const beforeWake = normalizeSpaces(normalizedText.slice(0, inline.index).trim())
-  const afterWake = normalizeSpaces(normalizedText.slice(inline.index + inline.length).trim())
+  const afterWake = stripLeadingWakeRepeats(
+    normalizedText.slice(inline.index + inline.length).trim(),
+    wakeWords,
+  )
   return {
     wakeWordMatched: true,
     beforeWake,
     afterWake,
     commandText: afterWake,
     normalizedText,
+    beforeWakeText: sliced.beforeWakeText,
+    afterWakeText: stripLeadingWakeRepeats(sliced.afterWakeText, wakeWords),
   }
-}
-
-function voiceCommandCapturesRelate(richer = '', trigger = '') {
-  const left = normalizeVoiceCommandText(richer)
-  const right = normalizeVoiceCommandText(trigger)
-  if (!left || !right) return false
-  if (left === right) return true
-  if (left.includes(right) || right.includes(left)) return true
-  const leftWords = left.split(/\s+/).filter(Boolean)
-  const rightWords = right.split(/\s+/).filter(Boolean)
-  if (!rightWords.length) return false
-  return rightWords.every((word) => leftWords.includes(word))
-}
-
-/** Elige la captura más completa del turno que sigue conteniendo el disparador del comando. */
-export function pickRichestVoiceCommandCapture(
-  triggerPhrase = '',
-  { publishedLive = '', lastEmitted = '', streamDisplay = '' } = {},
-) {
-  const trigger = cleanForSpeech(triggerPhrase)
-  const candidates = [publishedLive, streamDisplay, lastEmitted, trigger]
-    .map(cleanForSpeech)
-    .filter(Boolean)
-  if (!candidates.length) return ''
-  const unique = [...new Set(candidates)]
-  unique.sort((a, b) => b.length - a.length)
-  if (!trigger) return unique[0]
-  for (const candidate of unique) {
-    if (voiceCommandCapturesRelate(candidate, trigger)) return candidate
-  }
-  return unique[0]
 }
 
 /** Segmento de comando para log (sin prefijo pasivo ya registrado; conserva wake word). */
-export function resolveCommandConversationLogText(phrase = '', split = {}, passivePrefix = '') {
+export function resolveCommandConversationLogText(phrase = '', _split = {}, passivePrefix = '') {
   const cleaned = cleanForSpeech(phrase)
   if (!cleaned) return ''
   const prefix = cleanForSpeech(passivePrefix)
@@ -382,11 +650,11 @@ export function resolveCommandConversationLogText(phrase = '', split = {}, passi
 
 export function detectListeningControl(text = '', commands = {}) {
   if (matchesCommandPhrase(text, commands.openListening || [])) {
-    return 'ABRIR_ESCUCHA'
+    return COMMAND_IDS.ABRIR_ESCUCHA
   }
 
   if (matchesCommandPhrase(text, commands.closeListening || [])) {
-    return 'CERRAR_ESCUCHA'
+    return COMMAND_IDS.CERRAR_ESCUCHA
   }
 
   return null
@@ -446,6 +714,7 @@ export function isMinuteKnowledgeRequest(text = '') {
 
   const normalized = normalizeVoiceCommandText(text)
   if (!normalized) return false
+  if (isTutoringProgressQuery(normalized) || isTutoringGlobalProgressQuery(normalized) || isTutoringReviewQuery(normalized)) return true
 
   return [
     /\b(historial\s+de\s+minutas?)\b/i,
@@ -471,38 +740,59 @@ export function isSessionStartRequest(text = '', commands = {}) {
 
 export function detectUiVoiceCommand(text = '', commands = {}) {
   if (isSessionStartRequest(text, commands)) {
-    return 'INICIAR_CONVERSACION'
+    return FLU_CONFIG.navigation.sessionResetCommand
   }
 
   if (isMinuteSaveRequest(text) || matchesCommandPhrase(text, commands.saveMinute || [])) {
-    return 'GUARDAR_MINUTA'
+    return COMMAND_IDS.GUARDAR_MINUTA
   }
 
   if (
+    isMinuteGenerationRequest(text) ||
     matchesCommandPhrase(text, commands.generateMinute || []) ||
     matchesCommandPhrase(text, commands.generateSummary || [])
   ) {
-    return 'GENERAR_RESUMEN'
+    return COMMAND_IDS.GENERAR_RESUMEN
   }
 
   // F1 — análisis de documentos
   if (matchesCommandPhrase(text, commands.analyzeDocument || [])) {
-    return 'ANALIZAR_DOCUMENTO'
+    return COMMAND_IDS.ANALIZAR_DOCUMENTO
   }
 
   // F2 — análisis de funcionalidad de apps
   if (matchesCommandPhrase(text, commands.analyzeApp || [])) {
-    return 'ANALIZAR_APP'
+    return COMMAND_IDS.ANALIZAR_APP
   }
 
   // F3 — generación de documentos
   if (matchesCommandPhrase(text, commands.generateDocument || [])) {
-    return 'GENERAR_DOCUMENTO'
+    return COMMAND_IDS.GENERAR_DOCUMENTO
   }
 
   // F4 — generación de video
   if (matchesCommandPhrase(text, commands.generateVideo || [])) {
-    return 'GENERAR_VIDEO'
+    return COMMAND_IDS.GENERAR_VIDEO
+  }
+
+  // Navegación curada por voz → resultado en el Pizarrón
+  // (modo tolerante: acepta frases conversacionales como "navegar a wikipedia")
+  if (matchesCommandPhrase(text, commands.navigate || [], { tolerant: true })) {
+    return COMMAND_IDS.NAVEGAR
+  }
+
+  // F3 — búsqueda web por voz ("buscá capital de Francia") → resultados en el
+  // Pizarrón. Se evalúa DESPUÉS de NAVEGAR para que "navega en wikipedia"
+  // gane sobre "buscar en wikipedia" (orden por especificidad).
+  if (matchesCommandPhrase(text, commands.buscar || [], { tolerant: true })) {
+    return COMMAND_IDS.BUSCAR
+  }
+
+  // P1-C (§1.3.3) — autoconocimiento (CONOCER_FLU): fast-path local sin IA.
+  // Se evalúa después de NAVEGAR/BUSCAR; responde enumerando las capacidades
+  // reales de FLU compiladas desde la configuración (nunca hardcode).
+  if (matchesCommandPhrase(text, commands.conocerFlu || [], { tolerant: true })) {
+    return COMMAND_IDS.CONOCER_FLU
   }
 
   return null
@@ -528,7 +818,7 @@ export function detectSessionVoiceCommand(text = '', voiceCommands = {}) {
 
   if (split.wakeWordMatched && matchWakeWordPrefix(normalizeVoiceCommandText(snapshot), wakeWords)) {
     if (shouldAckFluWake(afterWake, voiceCommands)) {
-      return 'FLU_WAKE'
+      return COMMAND_IDS.FLU_WAKE
     }
     return null
   }
@@ -548,22 +838,34 @@ export function detectSessionVoiceCommand(text = '', voiceCommands = {}) {
 }
 
 /** Acción al cerrar un final en conversación pasiva. */
-export function resolveFinalConversationAction(text = '', voiceCommands = {}, { lastCommitted = '' } = {}) {
+export function resolveFinalConversationAction(
+  text = '',
+  voiceCommands = {},
+  { lastCommitted = '', wakeRequired = true } = {},
+) {
   const snapshot = cleanForSpeech(text)
   const wakeWords = voiceCommands.wakeWords || []
   const split = splitTranscriptAtWakeWord(snapshot, wakeWords)
-  const beforeWake = cleanForSpeech(split.beforeWake)
+  const beforeWake = cleanForSpeech(split.beforeWakeText || split.beforeWake)
+  // Detección: texto normalizado (sin acentos) para los matchers.
   const afterWakeRaw = cleanForSpeech(split.afterWake || split.commandText || '')
-  /** Solo pelar eco TV (beforeWake); lastCommitted solo en wake inline con TV — no repetir fila del usuario. */
-  const echoSources = beforeWake
-    ? [beforeWake, cleanForSpeech(lastCommitted)].filter(Boolean)
-    : [beforeWake].filter(Boolean)
+  // §9.6: la pregunta que escucha la IA se deriva de la MISMA frase canónica,
+  // conservando acentos/mayúsculas (texto original tras la wake word).
+  const questionTextRaw = cleanForSpeech(
+    split.afterWakeText || split.afterWake || split.commandText || '',
+  )
+  // B2: las fuentes de eco son el texto pasivo de la MISMA locucion y el texto REAL de
+  // FLU (solo si su ventana de eco sigue abierta). `lastCommitted` NO es fuente: en el
+  // ingress es la ultima fila del log de USUARIO, y medir el eco contra el usuario
+  // recortaba habla real.
+  const echoSources = resolveEchoSources({ passiveText: beforeWake || lastCommitted })
   const afterWake = peelWakeQuestionEcho(afterWakeRaw, echoSources)
+  const question = peelWakeQuestionEcho(questionTextRaw, echoSources)
 
   if (split.wakeWordMatched && afterWake && isMinuteKnowledgeRequest(afterWake)) {
     return {
       kind: 'flu',
-      question: afterWake,
+      question,
       beforeWake,
     }
   }
@@ -574,20 +876,54 @@ export function resolveFinalConversationAction(text = '', voiceCommands = {}, { 
   }
 
   const command = detectSessionVoiceCommand(text, voiceCommands)
-  if (command) return { kind: 'command', command }
+  if (command) {
+    // Generación de contenido (video/documento): si la frase es SOLO el gatillo
+    // ("generame un video") sin descripción de QUÉ generar, FLU debe ESPERAR a
+    // que el usuario complete la instrucción en vez de disparar de inmediato y
+    // truncar el contenido. El contenido llega en una frase posterior o en la
+    // misma frase con descripción (esa NO es gatillo pelado → va a la IA).
+    if (
+      (command === COMMAND_IDS.GENERAR_VIDEO || command === COMMAND_IDS.GENERAR_DOCUMENTO) &&
+      isBareContentGenerationTrigger(text, voiceCommands)
+    ) {
+      return { kind: 'wait' }
+    }
+    // Estabilización de fragmentos: si el turno quedó en un gatillo SIN
+    // contenido ("ok flu busca en la web", "navega", "crea un video"), se
+    // espera el siguiente fragmento final antes de ejecutar (Bug #3/#4).
+    // Se evalúa el transcript COMPLETO (puede llevar o no wake word).
+    if (
+      decideVoiceTurnDispatch(snapshot, voiceCommands, { requireWake: false }).ready === false
+    ) {
+      return { kind: 'wait' }
+    }
+    return { kind: 'command', command }
+  }
 
-  if (!split.wakeWordMatched) return { kind: 'log' }
+  if (!split.wakeWordMatched) {
+    // Piso CERRADO: sin wake no es un turno (ni fila ni despacho) — P8.38.
+    if (wakeRequired) return { kind: 'log' }
+    // Piso ABIERTO (la wake no es obligatoria): la captura ES un turno, con el
+    // texto completo como pregunta. Antes se devolvia 'log' SIEMPRE, asi que la
+    // fila que abre el stream (P8.49) nunca se despachaba y quedaba como peticion
+    // PENDIENTE en el historial: la respondia el turno siguiente, tarde y fuera de
+    // turno (medido 2026-10-05: "Platicame de los barcos" -> respuesta 19s despues).
+    const openQuestion = cleanForSpeech(snapshot)
+    return openQuestion
+      ? { kind: 'flu', question: openQuestion, beforeWake: '' }
+      : { kind: 'log' }
+  }
 
-  if (!afterWake) return { kind: 'command', command: 'FLU_WAKE' }
+  if (!afterWake) return { kind: 'command', command: COMMAND_IDS.FLU_WAKE }
   if (shouldAckFluWake(afterWake, voiceCommands)) {
-    return { kind: 'command', command: 'FLU_WAKE' }
+    return { kind: 'command', command: COMMAND_IDS.FLU_WAKE }
   }
 
   const introducedName = detectWakeIntroducedName(snapshot, wakeWords)
   if (introducedName) {
     return {
       kind: 'command',
-      command: 'REGISTRAR_PARTICIPANTE',
+      command: COMMAND_IDS.REGISTRAR_PARTICIPANTE,
       introducedName,
       beforeWake,
     }
@@ -603,9 +939,34 @@ export function resolveFinalConversationAction(text = '', voiceCommands = {}, { 
 
   return {
     kind: 'flu',
-    question: afterWake,
+    question,
     beforeWake,
   }
+}
+
+/**
+ * §9 ÚNICA FUENTE DE VERDAD de la query.
+ *
+ * A partir de la fila canónica (la MISMA frase que se commitea en el store),
+ * deriva la acción y el texto de consulta que consumen Gemini y la búsqueda
+ * web. Esa derivación ocurre en UN SOLO lugar: aquí. Nadie más construye la
+ * query por su cuenta.
+ *
+ * @param {string} rowText Texto de la fila canónica (con o sin wake word).
+ * @param {object} voiceCommands `FLU_CONFIG.voiceCommands`.
+ * @param {object} [options] Opciones de `resolveFinalConversationAction`.
+ */
+export function deriveQueryFromRow(rowText = '', voiceCommands = {}, options = {}) {
+  const row = cleanForSpeech(rowText)
+  if (!row) return { kind: 'log', question: '', searchQuery: '' }
+  const action = resolveFinalConversationAction(row, voiceCommands, options)
+  const wakeWords = voiceCommands.wakeWords || []
+  const searchQuery = cleanForSpeech(
+    extractQueryFromWebSearchPhrase(row, voiceCommands) ||
+      action.question ||
+      removeWakeWord(row, wakeWords),
+  )
+  return { ...action, question: action.question || row, searchQuery }
 }
 
 /** Interino: solo consultas de minuta (Chrome a veces no manda final). Flu general → final. */
@@ -647,20 +1008,20 @@ export function shouldDispatchCommandInterim(
   voiceCommands = {},
   fullPhrase = '',
 ) {
-  if (command === 'FLU_WAKE') return false
+  if (command === COMMAND_IDS.FLU_WAKE) return false
 
-  if (command === 'FLU_ADELANTE' || command === 'FLU_ESPERA') return false
+  if (command === COMMAND_IDS.FLU_ADELANTE || command === COMMAND_IDS.FLU_ESPERA) return false
 
   const norm = cleanForSpeech(text)
   if (!norm) return false
 
-  if (command === 'REGISTRAR_PARTICIPANTE') {
+  if (command === COMMAND_IDS.REGISTRAR_PARTICIPANTE) {
     const wakeWords = voiceCommands.wakeWords || []
     const snapshot = cleanForSpeech(fullPhrase) || norm
     return Boolean(detectWakeIntroducedName(snapshot, wakeWords))
   }
 
-  if (command === 'GENERAR_RESUMEN') {
+  if (command === COMMAND_IDS.GENERAR_RESUMEN) {
     if (isMinuteKnowledgeRequest(norm)) return false
     if (/\b(genera\w*|generar|resume\w*|resumir)\b.*\bresumen\b.*\bde\s+la\b/i.test(norm)) return false
     if (/\b(generate|summarize|summary)\b.*\b(of\s+the\s+)?minute\b/i.test(norm)) return false
@@ -703,6 +1064,16 @@ export function shouldDispatchConversationAction(
   return false
 }
 
+/**
+ * Ventana UNICA de "misma peticion": la comparten el despacho (dedup por firma en
+ * `planConversationDispatch`) y el dedup de la captura reentregada
+ * (`captureDedup.shouldSkipCapture`). Un valor, un dueno, dos consumidores: la
+ * fila y la ejecucion no pueden discrepar sobre si algo es el mismo turno.
+ */
+export function sameRequestWindowMs() {
+  return Number(FLU_CONFIG.transcript?.fluQuery?.requestDedupMs) || 4500
+}
+
 /** Plan de dispatch (origen único): hook, simulaciones e invariantes. */
 export function planConversationDispatch(
   text = '',
@@ -711,7 +1082,9 @@ export function planConversationDispatch(
     interim = false,
     lastSignature = '',
     lastAt = 0,
-    dedupMs = 4500,
+    lastPhrase = '',
+    dedupMs = sameRequestWindowMs(),
+    wakeRequired = true,
     now = Date.now(),
     lastCommitted = '',
   } = {},
@@ -719,8 +1092,10 @@ export function planConversationDispatch(
   const phrase = cleanForSpeech(text)
   if (!phrase) return { plan: 'skip', reason: 'empty', action: null, signature: '' }
 
-  const action = resolveFinalConversationAction(phrase, voiceCommands, {
+  // §9: la query se deriva de la fila canónica en UN solo lugar.
+  const action = deriveQueryFromRow(phrase, voiceCommands, {
     lastCommitted: cleanForSpeech(lastCommitted),
+    wakeRequired,
   })
   if (
     !shouldDispatchConversationAction(action, {
@@ -734,17 +1109,36 @@ export function planConversationDispatch(
 
   const signature =
     action.kind === 'command'
-      ? action.command === 'FLU_ADELANTE'
+      ? action.command === COMMAND_IDS.FLU_ADELANTE
         ? 'cmd:FLU_ADELANTE'
         : `cmd:${action.command}:${normalizeVoiceCommandText(phrase)}`
       : `flu:${normalizeVoiceCommandText(action.question || phrase)}`
 
   const effectiveDedupMs =
-    action.kind === 'command' && action.command === 'FLU_ADELANTE'
+    action.kind === 'command' && action.command === COMMAND_IDS.FLU_ADELANTE
       ? Math.max(dedupMs, Number(FLU_CONFIG.fluParticipant?.floorGrantDedupMs) || 12000)
       : dedupMs
 
   const prefixDedupMs = Number(FLU_CONFIG.transcript?.fluQuery?.prefixExtensionDedupMs)
+
+  // REVISION DEL ASR (dueno UNICO de la decision): Chrome entrega la MISMA frase en
+  // finales que CRECEN ("Como" -> "Como sal" -> "Como saltan"). Solo la ultima (la
+  // mas larga, tras pausa) debe despacharse. Antes esta regla vivia en el hook con
+  // la ventana como literal (1600) y el planificador tenia su propia dedupe: dos
+  // decisiones para el mismo hecho. Ahora la decide aqui, con la ventana en config.
+  const asrRevisionWindowMs =
+    Number(FLU_CONFIG.transcript?.fluQuery?.asrRevisionWindowMs) || 1600
+  const prevPhrase = String(lastPhrase || '').toLowerCase().trim()
+  const curPhrase = phrase.toLowerCase().trim()
+  const isAsrRevision =
+    Boolean(prevPhrase) &&
+    Boolean(curPhrase) &&
+    prevPhrase !== curPhrase &&
+    now - lastAt < asrRevisionWindowMs &&
+    (curPhrase.startsWith(prevPhrase) || prevPhrase.startsWith(curPhrase))
+  if (isAsrRevision) {
+    return { plan: 'dedup', reason: 'asr-revision', action, signature, phrase }
+  }
 
   if (lastSignature === signature && now - lastAt < effectiveDedupMs) {
     return { plan: 'dedup', action, signature, phrase }
@@ -779,62 +1173,6 @@ export function getRecognitionErrorMessage(error = '', messages = {}) {
   return messages[code] || `Error de reconocimiento: ${code}`
 }
 
-export function buildCurrentPhraseFromResults(results = [], fromIndex = 0) {
-  if (!Array.isArray(results) || !results.length) return ''
-
-  const startIndex = Math.max(0, Math.min(fromIndex, results.length))
-  let phrase = ''
-  const trailingFragments = []
-
-  for (let index = startIndex; index < results.length; index += 1) {
-    const alternatives = Array.from(results[index] || [])
-      .map((alternative) => ({
-        transcript: cleanForSpeech(alternative?.transcript || ''),
-        confidence: Number(alternative?.confidence || 0),
-      }))
-      .filter((alternative) => Boolean(alternative.transcript))
-
-    if (!alternatives.length) continue
-
-    const bestAlternative = alternatives.reduce((best, current) => {
-      const bestRank = scoreRecognitionAlternative(best.transcript, best.confidence)
-      const currentRank = scoreRecognitionAlternative(current.transcript, current.confidence)
-      if (currentRank === bestRank) {
-        return compareRecognitionAlternatives(current.transcript, best.transcript) > 0
-          ? current
-          : best
-      }
-      if (compareRecognitionAlternatives(current.transcript, best.transcript) > 0 && currentRank >= bestRank - 10) {
-        return current
-      }
-      return currentRank > bestRank ? current : best
-    })
-
-    if (!looksLikeTrailingFragment(bestAlternative.transcript)) {
-      for (const alternative of alternatives) {
-        if (looksLikeTrailingFragment(alternative.transcript)) {
-          const value = alternative.transcript
-          if (value && trailingFragments.at(-1) !== value) {
-            trailingFragments.push(value)
-          }
-        }
-      }
-    }
-
-    phrase = phrase ? mergeTranscriptText(phrase, bestAlternative.transcript) : bestAlternative.transcript
-  }
-
-  const uniqueTrailingFragments = trailingFragments.filter(
-    (fragment, index, list) => list.indexOf(fragment) === index,
-  )
-
-  const combined = uniqueTrailingFragments.length
-    ? [phrase, ...uniqueTrailingFragments].filter(Boolean).join(' ')
-    : phrase
-
-  return cleanForSpeech(normalizeSpaces(combined))
-}
-
 export function pickBestRecognitionTranscript(result = []) {
   const alternatives = Array.from(result || [])
     .map((alternative) => ({
@@ -859,6 +1197,16 @@ export function pickBestRecognitionTranscript(result = []) {
   }).transcript
 }
 
+/**
+ * Extrae el mandato de una captura: valida la wake word y devuelve el texto
+ * posterior. Acepta la wake INLINE (no solo como prefijo) usando el splitter
+ * único `splitTranscriptAtWakeWord`, igual que el resto del motor.
+ *
+ * @param {string} [text] Captura cruda del ASR.
+ * @param {{ requireWake?: boolean, wakeWords?: string[] }} [options]
+ * @returns {{ accepted: boolean, reason: string, wakeWordMatched: boolean,
+ *   normalizedText: string, commandText: string }}
+ */
 export function extractFluVoiceCommand(text = '', { requireWake = false, wakeWords = [] } = {}) {
   const normalizedText = normalizeVoiceCommandText(text)
   if (!normalizedText) {
@@ -881,8 +1229,8 @@ export function extractFluVoiceCommand(text = '', { requireWake = false, wakeWor
     }
   }
 
-  const wakeWordPrefix = matchWakeWordPrefix(normalizedText, wakeWords)
-  if (!wakeWordPrefix) {
+  const wakeSplit = splitTranscriptAtWakeWord(normalizedText, wakeWords)
+  if (!wakeSplit.wakeWordMatched) {
     return {
       accepted: false,
       reason: 'missing_wake_word',
@@ -892,7 +1240,7 @@ export function extractFluVoiceCommand(text = '', { requireWake = false, wakeWor
     }
   }
 
-  const commandText = normalizeSpaces(normalizedText.slice(wakeWordPrefix.length))
+  const commandText = normalizeSpaces(wakeSplit.afterWake || '')
 
   if (!commandText) {
     return {
@@ -913,158 +1261,175 @@ export function extractFluVoiceCommand(text = '', { requireWake = false, wakeWor
   }
 }
 
-export function removeWakeWord(text = '', wakeWords = []) {
+/**
+ * Recorte de wake word para resolución determinista. Es un envoltorio del
+ * splitter ÚNICO (`splitTranscriptAtWakeWord`) vía `extractFluVoiceCommand`:
+ * no define un algoritmo propio de wake word (§9.5/§9.6).
+ */
+export const removeWakeWord = (text = '', wakeWords = []) => {
   const result = extractFluVoiceCommand(text, { requireWake: true, wakeWords })
   return result.accepted ? result.commandText : normalizeVoiceCommandText(text)
 }
 
-export function cosineDistance(vectorA = [], vectorB = []) {
-  const length = Math.min(vectorA.length, vectorB.length)
-  if (!length) return 1
-
-  let dot = 0
-  let magA = 0
-  let magB = 0
-
-  for (let index = 0; index < length; index += 1) {
-    const a = Number(vectorA[index] || 0)
-    const b = Number(vectorB[index] || 0)
-    dot += a * b
-    magA += a * a
-    magB += b * b
-  }
-
-  if (!magA || !magB) return 1
-  const cosineSimilarity = dot / (Math.sqrt(magA) * Math.sqrt(magB))
-  return 1 - Math.max(-1, Math.min(1, cosineSimilarity))
+/** Plegado para comparar si dos textos son la MISMA emisión (sin wake word). */
+function foldSpokenUtterance(text = '', wakeWords = []) {
+  return normalizeSpaces(stripDiacritics(removeWakeWord(text, wakeWords) || ''))
+    .toLowerCase()
+    .trim()
 }
 
-function hannWindow(length) {
-  const window = new Float32Array(length)
-  for (let index = 0; index < length; index += 1) {
-    window[index] = 0.5 * (1 - Math.cos((2 * Math.PI * index) / (length - 1 || 1)))
-  }
-  return window
+/**
+ * ¿nextText es la MISMA emisión que lastText (revisión ASR que crece o igual)?
+ * Comparación SIN wake word (config), minúsculas y sin diacríticos/puntuación.
+ * Devuelve 'equal' (misma emisión), 'grow' (next extiende a last) o false.
+ */
+export function spokenUtteranceRevision(lastText = '', nextText = '', wakeWords = []) {
+  const last = foldSpokenUtterance(lastText, wakeWords)
+  const next = foldSpokenUtterance(nextText, wakeWords)
+  if (!next) return false
+  if (!last) return 'grow'
+  if (next === last) return 'equal'
+  return next.startsWith(`${last} `) ? 'grow' : false
 }
 
-function estimatePitch(frame, sampleRate) {
-  const size = frame.length
-  if (!size || !sampleRate) return 0
+/**
+ * Para mostrar la transcripción en la UI: si el texto contiene una palabra de
+ * activación (wake word), se muestra SOLO lo que viene después de ella; si no
+ * hay wake word, se muestra el texto tal cual. Así la transcripción en pantalla
+ * refleja la intención del usuario sin el prefijo de activación ("Flu, ...").
+ *
+ * A diferencia de splitTranscriptAtWakeWord (que normaliza y pierde los acentos),
+ * este helper recorta sobre el texto ORIGINAL para conservar la frase tal y como
+ * la dijo el usuario (p. ej. "recuérdame" no pierde la tilde).
+ */
+export const stripWakeWordForDisplay = (text = '', wakeWords = []) => {
+  const source = typeof text === 'string' ? text : ''
+  if (!source.trim() || !wakeWords.length) return source
 
-  let rms = 0
-  for (let index = 0; index < size; index += 1) {
-    rms += frame[index] * frame[index]
-  }
-  rms = Math.sqrt(rms / size)
-  if (rms < 0.01) return 0
-
-  let bestLag = 0
-  let bestCorrelation = 0
-  const minLag = Math.floor(sampleRate / 400)
-  const maxLag = Math.min(Math.floor(sampleRate / 60), size - 1)
-
-  for (let lag = minLag; lag <= maxLag; lag += 1) {
-    let correlation = 0
-    for (let index = 0; index < size - lag; index += 1) {
-      correlation += frame[index] * frame[index + lag]
-    }
-
-    if (correlation > bestCorrelation) {
-      bestCorrelation = correlation
-      bestLag = lag
-    }
-  }
-
-  return bestLag ? sampleRate / bestLag : 0
+  // §9.5/§9.6: un solo recorte, sobre el texto original (conserva acentos).
+  // `splitTranscriptAtWakeWord` ya expone la versión con texto original.
+  const split = splitTranscriptAtWakeWord(source, wakeWords)
+  if (!split.wakeWordMatched) return source
+  return split.afterWakeText || source
 }
 
-function analyzeSpectrum(frame, sampleRate) {
-  const size = frame.length
-  if (!size || !sampleRate) {
-    return {
-      centroid: 0,
-      dominantFrequency: 0,
-      energy: 0,
-      pitch: 0,
-    }
+// ============================================================
+// PUNTO ÚNICO DE NORMALIZACIÓN DEL MANDATO (hub de integración)
+// ============================================================
+// El transcript crudo llega CON la wake word pegada ("Okay Blue generame una
+// cita...") y con fragmentos ASR duplicados ("Okay Flow generame Una Okay flu
+// genérame una nota..."). Los parsers deterministas (parseReminderIntent,
+// __fluHandleNoteText, etc.) anclan sus regex al inicio del mandato, así que
+// aquí se limpia TODO el prefijo de wake word (una sola vez, para todos los
+// manejadores) y se colapsan los fragmentos duplicados antes de despachar.
+//
+// Esta es LA ÚNICA función que separa la wake word del mandato para la
+// resolución determinista de intención. Antes vivía inline en App.tsx
+// (onContractResolved); se extrajo aquí como función pura testeable para que
+// todos los consumidores compartan el mismo comportamiento (una tubería).
+//
+// @param {string} text Transcript crudo (con wake word y posible eco ASR).
+// @param {string[]} [wakeWords=[]] Palabras de activación configuradas.
+// @returns {string} Mandato limpio y normalizado (sin wake word ni eco).
+export function normalizeCommandForDeterministic(text = '', wakeWords = []) {
+  let commandText = String(text || '').trim()
+  if (!commandText || !wakeWords.length) return commandText
+
+  // 1) El mandato EMPIEZA en la wake word: lo anterior es habla de contexto
+  //    (TV/sala) o residuo del ASR, y los parsers deterministas anclan sus
+  //    regex al inicio, así que hay que descartarlo. Dueño único de dónde está la
+  //    wake y qué viene detrás: `splitTranscriptAtWakeWord` (conserva
+  //    acentos/mayúsculas vía afterWakeText). Sin mandato detrás de la wake no hay
+  //    frontera: se conserva el texto tal cual, para no perder lo dicho.
+  const split = splitTranscriptAtWakeWord(commandText, wakeWords)
+  const afterWake = split.wakeWordMatched ? split.afterWakeText : ''
+  if (afterWake) commandText = afterWake
+  const wakePattern = buildWakeWordPattern(
+    wakeWords.map((ww) => String(ww || '').toLowerCase()),
+    { anywhere: true },
+  )
+  // 2) Quitar las apariciones RESTANTES de wake word (no solo la primera) para
+  //    tolerar el eco ASR duplicado. Fuente única del patrón: wakeWord.js.
+  let stripped = commandText
+  if (wakePattern) {
+    stripped = stripped.replace(new RegExp(wakePattern.source, 'gi'), ' ')
+  }
+  commandText = stripped.replace(/\s+/g, ' ').trim()
+
+  // 3) Colapsar fragmentos duplicados del mandato: cuando el ASR repite el
+  //    verbo ("generame ... genérame una nota"), nos quedamos con la última
+  //    aparición completa. El patrón real es "VERBO una VERBO una NOTA ...":
+  //    buscamos la ÚLTIMA ocurrencia de "VERBO [una|un] NOTA" y recortamos.
+  //    NOTA: exec() solo devuelve la PRIMERA coincidencia, así que iteramos
+  //    con el flag global para localizar la última (evita que el eco quede
+  //    sin colapsar cuando la primera aparición está en el índice 0).
+  const intentNoun = /(nota|cita|video|documento|recordatorio|alarma|temporizador|diario|compra|compras)\b/i
+  const verbPhraseRe = /(genera|genérame|generame|generar|crea|crear|haz|hacer|pon|poner|ponme|guarda|guardar|anota|anotar|apunta|apuntar|agenda|agendar|programa|programar)\w*\s+(?:una\s+|un\s+)?(nota|cita|video|documento|recordatorio|alarma|temporizador|diario|compra|compras)\b/gi
+  let lastIdx = -1
+  let match = verbPhraseRe.exec(commandText)
+  while (match) {
+    lastIdx = match.index
+    match = verbPhraseRe.exec(commandText)
+  }
+  if (lastIdx > 0) {
+    // Recortar todo lo anterior a la última aparición del verbo.
+    commandText = commandText.slice(lastIdx).trim()
+  } else if (lastIdx === -1 && intentNoun.test(commandText)) {
+    // Sin verbo duplicado pero con eco "Una ...": quitar un fragmento
+    // "una/un" huérfano al inicio.
+    commandText = commandText.replace(/^(?:una|un)\s+/i, '')
   }
 
-  const window = hannWindow(size)
-  const sample = new Float32Array(size)
-  let energy = 0
-
-  for (let index = 0; index < size; index += 1) {
-    sample[index] = frame[index] * window[index]
-    energy += sample[index] * sample[index]
-  }
-
-  let dominantFrequency = 0
-  let dominantMagnitude = 0
-  let weightedFrequencySum = 0
-  let weightedMagnitudeSum = 0
-  const maxBins = Math.min(64, Math.floor(size / 2))
-
-  for (let bin = 1; bin < maxBins; bin += 1) {
-    let real = 0
-    let imaginary = 0
-
-    for (let sampleIndex = 0; sampleIndex < size; sampleIndex += 1) {
-      const angle = (-2 * Math.PI * bin * sampleIndex) / size
-      real += sample[sampleIndex] * Math.cos(angle)
-      imaginary += sample[sampleIndex] * Math.sin(angle)
-    }
-
-    const magnitude = Math.hypot(real, imaginary)
-    const frequency = (bin * sampleRate) / size
-    weightedFrequencySum += frequency * magnitude
-    weightedMagnitudeSum += magnitude
-    if (magnitude > dominantMagnitude) {
-      dominantMagnitude = magnitude
-      dominantFrequency = frequency
-    }
-  }
-
-  const centroid = weightedMagnitudeSum ? weightedFrequencySum / weightedMagnitudeSum : 0
-  const pitch = estimatePitch(frame, sampleRate)
-  let zeroCrossings = 0
-  for (let index = 1; index < size; index += 1) {
-    const prev = frame[index - 1]
-    const current = frame[index]
-    if ((prev >= 0 && current < 0) || (prev < 0 && current >= 0)) {
-      zeroCrossings += 1
-    }
-  }
-  const zeroCrossingRate = size > 1 ? zeroCrossings / (size - 1) : 0
-
-  return {
-    centroid,
-    dominantFrequency,
-    energy: energy / size,
-    pitch,
-    zeroCrossingRate,
-  }
+  return commandText
 }
 
-function downsampleBuffer(samples, sampleRate, targetRate = 16000) {
-  if (!samples?.length || sampleRate <= targetRate) return samples
-  const ratio = sampleRate / targetRate
-  const length = Math.max(1, Math.floor(samples.length / ratio))
-  const result = new Float32Array(length)
-  for (let index = 0; index < length; index += 1) {
-    result[index] = samples[Math.min(samples.length - 1, Math.floor(index * ratio))]
+/**
+ * Normalización ÚNICA del texto hablado para resolución determinista:
+ * quita la wake word (todas las apariciones) y colapsa el tartamudeo de
+ * prefijo del ASR ("bor Borra" → "Borra"). Es idempotente y la usan el
+ * árbitro y los parsers de dominio, de modo que un dictado con wake funcione
+ * igual se llame por donde se llame (una sola implementación).
+ */
+// Higiene de ENTRADA compartida (agenda, notas y arbitro la consumen via
+// normalizeSpokenCommand). Dos clases de ruido del ASR que degradaban la orden:
+//  - ECO/REPETICION: "X X" -> "X". La repeticion duplicaba la etiqueta capturada
+//    ("borra la clase de historia" + eco -> etiqueta "historia historia").
+//  - MULETILLA INICIAL: "eh X" -> "X". El prefijo se colaba como etiqueta y
+//    ANULABA los cuantificadores universales usando una etiqueta basura.
+const LEADING_NOISE_WORDS = Object.freeze([
+  'eh', 'ehh', 'em', 'mmm', 'pues', 'bueno', 'o sea', 'este', 'digamos',
+  // 'ahora' es arranque de mando, no contenido: "ahora habla otra persona" y
+  // "ahora pon una alarma" ordenan lo MISMO que sin el adverbio. Medido 2026-10-12:
+  // sin quitarlo, el cue de cambio de hablante no encabezaba el mandato y la ORDEN
+  // se perdia (el arreglo del cue exige que el mandato ABRA con el cue).
+  'ahora',
+])
+function stripLeadingNoiseAndEcho(text = '') {
+  let out = String(text || '').trim()
+  for (let pass = 0; pass < 6; pass += 1) {
+    const before = out
+    for (const noise of LEADING_NOISE_WORDS) {
+      const pattern = new RegExp('^' + noise.replace(/ /g, '\\s+') + '\\b[,:]?\\s*', 'i')
+      out = out.replace(pattern, '').trim()
+    }
+    if (out === before) break
   }
-  return result
+  const half = Math.floor(out.length / 2)
+  if (half > 0) {
+    const left = out.slice(0, half).trim()
+    const right = out.slice(out.length - half).trim()
+    if (left && left === right) out = left
+  }
+  return out
 }
-
-export function normalizeEmbeddingVector(vector = []) {
-  if (!Array.isArray(vector) || !vector.length) return []
-  const out = vector.map((value) => Number(value || 0))
-  let norm = 0
-  for (let index = 0; index < out.length; index += 1) {
-    norm += out[index] * out[index]
-  }
-  norm = Math.sqrt(norm) || 1
-  return out.map((value) => value / norm)
+export function normalizeSpokenCommand(text = '') {
+  const wakeWords = FLU_CONFIG.voiceCommands?.wakeWords || []
+  const withoutWake = normalizeCommandForDeterministic(String(text || ''), wakeWords)
+  const cleaned = String(withoutWake || '')
+    .replace(/\b(\S{1,3})\s+(?=\1\S+)/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+  return stripLeadingNoiseAndEcho(cleaned)
 }
 
 export function blendEmbeddingVectors(vectorA = [], vectorB = [], weightA = 0.5) {
@@ -1079,42 +1444,12 @@ export function blendEmbeddingVectors(vectorA = [], vectorB = [], weightA = 0.5)
   return normalizeEmbeddingVector(blended)
 }
 
-/** Similitud coseno pura [0, 1]; 1 = misma identidad de voz. Vectores L2-normalizados antes del producto punto. */
-export function cosineSimilarity(vectorA = [], vectorB = []) {
-  if (!vectorA.length || !vectorB.length) return 0
-  const a = normalizeEmbeddingVector(vectorA)
-  const b = normalizeEmbeddingVector(vectorB)
-  const dim = Math.min(a.length, b.length)
-  let dot = 0
-  for (let index = 0; index < dim; index += 1) {
-    dot += a[index] * b[index]
-  }
-  if (!Number.isFinite(dot)) return 0
-  return Math.max(0, Math.min(1, dot))
-}
-
-/** Similitud coseno L2 explícita (misma fórmula que voiceIdentity.compareAudioSignatures). */
-export function compareAudioSignatures(sig1 = [], sig2 = []) {
-  if (!Array.isArray(sig1) || !Array.isArray(sig2) || !sig1.length || !sig2.length) {
-    return 0
-  }
-  const dim = Math.min(sig1.length, sig2.length)
-  let dot = 0
-  let norm1 = 0
-  let norm2 = 0
-  for (let i = 0; i < dim; i += 1) {
-    const a = Number(sig1[i] || 0)
-    const b = Number(sig2[i] || 0)
-    dot += a * b
-    norm1 += a * a
-    norm2 += b * b
-  }
-  const denom = Math.sqrt(norm1) * Math.sqrt(norm2)
-  if (!denom || !Number.isFinite(denom)) return 0
-  const similarity = dot / denom
-  if (!Number.isFinite(similarity)) return 0
-  return Math.max(0, Math.min(1, similarity))
-}
+/**
+ * Similitud coseno L2 explícita. Dueño único: speakerCore.js
+ * (compareCosineSignatures); aquí solo se re-exporta con el nombre histórico
+ * para no duplicar el cuerpo.
+ */
+export { compareCosineSignatures }
 
 export function formatEmbeddingPreview(vector = [], { head = 3, tail = 2 } = {}) {
   if (!Array.isArray(vector) || !vector.length) return ''
@@ -1130,7 +1465,7 @@ export function formatEmbeddingPreview(vector = [], { head = 3, tail = 2 } = {})
  * Firma de voz: embedding ECAPA-TDNN (192-D) vía Transformers.js.
  * @param {Float32Array|number[]} samples — PCM filtrado del turno
  */
-export async function computeAudioSignature(samples = [], sampleRate = 48000) {
+export async function computeAudioSignature(samples = [], sampleRate = DEFAULT_SAMPLE_RATE) {
   if (!samples?.length) {
     return {
       vector: [],
@@ -1148,40 +1483,6 @@ export async function computeAudioSignature(samples = [], sampleRate = 48000) {
       samples: samples.length,
     },
   }
-}
-
-export function detectRole(text = '', language = 'es') {
-  const normalized = stripDiacritics(text)
-  const isEnglish = language === 'en'
-
-  if (isEnglish) {
-    if (/(student tutor|tutor|children|students|kids)/.test(normalized)) {
-      return 'Tutor de Alumnos'
-    }
-
-    if (/(meeting coordinator|coordinator|technical council|cte|meeting)/.test(normalized)) {
-      return 'Coordinador en Juntas'
-    }
-
-    if (/(teacher assistant|assistant|teacher|educator|instructor)/.test(normalized)) {
-      return 'Asistente'
-    }
-    return ''
-  }
-
-  if (/(tutor de alumnos|tutor|ninos|alumnos de 5|alumnos de 6)/.test(normalized)) {
-    return 'Tutor de Alumnos'
-  }
-
-  if (/(coordinador en juntas|coordinador|consejo tecnico|cte|junta)/.test(normalized)) {
-    return 'Coordinador en Juntas'
-  }
-
-  if (/(asistente del maestro|asistente|docente|maestro|profesor)/.test(normalized)) {
-    return 'Asistente'
-  }
-
-  return ''
 }
 
 const NAME_INTRO_PATTERNS = [
@@ -1233,6 +1534,12 @@ const NAME_STOPWORDS = new Set([
   'conversacion',
   'escucha',
   'cerrar',
+  // Palabras de CONFIRMACION/eco que el ASR pega tras el nombre. "okay flu soy Luis
+  // registrado" es nombre "Luis", no "Luis Registrado" (defecto medido 2026-10-21:
+  // el eco del TTS creo un participante "Luis Registrado" y contamino la base).
+  // FUENTE UNICA del vocabulario: `src/lib/confirmationSuffix.ts` (la comparte con la
+  // reparacion de datos de useParticipants; antes cada una tenia su copia divergente).
+  ...CONFIRMATION_SUFFIXES,
 ])
 
 const NAME_ARTICLE_TOKENS = new Set(['lo', 'la', 'el', 'los', 'las', 'un', 'una', 'unos', 'unas', 'al', 'del'])
@@ -1245,7 +1552,6 @@ const NAME_INVALID_PHRASES = [
   'tan pronto',
   'cuando quieras',
   'vino tinto',
-  'okay flu',
   'generar minuta',
   'iniciar conversacion',
   'nadie para poder',
@@ -1257,6 +1563,15 @@ export function isPlausiblePersonName(candidate = '') {
   const normalized = normalizeSpaces(stripDiacritics(candidate)).toLowerCase()
   if (!normalized) return false
   if (NAME_INVALID_PHRASES.some((phrase) => normalized.includes(phrase))) return false
+
+  // Wake words vienen SOLO de config (§9.4): un candidato que contenga una wake
+  // word configurada no es un nombre.
+  const normalizedCommand = normalizeVoiceCommandText(candidate)
+  const wakeWords = FLU_CONFIG.voiceCommands?.wakeWords || []
+  if (wakeWords.some((wakeWord) => {
+    const key = normalizeVoiceCommandText(wakeWord)
+    return key && normalizedCommand.includes(key)
+  })) return false
 
   const tokens = normalized.split(' ').filter(Boolean)
   if (!tokens.length || tokens.length > 3) return false
@@ -1291,13 +1606,25 @@ function toTitleCaseName(text = '') {
     .join(' ')
 }
 
-export function detectIntroducedName(text = '') {
+/**
+ * Nombre propio introducido en el TEXTO ("soy X" / "me llamo X" / "mi nombre es X").
+ *
+ * @param {string} text
+ * @param {{ mustOpen?: boolean }} [options] `mustOpen` (por defecto true): el patron tiene
+ *   que ABRIR el texto. Sin eso el nombre se captura en cualquier posicion y una frase que
+ *   REPORTA el comando ("mi definicion fue hasta que yo diga ... soy Luis") devolvia un
+ *   nombre. Medido por el dueno 2026-10-10.
+ */
+export function detectIntroducedName(text = '', { mustOpen = true } = {}) {
   const normalized = normalizeSpaces(stripDiacritics(text))
   if (!normalized) return ''
 
   for (const pattern of NAME_INTRO_PATTERNS) {
     const match = normalized.match(pattern)
     if (!match?.[1]) continue
+    // El intro tiene que ABRIR el texto: un "soy <nombre>" a mitad de frase es habla que
+    // HABLA de la orden, no una presentacion.
+    if (mustOpen && (match.index || 0) > 0) continue
 
     const rawCandidate = normalizeSpaces(match[1]).toLowerCase()
     if (!rawCandidate) continue
@@ -1317,62 +1644,52 @@ export function detectIntroducedName(text = '') {
   return ''
 }
 
+/**
+ * ¿El texto es el ARRANQUE de un intro de nombre (el ASR partió la locución y dejó
+ * "... soy" / "me llamo" tras la wake)? Se comprueba completándolo con un nombre de prueba
+ * usando los MISMOS patrones (una sola fuente del vocabulario de intro).
+ */
+export function isIncompleteNameIntro(text = '') {
+  const normalized = normalizeSpaces(stripDiacritics(text))
+  if (!normalized) return false
+  return Boolean(detectIntroducedName(`${normalized} prueba`, { mustOpen: true }))
+}
+
 /** Solo tras wake word (ok flu / oye flu …) + soy | me llamo | mi nombre es. */
 export function detectWakeIntroducedName(text = '', wakeWords = []) {
   const split = splitTranscriptAtWakeWord(text, wakeWords)
   if (!split.wakeWordMatched) return ''
+  // EL MANDATO EMPIEZA EN LA WAKE (Anexo B #11): lo anterior a la wake es habla de contexto
+  // y SE DESCARTA; el intro se lee del MANDATO (lo que sigue a la wake). Antes se exigia
+  // ADEMAS que no hubiera nada antes de la wake, y como el ASR acumula la locucion previa
+  // ("vamos a poner Ah voy a voy a decirle Okay flu Soy Luis") el intro se perdia: el
+  // registro no se ejecutaba y el nombre no se sustituia (medido 2026-10-11 21:27:40).
+  // El `mustOpen` de abajo sigue exigiendo que el intro ABRA el mandato.
 
   const introText = normalizeSpaces(
     stripDiacritics(split.commandText || split.afterWake || ''),
   )
   if (!introText) return ''
 
-  return detectIntroducedName(introText)
-}
-
-/** «yo Luis» / «soy Luis» sin wake, si el nombre ya está registrado en la sesión. */
-export function detectSelfSpeakerName(text = '', registeredNames = []) {
-  const snapshot = normalizeSpaces(stripDiacritics(text)).toLowerCase()
-  if (!snapshot || !registeredNames?.length) return ''
-
-  for (const rawName of registeredNames) {
-    const name = normalizeSpaces(stripDiacritics(rawName)).toLowerCase()
-    if (!name || name.split(/\s+/).length > 3) continue
-    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    if (new RegExp(`\\b(?:yo|soy)\\s+${escaped}\\b`).test(snapshot)) {
-      return toTitleCaseName(name)
-    }
-    if (new RegExp(`\\b${escaped}\\b`).test(snapshot) && /\b(?:yo|soy)\b/.test(snapshot)) {
-      return toTitleCaseName(name)
-    }
-  }
-  return ''
-}
-
-export function extractTheme(text = '', role = '', wakeWords = []) {
-  const normalizedText = stripDiacritics(removeWakeWord(text, wakeWords))
-  const normalizedRole = stripDiacritics(role)
-  let theme = normalizedText
-
-  if (normalizedRole) {
-    theme = theme.replace(normalizedRole, '')
-  }
-
-  theme = theme
-    .replace(/(soy|quiero|vamos a|vamos a hablar de|hablar de|sobre|el tema de|tema|rol|como|como un|como una)/g, ' ')
-    .replace(/\b(tutor de alumnos|coordinador en juntas|asistente del maestro|tutor|coordinador|asistente|maestro|profesor|docente)\b/g, ' ')
-
-  theme = normalizeSpaces(theme)
-  if (!theme) return FLU_CONFIG.sessionDefaults?.theme || ''
-  return theme
+  // El intro debe ABRIR el mandato (no venir tras "la frase es" / "que yo diga" / ...).
+  const directo = detectIntroducedName(introText, { mustOpen: true })
+  if (directo) return directo
+  // El intro de ANTES de la wake SOLO vale si el mandato tras la wake es el FRAGMENTO de un
+  // intro ("... soy"): es la MISMA locucion partida por el ASR ("Soy Luis Okay flu soy").
+  // Con un mandato COMPLETO ("pon musica") o VACIO, lo anterior es habla de CONTEXTO (TV/sala
+  // u otra persona) y NO registra ningun nombre: Anexo B.11 ("ayer mi tia dijo soy Luis" NO
+  // registra). Y el intro previo tiene que ABRIR esa parte (mismo criterio que el directo).
+  if (!isIncompleteNameIntro(introText)) return ''
+  const previo = normalizeSpaces(stripDiacritics(split.beforeWakeText || ''))
+  if (!previo) return ''
+  return detectIntroducedName(previo, { mustOpen: true })
 }
 
 export function formatClock(date = new Date()) {
-  return date.toLocaleTimeString('es-MX', {
+  return date.toLocaleTimeString(SPEECH_LOCALES.es, {
     hour12: false,
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
   })
 }
-

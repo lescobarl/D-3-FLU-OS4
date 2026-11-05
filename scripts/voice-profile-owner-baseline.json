@@ -1,0 +1,5 @@
+{
+  "_nota": "Barrera de perfiles de voz: una sola ruta de lectura por etiqueta y un solo borrado sobre fluDb.voiceProfiles. El dueno es useVoiceProfiles; fluStorage queda como fachada. duplicateRoutes debe ser 0 y solo baja.",
+  "duplicateRoutes": 0,
+  "minSources": 400
+}

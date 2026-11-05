@@ -1,0 +1,167 @@
+// ============================================================
+// Prueba de escritorio del parser ÚNICO de agenda (create/list/cancel)
+// ------------------------------------------------------------
+// P4 de la spec: "ok flu crea una junta/clase/alarma/... para mañana a las 11"
+// → aparece con su fecha correcta; "mañana" ≠ "hoy"; weekly para clases.
+// ============================================================
+import { describe, it, expect } from 'vitest';
+import { parseAgendaCommand } from '../src/core/agenda/agendaCommandParser';
+import { localDayDiff } from '../src/core/temporal/scheduleEngine';
+
+const NOW = new Date(2026, 8, 15, 22, 0, 0, 0).getTime(); // martes 15-sep-2026
+
+describe('agenda.intent — create', () => {
+    it('"crea una alarma para mañana a las 11" → alarma absolute mañana 11', () => {
+        const r = parseAgendaCommand('crea una alarma para mañana a las 11', { now: () => NOW });
+        expect(r.handled).toBe(true);
+        expect(r.action).toBe('agenda.create');
+        expect(r.kind).toBe('alarma');
+        expect(r.trigger?.type).toBe('absolute');
+        const at = (r.trigger as { at: number }).at;
+        expect(localDayDiff(NOW, at)).toBe(1); // mañana ≠ hoy
+        expect(new Date(at).getHours()).toBe(11);
+    });
+
+    it('"ok flu crea una junta para mañana a las 11" → junta mañana 11', () => {
+        const r = parseAgendaCommand('ok flu crea una junta para mañana a las 11', { now: () => NOW });
+        expect(r.handled).toBe(true);
+        expect(r.kind).toBe('junta');
+        expect(r.trigger?.type).toBe('absolute');
+    });
+
+    it('"crea una clase los lunes a las 9" → weekly lunes 9', () => {
+        const r = parseAgendaCommand('crea una clase los lunes a las 9', { now: () => NOW });
+        expect(r.handled).toBe(true);
+        expect(r.kind).toBe('clase');
+        expect(r.trigger).toEqual({ type: 'weekly', daysOfWeek: [1], timeOfDay: '09:00' });
+    });
+
+    it('"pon una alarma en 5 minutos" → countdown 5 min', () => {
+        const r = parseAgendaCommand('pon una alarma en 5 minutos', { now: () => NOW });
+        expect(r.handled).toBe(true);
+        expect(r.kind).toBe('alarma');
+        expect(r.trigger).toEqual({ type: 'countdown', durationMs: 5 * 60_000 });
+    });
+
+    it('"recuérdame todos los días a las 8" → recordatorio daily', () => {
+        const r = parseAgendaCommand('recuérdame todos los días a las 8', { now: () => NOW });
+        expect(r.handled).toBe(true);
+        expect(r.kind).toBe('recordatorio');
+        expect(r.trigger).toEqual({ type: 'daily', timeOfDay: '08:00' });
+    });
+});
+
+describe('agenda.intent — "hoy" no salta a mañana', () => {
+    const MORNING = new Date(2026, 8, 15, 7, 56, 0, 0).getTime(); // 15-sep-2026 07:56
+
+    it('"crea una cita hoy con el doctor a las 9 a.m." → hoy 9 (no mañana)', () => {
+        const r = parseAgendaCommand('crea una cita hoy con el doctor a las 9 a.m.', { now: () => MORNING });
+        expect(r.handled).toBe(true);
+        expect(r.kind).toBe('cita');
+        expect(r.trigger?.type).toBe('absolute');
+        const at = (r.trigger as { at: number }).at;
+        expect(localDayDiff(MORNING, at)).toBe(0); // hoy
+        expect(new Date(at).getHours()).toBe(9);
+    });
+
+    it('"hoy a las 9" con la hora ya pasada sigue siendo hoy', () => {
+        const r = parseAgendaCommand('crea una junta hoy a las 9', { now: () => NOW });
+        const at = (r.trigger as { at: number }).at;
+        expect(localDayDiff(NOW, at)).toBe(0);
+    });
+
+    it('hora PELADA ya pasada sí rueda a la próxima ocurrencia (mañana)', () => {
+        const r = parseAgendaCommand('crea una junta a las 9', { now: () => NOW });
+        const at = (r.trigger as { at: number }).at;
+        expect(localDayDiff(NOW, at)).toBe(1);
+    });
+});
+
+describe('agenda.intent — list/cancel', () => {
+    it('"qué hay para hoy" → list', () => {
+        expect(parseAgendaCommand('qué hay para hoy').action).toBe('agenda.list');
+    });
+
+    it('"qué hay mañana" → list when=mañana', () => {
+        const r = parseAgendaCommand('qué hay mañana', { now: () => NOW });
+        expect(r.action).toBe('agenda.list');
+        expect(r.when).toBe('mañana');
+    });
+
+    it('"qué hay esta semana" → list when=semana', () => {
+        expect(parseAgendaCommand('qué hay esta semana').when).toBe('semana');
+    });
+
+    it('"quita historia del viernes" → cancel clase (por materia+día)', () => {
+        const r = parseAgendaCommand('quita historia del viernes', { now: () => NOW });
+        expect(r.handled).toBe(true);
+        expect(r.action).toBe('agenda.cancel');
+        expect(r.kind).toBe('clase');
+        expect(r.label).toContain('historia');
+    });
+
+    it('"cancela la alarma de las 7" → cancel alarma', () => {
+        const r = parseAgendaCommand('cancela la alarma de las 7', { now: () => NOW });
+        expect(r.handled).toBe(true);
+        expect(r.action).toBe('agenda.cancel');
+        expect(r.kind).toBe('alarma');
+    });
+
+    it('"agrega matemáticas el lunes a las 8" → clase (dictado escolar)', () => {
+        const r = parseAgendaCommand('agrega matemáticas el lunes a las 8', { now: () => NOW });
+        expect(r.handled).toBe(true);
+        expect(r.action).toBe('agenda.create');
+        expect(r.kind).toBe('clase');
+        expect(r.trigger?.type).toBe('weekly');
+    });
+
+    it('frase sin intención no matchea', () => {
+        expect(parseAgendaCommand('hola flu').handled).toBe(false);
+    });
+
+    it('«Okay flu borra la clase de historia» → cancel (wake «okay flu» desde config)', () => {
+        const r = parseAgendaCommand('Okay flu borra la clase de historia', { now: () => NOW });
+        expect(r.handled).toBe(true);
+        expect(r.action).toBe('agenda.cancel');
+        expect(r.kind).toBe('clase');
+    });
+});
+describe('agenda.intent — referencia de CONJUNTO (cuantificador o plural)', () => {
+    it('"borra todas las clases" -> cancel de todo el tipo, sin etiqueta', () => {
+        const r = parseAgendaCommand('borra todas las clases', { now: () => NOW });
+        expect(r.handled).toBe(true);
+        expect(r.action).toBe('agenda.cancel');
+        expect(r.kind).toBe('clase');
+        // Sin objetivo concreto: el servicio opera sobre la serie ENTERA del tipo.
+        expect(r.label).toBe('');
+    });
+    it('con wake delante ("Okay Flow borra todas las clases") -> mismo despacho', () => {
+        const r = parseAgendaCommand('Okay Flow borra todas las clases', { now: () => NOW });
+        expect(r.action).toBe('agenda.cancel');
+        expect(r.kind).toBe('clase');
+        expect(r.label).toBe('');
+    });
+    it('cuantificador universal sobre otros tipos', () => {
+        expect(parseAgendaCommand('borra todas las alarmas').label).toBe('');
+        expect(parseAgendaCommand('borra todos los recordatorios').label).toBe('');
+        expect(parseAgendaCommand('borra todas las citas').label).toBe('');
+    });
+    it('plural desnudo = conjunto; singular desnudo NO arrastra (conservador)', () => {
+        expect(parseAgendaCommand('borra los recordatorios').label).toBe('');
+        // Singular sin nombre: ambiguo, no se lleva el conjunto.
+        expect(parseAgendaCommand('borra el recordatorio').label).toBe('recordatorio');
+    });
+    it('etiqueta nombrada sigue ACOTADA (no se vuelve conjunto)', () => {
+        const r = parseAgendaCommand('borra la clase de historia', { now: () => NOW });
+        expect(r.action).toBe('agenda.cancel');
+        expect(r.label).toBe('historia');
+    });
+    it('"borra toda la agenda" sigue siendo el vaciado TOTAL', () => {
+        expect(parseAgendaCommand('borra toda la agenda').action).toBe('agenda.clear');
+    });
+    it('el plural no rompe crear: "crea clases de matemáticas el lunes a las 8"', () => {
+        const r = parseAgendaCommand('crea clases de matemáticas el lunes a las 8', { now: () => NOW });
+        expect(r.action).toBe('agenda.create');
+        expect(r.kind).toBe('clase');
+    });
+});

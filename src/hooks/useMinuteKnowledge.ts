@@ -10,7 +10,16 @@
 // ============================================================
 
 import { useCallback, useEffect, useState } from 'react';
-import { fluDb, newId, newSyncTuple, bumpSync, type MinuteRecord, type MinuteSummarySnapshot } from '../core/db/fluDatabase';
+import { fluDb, newId, type MinuteRecord, type MinuteSummarySnapshot, type KnowledgeKind } from '../core/db/fluDatabase';
+import { buildSyncTuple } from '../core/db/syncTuple';
+import { useIntegrationStore } from '../store/integrationStore';
+import { logCaughtError } from '../lib/caughtError';
+import {
+    buildMinuteKey,
+    formatMinuteHistoryCode,
+    compareMinuteHistoryCodeDesc,
+    nextMinuteHistorySequence,
+} from '../lib/minuteKnowledgeHelpers';
 
 /**
  * Minuta en formato de UI (compatible con OS2 normalizeMinuteKnowledgeRecord).
@@ -30,55 +39,10 @@ export interface MinuteUIEntry {
 }
 
 /**
- * Construye minuteKey al estilo OS2: titulo|tema_sesion normalizado.
+ * Clave/formato/parseo del historyCode: dueno unico en
+ * src/lib/minuteKnowledgeHelpers.ts (se importan arriba). NO se reimplementan
+ * aqui: la copia local divergia del canonico (auditoria 2026-10-02).
  */
-function buildMinuteKey(snapshot: MinuteSummarySnapshot): string {
-    const title = (snapshot.titulo || '').trim().toLowerCase();
-    const theme = (snapshot.tema_sesion || '').trim().toLowerCase();
-    return `${title}|${theme}`;
-}
-
-/**
- * Formatea historyCode al estilo OS2: YYMMDD-NN
- */
-function formatHistoryCode(now: Date, sequence: number): string {
-    const year = String(now.getFullYear()).slice(-2);
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const day = String(now.getDate()).padStart(2, '0');
-    const seq = String(sequence).padStart(2, '0');
-    return `${year}${month}${day}-${seq}`;
-}
-
-/**
- * Parsea historyCode: { date: string, sequence: number }
- */
-function parseHistoryCode(code: string): { date: string; sequence: number } {
-    const match = (code || '').trim().match(/^(\d{6})-(\d+)$/);
-    if (!match) return { date: code || '', sequence: 0 };
-    return { date: match[1], sequence: Number.parseInt(match[2], 10) || 0 };
-}
-
-/**
- * Compara dos historyCodes descendente (más reciente primero).
- */
-function compareHistoryCodeDesc(a: string, b: string): number {
-    const left = parseHistoryCode(a);
-    const right = parseHistoryCode(b);
-    const dateCompare = right.date.localeCompare(left.date);
-    if (dateCompare !== 0) return dateCompare;
-    return right.sequence - left.sequence;
-}
-
-/**
- * Obtiene la siguiente secuencia universal para historyCode.
- */
-function getNextSequence(entries: MinuteRecord[]): number {
-    return entries.reduce((max, entry) => {
-        const { sequence } = parseHistoryCode(entry.historyCode);
-        return Math.max(max, sequence);
-    }, 0) + 1;
-}
-
 /**
  * Convierte MinuteRecord a MinuteUIEntry.
  */
@@ -98,88 +62,33 @@ function toUI(record: MinuteRecord): MinuteUIEntry {
 }
 
 /**
- * Crea un MinuteSummarySnapshot vacío.
- */
-export function createEmptySummarySnapshot(theme = ''): MinuteSummarySnapshot {
-    return {
-        titulo: '',
-        participantes: [],
-        resumen: '',
-        acuerdos: [],
-        pendientes: [],
-        siguientes_pasos: [],
-        tema_sesion: (theme || '').trim(),
-    };
-}
-
-/**
- * Crea un MinuteSummarySnapshot desde un AISummaryResult (o cualquier objeto con esos campos).
- */
-export function createSummarySnapshotFromResult(result: Record<string, unknown>, theme = ''): MinuteSummarySnapshot {
-    return {
-        titulo: String(result?.titulo || '').trim(),
-        participantes: Array.isArray(result?.participantes)
-            ? result.participantes.map((item: unknown) => String(item || '').trim()).filter(Boolean)
-            : [],
-        resumen: String(result?.resumen || '').trim(),
-        acuerdos: Array.isArray(result?.acuerdos)
-            ? result.acuerdos.map((item: unknown) => String(item || '').trim()).filter(Boolean)
-            : [],
-        pendientes: Array.isArray(result?.pendientes)
-            ? result.pendientes.map((item: unknown) => String(item || '').trim()).filter(Boolean)
-            : [],
-        siguientes_pasos: Array.isArray(result?.siguientes_pasos)
-            ? result.siguientes_pasos.map((item: unknown) => String(item || '').trim()).filter(Boolean)
-            : [],
-        tema_sesion: String(result?.tema_sesion || theme || '').trim(),
-    };
-}
-
-/**
- * Crea un MinuteSummarySnapshot desde un draft de OS2 (createMinuteDraftFromSummary).
- */
-export function createSummarySnapshotFromDraft(draft: Record<string, unknown>, theme = ''): MinuteSummarySnapshot {
-    return {
-        titulo: String(draft?.titulo || '').trim(),
-        participantes: Array.isArray(draft?.participantes)
-            ? draft.participantes.map((item: unknown) => String(item || '').trim()).filter(Boolean)
-            : [],
-        resumen: String(draft?.resumen || '').trim(),
-        acuerdos: Array.isArray(draft?.acuerdos)
-            ? draft.acuerdos.map((item: unknown) => String(item || '').trim()).filter(Boolean)
-            : [],
-        pendientes: Array.isArray(draft?.pendientes)
-            ? draft.pendientes.map((item: unknown) => String(item || '').trim()).filter(Boolean)
-            : [],
-        siguientes_pasos: Array.isArray(draft?.siguientes_pasos)
-            ? draft.siguientes_pasos.map((item: unknown) => String(item || '').trim()).filter(Boolean)
-            : [],
-        tema_sesion: String(draft?.tema_sesion || theme || '').trim(),
-    };
-}
-
-/**
- * Formatea una etiqueta de historial al estilo OS2 formatMinuteHistoryLabel.
- * Formato: "YYMMDD-NN-Description" o solo "Description" si no hay code.
- */
-export function formatMinuteHistoryLabel(entry: MinuteUIEntry): string {
-    const code = (entry.historyCode || '').trim();
-    const description = (entry.description || entry.summarySnapshot?.titulo || '').trim();
-    if (!code) return description;
-    if (!description) return code;
-    return `${code}-${description}`;
-}
-
-/**
  * Hook para gestionar minutas con persistencia en IndexedDB.
  * Sigue la nomenclatura exacta de OS2 normalizeMinuteKnowledgeRecord.
  */
-export function useMinuteKnowledge() {
+/**
+ * UNICO punto del proyecto que publica una minuta en integrationStore (C10).
+ *
+ * El dueño de la minuta (useMinuteKnowledge) es quien publica; los consumidores
+ * NO espejan por su cuenta. Centralizar aqui hace que la publicacion individual y
+ * la hidratacion del store pasen por la misma puerta: antes App recorria las
+ * minutas y llamaba a integrationStore.addMinute por su cuenta (segundo escritor).
+ */
+function publishMinuteToStore(entry: MinuteUIEntry): void {
+    useIntegrationStore.getState().addMinute(entry);
+}
+export function useMinuteKnowledge(participantId?: string) {
+    const scope = participantId || 'global';
     const [minutes, setMinutes] = useState<MinuteUIEntry[]>([]);
     const [loading, setLoading] = useState(true);
 
     /** Cargar minutas desde IndexedDB, ordenadas por createdAt descendente */
     const refresh = useCallback(async () => {
+        // Sin usuario real: NO se lee nada (todo el pizarrón es por usuario).
+        if (!participantId) {
+            setMinutes([]);
+            setLoading(false);
+            return;
+        }
         setLoading(true);
         try {
             const records = await fluDb.minutes
@@ -188,19 +97,20 @@ export function useMinuteKnowledge() {
                 .toArray();
             setMinutes(
                 records
-                    .filter((r) => !r.sync.deleted)
-                    .sort((a, b) => compareHistoryCodeDesc(a.historyCode, b.historyCode))
+                    // Aislamiento por usuario: solo las minutas de ESTE usuario.
+                    .filter((r) => !r.sync.deleted && (r.userId || 'global') === scope)
+                    .sort(compareMinuteHistoryCodeDesc)
                     .map(toUI),
             );
         } catch (err) {
-            console.error('[useMinuteKnowledge] Error loading minutes:', err);
+            logCaughtError('[useMinuteKnowledge] Error loading minutes', err);
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [scope, participantId]);
 
     useEffect(() => {
-        refresh().catch(console.error);
+        refresh().catch((e) => logCaughtError('src/hooks/useMinuteKnowledge.ts: refresh', e));
     }, [refresh]);
 
     /**
@@ -208,31 +118,39 @@ export function useMinuteKnowledge() {
      * Acepta un summarySnapshot (OS2 compatible) y genera los metadatos automáticamente.
      */
     const addMinute = useCallback(
-        async (snapshot: MinuteSummarySnapshot, options?: { profileId?: string; userId?: string }): Promise<MinuteUIEntry> => {
+        async (snapshot: MinuteSummarySnapshot, options?: { profileId?: string; userId?: string; kind?: KnowledgeKind }): Promise<MinuteUIEntry> => {
             const records = await fluDb.minutes.orderBy('sequence').reverse().toArray();
             const maxSeq = records.length > 0 ? records[0].sequence : 0;
             const now = new Date();
-            const minuteKey = buildMinuteKey(snapshot);
-            const description = (snapshot.titulo || '').trim();
+            const kind = options?.kind || snapshot.kind || 'minuta';
+            const snapshotWithKind: MinuteSummarySnapshot = { ...snapshot, kind };
+            const minuteKey = buildMinuteKey(snapshotWithKind);
+            const description = (snapshotWithKind.titulo || '').trim();
 
             // Buscar si ya existe una minuta con el mismo minuteKey (upsert)
-            const existingIndex = records.findIndex((r) => r.minuteKey === minuteKey && !r.sync.deleted);
+            // El dueno de la clave es buildMinuteKey (canonico). Las filas escritas
+            // ANTES de la unificacion pueden llevar la clave vieja, asi que la clave
+            // se RECALCULA al buscar: de lo contrario el upsert crearia una fila
+            // duplicada de la misma minuta (AGENTS.md 7.7.c).
+            const existingIndex = records.findIndex(
+                (r) => !r.sync.deleted && buildMinuteKey(r.summarySnapshot) === minuteKey,
+            );
 
             const record: MinuteRecord = {
                 id: existingIndex >= 0 ? records[existingIndex].id : newId(),
                 profileId: options?.profileId || '',
-                userId: options?.userId || '',
+                userId: options?.userId || (scope !== 'global' ? scope : ''),
                 minuteKey,
                 historyCode:
                     existingIndex >= 0
                         ? records[existingIndex].historyCode
-                        : formatHistoryCode(now, getNextSequence(records)),
+                        : formatMinuteHistoryCode(now, nextMinuteHistorySequence(records)),
                 description,
-                summarySnapshot: { ...snapshot },
+                summarySnapshot: { ...snapshotWithKind },
                 sequence: maxSeq + 1,
                 createdAt: existingIndex >= 0 ? records[existingIndex].createdAt : now.toISOString(),
                 updatedAt: now.toISOString(),
-                sync: existingIndex >= 0 ? bumpSync(records[existingIndex].sync) : newSyncTuple(),
+                sync: existingIndex >= 0 ? buildSyncTuple(records[existingIndex].sync, Date.now()) : buildSyncTuple(undefined, Date.now()),
             };
 
             if (existingIndex >= 0) {
@@ -244,12 +162,21 @@ export function useMinuteKnowledge() {
             const ui = toUI(record);
             setMinutes((prev) => {
                 const filtered = prev.filter((m) => m.id !== record.id);
-                return [ui, ...filtered].sort((a, b) => compareHistoryCodeDesc(a.historyCode, b.historyCode));
+                return [ui, ...filtered].sort(compareMinuteHistoryCodeDesc);
             });
+            // C10 — Escritura ÚNICA hacia el store: el dueño de la minuta
+            // (persistencia) es quien publica en integrationStore; los
+            // consumidores NO espejan por su cuenta.
+            publishMinuteToStore(ui);
             return ui;
         },
-        [],
+        [scope],
     );
+
+    /** Publica en integrationStore todas las minutas cargadas (hidratacion). */
+    const publishAllToStore = useCallback(() => {
+        minutes.forEach(publishMinuteToStore);
+    }, [minutes]);
 
     /** Actualizar una minuta existente */
     const updateMinute = useCallback(async (id: string, snapshot: Partial<MinuteSummarySnapshot>) => {
@@ -267,13 +194,13 @@ export function useMinuteKnowledge() {
             description: (mergedSnapshot.titulo || existing.description || '').trim(),
             minuteKey: buildMinuteKey(mergedSnapshot),
             updatedAt: new Date().toISOString(),
-            sync: bumpSync(existing.sync),
+            sync: buildSyncTuple(existing.sync, Date.now()),
         };
         await fluDb.minutes.put(updated);
         setMinutes((prev) =>
             prev
                 .map((m) => (m.id === id ? toUI(updated) : m))
-                .sort((a, b) => compareHistoryCodeDesc(a.historyCode, b.historyCode)),
+                .sort(compareMinuteHistoryCodeDesc),
         );
     }, []);
 
@@ -284,7 +211,7 @@ export function useMinuteKnowledge() {
 
         const updated: MinuteRecord = {
             ...existing,
-            sync: { ...bumpSync(existing.sync), deleted: true },
+            sync: { ...buildSyncTuple(existing.sync, Date.now()), deleted: true },
         };
         await fluDb.minutes.put(updated);
         setMinutes((prev) => prev.filter((m) => m.id !== id));
@@ -301,6 +228,7 @@ export function useMinuteKnowledge() {
         loading,
         refresh,
         addMinute,
+        publishAllToStore,
         updateMinute,
         deleteMinute,
         getMinute,
