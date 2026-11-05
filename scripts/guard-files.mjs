@@ -36,4 +36,5 @@
   'tests/replayTriageGuard.test.ts',
   'tests/vozEventoSistemaMarcaGuard.test.ts',
   'tests/vozRespuestaFluUnaSolaVezGuard.test.ts',
+  'tests/vozFuncionesRatchetGuard.test.ts',
 ]
