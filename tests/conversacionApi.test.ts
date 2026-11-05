@@ -43,6 +43,9 @@ import type {
 const SAMPLE_RATE = 16000
 const UUID_A = '11111111-1111-4111-8111-111111111111'
 const UUID_B = '22222222-2222-4222-8222-222222222222'
+const UUID_C = '33333333-3333-4333-8333-333333333333'
+const UUID_D = '44444444-4444-4444-8444-444444444444'
+const UUID_E = '55555555-5555-4555-8555-555555555555'
 
 const crearReloj = () => {
   let ahora = 1_700_000_000_000
@@ -739,6 +742,58 @@ describe('stop — un pendiente con texto y sin tramo no se pierde', () => {
     const detenida = await api.stop('system')
     expect(detenida.filas.map((fila) => fila.texto)).toEqual(['uno', 'dos'])
     expect(detenida.descartes.filter((descarte) => descarte.motivo === 'huerfano')).toEqual([])
+  })
+})
+
+describe('stop — un pendiente con audio ya cubierto no crea fila', () => {
+  it('no commitea el pendiente anterior a la última fila', async () => {
+    const { api } = crearEscenario()
+    await api.start()
+    const tramoA = await abrirConVoz(api, 0)
+    await api.ingestAsr(asr(tramoA, { texto: 'uno' }))
+    await api.ingestAsr(
+      asr(UUID_C, {
+        texto: 'viejo',
+        tramo: { inicio: 0, fin: 8000, sampleRate: SAMPLE_RATE },
+      }),
+    )
+
+    const detenida = await api.stop('system')
+    expect(detenida.filas.map((fila) => fila.texto)).toEqual(['uno'])
+    expect(detenida.descartes.some((descarte) => descarte.motivo === 'obsoleto')).toBe(true)
+  })
+
+  it('descarta el pendiente cuyo fin es IGUAL al de la última fila', async () => {
+    const { api } = crearEscenario()
+    await api.start()
+    const tramoA = await abrirConVoz(api, 0)
+    await api.ingestAsr(asr(tramoA, { texto: 'uno' }))
+    await api.ingestAsr(
+      asr(UUID_D, {
+        texto: 'igual',
+        tramo: { inicio: 0, fin: SAMPLE_RATE, sampleRate: SAMPLE_RATE },
+      }),
+    )
+
+    const detenida = await api.stop('system')
+    expect(detenida.filas.map((fila) => fila.texto)).toEqual(['uno'])
+    expect(detenida.descartes.some((descarte) => descarte.motivo === 'obsoleto')).toBe(true)
+  })
+
+  it('conserva el pendiente cuyo fin es POSTERIOR al de la última fila', async () => {
+    const { api } = crearEscenario()
+    await api.start()
+    const tramoA = await abrirConVoz(api, 0)
+    await api.ingestAsr(asr(tramoA, { texto: 'uno' }))
+    await api.ingestAsr(
+      asr(UUID_E, {
+        texto: 'nuevo',
+        tramo: { inicio: SAMPLE_RATE, fin: SAMPLE_RATE * 2, sampleRate: SAMPLE_RATE },
+      }),
+    )
+
+    const detenida = await api.stop('system')
+    expect(detenida.filas.map((fila) => fila.texto)).toEqual(['uno', 'nuevo'])
   })
 })
 

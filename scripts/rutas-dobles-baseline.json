@@ -599,12 +599,24 @@
     {
       "id": "turno-ya-escrito",
       "owner": "src/voice/conversation/ingesta.ts",
-      "description": "El motivo turnoYaEscrito tiene un solo sitio y un solo dueno: la reentrega de ingesta.",
+      "description": "El motivo turnoYaEscrito tiene un solo dueno: la reentrega de texto de ingesta.",
       "pattern": "contarDescarte\\(\\s*['\"]turnoYaEscrito['\"]",
       "roots": ["src/voice/conversation"],
       "kind": "sites",
       "allowed": {
         "src/voice/conversation/ingesta.ts": 1
+      },
+      "goal": 1
+    },
+    {
+      "id": "audio-cubierto",
+      "owner": "src/voice/conversation/texto.ts",
+      "description": "El pendiente cuyo audio ya esta cubierto por una fila posterior tiene su propio motivo (obsoleto) y su unico dueno en el stop.",
+      "pattern": "contarDescarte\\(\\s*['\"]obsoleto['\"]",
+      "roots": ["src/voice/conversation"],
+      "kind": "sites",
+      "allowed": {
+        "src/voice/conversation/texto.ts": 1
       },
       "goal": 1
     },

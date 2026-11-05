@@ -6,6 +6,7 @@
  * aparece un fichero nuevo que implemente la responsabilidad fuera del dueno, si
  * la lista conserva un fichero que ya no casa, o si el total sube del techo.
  */
+import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -46,6 +47,39 @@ function fuentesReales(): Array<{ rel: string; text: string }> {
   }))
 }
 
+function existeRef(ref: string): boolean {
+  try {
+    execFileSync('git', ['rev-parse', '--verify', '--end-of-options', ref], { stdio: 'ignore' })
+    return true
+  } catch {
+    return false
+  }
+}
+
+function refBase(): string {
+  if (process.env.GITHUB_EVENT_NAME === 'pull_request' && process.env.GITHUB_BASE_REF) {
+    const base = `origin/${process.env.GITHUB_BASE_REF}`
+    if (existeRef(base)) return base
+    if (existeRef('HEAD^1')) return 'HEAD^1'
+  }
+  if (process.env.GITHUB_EVENT_NAME === 'push' && existeRef('HEAD^1')) return 'HEAD^1'
+  return 'HEAD'
+}
+
+function baselineEn(ref: string): Baseline | null {
+  const ruta = 'scripts/rutas-dobles-baseline.json'
+  try {
+    execFileSync('git', ['cat-file', '-e', `${ref}:${ruta}`], { stdio: 'ignore' })
+  } catch {
+    return null
+  }
+  const raw = execFileSync('git', ['show', `${ref}:${ruta}`], {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'ignore'],
+  })
+  return JSON.parse(raw) as Baseline
+}
+
 describe('rutasDoblesGuard — la linea base se cumple', () => {
   const base = baseline()
 
@@ -74,6 +108,24 @@ describe('rutasDoblesGuard — la linea base se cumple', () => {
       ).toBeLessThanOrEqual(caso.goal)
     })
   }
+
+  it('la línea base no sube respecto a la referencia (solo baja)', () => {
+    const anterior = baselineEn(refBase())
+    if (!anterior) return
+    const subidas: string[] = []
+    for (const caso of base.cases) {
+      const previo = anterior.cases.find((prev) => prev.id === caso.id)
+      if (!previo) continue
+      if (caso.goal > previo.goal) {
+        subidas.push(`${caso.id}: goal ${previo.goal} -> ${caso.goal}`)
+      }
+      for (const [archivo, techo] of Object.entries(caso.allowed)) {
+        const antes = previo.allowed[archivo] ?? 0
+        if (techo > antes) subidas.push(`${caso.id}: ${archivo} ${antes} -> ${techo}`)
+      }
+    }
+    expect(subidas).toEqual([])
+  })
 })
 
 describe('rutasDoblesGuard — el detector no es decorativo', () => {

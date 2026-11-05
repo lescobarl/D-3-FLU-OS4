@@ -120,6 +120,7 @@ export type MotivoDescarteConversacion =
   | 'eco'
   | 'huerfano'
   | 'turnoYaEscrito'
+  | 'obsoleto'
   | 'control'
 
 /** Descarte contado con su locución y su motivo. */
@@ -278,6 +279,8 @@ export type LocucionAbierta = Readonly<{
   medidaMotor?: MedidaMotor
   /** Continuidad de voz calculada al abrir (no se reescribe al azar). */
   continuidadVoz: boolean
+  /** La locución nació de una partición por cambio de voz (hecho de ingesta). */
+  partidaDeVoz: boolean
 }>
 
 /** Texto de un tramo ajeno retenido hasta que se pueda abrir sin mezclarse. */

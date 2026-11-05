@@ -90,6 +90,8 @@ export type DatosApertura = Readonly<{
   voz: EvidenciaVoz
   /** ¿El final del ASR ya llegó? (Caso 7+6: marca la frase completa.) */
   finalLlego?: boolean
+  /** La locución nace de una partición por cambio de voz (hecho de ingesta). */
+  partidaDeVoz?: boolean
   /** Métricas del motor para el final (pueden faltar). */
   medidaMotor?: MedidaMotor
   /**
@@ -253,6 +255,7 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
       final: Boolean(datos.finalLlego),
       medidaMotor: datos.medidaMotor,
       continuidadVoz,
+      partidaDeVoz: Boolean(datos.partidaDeVoz),
     }
     registro.registrar('conversacion.locucion.abierta', {
       sessionId: estado.sessionId,

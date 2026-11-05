@@ -159,8 +159,9 @@ export function crearIngesta({
     tramo: Pick<TramoMuestreado, 'inicio' | 'fin' | 'sampleRate'>,
     turnId: string,
     idioma: IdiomaLocucion,
+    partidaDeVoz = false,
   ): void {
-    sesion.abrirLocucion({ tramoId, texto: '', tramo, turnId, idioma, voz: {} })
+    sesion.abrirLocucion({ tramoId, texto: '', tramo, turnId, idioma, voz: {}, partidaDeVoz })
   }
 
   /** Retiene el PCM del tramo para la voz de un pendiente que abre tarde. */
@@ -416,6 +417,9 @@ export function crearIngesta({
       { inicio: datos.inicio, fin: datos.fin, sampleRate: datos.sampleRate },
       turno,
       idioma,
+      // El hecho de la partición: la anterior se RECORTÓ dentro de su audio
+      // (continuación real) vs. el VAD ya la había cortado (tramo nuevo).
+      datos.recortarAnterior !== null,
     )
     // 3. Identidad de la voz nueva con el MISMO vector (etiqueta perezosa).
     if (!aplicarIdentidadAlTramoAbierto(vector, ventana.length)) return null

@@ -293,6 +293,46 @@ describe('Caso 1+3 — dos voces SIN pausa (módulo real, embebedor falso)', () 
     expect(causas).toContain('voz')
   })
 
+  it('la voz nueva NO repite el prefijo ya commiteado de la voz anterior', async () => {
+    const escenario = crearEscenario(VECTOR_A, VECTOR_B)
+    await escenario.api.start({ turnId: 'T5' })
+
+    await entregarAudio(escenario.api, VOZ(), cursor)
+    await entregarAudio(escenario.api, VOZ(), cursor)
+    await frase(escenario.api, 'ok flu crea una cita', 'T5')
+    // Voz B SIN pausa; el ASR reemite la línea acumulada con el prefijo de A.
+    await entregarAudio(escenario.api, VOZ(), cursor)
+    await entregarAudio(escenario.api, VOZ(), cursor)
+    await frase(escenario.api, 'ok flu crea una cita con el doctor', 'T5')
+    await cerrarPorSilencio(escenario.api)
+
+    const filas = filasDe(escenario.api)
+    expect(filas).toHaveLength(2)
+    expect(filas[0]).toMatchObject({ texto: 'ok flu crea una cita', etiqueta: 'Hablante 1' })
+    expect(filas[1]).toMatchObject({ texto: 'con el doctor', etiqueta: 'Hablante 2' })
+  })
+
+  it('frase tras pausa de OTRA voz que repite el inicio NO se deduplica', async () => {
+    const escenario = crearEscenario(VECTOR_A, VECTOR_B)
+    await escenario.api.start({ turnId: 'T5' })
+
+    await entregarAudio(escenario.api, VOZ(), cursor)
+    await entregarAudio(escenario.api, VOZ(), cursor)
+    await frase(escenario.api, 'uno', 'T5')
+    await cerrarPorSilencio(escenario.api)
+
+    // Voz B tras el silencio: tramo NUEVO, no partición. Aunque su ASR repita
+    // el inicio de la fila anterior, no se deduce por `partidaDeVoz`.
+    await entregarAudio(escenario.api, VOZ(), cursor)
+    await frase(escenario.api, 'uno dos', 'T5')
+    await cerrarPorSilencio(escenario.api)
+
+    const filas = filasDe(escenario.api)
+    expect(filas).toHaveLength(2)
+    expect(filas[0]).toMatchObject({ texto: 'uno', etiqueta: 'Hablante 1' })
+    expect(filas[1]).toMatchObject({ texto: 'uno dos', etiqueta: 'Hablante 2' })
+  })
+
   it('misma voz en tramo continuo => UNA fila, UNA etiqueta y texto que crece', async () => {
     const escenario = crearEscenario(VECTOR_A, VECTOR_A)
     await escenario.api.start({ turnId: 'T5' })

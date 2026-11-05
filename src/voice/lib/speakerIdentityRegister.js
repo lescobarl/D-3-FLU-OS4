@@ -79,6 +79,9 @@ export function committedEchoStreakWindowMs() {
  * @param {{ sessionPrimarySpeakerRef?: { current: string }, setClusters?: (clusters: unknown[]) => void, registerParticipant?: (name: string, speakerLabel?: string, voiceVector?: number[] | null) => void | Promise<unknown> }} [params.refs] Refs de sesion
  *   (el dueno de la precedencia decide si escribe).
  * @param {"presented"|"participant"|"resolved"} [params.source] Fuente del primario.
+ * @param {"passive"|"command"} [params.origin] Procedencia del nombre: `passive`
+ *   aplica la ventana de eco del TTS; `command` es el comando explicito del
+ *   usuario y no la aplica.
  * @returns {{ registered: boolean, name: string, labels: string[], rowsChanged: number, primarySet: boolean }}
  */
 export function registerSpeakerIdentity({
@@ -88,6 +91,10 @@ export function registerSpeakerIdentity({
   signatureVector = null,
   refs = null,
   source = "presented",
+  // Procedencia del nombre, no una bandera de producto: `passive` es la escucha
+  // continua (el TTS puede volver por el microfono y el eco se descarta);
+  // `command` es el comando explicito del usuario, que llega con wake y nombre.
+  origin = "passive",
 } = {}) {
   // P9.78: UNA grafia. El nombre entra canonico (inicial en mayuscula) para que la fila,
   // el alias y la base no partan la MISMA identidad en "luis"/"Luis".
@@ -103,7 +110,10 @@ export function registerSpeakerIdentity({
   // asi que no cae en esta ventana.
   const lastSpeechAt = getLastCompletedSpeechAt()
   const echoAgeMs = lastSpeechAt > 0 ? Date.now() - lastSpeechAt : Number.POSITIVE_INFINITY
-  if (echoAgeMs >= 0 && echoAgeMs < committedEchoStreakWindowMs()) {
+  // El eco del TTS solo puede colarse por la escucha pasiva. Un comando explicito
+  // (`origin: "command"`) paso la wake y trae el nombre del usuario: la ventana
+  // de eco no puede anularlo (defecto medido 2026-11-05 15:38:26, ageMs=4).
+  if (origin !== "command" && echoAgeMs >= 0 && echoAgeMs < committedEchoStreakWindowMs()) {
     voiceProbe('identity-register-skip', {
       name: clean,
       reason: 'tts-echo-window',
@@ -332,5 +342,6 @@ export function registerSpeakerIdentityFromCommand({
     signatureVector,
     clusters,
     refs,
+    origin: "command",
   })
 }

@@ -22,7 +22,8 @@ vi.mock('../src/voice/lib/fluSpeech.js', () => ({
 // (speakerIdentityRegister) lee su propia `committedEchoStreakWindowMs` de FLU_CONFIG
 // y ya no importa la isla.
 
-import { registerSpeakerIdentity } from '../src/voice/lib/speakerIdentityRegister'
+import { registerSpeakerIdentity, registerSpeakerIdentityFromCommand } from '../src/voice/lib/speakerIdentityRegister'
+import { FLU_WAKE_WORDS } from '../src/voice/lib/fluConfig.js'
 
 const vector = (n: number) => {
     const v = new Array(16).fill(0)
@@ -39,6 +40,24 @@ describe('eco del TTS en el nombre', () => {
     it('"soy Luis registrado" se corta a Luis', () => {
         expect(detectIntroducedName('soy Luis registrado')).toBe('Luis')
         expect(detectWakeIntroducedName('okay flu soy Luis registrado', ['okay flu'])).toBe('Luis')
+    })
+
+    it('extrae el nombre del final real con la wake al final (15:38:24)', () => {
+        const texto = 'Aquí voy a pasar la palabra a una mujer pareciera que va bien Voy a pasarle la la palabra a la mujer antes de esto voy a ejecutar mi Comando Okay flu Soy Luis'
+        expect(detectWakeIntroducedName(texto, [...FLU_WAKE_WORDS])).toBe('Luis')
+    })
+
+    it('un comando explícito registra aunque el TTS acabe de hablar', () => {
+        estado.ttsAt = Date.now() - 100
+        const registerParticipant = vi.fn()
+        const result = registerSpeakerIdentityFromCommand({
+            transcript: `${FLU_WAKE_WORDS[0]} soy Luis`,
+            speakerName: 'Hablante 1',
+            signatureVector: vector(1),
+            refs: { registerParticipant },
+        })
+        expect(result.registered).toBe(true)
+        expect(registerParticipant).toHaveBeenCalledTimes(1)
     })
 
     it('no registra identidad dentro de la ventana de eco', () => {
