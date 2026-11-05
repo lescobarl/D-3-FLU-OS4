@@ -610,16 +610,17 @@
     },
     {
       "id": "comando-control",
-      "owner": "src/voice/conversation/adapters.ts",
-      "description": "El predicado de comando de control tiene UN dueno; solo las dos puertas declaradas lo consumen.",
-      "pattern": "esComandoDeControl\\?\\.\\(",
-      "roots": ["src/voice/conversation"],
+      "owner": "src/voice/lib/audioMath.js",
+      "description": "El predicado de comando de control lo decide detectListeningControl; el adaptador delega y solo las dos puertas del modulo lo consumen.",
+      "pattern": "(?:function detectListeningControl|esComandoDeControl\\?\\.\\(|normal\\.includes\\(objetivo\\))",
+      "roots": ["src/voice"],
       "kind": "sites",
       "allowed": {
+        "src/voice/lib/audioMath.js": 1,
         "src/voice/conversation/texto.ts": 1,
         "src/voice/conversation/cierre.ts": 1
       },
-      "goal": 2
+      "goal": 3
     }
   ]
 }

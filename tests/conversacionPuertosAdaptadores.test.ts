@@ -22,6 +22,8 @@ import {
   crearVadProducto,
 } from '../src/voice/conversation/adapters'
 import { getVadEnergyThreshold } from '../src/voice/lib/asr/asrConfig'
+import { detectListeningControl } from '../src/voice/lib/audioMath.js'
+import { FLU_CONFIG } from '../src/voice/api/config'
 import {
   CONVERSACION_CONFIG,
 } from '../src/voice/conversation/ports'
@@ -170,6 +172,21 @@ describe('config viva — sale de FLU_CONFIG, no inventa wake', () => {
     expect(config.wakeWords().length).toBeGreaterThan(0)
     expect(config.semillaEtiqueta()).not.toBe('')
     expect('localFallbackHabilitado' in config).toBe(false)
+  })
+
+  it('el adaptador y detectListeningControl coinciden en las frases de control', () => {
+    const config = crearConfigFlu()
+    const abrir = FLU_CONFIG.voiceCommands.openListening?.[0] || ''
+    const cerrar = FLU_CONFIG.voiceCommands.closeListening?.[0] || ''
+    expect(abrir).not.toBe('')
+    expect(cerrar).not.toBe('')
+    const conComa = cerrar.replace(' ', ', ')
+    const frases = [abrir, cerrar, `por favor ${cerrar}`, conComa, 'texto normal']
+    for (const frase of frases) {
+      expect(Boolean(config.esComandoDeControl?.(frase))).toBe(
+        Boolean(detectListeningControl(frase, FLU_CONFIG.voiceCommands)),
+      )
+    }
   })
 })
 

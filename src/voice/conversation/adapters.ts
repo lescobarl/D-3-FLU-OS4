@@ -43,6 +43,7 @@ import { normalizeForMatch } from '../../lib/textUtils.ts'
 import { splitTranscriptAtWakeWord } from '../api/audio.ts'
 import { FLU_CONFIG } from '../api/config.ts'
 import { getVadFrameMs } from '../lib/asr/asrConfig.js'
+import { detectListeningControl } from '../lib/audioMath.js'
 import { labelToSpeakerId } from '../lib/conversationRow.js'
 import {
   autoSpeakerLabel,
@@ -214,14 +215,8 @@ export function crearConfigFlu(): ConfigPort {
         ? valor
         : VOICE_DIARIZATION_DEFAULTS.cosineExistingMatch
     },
-    esComandoDeControl: (texto) => {
-      const normal = normalizeForMatch(texto)
-      if (!normal) return false
-      return (FLU_CONFIG.voiceCommands.closeListening || []).some((frase) => {
-        const objetivo = normalizeForMatch(frase)
-        return objetivo.length > 0 && (normal === objetivo || normal.includes(objetivo))
-      })
-    },
+    esComandoDeControl: (texto) =>
+      Boolean(detectListeningControl(texto, FLU_CONFIG.voiceCommands)),
     etiquetaAnonima: (indice) => autoSpeakerLabel(indice),
     // Etiqueta TEMPORAL mientras la medida de la voz no es fiable (mandato del
     // dueño 2026-10-30). Fuente única: `speakerAssignDefaults.pendingSpeaker`.
