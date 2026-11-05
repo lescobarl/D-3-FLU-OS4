@@ -36,7 +36,8 @@ export function nombresDeFunciones(src) {
   for (const match of limpio.matchAll(
     /^[ \t]*(?:(?:public|private|protected|static|async|get|set|readonly|override)[ \t]+)*#?([A-Za-z_$][\w$]*)[ \t]*\([^)]*\)[ \t]*(?::[^{\n]+)?\{/gm,
   )) {
-    if (!/^(?:if|for|while|switch|catch|function|constructor|return|typeof|await)$/.test(match[1])) {
+    // `async (` es una flecha anónima, no un método llamado `async`.
+    if (!/^(?:if|for|while|switch|catch|function|constructor|return|typeof|await|async)$/.test(match[1])) {
       nombres.add(match[1])
     }
   }

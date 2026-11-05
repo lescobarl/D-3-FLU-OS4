@@ -1,0 +1,2331 @@
+{
+  "fecha": "2026-11-05",
+  "dueno": "src (fuera de src/voice)",
+  "nota": "Ratchet de nombres de función de TODO src fuera de src/voice: una función nueva exige declararla aquí en el mismo cambio. src/voice tiene su propia línea base (voz-funciones-baseline.json) y src/voice/conversation la suya (conversacion-rutas-dobles-baseline.json).",
+  "minSources": 345,
+  "funciones": {
+    "src/App.tsx": [
+      "App",
+      "cleanup",
+      "fill",
+      "handler",
+      "isTransient",
+      "onPageHide",
+      "startOnGesture",
+      "tryStartListening"
+    ],
+    "src/app/appDispatchHelpers.ts": [
+      "buildArbiterOptions",
+      "exposeContractHookDev",
+      "exposeDevHook",
+      "isRedundantTextWorkspace",
+      "resolveDomainScopedIntent"
+    ],
+    "src/app/appTypeGuards.ts": [
+      "isBunnyComponent"
+    ],
+    "src/app/arbiterDispatch.ts": [
+      "dispatchArbiterIntent",
+      "readStringProp"
+    ],
+    "src/app/arbiterDomainRoutes.ts": [
+      "arbiterDomainRoute",
+      "dispatcherHandlerFor",
+      "isStateFastPathDomain",
+      "isTurnAlreadyExecuted"
+    ],
+    "src/app/configActions.ts": [
+      "applyConfigAction",
+      "applyNumberConfig",
+      "parseBoolean"
+    ],
+    "src/app/fluBridges.ts": [
+      "clearFluBridges",
+      "publishFluBridges",
+      "readBridge",
+      "snapshotFluBridges",
+      "useFluBridgesLifecycle",
+      "writeBridge"
+    ],
+    "src/app/gameActions.ts": [
+      "applyGameAction",
+      "applyGameEmotion",
+      "buildGameConfig",
+      "playSongForGame",
+      "speakGameText",
+      "stopMusicForGame",
+      "unavailableGameMessage"
+    ],
+    "src/app/noteRemovalActions.ts": [
+      "runNoteRemovalIntent"
+    ],
+    "src/app/registerParticipantVoice.ts": [
+      "registerParticipantVoice"
+    ],
+    "src/app/superNoteActions.ts": [
+      "removeSuperNoteItem",
+      "superNoteIncoming",
+      "superNoteItemRemovedReply",
+      "writeSuperNoteList"
+    ],
+    "src/app/tabRoutes.ts": [
+      "pathForTab",
+      "tabFromPath"
+    ],
+    "src/app/useIdentitySessionRef.ts": [
+      "useIdentitySessionRef"
+    ],
+    "src/avatar/components/AnimationPanel.tsx": [
+      "AnimationPanel"
+    ],
+    "src/avatar/components/BunnyViewer.tsx": [
+      "BunnyViewer",
+      "Scene",
+      "SceneBackgroundSync",
+      "SignalOverlay",
+      "StateIndicator",
+      "WebGLContextManager",
+      "apply",
+      "handleContextLost",
+      "handleContextRestored",
+      "readBgColor"
+    ],
+    "src/avatar/components/ComponentPanel.tsx": [
+      "ComponentPanel"
+    ],
+    "src/avatar/components/ControlsPanel.tsx": [
+      "ControlsPanel",
+      "handleControlClick"
+    ],
+    "src/avatar/components/LogPanel.tsx": [
+      "LogPanel"
+    ],
+    "src/avatar/components/SignalPanel.tsx": [
+      "SignalPanel"
+    ],
+    "src/avatar/config/bunnySceneConfig.ts": [
+      "bunnyStateColor"
+    ],
+    "src/avatar/decorations/DecorationsRenderer.tsx": [
+      "DecorationsRenderer",
+      "findAnchorBone"
+    ],
+    "src/avatar/decorations/decorationsCatalog.ts": [
+      "buildDecorationGroup",
+      "buildElement",
+      "disposeDecorationGroup",
+      "getDecorationLabel"
+    ],
+    "src/avatar/lib/fbxDomShim.ts": [
+      "createCanvas",
+      "createElement",
+      "createElementNS",
+      "dispatchEvent",
+      "get",
+      "getAttribute",
+      "installDomShim",
+      "set",
+      "setAttribute"
+    ],
+    "src/avatar/lib/fbxParse.ts": [
+      "fetchFbxJson",
+      "parseFbxBuffer"
+    ],
+    "src/avatar/model/BunnyModel.tsx": [
+      "BunnyModel"
+    ],
+    "src/avatar/model/bunnyAnimator.ts": [
+      "boneSuffix",
+      "buildBlendActions",
+      "clearAnimBones",
+      "crossFadeTo",
+      "crossFadeToBlended",
+      "dispose",
+      "ensureAnimBones",
+      "ensureMouthClip",
+      "ensurePalabraClip",
+      "findClip",
+      "getPlayingAnimations",
+      "isSynthetic",
+      "play",
+      "playBlended",
+      "playBlendedList",
+      "preloadAll",
+      "prepareMainAction",
+      "quatFromTrack",
+      "resolveClip",
+      "setTimeScale",
+      "shiftClipToZero",
+      "stop",
+      "stopAllActions",
+      "update",
+      "validBlendList",
+      "validateAnimations"
+    ],
+    "src/avatar/model/bunnyComponents.ts": [
+      "applyComponentColor",
+      "applyComponentVisibility",
+      "findGroupByName"
+    ],
+    "src/avatar/model/bunnyMaterials.ts": [
+      "repairFBXMaterials"
+    ],
+    "src/avatar/model/bunnySkeleton.ts": [
+      "unifySkeletons"
+    ],
+    "src/avatar/model/bunnyTextures.ts": [
+      "applyTextures",
+      "getTexture",
+      "getTextureSetForMesh"
+    ],
+    "src/avatar/store/bunnyStore.ts": [
+      "ensureAvatarPantsVisible"
+    ],
+    "src/avatar/workers/fbxWorkerClient.ts": [
+      "loadFbx",
+      "postLoad",
+      "runMainThreadFallback"
+    ],
+    "src/components/AgendaPanel.tsx": [
+      "AgendaPanel",
+      "formatDayLabel",
+      "formatTimeLabel",
+      "fromDateTimeLocal",
+      "itemOccursOnDay",
+      "itemTimeText",
+      "pad",
+      "relativeDayLabel",
+      "renderEditAction",
+      "renderRow",
+      "resetForm",
+      "saveBodyEdit",
+      "saveNoteEdit",
+      "startEdit",
+      "startEditBody",
+      "startEditNote",
+      "submit",
+      "submitNote",
+      "toDateTimeLocal"
+    ],
+    "src/components/AmbienteEditorForm.tsx": [
+      "AmbienteEditorForm",
+      "setVar",
+      "toggleTab"
+    ],
+    "src/components/AmbientesPanel.tsx": [
+      "AmbientesPanel",
+      "buildThemeStyle",
+      "handleRemove",
+      "startClone",
+      "startCreate",
+      "startEdit",
+      "tabLabel"
+    ],
+    "src/components/AnalysisErrorBlock.tsx": [
+      "AnalysisErrorBlock"
+    ],
+    "src/components/AnalysisErrorList.tsx": [
+      "AnalysisErrorList"
+    ],
+    "src/components/AnalysisPanelShell.tsx": [
+      "AnalysisPanelShell"
+    ],
+    "src/components/AnalysisSection.tsx": [
+      "AnalysisSection"
+    ],
+    "src/components/AppAnalysisPanel.tsx": [
+      "AppAnalysisPanel"
+    ],
+    "src/components/AssistantSettingsPanel.tsx": [
+      "AssistantSettingsPanel"
+    ],
+    "src/components/BrowserProfilesPanel.tsx": [
+      "BrowserProfileEditor",
+      "BrowserProfilesPanel"
+    ],
+    "src/components/CatalogCardActions.tsx": [
+      "CatalogCardActions"
+    ],
+    "src/components/CatalogCardShell.tsx": [
+      "CatalogCardShell"
+    ],
+    "src/components/CatalogEditorFormShell.tsx": [
+      "CatalogEditorFormShell"
+    ],
+    "src/components/CatalogEditorNameField.tsx": [
+      "CatalogEditorNameField"
+    ],
+    "src/components/CatalogPanelShell.tsx": [
+      "CatalogPanelShell"
+    ],
+    "src/components/ContactsPanel.tsx": [
+      "ContactsPanel",
+      "handleRemove",
+      "handleSubmit"
+    ],
+    "src/components/DocumentResultPanel.tsx": [
+      "DocumentResultPanel",
+      "formatBytes"
+    ],
+    "src/components/DocumentsHistoryPanel.tsx": [
+      "DocumentsHistoryPanel",
+      "downloadDocumentContent"
+    ],
+    "src/components/ErrorBoundary.tsx": [
+      "componentDidCatch",
+      "getDerivedStateFromError",
+      "render"
+    ],
+    "src/components/FluAvatarVoiceBridge.tsx": [
+      "FluAvatarVoiceBridge",
+      "VoiceControls",
+      "handleKeyDown",
+      "handleKeyUp",
+      "useKeyboardShortcuts"
+    ],
+    "src/components/FluConversationTabView.tsx": [
+      "FluConversationTabView"
+    ],
+    "src/components/FluMinutesTabView.tsx": [
+      "FluMinutesTabView"
+    ],
+    "src/components/FluSettingsPanel.tsx": [
+      "FluSettingsPanel"
+    ],
+    "src/components/FluSettingsTabView.tsx": [
+      "FluSettingsTabView"
+    ],
+    "src/components/FluSystemTabView.tsx": [
+      "FluSystemTabView"
+    ],
+    "src/components/FluWorkspaceTabView.tsx": [
+      "FluWorkspaceTabView"
+    ],
+    "src/components/GenerationProgressPanel.tsx": [
+      "GenerationProgressPanel",
+      "triggerDownload"
+    ],
+    "src/components/ImageGrid.tsx": [
+      "ImageGrid",
+      "useImageGridUi"
+    ],
+    "src/components/MateriaGrisPanel.tsx": [
+      "MateriaGrisPanel",
+      "handleSubmit"
+    ],
+    "src/components/MediaResultItem.tsx": [
+      "MediaResultItem"
+    ],
+    "src/components/NotificationCenterBell.tsx": [
+      "NotificationCenterBell",
+      "dayLabel",
+      "onDocClick",
+      "onKey",
+      "timeLabel",
+      "uiText"
+    ],
+    "src/components/OnboardingOverlay.tsx": [
+      "OnboardingOverlay",
+      "handleSubmit",
+      "inputForm",
+      "selectForm"
+    ],
+    "src/components/PaletaEditorForm.tsx": [
+      "PaletaEditorForm",
+      "setColor"
+    ],
+    "src/components/PaletasPanel.tsx": [
+      "PaletasPanel",
+      "handleRemove",
+      "startClone",
+      "startCreate",
+      "startEdit"
+    ],
+    "src/components/ParticipantSelect.tsx": [
+      "ParticipantSelect"
+    ],
+    "src/components/ParticipantsPanel.tsx": [
+      "ParticipantsPanel",
+      "handleRemove",
+      "handleReset",
+      "handleSetLevel",
+      "handleSetTone",
+      "handleSubmit"
+    ],
+    "src/components/ResultFeed.tsx": [
+      "ResultFeed",
+      "filterForKind",
+      "pickPriorityFilter"
+    ],
+    "src/components/SearchCatalogPanel.tsx": [
+      "ChipCheckbox",
+      "SearchCatalogPanel",
+      "SearchSiteEditorForm",
+      "emptySeed"
+    ],
+    "src/components/SearchControlCenter.tsx": [
+      "ProviderNumberField",
+      "SearchControlCenter",
+      "numText"
+    ],
+    "src/components/SettingsPanelShell.tsx": [
+      "SettingsPanelShell"
+    ],
+    "src/components/SettingsSaveContext.tsx": [
+      "SettingsSaveBar",
+      "SettingsSaveProvider",
+      "useSettingsSave",
+      "useSettingsSaveRegistration"
+    ],
+    "src/components/SettingsTextArea.tsx": [
+      "SettingsTextArea"
+    ],
+    "src/components/SettingsTextField.tsx": [
+      "SettingsTextField"
+    ],
+    "src/components/ShoppingPanel.tsx": [
+      "ShoppingPanel",
+      "handleClearChecked",
+      "handleRemove",
+      "handleSubmit",
+      "handleToggle",
+      "renderItem"
+    ],
+    "src/components/ThinkingIndicator.tsx": [
+      "ThinkingIndicator"
+    ],
+    "src/components/VideoGrid.tsx": [
+      "VideoGrid",
+      "useVideoGridUi"
+    ],
+    "src/components/VoiceAssistantBarWrapper.tsx": [
+      "VoiceAssistantBarWrapper"
+    ],
+    "src/components/WorkspaceHub.tsx": [
+      "HorarioImportConfirm",
+      "WorkspaceHub"
+    ],
+    "src/components/WorkspaceSearch.tsx": [
+      "WorkspaceSearch"
+    ],
+    "src/components/catalogPanelEditors.ts": [
+      "catalogCreateValue",
+      "catalogEditValue",
+      "catalogEditorProps",
+      "catalogPanelSave",
+      "catalogSeedEditorProps",
+      "mapCatalogReason",
+      "submitCatalogPanel"
+    ],
+    "src/components/configText.ts": [
+      "asConfigNode",
+      "configChild",
+      "configLabel",
+      "configText",
+      "configTextMap"
+    ],
+    "src/components/editorSubmit.ts": [
+      "submitCatalogEditor"
+    ],
+    "src/components/panelUtils.ts": [
+      "cloneSeedEntry",
+      "todayLocalDate"
+    ],
+    "src/context/FluBridgeContext.tsx": [
+      "FluBridgeProvider",
+      "useFluBridge"
+    ],
+    "src/core/agenda/agendaCommandParser.ts": [
+      "collapseQuantifierStutter",
+      "collapseRepeatedPhrase",
+      "detectAction",
+      "detectAnyWeekdays",
+      "detectKind",
+      "detectQueryView",
+      "detectWeekdays",
+      "expandDayRange",
+      "hasExplicitRecurrence",
+      "hasNamedDay",
+      "parseAgendaCommand",
+      "resolveImplicitKind",
+      "resolveLabel",
+      "resolveRecurrence",
+      "withDayRange",
+      "wordRe"
+    ],
+    "src/core/agenda/agendaModel.ts": [
+      "agendaDedupKey",
+      "agendaTriggerAction",
+      "colorForKind",
+      "isDueToday",
+      "nextAgendaDue",
+      "normalizeAgendaLabel",
+      "timeOfDayMs"
+    ],
+    "src/core/agenda/agendaMotor.ts": [
+      "collectDueFires",
+      "runAgendaCycle"
+    ],
+    "src/core/agenda/agendaQuery.ts": [
+      "agendaWindow",
+      "isRecurring",
+      "itemsInView",
+      "nextAgendaTick"
+    ],
+    "src/core/agenda/agendaService.ts": [
+      "agendaLabelMatches",
+      "cancel",
+      "cancelByTarget",
+      "clearAll",
+      "complete",
+      "create",
+      "createAgendaService",
+      "findDuplicate",
+      "findSeries",
+      "list",
+      "normalizeDays",
+      "restore",
+      "update",
+      "updateByTarget"
+    ],
+    "src/core/agenda/agendaShared.ts": [
+      "clasificarDia",
+      "diaDeFecha",
+      "esNombreDeDia",
+      "extractAula",
+      "extractHorarioHoras",
+      "structureHorarioText",
+      "toHHMM"
+    ],
+    "src/core/agenda/agendaSummary.ts": [
+      "agendaSummaryText",
+      "localHHMM",
+      "summarizeAgenda"
+    ],
+    "src/core/agenda/demoSeed.ts": [
+      "atHoursFromNow",
+      "buildDemoAgendaInputs",
+      "buildDemoNotes",
+      "selectDemoAgendaInputs"
+    ],
+    "src/core/agenda/describeTriggerText.ts": [
+      "describeTriggerWhen",
+      "describeWeekdays",
+      "weekdayName"
+    ],
+    "src/core/agenda/domainScopedIntent.ts": [
+      "actionDomainList",
+      "askMissingInstant",
+      "resolveAgendaDomainIntent"
+    ],
+    "src/core/ai/IAIService.ts": [
+      "generateVisionAnalysis"
+    ],
+    "src/core/ai/aiServiceBase.ts": [
+      "analyzeApp",
+      "analyzeDocument",
+      "buildConversationLog",
+      "generateConversationSummary",
+      "generateDocument",
+      "generateMinute",
+      "generateParticipantEvaluation",
+      "generateResponse",
+      "generateVisionAnalysis",
+      "generateWorkspaceImage",
+      "normalizeMinute",
+      "normalizePractica",
+      "safeParseJson"
+    ],
+    "src/core/ai/httpClient.ts": [
+      "buildNetworkError",
+      "buildTimeoutError",
+      "fetchTextEngine",
+      "fetchTextEngineResilient",
+      "isTransportError",
+      "resolveRequestTimeout"
+    ],
+    "src/core/ai/imageFailure.ts": [
+      "imageGenerationFailure"
+    ],
+    "src/core/ai/personalization.ts": [
+      "buildPersonalityPayload",
+      "buildPersonalizationRule"
+    ],
+    "src/core/ai/prompts.ts": [
+      "buildMinuteSystemPrompt"
+    ],
+    "src/core/ai/providerPreference.ts": [
+      "getPreferredAIProvider",
+      "setPreferredAIProvider"
+    ],
+    "src/core/ai/textKey.ts": [
+      "resolveTextRequestKey"
+    ],
+    "src/core/anim/emotionEngine.ts": [
+      "applyReactivityToAnims",
+      "emptyResolved",
+      "getDefaultExpression",
+      "isValidAnimation",
+      "isValidExpression",
+      "resolveContextualExpression",
+      "resolveEmotionExpression",
+      "resolveFromCandidates",
+      "resolveIdleMicroExpression",
+      "resolveSpeakingExpression",
+      "resolveStateExpression",
+      "resolveToggleExpression",
+      "resolveTriggerExpression",
+      "speakingAnims"
+    ],
+    "src/core/anim/expressionRegistry.ts": [
+      "buildAnimPrompt",
+      "getEmotionExpressions",
+      "getExpressionDef",
+      "getGroupExpressions",
+      "getMicroExpressions",
+      "getStateExpressions",
+      "getTriggerExpressions",
+      "getValidAnimations",
+      "getValidExpressions",
+      "pickBestExpressionForPersonality",
+      "scoreExpressionByPersonality"
+    ],
+    "src/core/autonomy/AutonomyStatusPanel.tsx": [
+      "AutonomyStatusPanel",
+      "getStatusColor",
+      "getStatusText"
+    ],
+    "src/core/autonomy/autoOptimization.ts": [
+      "applyOptimization",
+      "applyToSystemConfig",
+      "average",
+      "calculateExpectedImprovement",
+      "calculateNewValue",
+      "compareMetrics",
+      "create",
+      "determineOptimizationDirection",
+      "evaluateAndOptimize",
+      "evaluateOptimizationResult",
+      "evaluateParameter",
+      "generateJustification",
+      "getAutoOptimizationSystem",
+      "getConfig",
+      "getCurrentParameterValues",
+      "getDefaultParameterValue",
+      "getOptimizationHistory",
+      "getParameterValue",
+      "getRecentMetrics",
+      "getRelevantMetrics",
+      "mapToOptimizationMetrics",
+      "recordMetrics",
+      "recordPerformanceMetrics",
+      "resetParameter",
+      "rollbackOptimization",
+      "startGlobalAutoOptimization",
+      "stopGlobalAutoOptimization",
+      "tick"
+    ],
+    "src/core/autonomy/autoRecovery.ts": [
+      "clearAllIncidents",
+      "clearHistory",
+      "clearIncident",
+      "create",
+      "createIncident",
+      "evaluateAndRecover",
+      "evaluateCondition",
+      "evaluateMetricCondition",
+      "executeEnableDegradedMode",
+      "executeEscalateToAdmin",
+      "executeNotifyUser",
+      "executeRecoveryAction",
+      "executeRestartComponent",
+      "executeRestoreFromBackup",
+      "executeRetryWithBackoff",
+      "executeSwitchAIProvider",
+      "finishRecovery",
+      "getActiveIncidents",
+      "getAutoRecoverySystem",
+      "getConfig",
+      "getExecutionCount",
+      "getIncidentHistory",
+      "getOrCreateIncidentId",
+      "getRuleExecutionCount",
+      "isInCooldown",
+      "recordExecution",
+      "setHealthMonitor",
+      "startGlobalAutoRecovery",
+      "updateConfig",
+      "updateIncidentStatus"
+    ],
+    "src/core/autonomy/autonomyEvents.ts": [
+      "emitAutonomyEvent",
+      "onAutonomyEvent"
+    ],
+    "src/core/autonomy/backupSystem.ts": [
+      "calculateChecksum",
+      "cleanup",
+      "cleanupOldBackups",
+      "compressBackup",
+      "create",
+      "createBackup",
+      "createEmergencyBackup",
+      "createManualBackup",
+      "decompressBackup",
+      "deleteBackup",
+      "extractAIConfiguration",
+      "extractComponent",
+      "extractConversationState",
+      "extractMinuteHistory",
+      "extractSystemSettings",
+      "extractUserPreferences",
+      "extractVoiceProfiles",
+      "extractWorkspaceData",
+      "getAppVersion",
+      "getAvailableBackups",
+      "getBackup",
+      "getBackupStats",
+      "getBackupSystem",
+      "getConfig",
+      "getStoredBackupsSizeBytes",
+      "loadBackup",
+      "loadBackupList",
+      "performAutoBackup",
+      "resolveBackupComponents",
+      "restoreAIConfiguration",
+      "restoreBackup",
+      "restoreBackupById",
+      "restoreComponent",
+      "restoreConversationState",
+      "restoreFromLatestBackup",
+      "restoreLatestBackup",
+      "restoreMinuteHistory",
+      "restoreSystemSettings",
+      "restoreUserPreferences",
+      "restoreVoiceProfiles",
+      "restoreWorkspaceData",
+      "saveBackup",
+      "saveBackupList",
+      "start",
+      "startGlobalBackupSystem",
+      "stopGlobalBackupSystem",
+      "tick",
+      "updateBackupStats",
+      "verifyAllBackups",
+      "verifyBackupIntegrity",
+      "writeBackupRaw"
+    ],
+    "src/core/autonomy/configSnapshot.ts": [
+      "snapshotConfig"
+    ],
+    "src/core/autonomy/decisionEngine.ts": [
+      "analyzeTrend",
+      "calculateChangePenalty",
+      "calculateConfidence",
+      "clearDecisionHistory",
+      "create",
+      "decisionEngineFactory",
+      "evaluateAIProviderFactors",
+      "evaluateAISwitchDecision",
+      "evaluateAlternativeProviderOption",
+      "evaluateAndDecide",
+      "evaluateCurrentProviderOption",
+      "evaluateSwitchAIOptions",
+      "executeDecisionActions",
+      "executeNotifySystem",
+      "executeRecordDecision",
+      "executeSingleAction",
+      "executeUpdateProviderConfig",
+      "generateJustification",
+      "generateSwitchActions",
+      "getAllProviderMetrics",
+      "getConfig",
+      "getDecisionEngine",
+      "getDecisionHistory",
+      "getRecentAutonomousDecisions",
+      "getRecentDecisions",
+      "loadDailyDecisionCount",
+      "normalizeValue",
+      "recordProviderMetrics",
+      "resetDailyCount",
+      "saveDailyDecisionCount",
+      "setDecisionEngineFactory",
+      "startGlobalDecisionEngine",
+      "stopGlobalDecisionEngine",
+      "tick"
+    ],
+    "src/core/autonomy/healthMonitor.ts": [
+      "calculateOverallStatus",
+      "checkAIService",
+      "checkIndexedDB",
+      "checkMemory",
+      "checkNetwork",
+      "checkReactComponents",
+      "checkSpeechRecognition",
+      "checkSpeechSynthesis",
+      "clearHistory",
+      "componentHealth",
+      "create",
+      "determineComponentStatus",
+      "getComponentHistory",
+      "getComponentMetrics",
+      "getConfig",
+      "getHealthMonitor",
+      "getLastHealth",
+      "getSystemHealth",
+      "performHealthCheck",
+      "recordMetric",
+      "start",
+      "startGlobalHealthMonitoring",
+      "stopGlobalHealthMonitoring",
+      "tick"
+    ],
+    "src/core/autonomy/intervalLifecycle.ts": [
+      "fireAndForget",
+      "start",
+      "stop",
+      "updateConfig"
+    ],
+    "src/core/autonomy/serviceSingleton.ts": [
+      "createModuleSingleton"
+    ],
+    "src/core/autonomy/useAutonomyIntegration.ts": [
+      "initializeAutonomySystems",
+      "stopSystems",
+      "useAutonomyIntegration"
+    ],
+    "src/core/branding/SeasonalDecoration.tsx": [
+      "SeasonalDecoration"
+    ],
+    "src/core/branding/SeasonalEffects.tsx": [
+      "SeasonalEffects",
+      "buildParticles",
+      "getSeasonalEffect",
+      "mulberry32",
+      "randRange"
+    ],
+    "src/core/branding/paletaFactory.ts": [
+      "buildPaletaPayload",
+      "editableFieldsOf",
+      "emptyEditableFields",
+      "slugifyPalette"
+    ],
+    "src/core/branding/paletasCatalog.ts": [
+      "getDynamicPaleta",
+      "hydratePalettes",
+      "listDynamicPaletas",
+      "resetPaletasCache"
+    ],
+    "src/core/branding/seasonalCalendar.ts": [
+      "getActiveSeason",
+      "getMonthName",
+      "isSameDay"
+    ],
+    "src/core/branding/seasonalPalettes.ts": [
+      "applyPaletteToCSS",
+      "builtinPaletteEntries",
+      "getAllPalettes",
+      "getBrandingScopes",
+      "getFusedPalettes",
+      "getPalette",
+      "getPaletteKeys",
+      "resetMergedPalettes",
+      "resetPaletteToDefault",
+      "setMergedPalettes",
+      "toggleBrandingClass"
+    ],
+    "src/core/branding/useEnhancedBranding.ts": [
+      "useEnhancedBranding"
+    ],
+    "src/core/branding/useSeasonalBranding.ts": [
+      "loadConfigFromDB",
+      "saveConfigToDB",
+      "useSeasonalBranding"
+    ],
+    "src/core/browser/browserNavigation.ts": [
+      "resolveBrowserNavigation"
+    ],
+    "src/core/browser/browserProfileService.ts": [
+      "createBrowserProfileService"
+    ],
+    "src/core/browser/browserSession.ts": [
+      "buildBrowserUrl",
+      "extractSiteFromPhrase",
+      "isDomainAllowed",
+      "normalizeHost",
+      "resolveSiteCandidate",
+      "tileUrl"
+    ],
+    "src/core/catalogs/catalogEditorSave.ts": [
+      "saveCatalogEntry"
+    ],
+    "src/core/catalogs/catalogRegistry.ts": [
+      "add",
+      "catalogRecordFromRow",
+      "createCatalogDb",
+      "createCatalogMutations",
+      "createCatalogRegistry",
+      "get",
+      "put",
+      "register",
+      "remove",
+      "toArray",
+      "update"
+    ],
+    "src/core/catalogs/catalogSchema.ts": [
+      "isCssColor",
+      "isDecorationKey",
+      "isHexColor",
+      "isHost",
+      "isNonEmptyText",
+      "isSlug",
+      "isTabIdList"
+    ],
+    "src/core/catalogs/mergeCatalog.ts": [
+      "cloneBuiltin",
+      "isReservedId",
+      "mergeCatalog"
+    ],
+    "src/core/config/appConfig.ts": [
+      "buildPollinationsUrl",
+      "buildTextApiUrl",
+      "readStorage",
+      "resolveDedicatedGeminiApiKey",
+      "resolveFalApiKey",
+      "resolveFalVideoModel",
+      "resolveTextApiKey",
+      "writeStorage"
+    ],
+    "src/core/config/localeConfig.ts": [
+      "normalizeLang"
+    ],
+    "src/core/config/pronunciacionBank.ts": [
+      "pronunciacionWordsByLevel"
+    ],
+    "src/core/config/sharedConfig.ts": [
+      "buildPollinationsImageUrl",
+      "getDefaultProfile",
+      "getProfileById",
+      "isAIProvider",
+      "isGenerationWorkspaceTipo",
+      "isLocalTextEndpoint",
+      "isMemberOf",
+      "isTextEngineProvider",
+      "isVisualWorkspaceTipo",
+      "isWorkspaceTipo",
+      "joinApiUrl",
+      "normalizarTipo",
+      "readServerEnv",
+      "resolveApiKey",
+      "resolveServerPollinationsUrl",
+      "resolveServerTextApiKey",
+      "resolveServerTextApiUrl",
+      "resolveServerTextModel",
+      "resolveTextApiKeyFromEnv",
+      "setServerEnv"
+    ],
+    "src/core/config/voiceConfigCatalog.ts": [
+      "buildConfiguracionPrompt",
+      "describeNumber",
+      "formatValueEn",
+      "formatValueEs"
+    ],
+    "src/core/contacts/contactService.ts": [
+      "createContactService"
+    ],
+    "src/core/days/dayRollover.ts": [
+      "shouldRolloverDay"
+    ],
+    "src/core/db/conversationRowMapping.ts": [
+      "mapearMetaConversacion",
+      "metaDeFilaConversacion"
+    ],
+    "src/core/db/conversationRowWriter.ts": [
+      "bulkPutConversationRecords",
+      "escribirRegistroConversacion",
+      "leerConversacionesPorIds",
+      "leerRegistroConversacion",
+      "listarConversaciones",
+      "registroDesdeFilaConversacion",
+      "softDeleteConversationRows",
+      "transaccionConversaciones"
+    ],
+    "src/core/db/entityMutations.ts": [
+      "createClearFlagged",
+      "createGetRow",
+      "createRename",
+      "createSoftDelete",
+      "createToggle",
+      "listAliveByName"
+    ],
+    "src/core/db/fluDatabase.ts": [
+      "addAuditLog",
+      "clearAuditLogs",
+      "getAuditLogs",
+      "newId",
+      "probeIndexedDb",
+      "schemaTableNames"
+    ],
+    "src/core/db/recordCopy.ts": [
+      "copyRecord",
+      "createFilteredAliveList",
+      "getAliveRecord",
+      "isLiveRecord",
+      "listAliveRecords"
+    ],
+    "src/core/db/syncTuple.ts": [
+      "buildSyncTuple",
+      "makeTupleTimestamp"
+    ],
+    "src/core/deviceActions/deviceActionIntentParser.ts": [
+      "askContactReply",
+      "callReply",
+      "cleanContactLabel",
+      "cleanMessage",
+      "emailReply",
+      "missingContactReply",
+      "parseDeviceActionIntent",
+      "parseSendChannel",
+      "resolvedIntent",
+      "smsReply",
+      "splitContactAndMessage",
+      "tidyLabel",
+      "whatsappReply"
+    ],
+    "src/core/deviceActions/deviceActionService.ts": [
+      "buildMailtoUri",
+      "buildSmsUri",
+      "buildTelUri",
+      "buildWhatsAppUri",
+      "createDeviceActionService",
+      "matchContactName",
+      "normalizePhone"
+    ],
+    "src/core/diary/diaryIntentParser.ts": [
+      "parseDiaryIntent",
+      "resolveDiaryVoiceIntent"
+    ],
+    "src/core/diary/diaryService.ts": [
+      "createDiaryService",
+      "filtered"
+    ],
+    "src/core/dnd/dndPolicy.ts": [
+      "describeDndSchedule",
+      "isDoNotDisturbActive",
+      "parseTimeToMinutes"
+    ],
+    "src/core/documents/documentInsumo.ts": [
+      "buildDocumentInsumo"
+    ],
+    "src/core/documents/documentsService.ts": [
+      "add",
+      "createDocumentsService",
+      "list",
+      "remove"
+    ],
+    "src/core/documents/generatedInsumo.ts": [
+      "buildGeneratedInsumo"
+    ],
+    "src/core/documents/imageInsumo.ts": [
+      "buildImageInsumo",
+      "composeAnalysisText"
+    ],
+    "src/core/documents/scheduleAdapter.ts": [
+      "createScheduleAdapter",
+      "propose"
+    ],
+    "src/core/environments/ambienteFactory.ts": [
+      "buildAmbientePayload",
+      "editableFieldsOfEnvironment",
+      "emptyEnvironmentEditableFields",
+      "slugifyAmbiente",
+      "splitPhrases"
+    ],
+    "src/core/environments/ambientesCatalog.ts": [
+      "getDynamicAmbiente",
+      "hydrateAmbientes",
+      "listDynamicAmbientes",
+      "resetAmbientesCache"
+    ],
+    "src/core/environments/applyEnvironment.ts": [
+      "applyEnvironment",
+      "applyEnvironmentThemeVars",
+      "cleanupEnvironmentThemeVars",
+      "resetEnvironment"
+    ],
+    "src/core/environments/environmentIntents.ts": [
+      "normalizeEnvironment",
+      "resolveEnvironmentIntent",
+      "resolveLangKey"
+    ],
+    "src/core/environments/environmentPrompt.ts": [
+      "buildAmbientePrompt"
+    ],
+    "src/core/environments/environmentRegistry.ts": [
+      "getAmbiente",
+      "getAmbientes",
+      "getDefaultAmbiente",
+      "getEnvironmentCssVars",
+      "getVisibleTabIds",
+      "isAmbienteId",
+      "resetMergedAmbientes",
+      "setMergedAmbientes"
+    ],
+    "src/core/events/fluEvents.ts": [
+      "dispatchFluEvent",
+      "dispatchFluResetSearch",
+      "dispatchFluSearch",
+      "dispatchFluSearchReady",
+      "listener",
+      "onFluEvent",
+      "onFluResetSearch",
+      "onFluSearch",
+      "onFluSearchReady"
+    ],
+    "src/core/games/abecedario.ts": [
+      "createAbecedarioEngine",
+      "isGameCommand",
+      "itemAt",
+      "matchedWord",
+      "turn"
+    ],
+    "src/core/games/adivinaCancion.ts": [
+      "buildOptions",
+      "createAdivinaCancionEngine",
+      "createSession",
+      "isGameCommand",
+      "matchesAnyOption",
+      "songPrompt",
+      "start",
+      "turn"
+    ],
+    "src/core/games/adivinaNumero.ts": [
+      "createAdivinaNumeroEngine",
+      "createSession",
+      "pickNumber",
+      "start",
+      "turn"
+    ],
+    "src/core/games/ahorcado.ts": [
+      "createAhorcadoEngine",
+      "createSession",
+      "displayWord",
+      "extractLetter",
+      "isComplete",
+      "isGameCommand",
+      "start",
+      "turn"
+    ],
+    "src/core/games/calculoMental.ts": [
+      "createCalculoMentalEngine",
+      "createSession",
+      "generateOperation",
+      "isGameCommand",
+      "operationPrompt",
+      "start",
+      "turn"
+    ],
+    "src/core/games/cuentaConmigo.ts": [
+      "createCuentaConmigoEngine",
+      "createSession",
+      "isGameCommand",
+      "start",
+      "turn"
+    ],
+    "src/core/games/cuentoColaborativo.ts": [
+      "closePrompt",
+      "createCuentoColaborativoEngine",
+      "createSession",
+      "isGameCommand",
+      "start",
+      "turn"
+    ],
+    "src/core/games/gameCatalog.ts": [
+      "bestAliasMatch",
+      "gameDisplayName",
+      "gameMenuNames",
+      "getGameEngine",
+      "hasNegativeGameIntent",
+      "hasNegativeIntent",
+      "isAudioGame",
+      "isGameId",
+      "matchGameAliasOnly",
+      "matchGameIntent",
+      "matchesTruncatedAliasTail",
+      "suppressesAmbient",
+      "turn",
+      "withStartOrderWall",
+      "wordsOf"
+    ],
+    "src/core/games/gameSessionStore.ts": [
+      "clearActiveGameSession",
+      "getActiveGameSession",
+      "isGameSuspended",
+      "noteGameTurn",
+      "resumeActiveGameSession",
+      "setActiveGameSession",
+      "suspendActiveGameSession"
+    ],
+    "src/core/games/gameSpeech.ts": [
+      "resolveGameSpeechOptions"
+    ],
+    "src/core/games/gameUtils.ts": [
+      "adoptRandom",
+      "advanceCursorAfterSkip",
+      "advanceRound",
+      "bankItemAt",
+      "baseSession",
+      "baseTurnResult",
+      "beginGame",
+      "buildShuffledState",
+      "clamp",
+      "createShuffledAnnounceStateBuilder",
+      "createShuffledAnnounceSurface",
+      "createShuffledAnnounceSurfaceBase",
+      "engineCommandGuard",
+      "findTokenIndex",
+      "finishRoundsIfLast",
+      "gameOverResult",
+      "gamePrompt",
+      "hasAnyToken",
+      "hasGameOrderFrame",
+      "hasToken",
+      "isBareAffirmation",
+      "isEngineCommand",
+      "isExplicitOrderFor",
+      "isGameCommandSurface",
+      "isLastRound",
+      "isStopOrSkipCommand",
+      "matchesEndGameFrames",
+      "openTurn",
+      "pickRandom",
+      "readLongMaxCfg",
+      "readNumberCfg",
+      "readRounds",
+      "resetGameSession",
+      "resolveNumericAnswer",
+      "roundsOverMessage",
+      "runGuessTurn",
+      "shuffleOrder",
+      "skipNextPrompt",
+      "skipTurn",
+      "turnResult"
+    ],
+    "src/core/games/karaoke.ts": [
+      "createKaraokeEngine",
+      "createSession",
+      "start",
+      "turn"
+    ],
+    "src/core/games/loteria.ts": [
+      "cantarPrompt",
+      "cardAt",
+      "createLoteriaEngine",
+      "createSession",
+      "isExplicitOrder",
+      "isGameCommand",
+      "start",
+      "turn"
+    ],
+    "src/core/games/memoriaSecuencias.ts": [
+      "buildSequence",
+      "createMemoriaSecuenciasEngine",
+      "createSession",
+      "extractLetters",
+      "isGameCommand",
+      "isOrderedMatch",
+      "sequencePrompt",
+      "start",
+      "turn"
+    ],
+    "src/core/games/ordenaSecuencia.ts": [
+      "claveIndex",
+      "clavePositions",
+      "countRecognized",
+      "createOrdenaSecuenciaEngine",
+      "displayScrambled",
+      "isAscending",
+      "isGameCommand",
+      "itemAt",
+      "shufflePasos",
+      "start",
+      "turn"
+    ],
+    "src/core/games/palabrasEncadenadas.ts": [
+      "continuationFor",
+      "createPalabrasEncadenadasEngine",
+      "createSession",
+      "findBankWord",
+      "firstLetter",
+      "isGameCommand",
+      "lastLetter",
+      "realWordWithLetter",
+      "start",
+      "turn"
+    ],
+    "src/core/games/pronunciacion.ts": [
+      "createPronunciacionEngine",
+      "createSession",
+      "currentPrompt",
+      "editDistance",
+      "imitaLaPalabra",
+      "isGameCommand",
+      "itemAt",
+      "start",
+      "turn"
+    ],
+    "src/core/games/quienSoy.ts": [
+      "advanceSkippingMentioned",
+      "askNext",
+      "bestSplitAttribute",
+      "clueAt",
+      "cluePrompt",
+      "createQuienSoyEngine",
+      "createSession",
+      "finishFluGuessing",
+      "guessPrompt",
+      "isGameCommand",
+      "itemAt",
+      "quienSoyCategory",
+      "quienSoyHints",
+      "quienSoyNarrowing",
+      "resolveSiNoQuestion",
+      "start",
+      "turn",
+      "turnFluGuessing"
+    ],
+    "src/core/games/repiteTraduce.ts": [
+      "createRepiteTraduceEngine",
+      "currentPrompt",
+      "isGameCommand",
+      "itemAt",
+      "turn"
+    ],
+    "src/core/games/respiracion.ts": [
+      "createRespiracionEngine",
+      "createSession",
+      "start",
+      "stepPrompt",
+      "turn"
+    ],
+    "src/core/games/riddles.ts": [
+      "createRiddlesEngine",
+      "currentPrompt",
+      "isGameCommand",
+      "riddleAt",
+      "start",
+      "turn"
+    ],
+    "src/core/games/simonDice.ts": [
+      "announcePrompt",
+      "createSession",
+      "createSimonDiceEngine",
+      "describeSequence",
+      "extractOrderedVerbs",
+      "growSequence",
+      "isGameCommand",
+      "isOrderedSubsequence",
+      "start",
+      "turn"
+    ],
+    "src/core/games/storyteller.ts": [
+      "createCuentacuentosEngine",
+      "createSession",
+      "isGameCommand",
+      "narrate",
+      "personalizeStory",
+      "readEscenasMax",
+      "sanitizeScenes",
+      "sceneResult",
+      "start",
+      "toAnimation",
+      "turn"
+    ],
+    "src/core/games/trabalenguas.ts": [
+      "createTrabalenguasEngine",
+      "currentPrompt",
+      "isGameCommand",
+      "itemAt",
+      "turn"
+    ],
+    "src/core/games/trivia.ts": [
+      "createTriviaEngine",
+      "currentPrompt",
+      "isGameCommand",
+      "optionsPrompt",
+      "questionAt",
+      "resolveOptionIndex",
+      "turn"
+    ],
+    "src/core/games/veoVeo.ts": [
+      "createVeoVeoEngine",
+      "isGameCommand",
+      "itemAt",
+      "itemLetter",
+      "itemPrompt",
+      "turn"
+    ],
+    "src/core/media/mediaRequestGate.ts": [
+      "createMediaRequestGate",
+      "normalizeKey",
+      "reset"
+    ],
+    "src/core/media/musicActions.ts": [
+      "asMusicAction",
+      "empiezaPor",
+      "esParada",
+      "isMusicRequestText",
+      "musicActionSpeech",
+      "resolveMusicIntent",
+      "resolverReproduccion",
+      "shouldAutoPlayDanceTrack",
+      "sinPuntuacionBordes"
+    ],
+    "src/core/multiuser/anonymousProfile.ts": [
+      "resolveAnonymousProfile"
+    ],
+    "src/core/multiuser/confirmationNameRepair.ts": [
+      "repairConfirmationNameDuplicates"
+    ],
+    "src/core/multiuser/materiaGrisService.ts": [
+      "createMateriaGrisService"
+    ],
+    "src/core/multiuser/participantRegistry.ts": [
+      "anonymousSeedInFlight",
+      "createParticipantRegistry",
+      "normalizeVoiceVector",
+      "notifyParticipantsChanged",
+      "resolveKindRole"
+    ],
+    "src/core/notes/notesList.ts": [
+      "clearDone",
+      "filterNotes",
+      "filterNotesByScope",
+      "matchNotesByTarget",
+      "notesRemaining",
+      "uncheckAllNotes"
+    ],
+    "src/core/notes/notesService.ts": [
+      "createNotesService",
+      "notesTable",
+      "shoppingItemsTable"
+    ],
+    "src/core/notes/superNoteTarget.ts": [
+      "appendSuperNoteItems",
+      "isSuperNoteLabel",
+      "planSuperNoteWrite",
+      "removeSuperNoteItems",
+      "superItemKey",
+      "superNoteItems",
+      "superNoteLabelItems"
+    ],
+    "src/core/notifications/notificationService.ts": [
+      "createDefaultDriver",
+      "createNotificationService",
+      "getPermission",
+      "isSupported",
+      "readStoredChannel",
+      "requestPermission",
+      "showSystemNotification"
+    ],
+    "src/core/onboarding/onboardingFlow.ts": [
+      "advanceOnboarding",
+      "createInitialState",
+      "decides",
+      "fillTemplate",
+      "finishOnboarding",
+      "initialSpeech",
+      "localized",
+      "matchesOption",
+      "nameCaptureKey",
+      "normalizeAnswer",
+      "progressInfo",
+      "promptForStep"
+    ],
+    "src/core/onboarding/onboardingService.ts": [
+      "createOnboardingRecord",
+      "createOnboardingService",
+      "getLocalStorage",
+      "onboardingStateFromRecord",
+      "resolveActiveUser",
+      "setActiveUser"
+    ],
+    "src/core/personalization/communicationProfileService.ts": [
+      "computeProfileConfidence",
+      "createCommunicationProfileService",
+      "defaultRecord",
+      "detectExplanationLevel",
+      "detectToneFromText",
+      "mergeObservation",
+      "resolveExplanationLevel",
+      "resolveTone",
+      "ttsRateForLevel"
+    ],
+    "src/core/reminders/nlDateParser.ts": [
+      "absoluteResult",
+      "applyHourMinute",
+      "extractTime",
+      "findWeekdayEntry",
+      "monthEntry",
+      "nextWeekday",
+      "parseNlDateTime",
+      "spanishWeekdayName",
+      "weekdayResult"
+    ],
+    "src/core/reminders/shoppingIntentParser.ts": [
+      "cleanShoppingLabel",
+      "parseShoppingIntent"
+    ],
+    "src/core/reminders/shoppingList.ts": [
+      "addItem",
+      "clearChecked",
+      "filterItems",
+      "itemsForPerson",
+      "itemsRemaining",
+      "removeItem",
+      "renameItem",
+      "toggleItem",
+      "uncheckAll"
+    ],
+    "src/core/reminders/shoppingService.ts": [
+      "createShoppingService"
+    ],
+    "src/core/search/searchCatalog.ts": [
+      "getDynamicSearchSite",
+      "getSearchSites",
+      "hydrateSearchSites",
+      "listDynamicSearchSites",
+      "resetSearchSitesCache"
+    ],
+    "src/core/search/searchConfigOverrides.ts": [
+      "applyProviderOverrides",
+      "clearSearchConfigOverrides",
+      "envOpenRouterKey",
+      "evalDailyUsage",
+      "getLastStorageError",
+      "loadDailyUsage",
+      "loadSearchConfigOverrides",
+      "mergeSearchConfig",
+      "parsePositiveInt",
+      "readRawOverrides",
+      "safeGet",
+      "saveDailyUsage",
+      "saveSearchConfigOverrides",
+      "writeRawOverrides"
+    ],
+    "src/core/search/searchLanguage.ts": [
+      "acceptLanguageHeader",
+      "applyLanguageToHost",
+      "extractLanguageFromPhrase",
+      "hasMarker",
+      "resolveSearchLanguage",
+      "stripLanguageWords"
+    ],
+    "src/core/search/searchSession.ts": [
+      "buildOfflineFallback",
+      "buildProviderRequest",
+      "buildWikiArticleUrl",
+      "capResults",
+      "deriveOrigin",
+      "extractHost",
+      "fillBodyTokens",
+      "fillTokens",
+      "filterNavigable",
+      "mapProviderResults",
+      "navigableResults",
+      "normalizeCommonsMedia",
+      "normalizeDuckDuckGo",
+      "normalizeInvidious",
+      "normalizeOpenRouter",
+      "normalizeResults",
+      "normalizeTavily",
+      "normalizeWikipedia",
+      "normalizeYouTube",
+      "pushTopic",
+      "resolveSearchProviders",
+      "stripHtml",
+      "videoUrlTemplates",
+      "videoUrls"
+    ],
+    "src/core/search/searchSiteTypes.ts": [
+      "deriveAllowlist",
+      "deriveTiles",
+      "filterApprovedSites"
+    ],
+    "src/core/selfKnowledge/selfKnowledge.ts": [
+      "buildBusquedaEntries",
+      "buildComandoEntries",
+      "buildContratoEntries",
+      "buildJuegoEntries",
+      "buildPaginaEntries",
+      "buildSelfKnowledgeSnapshot",
+      "buildSelfManifesto",
+      "buildSelfManifestoPrompt",
+      "buildSitioEntries",
+      "buildWorkspaceEntries",
+      "capabilitiesByCategoria",
+      "findCapabilityByText",
+      "humanizeKey",
+      "isSelfKnowledgeRequest",
+      "normalizeSelfText",
+      "pickBilingualPair",
+      "uniqueNonEmpty"
+    ],
+    "src/core/storage/localStore.ts": [
+      "browserSessionStorage",
+      "browserStorage",
+      "hasLocalStorage",
+      "localGet",
+      "localKeys",
+      "localRemove",
+      "localSet",
+      "localSetSafe",
+      "localStorePort",
+      "makeMemoryPort",
+      "memoryPort",
+      "sessionMemoryPort",
+      "sessionRemove",
+      "sessionSet",
+      "sessionStorePort"
+    ],
+    "src/core/temporal/audioAlert.ts": [
+      "createNoopDriver",
+      "createWebAudioDriver",
+      "defaultGetContext"
+    ],
+    "src/core/temporal/scheduleEngine.ts": [
+      "collectDue",
+      "collectDueOrdered",
+      "dayOfWeek",
+      "firstDueAt",
+      "formatCountdown",
+      "formatTimeOfDay",
+      "formatTimeOfDayMeridiem",
+      "isDue",
+      "localDayDiff",
+      "nextAtTimeOfDay",
+      "nextOccurrence",
+      "startOfLocalDay",
+      "timerEndsAt",
+      "timerRemainingMs"
+    ],
+    "src/core/temporal/temporalTypes.ts": [
+      "dailyRecurrence",
+      "intervalRecurrence",
+      "onceRecurrence",
+      "weekdaysRecurrence"
+    ],
+    "src/core/temporal/timeOfDay.ts": [
+      "clockLabel",
+      "collect",
+      "hour24",
+      "overlapsAny",
+      "pickTimeOfDay",
+      "removeRange",
+      "resolveBareMeridiemTime",
+      "resolveEnTime",
+      "resolveEsTime",
+      "resolveMinuteWord",
+      "scanTimesOfDay",
+      "stripTimesOfDay"
+    ],
+    "src/core/tutoring/tutoringModel.ts": [
+      "buildTutoringRule",
+      "findKnownTutoringArea",
+      "isTutoringGlobalProgressQuery",
+      "isTutoringProgressQuery",
+      "isTutoringReviewQuery",
+      "mentionsTutoringArea",
+      "norm",
+      "parseTutoringProgressQuery",
+      "resolveMinuteTutoringArea",
+      "resolveTutoringArea",
+      "resolveTutoringLevel",
+      "slugTutoringArea"
+    ],
+    "src/core/tutoring/tutoringProgress.ts": [
+      "buildTutoringProgress",
+      "dateOf",
+      "emptyProgress",
+      "isoDateOf",
+      "listTutoringAreas",
+      "minuteCoversTutoringArea",
+      "minuteSearchText",
+      "minuteTutoringArea",
+      "pendingOf",
+      "pushUnique",
+      "snapshotOf"
+    ],
+    "src/core/tutoring/tutoringReview.ts": [
+      "buildTutoringReview",
+      "daysSince",
+      "reviewBand"
+    ],
+    "src/core/voice/responseGate.ts": [
+      "buildResponseKey",
+      "isDuplicateResponse",
+      "isDuplicateResponseIn",
+      "pushResponseState"
+    ],
+    "src/dev/asrLab/AsrLab.tsx": [
+      "AsrLab",
+      "capturePcm",
+      "encodeWav16",
+      "finish",
+      "push",
+      "runChrome",
+      "runGemini",
+      "runVosk",
+      "runWhisper"
+    ],
+    "src/hooks/pendingListCore.ts": [
+      "addSequentially",
+      "cleanLabels",
+      "useCountedMutation",
+      "usePendingList"
+    ],
+    "src/hooks/refreshOnOk.ts": [
+      "refreshIf",
+      "refreshOnOk",
+      "refreshOnValue",
+      "useRefreshAction"
+    ],
+    "src/hooks/useAgenda.ts": [
+      "tick",
+      "useAgenda"
+    ],
+    "src/hooks/useAppAnalysis.ts": [
+      "useAppAnalysis"
+    ],
+    "src/hooks/useAsyncAction.ts": [
+      "useAsyncAction"
+    ],
+    "src/hooks/useAuditLog.ts": [
+      "useAuditLog"
+    ],
+    "src/hooks/useAvatarVoiceSync.ts": [
+      "checkSong",
+      "scheduleNext",
+      "useAvatarVoiceSync"
+    ],
+    "src/hooks/useBrowserProfiles.ts": [
+      "useBrowserProfiles"
+    ],
+    "src/hooks/useCatalogEditorForm.ts": [
+      "handleSubmit",
+      "useCatalogEditorForm"
+    ],
+    "src/hooks/useCatalogPanel.ts": [
+      "useCatalogPanel"
+    ],
+    "src/hooks/useCatalogsSettings.ts": [
+      "useCatalogsSettings"
+    ],
+    "src/hooks/useCommunicationProfiles.ts": [
+      "useCommunicationProfiles"
+    ],
+    "src/hooks/useConfigPersistence.ts": [
+      "apply",
+      "load",
+      "loadString",
+      "normalizeUiLanguage",
+      "onStorage",
+      "saveString",
+      "useConfigPersistence"
+    ],
+    "src/hooks/useContacts.ts": [
+      "useContacts"
+    ],
+    "src/hooks/useConversationPersistence.ts": [
+      "debePersistirEntrada",
+      "entryToRow",
+      "guardarCambiadas",
+      "mismaFilaPersistida",
+      "persistir",
+      "rowToEntry",
+      "serializarCanonica",
+      "toConversationSentiment",
+      "useConversationPersistence"
+    ],
+    "src/hooks/useDeviceActions.ts": [
+      "useDeviceActions"
+    ],
+    "src/hooks/useDiary.ts": [
+      "useDiary"
+    ],
+    "src/hooks/useDoNotDisturb.ts": [
+      "readDndConfig",
+      "readStoredBoolean",
+      "readStoredSchedule",
+      "useDoNotDisturb"
+    ],
+    "src/hooks/useDocumentAnalysis.ts": [
+      "useDocumentAnalysis"
+    ],
+    "src/hooks/useDocumentGeneration.ts": [
+      "useDocumentGeneration"
+    ],
+    "src/hooks/useDocumentGenerationBridge.ts": [
+      "onAnalyzeApp",
+      "onAnalyzeDocument",
+      "useDocumentGenerationBridge"
+    ],
+    "src/hooks/useDocuments.ts": [
+      "useDocuments"
+    ],
+    "src/hooks/useEditableFields.ts": [
+      "setField",
+      "setGroupedField",
+      "useEditableFields"
+    ],
+    "src/hooks/useFluParticipant.ts": [
+      "useFluParticipant"
+    ],
+    "src/hooks/useListReload.ts": [
+      "useListReload"
+    ],
+    "src/hooks/useMateriaGris.ts": [
+      "useMateriaGris"
+    ],
+    "src/hooks/useMinuteHandlers.ts": [
+      "conversationTextOf",
+      "minuteTutoringText",
+      "practicaOf",
+      "reportAuditWriteFailure",
+      "useMinuteHandlers",
+      "withTutoringArea"
+    ],
+    "src/hooks/useMinuteKnowledge.ts": [
+      "publishMinuteToStore",
+      "toUI",
+      "useMinuteKnowledge"
+    ],
+    "src/hooks/useNavigationCommands.ts": [
+      "firstString",
+      "useNavigationCommands"
+    ],
+    "src/hooks/useNotes.ts": [
+      "useNotes"
+    ],
+    "src/hooks/useNotificationCenter.ts": [
+      "notificationFields",
+      "onNotification",
+      "useNotificationCenter"
+    ],
+    "src/hooks/useOnboarding.ts": [
+      "useOnboarding"
+    ],
+    "src/hooks/useOnboardingVoiceCapture.ts": [
+      "useOnboardingVoiceCapture"
+    ],
+    "src/hooks/useParticipants.ts": [
+      "onChanged",
+      "useParticipants"
+    ],
+    "src/hooks/useProfileList.ts": [
+      "useProfileList"
+    ],
+    "src/hooks/useSearchSites.ts": [
+      "useSearchSites"
+    ],
+    "src/hooks/useServiceRef.ts": [
+      "useServiceRef"
+    ],
+    "src/hooks/useSessionPersistence.ts": [
+      "clearSessionState",
+      "defaultSessionState",
+      "pickSession",
+      "readSessionState",
+      "useSessionPersistence",
+      "writeSessionState"
+    ],
+    "src/hooks/useShoppingList.ts": [
+      "useShoppingList"
+    ],
+    "src/hooks/useThinkingIndicator.ts": [
+      "useThinkingIndicator"
+    ],
+    "src/hooks/useVoiceProfiles.ts": [
+      "deleteVoiceProfile",
+      "findVoiceProfileRecordByLabel",
+      "insertVoiceProfile",
+      "listVoiceProfileRecords",
+      "persistVoiceProfile",
+      "toUI",
+      "useVoiceProfiles"
+    ],
+    "src/hooks/useWorkspaceImage.ts": [
+      "handleKeyDown",
+      "traceImage",
+      "useWorkspaceImage"
+    ],
+    "src/hooks/useWorkspaceSearch.ts": [
+      "buildDeterministicOverview",
+      "buildRuntimeConfig",
+      "fetchAiOverview",
+      "fetchTypeResults",
+      "resolve",
+      "resolveMergedSearchConfig",
+      "useWorkspaceSearch"
+    ],
+    "src/lib/analysisFallbacks.ts": [
+      "buildBaseDocumentContract",
+      "buildHeuristicAppAnalysis"
+    ],
+    "src/lib/appAnalyzer.ts": [
+      "analyzeAppStructure",
+      "buildEstructura",
+      "collectErrors",
+      "detectFramework",
+      "isConfigFile",
+      "isScreenFile"
+    ],
+    "src/lib/caughtError.ts": [
+      "describe",
+      "logCaughtError",
+      "registrarReceptorCaughtError"
+    ],
+    "src/lib/clientLogRelay.ts": [
+      "flush",
+      "flushLogs",
+      "hasDocumentOrigin",
+      "relayLog",
+      "scheduleFlush",
+      "setRelayEnabled",
+      "syncEnabled"
+    ],
+    "src/lib/confirmationSuffix.ts": [
+      "baseNameWithoutConfirmationSuffix"
+    ],
+    "src/lib/dailyAgenda.ts": [
+      "appendPendingCalendar",
+      "buildDailyAgenda",
+      "buildPendingSection",
+      "countPendingItems",
+      "formatAgendaForPrompt",
+      "formatReminderWhen",
+      "mergeRemindersIntoAgenda",
+      "normalizeItems",
+      "parseHistoryDate"
+    ],
+    "src/lib/dataViewAscii.ts": [
+      "writeAscii"
+    ],
+    "src/lib/dateKey.ts": [
+      "dayKey",
+      "isDayKey"
+    ],
+    "src/lib/dayBoundary.ts": [
+      "startOfDay",
+      "startOfDayMs"
+    ],
+    "src/lib/devValidationReset.ts": [
+      "createValidationRegistry",
+      "resetParticipantBase",
+      "runDevValidationCommand"
+    ],
+    "src/lib/discourseMarkers.ts": [
+      "addDiscourseMarker",
+      "filterMarkersByTone",
+      "getDiscourseMarker"
+    ],
+    "src/lib/documentChunker.ts": [
+      "analysisPrompt",
+      "applyReduceToContract",
+      "buildContextBlock",
+      "buildMapPrompt",
+      "buildReducePrompt",
+      "buildSingleAnalysisPrompt",
+      "documentPrompt",
+      "documentPromptPreamble",
+      "getDocumentAnalysisLimits",
+      "getMaxChunks",
+      "mergePartialSummaries"
+    ],
+    "src/lib/documentParser.ts": [
+      "buildHeuristicResumen",
+      "buildQaContext",
+      "chunkText",
+      "detectSheetRol",
+      "errMsg",
+      "failedPayload",
+      "getDocumentTipo",
+      "getLimits",
+      "inferTipoFromMime",
+      "inspectSheet",
+      "isSupportedDocument",
+      "parseDocument",
+      "parseDocx",
+      "parseExcel",
+      "parsePdf",
+      "parsePptx",
+      "parseText",
+      "read",
+      "readArrayBufferAsUtf8"
+    ],
+    "src/lib/downloadFile.ts": [
+      "downloadBlob",
+      "downloadUrl"
+    ],
+    "src/lib/fetchWithDeadline.ts": [
+      "fetchWithDeadline"
+    ],
+    "src/lib/fluParticipant.ts": [
+      "advanceParticipantTurnCounter",
+      "applyParticipantEvaluation",
+      "buildParticipantLogWindow",
+      "canGrantParticipantFloor",
+      "canScheduleParticipantEvaluation",
+      "consumeRaisedDraft",
+      "countInterventionsInHour",
+      "createFluParticipantState",
+      "dismissRaisedHand",
+      "evaluatesOnTurnCommit",
+      "formatParticipantLogForPrompt",
+      "normalizeParticipantEvaluation",
+      "recordParticipantIntervention",
+      "resolveFluParticipantLabel",
+      "resolveParticipantUiPresentation",
+      "shouldAutoDismissRaisedHand",
+      "shouldEvaluateParticipantOnTurn",
+      "shouldIgnoreParticipantFloorGrant"
+    ],
+    "src/lib/formatAdapters.ts": [
+      "blobToDataUrl",
+      "bytesToBase64",
+      "dataUrlToBlob",
+      "fallbackMarkdown",
+      "getFormatInfo",
+      "isDataUrl",
+      "safeFileName",
+      "serializeDocument",
+      "serializeDocx",
+      "serializePdf",
+      "serializePptx",
+      "serializeXlsx",
+      "textResult",
+      "toBlobUrl"
+    ],
+    "src/lib/generationPrompts.ts": [
+      "buildGenerationFallbackContent",
+      "buildGenerationPrompt",
+      "buildGenerationSystemPrompt",
+      "formatContentInstruction",
+      "safeFuenteLabel"
+    ],
+    "src/lib/generationTopic.ts": [
+      "buildGenerationTopic",
+      "cleanTopicFromCommand",
+      "looksLikeBody",
+      "normalizeWorkspaceDocumentFields",
+      "resolveDocumentTitle",
+      "resolveNormalizeOptions",
+      "shortTitleFromBody"
+    ],
+    "src/lib/languageLabel.ts": [
+      "languageLabel"
+    ],
+    "src/lib/listOps.ts": [
+      "copyList",
+      "countUnflagged",
+      "uncheckAllFlagged"
+    ],
+    "src/lib/lookupText.ts": [
+      "normalizeLookupText"
+    ],
+    "src/lib/minuteKnowledgeHelpers.ts": [
+      "buildMinuteKey",
+      "buildMinuteKnowledgeBase2",
+      "buildMinuteLookupContract",
+      "buildMinuteSnapshot",
+      "buildTutoringGlobalContract",
+      "buildTutoringGlobalSpeech",
+      "buildTutoringProgressContract",
+      "buildTutoringProgressSpeech",
+      "buildTutoringReviewContract",
+      "buildTutoringReviewSpeech",
+      "compareMinuteHistoryCodeAsc",
+      "compareMinuteHistoryCodeDesc",
+      "createMinuteDraftFromSummary",
+      "diaryEntryToKnowledgeRecord",
+      "findMinuteRecordBySequence",
+      "formatMinuteDraftText",
+      "formatMinuteHistoryCode",
+      "formatMinuteHistoryLabel",
+      "formatMinuteKnowledgeEntry",
+      "historyCodeOf",
+      "isGenericMinuteSessionTheme",
+      "joinSpeechItems",
+      "listSection",
+      "minuteCatalogSpeech",
+      "nextMinuteHistorySequence",
+      "parseMinuteHistoryCode",
+      "parseMinuteSequenceFromQuery",
+      "parseMinuteSequenceToken",
+      "plural",
+      "resolveKindLabel",
+      "resolveMinuteQuery",
+      "resolveMinuteThemeForSpeech",
+      "selectMinuteForLookup",
+      "tutoringDateLabel"
+    ],
+    "src/lib/profileLookup.ts": [
+      "findProfileByParticipant"
+    ],
+    "src/lib/removeAndRefresh.ts": [
+      "removeAndRefresh"
+    ],
+    "src/lib/sourceLabel.ts": [
+      "sourceLabelFor"
+    ],
+    "src/lib/spokenNumbers.ts": [
+      "resolveSpokenNumber",
+      "spokenNumberAlternation"
+    ],
+    "src/lib/systemEventLog.ts": [
+      "buildSystemConversationEntry",
+      "eventSentiment",
+      "filterRecentSystemEvents",
+      "formatSystemEvent",
+      "isDuplicateSystemEvent",
+      "systemEventDedupKey"
+    ],
+    "src/lib/textUtils.ts": [
+      "cleanForSpeech",
+      "equalsTrimmed",
+      "escapeRegExp",
+      "normalizeForMatch",
+      "normalizeForMatchExact",
+      "normalizeSpaces",
+      "pickLabel",
+      "shortText",
+      "stripDiacritics",
+      "stripDiacriticsLower"
+    ],
+    "src/lib/timeFormat.ts": [
+      "formatLocalHHMM"
+    ],
+    "src/lib/timeOfDay.ts": [
+      "parseTimeOfDayToMinutes",
+      "parseTimeOfDayToMs"
+    ],
+    "src/lib/timerRefs.ts": [
+      "clearAnimationFrameRef",
+      "clearTimeoutRef"
+    ],
+    "src/lib/transcriptProcessor.ts": [
+      "detectActionInTranscript",
+      "detectEmotionInTranscript",
+      "resolveEmotionAnims"
+    ],
+    "src/lib/turnArtifactKind.ts": [
+      "resolveTurnArtifactKind"
+    ],
+    "src/lib/uiStrings.ts": [
+      "pickText"
+    ],
+    "src/lib/workerRuntime.ts": [
+      "isWorkerRuntime"
+    ],
+    "src/server/allowlist.ts": [
+      "parseAllowlist"
+    ],
+    "src/server/browserProxy.ts": [
+      "configureServer",
+      "createBrowserProxy",
+      "fetchSite",
+      "handleBrowserFetch"
+    ],
+    "src/server/geminiProxy.ts": [
+      "buildContractCacheKey",
+      "buildEvalCacheKey",
+      "configureServer",
+      "createGeminiMiddleware",
+      "errorField",
+      "getCachedResponse",
+      "handleContract",
+      "handleContractMode",
+      "handleFalVideo",
+      "handleMinuteMode",
+      "handleOpenRouterImage",
+      "handleParticipantEval",
+      "handleResponseMode",
+      "handleText",
+      "handleVisionAnalysis",
+      "handleWorkspaceImage",
+      "isContractTraceOn",
+      "parseBody",
+      "proxyBodyToGenerateParams",
+      "readRawBody",
+      "resolveServerApiKey",
+      "sendProxyErrorBrief",
+      "sendProxyErrorFull",
+      "setCachedResponse",
+      "simpleHash",
+      "summaryRequestFromBody",
+      "writeClientLogLine"
+    ],
+    "src/server/httpJson.ts": [
+      "createSendJson",
+      "sendJson"
+    ],
+    "src/server/proxyFetchError.ts": [
+      "proxyFetchError"
+    ],
+    "src/server/recorderSink.ts": [
+      "appCommitOf",
+      "appendAudio",
+      "appendEvents",
+      "appendTurns",
+      "buildWav",
+      "configHashOf",
+      "configureServer",
+      "countLines",
+      "createRecorderSink",
+      "createRecorderStore",
+      "finalize",
+      "handleRecorderRequest",
+      "modelIdsOf",
+      "readBody",
+      "readControl",
+      "safeSessionId",
+      "start",
+      "writeControl"
+    ],
+    "src/server/requestUrl.ts": [
+      "parseRequestUrl"
+    ],
+    "src/server/searchProxy.ts": [
+      "configureServer",
+      "createSearchProxy",
+      "fetchProviderJson",
+      "handleSearch",
+      "parseProviders",
+      "register"
+    ],
+    "src/services/aiServiceFactory.ts": [
+      "createIntelligentAIService",
+      "getAIService"
+    ],
+    "src/services/aiTemperature.ts": [
+      "resolveConfiguredTemperature"
+    ],
+    "src/services/capabilities.ts": [
+      "buildCapabilitiesPrompt",
+      "trackListFor"
+    ],
+    "src/services/deepseek.ts": [
+      "canUseTextBackend",
+      "completeText",
+      "documentAnalysisSystem",
+      "fetchEvaluation",
+      "fetchImage",
+      "fetchMinute",
+      "fetchResponse",
+      "fetchSummary",
+      "fetchTextCompletion",
+      "fetchVision",
+      "hasUsableTextBackend",
+      "postJson",
+      "readCompletionText",
+      "resolveTextCall"
+    ],
+    "src/services/gemini.ts": [
+      "acciones",
+      "buildDiagnostics",
+      "canUseTextBackend",
+      "completeText",
+      "contractRequest",
+      "documentAnalysisSystem",
+      "fetchEvaluation",
+      "fetchImage",
+      "fetchMinute",
+      "fetchResponse",
+      "fetchSummary",
+      "fetchVision",
+      "generateFluContract",
+      "postJson"
+    ],
+    "src/services/geminiContractClient.ts": [
+      "buildContractInit",
+      "postGeminiContract",
+      "postGeminiContractResilient"
+    ],
+    "src/services/localTts.ts": [
+      "buildLocalNarrationSegments",
+      "flush",
+      "getLocalVoices",
+      "isLocalTtsAvailable",
+      "isTtsSpeaking",
+      "mapVoice",
+      "pickBestLocalVoice",
+      "sanitizeForNarration",
+      "speakLocal",
+      "stopLocalSpeech"
+    ],
+    "src/services/musicPlayer.ts": [
+      "findTrack",
+      "getAudio",
+      "getPlaylist",
+      "isMusicPlaying",
+      "pauseMusic",
+      "playMusic",
+      "playMusicUrl",
+      "playSong",
+      "resolveTrack",
+      "restartStream",
+      "resumeMusic",
+      "setMusicVolume",
+      "startAudio",
+      "stopMusic"
+    ],
+    "src/services/musicSearch.ts": [
+      "defaultSearchJson",
+      "onCanPlay",
+      "onError",
+      "onLoaded",
+      "probeStream",
+      "probeWithAudio",
+      "probeWithRange",
+      "searchJson",
+      "searchSongOnline",
+      "timer"
+    ],
+    "src/services/ocrService.ts": [
+      "extractTextFromImage",
+      "extractTextFromPdf",
+      "extractWithLocal",
+      "extractWithRemote",
+      "resolveOcrConfig"
+    ],
+    "src/services/pollinationsImage.ts": [
+      "buildPollinationsImageResult"
+    ],
+    "src/services/videoAssembler.ts": [
+      "assembleVideo",
+      "buildStoryboardFromScript",
+      "buildSubjectImageUrl",
+      "describeFrame",
+      "estimateSecondsForText",
+      "estimateVideoDuration",
+      "flush",
+      "loadSubjectImage",
+      "renderFrameToPng",
+      "tryLoadFFmpeg",
+      "wrapText"
+    ],
+    "src/store/environmentStore.ts": [
+      "readPersistedActiveAmbienteId"
+    ],
+    "src/store/integrationStore.ts": [
+      "capConversationHistory",
+      "detectSentiment",
+      "nextId",
+      "sentimentToEmotion",
+      "withActivePersonId",
+      "withEntryPatch"
+    ],
+    "src/store/storage.ts": [
+      "resolveSafeStorage"
+    ]
+  }
+}

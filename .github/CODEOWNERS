@@ -17,6 +17,7 @@
 /scripts/rutas-dobles-baseline.json @lescobarl
 /scripts/funciones-ratchet.mjs @lescobarl
 /scripts/voz-funciones-baseline.json @lescobarl
+/scripts/src-funciones-baseline.json @lescobarl
 /scripts/guard-duplicados25.mjs @lescobarl
 /scripts/duplicados25-baseline.json @lescobarl
 /scripts/persist-row-baseline.json @lescobarl
