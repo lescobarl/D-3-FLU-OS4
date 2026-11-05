@@ -37,4 +37,6 @@
   'tests/vozEventoSistemaMarcaGuard.test.ts',
   'tests/vozRespuestaFluUnaSolaVezGuard.test.ts',
   'tests/rutasDoblesGuard.test.ts',
+  'tests/revisorFuncionesGuard.test.ts',
+  'tests/revisorPuertasGuard.test.ts',
 ]

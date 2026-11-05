@@ -1,0 +1,5 @@
+#!/bin/sh
+# Puerta del revisor de funciones: un commit que añade funciones bajo src/
+# debe declarar el veredicto en el JSDoc (@revisor) o en este mensaje
+# (Revisor-Funciones: / Revisor-Motivo:).
+node scripts/revisor-git.mjs --staged --msg "$1" || exit 1
