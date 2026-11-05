@@ -1,0 +1,1017 @@
+{
+  "fecha": "2026-11-05",
+  "dueno": "src/voice (fuera del módulo CONVERSACIÓN)",
+  "nota": "Ratchet de nombres de función: una función nueva exige declararla aquí en el mismo cambio. El módulo CONVERSACIÓN tiene su propia línea base (conversacion-rutas-dobles-baseline.json).",
+  "minSources": 129,
+  "funciones": {
+    "src/voice/api/audio.ts": [
+      "loadWhisperRecognitionEngine",
+      "loadWhisperWasmTranscriber"
+    ],
+    "src/voice/components/ConversationLog.jsx": [
+      "ConversationLog",
+      "FilaDeConversacion",
+      "formatCompactLogText"
+    ],
+    "src/voice/components/FluParticipantSettingsPanel.jsx": [
+      "FluParticipantSettingsPanel",
+      "buildDraftFromConfig",
+      "readFieldValue",
+      "serializeDraftForSave"
+    ],
+    "src/voice/components/FluShellTabs.jsx": [
+      "FluShellTabs",
+      "FluTabPanel"
+    ],
+    "src/voice/components/MinuteDraftPanel.jsx": [
+      "MinuteDraftPanel",
+      "handleSave"
+    ],
+    "src/voice/components/MinuteHistoryPanel.jsx": [
+      "MinuteHistoryPanel"
+    ],
+    "src/voice/components/PanelFrame.jsx": [
+      "PanelFrame"
+    ],
+    "src/voice/components/VoiceProfilesPanel.jsx": [
+      "VoiceProfilesPanel",
+      "beginRename",
+      "commitRename"
+    ],
+    "src/voice/compose/conversationMotorProducto.js": [
+      "crearMotorConversacionHook",
+      "despacharFraseVigente"
+    ],
+    "src/voice/core/locucion.js": [
+      "continuaLaFrase",
+      "countSharedSpeechWords",
+      "estadoDeLocucion",
+      "frasesSolapadas",
+      "utterancesSameRevision"
+    ],
+    "src/voice/core/tramo.js": [
+      "tramoDelTurno"
+    ],
+    "src/voice/core/tramoDeLocucion.js": [
+      "crearDetectorDeFronteras",
+      "hayFronteraDeAudio",
+      "push"
+    ],
+    "src/voice/hooks/useFluVoiceAssistant.js": [
+      "createRecognition",
+      "current",
+      "job",
+      "respondParticipantFloor",
+      "runCapture",
+      "shouldBlockParticipantFloorGrant",
+      "stopMediaStream",
+      "useFluVoiceAssistant"
+    ],
+    "src/voice/hooks/useLocalAsrFallback.js": [
+      "useLocalAsrFallback"
+    ],
+    "src/voice/hooks/useSessionSpeakerClusters.js": [
+      "useSessionSpeakerClusters"
+    ],
+    "src/voice/hooks/useTurnInfrastructure.js": [
+      "useOffPathSessionWriter",
+      "useTurnLifecycleSync"
+    ],
+    "src/voice/lib/asr/asrConfig.js": [
+      "getAsrConfig",
+      "getVadEnergyThreshold",
+      "getVadFrameMs",
+      "getVadSegmentConfig",
+      "getVadSpeechLikeConfig",
+      "numberOr"
+    ],
+    "src/voice/lib/asr/resample.js": [
+      "downsample"
+    ],
+    "src/voice/lib/asr/voiceActivitySegmenter.js": [
+      "closeTurn",
+      "createVoiceSegmenter",
+      "flush",
+      "getAsrSampleRate",
+      "getVadConfig",
+      "processFrame",
+      "push",
+      "recoger",
+      "reset",
+      "resetTurn",
+      "tramosDeAudio"
+    ],
+    "src/voice/lib/asr/whisperRecognitionEngine.d.ts": [
+      "createWhisperRecognitionEngine"
+    ],
+    "src/voice/lib/asr/whisperRecognitionEngine.js": [
+      "abort",
+      "active",
+      "applySegmentEvent",
+      "buildResultEvent",
+      "continuous",
+      "createWhisperRecognitionEngine",
+      "dispose",
+      "enqueueFinal",
+      "enqueueTranscription",
+      "maybeEmitPartial",
+      "measure",
+      "preload",
+      "pushAudio",
+      "resetTurn",
+      "runPartial",
+      "start",
+      "stop",
+      "whenIdle"
+    ],
+    "src/voice/lib/asr/whisperWasmTranscriber.d.ts": [
+      "createWhisperWasmTranscriber"
+    ],
+    "src/voice/lib/asr/whisperWasmTranscriber.js": [
+      "createWhisperWasmTranscriber",
+      "dispose",
+      "modelId",
+      "preload",
+      "request",
+      "transcribe"
+    ],
+    "src/voice/lib/asrWatchdog.js": [
+      "resolveWatchdogStep"
+    ],
+    "src/voice/lib/audioMath.js": [
+      "actionBelongsToTranscript",
+      "blendEmbeddingVectors",
+      "collectVoiceCommandPhrases",
+      "commandTextFromPhrase",
+      "compareRecognitionAlternatives",
+      "computeAudioSignature",
+      "decideVoiceTurnDispatch",
+      "deriveQueryFromRow",
+      "deriveSearchQuery",
+      "detectIntroducedName",
+      "detectListeningControl",
+      "detectSessionVoiceCommand",
+      "detectTranscriptLanguage",
+      "detectUiVoiceCommand",
+      "detectWakeIntroducedName",
+      "extractFluVoiceCommand",
+      "extractQueryFromWebSearchPhrase",
+      "foldSpokenUtterance",
+      "formatClock",
+      "formatEmbeddingPreview",
+      "getRecognitionErrorMessage",
+      "getRecognitionRetryDelay",
+      "isBareContentGenerationTrigger",
+      "isFluQueryPrefixExtension",
+      "isIncompleteContentTurn",
+      "isIncompleteMinuteConsult",
+      "isIncompleteNameIntro",
+      "isIncompleteVoiceCommand",
+      "isListeningAckPhrase",
+      "isMinuteGenerationRequest",
+      "isMinuteKnowledgeRequest",
+      "isMinuteSaveRequest",
+      "isPlausiblePersonName",
+      "isRecoverableRecognitionError",
+      "isSessionStartRequest",
+      "isVisualRequestText",
+      "matchWakeWordInText",
+      "matchWakeWordPrefix",
+      "matchesCommandPhrase",
+      "normalizeCommandForDeterministic",
+      "normalizeSpokenCommand",
+      "normalizeVoiceCommandText",
+      "novelWords",
+      "peelWakeQuestionEcho",
+      "pickBestRecognitionTranscript",
+      "planConversationDispatch",
+      "queryAfterTrigger",
+      "referencesSavedMinute",
+      "removeWakeWord",
+      "resolveAppLanguage",
+      "resolveCommandConversationLogText",
+      "resolveFinalConversationAction",
+      "sameRequestWindowMs",
+      "scoreRecognitionAlternative",
+      "shouldAckFluWake",
+      "shouldDispatchCommandInterim",
+      "shouldDispatchConversationAction",
+      "shouldDispatchFluInterim",
+      "sliceWakeWordFromSource",
+      "sliceWordsLower",
+      "speechWords",
+      "splitTranscriptAtWakeWord",
+      "spokenUtteranceRevision",
+      "stripLeadingNoiseAndEcho",
+      "stripLeadingWakeRepeats",
+      "stripSearchQueryLeadFillers",
+      "stripWakeWordForDisplay",
+      "toTitleCaseName",
+      "tokens"
+    ],
+    "src/voice/lib/audioSegmentClock.js": [
+      "getLastCommitPerfAt",
+      "getSegmentSilenceGapMs",
+      "isNewAudioSegment",
+      "markCommitPerfNow",
+      "nowPerf"
+    ],
+    "src/voice/lib/chromeSpeechSnapshot.js": [
+      "snapshotChromeSpeechResult"
+    ],
+    "src/voice/lib/configCommands.js": [
+      "buildIsoDate",
+      "buildSeasonAliases",
+      "cutAfterLongestNoun",
+      "extractCustomEventName",
+      "extractTextValue",
+      "findConfigEntry",
+      "findVoiceTokenIndex",
+      "hasBrandingIntent",
+      "hasVoiceToken",
+      "matchEmotion",
+      "matchLanguage",
+      "matchMode",
+      "matchProvider",
+      "matchSeason",
+      "normalizeConfiguracion",
+      "normalizeJuego",
+      "parseModeloJson",
+      "resolveBooleanValue",
+      "resolveColorValue",
+      "resolveConfigCommandFromText",
+      "resolveConfigSubvalor",
+      "resolveCustomEventValue",
+      "resolveDateValue",
+      "resolveDayToken",
+      "resolveDeclaredActionCommand",
+      "resolveFromSynonyms",
+      "resolveMonthToken",
+      "resolveNumberValue",
+      "resolveSelectValue",
+      "resolveValueForEntry",
+      "stripLeadingStopwords"
+    ],
+    "src/voice/lib/configGuard.js": [
+      "optionalConfigBlock",
+      "requireConfigBlock"
+    ],
+    "src/voice/lib/contractParams.js": [
+      "buildContractParams"
+    ],
+    "src/voice/lib/conversationDialogue.js": [
+      "appendDialogueEntry",
+      "buildFluSpeechAuditRows",
+      "deriveAssistantLastAtMs",
+      "deriveAssistantLastText",
+      "deriveDialogueHistory",
+      "deriveUserLastText",
+      "deriveUserRowSpeakers",
+      "deriveUserRowTexts",
+      "getDialogueContextSlice",
+      "isFluSpeaker",
+      "lastFluEntry",
+      "resolveEchoContext",
+      "selectVisiblePhrase",
+      "trimDialogueHistory"
+    ],
+    "src/voice/lib/conversationMode.ts": [
+      "createConversationModeController",
+      "enter",
+      "exit",
+      "open",
+      "reflect",
+      "trace"
+    ],
+    "src/voice/lib/conversationRow.js": [
+      "ensureClusterSpeakerId",
+      "formatRowClock",
+      "getIdentifyingSpeakerName",
+      "isCalculatingSpeakerId",
+      "isValidSpeakerId",
+      "labelToSpeakerId",
+      "normalizeRowSignature",
+      "resolveRowSpeakerLabel",
+      "resolveSpeakerNameFromId",
+      "speakerIdToDefaultName"
+    ],
+    "src/voice/lib/deterministicArbiter.js": [
+      "isCommandAuthorized",
+      "resolveChannelForNavigation",
+      "resolveDeterministicCommand",
+      "resolveDeterministicCourtesySpeech",
+      "resolveDeterministicSkipGeminiContract",
+      "resolveStatefulDomains",
+      "resolveVoiceCommand"
+    ],
+    "src/voice/lib/devFlags.js": [
+      "resolveDevDebugFlag"
+    ],
+    "src/voice/lib/echoPolicy.js": [
+      "echoChunkCovers",
+      "echoCoverageFloor",
+      "echoWindowMs",
+      "isEchoWindowOpen",
+      "lastFluSpeechEndedAt",
+      "recordFluSpeechEnd",
+      "resolveEchoSources",
+      "resolveFluEchoSource"
+    ],
+    "src/voice/lib/embeddingConfig.js": [
+      "getEmbeddingConfig",
+      "getMinSamples",
+      "getModelId",
+      "getTargetSampleRate"
+    ],
+    "src/voice/lib/embeddingFrames.js": [
+      "downsampleTo16k",
+      "tensorToEmbeddingVector"
+    ],
+    "src/voice/lib/fluAsyncError.js": [
+      "fluAsyncErrorHandler",
+      "logFluAsyncError"
+    ],
+    "src/voice/lib/fluConfig.js": [
+      "firstWakeWith",
+      "getActiveListenConfig",
+      "getCanonicalWakeWord",
+      "getConversationConfig",
+      "getConversationRestartConfig",
+      "isSessionResetCommand"
+    ],
+    "src/voice/lib/fluConversationLog.ts": [
+      "logFluReply"
+    ],
+    "src/voice/lib/fluDebug.js": [
+      "clearFluDebug",
+      "debugRecordCommandDispatch",
+      "debugRecordCommitCapture",
+      "debugRecordHistoryError",
+      "debugRecordLogEmit",
+      "debugRecordMic",
+      "debugRecordMicFragments",
+      "debugRecordPromptBudget",
+      "debugRecordRecognitionEnd",
+      "debugRecordSpeakerNew",
+      "debugRecordSpeakerPrune",
+      "debugRecordSpeakerSticky",
+      "debugRecordSrGapCommit",
+      "debugRecordStallRebuild",
+      "debugRecordStreamEmit",
+      "debugRecordStreamSkip",
+      "debugRecordWorkspaceImage",
+      "debugUpdateContext",
+      "disableFluDebug",
+      "enableFluDebug",
+      "fluDebugHot",
+      "getFluDebugApi",
+      "getFluDebugReport",
+      "initFluDebug",
+      "isFluDebugEnabled",
+      "logDebug",
+      "mountFluDebugDev",
+      "recordViolation",
+      "resolveEnabledFlag",
+      "rowDuplicatesPrior",
+      "runFluDebugChecks",
+      "subscribeFluDebug",
+      "syncHotPath",
+      "tick",
+      "validateLogRowsNoPrefixDup"
+    ],
+    "src/voice/lib/fluParticipantConfig.js": [
+      "coerceBoolean",
+      "coerceParticipantValue",
+      "configMinutesToMs",
+      "getFluParticipantConfig",
+      "getFluParticipantDefaults",
+      "isFluParticipantEnabled",
+      "listFluParticipantHardRules",
+      "msToConfigMinutes",
+      "pickDefaultsFrom",
+      "readStorageOverrides",
+      "resetFluParticipantOverrides",
+      "resolveFluParticipantFieldHint",
+      "resolveFluParticipantFieldLabel",
+      "setFluParticipantEnabled",
+      "setFluParticipantOverrides"
+    ],
+    "src/voice/lib/fluSpeech.js": [
+      "cancelSpeech",
+      "detectSpeechScriptLocale",
+      "ensureSpeechVoicesReady",
+      "enterSpeakingState",
+      "finish",
+      "getLastCompletedSpeechAt",
+      "getSpeechCfg",
+      "getSpeechEngine",
+      "getSpeechVoices",
+      "getVoiceConfig",
+      "isFluSpeaking",
+      "isSpeechBusy",
+      "isSpeechSupported",
+      "isSpeechSynthesisSpeaking",
+      "markReady",
+      "refreshVoiceConfigCache",
+      "resolveSpeechLocale",
+      "speakResponse",
+      "speakSingleChunk",
+      "splitSpeechChunks",
+      "subscribeSpeechVoices",
+      "waitForSpeechIdle"
+    ],
+    "src/voice/lib/fluStorage.js": [
+      "clearUiSessionState",
+      "findVoiceProfileByLabel",
+      "listVoiceProfiles",
+      "loadSessionState",
+      "loadUiSessionState",
+      "persistSessionState",
+      "saveSessionState",
+      "saveUiSessionState",
+      "softDeleted",
+      "voiceRecordToProfile"
+    ],
+    "src/voice/lib/fluTranscriptMotor.js": [
+      "getFluTimingCfg",
+      "getIngressGuardsCfg",
+      "getShortFinalKeywordSet",
+      "getSpeakerThresholdsCfg",
+      "getSpeechMergeCfg",
+      "getTranscriptPolicyCfg"
+    ],
+    "src/voice/lib/fluTranscriptPause.js": [
+      "countSpeechWords",
+      "emitSrGapProbe",
+      "getTranscriptPauseCfg",
+      "isPhraseShortForSpeakerHeuristics",
+      "isTailByRelation",
+      "isWeakAsrSpeakerEvidence",
+      "listConfiguredTranscriptHardRules",
+      "resolveSrGapTrigger",
+      "srGapSilenceReached"
+    ],
+    "src/voice/lib/fluVisualPipeline.js": [
+      "buildPollinationsArtifact",
+      "buildVisualGenerationPrompt",
+      "cfg",
+      "getVisualPipelineConfig",
+      "hashPromptSeed",
+      "listConfiguredVisualPipelineRules",
+      "resolveVisualBriefCore",
+      "shouldUseLocalSvgOnError",
+      "templateForType"
+    ],
+    "src/voice/lib/fluVisualStockSearch.js": [
+      "fetchJsonWithTimeout",
+      "resolveOpenverseStockArtifact",
+      "scoreOpenverseResult"
+    ],
+    "src/voice/lib/gameCommands.js": [
+      "audioPlayingProbe",
+      "consumesGameTurn",
+      "isCatalogLevelGameAction",
+      "isClaimedByOtherDomain",
+      "isQuestionLike",
+      "isUnknownGameOrder",
+      "owned",
+      "resolveGameCommandFromText",
+      "run",
+      "setAudioPlayingProbe",
+      "startsWithFrame"
+    ],
+    "src/voice/lib/gemini.js": [
+      "acciones",
+      "analyzeImage",
+      "buildActiveSystemPrompt",
+      "buildConversationMessages",
+      "buildConversationSummaryPrompt",
+      "buildMinimalContractSchema",
+      "buildParticipantEvaluationPrompt",
+      "buildSchemaFormatBlock",
+      "buildSystemPrompt",
+      "buildUserPrompt",
+      "coerceFluContractPayload",
+      "detectSimpleRequest",
+      "esTurnoDeUsuario",
+      "extractBalancedJson",
+      "extractJson",
+      "generateConversationSummary",
+      "generateFluContract",
+      "generateOpenRouterImage",
+      "generateParticipantEvaluation",
+      "generateVideoViaFal",
+      "generateWorkspaceImage",
+      "getGeminiGenerationProfile",
+      "hasUsableVoiceBackend",
+      "mapChatMessagesToGemini",
+      "mapChatMessagesToOpenAI",
+      "parseGeminiApiResponse",
+      "postChatCompletion",
+      "requestFluContract",
+      "resolveClientRequestTimeout",
+      "resolveGeminiModel",
+      "resolveServerGeminiApiKey",
+      "sanitizeVoiceText",
+      "shouldIncludeConfigPrompt",
+      "tryParseJsonCandidate"
+    ],
+    "src/voice/lib/geminiDiagnostics.js": [
+      "buildGeminiDiagnosticsFromError",
+      "cleanDetail",
+      "formatGeminiErrorHint",
+      "formatGeminiUserMessage",
+      "hasGeminiFailureSignal",
+      "pickLang",
+      "readFailureSignal",
+      "resolveGeminiErrorPresentation"
+    ],
+    "src/voice/lib/imageGeneration.js": [
+      "buildLocalSvgDataUrl",
+      "buildNotVisualTrace",
+      "buildWorkspaceImageArtifact",
+      "buildWorkspaceImageRequestKey",
+      "escapeXml",
+      "fetchFalVideo",
+      "fetchOpenRouterImageFallback",
+      "fetchWorkspaceImageSource",
+      "openRouterTrace",
+      "postJsonToProxy",
+      "postVisualProxy",
+      "promise",
+      "readProxyErrorDetail",
+      "resolveErrorFallback",
+      "resolveWorkspaceAiImageSource"
+    ],
+    "src/voice/lib/languageDefault.ts": [
+      "defaultLanguage"
+    ],
+    "src/voice/lib/listenLog.js": [
+      "clearListenLogRing",
+      "fluEvent",
+      "flushDevLogs",
+      "getListenLogRing",
+      "getListenStats",
+      "isChromeRawConsoleEnabled",
+      "isListenTraceEnabled",
+      "logChromeRawConsole",
+      "logChromeSpeechResult",
+      "pushRing",
+      "serialize",
+      "shouldRecord",
+      "syncListenLogGlobals"
+    ],
+    "src/voice/lib/listenParity.js": [
+      "evaluateListenParity"
+    ],
+    "src/voice/lib/micCapture.js": [
+      "getConversationAudioConfig",
+      "getConversationMinVoicedSamples",
+      "getConversationSpeakerTailMs",
+      "getPassiveBufferMs",
+      "getVoiceIdentityCaptureConfig",
+      "resolveCaptureAudioConstraints",
+      "resolveCaptureGain"
+    ],
+    "src/voice/lib/micCaptureBridge.js": [
+      "createMicCaptureWorkletNode",
+      "deliverRawTap",
+      "wireMicCapturePipeline"
+    ],
+    "src/voice/lib/minuteKnowledge.js": [
+      "buildMinuteHistoryEntries",
+      "buildMinuteKnowledgeId",
+      "buildVoiceMinuteKnowledgeBase",
+      "createEmptyMinuteDraft",
+      "hasMinuteDraftContent",
+      "minuteDraftToSummarySnapshot",
+      "minuteTextLabels",
+      "normalizeMinuteKnowledgeRecord",
+      "parseMinuteDraftText",
+      "resolveMinuteThemeForSave",
+      "truncateMinuteDescription",
+      "upsertMinuteHistoryEntry"
+    ],
+    "src/voice/lib/navSettleFlag.js": [
+      "getSettlePlazoMs",
+      "isNavSettlePending",
+      "setNavSettlePending"
+    ],
+    "src/voice/lib/noteIntentParser.js": [
+      "cleanSuperItem",
+      "isNoteCommand",
+      "normalizeRemoveTarget",
+      "parseNoteIntentText",
+      "parseNoteItemRemoveIntentText",
+      "parseNoteRemoveIntentText",
+      "resolveNoteVoiceIntent"
+    ],
+    "src/voice/lib/offPathWriter.js": [
+      "createOffPathWriter",
+      "flush",
+      "write"
+    ],
+    "src/voice/lib/participantFloor.js": [
+      "detectParticipantFloorCommand",
+      "resolveParticipantFloorLabel"
+    ],
+    "src/voice/lib/participantVoiceAnchors.ts": [
+      "getParticipantAnchors",
+      "participantVoiceAnchorsForDiarization",
+      "setParticipantAnchorsProvider"
+    ],
+    "src/voice/lib/pcmAudio.js": [
+      "encodePcmChunk",
+      "float32ToInt16",
+      "resampleLinear"
+    ],
+    "src/voice/lib/pcmChunks.js": [
+      "concatFloat32"
+    ],
+    "src/voice/lib/phraseDiscard.js": [
+      "clip",
+      "discardLocution",
+      "isKnownDiscardReason"
+    ],
+    "src/voice/lib/resolvedActionIdentity.ts": [
+      "normLabel",
+      "resolvedActionIdentity"
+    ],
+    "src/voice/lib/resolvedContract.js": [
+      "buildResolvedContract",
+      "estadoFastPathIdempotente"
+    ],
+    "src/voice/lib/sessionLifecycle.js": [
+      "applySessionCommandToPrimary",
+      "isSessionCloseRequest"
+    ],
+    "src/voice/lib/sessionPrimarySpeaker.js": [
+      "clearSessionPrimarySpeaker",
+      "setSessionPrimarySpeaker"
+    ],
+    "src/voice/lib/sessionRecorder.js": [
+      "buildSessionJsonBlob",
+      "buildSessionWavBlob",
+      "captureBaseSnapshot",
+      "clearSessionRecording",
+      "clipString",
+      "configureSessionSink",
+      "createHttpSessionSink",
+      "disableSessionRecorder",
+      "downloadSessionRecording",
+      "drainAudioChunk",
+      "enableSessionRecorder",
+      "enqueuePersist",
+      "ensurePersistSession",
+      "finalizeSessionRecording",
+      "flushPersist",
+      "fullCopy",
+      "getSessionRecorderApi",
+      "getSessionRecordingSnapshot",
+      "getSessionRecordingStatus",
+      "isSessionRecordingEnabled",
+      "maxAudioSamples",
+      "newSessionId",
+      "persistMeta",
+      "pushSessionAudio",
+      "q",
+      "queuePersistSnapshot",
+      "readStorageFlag",
+      "recordSessionEvent",
+      "recordSessionTurn",
+      "resolveMaxEvents",
+      "resolveMaxMinutes",
+      "resolveRecorderFlag",
+      "safeData",
+      "schedulePersistFlush",
+      "send",
+      "sendSync"
+    ],
+    "src/voice/lib/speakerClusters.js": [
+      "_buildClusterMap",
+      "autoSpeakerCount",
+      "capAndFuseSpeakerClusters",
+      "consolidateSpeakerClusters",
+      "cosineThreshold",
+      "countUtteranceWords",
+      "differentVoiceFloor",
+      "ensureClusterForLabel",
+      "findClusterByLabel",
+      "findLabelsWithSharedVoice",
+      "findNearestCluster",
+      "findShortUtteranceHistoricalMatch",
+      "findSpeakerLabelsMatchingSignature",
+      "flattenChunksTail",
+      "flattenChunksWindow",
+      "isPinnedAnchorCluster",
+      "isShortUtteranceContext",
+      "isVoiceDistinctFromSticky",
+      "mergeSpeakerClustersOnRename",
+      "namedAssignFloor",
+      "namedAssignMargin",
+      "passesRoomRematchStrict",
+      "registeredVoiceFloor",
+      "renamedCluster",
+      "resolveImmediateShortSpeakerContinuity",
+      "resolveRoomRematchThreshold",
+      "sameVoiceFloor",
+      "sameVoiceLabelGroup",
+      "seedRegisteredAnchors",
+      "trimAudioChunkBuffer",
+      "updateClusterSignature",
+      "verifiedAnchorFloor",
+      "verifiedAnchorMargin"
+    ],
+    "src/voice/lib/speakerCore.js": [
+      "autoSpeakerIndexFromKey",
+      "autoSpeakerLabel",
+      "compareCosineSignatures",
+      "getFallbackSpeaker",
+      "hasVoiceMeasurement",
+      "isAutoSpeakerLabel",
+      "nextAutoSpeakerLabel",
+      "normalizeEmbeddingVector",
+      "note",
+      "noteIndex",
+      "parseSpeakerIndex",
+      "payloadSeparacionDeTurno",
+      "sameEpoch",
+      "sessionSpeakerHighWater",
+      "speakerLabelPattern"
+    ],
+    "src/voice/lib/speakerDirectory.js": [
+      "forgetVoiceName",
+      "getVoiceDirectorySnapshot",
+      "registerVoiceName",
+      "rememberVoiceVector",
+      "resetVoiceDirectory",
+      "resolveRowVoiceName",
+      "resolveVoiceIdentity",
+      "resolveVoiceName",
+      "voiceKeyFor",
+      "voiceVectorModel"
+    ],
+    "src/voice/lib/speakerEmbeddingCore.js": [
+      "computeSpeakerEmbedding",
+      "createModelBundle",
+      "getSpeakerEmbeddingModelStatus",
+      "preloadSpeakerEmbeddingModel"
+    ],
+    "src/voice/lib/speakerIdentityRegister.js": [
+      "applyKnownVoiceName",
+      "committedEchoStreakWindowMs",
+      "participantRegisterPort",
+      "registerSpeakerIdentity",
+      "registerSpeakerIdentityFromCommand"
+    ],
+    "src/voice/lib/speakerLabels.js": [
+      "anonymousSpeakerLabel",
+      "canonicalSpeakerName",
+      "expandSessionSpeakerNames",
+      "foldSpeakerKey",
+      "formatSpeakerLabel",
+      "getVoiceIdentityConfig",
+      "isProperSpeakerName",
+      "isRegisteredSpeakerLabel",
+      "nextAvailableSpeakerLabel",
+      "normalizeSpeakerLabel",
+      "pruneGhostSpeakerClusters",
+      "sortSessionSpeakers"
+    ],
+    "src/voice/lib/speakerPolicy.js": [
+      "blindSpeakerFallback",
+      "getRoomCaptureCfg",
+      "requiresWakeWordForSpeakerName",
+      "resolveCommitStickyFallback",
+      "resolveSpeakerNameFromUtterance"
+    ],
+    "src/voice/lib/speechMerge.js": [
+      "claveDePalabra",
+      "cleanChunks",
+      "collapseAsrStutter",
+      "collapseEchoPhrase",
+      "collapseRepeatedSpeech",
+      "countSharedPrefixWords",
+      "dropOrphanSuffixFragment",
+      "fraseDelEventoAsr",
+      "fuzzyAsrWordEqual",
+      "hasRepeatedWordBlock",
+      "hasSpeechAnchor",
+      "isNumericBlock",
+      "isSameFragmentRevision",
+      "mergeIntoOpenLine",
+      "mergeMicChunks",
+      "mergeSpeechText",
+      "mergeSpeechTextBlind",
+      "micPublishedParityOk",
+      "minPalabrasTartamudeo",
+      "normalizeMicText",
+      "palabrasCrudas",
+      "pickBestMicInterim",
+      "pisoCaracteresTartamudeo",
+      "rejoinViaFuzzyWordOverlap",
+      "rejoinViaNormalizedOverlap",
+      "resolveMicFragmentMerge",
+      "shortFinalHasKeyword",
+      "shouldPreferShortFinalRow",
+      "tryAsrProgressiveMerge",
+      "unirVariantesDelMismoTramo",
+      "utterancesRelate",
+      "wouldShrinkLog",
+      "yaEsta"
+    ],
+    "src/voice/lib/speechRecognitionLocal.js": [
+      "abortSpeechRecognition",
+      "acquireSpeechRecognition",
+      "bindSpeechRecognition",
+      "createSpeechRecognition",
+      "getActiveRecognition",
+      "getRecognitionLanguage",
+      "isBilingualListenMode",
+      "isSpeechRecognitionSupported",
+      "resetActiveRecognitionForTest",
+      "resolveRecognitionLocale",
+      "speechRecognitionState",
+      "startSpeechRecognition",
+      "stopSpeechRecognition"
+    ],
+    "src/voice/lib/transcriptConfig.js": [
+      "formatStreamSttUiStatus"
+    ],
+    "src/voice/lib/transcriptDelta.js": [
+      "findCharBoundaryDelta",
+      "findWordBoundaryDelta",
+      "getTranscriptDelta",
+      "looksLikeTrailingFragment",
+      "mergeTranscriptText"
+    ],
+    "src/voice/lib/turnAudioSnapshot.js": [
+      "captureTurnAudioSnapshot",
+      "capturedTurnAudio",
+      "probePcmBlock",
+      "readTurnAudioSnapshot",
+      "rememberSnapshot",
+      "turnAudioForDiarize"
+    ],
+    "src/voice/lib/turnLifecycle.js": [
+      "createTurnLifecycle",
+      "endTurn",
+      "lap",
+      "markSpeaking",
+      "resetTurn",
+      "startTurn"
+    ],
+    "src/voice/lib/turnStopwatch.js": [
+      "createTurnStopwatch",
+      "lap",
+      "restart"
+    ],
+    "src/voice/lib/turnWorkIndicator.js": [
+      "begin",
+      "createTurnWorkIndicator",
+      "end",
+      "isActive",
+      "isVisible",
+      "markSpeaking",
+      "paint",
+      "render",
+      "reset"
+    ],
+    "src/voice/lib/voiceCommands.js": [
+      "getCommandSpeech",
+      "getVoiceCommands",
+      "isKnownNavigationCommand",
+      "planVoiceCommandDispatch",
+      "resolveNavigationCommand",
+      "resolveNavigationCommandFromTexts",
+      "resolveVoiceConversationAction",
+      "userRequestedNavigationCommand"
+    ],
+    "src/voice/lib/voicedActivity.js": [
+      "cola",
+      "countSpeechLikeSamples",
+      "countSpeechLikeSamplesInBlocks",
+      "countVoicedSamples",
+      "countVoicedSamplesInBlocks",
+      "frameBounds",
+      "frameRms",
+      "frameSamplesFor",
+      "isSpeechLikeFrame",
+      "isVoicedFrame",
+      "mergeBlocksTail",
+      "num",
+      "rmsOf",
+      "rmsOfBlocks",
+      "selectVoicedWindow",
+      "ventanaConVoz"
+    ],
+    "src/voice/lib/voiceIdWorkerClient.js": [
+      "drainEmbedQueue",
+      "embedAudioForDiarization",
+      "embedAudioInternal",
+      "logEmbedModel",
+      "post",
+      "postEmbed",
+      "postImmediate",
+      "preloadVoiceIdWorker",
+      "prepareTransferableAudio",
+      "rejectEmbedPending",
+      "runMainThreadFallback",
+      "samplesFromPayload"
+    ],
+    "src/voice/lib/voiceLocalFallback.js": [
+      "classifyLocalResult",
+      "createLocalRecognition",
+      "getLocalFallbackErrors",
+      "getLocalFallbackRuntimeConfig",
+      "getSilentDegradeConfig",
+      "installChromeRecognition",
+      "installLocalRecognition",
+      "isLocalFallbackEnabled",
+      "isLocalRecognitionEngine",
+      "prewarmLocalRecognition",
+      "releaseRecognition",
+      "reportLocalResultGate",
+      "resolveSilentDegrade",
+      "shouldDegradeSilentRecognition",
+      "shouldUseLocalFallback"
+    ],
+    "src/voice/lib/voiceParticipantsSource.ts": [
+      "resolveVoiceParticipants"
+    ],
+    "src/voice/lib/voiceProbe.ts": [
+      "isVoiceProbeEnabled",
+      "setVoiceProbeEnabled",
+      "voiceProbe"
+    ],
+    "src/voice/lib/voiceStallPolicy.js": [
+      "releaseStalledTurn",
+      "resumeAfterSpeechSuspend"
+    ],
+    "src/voice/lib/wakePolicy.js": [
+      "applyWakePolicyOrder",
+      "getWakePolicyPhrases",
+      "matches",
+      "resolveWakePolicyOrder",
+      "wakePolicySpeech"
+    ],
+    "src/voice/lib/wakeTurnCommit.js": [
+      "analyzeWakeTurn",
+      "getWakeWords",
+      "requiresWakeWord",
+      "resolveInlineWakeAtCommit"
+    ],
+    "src/voice/lib/wakeWord.js": [
+      "buildWakeWordPattern",
+      "configuredWakeWords",
+      "escapeRe",
+      "stripWakeWord",
+      "stripWakeWordAnywhere",
+      "wakeLeadRegex"
+    ],
+    "src/voice/lib/wakeWords.js": [
+      "resolveWakeWords"
+    ],
+    "src/voice/lib/workerBridge.js": [
+      "createWorkerReply",
+      "samplesFromTransfer"
+    ],
+    "src/voice/lib/workerPendingBridge.js": [
+      "createWorkerPendingBridge",
+      "dispose",
+      "ensure",
+      "failAll",
+      "terminate"
+    ],
+    "src/voice/lib/workspaceContract.js": [
+      "buildBareVisualFallbackWorkspace",
+      "buildVisualAnchorBlock",
+      "cleanConversationTopic",
+      "detectExplicitGenerationTipo",
+      "extractConversationTopic",
+      "extractVisualSubject",
+      "hasExplicitVisualQualifier",
+      "isBareVisualRequest",
+      "isGenericVisualPrompt",
+      "normalizeBareText",
+      "normalizeWorkspaceContract",
+      "selectConversationSummaryWindow",
+      "shouldGenerateWorkspaceImage",
+      "startsWithCanonical",
+      "stripGenerationLead"
+    ],
+    "src/voice/workers/micCapture.processor.d.ts": [
+      "registerProcessor"
+    ],
+    "src/voice/workers/micCapture.processor.js": [
+      "process"
+    ],
+    "src/voice/workers/voiceId.worker.js": [
+      "embedAudio",
+      "ensureModel"
+    ],
+    "src/voice/workers/whisperAsr.worker.js": [
+      "ensurePipeline"
+    ]
+  }
+}
