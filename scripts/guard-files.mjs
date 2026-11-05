@@ -28,4 +28,12 @@
   'tests/participantRemoveSingleCascadeGuard.test.ts',
   'tests/voiceProfileSingleOwnerGuard.test.ts',
   'tests/bajasRutasGuard.test.ts',
+  'tests/conversacionPendientesSinTramoGuard.test.ts',
+  'tests/conversacionTramoRealGuard.test.ts',
+  'tests/conversacionEtapa4Etiqueta.test.ts',
+  'tests/locucionEstadoGuard.test.ts',
+  'tests/locucionPredicadoGuard.test.ts',
+  'tests/replayTriageGuard.test.ts',
+  'tests/vozEventoSistemaMarcaGuard.test.ts',
+  'tests/vozRespuestaFluUnaSolaVezGuard.test.ts',
 ]
