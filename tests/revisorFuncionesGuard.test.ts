@@ -180,26 +180,27 @@ describe('revisorFunciones — candidatos', () => {
   it('usa los casos declarados de ruta doble como preguntas con dueño', () => {
     const casos = loadCasosRuta() as Caso[]
     const propuesta: Propuesta = {
-      pregunta: 'La última fila por fin de audio se calcula una sola vez',
-      nombre: 'filaUnicaPorFin',
+      pregunta: 'La emision y registro del cierre descartado tiene un solo dueno local',
+      nombre: 'cierreUnicoPorFin',
     }
     const candidatos = buscarCandidatos(propuesta, [], { casos }) as Candidato[]
-    const hit = candidatos.find((c) => c.origen === 'caso' && c.id === 'ultima-fila-audio')
-    expect(hit?.owner).toBe('src/voice/conversation/fila.ts')
+    const hit = candidatos.find((c) => c.origen === 'caso' && c.id === 'cierre-registro')
+    expect(hit, `candidatos: ${JSON.stringify(candidatos.slice(0, 3))}`).toBeDefined()
+    expect(hit?.owner).toBe('src/voice/conversation/cierre.ts')
   })
 })
 
 describe('revisorFunciones — caso real del repo', () => {
-  it('un nombre nuevo para la última fila encuentra a ultimaFilaPorFin', () => {
+  it('un nombre nuevo para el reloj del sistema encuentra a crearRelojSistema', () => {
     const funciones = indexarRepo(join(ROOT, 'src')) as Funcion[]
     const propuesta: Propuesta = {
-      pregunta: '¿Cuál es la última fila commiteada según el fin de su audio?',
-      nombre: 'filaMasRecientePorFin',
-      firma: { parametros: 1 },
+      pregunta: '¿Cómo se crea el reloj del sistema?',
+      nombre: 'nuevoRelojSistema',
+      firma: { parametros: 0 },
     }
     const candidatos = buscarCandidatos(propuesta, funciones) as Candidato[]
     const hit = candidatos.find(
-      (c) => c.nombre === 'ultimaFilaPorFin' && c.archivo === 'src/voice/conversation/fila.ts',
+      (c) => c.nombre === 'crearRelojSistema' && c.archivo === 'src/voice/conversation/adapters.ts',
     )
     expect(hit, `candidatos: ${JSON.stringify(candidatos.slice(0, 5))}`).toBeDefined()
     expect(hit!.puntaje).toBeGreaterThan(0.5)

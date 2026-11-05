@@ -31,7 +31,7 @@ type Funcion = {
 type Evaluacion = {
   bloquea: boolean
   declarada: boolean
-  topFuncion?: { nombre?: string; puntaje: number } | null
+  topFuncion?: { nombre?: string; puntaje: number; clon?: number } | null
   topCaso?: { id?: string; puntaje: number } | null
   candidatos: Array<{ origen: string; nombre?: string; id?: string; puntaje: number }>
 }
@@ -63,6 +63,16 @@ const CLON_DECLARADO = `
  * @revisor CREAR NUEVO — copia deliberada para probar la puerta.
  */
 export function filaMasRecientePorFin(items: Iterable<Fila>): Fila | null {
+  let elegida: Fila | null = null
+  for (const item of items) {
+    if (!elegida || item.tramo.fin > elegida.tramo.fin) elegida = item
+  }
+  return elegida
+}
+`
+
+const CLON_SIN_PALABRAS = `
+export function obtenerRegistroMasTardio(items: Iterable<Fila>): Fila | null {
   let elegida: Fila | null = null
   for (const item of items) {
     if (!elegida || item.tramo.fin > elegida.tramo.fin) elegida = item
@@ -132,6 +142,14 @@ describe('revisorPuertas — bloqueo', () => {
     expect(evaluacion.bloquea).toBe(true)
     expect(evaluacion.topFuncion?.nombre).toBe('ultimaFilaPorFin')
     expect(evaluacion.topFuncion?.puntaje).toBeGreaterThanOrEqual(0.7)
+  })
+
+  it('bloquea un clon exacto aunque el nombre no comparta palabras con la dueña', () => {
+    const [clon] = indexarFunciones(CLON_SIN_PALABRAS, 'src/voice/conversation/otra.ts') as Funcion[]
+    const evaluacion = evaluarFuncion(clon, existentes, []) as Evaluacion
+    expect(evaluacion.bloquea).toBe(true)
+    expect(evaluacion.topFuncion?.nombre).toBe('ultimaFilaPorFin')
+    expect(evaluacion.topFuncion?.clon).toBe(1)
   })
 
   it('deja pasar el clon si declara CREAR NUEVO', () => {

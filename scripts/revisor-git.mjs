@@ -15,6 +15,10 @@
  * El modo --diff no juzga la historia: si el gate no existía en la base, se
  * omite. Así la rama que lo introduce no se bloquea a sí misma.
  *
+ * El catálogo de casos se lee del commit de referencia (HEAD en --staged, la
+ * base en --diff), no del árbol de trabajo: un cambio en el mismo commit o PR
+ * no puede debilitar el criterio que lo juzga.
+ *
  * Uso:
  *   node scripts/revisor-git.mjs --staged --msg .git/COMMIT_EDITMSG
  *   node scripts/revisor-git.mjs --diff origin/main
@@ -27,7 +31,7 @@ import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { indexarFunciones, indexarRepo, loadCasosRuta } from './revisor-funciones.mjs'
+import { indexarFunciones, indexarRepo, loadCasosRuta, parseCasosRuta } from './revisor-funciones.mjs'
 import { evaluarFuncion, formatearBloqueo, funcionesAgregadas } from './revisor-puertas.mjs'
 
 const ROOT = process.env.CLAUDE_PROJECT_DIR || resolve(import.meta.dirname, '..')
@@ -102,6 +106,17 @@ function contenidoIndice(rel) {
 }
 
 /**
+ * Casos declarados en un commit. Si el catálogo no existía allí (repo joven),
+ * usa el del árbol de trabajo.
+ * @param {string} ref Commit de referencia.
+ * @returns {object[]} Casos.
+ */
+function casosEnCommit(ref) {
+  const texto = contenidoCommit(ref, 'scripts/rutas-dobles-baseline.json')
+  return texto.trim() === '' ? loadCasosRuta() : parseCasosRuta(texto)
+}
+
+/**
  * Archivos de código añadidos o modificados bajo src/.
  * @param {string[]} args Argumentos del diff.
  * @returns {string[]} Rutas relativas.
@@ -140,15 +155,15 @@ function existeGateEn(ref) {
  * @param {(rel: string) => string} leerNuevo Contenido nuevo.
  * @param {string} mensaje Mensaje de commit, si hay.
  * @param {string} contexto Nombre de la puerta.
+ * @param {object[]} casos Catálogo de casos ya declarados.
  * @returns {number} 0 permite, 2 bloquea.
  */
-function comprobar(archivos, leerViejo, leerNuevo, mensaje, contexto) {
+function comprobar(archivos, leerViejo, leerNuevo, mensaje, contexto, casos) {
   if (archivos.length === 0) {
     process.stdout.write(`[revisor] OK (${contexto}): 0 archivo(s) de código tocado(s) bajo src/.\n`)
     return 0
   }
   const funciones = indexarRepo(join(ROOT, 'src'), ROOT)
-  const casos = loadCasosRuta()
   const bloqueadas = []
   for (const rel of archivos) {
     const viejas = indexarFunciones(leerViejo(rel), rel)
@@ -200,7 +215,14 @@ function main() {
     } catch (error) {
       block(`[revisor] BLOQUEADO (commit-msg): no pude leer el índice: ${error.message}`)
     }
-    return comprobar(archivos, (rel) => contenidoCommit('HEAD', rel), contenidoIndice, mensaje, 'commit-msg')
+    return comprobar(
+      archivos,
+      (rel) => contenidoCommit('HEAD', rel),
+      contenidoIndice,
+      mensaje,
+      'commit-msg',
+      casosEnCommit('HEAD'),
+    )
   }
 
   try {
@@ -224,6 +246,7 @@ function main() {
     (rel) => contenidoCommit('HEAD', rel),
     '',
     'CI',
+    casosEnCommit(diffArg),
   )
 }
 
