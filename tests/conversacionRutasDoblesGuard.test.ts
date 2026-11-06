@@ -25,6 +25,7 @@ import { execFileSync } from 'node:child_process'
 import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { funcionesNuevas, nombresDeFunciones } from '../scripts/funciones-ratchet.mjs'
 import { resolveRowSpeakerLabel } from '../src/voice/lib/conversationRow.js'
 import { registerVoiceName, resetVoiceDirectory } from '../src/voice/lib/speakerDirectory.js'
 
@@ -58,54 +59,6 @@ const sinComentariosDeLinea = (src: string): string =>
     .split(/\r?\n/)
     .filter((line) => !/^\s*(?:\/\/|\/\*|\*)/.test(line))
     .join('\n')
-
-/**
- * Nombres de funciones del módulo: declaraciones, const-arrow y métodos de
- * objeto/clase. El ratchet congela los nombres: una función nueva obliga a
- * decidir su dueño y a actualizar la línea base en el mismo cambio.
- */
-function nombresDeFunciones(src: string): string[] {
-  const limpio = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '')
-  const nombres = new Set<string>()
-  for (const match of limpio.matchAll(
-    /\bfunction\s*\*?\s*([A-Za-z_$][\w$]*)\s*[<(]/g,
-  )) {
-    nombres.add(match[1])
-  }
-  for (const match of limpio.matchAll(
-    /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*(?::[^=]+)?=\s*(?:async\s*)?(?:\([^)]*\)|[A-Za-z_$][\w$]*)\s*=>/g,
-  )) {
-    nombres.add(match[1])
-  }
-  // Expresión de función con nombre implícito (`const ruta = function () {}`):
-  // es una forma real de declarar y no puede quedar fuera del ratchet.
-  for (const match of limpio.matchAll(
-    /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*(?::[^=]+)?=\s*(?:async\s*)?function\b/g,
-  )) {
-    nombres.add(match[1])
-  }
-  for (const match of limpio.matchAll(
-    /^[ \t]*(?:(?:public|private|protected|static|async|get|set|readonly|override)[ \t]+)*#?([A-Za-z_$][\w$]*)[ \t]*\([^)]*\)[ \t]*(?::[^{\n]+)?\{/gm,
-  )) {
-    if (!/^(?:if|for|while|switch|catch|function|constructor|return|typeof|await)$/.test(match[1])) {
-      nombres.add(match[1])
-    }
-  }
-  return [...nombres].sort()
-}
-
-/** Funciones presentes que no están en la línea base (el ratchet solo sube). */
-function funcionesNuevas(
-  fuentes: readonly Fuente[],
-  base: Record<string, readonly string[]>,
-): string[] {
-  return fuentes.flatMap((archivo) => {
-    const conocidas = new Set(base[archivo.nombre] ?? [])
-    return nombresDeFunciones(archivo.src)
-      .filter((nombre) => !conocidas.has(nombre))
-      .map((nombre) => `${archivo.nombre}:${nombre}`)
-  })
-}
 
 function walk(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
