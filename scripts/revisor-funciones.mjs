@@ -25,7 +25,8 @@
  *
  * LÍMITE DECLARADO: si la pregunta propuesta miente, el revisor se equivoca. La
  * equivalencia semántica total sigue siendo revisión del dueño; esto caza el
- * descuido y el copiar-pegar renombrado.
+ * descuido y el copiar-pegar renombrado. Un clon >= 90 % de un cuerpo de >= 24
+ * tokens bloquea por sí solo, aunque el nombre no comparta palabras.
  */
 import { readFileSync, readdirSync } from 'node:fs'
 import { join, relative, resolve } from 'node:path'
@@ -38,6 +39,8 @@ const CODE_EXT = /\.(ts|tsx|js|jsx|mjs|cjs)$/
 const MIN_PUNTAJE = 0.25
 const LIMITE_DEFECTO = 10
 const CLON_MINIMO = 0.6
+const CLON_BLOQUEO = 0.9
+const MIN_TOKENS_CLON = 24
 
 const AYUDA = `Uso:
   node scripts/revisor-funciones.mjs --pregunta "..." --nombre "..." [opciones]
@@ -66,7 +69,9 @@ Declaracion de una funcion nueva (la exigen las puertas):
                   Revisor-Motivo: justificacion
 
 Limite: no demuestra equivalencia semantica; ordena candidatos medibles y
-obliga a decidir antes de crear. La decision final es del agente/dueno.`
+obliga a decidir antes de crear. Un clon >= 90% de un cuerpo de >= 24 tokens
+bloquea por si solo, aunque el nombre no comparta palabras. La decision final
+es del agente/dueno.`
 
 const STOPWORDS = new Set([
   'de', 'del', 'la', 'el', 'los', 'las', 'un', 'una', 'unos', 'unas', 'al', 'a',
@@ -462,14 +467,28 @@ export function indexarRepo(raiz = join(ROOT, 'src'), raizRelativa = process.cwd
 }
 
 /**
+ * Interpreta el catalogo de casos desde su texto JSON.
+ * @param {string} texto Contenido del catalogo.
+ * @returns {object[]} Casos.
+ */
+export function parseCasosRuta(texto) {
+  try {
+    const data = JSON.parse(texto)
+    return Array.isArray(data.cases) ? data.cases : []
+  } catch (error) {
+    console.error(`[revisor-funciones] catalogo ilegible: ${error.message}`)
+    return []
+  }
+}
+
+/**
  * Carga los casos del guard de rutas dobles (preguntas ya declaradas con dueno).
  * @param {string} [ruta] Ruta del catalogo.
  * @returns {object[]} Casos.
  */
 export function loadCasosRuta(ruta = CASOS_RUTA) {
   try {
-    const data = JSON.parse(readFileSync(ruta, 'utf8'))
-    return Array.isArray(data.cases) ? data.cases : []
+    return parseCasosRuta(readFileSync(ruta, 'utf8'))
   } catch (error) {
     if (error?.code !== 'ENOENT') {
       console.error(`[revisor-funciones] no se pudo leer ${ruta}: ${error.message}`)
@@ -520,8 +539,9 @@ function puntuarFuncion(propuesta, funcion, palabrasPregunta, palabrasNombre, to
           : `firma distinta: ${funcion.params} vs ${propuesta.firma.parametros}`,
     })
   }
+  let clon = 0
   if (tokensBorrador && tokensBorrador.length > 0) {
-    const clon = similitudTokens(tokensBorrador, funcion.tokens)
+    clon = similitudTokens(tokensBorrador, funcion.tokens)
     partes.push({
       valor: clon,
       peso: 0.4,
@@ -529,9 +549,16 @@ function puntuarFuncion(propuesta, funcion, palabrasPregunta, palabrasNombre, to
     })
   }
   const pesoTotal = partes.reduce((total, parte) => total + parte.peso, 0)
-  const puntaje = partes.reduce((total, parte) => total + parte.valor * parte.peso, 0) / pesoTotal
+  const promedio = partes.reduce((total, parte) => total + parte.valor * parte.peso, 0) / pesoTotal
+  // Un clon casi exacto de un cuerpo sustancial no se diluye con el promedio:
+  // un nombre distinto no lo salva. Los cuerpos diminutos no activan la regla.
+  const puntaje =
+    clon >= CLON_BLOQUEO && funcion.tokens.length >= MIN_TOKENS_CLON
+      ? Math.max(promedio, clon)
+      : promedio
   return {
     puntaje,
+    clon,
     motivos: partes.map((parte) => parte.motivo).filter(Boolean),
   }
 }
@@ -556,7 +583,7 @@ export function buscarCandidatos(propuesta, funciones = [], opciones = {}) {
 
   for (const funcion of funciones) {
     if (!funcion || !funcion.nombre) continue
-    const { puntaje, motivos } = puntuarFuncion(
+    const { puntaje, clon, motivos } = puntuarFuncion(
       propuesta,
       funcion,
       palabrasPregunta,
@@ -571,6 +598,7 @@ export function buscarCandidatos(propuesta, funciones = [], opciones = {}) {
       nombre: funcion.nombre,
       nombreCompleto: funcion.nombreCompleto,
       puntaje: Math.round(puntaje * 1000) / 1000,
+      clon: Math.round(clon * 1000) / 1000,
       motivos,
     })
   }

@@ -1,6 +1,12 @@
 #!/bin/sh
 # Pre-commit ligero: dueño de archivos nuevos + arquitectura + linters + tipos.
 # Sin auditoría de historial ni de metadatos.
+
+# En worktrees vinculados git exporta GIT_DIR/GIT_INDEX_FILE a los hooks; se
+# borran para que cada herramienta re-descubra el repo desde el cwd (si no,
+# los commits reales de los tests de guards aterrizan en la rama del worktree).
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE
+
 node scripts/owner-gate.mjs --staged || exit 1
 node scripts/guard-architecture.mjs --staged || exit 1
 npm run lint || exit 1

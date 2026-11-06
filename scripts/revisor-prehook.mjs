@@ -7,7 +7,12 @@
  * alguna se parece a una existente y no declara su veredicto en el JSDoc, la
  * escritura se bloquea (exit 2) y el informe dice qué candidatos hay.
  *
- * Entrada (stdin, la entrega el harness):
+ * Entrada (stdin, la entrega el harness). El nombre del tool se acepta en
+ * cualquier capitalización (`Write`, `write`, `EDIT`, ...) y las claves del
+ * input en sus variantes habituales (`file_path`/`filePath`/`path`,
+ * `old_string`/`oldString`, `new_string`/`newString`, `replace_all`/`replaceAll`)
+ * para que la MISMA puerta sirva a Claude Code, al plugin de Kilo y al
+ * opencode-claude-hooks:
  *   {"tool_name":"Write","tool_input":{"file_path":"src/...","content":"..."}}
  *   {"tool_name":"Edit","tool_input":{"file_path":"src/...","old_string":"...","new_string":"..."}}
  *
@@ -24,6 +29,27 @@ import { evaluarFuncion, formatearBloqueo, funcionesAgregadas } from './revisor-
 const ROOT = process.env.CLAUDE_PROJECT_DIR || resolve(import.meta.dirname, '..')
 const SRC_DIR = 'src/'
 const CODE_EXT = /\.(?:ts|tsx|js|jsx|mjs|cjs)$/i
+const TOOL_WRITE = /^write$/
+const TOOL_EDIT = /^edit$/
+
+/**
+ * Nombre del tool en minúsculas, venga de `tool_name` (Claude) o de `tool`
+ * (Kilo/OpenCode).
+ * @param {object} input Entrada del hook.
+ * @returns {string} Nombre normalizado.
+ */
+function nombreTool(input) {
+  return String(input?.tool_name ?? input?.tool ?? '').toLowerCase()
+}
+
+/**
+ * Entrada del tool, de la clave que el harness use.
+ * @param {object} input Entrada del hook.
+ * @returns {object} Mapa de argumentos.
+ */
+function argsTool(input) {
+  return input?.tool_input ?? input?.args ?? input?.input ?? input?.arguments ?? {}
+}
 
 /**
  * Ruta del archivo relativa a la raíz del repo, con `/`.
@@ -42,13 +68,14 @@ function relativeToRoot(filePath) {
  * @returns {string|null} Contenido nuevo, o null si no aplica.
  */
 function contenidoNuevo(actual, input) {
-  if (input.tool_name === 'Write') return input.tool_input?.content ?? null
-  if (input.tool_name !== 'Edit') return null
-  const viejo = input.tool_input?.old_string
-  const nuevo = input.tool_input?.new_string
+  const entrada = argsTool(input)
+  if (TOOL_WRITE.test(nombreTool(input))) return typeof entrada.content === 'string' ? entrada.content : null
+  if (!TOOL_EDIT.test(nombreTool(input))) return null
+  const viejo = entrada.old_string ?? entrada.oldString
+  const nuevo = entrada.new_string ?? entrada.newString
   if (typeof nuevo !== 'string') return null
   if (typeof viejo !== 'string' || viejo.length === 0) return nuevo
-  if (input.tool_input?.replace_all === true) return actual.split(viejo).join(nuevo)
+  if ((entrada.replace_all ?? entrada.replaceAll) === true) return actual.split(viejo).join(nuevo)
   const indice = actual.indexOf(viejo)
   // Si el Edit no encuentra el texto, el tool fallará; evaluar el fragmento
   // nuevo contra el archivo viejo sigue siendo un aviso útil.
@@ -71,8 +98,9 @@ function main() {
     process.stderr.write(`[revisor-funciones] entrada ilegible: ${error.message}\n`)
     return 2
   }
-  if (!input || (input.tool_name !== 'Write' && input.tool_name !== 'Edit')) return 0
-  const target = input.tool_input?.file_path
+  if (!input) return 0
+  if (!TOOL_WRITE.test(nombreTool(input)) && !TOOL_EDIT.test(nombreTool(input))) return 0
+  const target = argsTool(input).file_path ?? argsTool(input).filePath ?? argsTool(input).path ?? argsTool(input).absolutePath
   if (!target) return 0
   const rel = relativeToRoot(target)
   if (rel.startsWith('..')) return 0

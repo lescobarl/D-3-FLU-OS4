@@ -346,8 +346,11 @@ function main() {
       process.stderr.write(`${usage()}\n`)
       return 1
     }
-    if (input.tool_name !== 'Write') return 0
-    target = input.tool_input?.file_path
+    // Las herramientas de escritura de opencode/Kilo se llaman `write` en
+    // minúscula; se acepta cualquier capitalización para que la MISMA puerta
+    // sirva a Claude Code, opencode-claude-hooks y el plugin de Kilo.
+    if (String(input.tool_name ?? input.tool ?? '').toLowerCase() !== 'write') return 0
+    target = input.tool_input?.file_path ?? input.input?.file_path ?? input.args?.file_path
     if (!target) return 0
   }
 
