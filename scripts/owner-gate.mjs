@@ -350,7 +350,10 @@ function main() {
     // minúscula; se acepta cualquier capitalización para que la MISMA puerta
     // sirva a Claude Code, opencode-claude-hooks y el plugin de Kilo.
     if (String(input.tool_name ?? input.tool ?? '').toLowerCase() !== 'write') return 0
-    target = input.tool_input?.file_path ?? input.input?.file_path ?? input.args?.file_path
+    // Las herramientas de opencode mandan `filePath` (camelCase); se aceptan
+    // las variantes habituales en cualquiera de los contenedores de entrada.
+    const entrada = input.tool_input ?? input.input ?? input.args ?? {}
+    target = entrada.file_path ?? entrada.filePath ?? entrada.path ?? entrada.absolutePath
     if (!target) return 0
   }
 
