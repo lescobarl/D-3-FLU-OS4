@@ -1,0 +1,32 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PROJECT_DIR:-.}/scripts/owner-gate.mjs\"",
+            "shell": "bash",
+            "timeout": 10,
+            "onFailure": "block",
+            "statusMessage": "Verificando dueño del archivo nuevo..."
+          }
+        ]
+      },
+      {
+        "matcher": "write|edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PROJECT_DIR:-.}/scripts/revisor-prehook.mjs\"",
+            "shell": "bash",
+            "timeout": 30,
+            "onFailure": "block",
+            "statusMessage": "Verificando funciones duplicadas..."
+          }
+        ]
+      }
+    ]
+  }
+}
