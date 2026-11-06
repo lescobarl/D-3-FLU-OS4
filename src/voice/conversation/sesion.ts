@@ -31,6 +31,8 @@ export type EstadoSesion = {
   activa: boolean
   sessionId: string | null
   turnoActual: string
+  /** Turnos que ya tienen fila commiteada: el módulo acuña el siguiente. */
+  turnosConFila: Set<string>
   idiomaActual: IdiomaLocucion
   estadoAsr: EstadoAsr
   motorAsr: MotorAsr | null
@@ -92,6 +94,7 @@ export function crearEstadoSesion(idiomaInicial: IdiomaLocucion): EstadoSesion {
     activa: false,
     sessionId: null,
     turnoActual: '',
+    turnosConFila: new Set(),
     idiomaActual: idiomaInicial,
     estadoAsr: 'idle',
     motorAsr: null,
@@ -214,6 +217,7 @@ export function crearSesion(
         ? {
             locutionId: estado.abierta.locutionId,
             texto: estado.abierta.texto,
+            turnId: estado.abierta.turnId,
             tramo: {
               inicio: estado.abierta.inicio,
               fin: estado.abierta.fin,
@@ -269,6 +273,7 @@ export function crearSesion(
   function reiniciar(sessionId: string, turno: string, idioma: IdiomaLocucion): void {
     estado.sessionId = sessionId
     estado.turnoActual = turno
+    estado.turnosConFila.clear()
     estado.idiomaActual = idioma
     estado.abierta = null
     estado.tramoAudio = null

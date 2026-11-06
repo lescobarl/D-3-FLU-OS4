@@ -131,8 +131,8 @@ describe('voiceSingleEngineGuard — 1 motor + 1 fuente de verdad', () => {
     const viaHelper = grep(/computeTurnSignature\s*\(/, [motor])
     expect(
       viaHelper.length,
-      `computeTurnSignature debe consumirse (N=${viaHelper.length})`,
-    ).toBeGreaterThanOrEqual(1)
+      `el hook no puede medir voz por su cuenta (N=${viaHelper.length})`,
+    ).toBe(0)
   })
 })
 

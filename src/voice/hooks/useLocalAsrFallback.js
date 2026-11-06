@@ -245,6 +245,7 @@ export function useLocalAsrFallback({
       return 'handled'
     }
     if (step.action === WATCHDOG_ACTIONS.REBUILD) {
+      relayLog('LOG', 'useFluVoiceAssistant', `[WD] rebuild kind=${step.kind} sinceMeaningful=${now - (lastMeaningfulIngressAtRef.current || 0)} recognitionActive=${recognitionActiveRef.current} restartPending=${recognitionRestartPendingRef.current}`)
       if (step.kind === 'stall') lastStallRebuildAtRef.current = now
       stallRebuildStreakRef.current += 1
       if (!rebuildRecognitionRef.current()) {

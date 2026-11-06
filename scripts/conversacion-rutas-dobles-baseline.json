@@ -1,7 +1,7 @@
 {
   "fecha": "2026-11-04",
   "dueno": "src/voice/conversation",
-  "nota": "Linea base de rutas dobles del modulo CONVERSACION. Solo baja: si una metrica baja, se actualiza aqui en el mismo cambio; si sube respecto a HEAD/origin base, el guard falla. `funciones` congela los nombres de funciones: una funcion nueva obliga a decidir su dueno (docs/OWNERS.md) y a actualizar esta linea base en el mismo commit.",
+  "nota": "Linea base de rutas dobles del modulo CONVERSACION. Solo baja: incluye la propiedad semantica (turno, voz, nombre) medida por operacion, no por nombre de simbolo. Un infractor con nombre nuevo sube la metrica y falla. Las funciones siguen congeladas: una funcion nueva exige decidir su dueno.",
   "metricas": {
     "timeConfigLiterals": 2,
     "timeConfigReads": 1,
@@ -18,7 +18,10 @@
     "syntheticWrappers": 1,
     "reentregaOwners": 1,
     "directSilenceCloses": 0,
-    "continuidadOwners": 1
+    "continuidadOwners": 1,
+    "turnMintOwners": 0,
+    "voiceMeasureOwners": 0,
+    "nameRegisterOwners": 0
   },
   "funciones": {
     "adapters.ts": [

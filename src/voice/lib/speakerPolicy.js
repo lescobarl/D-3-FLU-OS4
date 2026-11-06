@@ -28,19 +28,43 @@ export function requiresWakeWordForSpeakerName(roomCfg = getRoomCaptureCfg()) {
 }
 
 /**
+ * Prefiere un nombre ya conocido que encabece la captura.
+ * Evita que “soy Luis sigue sin funcionar” se registre como “Luis Sigue Sin”.
+ * @param {string} name Nombre capturado por el parser.
+ * @param {readonly string[]} knownNames Nombres de la base/clusters.
+ * @returns {string} Nombre conocido más largo, o el capturado.
+ */
+function preferKnownName(name, knownNames = []) {
+  const capturado = normalizeSpeakerLabel(name).toLocaleLowerCase()
+  if (!capturado) return name
+  const candidatos = knownNames
+    .map((known) => ({ original: known, normal: normalizeSpeakerLabel(known).toLocaleLowerCase() }))
+    .filter(({ normal }) => normal && (capturado === normal || capturado.startsWith(`${normal} `)))
+    .sort((a, b) => b.normal.length - a.normal.length)
+  return candidatos[0]?.original || name
+}
+
+/**
  * Resuelve nombre propio desde el texto del turno.
  * En sala: solo detectWakeIntroducedName (ok flu soy …); sin wake → ''.
+ * @param {string} text Texto del turno.
+ * @param {{ wakeWords?: string[], roomCfg?: object, knownNames?: readonly string[] }} [opciones]
+ * @returns {string} Nombre resuelto.
  */
 export function resolveSpeakerNameFromUtterance(
   text = '',
-  { wakeWords = FLU_CONFIG.voiceCommands?.wakeWords || [], roomCfg = getRoomCaptureCfg() } = {},
+  {
+    wakeWords = FLU_CONFIG.voiceCommands?.wakeWords || [],
+    roomCfg = getRoomCaptureCfg(),
+    knownNames = [],
+  } = {},
 ) {
   const wakeName = detectWakeIntroducedName(text, wakeWords)
-  if (wakeName) return wakeName
+  if (wakeName) return preferKnownName(wakeName, knownNames)
   // SIN WAKE: solo se admite si la config lo permite. Antes las DOS ramas devolvian '' y
   // `requireWakeWordForSpeakerName: false` no tenia ningun efecto (auditoria 2026-10-22).
   if (requiresWakeWordForSpeakerName(roomCfg)) return ''
-  return detectIntroducedName(text)
+  return preferKnownName(detectIntroducedName(text), knownNames)
 }
 
 export { isWeakAsrSpeakerEvidence, listConfiguredTranscriptHardRules } from './fluTranscriptPause.js'

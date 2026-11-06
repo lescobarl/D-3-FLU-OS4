@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 2,
+  "sampleRate": 48000,
+  "events": 2898,
+  "turns": 11,
+  "meta": {
+    "startedAt": "2026-11-06T16:07:58.404Z",
+    "sampleRate": 48000,
+    "language": "es-MX",
+    "sessionId": "80a43c12-fa87-4c55-9b4c-92307023b606",
+    "updatedAt": "2026-11-06T16:08:34.578Z"
+  },
+  "language": "es-MX"
+}

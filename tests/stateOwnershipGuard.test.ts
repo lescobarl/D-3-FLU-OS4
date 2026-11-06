@@ -74,12 +74,13 @@ const READ_TARGETS = [
 ] as const;
 
 describe('un dato, un dueno — identificadores y afirmaciones', () => {
-    it('el ID del turno se acuna en UN solo sitio (nace al abrir el turno)', () => {
-        // El corte de la tuberia vieja (2026-10-25) movio el acunado al hook: alli
-        // nace el turno cuando el modulo commitea una locucion nueva. Sigue siendo UN
-        // solo sitio; el modulo no lleva contador propio.
-        const mint = srcFiles().filter((f) => countMatches(read(f), /activeTurnIdRef\.current\s*\+=/) > 0);
-        expect(mint.map(rel)).toEqual(['voice/hooks/useFluVoiceAssistant.js']);
+    it('el ID del turno se acu?a en UN solo sitio (m?dulo, al abrir la locuci?n)', () => {
+        // Due?o ?nico: sesi?n/cierre. El hook solo espeja la fila commiteada.
+        const mint = srcFiles().filter((f) => /activeTurnIdRef\.current\s*\+=/.test(read(f)));
+        expect(mint.map(rel)).toEqual([]);
+        const owner = read(join(ROOT, 'src/voice/conversation/cierre.ts'));
+        expect(owner).toContain('estado.turnosConFila.has(sugerido)');
+        expect(owner).toContain('estado.turnoActual = turno');
     });
 
     it('no existe un segundo contador de turno (identidad unica)', () => {

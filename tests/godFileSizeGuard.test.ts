@@ -46,7 +46,7 @@ export const TECHOS: Record<string, number> = {
   // fila (`turnSnapshot.js`) y deduplica por `locutionId`. El buffer circular
   // dejaba `audioStart==audioEnd` y `signature:null` pasados 30 s; el hook
   // conserva solo el cableado y su dedupe. El cuerpo vive en el helper.
-  'src/voice/hooks/useFluVoiceAssistant.js': 2621,
+  'src/voice/hooks/useFluVoiceAssistant.js': 2516,
   // -66: 49 claves de config SIN lector (prometian comportamiento sin efecto) se borraron,
   // con su barrera (configConEfectoGuard).
   // -50 al cortar la tuberia vieja de conversacion (2026-10-25): el tracer, la

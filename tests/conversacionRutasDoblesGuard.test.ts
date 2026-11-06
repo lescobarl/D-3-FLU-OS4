@@ -23,7 +23,7 @@
 // @vitest-environment node
 import { execFileSync } from 'node:child_process'
 import { readFileSync, readdirSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, relative } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { funcionesNuevas, nombresDeFunciones } from '../scripts/funciones-ratchet.mjs'
 import { resolveRowSpeakerLabel } from '../src/voice/lib/conversationRow.js'
@@ -71,6 +71,56 @@ function walk(dir: string): string[] {
 const CONTINUIDAD_OWNERS = walk(join(process.cwd(), 'src')).filter((file) =>
   /function continuaLaFrase\b/.test(readFileSync(file, 'utf8')),
 ).length
+
+/** Fuentes de TODO src, con ruta relativa: mide consumidores fuera del m?dulo. */
+const FUENTES_SRC: readonly Fuente[] = walk(join(process.cwd(), 'src')).map((abs) => ({
+  nombre: relative(process.cwd(), abs).replace(/\\/g, '/'),
+  src: readFileSync(abs, 'utf8'),
+}))
+
+/** ?La l?nea decide el turno (mint/incremento) o solo lo espeja/resetea? */
+function decideTurno(fuente: string): boolean {
+  return fuente.split(/\r?\n/).some((linea) => {
+    if (/\.turnoActual\s*=/.test(linea) && !/= 0\b/.test(linea)) return true
+    if (/turnosConFila\.add\s*\(/.test(linea)) return true
+    const asignacion = linea.match(/activeTurnIdRef\.current\s*(\+=|=)\s*([^;]*)/)
+    if (!asignacion) return false
+    if (asignacion[1] === '+=') return true
+    const valor = asignacion[2].trim()
+    return valor !== '0' && valor !== 'turnId'
+  })
+}
+
+/** ?La l?nea embebe audio para identidad? */
+function mideVoz(fuente: string): boolean {
+  return /computeAudioSignature\s*\(|selectVoicedWindow\s*\(|embebedor\.medir\s*\(/.test(fuente)
+}
+
+/** ?La l?nea escribe el nombre/base de una voz? */
+function escribeNombre(fuente: string): boolean {
+  return fuente.split(/\r?\n/).some((linea) => {
+    if (/logCaughtError|console\.|message:/.test(linea)) return false
+    return /\.registerParticipant\s*\(|registerVoiceName\s*\(/.test(linea)
+  })
+}
+
+/**
+ * Mide qui?n DECIDE (operaci?n), no el nombre del s?mbolo viejo. El m?dulo es
+ * due?o de turno/voz; el registro ?nico es due?o del nombre.
+ */
+function medirPropiedadSemantica(fuentes: readonly Fuente[]) {
+  const modulo = (ruta: string) => ruta.startsWith('src/voice/conversation/')
+  const registro = 'src/voice/lib/speakerIdentityRegister.js'
+  const directorio = 'src/voice/lib/speakerDirectory.js'
+  const primitivasVoz = new Set(['src/voice/lib/audioMath.js', 'src/voice/lib/voicedActivity.js'])
+  return {
+    turnMintOwners: fuentes.filter((f) => !modulo(f.nombre) && decideTurno(f.src)).length,
+    voiceMeasureOwners: fuentes.filter((f) => !modulo(f.nombre) && !primitivasVoz.has(f.nombre) && mideVoz(f.src)).length,
+    nameRegisterOwners: fuentes.filter(
+      (f) => !modulo(f.nombre) && f.nombre !== registro && f.nombre !== directorio && escribeNombre(f.src),
+    ).length,
+  }
+}
 
 function existeRef(ref: string): boolean {
   try {
@@ -172,6 +222,7 @@ function medir(fuentes: readonly Fuente[] = FUENTES) {
       0,
     ),
     continuidadOwners: CONTINUIDAD_OWNERS,
+    ...medirPropiedadSemantica(FUENTES_SRC),
   }
 }
 
@@ -342,5 +393,48 @@ describe('CONVERSACIÓN — rutas dobles medidas', () => {
     expect(fuente('producto.ts')).not.toMatch(
       /componerFraseDelEvento\(\s*evento\.results,\s*evento\.resultIndex\s*\)/,
     )
+  })
+})
+
+describe('CONVERSACI?N ? propiedad sem?ntica del turno, la voz y el nombre', () => {
+  it('un solo due?o real: turno en el m?dulo; voz en el m?dulo; nombre en el registro', () => {
+    expect(medirPropiedadSemantica(FUENTES_SRC)).toEqual({
+      turnMintOwners: 0,
+      voiceMeasureOwners: 0,
+      nameRegisterOwners: 0,
+    })
+    expect(fuente('cierre.ts')).toContain('estado.turnosConFila.has(sugerido)')
+    expect(fuente('cierre.ts')).toContain('estado.turnosConFila.add(String(fila.turnId))')
+    expect(fuente('producto.ts')).not.toMatch(/turnosConFila|leerTurno|activeTurnIdRef/)
+    const hook = readFileSync(join(process.cwd(), 'src/voice/hooks/useFluVoiceAssistant.js'), 'utf8')
+    expect(hook).not.toMatch(/computeTurnSignature|selectVoicedWindow|embebedor\.medir/)
+    expect(hook).toContain('lastFirmaRef.current = Array.isArray(fila?.firma)')
+    expect(hook).toContain('signatureVector: lastFirmaRef.current')
+  })
+
+  it('FALSIFICACI?N: una ruta nueva con otro nombre que vuelve a decidir se marca', () => {
+    const infractor: readonly Fuente[] = [
+      { nombre: 'src/voice/hooks/ensureTurn.js', src: 'export function ensureTurn(id){ estado.turnoActual = id.uuid() }' },
+      { nombre: 'src/voice/hooks/computeTrackId.js', src: 'const v = await computeAudioSignature(muestras, sampleRate)' },
+      { nombre: 'src/voice/hooks/mintName.js', src: 'refs.registerParticipant(nombre, nombre, vector)' },
+    ]
+    expect(medirPropiedadSemantica(infractor)).toEqual({
+      turnMintOwners: 1,
+      voiceMeasureOwners: 1,
+      nameRegisterOwners: 1,
+    })
+  })
+
+  it('DELEGACI?N: el espejo del turno, el comando del nombre y el reset NO son due?os', () => {
+    const delegacion: readonly Fuente[] = [
+      { nombre: 'src/voice/hooks/espejo.js', src: 'if (turnId) activeTurnIdRef.current = turnId' },
+      { nombre: 'src/voice/hooks/registro.js', src: 'registerSpeakerIdentityFromCommand({ transcript, signatureVector: lastFirmaRef.current })' },
+      { nombre: 'src/voice/hooks/reset.js', src: 'activeTurnIdRef.current = 0' },
+    ]
+    expect(medirPropiedadSemantica(delegacion)).toEqual({
+      turnMintOwners: 0,
+      voiceMeasureOwners: 0,
+      nameRegisterOwners: 0,
+    })
   })
 })

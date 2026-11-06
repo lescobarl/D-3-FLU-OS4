@@ -29,14 +29,14 @@ import { resolveEchoContext } from '../lib/conversationDialogue.js'
 import { labelToSpeakerId } from '../lib/conversationRow.js'
 import { autoSpeakerIndexFromKey } from '../lib/speakerCore.js'
 import { voiceKeyFor } from '../lib/speakerDirectory.js'
+import { FLU_CONFIG } from '../lib/fluConfig.js'
 import { getLastCompletedSpeechAt } from '../lib/fluSpeech.js'
 import { getSessionRecordingStatus } from '../lib/sessionRecorder.js'
 
 /**
  * Compone el motor de conversación del producto con la vista del hook.
- * @param {object} opciones Idioma, turno, vista y ganchos del hook.
+ * @param {object} opciones Idioma, vista y ganchos del hook.
  * @param {'es'|'en'} opciones.idioma Idioma ya normalizado de la sesión.
- * @param {() => number|string} opciones.turnId Turno activo (se lee en cada uso).
  * @param {(fraseCanonica: string) => void} opciones.onLiveTranscript Publica la frase viva (completa, con wake).
  * @param {(fraseCanonica: string, opciones: {interim: boolean}) => void} opciones.onFraseCanonica Despacha la frase canónica.
  * @param {(fila: object) => void} [opciones.onLocucionCommiteada] Cierre de locución (frontera de turno).
@@ -44,7 +44,6 @@ import { getSessionRecordingStatus } from '../lib/sessionRecorder.js'
  */
 export function crearMotorConversacionHook({
   idioma,
-  turnId,
   onLiveTranscript,
   onFraseCanonica,
   onLocucionCommiteada,
@@ -52,9 +51,6 @@ export function crearMotorConversacionHook({
   const motor = crearMotorConversacionProducto({
     idioma,
     participantId: useIntegrationStore.getState().activePersonId,
-    // El proveedor se lee POR EVENTO en el producto: el motor queda abierto entre
-    // locuciones y el número de turno avanza con cada commit del hook.
-    turnId: () => (typeof turnId === 'function' ? turnId() : null),
     ultimoTextoDicho: () =>
       resolveEchoContext(
         useIntegrationStore.getState().conversationHistory,
@@ -69,6 +65,9 @@ export function crearMotorConversacionHook({
   let ultimaDespachada = ''
   /** Última locución commiteada: `row.committed` puede repetirse al promover la fila. */
   let ultimaCommiteada = ''
+  /** Timer único de la frase viva: agrupa ráfagas de interinos en un render. */
+  let liveTimer = 0
+  let cerrado = false
 
   /**
    * Despacha la frase canónica vigente tras ingerir un evento del reconocedor.
@@ -84,11 +83,16 @@ export function crearMotorConversacionHook({
 
   motor.suscribir((evento) => {
     if (evento.tipo === 'box.updated') {
+      if (cerrado) return
       // La frase viva es la MISMA frase de la fila (Anexo B 3): va completa, con
       // wake. Quitarla es presentación de la barra, y lo hace la barra con el
       // splitter único (Anexo B 5); si aquí se recortara, la barra recibiría un
       // texto sin wake, no casaría y no mostraría ningún comando.
-      onLiveTranscript(evento.abierta ? evento.fraseCanonica : '')
+      if (liveTimer) clearTimeout(liveTimer)
+      liveTimer = setTimeout(() => {
+        liveTimer = 0
+        onLiveTranscript(evento.abierta ? evento.fraseCanonica : '')
+      }, FLU_CONFIG.ui?.workspace?.liveTranscriptThrottleMs ?? 120)
       return
     }
     if (evento.tipo === 'speaker.labeled') {
@@ -163,11 +167,16 @@ export function crearMotorConversacionHook({
       ultimaDespachada = ''
       onLocucionCommiteada?.(evento.fila)
     }
+    if (liveTimer) clearTimeout(liveTimer)
+    liveTimer = 0
     onLiveTranscript('')
   })
 
   return {
-    abrir: () => motor.abrir(),
+    abrir: () => {
+      cerrado = false
+      return motor.abrir()
+    },
     evento: (evento) => {
       const interim = !traeFinal(evento)
       const ingesta = motor.evento(evento)
@@ -179,6 +188,13 @@ export function crearMotorConversacionHook({
       return ingesta
     },
     audio: (muestras, sampleRate, inicioMuestras) => motor.audio(muestras, sampleRate, inicioMuestras),
-    cerrar: (motivo) => motor.cerrar(motivo),
+    cerrar: (motivo) => {
+      cerrado = true
+      const resultado = motor.cerrar(motivo)
+      if (liveTimer) clearTimeout(liveTimer)
+      liveTimer = 0
+      onLiveTranscript('')
+      return resultado
+    },
   }
 }

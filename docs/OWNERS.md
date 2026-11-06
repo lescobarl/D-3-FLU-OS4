@@ -20,9 +20,10 @@ mismo commit. Si no puedes borrarlo ahora, no añadas el nuevo ahora.
 | Pregunta | Dueño | Nota |
 |---|---|---|
 | ¿La sesión está activa y cuál es su estado? | `sesion.ts:90` `crearEstadoSesion` · `sesion.ts:157` `crearSesion` | Estado, caja, voz y cierre de fila. |
+| ¿Quién acuña el turno de una fila? | `cierre.ts:227` `abrirLocucion` | El módulo decide; el producto consume la locución abierta. |
+| ¿Qué turno lleva cada evento del producto? | `producto.ts:123` `crearMotorConversacionProducto` | Consumidor: no hay segundo mint. |
 | ¿Qué motor ASR se elige al abrir? | `motor.ts:37` `elegirMotor` | Uno solo; sin swap en caliente. |
 | ¿Qué sesión y turno se adoptan al abrir? | `motor.ts:96` `iniciar` | `sessionId` de la grabación o uuid; `turnId` opcional. |
-| ¿Qué turno lleva cada evento del producto? | `producto.ts:172` `leerTurno` | Lee el proveedor del hook por evento; no es un segundo decisor. |
 
 ## Texto y caja
 
@@ -43,7 +44,7 @@ mismo commit. Si no puedes borrarlo ahora, no añadas el nuevo ahora.
 | ¿Cómo se construye la fila? | `fila.ts:164` `construirFila` | Texto, voz, etiqueta y motivo. |
 | ¿Cómo se resuelve la etiqueta del hablante? | `fila.ts:126` `resolverEtiqueta` | Nombre solo con evidencia; nunca `?`. |
 | ¿La voz es la misma? | `identidad.ts:97` `decidirIdentidad` | Compartido por cierre activo y resolución pasiva. |
-| ¿Cómo se mide la voz al cerrar? | `cierre.ts:164` `resolverVoz` · `cierre.ts:196` `medirTramoCerrado` | Medida del tramo cerrado. |
+| ?C?mo se mide la voz al cerrar? | `cierre.ts:386` `medirVozAlCerrar` | ?nica medida de identidad; el hook solo espeja `fila.firma`. |
 | ¿Cómo se resuelve la voz pasiva o se renombra una fila? | `pasivo.ts:119` `crearResolucionPasiva` · `pasivo.ts:46` `renombrarFilaDeUsuario` | No escribe filas; usa el mismo `decidirIdentidad`. |
 
 ## Ingesta y audio

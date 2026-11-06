@@ -117,31 +117,23 @@ export type MotorConversacionProducto = Readonly<{
  * (`EmbebedorPort`, decisión del dueño Paso 5-A): el producto no recibe
  * evidencia de voz externa.
  * @param opciones Idioma activo, último texto de FLU, participante dueño de
- *   las filas y proveedor de turno del hook (leído por evento).
+ *   las filas y grabación activa; el turno lo acuña el módulo.
  * @returns Controlador de apertura, ingesta y cierre.
  */
 export function crearMotorConversacionProducto({
   idioma,
   ultimoTextoDicho,
   participantId,
-  turnId: proveedorDeTurno,
   recordingId,
 }: {
   idioma: IdiomaLocucion
   ultimoTextoDicho: () => string
-  /** Participante activo: aísla las filas del motor por usuario. */
+  /** Participante activo: aA-sla las filas del motor por usuario. */
   participantId?: string
   /**
-   * Turno del hook, leído POR EVENTO: el motor queda abierto entre locuciones
-   * (modo pasivo) y el número de turno avanza con cada commit, así que un valor
-   * capturado en `abrir` pegaría el turno 1 a todas las filas. Sin proveedor, o
-   * con valor vacío, rige el uuid propio de la sesión.
-   */
-  turnId?: () => number | string | null
-  /**
-   * Id de la grabación activa (recorder, Caso 11), leído al ABRIR: la sesión
-   * ADOPTA ese id y todos sus commits/eventos lo llevan (nunca dos). Vacío o
-   * sin proveedor => el módulo acuña el propio (N/A sin recorder al iniciar).
+   * Id de la grabaciA3n activa (recorder, Caso 11), leA-do al ABRIR: la sesiA3n
+   * ADOPTA ese id y todos sus commits/eventos lo llevan (nunca dos). VacA-o o
+   * sin proveedor => el mA3dulo acuA�a el propio (N/A sin recorder al iniciar).
    */
   recordingId?: () => string | null
 }): MotorConversacionProducto {
@@ -162,17 +154,7 @@ export function crearMotorConversacionProducto({
     embebedor: crearEmbebedorProducto(),
   })
   let estadoMotor: EstadoMotorProducto = 'inactiva'
-  /** Uuid propio de la sesión (abrir); el proveedor lo pisa por evento si existe. */
-  let turnoDeSesion: string | null = null
   let cursorMuestras = 0
-  /**
-   * Turno vigente del evento: el proveedor manda si aporta valor; si no, el uuid
-   * de la sesión. Un solo dueño de la pregunta "¿qué turno es este?" por evento.
-   */
-  const leerTurno = (): string => {
-    const aportado = String(proveedorDeTurno?.() ?? '').trim()
-    return aportado || turnoDeSesion || ''
-  }
   /** Libro del último hueco de la frase NUEVA pegada a la línea abierta. */
   let libroDeLinea: LibroDeLinea | null = null
   /** Locución dueña del libro: si cambia, el libro no describe su texto. */
@@ -204,17 +186,14 @@ export function crearMotorConversacionProducto({
       locucionDelLibro = ''
       if (estadoMotor !== 'inactiva') return
       estadoMotor = 'activa'
-      const turno = leerTurno() || id.uuid()
-      turnoDeSesion = turno
       cursorMuestras = 0
-      // Caso 11: la conversación ADOPTA el id de la grabación activa al abrir la
-      // sesión; sin grabación (proveedor vacío) el módulo acuña el propio (N/A).
+      // Caso 11: la conversaciA3n ADOPTA el id de la grabaciA3n activa al abrir la
+      // sesiA3n; sin grabaciA3n (proveedor vacA-o) el mA3dulo acuA�a el propio (N/A).
       const grabacion = String(recordingId?.() ?? '').trim()
       void encadenar(() =>
         registrarFallo(
           'conversacion.producto.start.error',
           api.start({
-            turnId: turno,
             idioma,
             ...(grabacion ? { sessionId: grabacion } : {}),
           }),
@@ -225,10 +204,6 @@ export function crearMotorConversacionProducto({
     evento: (evento) =>
       encadenar(async () => {
         if (estadoMotor !== 'activa') return
-        // Se relee POR EVENTO: el commit del hook avanza el número de turno con la
-        // locución ABIERTA todavía, y esta ingesta pertenece al turno nuevo.
-        const turno = leerTurno()
-        if (!turno) return
         const instantanea = api.snapshot()
         const abierta = instantanea.locucionAbierta
         // El FINAL es la HIPÓTESIS COMPLETA del tramo (desde=0): sustituye la
@@ -274,7 +249,6 @@ export function crearMotorConversacionProducto({
             // el cierre por contenido llega con el corte o con `cerrar()`.
             final: hayFinal,
             idioma,
-            turnId: turno,
             // Medida del BLOQUE actual: el silencio medido antes del tramo
             // vigente. La frontera no relee una medida acumulada.
             silencioPrevioMs: instantanea.tramoAudio?.silencioPrevioMs ?? 0,
@@ -297,15 +271,9 @@ export function crearMotorConversacionProducto({
       // compone sobre una instantánea que ya incluye estos bloques.
       void encadenar(() => {
         if (estadoMotor !== 'activa') return undefined
-        // El turno se lee DENTRO de la cadena: un bloque capturado mientras la
-        // locución anterior commitea no puede abrir la siguiente con el turno
-        // viejo (el commit lo avanza; leerlo antes dejaba `turnoYaEscrito` y
-        // mataba una fila legítima).
-        const turno = leerTurno()
-        if (!turno) return undefined
         return registrarFallo(
           'conversacion.producto.audio.error',
-          api.ingestAudio({ muestras, sampleRate: frecuencia, inicio, fin, turnId: turno }),
+          api.ingestAudio({ muestras, sampleRate: frecuencia, inicio, fin }),
         )
       })
     },
@@ -331,7 +299,6 @@ export function crearMotorConversacionProducto({
           // y recién entonces se detiene la sesión. Una sola fila por segmento.
           const abierta = api.snapshot().locucionAbierta
           if (abierta && String(abierta.texto || '').trim()) {
-            const turno = leerTurno()
             await registrarFallo(
               'conversacion.producto.final.error',
               api.ingestAsr({
@@ -340,14 +307,12 @@ export function crearMotorConversacionProducto({
                 final: true,
                 idioma,
                 tramo: abierta.tramo,
-                ...(turno ? { turnId: turno } : {}),
               }),
             )
           }
           await registrarFallo('conversacion.producto.stop.error', api.stop(motivo))
         } finally {
           estadoMotor = 'inactiva'
-          turnoDeSesion = null
           libroDeLinea = null
           locucionDelLibro = ''
         }

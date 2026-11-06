@@ -326,6 +326,8 @@ export function participantRegisterPort(identitySession) {
  * @param {number[]|null} [params.signatureVector] Vector MEDIDO del turno, si el
  *   llamador lo tiene: ata el nombre a la voz real (no a la etiqueta heredada).
  * @param {Array} [params.clusters] Clusters vivos de la sesion (cosido de la misma voz).
+ * @param {string[]} [params.knownNames] Nombres ya conocidos (base/clusters).
+ * @param {"passive"|"command"} [params.origin] Procedencia del nombre.
  * @param {{ sessionPrimarySpeakerRef?: { current: string }, setClusters?: (clusters: unknown[]) => void, registerParticipant?: (name: string, speakerLabel?: string, voiceVector?: number[] | null) => void | Promise<unknown> }} [params.refs] Refs de sesion.
  * @returns {ReturnType<typeof registerSpeakerIdentity>}
  */
@@ -334,14 +336,16 @@ export function registerSpeakerIdentityFromCommand({
   speakerName = "",
   signatureVector = null,
   clusters = [],
+  knownNames = [],
+  origin = "command",
   refs = null,
 } = {}) {
   return registerSpeakerIdentity({
-    name: resolveSpeakerNameFromUtterance(transcript),
+    name: resolveSpeakerNameFromUtterance(transcript, { knownNames }),
     previousLabel: speakerName,
     signatureVector,
     clusters,
     refs,
-    origin: "command",
+    origin,
   })
 }

@@ -139,6 +139,7 @@ export type EventoConversacion =
       tipo: 'locution.closed'
       sessionId: string
       locutionId: string
+      turnId?: string
       tramo: TramoMuestreado
       motivo: MotivoCierre
       causa: CausaCierre
@@ -182,6 +183,7 @@ export type InstantaneaConversacion = Readonly<{
     locutionId: string
     texto: string
     tramo: TramoMuestreado
+    turnId?: string
   }> | null
   /** Tramo de audio vigente (puede no ser el de la locución abierta). */
   tramoAudio: Readonly<{

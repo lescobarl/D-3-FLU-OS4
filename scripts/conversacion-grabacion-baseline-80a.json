@@ -1,0 +1,68 @@
+{
+  "_nota": "L?nea base de la sesi?n REAL 80a43c12 (2026-11-06), la prueba que desminti? al playback: turnId 9 duplicado y identity-register con turnMeasured 0. Fixture redactada (texto/vectores fuera; tiempos, longitudes, hashes, turnId, hablante y motivos intactos). Solo baja.",
+  "sessionId": "80a43c12-fa87-4c55-9b4c-92307023b606",
+  "fecha": "2026-11-06",
+  "stallMs": 4200,
+  "minEvents": 2800,
+  "metricas": {
+    "events": 2898,
+    "commits": 10,
+    "finals": 9,
+    "uniqueTurnIds": 9,
+    "duplicateTurnIds": [
+      "9"
+    ],
+    "extraCommitsForDuplicateTurn": 1,
+    "rowsNotEqualAnyFinal": 7,
+    "tailLossChars": 44,
+    "tailLossTurns": [
+      {
+        "turnId": "1",
+        "finalLen": 460,
+        "rowLen": 416,
+        "loss": 44
+      }
+    ],
+    "commitsAfterStop": 0,
+    "identitySkips": 0,
+    "chromeRawGapsOverStall": 9,
+    "maxGapMs": 15104,
+    "sinVector": 1,
+    "speakerFlips": 2,
+    "initialAnchorsCount": 0,
+    "initialAnchorsUsable": 0
+  },
+  "cases": [
+    {
+      "id": "turnid-duplicado",
+      "owner": "src/voice/conversation/cierre.ts:227",
+      "metric": "extraCommitsForDuplicateTurn",
+      "ceiling": 1,
+      "descripcion": "La sesi?n real 80a43c12 duplic? el turnId 9; el due?o ahora acu?a el siguiente en el m?dulo."
+    },
+    {
+      "id": "fila-no-final",
+      "owner": "src/voice/conversation/cierre.ts:461",
+      "metric": "rowsNotEqualAnyFinal",
+      "ceiling": 7
+    },
+    {
+      "id": "cola-perdida",
+      "owner": "src/voice/conversation/texto.ts:399",
+      "metric": "tailLossChars",
+      "ceiling": 44
+    },
+    {
+      "id": "sin-vector",
+      "owner": "src/voice/conversation/cierre.ts:397",
+      "metric": "sinVector",
+      "ceiling": 1
+    },
+    {
+      "id": "hablante-alterna",
+      "owner": "src/voice/conversation/fila.ts:126",
+      "metric": "speakerFlips",
+      "ceiling": 2
+    }
+  ]
+}

@@ -296,7 +296,7 @@ describe('Caso 8 — un turnId => una fila inmutable (módulo real)', () => {
     const filas = filasDe(escenario.api)
     expect(filas).toHaveLength(2)
     expect(filas[0]!.turnId).toBe('T5')
-    expect(filas[1]!.turnId).toBe('T5')
+    expect(filas[1]!.turnId).not.toBe('T5')
     expect(filas[0]!.texto).toBe('ok flu crea una cita')
     expect(filas[1]!.texto).toBe('ok flu crea una cita manana')
     expect(descartesDe(escenario.api)).not.toContainEqual(

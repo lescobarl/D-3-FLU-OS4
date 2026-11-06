@@ -1,0 +1,136 @@
+{
+  "_nota": "Línea base de la grabación real 14c1aa32 (2026-11-05). La fixture versionada es la MISMA sesión con texto y vectores redactados; conserva tiempos, longitudes, hashes, turnId, hablante y motivos, y reproduce exactamente las métricas de la grabación original. El techo solo baja: si una métrica mejora, se actualiza esta línea base en el mismo cambio; si sube, el guard falla.",
+  "sessionId": "14c1aa32-5b49-49ba-b119-d4755c9e8d7f",
+  "fecha": "2026-11-05",
+  "stallMs": 4200,
+  "minEvents": 4000,
+  "metricas": {
+    "events": 4042,
+    "commits": 18,
+    "finals": 17,
+    "uniqueTurnIds": 11,
+    "duplicateTurnIds": [
+      "3",
+      "4",
+      "5",
+      "6",
+      "8",
+      "11"
+    ],
+    "extraCommitsForDuplicateTurn": 7,
+    "rowsNotEqualAnyFinal": 15,
+    "tailLossChars": 69,
+    "tailLossTurns": [
+      {
+        "turnId": "1",
+        "finalLen": 540,
+        "rowLen": 495,
+        "loss": 45
+      },
+      {
+        "turnId": "3",
+        "finalLen": 637,
+        "rowLen": 636,
+        "loss": 1
+      },
+      {
+        "turnId": "5",
+        "finalLen": 329,
+        "rowLen": 327,
+        "loss": 2
+      },
+      {
+        "turnId": "9",
+        "finalLen": 14,
+        "rowLen": 13,
+        "loss": 1
+      },
+      {
+        "turnId": "10",
+        "finalLen": 158,
+        "rowLen": 138,
+        "loss": 20
+      }
+    ],
+    "commitsAfterStop": 7,
+    "identitySkips": 1,
+    "chromeRawGapsOverStall": 10,
+    "maxGapMs": 29014,
+    "sinVector": 6,
+    "speakerFlips": 4,
+    "initialAnchorsCount": 0,
+    "initialAnchorsUsable": 0
+  },
+  "cases": [
+    {
+      "id": "fila-no-final",
+      "owner": "src/voice/conversation/cierre.ts:461",
+      "metric": "rowsNotEqualAnyFinal",
+      "ceiling": 15,
+      "descripcion": "Filas commiteadas que no son exactamente un asrFinal (texto interino, mezcla o cola perdida)."
+    },
+    {
+      "id": "cola-perdida",
+      "owner": "src/voice/conversation/producto.ts:330",
+      "metric": "tailLossChars",
+      "ceiling": 69,
+      "descripcion": "Caracteres perdidos entre la suma de finales y la fila del mismo turnId."
+    },
+    {
+      "id": "turnid-duplicado",
+      "owner": "src/voice/conversation/ports.ts:51",
+      "metric": "extraCommitsForDuplicateTurn",
+      "ceiling": 7,
+      "descripcion": "Commits de más para un mismo turnId; la grabación real f16610b1 lo reprodujo (1, 6 y 10)."
+    },
+    {
+      "id": "fila-tras-stop",
+      "owner": "src/voice/conversation/cierre.ts:461",
+      "metric": "commitsAfterStop",
+      "ceiling": 7,
+      "descripcion": "Filas creadas después de un [REC] stop; la grabación real f16610b1 lo reprodujo (3)."
+    },
+    {
+      "id": "hueco-asr",
+      "owner": "src/voice/lib/asrWatchdog.js:68",
+      "metric": "chromeRawGapsOverStall",
+      "ceiling": 10,
+      "descripcion": "Huecos de chrome-raw por encima de conversationStallMs (4200 ms)."
+    },
+    {
+      "id": "hueco-maximo",
+      "owner": "src/voice/lib/asrWatchdog.js:68",
+      "metric": "maxGapMs",
+      "ceiling": 29014,
+      "descripcion": "Hueco máximo medido; el watchdog debía reconstruir a los 4200 ms."
+    },
+    {
+      "id": "sin-vector",
+      "owner": "src/voice/conversation/cierre.ts:404",
+      "metric": "sinVector",
+      "ceiling": 6,
+      "descripcion": "Medidas de voz cerradas sin vector (base de la etiqueta genérica)."
+    },
+    {
+      "id": "hablante-alterna",
+      "owner": "src/voice/conversation/fila.ts:126",
+      "metric": "speakerFlips",
+      "ceiling": 4,
+      "descripcion": "Cambios de hablante entre commits consecutivos; la misma voz alterna Hablante 1/2."
+    },
+    {
+      "id": "anclas-cero",
+      "owner": "src/voice/hooks/useSessionSpeakerClusters.js:58",
+      "metric": "initialAnchorsUsable",
+      "ceiling": 0,
+      "descripcion": "Anclas usables al inicio; sin vector/modelo no se siembra ninguna."
+    }
+  ],
+  "resueltos": [
+    {
+      "id": "nombre-descartado",
+      "owner": "src/voice/hooks/useFluVoiceAssistant.js:1067",
+      "nota": "Corregido: el hook pasa origin command cuando la wake introduce el nombre. El evento histórico sigue en metricas.identitySkips=1; una grabación nueva debe dar 0."
+    }
+  ]
+}

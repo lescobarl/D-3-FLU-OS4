@@ -43,7 +43,7 @@ const ownerSource = () =>
  * `setSessionPrimarySpeaker` ni escribiendo el ref a mano.
  */
 export function hookRoutesPresentedToOwner(src: string): boolean {
-    return /registerSpeakerIdentity\(\{\s*name: introducedName/.test(src);
+    return /registerSpeakerIdentityFromCommand\(\{|registerSpeakerIdentity\(\{\s*name: introducedName/.test(src);
 }
 
 /**
@@ -154,6 +154,7 @@ describe('el hablante primario de la sesion conserva su nombre', () => {
 // P2.4 - prueba de detector: alimentado el infractor sintetico, la marca.
 describe('identidad de hablante - el detector no es decorativo', () => {
     it('marca el hook que enruta la presentacion y no el que la ignora', () => {
+        expect(hookRoutesPresentedToOwner("registerSpeakerIdentityFromCommand({ transcript, signatureVector })")).toBe(true)
         expect(hookRoutesPresentedToOwner("registerSpeakerIdentity({ name: introducedName, clusters })")).toBe(true)
         expect(hookRoutesPresentedToOwner("setSessionPrimarySpeaker(sessionPrimarySpeakerRef, introducedName, 'presented')")).toBe(false)
         expect(hookRoutesPresentedToOwner('const x = introducedName')).toBe(false)
@@ -298,14 +299,11 @@ describe('"soy X" marca VERIFICADO solo el cluster de SU voz', () => {
         expect(/compareCosineSignatures\(measured,\s*marcado\.signature\)/.test(src)).toBe(true);
     });
 
-    it('GUARD de fuente (2A): la firma del turno pasivo se calcula SOLO sobre el tramo con voz', () => {
+    it('GUARD de fuente (2A): la firma sale de la fila MEDIDA del m?dulo, no del hook', () => {
         const src = hookSource();
-        // El recorte es del dueno unico (`selectVoicedWindow`) y va ANTES de la firma:
-        // la ventana completa con audio ajeno envenenaba el ancla de "soy X" (d4c1c8f3).
-        expect(/selectVoicedWindow\(audioSnapshot,\s*\{\s*sampleRate\s*\}\)/.test(src)).toBe(true);
-        expect(src.indexOf('selectVoicedWindow(audioSnapshot')).toBeLessThan(
-            src.indexOf('computeTurnSignature(ventanaVoz'),
-        );
+        expect(src).not.toMatch(/computeTurnSignature|selectVoicedWindow/);
+        expect(src).toContain('lastFirmaRef.current = Array.isArray(fila?.firma)');
+        expect(src).toContain('signatureVector: lastFirmaRef.current');
     });
 });
 

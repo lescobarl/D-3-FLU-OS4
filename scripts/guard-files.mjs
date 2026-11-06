@@ -4,6 +4,7 @@
   'tests/conversacionEtiquetasYMezclaGuard.test.ts',
   'tests/conversacionUnIdPorGrabacionGuard.test.ts',
   'tests/conversacionTrazaDeFilaGuard.test.ts',
+  'tests/conversacionGrabacionGuard.test.ts', 'tests/conversacionGrabacion80aGuard.test.ts',
   'tests/conversacionUnCicloDeEscuchaGuard.test.ts',
   'tests/sessionRecorder.test.ts',
   'tests/downloadSingleOwnerGuard.test.ts',

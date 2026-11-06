@@ -41,8 +41,8 @@ export function findLiveBufferFeeds(source: string): string[] {
   return source
     .split(/\r?\n/)
     .map((line, index) => ({ line, index }))
-    .filter(({ line }) => /selectVoicedWindow\(/.test(line) && !/selectVoicedWindow\(audioSnapshot/.test(line))
-    .map(({ index }) => `${HOOK}:${index + 1}`)
+    .filter(({ line }) => /computeAudioSignature\s*\(|selectVoicedWindow\s*\(|embebedor\.medir\s*\(/.test(line))
+    .map(({ index }) => HOOK + ':' + (index + 1))
 }
 
 describe('diarización — el audio del turno lo captura su dueño único (semántica pura)', () => {
@@ -89,20 +89,22 @@ describe('diarización — el audio del turno lo captura su dueño único (semá
   })
 })
 
-describe('el camino vivo consume el snapshot del dueño (guard de fuente)', () => {
-  it('el hook importa al dueño y la firma se calcula SOLO del snapshot', () => {
+describe('el camino vivo consume el snapshot del due?o (guard de fuente)', () => {
+  it('el hook no mide voz: la firma sale de la fila medida del m?dulo', () => {
     const source = hookSource()
     expect(source).toContain("from '../lib/turnAudioSnapshot.js'")
-    expect(source).toContain('selectVoicedWindow(audioSnapshot')
-    expect(source, 'la firma jamas se alimenta del buffer vivo').toContain('audioSnapshot?.length')
-    expect(source, 'sin snapshot no hay medida').toContain('if (!audioSnapshot.length)')
-    expect(source, 'la diarizacion pasa por el dueno (snapshot primero, chunks como respaldo)').toContain('turnAudioForDiarize(activeTurnIdRef.current')
+    expect(source).not.toMatch(/computeAudioSignature|selectVoicedWindow|embebedor\.medir/)
+    expect(source).toContain('lastFirmaRef.current = Array.isArray(fila?.firma)')
+    expect(source).toContain('signatureVector: lastFirmaRef.current')
+    expect(source, 'la diarizacion pasa por el dueno').toContain('turnAudioForDiarize(activeTurnIdRef.current')
+    const modulo = readFileSync(join(process.cwd(), 'src/voice/conversation/cierre.ts'), 'utf8')
+    expect(modulo).toContain('embebedor.medir(')
   })
 
-  it('PRUEBA DE DETECTOR: alimentar el buffer vivo a la firma se marca', () => {
+  it('PRUEBA DE DETECTOR: una medici?n de voz en el hook se marca', () => {
     const legitimo = hookSource()
     expect(findLiveBufferFeeds(legitimo)).toEqual([])
-    const infractor = legitimo.replace('selectVoicedWindow(audioSnapshot', 'selectVoicedWindow(chunksRef.current')
+    const infractor = legitimo + '\nconst track = await computeAudioSignature(chunksRef.current, 16000)'
     expect(findLiveBufferFeeds(infractor)).not.toEqual([])
   })
 })

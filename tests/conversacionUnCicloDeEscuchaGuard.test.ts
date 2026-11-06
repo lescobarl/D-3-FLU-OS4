@@ -128,7 +128,6 @@ describe('Caso 13 — un ciclo de escucha no reinicia sesión ni turno (motor re
     const motor = crearMotorConversacionProducto({
       idioma: 'es',
       ultimoTextoDicho: () => '',
-      turnId: () => 'T-uno',
     })
     motor.abrir()
     const primerCommit = await locucionProducto(motor, 'hola', 0)
@@ -148,13 +147,15 @@ describe('Caso 13 — un ciclo de escucha no reinicia sesión ni turno (motor re
     // como `turnoYaEscrito` y la conversación se perdía (auditoría 2026-11-01).
     const segundoCierre = await locucionProducto(motor, 'adios', 120000, 'locution.closed')
     expect(segundoCierre.sessionId).toBe(sessionIdVigente)
-    expect(primerCommit.fila.turnId).toBe('T-uno')
+    expect(primerCommit.fila.turnId).toBeTruthy()
+    expect(primerCommit.fila.turnId).not.toBe('T-uno')
     const trasSegundo = motor.instantanea()
     expect(trasSegundo.descartes.map((descarte) => descarte.motivo)).not.toContain('turnoYaEscrito')
     const filas = trasSegundo.filas
     expect(filas).toHaveLength(2)
     expect(filas.map((fila) => fila.texto)).toEqual(['hola', 'adios'])
-    expect(filas[0]!.turnId).toBe('T-uno')
+    expect(filas[0]!.turnId).toBe(primerCommit.fila.turnId)
+    expect(filas[1]!.turnId).not.toBe(filas[0]!.turnId)
     expect(new Set(filas.map((fila) => fila.sessionId))).toEqual(new Set([sessionIdVigente]))
     const persistidas = await fluDb.conversations.toArray()
     expect(persistidas).toHaveLength(2)

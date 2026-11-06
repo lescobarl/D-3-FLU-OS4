@@ -157,7 +157,7 @@ describe('rutina de revision - la traza de UNA corrida cumple los invariantes', 
     // retiró con la tubería vieja); la fila no asciende por voz.
     expect(HOOK.includes('resolveSpeakerNameFromUtterance('), 'el dato es el mandato').toBe(true)
     expect(HOOK.includes('evidenciaAcustica: audioSnapshot.length > 0'), '"hay audio" NO es evidencia').toBe(false)
-    expect((HOOK.match(/evidenciaAcustica: (true|false)/g) || []).filter((m) => m === 'evidenciaAcustica: true').length, 'la marca true sale SOLO de la medida').toBe(1)
+    expect((HOOK.match(/evidenciaAcustica: (true|false)/g) || []).filter((m) => m === 'evidenciaAcustica: true').length, 'la marca true sale SOLO de la medida; el hook ya no mide').toBe(0)
     expect(TURN_ROW.includes('resolveRegisteredSpeakerName'), 'la fila no asciende por voz').toBe(false)
     // Sin defaults que mientan: `evidenciaAcustica` no puede venir en true por defecto.
     expect(/evidenciaAcustica = true/.test(TURN_ROW), 'ningun default en true').toBe(false)

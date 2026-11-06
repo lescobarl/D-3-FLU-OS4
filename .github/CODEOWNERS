@@ -37,6 +37,11 @@
 /tests/conversacionEtiquetasYMezclaGuard.test.ts @lescobarl
 /tests/conversacionRutasDoblesGuard.test.ts @lescobarl
 /scripts/conversacion-rutas-dobles-baseline.json @lescobarl
+/tests/conversacionGrabacionGuard.test.ts @lescobarl
+/scripts/conversacionGrabacionMetricas.mjs @lescobarl
+/scripts/conversacion-grabacion-baseline.json @lescobarl
+/scripts/conversacion-grabacion-baseline-80a.json @lescobarl
+/tests/fixtures/flu-recordings/** @lescobarl
 
 # Gate de dueños (archivos nuevos)
 /docs/OWNERS.md               @lescobarl

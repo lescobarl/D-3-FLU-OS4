@@ -260,7 +260,9 @@ describe('P9.60 - tuberia completa: el rebuild del watchdog no puede perder la l
     // FINAL de Chrome: NO cierra la locución (el cierre es la frontera VAD).
     await act(async () => {
       h.recognition.onresult?.(chromeEvent([{ isFinal: true, transcript: LARGA }], 0));
-      await vi.advanceTimersByTimeAsync(1);
+      await vi.advanceTimersByTimeAsync(
+        FLU_CONFIG.ui?.workspace?.liveTranscriptThrottleMs ?? 120,
+      );
     });
     expect(vista.result.current.liveTranscript, 'la caja del módulo publica la frase').toContain(
       'voy a hacer una prueba',

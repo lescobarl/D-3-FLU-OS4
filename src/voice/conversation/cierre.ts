@@ -48,6 +48,8 @@ import type {
 /** Parte del estado de sesión que consumen las reglas de cierre. */
 export type EstadoCierre = {
   sessionId: string | null
+  turnoActual: string
+  turnosConFila: Set<string>
   abierta: LocucionAbierta | null
   ultimaEtiqueta: string
   filas: Map<string, Fila>
@@ -239,7 +241,9 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
     estado.muestrasEnUltimoIntento = 0
     // Caso 8: sin proveedor de turno, cada locución ES su turno (uuid propio);
     // un turnId solo agrupa lo que vino con el MISMO turno del llamador.
-    const turno = String(datos.turnId || '').trim() || id.uuid()
+    const sugerido = String(datos.turnId || '').trim() || estado.turnoActual
+    const turno = sugerido && !estado.turnosConFila.has(sugerido) ? sugerido : id.uuid()
+    estado.turnoActual = turno
     estado.abierta = {
       locutionId: datos.tramoId,
       texto: datos.texto,
@@ -457,6 +461,7 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
    * @param fila Fila commiteada que se emite y se traza.
    */
   function commitar(fila: Fila): void {
+    estado.turnosConFila.add(String(fila.turnId))
     emitir({ tipo: 'row.committed', sessionId: fila.sessionId, fila })
     recordSessionEvent('conversacion', 'fila.commiteada', {
       sessionId: fila.sessionId,
@@ -487,6 +492,7 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
       tipo: 'locution.closed',
       sessionId,
       locutionId: locucion.locutionId,
+      turnId: locucion.turnId,
       tramo,
       motivo,
       causa,

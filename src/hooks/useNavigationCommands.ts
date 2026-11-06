@@ -16,7 +16,6 @@ import { deriveSearchQuery } from '../voice/api/audio'
 import { COMMAND_IDS, userRequestedNavigationCommand } from '../voice/api/commands'
 import { FLU_CONFIG, isSessionResetCommand } from '../voice/api/config'
 import { logFluReply, setNavSettlePending } from '../voice/api/conversation'
-import { registerSpeakerIdentityFromCommand } from '../voice/api/identity'
 import { isSpeechBusy, speakResponse, waitForSpeechIdle } from '../voice/api/speech';
 import { dispatchFluEvent, FLU_EVENTS, dispatchFluSearch, onFluSearchReady } from '../core/events/fluEvents';
 import { resolveBrowserNavigation } from '../core/browser/browserNavigation';
@@ -244,7 +243,6 @@ export function useNavigationCommands(
         fluParticipant,
         os2ResetVoiceDisplay,
         requestMedia,
-        identitySession,
     }: NavigationCommandParams) => {
         if (!navegacion.comando) return;
 
@@ -303,26 +301,10 @@ export function useNavigationCommands(
             // no tenia consumidor: FLU decia "Registrado {name}." y NO registraba nada
             // (el registro solo ocurria como efecto colateral del commit del stream).
             case COMMAND_IDS.REGISTRAR_PARTICIPANTE: {
-                const sesionIdentidad = identitySession?.current || null;
-                const registrado = registerSpeakerIdentityFromCommand({
-                    transcript,
-                    speakerName: speakerName || '',
-                    // La VOZ que dice el nombre es la del TURNO: su timbre medido lo ata a ESA
-                    // voz (no a la etiqueta heredada ni a la continuidad). Sin esta firma el
-                    // nombre quedaba en la clave de la etiqueta y solo cambiaba la ultima
-                    // intervencion (defecto medido por el dueno 2026-10-18).
-                    signatureVector: sesionIdentidad?.getLastTurnSignature?.() || null,
-                    clusters: sesionIdentidad?.speakerClustersRef?.current || [],
-                    refs: {
-                        sessionPrimarySpeakerRef: sesionIdentidad?.sessionPrimarySpeakerRef,
-                        setClusters: sesionIdentidad?.setClusters,
-                        // El nombre dicho por VOZ entra en la base de participantes: si esta
-                        // en la base, se ve en la seccion de participantes (punto del dueno).
-                        registerParticipant: sesionIdentidad?.registerParticipant,
-                    },
-                });
+                // El nombre lo registra la FILA medida del m?dulo conversaci?n
+                // Aqu? solo se audita: no se vuelve a resolver nombre ni a escribir la base.
                 logCommand('command:registrar_participante', 'REGISTRAR_PARTICIPANTE command executed', {
-                    speaker: registrado.name || speakerName || undefined,
+                    speaker: speakerName || undefined,
                     transcript,
                     response: commandSpeech,
                     comando: COMMAND_IDS.REGISTRAR_PARTICIPANTE,

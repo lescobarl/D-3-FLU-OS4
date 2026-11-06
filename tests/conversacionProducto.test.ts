@@ -315,7 +315,7 @@ beforeEach(async () => {
     presentation: { label: 'Participante', show: false },
   });
   h.useTurnLifecycleSync.mockReset().mockReturnValue({
-    current: { startTurn: vi.fn(), resetTurn: vi.fn(), markSpeaking: vi.fn(), isWorking: () => false },
+    current: { startTurn: vi.fn(), resetTurn: vi.fn(), markSpeaking: vi.fn(), lap: vi.fn(), endTurn: vi.fn(), isWorking: () => false },
   });
   h.useOffPathSessionWriter.mockReset().mockReturnValue({ write: vi.fn() });
 
@@ -506,5 +506,76 @@ describe('producto — engine new escribe la fila desde el reconocedor real', ()
       (h.integration as unknown as { addConversationEntry: ReturnType<typeof vi.fn> })
         .addConversationEntry,
     ).toHaveBeenCalledTimes(1);
+  });
+
+  it('un interino tardío después del stop no crea una fila extra', async () => {
+    darSoporteNavegador();
+    const { result } = montar();
+    await waitFor(() => expect(result.current.isSupported).toBe(true));
+
+    await act(async () => {
+      await result.current.startListening();
+    });
+    act(() => h.recognition.onstart?.());
+    await alimentarVoz();
+    await act(async () => {
+      h.recognition.onresult?.(eventoAsr('ok flu hola mundo', true));
+    });
+
+    h.recognition.stop.mockImplementation(() => h.recognition.onend?.());
+    await act(async () => {
+      await result.current.stopListening({ closing: true });
+    });
+    await waitFor(async () => {
+      expect(await fluDb.conversations.count()).toBe(1);
+    });
+    expect(h.setCommitted).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      h.recognition.onresult?.(eventoAsr('cerrando', false));
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(await fluDb.conversations.count()).toBe(1);
+    expect(h.setCommitted).toHaveBeenCalledTimes(1);
+  });
+
+  it('un onstart tardío tras el stop no reabre el motor ni crea fila', async () => {
+    darSoporteNavegador();
+    const { result } = montar();
+    await waitFor(() => expect(result.current.isSupported).toBe(true));
+
+    await act(async () => {
+      await result.current.startListening();
+    });
+    act(() => h.recognition.onstart?.());
+    await alimentarVoz();
+    await act(async () => {
+      h.recognition.onresult?.(eventoAsr('ok flu hola mundo', true));
+    });
+
+    h.recognition.stop.mockImplementation(() => h.recognition.onend?.());
+    await act(async () => {
+      await result.current.stopListening({ closing: true });
+    });
+    await waitFor(async () => {
+      expect(await fluDb.conversations.count()).toBe(1);
+    });
+    const motores = h.crearMotorLlamadas;
+    expect(h.setCommitted).toHaveBeenCalledTimes(1);
+
+    act(() => h.recognition.onstart?.());
+    await act(async () => {
+      h.recognition.onresult?.(eventoAsr('tarde', true));
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(h.crearMotorLlamadas).toBe(motores);
+    expect(await fluDb.conversations.count()).toBe(1);
+    expect(h.setCommitted).toHaveBeenCalledTimes(1);
   });
 });

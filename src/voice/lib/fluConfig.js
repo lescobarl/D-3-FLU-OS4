@@ -1779,7 +1779,7 @@ export const FLU_CONFIG = {
     identifyingSpeakerName: 'Identificando...',
     mainCopy: '',
     workspace: {
-      title: 'Pizarrón',
+      title: 'Pizarrón', liveTranscriptThrottleMs: 120,
       emptyContent: '',
       fallbackTitle: 'Salida activa de IA',
       keyPointsTitle: { es: 'Puntos clave', en: 'Key points' },

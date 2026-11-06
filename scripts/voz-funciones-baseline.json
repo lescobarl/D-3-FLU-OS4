@@ -781,6 +781,7 @@
     "src/voice/lib/speakerPolicy.js": [
       "blindSpeakerFallback",
       "getRoomCaptureCfg",
+      "preferKnownName",
       "requiresWakeWordForSpeakerName",
       "resolveCommitStickyFallback",
       "resolveSpeakerNameFromUtterance"

@@ -51,6 +51,8 @@ function crearProbe(
 ): Probe {
   const estado: EstadoCierre = {
     sessionId: 'sesion-guard',
+    turnoActual: '',
+    turnosConFila: new Set(),
     abierta: null,
     ultimaEtiqueta,
     filas: new Map(),
@@ -134,6 +136,8 @@ async function correrLocucion(
 function crearProbePendiente() {
   const estado: EstadoCierre = {
     sessionId: 'sesion-pendiente',
+    turnoActual: '',
+    turnosConFila: new Set(),
     abierta: null,
     ultimaEtiqueta: '',
     filas: new Map(),

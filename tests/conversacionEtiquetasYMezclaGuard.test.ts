@@ -276,8 +276,8 @@ describe('Caso 1+3 — dos voces SIN pausa (módulo real, embebedor falso)', () 
       etiqueta: 'Hablante 1',
       tramo: { inicio: 0, fin: 40000, sampleRate: SAMPLE_RATE },
     })
+    expect(filas[1].turnId).not.toBe('T5')
     expect(filas[1]).toMatchObject({
-      turnId: 'T5',
       texto: 'con el doctor',
       etiqueta: 'Hablante 2',
       tramo: { inicio: 40000, fin: 64000, sampleRate: SAMPLE_RATE },

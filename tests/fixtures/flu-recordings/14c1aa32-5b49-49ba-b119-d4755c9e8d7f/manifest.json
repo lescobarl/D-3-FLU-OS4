@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 2,
+  "samples": 17373696,
+  "seconds": 361.952,
+  "sampleRate": 48000,
+  "events": 4042,
+  "turns": 19,
+  "audioBytes": 34747392,
+  "meta": {
+    "startedAt": "2026-11-05T15:34:40.626Z",
+    "sampleRate": 48000,
+    "language": "es-ES",
+    "sessionId": "14c1aa32-5b49-49ba-b119-d4755c9e8d7f",
+    "updatedAt": "2026-11-05T15:35:44.771Z"
+  },
+  "appCommit": "9dde0e0b",
+  "configHash": "sha1:cc983a36b4be",
+  "modelIds": [
+    "Xenova/wavlm-base-plus-sv|fp32"
+  ],
+  "language": "es-ES",
+  "finalizedAt": "2026-11-05T16:08:00.844Z"
+}

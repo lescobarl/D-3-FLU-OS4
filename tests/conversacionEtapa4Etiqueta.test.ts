@@ -27,9 +27,10 @@ const codigo = (texto: string) => texto.replace(/\/\*[\s\S]*?\*\//g, '').replace
 describe('ETAPA 4 · la medida y el tramo comparten la ventana con voz', () => {
   it('G U A R D (fuente): la MEDIDA se calcula sobre la ventana con voz, igual que el tramo', () => {
     const hook = codigo(leer('src/voice/hooks/useFluVoiceAssistant.js'))
-    // La firma del turno se embebe sobre `selectVoicedWindow(audioSnapshot)` (tramo con voz).
-    expect(hook).toMatch(/selectVoicedWindow\(audioSnapshot/)
-    // El tramo de la fila usa el MISMO dueno (`ventanaConVoz`), no un criterio propio.
+    // El hook ya NO mide: la fila trae la firma MEDIDA por el m?dulo.
+    expect(hook).not.toMatch(/selectVoicedWindow|computeTurnSignature|embebedor\.medir/)
+    expect(hook).toContain('lastFirmaRef.current = Array.isArray(fila?.firma)')
+    // El tramo de la fila usa el MISMO due?o (`ventanaConVoz`), no un criterio propio.
     expect(codigo(leer('src/voice/core/tramo.js'))).toContain('ventanaConVoz')
   })
 })
