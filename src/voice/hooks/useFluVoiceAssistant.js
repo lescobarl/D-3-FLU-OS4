@@ -83,7 +83,7 @@ import { normalizeLang } from '../../core/config/localeConfig.ts'
 import { useFluParticipant } from '../../hooks/useFluParticipant'
 import { isSpeechSynthesisSpeaking, isFluSpeaking, waitForSpeechIdle } from '../lib/fluSpeech.js'
 import { resumeAfterSpeechSuspend, releaseStalledTurn } from '../lib/voiceStallPolicy.js'
-import { isLocalFallbackEnabled, prewarmLocalRecognition, shouldUseLocalFallback } from '../lib/voiceLocalFallback'
+import { createLocalRecognition, isLocalFallbackEnabled, prewarmLocalRecognition, shouldUseLocalFallback } from '../lib/voiceLocalFallback'
 import { useLocalAsrFallback } from './useLocalAsrFallback'
 import { logCaughtError } from '../../lib/caughtError';
 import { clearAnimationFrameRef, clearTimeoutRef } from '../../lib/timerRefs'
@@ -112,10 +112,10 @@ async function stopMediaStream(stream) {
   if (!stream) return
   stream.getTracks().forEach((track) => track.stop())
 }
-
 function createRecognition(language, activeLocale = '') {
-  // §9 Motor de escucha: Chrome SpeechRecognition (Google, online) — en vivo y
-  // preciso. El resto del pipeline (ingress/commit/query/display/diarización) sigue unificado y es agnóstico al motor.
+  if (typeof globalThis !== 'undefined' && globalThis.__FLU_PLAYBACK_LOCAL_ASR === true) {
+    return createLocalRecognition()
+  }
   return acquireSpeechRecognition(language, activeLocale)
 }
 
@@ -1586,7 +1586,7 @@ export function useFluVoiceAssistant({
       isListeningRef.current = true
       // Precalienta el motor local SOLO si la politica lo habilita: en
       // produccion Chrome-only no se carga Whisper (backup `rescate/wip-pre-s9`).
-      if (isLocalFallbackEnabled()) prewarmLocalRecognition()
+      if (isLocalFallbackEnabled() || globalThis.__FLU_PLAYBACK_LOCAL_ASR === true) prewarmLocalRecognition()
 
       if (!startSpeechRecognition(Recognition)) {
         requestRecognitionRestart('arranque', getActiveListenConfig().restart.retryBackoffMs)

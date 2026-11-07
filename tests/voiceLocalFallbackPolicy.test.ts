@@ -35,7 +35,8 @@ describe('politica del fallback local: produccion Chrome-only', () => {
   })
 
   it('el hook consulta la politica antes de precalentar y de degradar', () => {
-    expect(HOOK).toContain('if (isLocalFallbackEnabled()) prewarmLocalRecognition()')
+    expect(HOOK).toContain("if (isLocalFallbackEnabled() || globalThis.__FLU_PLAYBACK_LOCAL_ASR === true) prewarmLocalRecognition()")
+    expect(HOOK).toContain('globalThis.__FLU_PLAYBACK_LOCAL_ASR === true')
     expect(HOOK).toContain('degradeEnabled: isLocalFallbackEnabled()')
     expect(HOOK).toContain('isLocalFallbackEnabled() &&')
     expect(HOOK).toContain('shouldUseLocalFallback(errorCode)')

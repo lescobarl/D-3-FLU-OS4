@@ -2,23 +2,19 @@
  * FLU Playback - CLI de soporte.
  *
  * Uso:
- *   npm run playback -- --session <carpeta> [--mode clean-room|restore-start]
- *                      [--sr real|mute|script] [--headed] [--out <carpeta>]
- *                      [--lead-in ms] [--tail ms] [--dry-run]
+ *   npm run playback -- --session <carpeta> [--tail ms] [--lead-in ms] [--headed]
  *
- * No toca producto. Valida la sesión, prepara artefactos y lanza el spec de
- * Playwright que reproduce el WAV como micrófono virtual.
+ * SOLO reproduce el audio de la sesión como micrófono virtual. No sustituye
+ * el ASR, no inyecta transcripciones y no escribe filas: la app escucha el
+ * audio con su motor normal.
  */
-import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { basename, join, resolve } from 'node:path'
+import { join, resolve } from 'node:path'
 import { spawn } from 'node:child_process'
 import {
   DEFAULT_URL,
-  defaultOutDir,
   loadSession,
   parseArgs,
   usage,
-  writePaddedWav,
 } from './playback/session.mjs'
 
 const ROOT = resolve(import.meta.dirname, '..')
@@ -28,35 +24,6 @@ const PLAYWRIGHT_CLI = join(ROOT, 'node_modules', '@playwright', 'test', 'cli.js
 function fail(message, code = 2) {
   console.error(`[playback] ${message}`)
   process.exit(code)
-}
-
-function copySource(session, out) {
-  const sourceDir = join(out, 'source')
-  mkdirSync(sourceDir, { recursive: true })
-  for (const name of ['manifest.json', 'meta.json', 'turns.ndjson', 'events.ndjson']) {
-    const file = join(session.dir, name)
-    if (existsSync(file)) copyFileSync(file, join(sourceDir, name))
-  }
-  if (session.audioPath.toLowerCase().endsWith('.wav')) {
-    copyFileSync(session.audioPath, join(sourceDir, 'audio.wav'))
-  } else {
-    copyFileSync(session.audioPath, join(sourceDir, 'audio.pcm'))
-  }
-}
-
-function summary(session, options, out) {
-  return {
-    sessionId: session.sessionId,
-    source: session.dir,
-    out,
-    schemaVersion: session.schemaVersion,
-    mode: options.mode,
-    sr: options.sr,
-    audio: session.audio,
-    sourceRows: session.sourceRows.length,
-    hasBaseStart: session.hasBaseStart,
-    fidelity: session.fidelity,
-  }
 }
 
 function run(command, args, env, timeoutMs) {
@@ -101,40 +68,12 @@ async function main() {
     console.log(usage())
     return
   }
-  if (options.sr === 'local') {
-    fail('--sr local no está implementado en Fase 1; usa real, mute o script.')
-  }
-  if (options.sr === 'real' && !options.headed) {
-    console.warn('[playback] --sr real sin --headed: Chrome SR puede no estar disponible en headless.')
-  }
 
   let session
   try {
     session = loadSession(options.session)
   } catch (error) {
     fail(error.message)
-  }
-  if (options.mode === 'restore-start' && !session.hasBaseStart) {
-    fail('restore-start exige un snapshot base-start; esta sesión no lo tiene. Usa clean-room.')
-  }
-
-  const out = defaultOutDir(options.out, session)
-  mkdirSync(out, { recursive: true })
-  copySource(session, out)
-
-  let realWav = null
-  if (options.sr === 'real') {
-    const leadIn = options.leadIn > 0 ? options.leadIn : 10000
-    realWav = writePaddedWav(session.audioPath, join(out, 'padded.wav'), leadIn, 2000)
-    options.leadIn = leadIn
-  }
-
-  const info = summary(session, options, out)
-  info.realWav = realWav
-  writeFileSync(join(out, 'source.json'), JSON.stringify(info, null, 2))
-  if (options.dryRun) {
-    console.log(JSON.stringify(info, null, 2))
-    return
   }
 
   const url = options.url || DEFAULT_URL
@@ -148,25 +87,13 @@ async function main() {
     fail(`--url invalida: ${url}`)
   }
 
-  console.log(`[playback] sesión ${session.sessionId} (${session.audio.seconds.toFixed(2)} s) -> ${out}`)
-  console.log(`[playback] modo=${options.mode} sr=${options.sr} url=${url}`)
-  if (!session.fidelity.complete) {
-    console.warn('[playback] AVISO: sesión sin fidelidad completa (appCommit/configHash desconocidos).')
-  }
-
   const env = {
     PORT: String(port),
     FLU_PLAYBACK_SESSION: session.dir,
-    FLU_PLAYBACK_OUT: out,
-    FLU_PLAYBACK_MODE: options.mode,
-    FLU_PLAYBACK_SR: options.sr,
     FLU_PLAYBACK_LEAD_IN_MS: String(options.leadIn),
     FLU_PLAYBACK_TAIL_MS: String(options.tail),
     FLU_PLAYBACK_TIMEOUT_MS: String(options.timeout),
     FLU_PLAYBACK_HEADED: options.headed ? '1' : '0',
-    FLU_PLAYBACK_NO_CAPTURE: options.noCapture ? '1' : '0',
-    FLU_PLAYBACK_REAL_WAV: realWav?.path || '',
-    FLU_PLAYBACK_REAL_LEAD_IN_MS: realWav ? String(options.leadIn) : '0',
   }
   const runResult = await run(
     process.execPath,
@@ -176,35 +103,7 @@ async function main() {
   )
   if (runResult.timedOut) fail('timeout global: Playwright no terminó', 2)
 
-  const resultPath = join(out, 'result.json')
-  if (!existsSync(resultPath)) {
-    fail(`Playwright terminó (${runResult.code}) sin result.json; revisa la salida.`, 2)
-  }
-  const result = JSON.parse(readFileSync(resultPath, 'utf8'))
-  console.log(
-    JSON.stringify(
-      {
-        ok: result.ok,
-        mode: result.mode,
-        sr: result.sr,
-        rows: result.rows?.length || 0,
-        ui: result.ui?.length || 0,
-        script: result.script
-          ? {
-              planned: result.script.planned,
-              emitted: result.script.emitted?.length || 0,
-              errors: result.script.errors?.length || 0,
-            }
-          : null,
-        events: result.artifacts?.events ? 'events.ndjson' : null,
-        out,
-        errors: result.errors,
-      },
-      null,
-      2,
-    ),
-  )
-  process.exitCode = result.ok ? 0 : 1
+  process.exitCode = runResult.code ?? 2
 }
 
 main().catch((error) => {
