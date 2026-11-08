@@ -35,7 +35,6 @@
       "crearPuertoVistaFilasProducto",
       "crearRegistroCaughtError",
       "crearRelojSistema",
-      "crearResolucionPasivaProducto",
       "crearUtilidadesFilaProducto",
       "crearVadProducto",
       "ejecutarRegistrando",
@@ -131,9 +130,7 @@
       "retenerCola"
     ],
     "pasivo.ts": [
-      "crearResolucionPasiva",
-      "renombrarFilaDeUsuario",
-      "resolverHablante"
+      "renombrarFilaDeUsuario"
     ],
     "ports.ts": [
       "asrEmpujaAudio",

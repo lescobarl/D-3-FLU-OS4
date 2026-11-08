@@ -45,7 +45,7 @@ mismo commit. Si no puedes borrarlo ahora, no añadas el nuevo ahora.
 | ¿Cómo se resuelve la etiqueta del hablante? | `fila.ts:126` `resolverEtiqueta` | Nombre solo con evidencia; nunca `?`. |
 | ¿La voz es la misma? | `identidad.ts:97` `decidirIdentidad` | Compartido por cierre activo y resolución pasiva. |
 | ?C?mo se mide la voz al cerrar? | `cierre.ts:386` `medirVozAlCerrar` | ?nica medida de identidad; el hook solo espeja `fila.firma`. |
-| ¿Cómo se resuelve la voz pasiva o se renombra una fila? | `pasivo.ts:119` `crearResolucionPasiva` · `pasivo.ts:46` `renombrarFilaDeUsuario` | No escribe filas; usa el mismo `decidirIdentidad`. |
+| ¿Cómo se corrige el rótulo de una fila concreta? | `pasivo.ts:46` `renombrarFilaDeUsuario` | No mide ni decide identidad: solo fija el nombre canónico por id. El resolver pasivo quedó retirado. |
 
 ## Ingesta y audio
 
@@ -85,10 +85,9 @@ Estas cuatro zonas parecen dos y no lo son. No las «unifiques» sin leer la not
    por el mismo `conversationRowWriter`. No es un segundo escritor: es un
    llamador que copia el store a Dexie y salta las filas del módulo
    (`debePersistirEntrada`). `conversacionEscrituraUnica` lo prueba.
-2. **Identidad activa vs pasiva.** `cierre.resolverVoz` mide al cerrar;
-   `pasivo.crearResolucionPasiva` resuelve al renombrar. Las dos llaman a
-   `identidad.decidirIdentidad` y al mismo embebedor. Dos superficies, una
-   decisión.
+2. **Identidad medida vs corrección de rótulo.** `cierre.resolverVoz` mide al
+   cerrar; `pasivo.renombrarFilaDeUsuario` solo fija el nombre canónico de una
+   fila por id. No hay segunda medida: el resolver pasivo quedó retirado.
 3. **Composición del límite vs revisión del módulo.**
    `speechMerge.fraseDelEventoAsr` / `mergeIntoOpenLine` componen la hipótesis
    del evento; `fusion.perteneceALineaAbierta` y `revision.unirRevision`

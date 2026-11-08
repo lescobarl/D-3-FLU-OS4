@@ -321,10 +321,9 @@ describe('Caso 10 — la etiqueta nueva se resuelve SOLO para voz nueva (proveed
 })
 
 describe('Caso 10 — la plantilla perezosa vive en los puntos de llamada reales', () => {
-  it('cierre, ingesta y resolucion pasiva pasan un proveedor, no la etiqueta', () => {
+  it('cierre e ingesta pasan un proveedor, no la etiqueta', () => {
     expect(etiquetaNuevaPerezosa(fuenteDe('src/voice/conversation/cierre.ts'))).toBe(true)
     expect(etiquetaNuevaPerezosa(fuenteDe('src/voice/conversation/ingesta.ts'))).toBe(true)
-    expect(etiquetaNuevaPerezosa(fuenteDe('src/voice/conversation/pasivo.ts'))).toBe(true)
   })
 })
 

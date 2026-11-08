@@ -91,8 +91,7 @@ import type {
   UtilidadesFila,
   VadPort,
 } from './ports.ts'
-import { crearResolucionPasiva, renombrarFilaDeUsuario } from './pasivo.ts'
-import type { ResolucionPasivaHablante } from './pasivo.ts'
+import { renombrarFilaDeUsuario } from './pasivo.ts'
 
 /** Reloj del sistema: la ÚNICA llamada a `Date.now()` del módulo, inyectada. */
 export function crearRelojSistema(): RelojPort {
@@ -505,20 +504,5 @@ export function renameRowSpeakerName(rowId: string, speakerName: string): boolea
   return renombrarFilaDeUsuario(rowId, speakerName, {
     vista: crearPuertoVistaFilasProducto(),
     utilidades: crearUtilidadesFilaProducto(),
-  })
-}
-
-/**
- * Resolutor del hablante del PRODUCTO (modo pasivo): la medida real
- * (`crearEmbebedorProducto`, con la puerta de voz de `ventanaConVoz`) y la regla
- * de identidad del módulo. UNA instancia por proceso.
- * @returns El resolutor `resolverHablante` con la evidencia de medida.
- */
-export function crearResolucionPasivaProducto(): ResolucionPasivaHablante {
-  return crearResolucionPasiva({
-    embebedor: crearEmbebedorProducto(),
-    config: crearConfigFlu(),
-    id: crearIdUuid(),
-    registro: crearRegistroCaughtError(),
   })
 }

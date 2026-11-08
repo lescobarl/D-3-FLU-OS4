@@ -2502,9 +2502,8 @@ export function useFluVoiceAssistant({
     endParticipantFloorDelivery: () => fluParticipantRef.current?.endFloorDelivery?.(),
     suspendRecognitionForAssistantSpeech,
     /**
-     * Resolución de hablante del turno (paso el pipeline). Expuesta como entrada
-     * pública del motor de identidad para que la rama PASIVA se pueda ejercitar
-     * de verdad en pruebas (sin simular el resolver).
+     * Resolución de hablante del turno: espeja la etiqueta y la firma que el
+     * módulo publicó en `row.committed`; el hook no vuelve a medir.
      */
     resolveSpeaker,
     /** Set a recent memory text that gets injected into the system prompt on next contract request. */

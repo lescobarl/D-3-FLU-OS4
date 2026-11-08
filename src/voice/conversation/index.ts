@@ -65,7 +65,6 @@ export {
   crearPuertoVistaFilasProducto,
   crearRegistroCaughtError,
   crearRelojSistema,
-  crearResolucionPasivaProducto,
   crearUtilidadesFilaProducto,
   renameRowSpeakerName,
 } from './adapters.ts'
@@ -76,14 +75,8 @@ export {
   grabarSnapshotDeTurno,
   snapshotDeTurno,
 } from './turnSnapshot.js'
-export { crearResolucionPasiva, renombrarFilaDeUsuario } from './pasivo.ts'
-export type {
-  DependenciasRenombreFila,
-  DependenciasResolucionPasiva,
-  EntradaResolucionPasiva,
-  ResolucionPasiva,
-  ResolucionPasivaHablante,
-} from './pasivo.ts'
+export { renombrarFilaDeUsuario } from './pasivo.ts'
+export type { DependenciasRenombreFila } from './pasivo.ts'
 export type {
   FilaVistaUsuario,
   PuertoVistaFilas,
