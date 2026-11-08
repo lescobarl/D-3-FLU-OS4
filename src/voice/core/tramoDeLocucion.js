@@ -15,7 +15,7 @@
  * locución: cortar en cada una partió 24 filas). Las dos juntas sí identifican el corte.
  *
  * `crearDetectorDeFronteras` sigue siendo el dueño del VAD por evento para MEDIR audio
- * (playback y diagnóstico). Su marca NO decide la frontera: en la sesión real no hay
+ * (reproduccion y diagnóstico). Su marca NO decide la frontera: en la sesión real no hay
  * frontera de audio después de 77,7 s y la locución sí acabó.
  */
 import { createVoiceSegmenter } from '../lib/asr/voiceActivitySegmenter.js'
@@ -70,7 +70,7 @@ export function crearDetectorDeFronteras({ sampleRate = DEFAULT_SAMPLE_RATE, con
  * Exige las dos evidencias: la línea lleva QUIETA el silencio mínimo y lo que llega abre
  * otra locución. Sin la quietud, un reinicio de hipótesis del ASR a media frase (texto
  * distinto, 200 ms después) se tomaba por frontera y partía la locución (2 filas extra
- * medidas en playback 8f3112c2).
+ * medidas en reproduccion 8f3112c2).
  *
  * @param {{ lineaAbierta?: string, texto?: string, quietaMs?: number, minQuietaMs?: number }} [estado]
  * @returns {boolean}

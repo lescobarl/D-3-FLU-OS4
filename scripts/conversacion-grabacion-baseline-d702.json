@@ -1,0 +1,88 @@
+{
+  "_nota": "Línea base de la sesión REAL d70267b8 (replay de 7d337663, 2026-11-08) con reinicio del reconocedor en el borde de turno. Fixture real, sin audio ni vectores. Solo baja. Residual declarado: fuzzyCarry=2 (repetición real tras pausa + wake 'okay flu' de la misma frase); exactCarry=0.",
+  "sessionId": "d70267b8-7d45-4cec-9f6a-fa3ca262f707",
+  "fecha": "2026-11-08",
+  "stallMs": 4200,
+  "minEvents": 1000,
+  "metricas": {
+    "events": 1527,
+    "commits": 13,
+    "exactCarry": 0,
+    "fuzzyCarry": 2,
+    "shortLong": 0,
+    "speakerHablante2": 0,
+    "speakerHablante3": 0,
+    "zeroAudioTextRows": 0,
+    "normalErrorLogs": 0,
+    "normalConversationLogs": 64,
+    "sinVector": 9,
+    "identityRegisters": 0
+  },
+  "cases": [
+    {
+      "id": "reentrega-exacta-entre-turnos",
+      "owner": "src/voice/hooks/useFluVoiceAssistant.js:1284",
+      "metric": "exactCarry",
+      "ceiling": 0,
+      "descripcion": "El reconocedor se reinicia al abrir turno; no reescribe la frase anterior."
+    },
+    {
+      "id": "reentrega-fuzzy-entre-turnos",
+      "owner": "src/voice/hooks/useFluVoiceAssistant.js:1284",
+      "metric": "fuzzyCarry",
+      "ceiling": 2,
+      "descripcion": "Residual real: repetición tras pausa y wake de la misma frase; no es exacta."
+    },
+    {
+      "id": "texto-imposible-para-el-audio",
+      "owner": "src/voice/conversation/producto.ts:213",
+      "metric": "shortLong",
+      "ceiling": 0
+    },
+    {
+      "id": "fila-con-texto-y-audio-cero",
+      "owner": "src/voice/conversation/fila.ts:126",
+      "metric": "zeroAudioTextRows",
+      "ceiling": 0,
+      "descripcion": "El medidor ahora cuenta filas de <=1 muestra; esta sesión no tiene ninguna."
+    },
+    {
+      "id": "hablante-2-inesperado",
+      "owner": "src/voice/conversation/fila.ts:126",
+      "metric": "speakerHablante2",
+      "ceiling": 0
+    },
+    {
+      "id": "hablante-3-inesperado",
+      "owner": "src/voice/conversation/fila.ts:126",
+      "metric": "speakerHablante3",
+      "ceiling": 0
+    },
+    {
+      "id": "log-normal-en-canal-de-error",
+      "owner": "src/voice/conversation/adapters.ts:115",
+      "metric": "normalErrorLogs",
+      "ceiling": 0
+    },
+    {
+      "id": "log-normal-presente",
+      "owner": "src/voice/conversation/adapters.ts:115",
+      "metric": "normalConversationLogs",
+      "ceiling": 64
+    },
+    {
+      "id": "sin-vector",
+      "owner": "src/voice/conversation/cierre.ts:397",
+      "metric": "sinVector",
+      "ceiling": 9,
+      "descripcion": "Umbral de VAD intacto; tramos cortos."
+    },
+    {
+      "id": "nombre-registrado-de-mas",
+      "owner": "src/voice/lib/speakerIdentityRegister.js:344",
+      "metric": "identityRegisters",
+      "ceiling": 0,
+      "descripcion": "La base ya trae Luis; el replay no vuelve a registrar."
+    }
+  ]
+}

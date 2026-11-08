@@ -1,4 +1,4 @@
-﻿import { createHash } from 'node:crypto'
+import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
@@ -180,5 +180,105 @@ export function medirGrabacion({ eventos, turnos }, { stallMs = STALL_MS_DEFECTO
     speakerFlips,
     initialAnchorsCount: anchors?.count ?? null,
     initialAnchorsUsable: anchors?.usable ?? null,
+  }
+}
+
+
+
+function palabrasMetrica(texto = '') {
+  return normalizarTexto(texto)
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9ñ ]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .split(' ')
+    .filter(Boolean)
+}
+
+/**
+ * Métricas de la sesión real del replay (6ad0dbc7) para la barrera de
+ * conversación: reentrega acumulada, texto/audio imposible, canal de log y
+ * diarización. Dueño único de la medición: este módulo; el fixture es la
+ * grabación real, no un test sintético.
+ * @param {{ eventos: object[], turnos: object[] }} grabacion Datos cargados.
+ * @returns {object} Métricas medidas.
+ */
+export function medirConversacionReal({ eventos, turnos }) {
+  const commits = turnos.filter((turno) => turno.kind === 'commit')
+  let exactCarry = 0
+  let fuzzyCarry = 0
+  let shortLong = 0
+  let speakerHablante2 = 0
+  let speakerHablante3 = 0
+  let zeroAudioTextRows = 0
+  for (let i = 1; i < commits.length; i += 1) {
+    const anterior = normalizarTexto(commits[i - 1]?.text)
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9ñ ]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+    const actual = normalizarTexto(commits[i]?.text)
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9ñ ]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+    const palabrasAnterior = palabrasMetrica(anterior)
+    const palabrasActual = palabrasMetrica(actual)
+    const dur =
+      (Number(commits[i]?.audioEndSample) - Number(commits[i]?.audioStartSample)) /
+      Number(commits[i]?.sampleRate || 48000)
+    const contiene = actual.includes(anterior)
+    const solape = palabrasAnterior.length
+      ? palabrasAnterior.filter((palabra) => palabrasActual.includes(palabra)).length /
+        palabrasAnterior.length
+      : 0
+    if (contiene && Math.min(anterior.length, actual.length) > 20) exactCarry += 1
+    if (solape >= 0.5 && Math.min(palabrasAnterior.length, palabrasActual.length) > 5) {
+      fuzzyCarry += 1
+    }
+    if (dur < 2.5 && palabrasActual.length > 15) shortLong += 1
+    const hablante = String(commits[i]?.speaker || '')
+    if (hablante === 'Hablante 2') speakerHablante2 += 1
+    if (hablante === 'Hablante 3') speakerHablante3 += 1
+    const muestrasAudio = Number(commits[i]?.audioEndSample) - Number(commits[i]?.audioStartSample)
+    if (Number.isFinite(muestrasAudio) && muestrasAudio <= 1 && palabrasActual.length > 0) {
+      zeroAudioTextRows += 1
+    }
+  }
+  const normalErrorLogs = eventos.filter(
+    (evento) =>
+      evento.event === 'ERROR:catch' &&
+      String(evento.data?.message || '').startsWith('conversacion.'),
+  ).length
+  const normalConversationLogs = eventos.filter((evento) =>
+    String(evento.event || '').startsWith('LOG:conversacion'),
+  ).length
+  const sinVector = eventos.filter((evento) =>
+    mensaje(evento).includes('conversacion.voz.medida.sinVector'),
+  ).length
+  const identityRegisters = eventos.filter((evento) =>
+    /identity-register|registrarNombre|conversacion\.nombre|REGISTRAR_PARTICIPANTE/i.test(
+      JSON.stringify(evento),
+    ),
+  ).length
+  return {
+    events: eventos.length,
+    commits: commits.length,
+    exactCarry,
+    fuzzyCarry,
+    shortLong,
+    speakerHablante2,
+    speakerHablante3,
+    zeroAudioTextRows,
+    normalErrorLogs,
+    normalConversationLogs,
+    sinVector,
+    identityRegisters,
   }
 }

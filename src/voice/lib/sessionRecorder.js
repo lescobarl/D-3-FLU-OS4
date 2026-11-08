@@ -313,7 +313,7 @@ function enqueuePersist(label, task) {
       const attempts = (persistFailures.get(label) || 0) + 1
       persistFailures.set(label, attempts)
       // AUDIO: nunca se apaga. Un lote perdido es un HUECO declarado, no el fin del audio
-      // (sin audio fiel no hay tramo, ni medida, ni playback: ver PORTERO A1).
+      // (sin audio fiel no hay tramo, ni medida, ni reproduccion: ver PORTERO A1).
       if (label === 'audio') {
         audioGaps.push({ sample: audioSamples, at: Date.now() })
         if (attempts === 5) logCaughtError('sessionRecorder.audioGap', error, { attempts })

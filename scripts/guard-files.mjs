@@ -42,4 +42,6 @@
   'tests/revisorHostAdapters.test.ts',
   'tests/vozFuncionesRatchetGuard.test.ts',
   'tests/srcFuncionesRatchetGuard.test.ts',
+  'tests/conversacionGrabacionD702Guard.test.ts',
+  'tests/nombreRespuestaDiferidaGuard.test.ts',
 ]

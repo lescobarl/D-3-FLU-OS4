@@ -170,7 +170,7 @@ export function getAsrSampleRate(config = getAsrConfig()) {
  * TRAMOS de un PCM completo: [{ inicioMs, finMs }] por locución (silencio→voz→silencio).
  *
  * Es el dueño único de "dónde empieza y dónde acaba cada locución" para consumidores que
- * no empujan audio en vivo (el portero del tramo, el playback, los tests). En vivo se usa
+ * no empujan audio en vivo (el portero del tramo, el reproduccion, los tests). En vivo se usa
  * `createVoiceSegmenter` directamente; aquí solo se le da de comer el PCM por bloques.
  *
  * @param {Float32Array} samples PCM mono

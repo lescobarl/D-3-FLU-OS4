@@ -1006,7 +1006,7 @@ export function shouldDispatchCommandInterim(
   command = '',
   text = '',
   voiceCommands = {},
-  fullPhrase = '',
+  _fullPhrase = '',
 ) {
   if (command === COMMAND_IDS.FLU_WAKE) return false
 
@@ -1015,11 +1015,10 @@ export function shouldDispatchCommandInterim(
   const norm = cleanForSpeech(text)
   if (!norm) return false
 
-  if (command === COMMAND_IDS.REGISTRAR_PARTICIPANTE) {
-    const wakeWords = voiceCommands.wakeWords || []
-    const snapshot = cleanForSpeech(fullPhrase) || norm
-    return Boolean(detectWakeIntroducedName(snapshot, wakeWords))
-  }
+  // El nombre se registra UNA vez, al final del mandato. Despacharlo en interino
+  // producía varias respuestas "Registrado ..." y nombres a medio formar
+  // (medido 7d337663 → replay a35e0ff0). El final sigue pasando por la ruta única.
+  if (command === COMMAND_IDS.REGISTRAR_PARTICIPANTE) return false
 
   if (command === COMMAND_IDS.GENERAR_RESUMEN) {
     if (isMinuteKnowledgeRequest(norm)) return false
@@ -1534,6 +1533,15 @@ const NAME_STOPWORDS = new Set([
   'conversacion',
   'escucha',
   'cerrar',
+  // Cola de MANDATO que el ASR pega tras el nombre: "soy Luis regístrame en la
+  // conversación" es nombre "Luis", no "Luis Registrame En" (medido 7d337663).
+  'registrame',
+  'registra',
+  'registrar',
+  'registro',
+  'en',
+  'por',
+  'favor',
   // Palabras de CONFIRMACION/eco que el ASR pega tras el nombre. "okay flu soy Luis
   // registrado" es nombre "Luis", no "Luis Registrado" (defecto medido 2026-10-21:
   // el eco del TTS creo un participante "Luis Registrado" y contamino la base).

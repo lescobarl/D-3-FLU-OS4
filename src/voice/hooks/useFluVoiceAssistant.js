@@ -19,7 +19,6 @@ import { requestFluContract } from '../lib/gemini'
 import { buildContractParams } from '../lib/contractParams'
 import {
   isCommandAuthorized,
-  resolveDeterministicCommand,
   resolveDeterministicSkipGeminiContract,
   resolveStatefulDomains,
   musicActionSpeech,
@@ -75,9 +74,9 @@ import {
 import { wireMicCapturePipeline } from '../lib/micCaptureBridge.js'
 import { formatGeminiUserMessage, buildGeminiDiagnosticsFromError } from '../lib/geminiDiagnostics.js'
 import { resolveWakeWords } from '../lib/wakeWords.js'
-import { resolveSpeakerNameFromUtterance } from '../lib/speakerPolicy.js'
 import { WAKE_POLICY_ORDER, applyWakePolicyOrder, resolveWakePolicyOrder, wakePolicySpeech } from '../lib/wakePolicy.js'
 import { normalizeLang } from '../../core/config/localeConfig.ts'
+import { resolveSpeakerNameFromUtterance } from '../lib/speakerPolicy.js'
 // Ruta única: useFluParticipant vive solo en src/hooks/useFluParticipant.ts.
 // El motor de voz la importa aquí solo como fallback defensivo; en producción App.tsx inyecta su instancia vía participantRef (mismo módulo).
 import { useFluParticipant } from '../../hooks/useFluParticipant'
@@ -365,6 +364,11 @@ export function useFluVoiceAssistant({
               locutionId,
               sampleRate: sampleRateRef.current,
             })
+            // FRONTERA DE TURNO (dueño: este callback, no el módulo): el
+            // reconocedor arranca limpio para que Chrome no re-emita el final de
+            // la locución anterior en el turno nuevo. Se reinicia SOLO al abrir
+            // un turno nuevo, no en cada revisión de la misma locución.
+            requestRecognitionRestartRef.current?.('frontera-turno', 0)
           }
           // El turno lo acuña el módulo: el hook solo espeja la fila commiteada.
           if (turnId) activeTurnIdRef.current = turnId
@@ -1281,12 +1285,26 @@ export function useFluVoiceAssistant({
         if (interim || finalText) maybeSwitchRecognitionLocaleRef.current(interim || finalText)
         if (finalText) { const w = analyzeWakeTurn(finalText, { lastCommitted: userRowsTextView.current.at(-1) || '' }); voiceProbe('asrFinal', { engine: localEngineActive ? 'whisper' : 'chrome', ms: event?.metrics?.durationMs ?? null, speechLikeMs: event?.metrics?.speechLikeMs ?? null, rms: event?.metrics?.rms ?? null, turn: activeTurnIdRef.current, wake: w.wakeWordMatched, inline: w.hasInlineBoundary, before: w.passiveOnly.slice(0, 80), after: w.afterWake.slice(0, 80), len: w.cleaned.length, text: w.cleaned }) }
         // MOTOR del producto: ÚNICA ruta de la frase y de la fila en AMBOS modos.
-        // Evento CRUDO adentro; la rama activa TERMINA tras delegar.
+        // PUENTE ASR: Chrome arrastra el final ANTERIOR en `results[0]`; el motor
+        // compone el final desde 0 por diseño. Aquí se le entregan SOLO los
+        // resultados NUEVOS y se reindexa a 0: el final es la hipótesis completa
+        // del tramo NUEVO, no del anterior (medido 7d337663: la frase de la
+        // locución previa se colaba en la siguiente). No se deduplica por texto
+        // en el módulo; el recorte es del EVENTO, en el hook.
+        const desdeResultado = Math.max(0, Number(event?.resultIndex) || 0)
+        const eventoDelMotor =
+          desdeResultado > 0
+            ? {
+                ...event,
+                results: Array.from(event?.results || []).slice(desdeResultado),
+                resultIndex: 0,
+              }
+            : event
         if (conversationActiveRef?.current) {
-          if (motorConversacionRef.current) motorConversacionRef.current.evento(event)
+          if (motorConversacionRef.current) motorConversacionRef.current.evento(eventoDelMotor)
           return
         }
-        if (motorConversacionRef.current) motorConversacionRef.current.evento(event)
+        if (motorConversacionRef.current) motorConversacionRef.current.evento(eventoDelMotor)
       }
 
       Recognition.onerror = (event) => {
@@ -2095,23 +2113,6 @@ export function useFluVoiceAssistant({
             fastPathEnvironment: statefulDomain === 'environment',
           })
           return
-        }
-
-        // TRACE escenario: ¿el árbitro determinista matchearía reminder/temporal/
-        // nota/horario sobre la question ANTES de llamar a Gemini? Esto muestra si el
-        // mandato ("crea una cita...", "pon una alarma...") debía despacharse sin IA.
-        try {
-          const probe = resolveDeterministicCommand(transcriptForAi, {
-            language: detectedLanguage,
-          })
-          relayLog(
-            'LOG',
-            'useFluVoiceAssistant',
-            `processConversationFluQuery TRACE: determinista sobre question="${(question || '').slice(0, 80)}" → matched=${Boolean(probe?.matched)} domain="${probe?.domain || ''}" action="${JSON.stringify(probe?.action?.action ?? probe?.action ?? null)?.slice(0, 120)}"`,
-          )
-        } catch (probeError) {
-    logCaughtError('[catch] src/voice/hooks/useFluVoiceAssistant.js', probeError, probeError?.stack);
-          relayLog('WARN', 'useFluVoiceAssistant', `processConversationFluQuery TRACE determinista lanzó: ${probeError?.message || probeError}`)
         }
 
         const knowledgeMode = isMinuteKnowledgeRequest(question) ? 'minutes' : 'general'

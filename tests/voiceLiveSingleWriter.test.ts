@@ -23,7 +23,10 @@ const source = (): string =>
     readFileSync(join(process.cwd(), 'src/voice/hooks/useFluVoiceAssistant.js'), 'utf8');
 
 const MODULE_ANCHOR = 'onLiveTranscript: setLiveTranscript';
-const MODULE_DISPATCH = 'motorConversacionRef.current.evento(event)';
+// Prefijo: el puente ASR puede entregar `evento(eventoDelMotor)` (resultados
+// NUEVOS del turno), pero el escritor sigue siendo SOLO el módulo.
+const MODULE_DISPATCH = 'motorConversacionRef.current.evento(';
+const MODULE_DISPATCH_EVENT = `${MODULE_DISPATCH}event)`;
 const ACTIVE_GUARD = 'if (conversationActiveRef?.current) {';
 const ONRESULT_START = 'Recognition.onresult = (event) => {';
 const ONRESULT_END = 'Recognition.onerror = (event) => {';
@@ -80,7 +83,7 @@ export function activeBranchPublishSites(src: string): number[] {
 export function activeBranchReturnsAfterDispatch(src: string): boolean {
     const dispatch = src.indexOf(MODULE_DISPATCH);
     if (dispatch < 0) return false;
-    return /motorConversacionRef\.current\.evento\(event\)\s*;?\s*return/.test(src.slice(dispatch));
+    return /motorConversacionRef\.current\.evento\([^)]*\)\s*;?\s*return/.test(src.slice(dispatch));
 }
 
 describe('§9 — UN solo escritor de la frase viva', () => {
@@ -127,17 +130,17 @@ describe('§9 — el detector no es decorativo', () => {
     });
 
     it('marca la rama de conversación que publica por su cuenta y no la que solo delega', () => {
-        expect(activeBranchPublishSites(onresultSrc(MODULE_DISPATCH))).toEqual([]);
-        expect(activeBranchPublishSites(onresultSrc(`${MODULE_DISPATCH}\n    setLiveTranscript(frase);`))).toHaveLength(1);
-        expect(activeBranchPublishSites(onresultSrc(`${MODULE_DISPATCH}\n    publishLiveFromTurn();`))).toHaveLength(1);
-        expect(activeBranchPublishSites(onresultSrc(`${MODULE_DISPATCH}\n    cajaVivaRef.current.publicarEnLaCaja(frase);`))).toHaveLength(1);
+        expect(activeBranchPublishSites(onresultSrc(MODULE_DISPATCH_EVENT))).toEqual([]);
+        expect(activeBranchPublishSites(onresultSrc(`${MODULE_DISPATCH_EVENT}\n    setLiveTranscript(frase);`))).toHaveLength(1);
+        expect(activeBranchPublishSites(onresultSrc(`${MODULE_DISPATCH_EVENT}\n    publishLiveFromTurn();`))).toHaveLength(1);
+        expect(activeBranchPublishSites(onresultSrc(`${MODULE_DISPATCH_EVENT}\n    cajaVivaRef.current.publicarEnLaCaja(frase);`))).toHaveLength(1);
     });
 
     it('marca la rama que NO retorna tras delegar', () => {
-        expect(activeBranchReturnsAfterDispatch(onresultSrc(MODULE_DISPATCH))).toBe(true);
+        expect(activeBranchReturnsAfterDispatch(onresultSrc(MODULE_DISPATCH_EVENT))).toBe(true);
         expect(
             activeBranchReturnsAfterDispatch(
-                `${ONRESULT_START}\n  if (conversationActiveRef?.current) {\n    ${MODULE_DISPATCH};\n  }\n  publishLiveFromTurn();\n${ONRESULT_END}\n`,
+                `${ONRESULT_START}\n  if (conversationActiveRef?.current) {\n    ${MODULE_DISPATCH_EVENT};\n  }\n  publishLiveFromTurn();\n${ONRESULT_END}\n`,
             ),
         ).toBe(false);
     });

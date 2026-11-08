@@ -41,6 +41,8 @@
 /scripts/conversacionGrabacionMetricas.mjs @lescobarl
 /scripts/conversacion-grabacion-baseline.json @lescobarl
 /scripts/conversacion-grabacion-baseline-80a.json @lescobarl
+/scripts/conversacion-grabacion-baseline-d702.json @lescobarl
+/tests/conversacionGrabacionD702Guard.test.ts @lescobarl
 /tests/fixtures/flu-recordings/** @lescobarl
 
 # Gate de dueños (archivos nuevos)
@@ -69,3 +71,5 @@
 
 # Definición del gate (aquí vive el orden de `lint`)
 /package.json                  @lescobarl
+
+/tests/nombreRespuestaDiferidaGuard.test.ts @lescobarl

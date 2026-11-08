@@ -26,6 +26,7 @@ import { logCaughtError } from '../../lib/caughtError.ts'
 import { useIntegrationStore } from '../../store/integrationStore'
 import { crearMotorConversacionProducto, grabarRevisionDeFila, traeFinal } from '../conversation/index'
 import { resolveEchoContext } from '../lib/conversationDialogue.js'
+import { detectWakeIntroducedName, splitTranscriptAtWakeWord } from '../lib/audioMath.js'
 import { labelToSpeakerId } from '../lib/conversationRow.js'
 import { autoSpeakerIndexFromKey } from '../lib/speakerCore.js'
 import { voiceKeyFor } from '../lib/speakerDirectory.js'
@@ -67,6 +68,8 @@ export function crearMotorConversacionHook({
   let ultimaCommiteada = ''
   /** Timer único de la frase viva: agrupa ráfagas de interinos en un render. */
   let liveTimer = 0
+  let nameCommandDeferTimer = 0
+  let nameCommandDeferPayload = null
   let cerrado = false
 
   /**
@@ -78,6 +81,32 @@ export function crearMotorConversacionHook({
     const frase = String(motor.instantanea().fraseCanonica || '').trim()
     if (!frase || frase === ultimaDespachada) return
     ultimaDespachada = frase
+    // Cualquier frase nueva cancela una respuesta de nombre pendiente: el
+    // usuario sigue hablando. El defer vive aquí, en el cableado del motor;
+    // el hook solo despacha. No se toca el VAD.
+    if (nameCommandDeferTimer) {
+      clearTimeout(nameCommandDeferTimer)
+      nameCommandDeferTimer = 0
+    }
+    const wakeWords = FLU_CONFIG.voiceCommands.wakeWords || []
+    const esMandatoNombre =
+      !interim && Boolean(detectWakeIntroducedName(frase, wakeWords))
+    // La wake SOLA (“Okay flu”) también se difiere: el ASR la cierra antes de
+    // “Soy Luis regístrame…” y FLU respondía “Te escucho.” en medio.
+    const split = splitTranscriptAtWakeWord(frase, wakeWords)
+    const esSoloWake =
+      split.wakeWordMatched &&
+      !String(split.commandText || split.afterWake || '').trim()
+    if (esMandatoNombre || esSoloWake) {
+      nameCommandDeferPayload = { frase, opciones: { interim } }
+      nameCommandDeferTimer = setTimeout(() => {
+        nameCommandDeferTimer = 0
+        const payload = nameCommandDeferPayload
+        nameCommandDeferPayload = null
+        if (payload) onFraseCanonica(payload.frase, payload.opciones)
+      }, FLU_CONFIG.timing.nameCommandDeferMs)
+      return
+    }
     onFraseCanonica(frase, { interim })
   }
 
@@ -193,6 +222,9 @@ export function crearMotorConversacionHook({
       const resultado = motor.cerrar(motivo)
       if (liveTimer) clearTimeout(liveTimer)
       liveTimer = 0
+      if (nameCommandDeferTimer) clearTimeout(nameCommandDeferTimer)
+      nameCommandDeferTimer = 0
+      nameCommandDeferPayload = null
       onLiveTranscript('')
       return resultado
     },

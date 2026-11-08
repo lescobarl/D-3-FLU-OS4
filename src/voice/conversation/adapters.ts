@@ -39,6 +39,7 @@
  * decide el módulo (`resolverEtiqueta` / `pasivo.ts`); nada se reimplementa.
  */
 import { logCaughtError } from '../../lib/caughtError.ts'
+import { relayLog } from '../../lib/clientLogRelay.ts'
 import { normalizeForMatch } from '../../lib/textUtils.ts'
 import { splitTranscriptAtWakeWord } from '../api/audio.ts'
 import { FLU_CONFIG } from '../api/config.ts'
@@ -111,9 +112,23 @@ export function crearIdUuid(): IdPort {
   }
 }
 
-/** Registro del proyecto: todo hecho del módulo pasa por `logCaughtError`. */
+/**
+ * Registro del módulo: los HECHOS normales van al relay informativo
+ * (`LOG:conversacion`); solo los contextos de fallo usan `logCaughtError`.
+ * Un cierre de locución o un descarte no son errores: mandarlos por el canal de
+ * `catch` llenaba el log de 49 `ERROR:catch` en la sesión 7d337663.
+ */
 export function crearRegistroCaughtError(): RegistroPort {
-  return { registrar: (contexto, ...detalles) => logCaughtError(contexto, ...detalles) }
+  return {
+    registrar: (contexto, ...detalles) => {
+      const data = detalles.length === 0 ? undefined : detalles.length === 1 ? detalles[0] : detalles
+      if (/\.fallo$|\.error$/i.test(String(contexto || ''))) {
+        logCaughtError(contexto, ...detalles)
+        return
+      }
+      relayLog('LOG', 'conversacion', contexto, data)
+    },
+  }
 }
 
 /**
@@ -317,7 +332,7 @@ export function crearPartidorWake(config: ConfigPort): PartidorPort {
  * voz), no un acumulado histórico: cuando el bloque trae voz se descarta el
  * silencio anterior y solo cuenta lo que queda tras la voz. Antes se sumaba
  * siempre, así que tras el primer silencio la medida ya no bajaba nunca y el
- * tramo no se cortaba en el siguiente hueco (congelación medida en el playback
+ * tramo no se cortaba en el siguiente hueco (congelación medida en el reproduccion
  * del 2026-10-25: filas de 119–152 s).
  *
  * @returns Puerto VAD con el silencio de cola del bloque.
