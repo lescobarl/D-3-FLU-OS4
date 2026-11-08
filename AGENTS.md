@@ -300,6 +300,15 @@ Estas reglas son duras y aplican a toda tarea, no solo a las de refactor.
     El gate `--diff` no es retroactivo: un archivo añadido por un commit que aún
     no tenía `scripts/owner-gate.mjs` en su árbol queda exento; uno añadido con
     el gate presente sí exige fila.
+11. **Host sin hooks: guardian + protocolo a mano.** Los hosts sin API de
+    hooks (Cline) no tienen Puerta 1 automática. El guardian
+    (`npm run guardiano`) vigila `src/` y BORRA al instante un archivo de
+    código nuevo sin dueño declarado o con función clonada; si el gate falla
+    sin veredicto, avisa y no borra. El host aplica además el protocolo manual
+    de `.clinerules` antes de cada escritura (dueño declarado ANTES de
+    escribir). El guardian usa las MISMAS puertas (`owner-gate --pretende-nuevo`
+    y `revisor-prehook --desde-vacio`): no es una segunda implementación de la
+    barrera.
 
 ---
 

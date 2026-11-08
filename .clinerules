@@ -1,0 +1,30 @@
+# Reglas para Cline — Puerta 1 (antes de escribir) A MANO
+
+Cline no tiene API de hooks: las puertas automáticas de este repo (Claude,
+Kilo, opencode) NO te interceptan antes de escribir. La Puerta 1 te la aplicas
+tú, en cada Write/Edit de código bajo `src/`.
+
+## Antes de crear o tocar código bajo src/
+1. Lee `docs/OWNERS.md` y haz grep del símbolo o responsabilidad.
+2. Declara el dueño `archivo:línea` ANTES de escribir. Sin fila en el mapa no
+   se escribe: archivo nuevo = fila nueva (pregunta, dueño, consumidor único,
+   kill list); si el dueño ya existe, edita esa fila, no crees otro archivo.
+3. Si una función nueva se parece a una existente, declara el veredicto en el
+   JSDoc: `@revisor REUSAR|EXTENDER|CREAR NUEVO — justificación`.
+
+## Guardian (red de seguridad automática, opcional)
+El usuario puede tener corriendo `npm run guardiano` en otra terminal: vigila
+`src/` y BORRA al instante cualquier archivo de código nuevo sin dueño
+declarado o con función clonada. Si borra un archivo tuyo es porque pasaste
+por alto una regla de arriba; corrige y reintenta. No lo detengas ni compitas
+con él.
+
+## Puertas que SÍ te interceptan
+- Commit (Puerta 2): `.githooks` vía `core.hooksPath` valida dueños y
+  funciones en el índice. No uses `--no-verify`.
+- CI (Puerta 3): `owner-gate --diff` y `revisor-git --diff` contra la base del
+  PR. Un PR con archivo sin dueño no pasa.
+
+## Suite
+La suite completa no se corre en local (AGENTS.md §1.15): `test:file`,
+`test:grep`, `npm test` (--changed), `lint`, `typecheck`, `gate`.

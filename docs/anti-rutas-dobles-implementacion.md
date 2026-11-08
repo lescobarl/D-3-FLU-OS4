@@ -401,6 +401,37 @@ aprobaciones obsoletas + **require review from Code Owners** + check requerido
 ("Unit + Lint + Build"). Nota medida: GitHub no permite aprobar tu propio PR
 (422); cuando el autor ES el code owner, el requisito se auto-satisface.
 
+### 4.14 Guardian — Puerta 1 de hosts SIN hooks (Cline y similares)
+
+Los hosts con API de hooks pasan por el prehook ANTES de escribir. Los que no
+la tienen (Cline) escriben directo al disco: la Puerta 1 no los intercepta. El
+guardian cierra ese hueco alcanzándolos JUSTO DESPUÉS del Write.
+
+- **`scripts/guardian.mjs`** vigila `src/` (fs.watch por directorio: el modo
+  recursive no existe en Linux) y ante cada archivo de código NUEVO espera un
+  debounce (el evento llega con el archivo a medio escribir) y corre las MISMAS
+  dos puertas sobre el disco — no es una segunda implementación de la barrera:
+  - `owner-gate --pretende-nuevo` — el flag nuevo de owner-gate evalúa el
+    archivo como si el Write estuviera a punto de ocurrir aunque YA exista.
+  - `revisor-prehook --desde-vacio` — el flag nuevo evalúa el contenido como si
+    el archivo no existiera antes (todas sus funciones son agregadas).
+- **Veredictos**: puerta exit 2 → el guardian BORRA el archivo y pega el
+  informe del gate con el protocolo de reintento (el archivo bloqueado sale del
+  censo para que el reintento del host vuelva a pasar por las puertas). Puerta
+  0 → OK. Puerta FALLIDA sin veredicto (crash/timeout) → NO borra (destruir el
+  trabajo del host por un fallo propio sería peor): avisa y pide verificación
+  manual; commit y CI siguen interceptando aguas abajo.
+- **CLI**: `npm run guardiano` (vigilar) y `npm run guardiano -- --una-vez
+  <ruta>` (verificar un archivo ya escrito; exit 0 permite / 2 bloquea y
+  borró). La función `verificarArchivoNuevo(rel, {soloRevisor, mapa})` se
+  exporta para los tests.
+- **`node` del PATH o `FLU_NODE`**, nunca `process.execPath` (§7.3).
+- **`.clinerules`** en la raíz: el protocolo manual que el host sin hooks debe
+  aplicar ANTES de cada escritura (dueño declarado, veredicto `@revisor`) +
+  aviso de que el guardian puede borrarle archivos y no debe detenerlo.
+- El guardian NO sustituye el protocolo manual ni las puertas 2/3: es la red
+  que hace REAL la Puerta 1 donde no hay API de hooks.
+
 ---
 
 ## 5. Orden de implementación
@@ -423,13 +454,16 @@ aprobaciones obsoletas + **require review from Code Owners** + check requerido
 6. **Adaptador + plugins de host** (§4.6/4.7): adaptador compartido, plugin de
    Kilo, plugin nativo de opencode, hooks de Claude en `.claude/settings.json`.
    Sin `sh` en ninguna pieza.
-7. **Hooks de git** (§4.8): pre-commit (con el `unset GIT_DIR` primero),
+7. **Guardian + `.clinerules`** (§4.14) para los hosts sin hooks: los dos flags
+   nuevos (`--pretende-nuevo` en owner-gate, `--desde-vacio` en
+   revisor-prehook), el watcher, el protocolo manual y el script `guardiano`.
+8. **Hooks de git** (§4.8): pre-commit (con el `unset GIT_DIR` primero),
    commit-msg, `install-hooks.mjs` + `prepare`.
-8. **Guard list**: `guard-files.mjs` + `vitest.guards.config.ts`; registrar
+9. **Guard list**: `guard-files.mjs` + `vitest.guards.config.ts`; registrar
    TODO guard nuevo en el mismo commit.
-9. **Tests de cada pieza** (§6), empezando por la reinyección del defecto.
-10. **CI** (§4.9) y **CODEOWNERS + branch protection** (§4.13).
-11. **Correr el gate completo una vez** (`npm run lint` + `lint:guards`) y
+10. **Tests de cada pieza** (§6), empezando por la reinyección del defecto.
+11. **CI** (§4.9) y **CODEOWNERS + branch protection** (§4.13).
+12. **Correr el gate completo una vez** (`npm run lint` + `lint:guards`) y
     verificar el conteo de tests.
 
 ### 5.2 Módulo NUEVO dentro del proyecto existente
@@ -473,6 +507,13 @@ aprobaciones obsoletas + **require review from Code Owners** + check requerido
 7. **En Windows, probar la cadena con `spawnSync`/el host real, NO con
    `sh -c` desde PowerShell 5.1**: PowerShell manglea `${VAR:-.}` al pasar el
    argumento y produce falsos negativos.
+8. **Guardian por reinyección**: escribir un archivo sin dueño bajo `src/` y
+   correr `node scripts/guardian.mjs --una-vez <ruta>` → exit 2 Y el archivo
+   desaparece; en modo watcher, inyectar el archivo con el guardian corriendo
+   → borrado en segundos con su informe. Pipe-test de los dos flags nuevos:
+   owner-gate con el archivo ya escrito pasa SIN `--pretende-nuevo` (exit 0) y
+   bloquea CON él (exit 2); revisor-prehook con el contenido ya en disco pasa
+   SIN `--desde-vacio` (exit 0) y bloquea un clon CON él (exit 2).
 
 ---
 
@@ -507,6 +548,11 @@ aprobaciones obsoletas + **require review from Code Owners** + check requerido
    cmd.exe).
 10. **Suite completa solo en CI/por el dueño**; en local se valida el módulo
     tocado.
+11. **Un host sin API de hooks no tiene Puerta 1**: los hooks de Claude, el
+    plugin de Kilo y el nativo de opencode no interceptan a Cline. La puerta
+    previa se hace REAL con el guardian (mismas puertas, flags `--pretende-nuevo`
+    / `--desde-vacio`) + protocolo manual en `.clinerules`; sin guardian, la
+    puerta la aplica el host A MANO.
 
 ---
 

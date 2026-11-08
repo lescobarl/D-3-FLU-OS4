@@ -34,6 +34,7 @@
     "gate": "npm run typecheck && npm run lint && npm run guard:arch",
     "guard:arch": "node scripts/guard-architecture.mjs",
     "guard:arch:staged": "node scripts/guard-architecture.mjs --staged",
+    "guardiano": "node scripts/guardian.mjs",
     "voz:log": "node scripts/analiza-voz-log.mjs",
     "lint:guards": "vitest run --config vitest.guards.config.ts",
     "prepare": "node scripts/install-hooks.mjs",

@@ -21,6 +21,9 @@
  *     | node scripts/owner-gate.mjs
  *
  * Salida: 0 permite, 2 bloquea (stderr explica), 1 error de uso o de entrada.
+ * `--pretende-nuevo` (solo con `--path`): evalúa el archivo como si el Write
+ * estuviera a punto de ocurrir aunque YA exista en disco. Lo usa el guardian
+ * para hosts sin hooks (Cline), que escriben sin pasar por la puerta previa.
  * El hook usa `onFailure: block`: un fallo del gate no deja pasar la escritura.
  *
  * Alcance: archivos de código (.ts/.tsx/.js/.jsx/.mjs/.cjs) bajo `src/`.
@@ -51,7 +54,7 @@ function argValue(name) {
 
 function usage() {
   return [
-    'Uso: node scripts/owner-gate.mjs --path <archivo> [--map <mapa>]',
+    'Uso: node scripts/owner-gate.mjs --path <archivo> [--map <mapa>] [--pretende-nuevo]',
     '  o: node scripts/owner-gate.mjs --staged [--map <mapa>]',
     '  o: node scripts/owner-gate.mjs --diff <base> [--map <mapa>]',
     "  o: echo '{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"...\"}}' | node scripts/owner-gate.mjs",
@@ -361,7 +364,7 @@ function main() {
   if (rel.startsWith('..')) return 0
   if (!rel.toLowerCase().startsWith(SRC_DIR)) return 0
   if (!CODE_EXT.test(rel)) return 0
-  if (existsSync(resolve(ROOT, rel))) return 0
+  if (!process.argv.includes('--pretende-nuevo') && existsSync(resolve(ROOT, rel))) return 0
 
   const { mapText, mapRel } = loadMap(mapPath, 'Write')
 

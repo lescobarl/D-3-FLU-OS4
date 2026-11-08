@@ -17,6 +17,8 @@
  *   {"tool_name":"Edit","tool_input":{"file_path":"src/...","old_string":"...","new_string":"..."}}
  *
  * Alcance: código bajo `src/`. Tests y scripts no pasan por esta puerta.
+ * `--desde-vacio`: evalúa el contenido como si el archivo no existiera antes
+ * (lo usa el guardian cuando el Write ya ocurrió sin puerta previa).
  * LÍMITE: la etiqueta `@revisor` la escribe el agente; la puerta obliga a mirar
  * y deja rastro, no demuestra equivalencia semántica.
  */
@@ -108,7 +110,15 @@ function main() {
   if (!CODE_EXT.test(rel)) return 0
 
   const absoluta = resolve(ROOT, rel)
-  const actual = existsSync(absoluta) ? readFileSync(absoluta, 'utf8') : ''
+  // El guardian evalúa un archivo recién escrito (el Write YA ocurrió, sin
+  // puerta previa): con --desde-vacio el contenido anterior se trata como
+  // inexistente y todas las funciones del contenido nuevo se evalúan como
+  // agregadas, igual que habría hecho el prehook antes del Write.
+  const actual = process.argv.includes('--desde-vacio')
+    ? ''
+    : existsSync(absoluta)
+      ? readFileSync(absoluta, 'utf8')
+      : ''
   const nuevo = contenidoNuevo(actual, input)
   if (nuevo === null || nuevo === actual) return 0
 
