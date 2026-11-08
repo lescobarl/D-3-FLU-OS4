@@ -1,53 +1,75 @@
 // ============================================================
 // FLU Playback - spec de soporte
 // ------------------------------------------------------------
-// SOLO reproduce el WAV de una sesión como micrófono virtual. No sustituye
-// el ASR, no inyecta transcripciones y no siembra resultados. La app escucha
-// el audio con su motor normal (en playback, el motor local ya existente).
+// Reproduce el WAV por un cable de audio virtual. La app lo escucha por su
+// micrófono predeterminado y ejecuta su camino normal: Chrome SpeechRecognition
+// real, VAD, tramos y reglas de conversación. No se sustituye el ASR, no se
+// inyecta PCM, no se cancela el TTS y no se siembran filas.
 // ============================================================
 import { expect, test } from '@playwright/test';
 import { loadSession } from '../../scripts/playback/session.mjs';
 import { autoSkipOnboarding, gotoClean, seedActiveUser } from './_helpers';
-import { stubWavMicrophone } from './playbackHelpers';
+import { installPlaybackPlayer, seedRecordedParticipants } from './playbackHelpers';
 
 const SESSION_PATH = process.env.FLU_PLAYBACK_SESSION || '';
-const LEAD_IN_MS = Number(process.env.FLU_PLAYBACK_LEAD_IN_MS || 0);
+const WAV_FILE = process.env.FLU_PLAYBACK_WAV_FILE || '';
 const TAIL_MS = Number(process.env.FLU_PLAYBACK_TAIL_MS || 5000);
 const TIMEOUT_MS = Number(process.env.FLU_PLAYBACK_TIMEOUT_MS || 600000);
+const REPORT_ROWS = process.env.FLU_PLAYBACK_REPORT_ROWS === '1';
+const SETTLE_MS = Number(process.env.FLU_PLAYBACK_SETTLE_MS || 3000);
+const SETTLE_MAX_MS = Number(process.env.FLU_PLAYBACK_SETTLE_MAX_MS || 60000);
+const OUTPUT_DEVICE = process.env.FLU_PLAYBACK_OUTPUT_DEVICE || '';
+const INPUT_DEVICE = process.env.FLU_PLAYBACK_INPUT_DEVICE || '';
+const CHROME_CHANNEL = (process.env.FLU_PLAYBACK_CHANNEL || 'chrome') as 'chrome';
 const WAV_URL = 'https://playback.local/session.wav';
 
-test.skip(!SESSION_PATH, 'FLU Playback se ejecuta con npm run playback');
+test.skip(!SESSION_PATH || !WAV_FILE, 'FLU Playback se ejecuta con npm run playback');
 test.setTimeout(TIMEOUT_MS);
-test.use({ headless: process.env.FLU_PLAYBACK_HEADED !== '1' });
+test.use({
+    channel: CHROME_CHANNEL,
+    headless: process.env.FLU_PLAYBACK_HEADED !== '1',
+    permissions: ['microphone'],
+});
 
 const session: any = SESSION_PATH ? loadSession(SESSION_PATH) : null;
+const recordedLanguage = String(
+    session?.manifest?.language || session?.meta?.language || '',
+).toLowerCase();
+const uiLanguage = recordedLanguage.startsWith('en')
+    ? 'en'
+    : recordedLanguage.startsWith('es')
+      ? 'es'
+      : '';
 
 test(`FLU Playback (${SESSION_PATH ? session.sessionId : 'sin sesión'})`, async ({ page }) => {
     if (!session) throw new Error('Falta FLU_PLAYBACK_SESSION');
-    if (!session.audioPath.toLowerCase().endsWith('.wav')) {
-        throw new Error('FLU Playback solo reproduce audio.wav');
-    }
 
     const errors: string[] = [];
     page.on('pageerror', (error) => errors.push(error.message));
 
     await autoSkipOnboarding(page);
-    // La app usa su motor local ya existente para oír el WAV. No hay
-    // SpeechRecognition falso ni guion de texto: solo audio.
-    await page.addInitScript(() => {
-        (window as any).__FLU_PLAYBACK_LOCAL_ASR = true;
-    });
     await page.route(WAV_URL, (route) =>
         route.fulfill({
-            path: session.audioPath,
+            path: WAV_FILE,
             contentType: 'audio/wav',
             headers: { 'Access-Control-Allow-Origin': '*' },
         }),
     );
-    await page.addInitScript(stubWavMicrophone(), WAV_URL);
+    await page.addInitScript(installPlaybackPlayer(), {
+        url: WAV_URL,
+        outputQuery: OUTPUT_DEVICE,
+        inputQuery: INPUT_DEVICE,
+    });
 
     await gotoClean(page);
-    await seedActiveUser(page, 'Usuario Playback');
+    if (uiLanguage) {
+        await page.evaluate((lang) => localStorage.setItem('flu-language', lang), uiLanguage);
+    }
+    if (session.hasBaseStart && session.baseStartParticipants.length > 0) {
+        await seedRecordedParticipants(page, session.baseStartParticipants);
+    } else {
+        await seedActiveUser(page, 'Usuario Playback');
+    }
     await page.waitForSelector('.flu-shell', { timeout: 45000 });
 
     const clicked = await page.evaluate(() => {
@@ -64,16 +86,13 @@ test(`FLU Playback (${SESSION_PATH ? session.sessionId : 'sin sesión'})`, async
     await page.waitForFunction(
         () => (window as any).__fluStore?.getState?.().conversationState === 'LISTENING',
         null,
-        { timeout: 60000 },
+        { timeout: 180000 },
     );
-    if (LEAD_IN_MS > 0) await page.waitForTimeout(LEAD_IN_MS);
 
-    await page.waitForFunction(
-        () => (window as any).__fluPlayback?.status?.()?.ready === true,
-        null,
-        { timeout: 60000 },
-    );
+    // La app ya está escuchando por el cable. Se reproduce el WAV por la salida
+    // del cable: Chrome SpeechRecognition lo oye como si fuera el usuario.
     await page.evaluate(async () => {
+        await (window as any).__fluPlayback?.prepare?.();
         await (window as any).__fluPlayback?.start?.();
     });
 
@@ -81,17 +100,43 @@ test(`FLU Playback (${SESSION_PATH ? session.sessionId : 'sin sesión'})`, async
         () => {
             const status = (window as any).__fluPlayback?.status?.();
             if (!status) return false;
-            if (status.ended) return true;
-            return (
-                Number(status.duration) > 0 &&
-                Number(status.position) >= Number(status.duration) - 0.25
-            );
+            if (status.ended === true) return true;
+            return Number(status.duration) > 0 && Number(status.position) >= Number(status.duration) - 0.25;
         },
         null,
         { timeout: TIMEOUT_MS - 60000 },
     );
     await page.waitForTimeout(TAIL_MS);
+
+    await page.evaluate(
+        async ({ quietMs, maxMs }) => {
+            const w = window as any;
+            await w.__fluWhenRecognitionIdle?.();
+            let last = '';
+            let stableSince = Date.now();
+            const started = Date.now();
+            while (Date.now() - started < maxMs) {
+                const snapshot = JSON.stringify(w.__fluStore?.getState?.().conversationHistory || []);
+                if (snapshot !== last) {
+                    last = snapshot;
+                    stableSince = Date.now();
+                } else if (Date.now() - stableSince >= quietMs) {
+                    return;
+                }
+                await new Promise((resolve) => setTimeout(resolve, 250));
+            }
+        },
+        { quietMs: SETTLE_MS, maxMs: SETTLE_MAX_MS },
+    );
     await page.evaluate(() => (window as any).__fluPlayback?.stop?.());
+
+    if (REPORT_ROWS) {
+        const rows = await page.evaluate(() => {
+            const store = (window as any).__fluStore?.getState?.();
+            return Array.isArray(store?.conversationHistory) ? store.conversationHistory : [];
+        });
+        console.log('[playback rows]', JSON.stringify(rows));
+    }
 
     expect(errors, `pageerrors: ${errors.join(' | ')}`).toEqual([]);
 });

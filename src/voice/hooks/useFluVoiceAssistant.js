@@ -83,7 +83,7 @@ import { normalizeLang } from '../../core/config/localeConfig.ts'
 import { useFluParticipant } from '../../hooks/useFluParticipant'
 import { isSpeechSynthesisSpeaking, isFluSpeaking, waitForSpeechIdle } from '../lib/fluSpeech.js'
 import { resumeAfterSpeechSuspend, releaseStalledTurn } from '../lib/voiceStallPolicy.js'
-import { createLocalRecognition, isLocalFallbackEnabled, prewarmLocalRecognition, shouldUseLocalFallback } from '../lib/voiceLocalFallback'
+import { isLocalFallbackEnabled, prewarmLocalRecognition, shouldUseLocalFallback } from '../lib/voiceLocalFallback'
 import { useLocalAsrFallback } from './useLocalAsrFallback'
 import { logCaughtError } from '../../lib/caughtError';
 import { clearAnimationFrameRef, clearTimeoutRef } from '../../lib/timerRefs'
@@ -113,9 +113,6 @@ async function stopMediaStream(stream) {
   stream.getTracks().forEach((track) => track.stop())
 }
 function createRecognition(language, activeLocale = '') {
-  if (typeof globalThis !== 'undefined' && globalThis.__FLU_PLAYBACK_LOCAL_ASR === true) {
-    return createLocalRecognition()
-  }
   return acquireSpeechRecognition(language, activeLocale)
 }
 
@@ -1586,7 +1583,7 @@ export function useFluVoiceAssistant({
       isListeningRef.current = true
       // Precalienta el motor local SOLO si la politica lo habilita: en
       // produccion Chrome-only no se carga Whisper (backup `rescate/wip-pre-s9`).
-      if (isLocalFallbackEnabled() || globalThis.__FLU_PLAYBACK_LOCAL_ASR === true) prewarmLocalRecognition()
+      if (isLocalFallbackEnabled()) prewarmLocalRecognition()
 
       if (!startSpeechRecognition(Recognition)) {
         requestRecognitionRestart('arranque', getActiveListenConfig().restart.retryBackoffMs)

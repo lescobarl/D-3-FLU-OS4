@@ -100,7 +100,8 @@ Sin estas claves no hay `900 ms`, ni `auto`, ni retención: sería hardcode. `ov
 ## Flu playback y barge-in
 
 - Playback = misma tubería con otro `AudioSource` (micrófono o archivo).
-- ASR determinista: stub/Whisper. Chrome en vivo se declara **NO COMPARABLE**.
+- ASR real: Chrome SpeechRecognition escuchando un cable de audio virtual. El WAV se
+  reproduce por la salida del cable; sin stub, sin Whisper forzado y sin inyección PCM.
 - Fixture: `events.ndjson`, `turns.ndjson`, `audio`, `manifest.json`; aceptación `N/0/0`.
 - **Barge-in: sí.** El eco es el portero y el módulo emite **`barge.in`**; el consumidor apaga `fluSpeech`. La voz de FLU no es fila del usuario.
 
@@ -186,7 +187,7 @@ commitear.
 - Dos voces reales → dos etiquetas.
 - `ok flu soy XXX` → nombre solo a la voz que lo dijo; perfil persistente.
 - Caja sin pérdidas, sin acortes, sin congelación.
-- **Flu playback** sobre fixture → `N/0/0`; Chrome en vivo no comparable.
+- **Flu playback** sobre fixture → `N/0/0`; Chrome real con cable virtual es comparable.
 - `stop()` a media frase → provisional o descarte, nunca pérdida.
 - Barge-in: FLU habla, usuario interrumpe, eco no genera fila.
 - Guards en `tests/*.test.ts`, uno por regla, con prueba de mutación.
@@ -198,7 +199,7 @@ commitear.
 
 - Techo del micrófono con muchas voces; `overlap` se declara.
 - Idioma fijo en cloud; Whisper local sí autodetecta.
-- Playback Chrome no comparable: solo stub/Whisper.
+- Playback Chrome: el cable virtual alimenta el SpeechRecognition real; comparable.
 - Sin grabación no hay `N` ni aceptación reproducible.
 
 ## Lo difícil

@@ -19,6 +19,7 @@ import { FLU_CONFIG } from '../src/voice/lib/fluConfig.js'
 import { isLocalFallbackEnabled } from '../src/voice/lib/voiceLocalFallback.js'
 
 const HOOK = readFileSync(join(process.cwd(), 'src/voice/hooks/useFluVoiceAssistant.js'), 'utf8')
+const PLAYBACK_SPEC = readFileSync(join(process.cwd(), 'tests/e2e/playback.spec.ts'), 'utf8')
 
 describe('politica del fallback local: produccion Chrome-only', () => {
   it('el default de produccion es NO cargar Whisper', () => {
@@ -35,11 +36,21 @@ describe('politica del fallback local: produccion Chrome-only', () => {
   })
 
   it('el hook consulta la politica antes de precalentar y de degradar', () => {
-    expect(HOOK).toContain("if (isLocalFallbackEnabled() || globalThis.__FLU_PLAYBACK_LOCAL_ASR === true) prewarmLocalRecognition()")
-    expect(HOOK).toContain('globalThis.__FLU_PLAYBACK_LOCAL_ASR === true')
+    expect(HOOK).toContain('if (isLocalFallbackEnabled()) prewarmLocalRecognition()')
     expect(HOOK).toContain('degradeEnabled: isLocalFallbackEnabled()')
     expect(HOOK).toContain('isLocalFallbackEnabled() &&')
     expect(HOOK).toContain('shouldUseLocalFallback(errorCode)')
+  })
+
+  it('el playback no tiene ramas en el producto ni en el spec', () => {
+    // El playback es solo un micrófono: no fuerza motor, no inyecta PCM y no
+    // sustituye el reconocedor. Chrome real consume el WAV por el cable virtual
+    // y la app aplica sus reglas.
+    expect(HOOK).not.toContain('__FLU_PLAYBACK')
+    expect(HOOK).not.toContain('pushPlaybackAudio')
+    expect(PLAYBACK_SPEC).not.toContain('__FLU_PLAYBACK')
+    expect(PLAYBACK_SPEC).not.toContain('pushPlaybackAudio')
+    expect(PLAYBACK_SPEC).not.toContain('stubWavMicrophone')
   })
 
   it('el detector no es decorativo: un hook sin la politica no la satisface', () => {

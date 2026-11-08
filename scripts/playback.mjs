@@ -4,14 +4,16 @@
  * Uso:
  *   npm run playback -- --session <carpeta> [--tail ms] [--lead-in ms] [--headed]
  *
- * SOLO reproduce el audio de la sesión como micrófono virtual. No sustituye
+ * SOLO reproduce el audio de la sesión por el cable de audio virtual. No sustituye
  * el ASR, no inyecta transcripciones y no escribe filas: la app escucha el
- * audio con su motor normal.
+ * audio por su micrófono del sistema y aplica sus reglas.
  */
+import { rmSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { spawn } from 'node:child_process'
 import {
   DEFAULT_URL,
+  buildPlaybackWav,
   loadSession,
   parseArgs,
   usage,
@@ -87,23 +89,38 @@ async function main() {
     fail(`--url invalida: ${url}`)
   }
 
+  let wav
+  try {
+    wav = buildPlaybackWav(session, { leadInMs: options.leadIn, tailMs: options.tail })
+  } catch (error) {
+    fail(error.message)
+  }
+
   const env = {
     PORT: String(port),
     FLU_PLAYBACK_SESSION: session.dir,
-    FLU_PLAYBACK_LEAD_IN_MS: String(options.leadIn),
+    FLU_PLAYBACK_WAV_FILE: wav.path,
+    FLU_PLAYBACK_OUTPUT_DEVICE: options.outputDevice,
+    FLU_PLAYBACK_INPUT_DEVICE: options.inputDevice,
     FLU_PLAYBACK_TAIL_MS: String(options.tail),
     FLU_PLAYBACK_TIMEOUT_MS: String(options.timeout),
     FLU_PLAYBACK_HEADED: options.headed ? '1' : '0',
+    FLU_PLAYBACK_REPORT_ROWS: options.reportRows ? '1' : '0',
   }
-  const runResult = await run(
-    process.execPath,
-    [PLAYWRIGHT_CLI, 'test', SPEC, '--workers=1', '--reporter=line'],
-    env,
-    options.timeout + 60000,
-  )
-  if (runResult.timedOut) fail('timeout global: Playwright no terminó', 2)
+  let runResult
+  try {
+    runResult = await run(
+      process.execPath,
+      [PLAYWRIGHT_CLI, 'test', SPEC, '--workers=1', '--reporter=line'],
+      env,
+      options.timeout + 60000,
+    )
+  } finally {
+    rmSync(wav.dir, { recursive: true, force: true })
+  }
+  if (runResult?.timedOut) fail('timeout global: Playwright no terminó', 2)
 
-  process.exitCode = runResult.code ?? 2
+  process.exitCode = runResult?.code ?? 2
 }
 
 main().catch((error) => {

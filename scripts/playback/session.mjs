@@ -6,11 +6,13 @@
  * reproducir el audio como microfono virtual.
  */
 import { readNdjson as readNdjsonStrict, readSessionManifest } from '../replay/loadSession.mjs';
-import { existsSync, readFileSync, statSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { basename, join, resolve } from 'node:path'
 
 export const DEFAULT_PORT = 5173
 export const DEFAULT_URL = `http://localhost:${DEFAULT_PORT}`
+export const DEFAULT_LEAD_IN_MS = 0
 export const DEFAULT_TAIL_MS = 5000
 export const DEFAULT_TIMEOUT_MS = 600000
 
@@ -27,7 +29,7 @@ export function readNdjson(file) {
 /**
  * Lee la cabecera de un WAV PCM simple (RIFF/WAVE) sin dependencias.
  * @param {string} file
- * @returns {{sampleRate:number, channels:number, bitsPerSample:number, dataBytes:number, seconds:number}}
+ * @returns {{sampleRate:number, channels:number, bitsPerSample:number, dataBytes:number, dataOffset:number, seconds:number}}
  */
 export function readWavInfo(file) {
   const buffer = readFileSync(file)
@@ -40,6 +42,7 @@ export function readWavInfo(file) {
   let channels = 0
   let bitsPerSample = 0
   let dataBytes = 0
+  let dataOffset = 0
   while (offset + 8 <= buffer.length) {
     const id = buffer.toString('ascii', offset, offset + 4)
     const size = buffer.readUInt32LE(offset + 4)
@@ -49,12 +52,13 @@ export function readWavInfo(file) {
       sampleRate = buffer.readUInt32LE(body + 4)
       bitsPerSample = buffer.readUInt16LE(body + 14)
     } else if (id === 'data') {
+      dataOffset = body
       dataBytes = Math.min(size, buffer.length - body)
       break
     }
     offset = body + size + (size % 2)
   }
-  if (!sampleRate || !channels || !bitsPerSample || !dataBytes) {
+  if (!sampleRate || !channels || !bitsPerSample || !dataBytes || !dataOffset) {
     throw new Error(`WAV sin fmt/data validos: ${file}`)
   }
   const bytesPerSecond = sampleRate * channels * (bitsPerSample / 8)
@@ -63,6 +67,7 @@ export function readWavInfo(file) {
     channels,
     bitsPerSample,
     dataBytes,
+    dataOffset,
     seconds: dataBytes / bytesPerSecond,
   }
 }
@@ -77,11 +82,20 @@ export function loadSession(input) {
   if (!existsSync(dir) || !statSync(dir).isDirectory()) {
     throw new Error(`Sesion no encontrada: ${input}`)
   }
-  // MANIFIESTO: dueno unico en el replay (auditoria 2026-10-23). Antes playback tenia su
-  // propia copia del conjunto de versiones y de la validacion (ruta doble de la misma regla).
-  const { manifest, schemaVersion, meta } = readSessionManifest(dir)
+  // MANIFIESTO: dueno unico en el replay (auditoria 2026-10-23). Playback tolera
+  // una grabacion SIN manifiesto si tiene meta.json y audio: el recorder puede
+  // cerrar antes de escribir el manifiesto y eso NO debe impedir la reproduccion.
   const manifestPath = join(dir, 'manifest.json')
   const metaPath = join(dir, 'meta.json')
+  let manifest, schemaVersion, meta
+  try {
+    ;({ manifest, schemaVersion, meta } = readSessionManifest(dir))
+  } catch (error) {
+    if (error?.code !== 'missing-manifest') throw error
+    meta = existsSync(metaPath) ? JSON.parse(readFileSync(metaPath, 'utf8')) : {}
+    schemaVersion = 2
+    manifest = { schemaVersion, dir, meta }
+  }
 
   const declaredAudio = manifest.audioFile ? resolve(dir, String(manifest.audioFile)) : join(dir, 'audio.wav')
   const pcmPath = join(dir, 'audio.pcm')
@@ -90,11 +104,11 @@ export function loadSession(input) {
   const audio = audioPath.toLowerCase().endsWith('.wav')
     ? readWavInfo(audioPath)
     : {
-        sampleRate: Number(manifest.sampleRate) || 0,
+        sampleRate: Number(manifest.sampleRate) || Number(meta.sampleRate) || 0,
         channels: 1,
         bitsPerSample: 16,
         dataBytes: statSync(audioPath).size,
-        seconds: Number(manifest.seconds) || 0,
+        seconds: Number(manifest.seconds) || statSync(audioPath).size / 2 / (Number(meta.sampleRate) || 0),
       }
   if (!audio.sampleRate || !audio.seconds) throw new Error(`Audio sin sampleRate/duracion: ${audioPath}`)
 
@@ -150,14 +164,76 @@ export function loadSession(input) {
   }
 }
 
+/**
+ * Construye el WAV que consume el cable de audio virtual: silencio inicial
+ * (opcional) + audio grabado + silencio final (para que el ASR cierre el
+ * ultimo turno). No altera el contenido: solo agrega silencio.
+ * @param {any} session Sesion cargada por `loadSession`.
+ * @param {{ leadInMs?: number, tailMs?: number }} [options]
+ * @returns {{ path: string, dir: string, seconds: number, sampleRate: number, channels: number }}
+ */
+export function buildPlaybackWav(session, { leadInMs = DEFAULT_LEAD_IN_MS, tailMs = DEFAULT_TAIL_MS } = {}) {
+  const source = String(session?.audioPath || '')
+  if (!source) throw new Error('Sesion sin audio para playback')
+  const info = session.audio
+  const sampleRate = Number(info?.sampleRate) || 0
+  if (!sampleRate) throw new Error(`Audio sin sampleRate: ${source}`)
+  const isPcm = source.toLowerCase().endsWith('.pcm')
+  const channels = isPcm ? 1 : Number(info?.channels) || 1
+  const bitsPerSample = isPcm ? 16 : Number(info?.bitsPerSample) || 0
+  if (bitsPerSample !== 16) throw new Error(`Playback exige PCM 16-bit: ${source}`)
+  const frameBytes = channels * 2
+  const raw = readFileSync(source)
+  const dataOffset = isPcm ? 0 : Number(info?.dataOffset) || 0
+  const available = Math.max(0, raw.length - dataOffset)
+  const dataBytes = Math.min(isPcm ? raw.length : Number(info?.dataBytes) || available, available)
+  const sourceFrames = Math.floor(dataBytes / frameBytes)
+  if (!sourceFrames) throw new Error(`Audio sin muestras: ${source}`)
+  const leadFrames = Math.max(0, Math.round(((Number(leadInMs) || 0) / 1000) * sampleRate))
+  const tailFrames = Math.max(0, Math.round(((Number(tailMs) || 0) / 1000) * sampleRate))
+  const totalFrames = leadFrames + sourceFrames + tailFrames
+  const pcm = Buffer.alloc(totalFrames * frameBytes)
+  raw.copy(pcm, leadFrames * frameBytes, dataOffset, dataOffset + sourceFrames * frameBytes)
+
+  const header = Buffer.alloc(44)
+  header.write('RIFF', 0, 'ascii')
+  header.writeUInt32LE(36 + pcm.length, 4)
+  header.write('WAVE', 8, 'ascii')
+  header.write('fmt ', 12, 'ascii')
+  header.writeUInt32LE(16, 16)
+  header.writeUInt16LE(1, 20)
+  header.writeUInt16LE(channels, 22)
+  header.writeUInt32LE(sampleRate, 24)
+  header.writeUInt32LE(sampleRate * frameBytes, 28)
+  header.writeUInt16LE(frameBytes, 32)
+  header.writeUInt16LE(16, 34)
+  header.write('data', 36, 'ascii')
+  header.writeUInt32LE(pcm.length, 40)
+
+  const dir = join(tmpdir(), `flu-playback-${process.pid}-${Date.now()}`)
+  mkdirSync(dir, { recursive: true })
+  const path = join(dir, 'audio.wav')
+  writeFileSync(path, Buffer.concat([header, pcm]))
+  return {
+    path,
+    dir,
+    seconds: totalFrames / sampleRate,
+    sampleRate,
+    channels,
+  }
+}
+
 export function parseArgs(argv) {
   const options = {
     session: '',
-    leadIn: 0,
+    leadIn: DEFAULT_LEAD_IN_MS,
     tail: DEFAULT_TAIL_MS,
     url: DEFAULT_URL,
+    outputDevice: '',
+    inputDevice: '',
     headed: false,
     timeout: DEFAULT_TIMEOUT_MS,
+    reportRows: false,
     help: false,
   }
   for (let i = 0; i < argv.length; i += 1) {
@@ -181,11 +257,20 @@ export function parseArgs(argv) {
       case '--url':
         options.url = value()
         break
+      case '--output-device':
+        options.outputDevice = value()
+        break
+      case '--input-device':
+        options.inputDevice = value()
+        break
       case '--headed':
         options.headed = true
         break
       case '--timeout':
         options.timeout = Number(value())
+        break
+      case '--report-rows':
+        options.reportRows = true
         break
       case '--help':
       case '-h':
@@ -211,12 +296,14 @@ export function usage() {
     '  npm run playback -- --session <carpeta> [opciones]',
     '',
     'Opciones:',
-    '  --lead-in <ms>                    Espera extra tras LISTENING (default: 0)',
-    '  --tail <ms>                       Margen tras el audio (default: 5000)',
+    '  --lead-in <ms>                    Silencio antes del audio (default: 0)',
+    '  --tail <ms>                       Silencio tras el audio (default: 5000)',
     '  --url <url>                       App (default: http://localhost:5173)',
+    '  --output-device <texto>            Salida del cable virtual (default: autodetecta)',
+    '  --input-device <texto>             Microfono del cable que debe ser el predeterminado',
     '  --headed                          Navegador visible',
     '  --timeout <ms>                    Limite total (default: 600000)',
+    '  --report-rows                     Imprime las filas finales de la conversacion',
     '  --help                            Esta ayuda',
   ].join('\n')
 }
-
