@@ -68,6 +68,8 @@ mismo commit. Si no puedes borrarlo ahora, no añadas el nuevo ahora.
 | ¿Cómo se refleja en el store/UI? | `src/voice/compose/conversationMotorProducto.js:111` `row.committed` → `addConversationEntry` (133); `speaker.labeled` (95) → `setEntrySpeakerName` (104) | Llamador espejo; no es un segundo escritor. |
 | ¿Cómo se evita que el store reescriba la fila del módulo? | `src/hooks/useConversationPersistence.ts:171` `debePersistirEntrada` · `:149` `mismaFilaPersistida` | `conversacionEscrituraUnica` lo prueba. |
 | ¿Cómo se renombra el hablante desde la UI? | `adapters.ts:494` `renameRowSpeakerName` (re-export en `src/voice/api/conversation.ts:10`) | Una sola vía de renombre. |
+| ¿Quién etiqueta las filas de la sesión con el nombre dicho? | `motor.ts:188` (adaptador `producto.ts:285`; consumidor `src/voice/hooks/useFluVoiceAssistant.js:2346`) | `registrarNombre`: solo la sesión. Fija `nombresPorVoz`/`nombrePendiente` y emite `speaker.labeled`. No escribe directorio ni base. |
+| ¿Quién registra el nombre propio en la identidad global? | `src/voice/lib/speakerIdentityRegister.js:334` `registerSpeakerIdentityFromCommand` → `:87` `registerSpeakerIdentity` (consumidor `useFluVoiceAssistant.js:381`) | Directorio por voz + base + clusters + primario. No reescribe filas (fila inmutable). |
 
 ## Configuración
 
@@ -77,7 +79,7 @@ mismo commit. Si no puedes borrarlo ahora, no añadas el nuevo ahora.
 
 ## Lo que NO es ruta doble
 
-Estas tres zonas parecen dos y no lo son. No las «unifiques» sin leer la nota:
+Estas cuatro zonas parecen dos y no lo son. No las «unifiques» sin leer la nota:
 
 1. **El espejo del store.** `useConversationPersistence` escribe la misma fila
    por el mismo `conversationRowWriter`. No es un segundo escritor: es un
@@ -91,6 +93,13 @@ Estas tres zonas parecen dos y no lo son. No las «unifiques» sin leer la nota:
    `speechMerge.fraseDelEventoAsr` / `mergeIntoOpenLine` componen la hipótesis
    del evento; `fusion.perteneceALineaAbierta` y `revision.unirRevision`
    deciden pertenencia y revisión. Preguntas distintas.
+4. **Nombre de sesión vs identidad global.** `motor.registrarNombre`
+   (`motor.ts:188`) es la etiqueta de continuidad de la SESIÓN: fija
+   `nombresPorVoz`/`nombrePendiente` y emite `speaker.labeled` para las filas
+   futuras. `registerSpeakerIdentityFromCommand`
+   (`src/voice/lib/speakerIdentityRegister.js:334`) es la identidad
+   PERSISTENTE: directorio por voz, base de participantes, clusters y primario.
+   Borrar uno rompe su parte; no son dos copias del mismo responsable.
 
 También es legítimo:
 
