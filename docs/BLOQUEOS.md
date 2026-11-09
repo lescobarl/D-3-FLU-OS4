@@ -37,6 +37,37 @@ dobles y `tests/bautizoVozIdempotenteGuard.test.ts` (con falsificación).
   - C10 (`asrFinal` con `ms/speechLikeMs/rms: null`): esos campos solo se rellenan cuando el
     evento trae métricas del motor; Chrome no las entrega. No se inventan.
 
+## EL NOMBRE CRUZA DE VOZ (medido 2026-11-09 10:35, sesión 36a8bc05) — ABIERTO
+
+Coseno contra la voz de Luis (fila del bautizo «okay flu Soy Luis regís regístrame»):
+
+| fila | etiqueta | cos | texto |
+|---|---|---|---|
+| 1-6 | Hablante 1 → **Luis** | 0.866 · 1.000 | (las del bautizo) |
+| 7 | Luis | 0.925 | ok |
+| 11 | **Luis** | **0.566** | «me dijeron» |
+| 12 | **Luis** | **0.436** | «voy a poner la carne encima…» |
+| 13 | Hablante 2 | 0.163 | la MISMA frase que 12 |
+
+**Dos filas con timbre de OTRA voz salieron con el nombre de Luis.** No es el texto: es la
+identidad.
+
+**Causa localizada (dos piezas, mismo efecto):**
+1. `src/voice/conversation/sesion.ts` `registrarMedidaVoz` (≈:141) **refresca el vector de la
+   plantilla** cuando decide continuidad (`existente.vector = [...vector]`). Si la decisión de
+   continuidad es errónea (turno corto «me dijeron», 10 caracteres), el vector de la mujer
+   **sobrescribe el ancla de Luis**: a partir de ahí la fila de Luis lleva el timbre de ella
+   (por eso `firma` de las filas 11/12 = 512 y aun así cos 0.43 contra el bautizo).
+2. `src/voice/conversation/cierre.ts:175` `resolverVoz` aplica `nombresPorVoz.get(vozId)`
+   **sin comprobar el timbre**: si la voz recibió la clave de Luis, hereda su nombre.
+
+**Arreglo (no aplicado aún, requiere las dos piezas juntas):**
+- `registrarMedidaVoz`: refrescar el vector de una plantilla **solo si la medida CASA con su
+  ancla** (`sameVoiceFloor`); una ventana ajena no envenena la identidad.
+- `resolverVoz`: recibir la medida del turno y **no aplicar el nombre** si no casa con el ancla
+  de esa voz (degradar a «Hablante N», que es lo honesto).
+- Barrera: caso con estos cosenos reales (0.566 / 0.436) que debe dar «Hablante N», no «Luis».
+
 ## speakerFlips / sinVector — NO son defecto (medido 2026-11-09, sesión e1b683e9)
 
 `speakerFlips 6` y `sinVector 5` de esa sesión **no son una etiqueta que alterna sola**:
