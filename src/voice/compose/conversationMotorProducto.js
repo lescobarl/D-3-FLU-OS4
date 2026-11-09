@@ -78,6 +78,13 @@ export function crearMotorConversacionHook({
   let ultimaCommiteada = ''
   /** Timer único de la frase viva: agrupa ráfagas de interinos en un render. */
   let liveTimer = 0
+  /**
+   * Última frase viva PUBLICADA. La caja no repinta lo mismo: medido 2026-11-09 en la
+   * sesión del dueño (e1b683e9), 193 de 532 eventos del ASR traían el mismo texto y cada
+   * uno volvía a pintar la caja (misma frase, mismo render). Eso es lo que se ve como
+   * «se atora y luego salta». El texto no cambia: el render no se repite.
+   */
+  let ultimaViva = ''
   let nameCommandDeferTimer = 0
   let nameCommandDeferPayload = null
   let cerrado = false
@@ -133,7 +140,11 @@ export function crearMotorConversacionHook({
       if (liveTimer) clearTimeout(liveTimer)
       liveTimer = setTimeout(() => {
         liveTimer = 0
-        onLiveTranscript(evento.abierta ? evento.fraseCanonica : '')
+        const viva = evento.abierta ? String(evento.fraseCanonica || '') : ''
+        if (viva !== ultimaViva) {
+          ultimaViva = viva
+          onLiveTranscript(viva)
+        }
       }, FLU_CONFIG.ui?.workspace?.liveTranscriptThrottleMs ?? 120)
       return
     }

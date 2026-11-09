@@ -456,6 +456,26 @@ describe('CONVERSACIÓN — una muestra de audio, una locución', () => {
   })
 })
 
+describe('CONVERSACIÓN — la caja no repinta la misma frase', () => {
+  const COMPOSE = readFileSync(
+    join(process.cwd(), 'src/voice/compose/conversationMotorProducto.js'),
+    'utf8',
+  )
+
+  it('la frase viva se publica solo cuando CAMBIA', () => {
+    // MEDIDO 2026-11-09 (sesión e1b683e9): 193 de 532 eventos del ASR traían el mismo
+    // texto y cada uno volvía a pintar la caja. Es el «se atora y luego salta».
+    expect(COMPOSE).toContain('if (viva !== ultimaViva)')
+    expect(COMPOSE).toContain('onLiveTranscript(viva)')
+  })
+
+  it('FALSIFICACIÓN: publicar sin comparar vuelve a repintar lo mismo', () => {
+    const sinComparar = "onLiveTranscript(evento.abierta ? evento.fraseCanonica : '')"
+    expect(sinComparar).not.toContain('ultimaViva')
+    expect('if (viva !== ultimaViva)').toContain('ultimaViva')
+  })
+})
+
 describe('CONVERSACIÓN — el hueco del ASR cierra la locución (srGap CON consumidor)', () => {
   it('el módulo pregunta al dueño del hueco y sella el reloj en cada resultado', () => {
     // MEDIDO 2026-11-08: `resolveSrGapTrigger` no tenía NINGÚN consumidor y la locución
