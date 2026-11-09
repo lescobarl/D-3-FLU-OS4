@@ -499,6 +499,19 @@ Responde como ${botName}:`;
 
         const data = await this.readProxyJson<ContractEnvelope>(response);
 
+        // ERROR DEL PROVEEDOR ≠ CONTRATO VACÍO (medido 2026-11-09: «platícame de los barcos»
+        // → FLU muda). El proxy responde `{ error: 'gemini_api_error', detail }` y eso se
+        // interpretaba como un contrato sin `respuesta_voz` → `empty_response`, que no
+        // distingue «el modelo no dijo nada» de «la llamada falló», así que el motivo real
+        // (clave, cuota, red) se perdía y el turno quedaba mudo sin rastro.
+        const errorProveedor = String((data as { error?: unknown }).error || '').trim()
+        if (errorProveedor) {
+            const detalle = String((data as { detail?: unknown }).detail || '').trim()
+            const error = new Error(detalle || errorProveedor) as Error & { code?: string }
+            error.code = errorProveedor
+            throw error
+        }
+
         // The proxy returns the full contract from generateFluContract()
         // Normalize to FluContract format
         const contract = (data.contract || data) as ContractEnvelope;
