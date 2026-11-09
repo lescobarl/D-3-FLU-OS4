@@ -29,7 +29,7 @@ import { resolveEchoContext } from '../lib/conversationDialogue.js'
 import { detectWakeIntroducedName, splitTranscriptAtWakeWord } from '../lib/audioMath.js'
 import { labelToSpeakerId } from '../lib/conversationRow.js'
 import { autoSpeakerIndexFromKey } from '../lib/speakerCore.js'
-import { voiceKeyFor } from '../lib/speakerDirectory.js'
+import { voiceKeyFor, knownVoiceNames, preferKnownVoiceName } from '../lib/speakerDirectory.js'
 import { FLU_CONFIG } from '../lib/fluConfig.js'
 import { getLastCompletedSpeechAt } from '../lib/fluSpeech.js'
 import { getSessionRecordingStatus } from '../lib/sessionRecorder.js'
@@ -165,11 +165,22 @@ export function crearMotorConversacionHook({
     // quien tiene el texto canónico y la etiqueta (WHERE) — y el renombrado lo
     // hace el módulo: este archivo NO escribe filas. El hook ya no lo dispara
     // (caso declarado en `scripts/rutas-dobles-baseline.json`).
+    //
+    // EL NOMBRE NO SE INVENTA AQUÍ (B2, mandato 2026-10-13): lo que el ASR captura
+    // NO es el nombre de una voz («soy Luis sigue sin funcionar» captura «Luis Sigue
+    // Sin»). La captura se resuelve contra los nombres que YA existen en su dueño
+    // único (`preferKnownVoiceName` + `knownVoiceNames`, directorio de voces) y lo
+    // que se entrega al bautizo es ESE nombre, nunca el texto crudo. El registro
+    // persistente del nombre (directorio/base/clusters) no es de este archivo: lo
+    // hace `registerSpeakerIdentityFromCommand` desde la frontera de turno.
     const nombreDicho =
       esNuevaLocucion &&
-      detectWakeIntroducedName(
-        String(evento.fila.texto || ''),
-        FLU_CONFIG.voiceCommands.wakeWords || [],
+      preferKnownVoiceName(
+        detectWakeIntroducedName(
+          String(evento.fila.texto || ''),
+          FLU_CONFIG.voiceCommands.wakeWords || [],
+        ),
+        knownVoiceNames(),
       )
     if (nombreDicho) motor.registrarNombre(nombreDicho, evento.fila.etiqueta)
     // Revisión por FUSIÓN de una continuación/duplicado: el snapshot inicial ya

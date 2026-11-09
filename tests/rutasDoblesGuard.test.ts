@@ -12,6 +12,7 @@ import { join, relative } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   evaluateCase,
+  idsRepetidos,
   loadBaseline,
   measureCaseByFiles,
   relKey,
@@ -164,5 +165,25 @@ describe('rutasDoblesGuard — la ruta declarada es la del repo', () => {
     expect(relative(ROOT, ruta).replace(/\\/g, '/')).toBe('scripts/rutas-dobles-baseline.json')
     expect(loadBaseline() as Baseline).toBeDefined()
     expect(baseline().cases.map((c) => c.id)).toContain('apertura-locucion')
+  })
+})
+
+describe('rutasDoblesGuard — un id de caso, una barrera', () => {
+  const casos = (): Array<{ id?: string }> => (baseline() as Baseline).cases
+
+  it('ANTI-VACUIDAD: el catalogo declara sus casos con id', () => {
+    const lista = casos()
+    expect(lista.length).toBeGreaterThanOrEqual(40)
+    expect(lista.filter((caso) => !String(caso?.id || '').trim())).toEqual([])
+  })
+
+  it('ningun id de caso se repite (medido y congelado en 0)', () => {
+    expect(idsRepetidos(casos())).toEqual([])
+  })
+
+  it('FALSIFICACION: un id repetido o vacio se marca', () => {
+    expect(idsRepetidos([{ id: 'a' }, { id: 'b' }])).toEqual([])
+    expect(idsRepetidos([{ id: 'a' }, { id: 'a' }])).toEqual(['a'])
+    expect(idsRepetidos([{ id: '' }, {}])).toEqual([''])
   })
 })

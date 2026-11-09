@@ -1,5 +1,5 @@
 {
-  "_nota": "Literales (>=18 chars) que HOY aparecen en >=2 archivos. Solo se quitan: el literal unificado se borra aqui en el mismo commit. Anadir uno exige aprobacion del dueno (CODEOWNERS).",
+  "_nota": "Literales (>=18 chars) que HOY aparecen en >=2 archivos. Solo se quitan: el literal unificado se borra aqui en el mismo commit. Anadir uno exige aprobacion del dueno (CODEOWNERS). EL UMBRAL NO BAJA (medido 2026-11-08): con minChars=12 el detector pasa de 403 a 761 literales y 145 de los nuevos son identificadores legitimos repetidos en >=3 archivos (MIME, eventos, i18n, animaciones); bajar el umbral no anade barrera, anade ruido. Un id que deba ser visible se alarga o se declara aqui.",
   "minChars": 18,
   "literales": [
     " : pickText(lang, ",

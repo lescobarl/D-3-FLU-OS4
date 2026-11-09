@@ -17,7 +17,7 @@
 import { getEmbeddingConfig, getModelId } from './embeddingConfig.js'
 import { compareCosineSignatures, isAutoSpeakerLabel, normalizeEmbeddingVector } from './speakerCore.js'
 import { registeredVoiceFloor, sameVoiceFloor, verifiedAnchorFloor } from './speakerClusters.js'
-import { foldSpeakerKey, isProperSpeakerName } from './speakerLabels.js'
+import { foldSpeakerKey, isProperSpeakerName, normalizeSpeakerLabel } from './speakerLabels.js'
 import { getParticipantAnchors } from './participantVoiceAnchors.ts'
 
 /**
@@ -86,6 +86,66 @@ export function registerVoiceName(voiceId, name, { vector = null, model = voiceV
 export function resolveVoiceName(voiceId) {
     const entry = voiceNames.get(String(voiceId || '').trim())
     return entry?.name || ''
+}
+
+/**
+ * NOMBRES QUE YA EXISTEN para una voz: los que este directorio afirma (nombre pegado a
+ * una voz de la sesión) más los de las anclas verificadas de la base de participantes.
+ *
+ * Es la lista contra la que se resuelve una CAPTURA del ASR. El caso medido (mandato del
+ * dueño 2026-10-13, citado en `tests/vozEcoIdentidadGuard.test.ts`): el dueño dice «ok flu
+ * soy Luis sigue sin funcionar», el ASR captura «Luis Sigue Sin» y su voz se llama «Luis».
+ * Sin esta lista la captura entra tal cual y la fila guarda basura.
+ *
+ * @returns {string[]} Nombres conocidos, sin repetir (comparados por `foldSpeakerKey`).
+ */
+export function knownVoiceNames() {
+    const nombres = []
+    voiceNames.forEach((entry) => {
+        if (entry?.name) nombres.push(entry.name)
+    })
+    for (const anchor of getParticipantAnchors()) {
+        if (anchor?.name) nombres.push(anchor.name)
+    }
+    const porClave = new Map()
+    for (const nombre of nombres) {
+        const limpio = String(nombre || '').trim()
+        const clave = foldSpeakerKey(limpio)
+        if (clave && !porClave.has(clave)) porClave.set(clave, limpio)
+    }
+    return [...porClave.values()]
+}
+
+/**
+ * NOMBRE DICHO -> NOMBRE DE LA VOZ: la captura del ASR NO es el nombre de nadie.
+ *
+ * Regla del dueño (mandato 2026-10-13): si la captura EMPIEZA por un nombre que ya existe,
+ * el nombre es ESE («Luis Sigue Sin» -> «Luis»); si no encabeza ninguno, se conserva la
+ * captura, porque una voz nueva puede estar presentándose con un nombre que aún no existe.
+ * La comparación es por nombre NORMALIZADO y gana el conocido MÁS LARGO (dos nombres que
+ * comparten prefijo no se confunden).
+ *
+ * @revisor EXTENDER — la regla ya existía como `preferKnownName` privada de
+ * `speakerPolicy.js`, donde solo la consumía la identidad persistente: el bautizo del
+ * módulo se quedaba con la captura cruda (defecto B2). No se crea una regla nueva, se
+ * mueve al dueño del NOMBRE y los dos consumidores usan esta misma implementación.
+ *
+ * @param {string} name Captura del detector de nombre introducido.
+ * @param {readonly string[]} [knownNames] Nombres ya conocidos (por defecto, `knownVoiceNames()`).
+ * @returns {string} Nombre de la voz ('' si la captura está vacía).
+ */
+export function preferKnownVoiceName(name = '', knownNames = knownVoiceNames()) {
+    const dicho = String(name || '').trim()
+    const capturado = normalizeSpeakerLabel(dicho).toLocaleLowerCase()
+    if (!capturado) return dicho
+    const candidatos = (Array.isArray(knownNames) ? knownNames : [])
+        .map((known) => ({
+            original: String(known || '').trim(),
+            normal: normalizeSpeakerLabel(known).toLocaleLowerCase(),
+        }))
+        .filter(({ normal }) => normal && (capturado === normal || capturado.startsWith(`${normal} `)))
+        .sort((a, b) => b.normal.length - a.normal.length)
+    return candidatos[0]?.original || dicho
 }
 
 /**

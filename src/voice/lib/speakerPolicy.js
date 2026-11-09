@@ -12,6 +12,7 @@ import { FLU_CONFIG } from './fluConfig.js'
 import { detectIntroducedName, detectWakeIntroducedName } from './audioMath.js'
 import { normalizeSpeakerLabel } from './voiceIdentity.js'
 import { anonymousSpeakerLabel } from './speakerLabels.js'
+import { preferKnownVoiceName } from './speakerDirectory.js'
 import { optionalConfigBlock } from './configGuard.js'
 
 /**
@@ -28,25 +29,11 @@ export function requiresWakeWordForSpeakerName(roomCfg = getRoomCaptureCfg()) {
 }
 
 /**
- * Prefiere un nombre ya conocido que encabece la captura.
- * Evita que “soy Luis sigue sin funcionar” se registre como “Luis Sigue Sin”.
- * @param {string} name Nombre capturado por el parser.
- * @param {readonly string[]} knownNames Nombres de la base/clusters.
- * @returns {string} Nombre conocido más largo, o el capturado.
- */
-function preferKnownName(name, knownNames = []) {
-  const capturado = normalizeSpeakerLabel(name).toLocaleLowerCase()
-  if (!capturado) return name
-  const candidatos = knownNames
-    .map((known) => ({ original: known, normal: normalizeSpeakerLabel(known).toLocaleLowerCase() }))
-    .filter(({ normal }) => normal && (capturado === normal || capturado.startsWith(`${normal} `)))
-    .sort((a, b) => b.normal.length - a.normal.length)
-  return candidatos[0]?.original || name
-}
-
-/**
  * Resuelve nombre propio desde el texto del turno.
  * En sala: solo detectWakeIntroducedName (ok flu soy …); sin wake → ''.
+ * El nombre DICHO no es el nombre de la voz: la preferencia por un nombre ya conocido vive
+ * en su dueño único, `speakerDirectory.preferKnownVoiceName` (aquí solo se elige QUÉ texto
+ * se mira y si la configuración exige wake).
  * @param {string} text Texto del turno.
  * @param {{ wakeWords?: string[], roomCfg?: object, knownNames?: readonly string[] }} [opciones]
  * @returns {string} Nombre resuelto.
@@ -60,11 +47,11 @@ export function resolveSpeakerNameFromUtterance(
   } = {},
 ) {
   const wakeName = detectWakeIntroducedName(text, wakeWords)
-  if (wakeName) return preferKnownName(wakeName, knownNames)
+  if (wakeName) return preferKnownVoiceName(wakeName, knownNames)
   // SIN WAKE: solo se admite si la config lo permite. Antes las DOS ramas devolvian '' y
   // `requireWakeWordForSpeakerName: false` no tenia ningun efecto (auditoria 2026-10-22).
   if (requiresWakeWordForSpeakerName(roomCfg)) return ''
-  return preferKnownName(detectIntroducedName(text), knownNames)
+  return preferKnownVoiceName(detectIntroducedName(text), knownNames)
 }
 
 export { isWeakAsrSpeakerEvidence, listConfiguredTranscriptHardRules } from './fluTranscriptPause.js'

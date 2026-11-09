@@ -743,6 +743,8 @@
     "src/voice/lib/speakerDirectory.js": [
       "forgetVoiceName",
       "getVoiceDirectorySnapshot",
+      "knownVoiceNames",
+      "preferKnownVoiceName",
       "registerVoiceName",
       "rememberVoiceVector",
       "resetVoiceDirectory",
@@ -782,7 +784,6 @@
     "src/voice/lib/speakerPolicy.js": [
       "blindSpeakerFallback",
       "getRoomCaptureCfg",
-      "preferKnownName",
       "requiresWakeWordForSpeakerName",
       "resolveCommitStickyFallback",
       "resolveSpeakerNameFromUtterance"

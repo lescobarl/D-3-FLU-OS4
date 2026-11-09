@@ -645,6 +645,18 @@
         "src/voice/compose/conversationMotorProducto.js": 1
       },
       "goal": 1
+    },
+    {
+      "id": "nombre-dicho-preferencia-conocida",
+      "owner": "src/voice/lib/speakerDirectory.js",
+      "description": "La captura del ASR NO es el nombre de una voz: la regla que prefiere el nombre YA conocido («Luis Sigue Sin» -> «Luis») tiene UN dueno (el directorio de voces). Un segundo resolutor de la misma pregunta deja que una ruta bautice con el texto crudo mientras la base dice otro nombre (defecto B2, mandato del dueno 2026-10-13). El consumidor solo aporta la captura y la lista de nombres conocidos.",
+      "pattern": "function\\s+preferKnownVoiceName\\s*\\(",
+      "roots": ["src"],
+      "kind": "sites",
+      "allowed": {
+        "src/voice/lib/speakerDirectory.js": 1
+      },
+      "goal": 1
     }
   ]
 }

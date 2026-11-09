@@ -86,6 +86,26 @@ export function loadBaseline(ruta = BASELINE) {
 }
 
 /**
+ * IDs de caso declarados MÁS DE UNA VEZ en la linea base.
+ *
+ * El id es la IDENTIDAD de una barrera: repetido, dos casos distintos cuentan como uno
+ * en `--report`, comparten nombre de prueba y el techo deja de significar lo que dice.
+ * Un id se renombra, nunca se reutiliza. (Defecto de la familia «un id repetido, nadie
+ * lo ve»: medido 0 hoy, y por eso se congela en 0.)
+ *
+ * @param {readonly {id?: string}[]} casos Casos de la linea base.
+ * @returns {string[]} Ids repetidos, ordenados (el id vacio cuenta como repetido).
+ */
+export function idsRepetidos(casos = []) {
+  const cuenta = new Map()
+  for (const caso of Array.isArray(casos) ? casos : []) {
+    const id = String(caso?.id || '').trim()
+    cuenta.set(id, (cuenta.get(id) ?? 0) + 1)
+  }
+  return [...cuenta].filter(([, veces]) => veces > 1).map(([id]) => id).sort()
+}
+
+/**
  * ¿La ruta relativa vive bajo la raiz indicada?
  * @param {string} rel Ruta relativa.
  * @param {string} root Raiz relativa.

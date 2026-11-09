@@ -13,9 +13,20 @@
  * Mide el compositor REAL; el módulo se sustituye por su frontera (su contrato
  * vive en `tests/conversacionApi.test.ts`). El nombre se resuelve con el detector
  * real sobre texto real: «ok flu soy Luis» -> 'Luis'.
+ *
+ * SEGUNDA MITAD (B2, mandato del dueño 2026-10-13): lo que el ASR CAPTURA no es el
+ * nombre de la voz. «ok flu soy Luis sigue sin funcionar» captura «Luis Sigue Sin» y
+ * la fila se bautizaba con esa basura mientras la base decía «Luis». La preferencia
+ * por el nombre YA conocido tiene dueño único (`speakerDirectory.preferKnownVoiceName`
+ * + `knownVoiceNames`); el disparador solo aporta la captura y lo que entrega al
+ * bautizo es el nombre resuelto. Un segundo resolutor (una copia de la regla en otra
+ * ruta) vuelve a dejar que una ruta bautice con el texto crudo: eso lo mide este
+ * guard, con su falsificación.
  */
 // @vitest-environment node
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { join, relative } from 'node:path'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const hoisted = vi.hoisted(() => ({
   registrarNombre: vi.fn(),
@@ -57,6 +68,8 @@ vi.mock('../src/voice/conversation/index', () => ({
 }))
 
 import { crearMotorConversacionHook } from '../src/voice/compose/conversationMotorProducto.js'
+import { registerVoiceName, resetVoiceDirectory } from '../src/voice/lib/speakerDirectory.js'
+import { walkFiles } from './_helpers'
 
 /** Fila commiteada del mandato «ok flu soy Luis» (etiqueta automática = WHERE). */
 const FILA = {
@@ -109,5 +122,83 @@ describe('bautizo de voz — un disparo por locución', () => {
   it('una fila sin mandato de nombre no bautiza a nadie', () => {
     commitear({ ...FILA, texto: 'hola, ¿qué tal?' })
     expect(hoisted.registrarNombre).not.toHaveBeenCalled()
+  })
+})
+
+// ============================================================
+// B2 — el nombre lo resuelve el DIRECTORIO, no la captura del ASR
+// ------------------------------------------------------------
+// El compositor REAL se ejerce con el detector real sobre texto real y el
+// directorio real (`speakerDirectory`): solo se sustituye la frontera del
+// módulo (su contrato vive en `tests/conversacionApi.test.ts`).
+// ============================================================
+const COMPOSE = readFileSync(
+  join(process.cwd(), 'src/voice/compose/conversationMotorProducto.js'),
+  'utf8',
+)
+
+/** Implementación de la regla «prefiere el nombre ya conocido» (una sola). */
+const REGLA_DE_PREFERENCIA = /function\s+preferKnownVoiceName\s*\(/
+
+/**
+ * Módulos que IMPLEMENTAN la regla de preferencia (no los que la invocan).
+ * @param {Record<string, string>} fuentes Fuentes por ruta relativa.
+ * @returns {string[]} Rutas que la implementan, ordenadas.
+ */
+function modulosConReglaDePreferencia(fuentes: Record<string, string>): string[] {
+  return Object.entries(fuentes)
+    .filter(([, texto]) => REGLA_DE_PREFERENCIA.test(String(texto)))
+    .map(([ruta]) => ruta)
+    .sort()
+}
+
+/** Fuentes de TODO `src`, que es el alcance real de la regla. */
+function fuentesDeSrc(): Record<string, string> {
+  const raiz = process.cwd()
+  const fuentes: Record<string, string> = {}
+  for (const abs of walkFiles(join(raiz, 'src'), /\.(js|ts|tsx)$/)) {
+    fuentes[relative(raiz, abs).replace(/\\/g, '/')] = readFileSync(abs, 'utf8')
+  }
+  return fuentes
+}
+
+describe('bautizo de voz — el nombre lo resuelve el directorio', () => {
+  afterEach(() => resetVoiceDirectory())
+
+  it('«ok flu soy Luis sigue sin funcionar» bautiza «Luis», no la captura completa', () => {
+    // La base ya conoce a Luis: su voz se llama Luis, diga lo que diga el ASR detrás.
+    registerVoiceName('speaker_1', 'Luis')
+    commitear({ ...FILA, texto: 'ok flu soy Luis sigue sin funcionar' })
+    expect(hoisted.registrarNombre).toHaveBeenCalledTimes(1)
+    expect(hoisted.registrarNombre).toHaveBeenCalledWith('Luis', 'Hablante 1')
+  })
+
+  it('una voz NUEVA que se presenta conserva su nombre (no hay conocido que preferir)', () => {
+    registerVoiceName('speaker_1', 'Luis')
+    commitear({ ...FILA, texto: 'ok flu soy Marta' })
+    expect(hoisted.registrarNombre).toHaveBeenCalledWith('Marta', 'Hablante 1')
+  })
+
+  it('el compositor NO entrega la captura cruda a registrarNombre', () => {
+    expect(COMPOSE).toContain('preferKnownVoiceName(')
+    expect(COMPOSE).toContain('knownVoiceNames()')
+    expect(COMPOSE).not.toMatch(/registrarNombre\(\s*detectWakeIntroducedName/)
+  })
+
+  it('la regla de preferencia tiene UN dueño: el directorio de voces', () => {
+    const fuentes = fuentesDeSrc()
+    // ANTI-VACUIDAD: el escaneo ve la fuente real del dueño.
+    expect(fuentes['src/voice/lib/speakerDirectory.js']).toBeTruthy()
+    expect(modulosConReglaDePreferencia(fuentes)).toEqual(['src/voice/lib/speakerDirectory.js'])
+  })
+
+  it('FALSIFICACIÓN: una segunda copia de la regla en otra ruta se marca', () => {
+    expect(
+      modulosConReglaDePreferencia({
+        'src/voice/lib/speakerDirectory.js': 'export function preferKnownVoiceName(name) {}',
+        'src/voice/compose/copia.js': 'function preferKnownVoiceName(name) { return name }',
+        'src/voice/lib/consumidor.js': 'const n = preferKnownVoiceName(captura, knownVoiceNames())',
+      }),
+    ).toEqual(['src/voice/compose/copia.js', 'src/voice/lib/speakerDirectory.js'])
   })
 })
