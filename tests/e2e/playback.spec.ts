@@ -62,6 +62,13 @@ test(`FLU Playback (${SESSION_PATH ? session.sessionId : 'sin sesión'})`, async
     });
 
     await gotoClean(page);
+    // PRE-FLIGHT (medido 2026-11-10): el routing se comprobaba DESPUÉS de arrancar la app y
+    // esperar LISTENING (hasta 180 s) para acabar diciendo que el micrófono no es el cable.
+    // Se prepara ANTES: si VoiceMeeter no está enrutado, falla en segundos con el motivo
+    // exacto (qué dispositivo ve y cuál espera) en vez de dejar al dueño esperando.
+    await page.evaluate(async () => {
+        await (window as any).__fluPlayback?.prepare?.();
+    });
     if (uiLanguage) {
         await page.evaluate((lang) => localStorage.setItem('flu-language', lang), uiLanguage);
     }
@@ -92,7 +99,6 @@ test(`FLU Playback (${SESSION_PATH ? session.sessionId : 'sin sesión'})`, async
     // La app ya está escuchando por el cable. Se reproduce el WAV por la salida
     // del cable: Chrome SpeechRecognition lo oye como si fuera el usuario.
     await page.evaluate(async () => {
-        await (window as any).__fluPlayback?.prepare?.();
         await (window as any).__fluPlayback?.start?.();
     });
 
