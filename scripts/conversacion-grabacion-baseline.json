@@ -19,7 +19,7 @@
     ],
     "extraCommitsForDuplicateTurn": 7,
     "rowsNotEqualAnyFinal": 15,
-    "tailLossChars": 69,
+    "tailLossChars": 46,
     "tailLossTurns": [
       {
         "turnId": "1",
@@ -28,28 +28,10 @@
         "loss": 45
       },
       {
-        "turnId": "3",
-        "finalLen": 637,
-        "rowLen": 636,
-        "loss": 1
-      },
-      {
-        "turnId": "5",
-        "finalLen": 329,
-        "rowLen": 327,
-        "loss": 2
-      },
-      {
         "turnId": "9",
         "finalLen": 14,
         "rowLen": 13,
         "loss": 1
-      },
-      {
-        "turnId": "10",
-        "finalLen": 158,
-        "rowLen": 138,
-        "loss": 20
       }
     ],
     "commitsAfterStop": 7,
@@ -73,7 +55,7 @@
       "id": "cola-perdida",
       "owner": "src/voice/conversation/producto.ts:330",
       "metric": "tailLossChars",
-      "ceiling": 69,
+      "ceiling": 46,
       "descripcion": "Caracteres perdidos entre la suma de finales y la fila del mismo turnId."
     },
     {

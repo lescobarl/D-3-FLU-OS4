@@ -14,15 +14,8 @@
     ],
     "extraCommitsForDuplicateTurn": 1,
     "rowsNotEqualAnyFinal": 7,
-    "tailLossChars": 44,
-    "tailLossTurns": [
-      {
-        "turnId": "1",
-        "finalLen": 460,
-        "rowLen": 416,
-        "loss": 44
-      }
-    ],
+    "tailLossChars": 0,
+    "tailLossTurns": [],
     "commitsAfterStop": 0,
     "identitySkips": 0,
     "chromeRawGapsOverStall": 9,
@@ -50,7 +43,7 @@
       "id": "cola-perdida",
       "owner": "src/voice/conversation/texto.ts:399",
       "metric": "tailLossChars",
-      "ceiling": 44
+      "ceiling": 0
     },
     {
       "id": "sin-vector",

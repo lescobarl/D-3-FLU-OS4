@@ -117,18 +117,27 @@ export function medirGrabacion({ eventos, turnos }, { stallMs = STALL_MS_DEFECTO
     const turnId = String(commit.data?.turnId ?? '')
     ;(porTurno[turnId] ??= []).push(commit)
   }
-  const finalesPorTurno = {}
-  for (const final of finals) {
-    const turnId = String(final.turn ?? '')
-    ;(finalesPorTurno[turnId] ??= []).push(final)
-  }
+  // El final que CIERRA una fila es el ULTIMO de SU turno anterior al commit, no la SUMA
+  // de todos los del turno. Sumarlos comparaba una fila con dos locuciones juntas y
+  // reportaba perdidas que no existian: medido 2026-11-08 en la sesion del dueno, sumaba
+  // 474 (dos finales del turno) contra una fila de 210 que era de OTRA locucion del mismo
+  // `turnId` (el modulo reutiliza el turnId en varias locuciones). El habla perdida real
+  // era 31, no 264. Los `fila.commiteada` y los `asrFinal` traen el reloj del evento (`t`).
+  const finalesConReloj = eventos
+    .map((evento) => {
+      const final = jsonTrasPrefijo(mensaje(evento), 'asrFinal ')
+      return final ? { t: Number(evento.t), final } : null
+    })
+    .filter(Boolean)
   const tailLossTurns = Object.entries(porTurno)
     .map(([turnId, lista]) => {
-      const finalLen = (finalesPorTurno[turnId] ?? []).reduce(
-        (total, final) => total + Number(final.len || 0),
-        0,
+      const hasta = lista.reduce((mayor, commit) => Math.max(mayor, Number(commit.t)), 0)
+      const previos = finalesConReloj.filter(
+        ({ t, final }) => String(final.turn ?? '') === turnId && t <= hasta,
       )
-      if (!finalLen) return null
+      if (!previos.length) return null
+      const finalCierre = previos[previos.length - 1].final
+      const finalLen = Number(finalCierre.len || 0)
       const rowLen = Math.max(...lista.map((commit) => Number(commit.data?.longitud || 0)))
       const loss = Math.max(0, finalLen - rowLen)
       return loss > 0 ? { turnId, finalLen, rowLen, loss } : null
