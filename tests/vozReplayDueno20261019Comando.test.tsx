@@ -152,6 +152,7 @@ vi.mock('../src/voice/lib/fluDebug', async (original) => ({
 }));
 
 import { useFluVoiceAssistant } from '../src/voice/hooks/useFluVoiceAssistant';
+import { relayLog } from '../src/lib/clientLogRelay';
 import { FLU_CONFIG } from '../src/voice/lib/fluConfig.js';
 import { fluDb } from '../src/core/db/fluDatabase';
 import { getVadEnergyThreshold } from '../src/voice/lib/asr/asrConfig.js';
@@ -340,10 +341,16 @@ describe('replay 2026-10-19 · defecto 5: la orden a mitad del dictado no borra 
     //    sigue al comando, en el mismo enunciado): la caja no puede perderla.
     await dictar([{ isFinal: false, transcript: MANDATO + ' ' + CONTINUACION }], 0);
 
-    // A) La caja de la ultima frase conserva el mandato Y la continuacion.
-    const caja = String(vista.result.current.liveTranscript || '');
-    expect(caja, 'la caja perdio el mandato: ' + JSON.stringify(caja)).toContain(MANDATO_CUERPO);
-    expect(caja, 'la caja perdio la continuacion: ' + JSON.stringify(caja)).toContain(CONTINUACION_CUERPO);
+    // A) La caja de la ultima frase conserva el mandato Y la continuacion. La
+    // vista se publica con THROTTLE (`liveTranscriptThrottleMs`): se espera la
+    // publicacion; leer el estado a medio agrupar no mide la caja, mide el timer.
+    await waitFor(() => {
+      const caja = String(vista.result.current.liveTranscript || '');
+      expect(caja, 'la caja perdio el mandato: ' + JSON.stringify(caja)).toContain(MANDATO_CUERPO);
+      expect(caja, 'la caja perdio la continuacion: ' + JSON.stringify(caja)).toContain(
+        CONTINUACION_CUERPO,
+      );
+    });
 
     // 3) CIERRE REAL: silencio sostenido cierra la locucion (frontera VAD).
     await cerrarLocucion(1);
@@ -393,10 +400,15 @@ describe('replay 2026-10-19 · defecto 5: la orden a mitad del dictado no borra 
     // 2) El dictado crece en el MISMO interino.
     await dictar([{ isFinal: false, transcript: PETICION + ' ' + CONTINUACION }], 0);
 
-    // A) La caja conserva la peticion Y lo que se siguio diciendo.
-    const caja = String(vista.result.current.liveTranscript || '');
-    expect(caja, 'la caja perdio la peticion: ' + JSON.stringify(caja)).toContain(PETICION_CUERPO);
-    expect(caja, 'la caja perdio la continuacion: ' + JSON.stringify(caja)).toContain(CONTINUACION_CUERPO);
+    // A) La caja conserva la peticion Y lo que se siguio diciendo (publicacion
+    // con throttle: se espera, no se lee a medio agrupar).
+    await waitFor(() => {
+      const caja = String(vista.result.current.liveTranscript || '');
+      expect(caja, 'la caja perdio la peticion: ' + JSON.stringify(caja)).toContain(PETICION_CUERPO);
+      expect(caja, 'la caja perdio la continuacion: ' + JSON.stringify(caja)).toContain(
+        CONTINUACION_CUERPO,
+      );
+    });
 
     // 3) Cierre real de la locucion (frontera VAD).
     await cerrarLocucion(1);
@@ -435,33 +447,53 @@ describe('replay 2026-10-19 · defecto 5: la orden a mitad del dictado no borra 
     //    con "soy Luis"; el defecto la recortaba al prefijo de 40).
     await dictar([{ isFinal: false, transcript: COMANDO }], 0);
 
-    const ordenes = () => onContract.mock.calls
-      .map((c) => (c[0] || {}) as Record<string, unknown>)
-      .filter((p) => (p.contract as Record<string, unknown> | null)?.navegacion);
-    await waitFor(() => {
-      expect(
-        ordenes().length,
-        'la orden no se despacho: ' + JSON.stringify(onContract.mock.calls.map((c) => c[0])),
-      ).toBeGreaterThan(0);
+    // El mandato de NOMBRE se despacha DIFERIDO (`nameCommandDeferMs`) para que FLU
+    // no conteste a mitad del habla: se espera ese diferido para que el camino del
+    // comando se ejecute de verdad y la medida del bautizo cubra el flujo completo.
+    await act(async () => {
+      await new Promise((resolve) =>
+        setTimeout(resolve, FLU_CONFIG.timing.nameCommandDeferMs + 250),
+      );
     });
-    const textoOrden = ordenes().map((p) => String(p.transcript || '')).join(' | ').toLowerCase();
-    expect(
-      textoOrden,
-      'la orden se despacho recortada (sin el nombre propio): ' + JSON.stringify(textoOrden),
-    ).toContain('soy luis');
+
+    // Esta frase es un MANDATO DE NOMBRE («soy Luis»), no una orden de navegacion:
+    // su contrato observable es el BAUTIZO de la voz, que se aplica al cerrar su
+    // locucion (se mide abajo). Antes este test esperaba un contrato `navegacion`,
+    // que ya no existe para este enunciado.
 
     // CONTRATO NUEVO: ejecutar la orden NO borra el dictado en vuelo (el defecto
     // media la linea vaciada al entrar al dispatch). La caja del modulo conserva
     // el mandato completo hasta que el silencio cierra la locucion.
-    const cajaTrasOrden = String(vista.result.current.liveTranscript || '');
-    expect(
-      cajaTrasOrden.toLowerCase(),
-      'el dispatch borro el dictado: ' + JSON.stringify(cajaTrasOrden),
-    ).toContain('soy luis');
+    await waitFor(() => {
+      const cajaTrasOrden = String(vista.result.current.liveTranscript || '');
+      expect(
+        cajaTrasOrden.toLowerCase(),
+        'el dispatch borro el dictado: ' + JSON.stringify(cajaTrasOrden),
+      ).toContain('soy luis');
+    });
 
     // 2) CIERRE de la locucion del comando por SILENCIO (medido 21:21:26.564
     //    sr-silence): la fila del comando queda COMPLETA (sin recortes).
     await cerrarLocucion(1);
+
+    // 2b) BAUTIZO UNICO, medido sobre la sesion REAL: la fila del comando dice
+    //     «Okay flu soy Luis», asi que la voz se bautiza UNA vez. Con dos
+    //     disparadores, el sobrante caia en `nombrePendiente` y bautizaba a la voz
+    //     de la locucion SIGUIENTE.
+    const bautizos = () =>
+      (relayLog as unknown as { mock: { calls: unknown[][] } }).mock.calls.filter(
+        ([, canal, contexto]) =>
+          canal === 'conversacion' &&
+          (contexto === 'conversacion.voz.bautizada' ||
+            contexto === 'conversacion.nombre.pendiente'),
+      );
+    await waitFor(() =>
+      expect(bautizos().length, 'no se disparo el bautizo de la voz').toBeGreaterThan(0),
+    );
+    expect(
+      bautizos().length,
+      'el bautizo se disparo ' + bautizos().length + ' veces: ' + JSON.stringify(bautizos()),
+    ).toBe(1);
 
     // 3) La locucion siguiente (316, medida) llega como resultado NUEVO del ASR
     //    (indice 1): tramo nuevo, caja nueva, sin heredar el comando.
@@ -472,14 +504,16 @@ describe('replay 2026-10-19 · defecto 5: la orden a mitad del dictado no borra 
       ],
       1,
     );
-    const caja = String(vista.result.current.liveTranscript || '');
-    expect(caja, 'la caja perdio la locucion siguiente: ' + JSON.stringify(caja)).toContain(
-      'ahora vamos a continuar',
-    );
-    expect(
-      caja.toLowerCase(),
-      'la locucion siguiente se pego al comando: ' + JSON.stringify(caja),
-    ).not.toContain('digo el comando');
+    await waitFor(() => {
+      const caja = String(vista.result.current.liveTranscript || '');
+      expect(caja, 'la caja perdio la locucion siguiente: ' + JSON.stringify(caja)).toContain(
+        'ahora vamos a continuar',
+      );
+      expect(
+        caja.toLowerCase(),
+        'la locucion siguiente se pego al comando: ' + JSON.stringify(caja),
+      ).not.toContain('digo el comando');
+    });
 
     // 4) CIERRE por silencio de la locucion siguiente.
     await cerrarLocucion(2);
