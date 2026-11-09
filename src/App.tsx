@@ -1541,6 +1541,18 @@ function App() {
                 !hasAcciones
             )
                 return;
+            // TRAZA DE LA RESPUESTA (medido 2026-11-09 11:54: el dueño pidió «platícame de los
+            // barcos», FLU habló 1,4 s y no hubo forma de saber QUÉ dijo: el log no guardaba
+            // la respuesta). Sin este dato no se puede acusar al que se comió la frase.
+            relayLog(
+                'LOG',
+                'App',
+                `onContractResolved → respuesta="${String(respuestaVoz).slice(0, 120)}" (navegacion=${Boolean(
+                    navegacion.comando,
+                )} config=${Boolean(configAction?.accion)} juego=${Boolean(
+                    juegoAction?.action,
+                )} acciones=${hasAcciones})`,
+            );
 
             // ============================================================
             // OS2 parity: cuando viene de una consulta de minuta local exitosa
