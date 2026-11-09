@@ -45,14 +45,24 @@ Medida con el dueño único del medidor (`scripts/conversacionGrabacionMetricas.
 
 | Métrica | Valor |
 |---|---|
-| `tailLossChars` | **508** caracteres dictados que NO llegaron a la fila |
-| `rowsNotEqualAnyFinal` | **7** de 9 filas |
-| pérdidas por turno | 474→210 (−264) · 160→17 (−143) · 128→38 (−90) · 138→127 (−11) |
+| `tailLossChars` | 508 — **ARTEFACTO de emparejado**, ver abajo |
+| `rowsNotEqualAnyFinal` | 7 de 9 filas — mismo artefacto |
+| pérdidas por turno | 474→210 · 160→17 · 128→38 · 138→127 |
 | `maxGapMs` | **17.573 ms** de ASR mudo |
 | `chromeRawGapsOverStall` | **5** huecos por encima del umbral de stall |
 | `speakerFlips` | 3 |
 | `sinVector` | 1 |
 | `commitsAfterStop` / `duplicateTurnIds` | 0 / 0 |
+
+**CORRECCIÓN (misma sesión, 2026-11-08):** el medidor empareja fila↔final por `turnId`, y el
+módulo **reutiliza el mismo `turnId` en varias locuciones** (`turns.ndjson`: la fila de 210
+lleva el turno `33208f00`, el mismo que el final de 474 que en realidad pertenece a la
+locución `e6ac5bae`). Emparejando por LOCUCIÓN las pérdidas reales son 474→443 (−31),
+160→153 (−7), 138→127 (−11): **el habla NO se pierde al 50 %**. La deuda real está en el
+MEDIDOR (`scripts/conversacionGrabacionMetricas.mjs:99 medirGrabacion`): debe emparejar por
+`locutionId`, no por `turnId`, o sus cifras mienten. Los números de arriba que NO dependen
+del emparejado (`maxGapMs`, `chromeRawGapsOverStall`, `speakerFlips`, `sinVector`) siguen
+siendo válidos.
 
 Estos son los números que tiene que BAJAR la próxima sesión. Se recalculan con:
 
