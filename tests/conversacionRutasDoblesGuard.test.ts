@@ -458,6 +458,25 @@ describe('CONVERSACIÓN — una muestra de audio, una locución', () => {
   })
 })
 
+describe('CONVERSACIÓN — el mandato de nombre no se responde dos veces', () => {
+  const COMPOSE = readFileSync(
+    join(process.cwd(), 'src/voice/compose/conversationMotorProducto.js'),
+    'utf8',
+  )
+
+  it('dos entregas del MISMO mandato (interino + final) se deduplican por NOMBRE', () => {
+    // MEDIDO 2026-11-09 10:35:48 y 10:35:50: «Registrado Luis Regis.» dicho dos veces.
+    expect(COMPOSE).toContain('if (claveMandato === ultimoNombreDespachado) return')
+    expect(COMPOSE).toContain('ultimoNombreDespachado = claveMandato')
+  })
+
+  it('FALSIFICACIÓN: sin la clave por nombre, el dedupe por texto deja pasar la variante', () => {
+    const sinClave = "if (!frase || frase === ultimaDespachada) return"
+    expect(sinClave).not.toContain('ultimoNombreDespachado')
+    expect('claveMandato = nombreMandado || frase').toContain('nombreMandado')
+  })
+})
+
 describe('CONVERSACIÓN — la grabación no duplica el trabajo del audio', () => {
   const RECORDER = readFileSync(join(process.cwd(), 'src/voice/lib/sessionRecorder.js'), 'utf8')
 

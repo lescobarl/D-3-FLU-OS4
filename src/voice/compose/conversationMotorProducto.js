@@ -85,6 +85,8 @@ export function crearMotorConversacionHook({
    * «se atora y luego salta». El texto no cambia: el render no se repite.
    */
   let ultimaViva = ''
+  /** Última expresión del mandato de nombre ya despachada (clave: el NOMBRE, no el texto). */
+  let ultimoNombreDespachado = ''
   let nameCommandDeferTimer = 0
   let nameCommandDeferPayload = null
   let cerrado = false
@@ -118,6 +120,17 @@ export function crearMotorConversacionHook({
       !String(split.commandText || split.afterWake || '').trim()
     if (esSoloWake) return
     if (esMandatoNombre) {
+      // DOS ENTREGAS DEL MISMO MANDATO no se responden dos veces: el ASR puede soltar el
+      // mandato en un interino y otra vez en el final con otra grafía del verbo
+      // («…soy Luis regís» / «…soy Luis regístrate»), y el dedupe por TEXTO no las ve igual.
+      // MEDIDO 2026-11-09 10:35:48 y 10:35:50: «Registrado Luis Regis.» dicho dos veces.
+      const nombreMandado = preferKnownVoiceName(
+        detectWakeIntroducedName(frase, wakeWords),
+        knownVoiceNames(),
+      )
+      const claveMandato = nombreMandado || frase
+      if (claveMandato === ultimoNombreDespachado) return
+      ultimoNombreDespachado = claveMandato
       nameCommandDeferPayload = { frase, opciones: { interim } }
       nameCommandDeferTimer = setTimeout(() => {
         nameCommandDeferTimer = 0
