@@ -496,6 +496,23 @@ describe('CONVERSACIÓN — la grabación no duplica el trabajo del audio', () =
   })
 })
 
+describe('CONVERSACIÓN — el bautizo no adivina entre voces con la misma etiqueta', () => {
+  const MOTOR = readFileSync(join(process.cwd(), 'src/voice/conversation/motor.ts'), 'utf8')
+
+  it('con DOS plantillas de la misma etiqueta no se bautiza la primera del mapa', () => {
+    // MEDIDO 2026-11-09 11:48 (sesión 02ba561f): dos voces compartían «Hablante 1» y el
+    // nombre «Luis» acabó en la voz de la mujer (sus filas: cos 0.397 contra Luis).
+    expect(MOTOR).toContain('if (candidatas.length === 1) vozId = candidatas[0][0]')
+    expect(MOTOR).not.toContain('for (const [id, plantilla] of estado.plantillasVoz) {')
+  })
+
+  it('FALSIFICACIÓN: el barrido por etiqueta que se queda con la primera es el defecto', () => {
+    const barrido = 'for (const [id, plantilla] of estado.plantillasVoz) { if (etiqueta === "...") { vozId = id; break } }'
+    expect(barrido).not.toContain('candidatas.length === 1')
+    expect('if (candidatas.length === 1) vozId = candidatas[0][0]').toContain('candidatas')
+  })
+})
+
 describe('CONVERSACIÓN — la frase reemitida con otra grafía no se duplica', () => {
   it('«flu/Flow» en las dos mitades se colapsa a una (caso medido)', () => {
     // MEDIDO 2026-11-09 11:48 (sesión 02ba561f): el mandato llegó dos veces en el MISMO

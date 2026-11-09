@@ -202,15 +202,16 @@ export function crearConversacion(dependencias: DependenciasConversacion): Conve
     let vozId = String(datos.vozId || estado.abierta?.voz.vozId || '').trim()
     if (!vozId && datos.etiqueta) {
       // La locución del comando ya cerró: la voz se identifica por la etiqueta
-      // que venía usando (una plantilla por voz). Sin coincidencia NO se
-      // bautiza a ciegas: el nombre quedaría pegado a una voz que no lo dijo.
+      // que venía usando (una plantilla por voz).
       const etiquetaDicha = String(datos.etiqueta || '').trim()
-      for (const [id, plantilla] of estado.plantillasVoz) {
-        if (String(plantilla.etiqueta || '').trim() === etiquetaDicha) {
-          vozId = id
-          break
-        }
-      }
+      const candidatas = [...estado.plantillasVoz].filter(
+        ([, plantilla]) => String(plantilla.etiqueta || '').trim() === etiquetaDicha,
+      )
+      // AMBIGUO = NO se bautiza a ciegas (medido 2026-11-09 11:48, sesión 02ba561f): dos
+      // voces de la sesión compartían la etiqueta «Hablante 1» y el bautizo se quedó con la
+      // PRIMERA del mapa; el nombre «Luis» acabó pegado a la voz de la mujer, cuyas filas
+      // siguientes salieron «Luis» con cos 0.397. Con una sola candidata no hay duda.
+      if (candidatas.length === 1) vozId = candidatas[0][0]
     }
     if (!vozId) {
       // MANDATO (2026-10-30, problema 5): la medida de respaldo resuelve la voz
