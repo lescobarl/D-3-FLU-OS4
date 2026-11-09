@@ -389,10 +389,18 @@ export function crearIngesta({
     const finalAnterior = abierta.final
     // 1. La locución anterior cierra: recortada a la ventana medida si el corte
     //    ocurrió dentro de su audio; tal cual si el VAD ya la había cortado.
-    const anterior =
+    //
+    //    INVARIANTE (medido 2026-11-08 02:28:26 en la sesión del dueño): una muestra
+    //    de audio pertenece a UNA locución. Entonces `anterior.fin` NO puede quedar
+    //    detrás del inicio de la voz nueva: la anterior cerró con fin=6.603.904 y la
+    //    nueva abrió en 6.340.736 → 263.168 muestras (5,5 s) en DOS locuciones, y esa
+    //    locución nueva salió con un tramo de 23,1 s en 6,5 s de reloj. Se acota al
+    //    inicio de la nueva: el tramo de la anterior nunca llega a su audio.
+    const finAnterior =
       datos.recortarAnterior === null
-        ? abierta
-        : { ...abierta, fin: datos.recortarAnterior }
+        ? Math.min(abierta.fin, datos.inicio)
+        : datos.recortarAnterior
+    const anterior = finAnterior === abierta.fin ? abierta : { ...abierta, fin: finAnterior }
     estado.abierta = anterior
     await sesion.cerrarLocucion(
       anterior,

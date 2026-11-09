@@ -438,3 +438,21 @@ describe('CONVERSACI?N ? propiedad sem?ntica del turno, la voz y el nombre', () 
     })
   })
 })
+
+describe('CONVERSACIÓN — una muestra de audio, una locución', () => {
+  /** Único acotado que impide el solape entre la locución anterior y la nueva. */
+  const CORTE = 'Math.min(abierta.fin, datos.inicio)'
+
+  it('la locución anterior NUNCA cierra después del inicio de la nueva (sin solape)', () => {
+    // Medido 2026-11-08 02:28:26 en la sesión del dueño: anterior fin=6.603.904 y
+    // nueva inicio=6.340.736 → 263.168 muestras (5,5 s) en DOS locuciones.
+    expect(fuente('ingesta.ts')).toContain(CORTE)
+  })
+
+  it('FALSIFICACIÓN: sin el acotado el solape vuelve a ser posible', () => {
+    const conSolape = 'recortarAnterior === null ? abierta : { ...abierta, fin: datos.recortarAnterior }'
+    expect(conSolape).not.toContain(CORTE)
+    expect(`const finAnterior = ${CORTE}`).toContain(CORTE)
+  })
+})
+
