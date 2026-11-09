@@ -13,6 +13,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FLU_CONFIG } from '../voice/api/config';
 import {
   advanceOnboarding,
+  completedNameSpeech,
   createInitialState,
   finishOnboarding,
   initialSpeech,
@@ -239,8 +240,15 @@ export function useOnboarding({
       setState(next);
       persistState(next);
       notifyCompleted(next);
+      // La VOZ no se salta el saludo ni el cierre: este atajo no pasa por
+      // `advanceOnboarding`, así que el texto lo compone el MISMO dueño
+      // (`completedNameSpeech`) y se habla aquí. Antes completaba en silencio.
+      const despedida = completedNameSpeech(config.steps, trimmed, lang);
+      if (despedida) {
+        speak(despedida, lang).catch((e) => { logCaughtError('[catch] src/hooks/useOnboarding.ts', e); });
+      }
     },
-    [state, config, persistState, notifyCompleted],
+    [state, config, lang, speak, persistState, notifyCompleted],
   );
 
   const skip = useCallback(() => {

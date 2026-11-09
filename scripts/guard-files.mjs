@@ -47,4 +47,5 @@
   'tests/conversacionGrabacionD702Guard.test.ts',
   'tests/nombreRespuestaDiferidaGuard.test.ts',
   'tests/guardianGuard.test.ts',
+  'tests/onboardingCierreHablaGuard.test.ts',
 ]

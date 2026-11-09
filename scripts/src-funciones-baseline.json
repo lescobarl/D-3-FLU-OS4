@@ -1429,6 +1429,7 @@
     ],
     "src/core/onboarding/onboardingFlow.ts": [
       "advanceOnboarding",
+      "completedNameSpeech",
       "createInitialState",
       "decides",
       "fillTemplate",

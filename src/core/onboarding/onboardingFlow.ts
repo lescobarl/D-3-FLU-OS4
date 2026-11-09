@@ -241,3 +241,34 @@ export function progressInfo(
   const current = Math.min(Math.max(state.stepIndex + 1, 1), total);
   return { current, total };
 }
+
+/**
+ * LO QUE SE HABLA al completar el onboarding con un nombre YA CONOCIDO (perfil existente).
+ *
+ * El atajo de los perfiles existentes (`completeWithName`) marcaba el onboarding como
+ * completado **sin decir nada**: ni «¡{name}, qué bonito nombre!» ni el mensaje de cierre,
+ * porque no pasaba por `advanceOnboarding`. Medido 2026-11-09 (reporte del dueño: «antes
+ * decía que bonito nombre y ya no lo dice» / «decía que la conversación está lista»).
+ *
+ * Dueño ÚNICO de componer estas frases: este módulo (usa el mismo `fillTemplate` y el mismo
+ * `promptForStep` que el camino normal). No hay una segunda copia del saludo.
+ *
+ * @param steps Pasos configurados (`FLU_CONFIG.onboarding.steps`).
+ * @param name Nombre ya conocido de la persona.
+ * @param lang Idioma del overlay.
+ * @returns Frase a hablar ('' si la config no declara saludo ni cierre).
+ */
+export function completedNameSpeech(
+  steps: OnboardingStep[],
+  name: string,
+  lang: 'es' | 'en' = 'es',
+): string {
+  const captured: Record<string, string> = { name: String(name || '').trim() };
+  const nameStep = steps.find((step) => step?.key === 'name' && step?.ack);
+  const ackNombre = nameStep?.ack ? fillTemplate(localized(nameStep.ack, lang), captured) : '';
+  const ultimo = steps[steps.length - 1];
+  const cierre = ultimo?.type === 'ack' ? promptForStep(ultimo, lang, captured) : '';
+  const parte = (texto: string): string => String(texto || '').trim();
+  const dicho = [parte(ackNombre), parte(cierre)].filter((frase) => frase !== '');
+  return dicho.join(' ');
+}
