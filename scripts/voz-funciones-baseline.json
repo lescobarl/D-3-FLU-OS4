@@ -789,6 +789,7 @@
       "resolveSpeakerNameFromUtterance"
     ],
     "src/voice/lib/speechMerge.js": [
+      "bloquesCasiIguales",
       "claveDePalabra",
       "cleanChunks",
       "collapseAsrStutter",

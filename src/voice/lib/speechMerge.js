@@ -71,6 +71,23 @@ function isNumericBlock(words, start, size) {
  * "cer rando cerrando escucha cerrando escucha" salia tal cual porque el bloque
  * repetido ("cerrando escucha") NO esta al inicio.
  */
+/**
+ * Dos bloques del MISMO tamaño son «el mismo repetido» si fallan como mucho UNA palabra
+ * (`flu` / `Flow`): el ASR reemite la frase con otra grafía del wake.
+ * @param {string[]} a Palabras del primer bloque.
+ * @param {string[]} b Palabras del segundo bloque.
+ * @returns {boolean} Verdadero si difieren en una palabra o ninguna.
+ */
+function bloquesCasiIguales(a, b) {
+  if (!a.length || a.length !== b.length) return false
+  let fallos = 0
+  for (let i = 0; i < a.length; i += 1) {
+    if (a[i] !== b[i]) fallos += 1
+    if (fallos > 1) return false
+  }
+  return true
+}
+
 export function collapseRepeatedSpeech(text = '') {
   let current = cleanForSpeech(text)
   if (!current) return ''
@@ -90,6 +107,22 @@ export function collapseRepeatedSpeech(text = '') {
           )
           collapsed = true
           break
+        }
+      }
+    }
+    // MISMA FRASE REEMITIDA CON OTRA GRAFÍA (medido 2026-11-09 11:48, sesión 02ba561f):
+    // el mandato llegó DOS VECES dentro del mismo resultado —
+    // «okay flu Soy Luis regístrame okay Flow Soy Luis regístrame». Solo se colapsa cuando el
+    // texto es EXACTAMENTE dos mitades casi iguales (una palabra de diferencia), para no
+    // comerse una repetición legítima del hablante dentro de una frase.
+    if (!collapsed && words.length % 2 === 0) {
+      const size = words.length / 2
+      if (size >= 3) {
+        const a = sliceWordsLower(words, 0, size).split(' ')
+        const b = sliceWordsLower(words, size, words.length).split(' ')
+        if (bloquesCasiIguales(a, b) && !isNumericBlock(words, 0, size)) {
+          current = cleanForSpeech(words.slice(0, size).join(' '))
+          collapsed = true
         }
       }
     }

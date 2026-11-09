@@ -27,6 +27,7 @@ import { join, relative } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { funcionesNuevas, nombresDeFunciones } from '../scripts/funciones-ratchet.mjs'
 import { resolveRowSpeakerLabel } from '../src/voice/lib/conversationRow.js'
+import { collapseRepeatedSpeech } from '../src/voice/lib/speechMerge.js'
 import { resolverVoz } from '../src/voice/conversation/cierre.ts'
 import { registrarMedidaVoz } from '../src/voice/conversation/sesion.ts'
 import { registerVoiceName, resetVoiceDirectory } from '../src/voice/lib/speakerDirectory.js'
@@ -492,6 +493,21 @@ describe('CONVERSACIÓN — la grabación no duplica el trabajo del audio', () =
     const doble = 'audioBlocks.push(new Int16Array(block))\nevents.push(row)'
     expect(doble).not.toContain('if (!sink)')
     expect('if (!sink) audioBlocks.push(new Int16Array(block))').toContain('if (!sink)')
+  })
+})
+
+describe('CONVERSACIÓN — la frase reemitida con otra grafía no se duplica', () => {
+  it('«flu/Flow» en las dos mitades se colapsa a una (caso medido)', () => {
+    // MEDIDO 2026-11-09 11:48 (sesión 02ba561f): el mandato llegó dos veces en el MISMO
+    // resultado: «okay flu Soy Luis regístrame okay Flow Soy Luis regístrame».
+    expect(
+      collapseRepeatedSpeech('okay flu Soy Luis regístrame okay Flow Soy Luis regístrame'),
+    ).toBe('okay flu Soy Luis regístrame')
+  })
+
+  it('FALSIFICACIÓN: una repetición del hablante DENTRO de la frase no se toca', () => {
+    // No son dos mitades del texto: es una frase con una repetición legítima.
+    expect(collapseRepeatedSpeech('pon la mesa ahora y pon la mesa luego')).toContain('luego')
   })
 })
 
