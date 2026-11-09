@@ -26,6 +26,16 @@ dobles y `tests/bautizoVozIdempotenteGuard.test.ts` (con falsificación).
   era un agujero real —**un id de caso repetido**— queda con barrera medida en 0:
   `idsRepetidos` (`scripts/rutas-dobles.mjs`) + caso en `tests/rutasDoblesGuard.test.ts`,
   falsificado inyectando el duplicado en el catálogo.
+- **C7/C9/C10 cerrados como NO defecto (medido 2026-11-08).**
+  - C9: la ventana de identidad es `minSegundosVozMedida` (1,5 s) **a propósito** —
+    `ingesta.ts` `lanzarMedidaSiCorresponde`: en la sesión 8149df78, 12 de 124 mediciones
+    copiaban hasta 709.824 muestras para sacar un vector de 512. No es un recorte olvidado.
+  - C7 (`vozInsuficiente`, 330 ms < 350 ms): es el PRIMER intento de una locución sobre una
+    ventana con poca voz; la medida se reintenta cuando el búfer crece `minSegundosVozMedida`
+    (freno `muestrasEnUltimoIntento`). En la sesión, tras el fallo de 02:25:57 las medidas de
+    02:26:24/25 salieron `ok` con vector 512: el sistema se recupera solo.
+  - C10 (`asrFinal` con `ms/speechLikeMs/rms: null`): esos campos solo se rellenan cuando el
+    evento trae métricas del motor; Chrome no las entrega. No se inventan.
 ## Límites declarados (no son bloqueos)
 
 - **El replay mide, no es barrera.** `vozReplayDueno20261019Comando` comprueba UN bautizo
