@@ -19,6 +19,7 @@ import { colaDeMuestras, duracionMsDeMuestras, retenerCola } from './muestras.ts
 import { fusionarVoz, ultimaFilaPorFin } from './fila.ts'
 import { registrarMedidaVoz } from './sesion.ts'
 import { asrEmpujaAudio } from './ports.ts'
+import { resolveSrGapTrigger } from '../lib/fluTranscriptPause.js'
 import { logCaughtError } from '../../lib/caughtError.ts'
 import type {
   ConfiguracionConversacion,
@@ -672,6 +673,38 @@ export function crearIngesta({
       }
     }
 
+    // PUERTA srGap (dueño único `resolveSrGapTrigger`): el ASR lleva `srGapCommitMs` sin
+    // entregar nada con una locución abierta → la locución se CIERRA ya, aunque el VAD
+    // siga oyendo ruido de fondo (con ruido `hayVoz` nunca baja y no hay otro cierre).
+    // MEDIDO 2026-11-08 en la sesión del dueño: 16 rebuilds del reconocedor y locuciones
+    // que seguían abiertas 43 s con huecos de ASR de 6,4 s; el texto de los dos tramos
+    // entraba de golpe en una sola fila de 405 caracteres. La sonda existía SIN consumidor.
+    if (estado.abierta && String(estado.abierta.texto || '').trim()) {
+      const ahora = dependencias.reloj.ahora()
+      const hueco = resolveSrGapTrigger({
+        sinceLastResultMs: ahora - (estado.ultimoResultadoMs || ahora),
+        hasOpenLine: true,
+      })
+      if (hueco.fire) {
+        // La CAUSA la decide su dueño (`decidirFrontera`), no esta línea: aquí solo se
+        // le pasa el hueco medido como silencio sin voz.
+        const fronteraHueco = decidirFrontera({
+          medida: { hayVoz: false, silencioMs: hueco.sinceLastResultMs },
+          textoAjeno: false,
+          abierta: true,
+        })
+        if (fronteraHueco.cerrar) {
+          await sesion.cerrarLocucion(
+            estado.abierta,
+            'system',
+            fronteraHueco.causa ?? 'silencio',
+            false,
+          )
+          estado.ultimoResultadoMs = ahora
+        }
+      }
+    }
+
     const abierta = estado.abierta
     if (abierta) {
       // Solo el audio de SU tramo alimenta EN VIVO la medida de la locución
@@ -707,6 +740,8 @@ export function crearIngesta({
   /** Ingesta un resultado del ASR por su tramo (regla 3). */
   async function ingestaAsr(entrada: AsrIngestado): Promise<InstantaneaConversacion> {
     sesion.exigirActiva()
+    // Marca del hueco: cada resultado del ASR reinicia el reloj de `srGapCommitMs`.
+    estado.ultimoResultadoMs = dependencias.reloj.ahora()
     await drenarResultadosAsr()
     await cerrarPendienteAsr()
      let tramoId = String(entrada.tramoId || '').trim() || tramoVigente()

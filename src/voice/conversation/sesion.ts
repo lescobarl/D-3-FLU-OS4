@@ -42,6 +42,13 @@ export type EstadoSesion = {
   /** Último tramo de audio medido: destina el final que llega tras el cierre. */
   ultimoTramoId: string
   ultimaEtiqueta: string
+  /**
+   * Marca del reloj del ÚLTIMO resultado del ASR. Es la medida del hueco que cierra la
+   * locución cuando el reconocedor se queda mudo (`srGapCommitMs`, dueño la sonda del
+   * hueco): sin ella, un ASR caído no cierra nada y la locución vive 43 s
+   * juntando dos frases (medido 2026-11-08 02:26-02:27 en la sesión del dueño).
+   */
+  ultimoResultadoMs: number
   cierreAsrPendiente: MotivoCierre | null
   descartes: DescarteConversacion[]
   filas: Map<string, Fila>
@@ -103,6 +110,7 @@ export function crearEstadoSesion(idiomaInicial: IdiomaLocucion): EstadoSesion {
     silencioPendienteMs: 0,
     ultimoTramoId: '',
     ultimaEtiqueta: '',
+    ultimoResultadoMs: 0,
     cierreAsrPendiente: null,
     descartes: [],
     filas: new Map(),

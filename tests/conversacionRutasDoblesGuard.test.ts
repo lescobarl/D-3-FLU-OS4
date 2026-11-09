@@ -456,3 +456,19 @@ describe('CONVERSACIÓN — una muestra de audio, una locución', () => {
   })
 })
 
+describe('CONVERSACIÓN — el hueco del ASR cierra la locución (srGap CON consumidor)', () => {
+  it('el módulo pregunta al dueño del hueco y sella el reloj en cada resultado', () => {
+    // MEDIDO 2026-11-08: `resolveSrGapTrigger` no tenía NINGÚN consumidor y la locución
+    // vivía 43 s con huecos de ASR de 6,4 s (fila de 405 caracteres con dos frases).
+    expect(fuente('ingesta.ts')).toContain('resolveSrGapTrigger({')
+    expect(fuente('ingesta.ts')).toContain('estado.ultimoResultadoMs = ')
+    expect(fuente('sesion.ts')).toContain('ultimoResultadoMs: number')
+  })
+
+  it('FALSIFICACIÓN: sin consumidor la sonda vuelve a ser una ruta muerta', () => {
+    const sinConsumidor = "import { decidirFrontera } from './frontera.ts'\nconst m = medida"
+    expect(sinConsumidor).not.toContain('resolveSrGapTrigger({')
+    expect('if (hueco.fire)').toContain('fire')
+  })
+})
+
