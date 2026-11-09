@@ -37,6 +37,24 @@ dobles y `tests/bautizoVozIdempotenteGuard.test.ts` (con falsificación).
   - C10 (`asrFinal` con `ms/speechLikeMs/rms: null`): esos campos solo se rellenan cuando el
     evento trae métricas del motor; Chrome no las entrega. No se inventan.
 
+## speakerFlips / sinVector — NO son defecto (medido 2026-11-09, sesión e1b683e9)
+
+`speakerFlips 6` y `sinVector 5` de esa sesión **no son una etiqueta que alterna sola**:
+
+| filas | etiqueta | cos vs la voz de Luis |
+|---|---|---|
+| 1-7 | Hablante 1 → **Luis** (bautizo) | 0.877 · 0.952 · 1.000 · 0.928 |
+| 8, 9 | Hablante 2 | **0.431 · 0.460** ← OTRA voz |
+
+- Los «flips» son la alternancia real entre **la voz de Luis** (filas medidas, cos 0.93-1.00)
+  y **una segunda voz** (cos 0.43): el contador compara etiquetas de filas consecutivas, y
+  con dos personas hablando eso es lo correcto.
+- `sinVector` son las filas **sin vector medido** (tramo corto). Su etiqueta es la
+  provisional del número de esa voz (mandato 2026-10-13: sin evidencia acústica no se
+  escribe un nombre propio), no un nombre inventado ni una segunda identidad.
+
+Se cierran sin tocar código: el número dice que la identidad está haciendo lo que debe.
+
 ## Medida del defecto «se alarga / se pierde lo dicho» (ANTES, 2026-11-08)
 
 Medida con el dueño único del medidor (`scripts/conversacionGrabacionMetricas.mjs`,
