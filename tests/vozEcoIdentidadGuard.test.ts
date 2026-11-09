@@ -115,10 +115,15 @@ describe('eco del TTS en el nombre', () => {
     })
 
     it('prefiere el nombre conocido y no captura "Luis Sigue Sin"', () => {
+        // La GRAFIA la fija el dueno unico `canonicalSpeakerName` (P9.78: "luis" y "Luis"
+        // son UNA sola grafia). Antes esta expectativa medía la minuscula de la base
+        // ("luis"), que es justo lo que salia en la sesion del 2026-11-08 02:27:11
+        // (`conversacion.voz.bautizada {"nombre":"luis"}`). Se declara el cambio: lo que
+        // el caso mide —preferir el nombre conocido— no cambia; la grafia ahora es la canonica.
         expect(
             resolveSpeakerNameFromUtterance('okay flu soy Luis sigue sin funcionar', {
                 knownNames: ['luis'],
             }),
-        ).toBe('luis')
+        ).toBe('Luis')
     })
 })

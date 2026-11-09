@@ -179,6 +179,14 @@ describe('bautizo de voz — el nombre lo resuelve el directorio', () => {
     expect(hoisted.registrarNombre).toHaveBeenCalledWith('Marta', 'Hablante 1')
   })
 
+  it('el nombre sale con GRAFIA CANONICA aunque la base lo guarde en minusculas', () => {
+    // MEDIDO en la sesion real 2026-11-08 02:27:11: la base guardaba "luis" (minuscula)
+    // y el evento del bautizo salio con `{"nombre":"luis"}`.
+    registerVoiceName('speaker_1', 'luis')
+    commitear({ ...FILA })
+    expect(hoisted.registrarNombre).toHaveBeenCalledWith('Luis', 'Hablante 1')
+  })
+
   it('el compositor NO entrega la captura cruda a registrarNombre', () => {
     expect(COMPOSE).toContain('preferKnownVoiceName(')
     expect(COMPOSE).toContain('knownVoiceNames()')

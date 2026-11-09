@@ -17,7 +17,7 @@
 import { getEmbeddingConfig, getModelId } from './embeddingConfig.js'
 import { compareCosineSignatures, isAutoSpeakerLabel, normalizeEmbeddingVector } from './speakerCore.js'
 import { registeredVoiceFloor, sameVoiceFloor, verifiedAnchorFloor } from './speakerClusters.js'
-import { foldSpeakerKey, isProperSpeakerName, normalizeSpeakerLabel } from './speakerLabels.js'
+import { canonicalSpeakerName, foldSpeakerKey, isProperSpeakerName, normalizeSpeakerLabel } from './speakerLabels.js'
 import { getParticipantAnchors } from './participantVoiceAnchors.ts'
 
 /**
@@ -145,7 +145,11 @@ export function preferKnownVoiceName(name = '', knownNames = knownVoiceNames()) 
         }))
         .filter(({ normal }) => normal && (capturado === normal || capturado.startsWith(`${normal} `)))
         .sort((a, b) => b.normal.length - a.normal.length)
-    return candidatos[0]?.original || dicho
+    // GRAFIA CANONICA (dueno unico `canonicalSpeakerName`, P9.78): la base puede
+    // guardar el nombre en minusculas ("luis", medido 2026-11-08 02:27:11: el evento
+    // del bautizo salio con ese nombre) y la fila salia con esa grafia. Un nombre propio
+    // se presenta con inicial mayuscula: "luis" y "Luis" son UNA sola grafia.
+    return canonicalSpeakerName(candidatos[0]?.original || dicho)
 }
 
 /**
