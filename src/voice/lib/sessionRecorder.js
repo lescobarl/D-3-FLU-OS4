@@ -669,9 +669,12 @@ export function pushSessionAudio(samples, sampleRate) {
     const room = maxAudioSamples() - audioSamples
     if (room > 0) {
       const block = room >= pcm.length ? pcm : pcm.subarray(0, room)
-      // Copia propia: un subarray mantendría vivo el buffer entero, y el audio
-      // original puede reutilizarse aguas arriba.
-      audioBlocks.push(new Int16Array(block))
+      // Con SUMIDERO la sesión YA está en disco: la copia en memoria sobra y duplicaba
+      // el trabajo de cada bloque (≈50/s, hasta 57 MB retenidos). MEDIDO 2026-11-09 en la
+      // sesión del dueño (e1b683e9): con la grabación encendida el ASR cayó de 374 a 103
+      // eventos/minuto, el hueco mediano subió de 23 a 113 ms y la latencia final→fila
+      // creció de 1,9 s a 95 s en 4 minutos. Una copia, no dos.
+      if (!sink) audioBlocks.push(new Int16Array(block))
       audioSamples += block.length
     }
     if (audioSamples >= maxAudioSamples()) audioTruncated = true
@@ -721,7 +724,9 @@ export function recordSessionEvent(category, event, data = null) {
       event: clipString(event, 160),
       data: safeData(data),
     }
-    events.push(row)
+    // Con sumidero, el evento va a disco y NO se retiene en memoria (era la segunda
+    // copia del mismo caudal: `safeData` + `JSON.stringify` por cada traza).
+    if (!sink) events.push(row)
     const max = resolveMaxEvents()
     if (events.length > max) {
       const excess = events.length - max

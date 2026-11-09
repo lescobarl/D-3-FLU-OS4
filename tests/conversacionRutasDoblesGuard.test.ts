@@ -456,6 +456,24 @@ describe('CONVERSACIÓN — una muestra de audio, una locución', () => {
   })
 })
 
+describe('CONVERSACIÓN — la grabación no duplica el trabajo del audio', () => {
+  const RECORDER = readFileSync(join(process.cwd(), 'src/voice/lib/sessionRecorder.js'), 'utf8')
+
+  it('con sumidero NO hay copia en memoria del audio ni de los eventos', () => {
+    // MEDIDO 2026-11-09 (e1b683e9): con la grabación encendida el ASR cayó de 374 a 103
+    // eventos/min, el hueco pasó de 23 a 113 ms y la latencia final→fila de 1,9 s a 95 s.
+    // La grabación hacía DOS copias de cada bloque (~50/s) y de cada traza.
+    expect(RECORDER).toContain('if (!sink) audioBlocks.push(new Int16Array(block))')
+    expect(RECORDER).toContain('if (!sink) events.push(row)')
+  })
+
+  it('FALSIFICACIÓN: sin la guarda vuelve la segunda copia', () => {
+    const doble = 'audioBlocks.push(new Int16Array(block))\nevents.push(row)'
+    expect(doble).not.toContain('if (!sink)')
+    expect('if (!sink) audioBlocks.push(new Int16Array(block))').toContain('if (!sink)')
+  })
+})
+
 describe('CONVERSACIÓN — la caja no repinta la misma frase', () => {
   const COMPOSE = readFileSync(
     join(process.cwd(), 'src/voice/compose/conversationMotorProducto.js'),
