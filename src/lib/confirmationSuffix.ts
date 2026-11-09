@@ -17,6 +17,14 @@ export const CONFIRMATION_SUFFIXES: readonly string[] = Object.freeze([
   'registrados',
   'registradas',
   'registered',
+  // IMPERATIVO pegado al nombre (medido 2026-11-09 10:35, sesion 36a8bc05): el dueño dijo
+  // «okay flu soy Luis regís regístrame» y el nombre quedo «Luis Regis» porque el parser no
+  // conocia la forma verbal y se tragaba las dos palabras siguientes.
+  'registra',
+  'registrame',
+  'registrate',
+  'registrar',
+  'regis',
 ])
 
 const SUFFIX_AT_END = new RegExp(

@@ -173,6 +173,14 @@ describe('bautizo de voz — el nombre lo resuelve el directorio', () => {
     expect(hoisted.registrarNombre).toHaveBeenCalledWith('Luis', 'Hablante 1')
   })
 
+  it('«ok flu soy Luis regís regístrame» bautiza «Luis», no «Luis Regis»', () => {
+    // MEDIDO 2026-11-09 10:35 (sesión 36a8bc05): sin «Luis» en la base, el parser se tragó
+    // «regís regístrame» y bautizó «Luis Regis». Las formas verbales son sufijo de
+    // confirmación (`confirmationSuffix`, dueño único del vocabulario).
+    commitear({ ...FILA, texto: 'okay flu soy Luis regís regístrame' })
+    expect(hoisted.registrarNombre).toHaveBeenCalledWith('Luis', 'Hablante 1')
+  })
+
   it('una voz NUEVA que se presenta conserva su nombre (no hay conocido que preferir)', () => {
     registerVoiceName('speaker_1', 'Luis')
     commitear({ ...FILA, texto: 'ok flu soy Marta' })
