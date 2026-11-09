@@ -288,7 +288,25 @@ function indexSources() {
   return sources
 }
 
-export function checkFull(ownerSymbols, sources) {
+/**
+ * PUERTOS declarados: un dueño puede aparecer UNA vez más en la fachada del
+ * módulo como adaptador que solo delega (aquí `producto.ts` encola y llama a la
+ * implementación). Es DATO, no una ceguera: el dueño sigue exigiendo UNA
+ * definición, el puerto se declara y una excepción sin uso es error. Cualquier
+ * tercera definición sigue siendo `dueño duplicado`.
+ */
+export const PUERTOS = Object.freeze({
+  registrarNombre: 'src/voice/conversation/producto.ts',
+})
+
+/**
+ * Revisa los símbolos dueños contra las fuentes.
+ * @param {string[]} ownerSymbols Símbolos dueños declarados en el mapa.
+ * @param {Array<{path: string, text: string}>} sources Fuentes a revisar.
+ * @param {Record<string, string>} [puertos] Puerto declarado por símbolo (adaptador que solo delega).
+ * @returns {string[]} Errores encontrados.
+ */
+export function checkFull(ownerSymbols, sources, puertos = PUERTOS) {
   const errors = []
   const definitions = new Map(ownerSymbols.map((symbol) => [symbol, []]))
   for (const { path, text } of sources) {
@@ -305,13 +323,29 @@ export function checkFull(ownerSymbols, sources) {
     }
   }
   for (const [symbol, defs] of definitions) {
+    const puerto = puertos[symbol]
     const total = defs.reduce((sum, def) => sum + def.count, 0)
     if (total === 0) {
       errors.push(`dueño declarado sin definición "${symbol}"`)
-    } else if (defs.length > 1) {
-      errors.push(`dueño duplicado "${symbol}": ${defs.map((d) => `${d.file}(${d.count})`).join(', ')}`)
-    } else if (total > 1) {
-      errors.push(`dueño definido ${total} veces en ${defs[0].file}: "${symbol}"`)
+      continue
+    }
+    if (!puerto) {
+      if (defs.length > 1) {
+        errors.push(`dueño duplicado "${symbol}": ${defs.map((d) => `${d.file}(${d.count})`).join(', ')}`)
+      } else if (total > 1) {
+        errors.push(`dueño definido ${total} veces en ${defs[0].file}: "${symbol}"`)
+      }
+      continue
+    }
+    const enPuerto = defs.filter((def) => def.file === puerto)
+    const duenos = defs.filter((def) => def.file !== puerto)
+    if (enPuerto.length === 0) {
+      errors.push(`puerto declarado sin definición "${symbol}" en ${puerto}`)
+    }
+    if (duenos.length !== 1) {
+      errors.push(`dueño duplicado "${symbol}": ${duenos.map((d) => `${d.file}(${d.count})`).join(', ') || '(ninguno fuera del puerto)'}`)
+    } else if (duenos[0].count > 1) {
+      errors.push(`dueño definido ${duenos[0].count} veces en ${duenos[0].file}: "${symbol}"`)
     }
   }
   return errors

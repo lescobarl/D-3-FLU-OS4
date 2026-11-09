@@ -542,3 +542,44 @@ describe('Gate de dueño — falsificación', () => {
         }
     });
 });
+
+describe('Gate de dueño — puerto declarado vs implementación', () => {
+    const PUERTO = 'src/voice/conversation/producto.ts';
+    const impl = {
+        path: 'src/voice/conversation/motor.ts',
+        text: 'async function registrarNombre(datos: object) { void datos }',
+    };
+    const port = {
+        path: PUERTO,
+        text: 'registrarNombre: (nombre, etiqueta) => { void nombre; void etiqueta }',
+    };
+
+    it('acepta la implementación del dueño + el puerto declarado', () => {
+        expect(checkFull(['registrarNombre'], [impl, port], { registrarNombre: PUERTO })).toEqual([]);
+    });
+
+    it('FALSIFICACIÓN: una tercera definición fuera del puerto sigue siendo dueño duplicado', () => {
+        const intruso = {
+            path: 'src/voice/conversation/otro.ts',
+            text: 'export function registrarNombre() {}',
+        };
+        expect(
+            checkFull(['registrarNombre'], [impl, port, intruso], { registrarNombre: PUERTO }),
+        ).toEqual([
+            'dueño duplicado "registrarNombre": src/voice/conversation/motor.ts(1), src/voice/conversation/otro.ts(1)',
+        ]);
+    });
+
+    it('FALSIFICACIÓN: un puerto declarado sin definición es excepción muerta', () => {
+        expect(checkFull(['registrarNombre'], [impl], { registrarNombre: PUERTO })).toEqual([
+            'puerto declarado sin definición "registrarNombre" en src/voice/conversation/producto.ts',
+        ]);
+    });
+
+    it('sin puerto declarado, dos ficheros siguen siendo dueño duplicado', () => {
+        expect(checkFull(['registrarNombre'], [impl, port], {})).toEqual([
+            'dueño duplicado "registrarNombre": src/voice/conversation/motor.ts(1), src/voice/conversation/producto.ts(1)',
+        ]);
+    });
+});
+

@@ -76,7 +76,6 @@ import { formatGeminiUserMessage, buildGeminiDiagnosticsFromError } from '../lib
 import { resolveWakeWords } from '../lib/wakeWords.js'
 import { WAKE_POLICY_ORDER, applyWakePolicyOrder, resolveWakePolicyOrder, wakePolicySpeech } from '../lib/wakePolicy.js'
 import { normalizeLang } from '../../core/config/localeConfig.ts'
-import { resolveSpeakerNameFromUtterance } from '../lib/speakerPolicy.js'
 // Ruta única: useFluParticipant vive solo en src/hooks/useFluParticipant.ts.
 // El motor de voz la importa aquí solo como fallback defensivo; en producción App.tsx inyecta su instancia vía participantRef (mismo módulo).
 import { useFluParticipant } from '../../hooks/useFluParticipant'
@@ -2338,13 +2337,11 @@ export function useFluVoiceAssistant({
           })
           return false
         }
-        // Problema 5: «ok flu soy X» bautiza la VOZ también en el motor (sus
-        // filas siguientes llevan el nombre); el registro sigue en su dueño.
-        if (plan.action.command === COMMAND_IDS.REGISTRAR_PARTICIPANTE) {
-          const knownNames = [...participantVoiceAnchors.map((anchor) => anchor?.name), ...speakerClustersRef.current.map((cluster) => cluster?.label)].filter(Boolean)
-          const nombreBautizo = resolveSpeakerNameFromUtterance(text, { knownNames })
-          if (nombreBautizo) motorConversacionRef.current?.registrarNombre?.(nombreBautizo)
-        }
+        // El bautizo de la VOZ («ok flu soy X») NO se dispara aquí: lo dispara el
+        // cableado del motor en `row.committed` (conversationMotorProducto), que es
+        // el único que conoce el texto canónico y la etiqueta de la fila. Un segundo
+        // disparo desde el hook es ruta doble (caso declarado en
+        // scripts/rutas-dobles-baseline.json).
         await invoke(() => dispatchPassiveVoiceCommand(plan.action.command, plan.phrase))
         return true
       }
@@ -2354,7 +2351,7 @@ export function useFluVoiceAssistant({
       }
       return false
     },
-    [conversationActiveRef, dispatchPassiveVoiceCommand, processConversationFluQuery, resolvedWakeWords, userRowsTextView, handleWakePolicyOrder, participantVoiceAnchors],
+    [conversationActiveRef, dispatchPassiveVoiceCommand, processConversationFluQuery, resolvedWakeWords, userRowsTextView, handleWakePolicyOrder],
   )
 
   // Despacho en SEGUNDO PLANO del motor de conversación: el módulo no espera la

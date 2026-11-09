@@ -30,6 +30,9 @@ const REVISION = readFileSync('src/voice/conversation/revision.ts', 'utf8')
 // usuario la escribe el módulo (pasivo.ts) y el nombre/evidencia los junta el HOOK.
 const TURN_ROW = readFileSync('src/voice/conversation/pasivo.ts', 'utf8')
 const HOOK = readFileSync('src/voice/hooks/useFluVoiceAssistant.js', 'utf8')
+// El bautizo de la voz (`ok flu soy X`) lo dispara el cableado del motor, no el hook
+// (caso declarado en scripts/rutas-dobles-baseline.json).
+const COMPOSE = readFileSync('src/voice/compose/conversationMotorProducto.js', 'utf8')
 
 const json = (l: string): Record<string, unknown> => {
   try {
@@ -152,10 +155,11 @@ describe('rutina de revision - la traza de UNA corrida cumple los invariantes', 
     expect(REVISION.includes('revisionMasCorta'), 'sin revision-mas-corta').toBe(false)
     expect(REVISION.includes('palabrasNuevas > palabrasAnteriores'), 'crece solo con MAS palabras').toBe(true)
     expect(REVISION.includes('pintar: false'), 'perder palabras no se pinta').toBe(true)
-    // Nombre: UNA via por DATO (el mandato "soy X") + la MEDIDA del turno. Corte
-    // 2026-10-26: el dueno de juntarlas es el HOOK (preflightEvidenceMeasured se
-    // retiró con la tubería vieja); la fila no asciende por voz.
-    expect(HOOK.includes('resolveSpeakerNameFromUtterance('), 'el dato es el mandato').toBe(true)
+    // Nombre: UNA via por DATO (el mandato "soy X") + la MEDIDA del turno. El dato
+    // lo toma el DISPARADOR UNICO del bautizo — el cableado del motor, en
+    // `row.committed` —; el hook ya no lo resuelve (caso declarado en
+    // scripts/rutas-dobles-baseline.json).
+    expect(COMPOSE.includes('detectWakeIntroducedName('), 'el dato es el mandato').toBe(true)
     expect(HOOK.includes('evidenciaAcustica: audioSnapshot.length > 0'), '"hay audio" NO es evidencia').toBe(false)
     expect((HOOK.match(/evidenciaAcustica: (true|false)/g) || []).filter((m) => m === 'evidenciaAcustica: true').length, 'la marca true sale SOLO de la medida; el hook ya no mide').toBe(0)
     expect(TURN_ROW.includes('resolveRegisteredSpeakerName'), 'la fila no asciende por voz').toBe(false)

@@ -38,6 +38,7 @@
 /tests/conversacionRutasDoblesGuard.test.ts @lescobarl
 /scripts/conversacion-rutas-dobles-baseline.json @lescobarl
 /tests/conversacionGrabacionGuard.test.ts @lescobarl
+# Medidor y líneas base de la conversación REAL (el criterio que juzga el agente)
 /scripts/conversacionGrabacionMetricas.mjs @lescobarl
 /scripts/conversacion-grabacion-baseline.json @lescobarl
 /scripts/conversacion-grabacion-baseline-80a.json @lescobarl

@@ -25,6 +25,8 @@
   'tests/turnSnapshotFromFilaGuard.test.ts',
   'tests/conversationRecordedSessionGuard.test.ts',
   'tests/rutasDoblesGuard.test.ts',
+  'tests/codeownersUnicoGuard.test.ts',
+  'tests/bautizoVozIdempotenteGuard.test.ts',
   'tests/persistRowSingleWriterGuard.test.ts',
   'tests/participantRemoveSingleCascadeGuard.test.ts',
   'tests/voiceProfileSingleOwnerGuard.test.ts',

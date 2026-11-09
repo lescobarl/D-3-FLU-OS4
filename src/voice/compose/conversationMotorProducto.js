@@ -49,14 +49,24 @@ export function crearMotorConversacionHook({
   onFraseCanonica,
   onLocucionCommiteada,
 }) {
+  // ECO sin recorrer el historial en cada evento: el último texto de FLU se
+  // cachea y solo se recalcula cuando el historial cambia (misma fuente,
+  // `resolveEchoContext`). Antes cada evento del ASR caminaba toda la
+  // conversación y el coste crecía con la sesión.
+  let historialCacheado = null
+  let ultimoDichoCacheado = ''
+  const leerUltimoTextoDicho = () => {
+    const historial = useIntegrationStore.getState().conversationHistory
+    if (historial !== historialCacheado) {
+      historialCacheado = historial
+      ultimoDichoCacheado = resolveEchoContext(historial, getLastCompletedSpeechAt()).lastAssistantText
+    }
+    return ultimoDichoCacheado
+  }
   const motor = crearMotorConversacionProducto({
     idioma,
     participantId: useIntegrationStore.getState().activePersonId,
-    ultimoTextoDicho: () =>
-      resolveEchoContext(
-        useIntegrationStore.getState().conversationHistory,
-        getLastCompletedSpeechAt(),
-      ).lastAssistantText,
+    ultimoTextoDicho: leerUltimoTextoDicho,
     // Caso 11: un id por grabación — la conversación ADOPTA el sessionId del
     // recorder (encendido antes de la escucha). Sin recorder activo el
     // proveedor devuelve '' y el módulo acuña el propio (N/A).
@@ -93,11 +103,14 @@ export function crearMotorConversacionHook({
       !interim && Boolean(detectWakeIntroducedName(frase, wakeWords))
     // La wake SOLA (“Okay flu”) también se difiere: el ASR la cierra antes de
     // “Soy Luis regístrame…” y FLU respondía “Te escucho.” en medio.
+    // La wake SOLA no es una orden: no se despacha y NO se responde. Antes se
+    // difería 1,2 s y FLU contestaba («Te escucho») en mitad del habla.
     const split = splitTranscriptAtWakeWord(frase, wakeWords)
     const esSoloWake =
       split.wakeWordMatched &&
       !String(split.commandText || split.afterWake || '').trim()
-    if (esMandatoNombre || esSoloWake) {
+    if (esSoloWake) return
+    if (esMandatoNombre) {
       nameCommandDeferPayload = { frase, opciones: { interim } }
       nameCommandDeferTimer = setTimeout(() => {
         nameCommandDeferTimer = 0
@@ -142,6 +155,23 @@ export function crearMotorConversacionHook({
     }
     if (evento.tipo !== 'row.committed') return
     useIntegrationStore.getState().setLastCommittedTranscript(evento.fila.texto)
+    // ¿Locución NUEVA o promoción de la MISMA fila (`revision > 1`)? UNA sola
+    // lectura del predicado; la usan el bautizo y la frontera de turno. Antes
+    // cada uno llevaba su propia variable para la misma pregunta.
+    const esNuevaLocucion = evento.fila.locutionId !== ultimaCommiteada
+    // NOMBRE POR VOZ: si la fila dice «ok flu soy X», se bautiza ESA voz y se
+    // renombran sus filas ya escritas (el hablante es el único campo
+    // actualizable). ÚNICO disparador — aquí, en el cableado del motor, que es
+    // quien tiene el texto canónico y la etiqueta (WHERE) — y el renombrado lo
+    // hace el módulo: este archivo NO escribe filas. El hook ya no lo dispara
+    // (caso declarado en `scripts/rutas-dobles-baseline.json`).
+    const nombreDicho =
+      esNuevaLocucion &&
+      detectWakeIntroducedName(
+        String(evento.fila.texto || ''),
+        FLU_CONFIG.voiceCommands.wakeWords || [],
+      )
+    if (nombreDicho) motor.registrarNombre(nombreDicho, evento.fila.etiqueta)
     // Revisión por FUSIÓN de una continuación/duplicado: el snapshot inicial ya
     // existe con el mismo locutionId; el dueño único recibe el texto/tramo/firma
     // finales como revisión (analizador: última por locutionId).
@@ -191,7 +221,7 @@ export function crearMotorConversacionHook({
     // por `speaker.labeled`, no por aquí: el texto y el resto de la fila no se
     // reescriben (mandato 2026-10-30).
     // Frontera de TURNO: una locución nueva. La promoción de la MISMA fila no lo es.
-    if (evento.fila.locutionId !== ultimaCommiteada) {
+    if (esNuevaLocucion) {
       ultimaCommiteada = evento.fila.locutionId
       ultimaDespachada = ''
       onLocucionCommiteada?.(evento.fila)
