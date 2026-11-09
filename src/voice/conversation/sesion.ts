@@ -7,6 +7,8 @@
  */
 import { crearReglasCierre } from './cierre.ts'
 import type { ReglasCierre } from './cierre.ts'
+import { compareCosineSignatures } from '../lib/speakerCore.js'
+import { sameVoiceFloor } from '../lib/speakerClusters.js'
 import type { IdentidadDecidida, PlantillaVoz } from './identidad.ts'
 import type {
   ContarDescarte,
@@ -148,7 +150,15 @@ export function registrarMedidaVoz(
   if (!identidad.continuidad) estado.contadorVoces += 1
   const existente = estado.plantillasVoz.get(identidad.vozId)
   if (existente) {
-    existente.vector = [...vector]
+    // REFRESCO SOLO SI ES LA MISMA VOZ (medido 2026-11-09 10:35, sesión 36a8bc05): un turno
+    // CORTO de otra voz decidido como continuidad sobrescribía el ancla y desde ahí la fila
+    // de Luis llevaba el timbre de la mujer (cos 0.436 contra su propio ancla). Un ancla no
+    // se envenena con una medida ajena: mismo piso que decide la continuidad.
+    const ancla = Array.isArray(existente.vector) ? existente.vector : []
+    const mismaVoz =
+      ancla.length === 0 ||
+      compareCosineSignatures([...vector], [...ancla]) >= sameVoiceFloor()
+    if (mismaVoz) existente.vector = [...vector]
     if (identidad.hablante) existente.etiqueta = identidad.hablante
     return
   }

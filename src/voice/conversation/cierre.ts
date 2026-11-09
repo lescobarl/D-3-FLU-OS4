@@ -17,6 +17,8 @@ import { decidirRevision } from './revision.ts'
 import { decidirIdentidad, plantillasDe } from './identidad.ts'
 import type { PlantillaVoz } from './identidad.ts'
 import { registrarMedidaVoz } from './sesion.ts'
+import { compareCosineSignatures } from '../lib/speakerCore.js'
+import { sameVoiceFloor } from '../lib/speakerClusters.js'
 import { concatenarMuestras, duracionMsDeMuestras } from './muestras.ts'
 import { logCaughtError } from '../../lib/caughtError.ts'
 import { normalizeForMatch } from '../../lib/textUtils.ts'
@@ -180,8 +182,19 @@ export function resolverVoz(
 ): VozEtiqueta {
   const vozId = String(voz.vozId || '').trim()
   const registrado = vozId ? nombresPorVoz.get(vozId) : undefined
-  const nombre =
-    registrado ?? (voz.nombreConfirmado ? String(voz.nombre || '').trim() : '')
+  // EL NOMBRE NO SE HEREDA SIN SU TIMBRE (medido 2026-11-09 10:35, sesión 36a8bc05): dos
+  // filas con cos 0.566 y 0.436 contra el ancla de Luis salieron etiquetadas «Luis» porque
+  // la voz recibió SU clave. Si la medida del turno no casa con el ancla de esa voz, el
+  // nombre no se afirma: la fila degrada a su etiqueta provisional («Hablante N»).
+  const ancla = vozId ? plantillasVoz.get(vozId)?.vector : null
+  const medida = Array.isArray(voz.vector) ? voz.vector : null
+  const mismaVoz =
+    !Array.isArray(ancla) || ancla.length === 0 || !medida || medida.length === 0
+      ? true
+      : compareCosineSignatures([...medida], [...ancla]) >= sameVoiceFloor()
+  const nombre = mismaVoz
+    ? registrado ?? (voz.nombreConfirmado ? String(voz.nombre || '').trim() : '')
+    : ''
   return {
     nombre,
     nombreConfirmado: Boolean(nombre),

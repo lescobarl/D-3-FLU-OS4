@@ -27,6 +27,8 @@ import { join, relative } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { funcionesNuevas, nombresDeFunciones } from '../scripts/funciones-ratchet.mjs'
 import { resolveRowSpeakerLabel } from '../src/voice/lib/conversationRow.js'
+import { resolverVoz } from '../src/voice/conversation/cierre.ts'
+import { registrarMedidaVoz } from '../src/voice/conversation/sesion.ts'
 import { registerVoiceName, resetVoiceDirectory } from '../src/voice/lib/speakerDirectory.js'
 
 type Fuente = Readonly<{ nombre: string; src: string }>
@@ -507,6 +509,37 @@ describe('CONVERSACIÓN — el hueco del ASR cierra la locución (srGap CON cons
     const sinConsumidor = "import { decidirFrontera } from './frontera.ts'\nconst m = medida"
     expect(sinConsumidor).not.toContain('resolveSrGapTrigger({')
     expect('if (hueco.fire)').toContain('fire')
+  })
+})
+
+describe('CONVERSACIÓN — un nombre no cruza de voz', () => {
+  /** Vector con coseno EXACTO `c` respecto a [1,0,0]. */
+  const v = (c: number): number[] => [c, Math.sqrt(Math.max(0, 1 - c * c)), 0]
+  const ANCLA = v(1)
+  // MEDIDO 2026-11-09 10:35 (sesión 36a8bc05): dos filas de la voz de la mujer con cos
+  // 0.566 y 0.436 contra el ancla de Luis salieron etiquetadas «Luis».
+  const AJENA = v(0.436)
+
+  it('una medida ajena NO refresca el ancla de la voz nombrada', () => {
+    const estado = {
+      plantillasVoz: new Map([['v1', { vector: [...ANCLA], etiqueta: 'Luis' }]]),
+      contadorVoces: 1,
+    }
+    registrarMedidaVoz(estado as never, AJENA, {
+      vozId: 'v1',
+      continuidad: true,
+      hablante: 'Luis',
+    } as never)
+    expect(estado.plantillasVoz.get('v1')?.vector).toEqual(ANCLA)
+  })
+
+  it('sin timbre que lo sostenga, el nombre NO se aplica (degrada a Hablante N)', () => {
+    const nombres = new Map([['v1', 'Luis']])
+    const plantillas = new Map([['v1', { vector: [...ANCLA], etiqueta: 'Luis' }]])
+    const conSuVoz = resolverVoz({ vozId: 'v1', vector: [...ANCLA] } as never, true, nombres, plantillas as never)
+    const conVozAjena = resolverVoz({ vozId: 'v1', vector: AJENA } as never, true, nombres, plantillas as never)
+    expect(conSuVoz.nombre).toBe('Luis')
+    expect(conVozAjena.nombre).toBe('')
   })
 })
 

@@ -73,6 +73,12 @@ export type EvidenciaVoz = Readonly<{
   continuidad?: boolean
   /** ¿Hubo solape de voces? Se declara, no se adivina. */
   overlap?: boolean
+  /**
+   * Vector MEDIDO del turno (evidencia de timbre). Lo usa `resolverVoz` para no aplicar un
+   * nombre registrado a una medida que no es la de esa voz (medido 2026-11-09 10:35: dos
+   * filas con cos 0.436 contra el ancla de Luis salieron «Luis»).
+   */
+  vector?: readonly number[]
 }>
 
 /** Resultado del ASR con la identidad de su tramo. */
