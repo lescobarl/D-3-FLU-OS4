@@ -36,6 +36,33 @@ dobles y `tests/bautizoVozIdempotenteGuard.test.ts` (con falsificación).
     02:26:24/25 salieron `ok` con vector 512: el sistema se recupera solo.
   - C10 (`asrFinal` con `ms/speechLikeMs/rms: null`): esos campos solo se rellenan cuando el
     evento trae métricas del motor; Chrome no las entrega. No se inventan.
+
+## Medida del defecto «se alarga / se pierde lo dicho» (ANTES, 2026-11-08)
+
+Medida con el dueño único del medidor (`scripts/conversacionGrabacionMetricas.mjs`,
+`leerGrabacion` + `medirGrabacion`) sobre la sesión real preservada en
+`%TEMP%\flu-preservado\sesion-2026-11-08-0225\`:
+
+| Métrica | Valor |
+|---|---|
+| `tailLossChars` | **508** caracteres dictados que NO llegaron a la fila |
+| `rowsNotEqualAnyFinal` | **7** de 9 filas |
+| pérdidas por turno | 474→210 (−264) · 160→17 (−143) · 128→38 (−90) · 138→127 (−11) |
+| `maxGapMs` | **17.573 ms** de ASR mudo |
+| `chromeRawGapsOverStall` | **5** huecos por encima del umbral de stall |
+| `speakerFlips` | 3 |
+| `sinVector` | 1 |
+| `commitsAfterStop` / `duplicateTurnIds` | 0 / 0 |
+
+Estos son los números que tiene que BAJAR la próxima sesión. Se recalculan con:
+
+```
+node --input-type=module -e "import {leerGrabacion,medirGrabacion} from './scripts/conversacionGrabacionMetricas.mjs'; const g=leerGrabacion('<carpeta-de-la-sesion>'); console.log(JSON.stringify(medirGrabacion(g),null,1))"
+```
+
+C4 (srGap con consumidor) y C5 (sin solape) atacan `maxGapMs`, `speakerFlips` y la pérdida
+por turno: una locución que se corta a tiempo se escribe con SU texto, en vez de acumular
+y quedarse con la última reentrega.
 ## Límites declarados (no son bloqueos)
 
 - **El replay mide, no es barrera.** `vozReplayDueno20261019Comando` comprueba UN bautizo
