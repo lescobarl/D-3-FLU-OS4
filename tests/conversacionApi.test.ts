@@ -423,7 +423,7 @@ describe('regla 5 — etiquetas con evidencia y solo la voz que habló', () => {
     await api.ingestAsr(
       asr(tramoUno, { texto: 'ok flu soy ana', voz: { vozId: 'A', hablante: 'Hablante 1' } }),
     )
-    const nombrada = api.registerName({ nombre: 'Ana' })
+    const nombrada = await api.registerName({ nombre: 'Ana' })
     expect(nombrada.descartes).toEqual([])
     await api.ingestAsr(asr(tramoUno, { texto: 'ok flu soy ana', final: true }))
     const cerrada = await cerrarPorSilencio(api, SAMPLE_RATE)
@@ -449,7 +449,7 @@ describe('regla 5 — etiquetas con evidencia y solo la voz que habló', () => {
     )
     // La medida de respaldo resuelve la voz AL CERRAR: sin vozId aún, el nombre
     // no se pierde — queda pendiente y se aplica a la voz que cierre la locución.
-    const pendiente = api.registerName({ nombre: 'Ana' })
+    const pendiente = await api.registerName({ nombre: 'Ana' })
     expect(pendiente.descartes).toEqual([])
     await api.ingestAsr(
       asr(tramoUno, { texto: 'ok flu soy ana', final: true, voz: { vozId: 'A' } }),
@@ -473,7 +473,7 @@ describe('regla 5 — etiquetas con evidencia y solo la voz que habló', () => {
     await api.start()
     const tramoId = await abrirConVoz(api)
     await api.ingestAsr(asr(tramoId, { texto: 'hola', voz: { vozId: 'A' } }))
-    expect(() => api.registerName({ nombre: '?' })).toThrow(/nombre \?/)
+    await expect(api.registerName({ nombre: '?' })).rejects.toThrow(/nombre \?/)
   })
 })
 

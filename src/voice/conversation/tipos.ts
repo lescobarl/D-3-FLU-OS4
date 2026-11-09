@@ -111,6 +111,12 @@ export type DatosNombre = Readonly<{
   nombre: string
   /** Voz que lo dijo; si falta, la de la locución abierta. */
   vozId?: string
+  /**
+   * Etiqueta de la fila que trajo el nombre (la que la voz venía usando). Es el
+   * `WHERE` del renombrado cuando la locución ya cerró y no hay `vozId` a mano:
+   * el módulo la resuelve contra su plantilla (misma clave por voz).
+   */
+  etiqueta?: string
 }>
 
 /** Motivo de un descarte contado (nunca silencioso). */
@@ -245,8 +251,8 @@ export interface ConversacionApi {
   snapshot(): InstantaneaConversacion
   /** Suscribe a los 6 eventos; devuelve la baja. */
   subscribe(oyente: (evento: EventoConversacion) => void): () => void
-  /** Bautiza SOLO la voz que dijo `ok flu soy XXX`. */
-  registerName(datos: DatosNombre): InstantaneaConversacion
+  /** Bautiza SOLO la voz que dijo `ok flu soy XXX` y renombra sus filas. */
+  registerName(datos: DatosNombre): Promise<InstantaneaConversacion>
 }
 
 /** Tramo de audio vivo: `[inicio, fin]` con su frecuencia y su turno. */

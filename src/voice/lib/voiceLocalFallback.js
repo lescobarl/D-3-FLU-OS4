@@ -97,6 +97,11 @@ export function getSilentDegradeConfig() {
       stallMs + (marginMs > 0 ? marginMs : LOCAL_FALLBACK_DEFAULTS.silentDegradeStallMarginMs),
     ),
     rebuilds: rebuilds > 0 ? Math.max(1, Math.floor(rebuilds)) : LOCAL_FALLBACK_DEFAULTS.silentDegradeRebuilds,
+    // Racha de reinicios SIN un solo final que prueba motor VIVO y MUDO.
+    deadRebuilds:
+      Number(cfg.silentDegradeDeadRebuilds) > 0
+        ? Math.max(1, Math.floor(Number(cfg.silentDegradeDeadRebuilds)))
+        : LOCAL_FALLBACK_DEFAULTS.silentDegradeDeadRebuilds,
     minSpeechLikeMs:
       minSpeechLikeMs > 0 ? minSpeechLikeMs : LOCAL_FALLBACK_DEFAULTS.silentDegradeMinSpeechLikeMs,
     stallMs,
@@ -200,8 +205,14 @@ export function reportLocalResultGate({ decision, phrase = '', isFinal = true, l
  */
 export function shouldDegradeSilentRecognition({ sinceSrResultMs, speechLikeMs, failedRebuilds }) {
   const cfg = getSilentDegradeConfig()
+  // La ventana larga es la puerta de siempre: sin ella no se degrada nada.
+  if (!(Number(sinceSrResultMs) >= cfg.silentMs)) return false
+  // MOTOR VIVO Y MUDO (medido en la sesión real d702: 13 reinicios seguidos sin
+  // un solo `asrFinal`): el reconocedor no vuelve por sí mismo y la evidencia de
+  // habla no puede exigirse — el silencio del micro es indistinguible del habla
+  // que Chrome ya no entrega. Con la racha medida se escala al motor local.
+  if (Number(failedRebuilds) >= cfg.deadRebuilds) return true
   return (
-    Number(sinceSrResultMs) >= cfg.silentMs &&
     Number(speechLikeMs) >= cfg.minSpeechLikeMs &&
     Number(failedRebuilds) >= cfg.rebuilds
   )

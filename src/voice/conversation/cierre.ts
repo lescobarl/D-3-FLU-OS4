@@ -149,9 +149,16 @@ export type ReglasCierre = Readonly<{
    * @param locucionId Fila commiteada a reetiquetar.
    * @param vozId Voz medida que identifica al hablante de esa fila.
    * @param hablante Etiqueta de la medida (nombre registrado o `Hablante N`).
+   * @param evidenciaPedida `'nombre'` cuando el comando «ok flu soy X» declara el
+   *   nombre sin voz medida: el renombrado va por ETIQUETA, no por `vozId`.
    * @returns `true` si la fila existía con etiqueta pendiente y se actualizó.
    */
-  reetiquetarFila(locucionId: string, vozId: string, hablante: string): Promise<boolean>
+  reetiquetarFila(
+    locucionId: string,
+    vozId: string,
+    hablante: string,
+    evidenciaPedida?: 'nombre' | '',
+  ): Promise<boolean>
   tramoYaCommiteado(tramoId: string): boolean
 }>
 
@@ -675,18 +682,24 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
     locucionId: string,
     vozId: string,
     hablante: string,
+    evidenciaPedida: 'nombre' | '' = '',
   ): Promise<boolean> {
     const idFila = String(locucionId || '').trim()
     const fila = idFila ? estado.filas.get(idFila) : undefined
     if (!fila || fila.deleted) return false
-    if (fila.evidencia !== 'pendiente') return false
     const nombreRegistrado = estado.nombresPorVoz.get(String(vozId || '').trim())
+    // Dos motivos legitimos para tocar el hablante, y solo el hablante:
+    //  - medida tardia sobre una fila que nacio `pendiente` (caso original);
+    //  - NOMBRE registrado (o declarado por el comando «ok flu soy X»), que
+    //    reemplaza la etiqueta automatica (`Hablante N`) ya afirmada.
+    const esNombre = Boolean(nombreRegistrado) || evidenciaPedida === 'nombre'
+    if (fila.evidencia !== 'pendiente' && !esNombre) return false
     const etiqueta = String(nombreRegistrado ?? hablante ?? '').trim()
     if (!etiqueta) return false
     // La plantilla aprende la etiqueta que la medida acaba de afirmar.
     const plantilla = estado.plantillasVoz.get(String(vozId || '').trim())
     if (plantilla) plantilla.etiqueta = etiqueta
-    const evidencia = nombreRegistrado ? 'nombre' : 'medida'
+    const evidencia = esNombre ? 'nombre' : 'medida'
     // La medida tardía trae el TIMBRE de la voz. Persistirlo en la fila es lo
     // que evita que `voiceKeyFor` caiga a la etiqueta y abra hablantes nuevos
     // (auditoría 2026-11-01: commits con signature:null tras vozMedida ok).

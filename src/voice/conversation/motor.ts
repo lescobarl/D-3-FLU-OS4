@@ -184,13 +184,34 @@ export function crearConversacion(dependencias: DependenciasConversacion): Conve
     return sesion.snapshot()
   }
 
-  /** Bautiza únicamente la voz que dijo `ok flu soy XXX`. */
-  function registrarNombre(datos: DatosNombre): InstantaneaConversacion {
+  /**
+   * Bautiza la voz que dijo `ok flu soy XXX` y RENOMBRA sus filas ya escritas.
+   *
+   * El hablante es el ÚNICO campo actualizable de una fila: con el nombre
+   * registrado se reemplaza la etiqueta automática (`Hablante N`) de TODAS las
+   * filas de ESA voz en esta sesión — «UPDATE ... WHERE voz = la del comando».
+   * No hay segundo escritor: se pide al dueño del reetiquetado
+   * (`sesion.reetiquetarFila`) fila por fila, y el disparo lo da el consumidor
+   * (`conversationMotorProducto`), que es el único que conoce la wake.
+   */
+  async function registrarNombre(datos: DatosNombre): Promise<InstantaneaConversacion> {
     const sessionId = sesion.exigirActiva()
     const nombre = String(datos.nombre || '').trim()
     if (!nombre) throw new Error('nombre vacio: no se bautiza una voz sin nombre')
     if (nombre === '?') throw new Error('nombre ? prohibido')
-    const vozId = String(datos.vozId || estado.abierta?.voz.vozId || '').trim()
+    let vozId = String(datos.vozId || estado.abierta?.voz.vozId || '').trim()
+    if (!vozId && datos.etiqueta) {
+      // La locución del comando ya cerró: la voz se identifica por la etiqueta
+      // que venía usando (una plantilla por voz). Sin coincidencia NO se
+      // bautiza a ciegas: el nombre quedaría pegado a una voz que no lo dijo.
+      const etiquetaDicha = String(datos.etiqueta || '').trim()
+      for (const [id, plantilla] of estado.plantillasVoz) {
+        if (String(plantilla.etiqueta || '').trim() === etiquetaDicha) {
+          vozId = id
+          break
+        }
+      }
+    }
     if (!vozId) {
       // MANDATO (2026-10-30, problema 5): la medida de respaldo resuelve la voz
       // al CERRAR; mientras la locución del comando sigue abierta aún no hay
@@ -201,7 +222,40 @@ export function crearConversacion(dependencias: DependenciasConversacion): Conve
       registro.registrar('conversacion.nombre.pendiente', { sessionId, nombre })
       return sesion.snapshot()
     }
+    // Etiqueta que ESA voz venía usando (su plantilla): es el WHERE del UPDATE.
+    // Se captura ANTES de tocar nada; `reetiquetarFila` la sube al nombre.
+    const etiquetaDeLaVoz = String(estado.plantillasVoz.get(vozId)?.etiqueta || '').trim()
     estado.nombresPorVoz.set(vozId, nombre)
+    let renombradas = 0
+    const etiquetaDicha = String(datos.etiqueta || '').trim()
+    if (vozId && etiquetaDeLaVoz) {
+      for (const fila of [...estado.filas.values()]) {
+        if (fila.deleted || fila.sessionId !== sessionId) continue
+        // Solo las filas de ESA voz: las que llevan su etiqueta automática.
+        if (fila.etiqueta !== etiquetaDeLaVoz) continue
+        if (await sesion.reetiquetarFila(fila.locutionId, vozId, nombre)) renombradas += 1
+      }
+    } else if (!vozId && etiquetaDicha) {
+      // SIN voz medida (`turnMeasured: 0`): el WHERE es la ETIQUETA de la fila
+      // que dijo el nombre — «UPDATE filas SET hablante = 'Luis' WHERE hablante
+      // = 'Hablante 1'». Dentro de una sesión, una etiqueta es una sola voz.
+      for (const fila of [...estado.filas.values()]) {
+        if (fila.deleted || fila.sessionId !== sessionId) continue
+        if (fila.etiqueta !== etiquetaDicha) continue
+        if (await sesion.reetiquetarFila(fila.locutionId, '', nombre, 'nombre')) renombradas += 1
+      }
+    }
+    // La plantilla aprende el nombre: las filas SIGUIENTES de esa voz nacen con él.
+    const plantillaDeLaVoz = estado.plantillasVoz.get(vozId)
+    if (plantillaDeLaVoz) plantillaDeLaVoz.etiqueta = nombre
+    if (renombradas > 0) {
+      registro.registrar('conversacion.nombre.renombrado', {
+        sessionId,
+        vozId,
+        nombre,
+        filas: renombradas,
+      })
+    }
     if (estado.abierta && estado.abierta.voz.vozId === vozId) {
       estado.abierta = {
         ...estado.abierta,

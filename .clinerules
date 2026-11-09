@@ -12,12 +12,32 @@ tú, en cada Write/Edit de código bajo `src/`.
 3. Si una función nueva se parece a una existente, declara el veredicto en el
    JSDoc: `@revisor REUSAR|EXTENDER|CREAR NUEVO — justificación`.
 
-## Guardian (red de seguridad automática, opcional)
-El usuario puede tener corriendo `npm run guardiano` en otra terminal: vigila
-`src/` y BORRA al instante cualquier archivo de código nuevo sin dueño
-declarado o con función clonada. Si borra un archivo tuyo es porque pasaste
-por alto una regla de arriba; corrige y reintenta. No lo detengas ni compitas
-con él.
+## Arranque de sesión: el guardian tiene que estar vivo
+La Puerta 1 automática es `scripts/guardian.mjs` (`npm run guardiano`). Antes
+de tocar código bajo `src/`, comprueba que su proceso existe:
+
+- Windows: `Get-CimInstance Win32_Process -Filter "Name='node.exe'" | Where-Object { $_.CommandLine -like '*guardian.mjs*' }`
+- Unix: `pgrep -af guardian.mjs`
+
+Si no aparece, **pídeselo al usuario una vez** (`npm run guardiano` en otra
+terminal). No lo arranques tú en segundo plano: sus informes se leen en esa
+terminal y no se dejan procesos largos colgados a la vista de nadie. Si el
+usuario decide no arrancarlo, se sigue con el protocolo manual + commit + CI y
+se declara en el reporte que la red automática no estaba activa.
+
+## Guardian: qué hace y cómo convivir con él
+Vigila `src/` y BORRA al instante cualquier archivo de código nuevo sin dueño
+declarado o con función clonada (usa las MISMAS puertas:
+`owner-gate --pretende-nuevo` y `revisor-prehook --desde-vacio`). Si borra un
+archivo tuyo es porque pasaste por alto una regla de arriba; corrige y
+reintenta. No lo detengas ni compitas con él.
+
+- Si una puerta **falla sin veredicto** (crash, timeout), no borra: avisa y
+  exige verificación manual.
+- `--una-vez <rel>` también borra si bloquea: no lo lances sobre un archivo
+  real del repo.
+- Solo cubre archivos NUEVOS bajo `src/`; las ediciones a archivos existentes
+  las juzgan el commit y el CI.
 
 ## Puertas que SÍ te interceptan
 - Commit (Puerta 2): `.githooks` vía `core.hooksPath` valida dueños y

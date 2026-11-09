@@ -262,6 +262,55 @@ export function medirConversacionReal({ eventos, turnos }) {
   const sinVector = eventos.filter((evento) =>
     mensaje(evento).includes('conversacion.voz.medida.sinVector'),
   ).length
+  // Nombre conocido vs etiqueta automática: la sesión ya sabe cómo se llama la
+  // voz (cluster o primario) y la fila sigue saliendo `Hablante N`. Es EL defecto
+  // «el nombre no se aplica». El hablante es el único campo actualizable de una
+  // fila (`motor.registrarNombre` renombra por voz), así que este número solo
+  // puede BAJAR: un valor mayor es una regresión.
+  const etiquetaAuto = /^Hablante \d+$/i
+  const nombreConocido =
+    commits
+      .flatMap((turno) => [
+        ...(Array.isArray(turno.clusters)
+          ? turno.clusters.map((cluster) => String(cluster?.label || ''))
+          : []),
+        String(turno.primary || ''),
+      ])
+      .find((etiqueta) => etiqueta && !etiquetaAuto.test(etiqueta)) || ''
+  const filasAutoConNombreConocido = nombreConocido
+    ? commits.filter((turno) => etiquetaAuto.test(String(turno.speaker || ''))).length
+    : 0
+  // COSTE DE MEDIR LA VOZ: cuántas veces se embebe y cuántas muestras se copian
+  // para hacerlo. Dueño: `ingesta.verificarCambioVoz` (copiaba el búfer completo
+  // para medir solo su cola). Sesión real 8149df78: 124 mediciones y 11.712.064
+  // muestras copiadas en 74 s de audio. Solo puede BAJAR.
+  const medicionesVoz = eventos
+    .map((evento) => mensaje(evento))
+    .filter((texto) => texto.startsWith('vozMedida '))
+  const muestrasCopiadasParaMedir = medicionesVoz.reduce((suma, texto) => {
+    const coincide = texto.match(/"muestras":(\d+)/)
+    return suma + (coincide ? Number(coincide[1]) : 0)
+  }, 0)
+  // REINICIOS SIN UN SOLO FINAL: racha máxima de `[WD] rebuild` sin un `asrFinal`
+  // en medio. Es la prueba de que el motor está VIVO y MUDO: con N medido se
+  // escala (dueño `asrWatchdog`). Medido: 13 en d702, 2 en la sesión 8149df78.
+  let rachaReinicios = 0
+  let maxReiniciosSinFinal = 0
+  for (const evento of eventos) {
+    const texto = mensaje(evento)
+    if (texto.startsWith('[WD] rebuild')) {
+      rachaReinicios += 1
+      maxReiniciosSinFinal = Math.max(maxReiniciosSinFinal, rachaReinicios)
+    } else if (texto.startsWith('asrFinal')) {
+      rachaReinicios = 0
+    }
+  }
+  // FILA MÁS CORTA: mínimo de muestras entre las filas commiteadas. Es el piso
+  // real medido (d702: 2.432); una fila por debajo no existe en la realidad.
+  const muestrasDeFilas = commits
+    .map((turno) => Number(turno.audioEndSample) - Number(turno.audioStartSample))
+    .filter((muestras) => Number.isFinite(muestras) && muestras > 0)
+  const minMuestrasFila = muestrasDeFilas.length ? Math.min(...muestrasDeFilas) : 0
   const identityRegisters = eventos.filter((evento) =>
     /identity-register|registrarNombre|conversacion\.nombre|REGISTRAR_PARTICIPANTE/i.test(
       JSON.stringify(evento),
@@ -279,6 +328,11 @@ export function medirConversacionReal({ eventos, turnos }) {
     normalErrorLogs,
     normalConversationLogs,
     sinVector,
+    filasAutoConNombreConocido,
+    medicionesVoz: medicionesVoz.length,
+    muestrasCopiadasParaMedir,
+    maxReiniciosSinFinal,
+    minMuestrasFila,
     identityRegisters,
   }
 }

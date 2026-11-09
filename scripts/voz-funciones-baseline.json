@@ -40,7 +40,8 @@
     ],
     "src/voice/compose/conversationMotorProducto.js": [
       "crearMotorConversacionHook",
-      "despacharFraseVigente"
+      "despacharFraseVigente",
+      "leerUltimoTextoDicho"
     ],
     "src/voice/core/locucion.js": [
       "continuaLaFrase",

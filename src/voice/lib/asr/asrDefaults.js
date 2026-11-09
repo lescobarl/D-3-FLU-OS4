@@ -58,6 +58,12 @@ export const LOCAL_FALLBACK_DEFAULTS = Object.freeze({
   silentDegradeMs: 12000,
   silentDegradeStallMarginMs: 1000,
   silentDegradeRebuilds: 2,
+  /**
+   * Reinicios seguidos del reconocedor SIN un solo final: prueba de motor vivo y
+   * mudo (no vuelve por sí mismo). Medido en la sesión real d702 (2026-11-08):
+   * 13 reinicios seguidos sin un `asrFinal` antes de quedarse sin transcribir.
+   */
+  silentDegradeDeadRebuilds: 13,
   silentDegradeMinSpeechLikeMs: 600,
   silentDegradeEvalMinMs: 1000,
   localRecoveryMs: 20000,

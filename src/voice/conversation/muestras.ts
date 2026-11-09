@@ -55,3 +55,35 @@ export function retenerCola(
   }
   return siguiente
 }
+
+/**
+ * Copia SOLO la cola de una cola de bloques, sin concatenar todo.
+ *
+ * Para medir la voz se usaba `concatenarMuestras(cola)` y después `slice(-ventana)`:
+ * se copiaba el búfer entero (hasta 30 s) por cada medición para usar 1,5 s. Medido
+ * en la sesión 8149df78 (2026-11-08): 104 mediciones copiando el búfer completo,
+ * 11.712.064 muestras copiadas en 74 s de audio.
+ *
+ * @param cola Bloques retenidos, en orden de llegada.
+ * @param ventana Muestras deseadas (se toman las MÁS RECIENTES).
+ * @returns Bloque contiguo con la cola pedida (nunca muta la entrada).
+ */
+export function colaDeMuestras(
+  cola: readonly Float32Array[],
+  ventana: number,
+): Float32Array {
+  const pedidas = Math.max(0, Math.round(Number(ventana) || 0))
+  if (pedidas === 0) return new Float32Array(0)
+  let disponibles = 0
+  for (const bloque of cola) disponibles += bloque.length
+  const salida = new Float32Array(Math.min(pedidas, disponibles))
+  let escrito = salida.length
+  for (let indice = cola.length - 1; indice >= 0 && escrito > 0; indice -= 1) {
+    const bloque = cola[indice]
+    if (!bloque || bloque.length === 0) continue
+    const tomar = Math.min(bloque.length, escrito)
+    escrito -= tomar
+    salida.set(bloque.subarray(bloque.length - tomar), escrito)
+  }
+  return salida
+}

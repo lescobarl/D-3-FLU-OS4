@@ -97,7 +97,7 @@ export const FLU_CONFIG = {
         /** SR mudo: degrade tras N rebuilds con HABLA (nunca antes del rebuild). */
         silentDegradeMs: LOCAL_FALLBACK_DEFAULTS.silentDegradeMs,
         silentDegradeStallMarginMs: LOCAL_FALLBACK_DEFAULTS.silentDegradeStallMarginMs,
-        silentDegradeRebuilds: LOCAL_FALLBACK_DEFAULTS.silentDegradeRebuilds,
+        silentDegradeRebuilds: LOCAL_FALLBACK_DEFAULTS.silentDegradeRebuilds, silentDegradeDeadRebuilds: LOCAL_FALLBACK_DEFAULTS.silentDegradeDeadRebuilds,
         silentDegradeMinSpeechLikeMs: LOCAL_FALLBACK_DEFAULTS.silentDegradeMinSpeechLikeMs,
         silentDegradeEvalMinMs: LOCAL_FALLBACK_DEFAULTS.silentDegradeEvalMinMs,
         /** Recuperacion: reintento por tiempo/segmentos; sin resultado -> local. */

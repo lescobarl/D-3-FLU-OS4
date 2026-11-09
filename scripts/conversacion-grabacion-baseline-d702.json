@@ -16,6 +16,11 @@
     "normalErrorLogs": 0,
     "normalConversationLogs": 64,
     "sinVector": 9,
+    "filasAutoConNombreConocido": 13,
+    "medicionesVoz": 84,
+    "muestrasCopiadasParaMedir": 12743424,
+    "maxReiniciosSinFinal": 13,
+    "minMuestrasFila": 2432,
     "identityRegisters": 0
   },
   "cases": [
@@ -76,6 +81,41 @@
       "metric": "sinVector",
       "ceiling": 9,
       "descripcion": "Umbral de VAD intacto; tramos cortos."
+    },
+    {
+      "id": "motor-vivo-y-mudo",
+      "owner": "src/voice/lib/asrWatchdog.js:81",
+      "metric": "maxReiniciosSinFinal",
+      "ceiling": 13,
+      "descripcion": "Racha maxima de reinicios del reconocedor sin un solo final en medio. Es el motor vivo y mudo; con 13 medidos se escala. Solo baja."
+    },
+    {
+      "id": "fila-sin-audio",
+      "owner": "src/voice/conversation/fila.ts:181",
+      "metric": "minMuestrasFila",
+      "ceiling": 2432,
+      "descripcion": "Fila mas corta commiteada (muestras). Piso real medido: por debajo no se escribe fila."
+    },
+    {
+      "id": "coste-de-medir-la-voz",
+      "owner": "src/voice/conversation/ingesta.ts:257",
+      "metric": "muestrasCopiadasParaMedir",
+      "ceiling": 12743424,
+      "descripcion": "Muestras copiadas para medir la voz. Se copiaba el bufer completo para medir solo su cola; ahora se copia la cola. Solo baja."
+    },
+    {
+      "id": "mediciones-de-voz",
+      "owner": "src/voice/conversation/ingesta.ts:257",
+      "metric": "medicionesVoz",
+      "ceiling": 84,
+      "descripcion": "Veces que se embebe la voz en la sesion. Un numero mayor es un retroceso al bucle de medicion."
+    },
+    {
+      "id": "nombre-no-aplicado",
+      "owner": "src/voice/conversation/motor.ts:197",
+      "metric": "filasAutoConNombreConocido",
+      "ceiling": 13,
+      "descripcion": "Filas con etiqueta automatica (`Hablante N`) cuando la sesion YA tiene un nombre conocido para la voz. El nombre es el unico campo actualizable: solo baja."
     },
     {
       "id": "nombre-registrado-de-mas",

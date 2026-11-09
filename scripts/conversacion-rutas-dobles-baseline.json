@@ -126,6 +126,7 @@
       "suscribir"
     ],
     "muestras.ts": [
+      "colaDeMuestras",
       "duracionMsDeMuestras",
       "retenerCola"
     ],

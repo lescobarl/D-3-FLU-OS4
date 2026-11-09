@@ -15,7 +15,7 @@ import type { BufferAsr, RegistroTramos } from './tramos.ts'
 import type { Sesion } from './sesion.ts'
 import { decidirIdentidad, plantillasDe } from './identidad.ts'
 import type { IdentidadDecidida } from './identidad.ts'
-import { concatenarMuestras, duracionMsDeMuestras, retenerCola } from './muestras.ts'
+import { colaDeMuestras, duracionMsDeMuestras, retenerCola } from './muestras.ts'
 import { fusionarVoz, ultimaFilaPorFin } from './fila.ts'
 import { registrarMedidaVoz } from './sesion.ts'
 import { asrEmpujaAudio } from './ports.ts'
@@ -236,23 +236,26 @@ export function crearIngesta({
     // hablante nuevo arrancó después del silencio. Se mide SU tramo retenido,
     // no la cola de la locución abierta (que es la voz anterior).
     const mismotramo = abierta.locutionId === tramoId
-    let retenidas: Float32Array
+    let bloques: readonly Float32Array[]
     let finAlMedir: number
     let sampleRate: number
     if (mismotramo) {
       if (abierta.fin - estado.medidoHastaFin < ventana) return null
-      retenidas = concatenarMuestras(estado.muestrasAbierta)
+      bloques = estado.muestrasAbierta
       finAlMedir = abierta.fin
       sampleRate = abierta.sampleRate
     } else {
       const entrante = tramos.resolver(tramoId)
       if (!entrante) return null
-      retenidas = concatenarMuestras(tramos.muestras(tramoId, entrante) ?? [])
+      bloques = tramos.muestras(tramoId, entrante) ?? []
       finAlMedir = entrante.fin
       sampleRate = entrante.sampleRate
     }
-    if (retenidas.length < ventana) return null
-    const cola = retenidas.slice(Math.max(0, retenidas.length - ventana))
+    // Se copia SOLO la cola que se mide. Antes se concatenaba el búfer entero
+    // (hasta 30 s) para luego quedarse con la ventana: 104 copias completas en
+    // la sesión 8149df78, 11.712.064 muestras copiadas en 74 s de audio.
+    const cola = colaDeMuestras(bloques, ventana)
+    if (cola.length < ventana) return null
     let vector: readonly number[] | null = null
     try {
       vector = await embebedor.medir(cola, sampleRate)
@@ -826,7 +829,11 @@ export function crearIngesta({
     // La medida cubre TODO el audio retenido: el contador del cambio de voz
     // (Caso 1+3) arranca en el fin cubierto por esta medida.
     estado.medidoHastaFin = Math.max(estado.medidoHastaFin, locucion.fin)
-    embebedor.medir(concatenarMuestras(estado.muestrasAbierta), sampleRate).then(
+    // Se mide la VENTANA de identidad (la misma que `verificarCambioVoz`), no el
+    // búfer completo: en la sesión 8149df78, 12 de 124 mediciones copiaban hasta
+    // 709.824 muestras para extraer un vector de 512.
+    const ventanaMedida = Math.max(1, Math.round(configuracion.minSegundosVozMedida * sampleRate))
+    embebedor.medir(colaDeMuestras(estado.muestrasAbierta, ventanaMedida), sampleRate).then(
       (vector) =>
         encolar(() =>
           Promise.resolve().then(() => aplicarMedidaVoz(locutionId, vector, totalMuestras)),
