@@ -120,6 +120,18 @@ export async function escribirRegistroConversacion(
     registro.sessionId,
   )
   const marca = Date.parse(registro.sync.updated_at)
+  // El `timestamp` de la fila es la HORA DE LA VOZ (inicio del tramo), no la de
+  // escritura/cierre (`sync.updated_at`). Antes la fila del usuario se sellaba al
+  // cerrar y quedaba DESPUÉS de la respuesta de FLU (medido 2026-11-10 21:35:58:
+  // respuesta 21:35:55, fila 21:35:58). El sync conserva el cierre; el chat usa
+  // el inicio. Dueño único: este escritor.
+  const duracionMs =
+    registro.sampleRate > 0
+      ? ((registro.finMs - registro.inicioMs) / registro.sampleRate) * 1000
+      : 0
+  const marcaInicio = Number.isFinite(marca)
+    ? marca - Math.max(0, duracionMs)
+    : Date.now()
   const fila: ConversationRow = {
     id: registro.locutionId,
     role: 'user',
@@ -129,7 +141,7 @@ export async function escribirRegistroConversacion(
     // TIMBRE medido de la fila (mandato 2026-10-11/13): persiste como `signature`
     // para que la restauración conserve el vínculo fila↔voz por timbre.
     signature: registro.firma ? [...registro.firma] : null,
-    timestamp: Number.isFinite(marca) ? marca : Date.now(),
+    timestamp: Math.round(marcaInicio),
     sessionId: registro.sessionId,
     participantId: contexto.participantId,
     meta,

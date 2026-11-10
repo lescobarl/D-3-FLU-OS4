@@ -85,12 +85,25 @@ export function crearIngesta({
   encolar: <T>(tarea: () => Promise<T>) => Promise<T>
 }): Ingesta {
   const estado = sesion.estado
+  /**
+   * Único dueño del motivo `turnoYaEscrito`; lo consumen la ingesta y el stop.
+   * @revisor CREAR NUEVO — el motivo tenía dueño inline en ingesta y el stop
+   *   necesitaba el mismo hecho sin duplicar el literal.
+   */
+  const contarReentrega: (
+    locutionId: Parameters<Sesion['contarDescarte']>[1],
+    tramo: Parameters<Sesion['contarDescarte']>[2],
+  ) => void = (locutionId, tramo) => {
+    sesion.contarDescarte('turnoYaEscrito', locutionId, tramo)
+  }
+
   const flujo: FlujoTexto = crearFlujoTexto({
     dependencias,
     configuracion,
     sesion,
     tramos,
     pendientes,
+    contarReentrega,
   })
 
   /**
@@ -820,7 +833,7 @@ export function crearIngesta({
     // REENTREGA: UN solo dueño (`esReentregaDeLaFila`). Si no es reentrega y el
     // tramo ya está commiteado, la frase nueva necesita SU id (sintético).
     if (esReentregaDeLaFila(entrada, tramoId)) {
-      sesion.contarDescarte('turnoYaEscrito', null, null)
+      contarReentrega(null, null)
       return sesion.snapshot()
     }
     if (tramoId && estado.filas.has(tramoId)) tramoId = tramoSinteticoParaTexto()

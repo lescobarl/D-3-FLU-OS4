@@ -50,6 +50,36 @@
       "owner": "src/voice/conversation/ingesta.ts:790",
       "limite": 0,
       "descripcion": "El reloj del hueco se movió a solo-resultados-de-la-línea-abierta y cortó la wake que llegaba como intermedio tras un final sin wake. Dueño único del reloj: ingesta.ts, cada resultado del ASR; la visibilidad del pendiente la resuelve la caja."
+    },
+    {
+      "id": "video-como-imagen",
+      "owner": "src/App.tsx:1737",
+      "limite": 0,
+      "descripcion": "El video generaba una ESCENA de imagen (WorkspaceImage) como si fuera el video. Dueño único del video: GENERAR_VIDEO → requestMediaRef; la escena no sustituye al video."
+    },
+    {
+      "id": "fila-sella-cierre",
+      "owner": "src/core/db/conversationRowWriter.ts:132",
+      "limite": 0,
+      "descripcion": "La fila usaba la hora de escritura/cierre (sync.updated_at) y quedaba después de la respuesta. Dueño único: el escritor sella la hora de la VOZ (inicio del tramo)."
+    },
+    {
+      "id": "clave-solo-env",
+      "owner": "src/hooks/useConfigPersistence.ts:131",
+      "limite": 0,
+      "descripcion": "La clave cliente solo vivía en el entorno del proceso; al reiniciar sin ese entorno el campo quedó vacío. Dueño único: el configurador siembra localStorage desde el resolver."
+    },
+    {
+      "id": "stop-sin-dedupe",
+      "owner": "src/voice/conversation/texto.ts:330",
+      "limite": 0,
+      "descripcion": "El stop volvía a commitear un pendiente con el mismo texto ya escrito (fila duplicada del inicio). Dueño único: sinReentregas + contarReentrega de ingesta."
+    },
+    {
+      "id": "navegacion-con-ia",
+      "owner": "src/voice/lib/deterministicArbiter.js:516",
+      "limite": 0,
+      "descripcion": "GENERAR_VIDEO se resolvía con Gemini y el contrato IA duplicaba la generación. Dueño único: la navegación determinista (skip Gemini) → handleNavigationCommand."
     }
   ]
 }

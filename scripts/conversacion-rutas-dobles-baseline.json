@@ -110,6 +110,7 @@
       "aplicarMedidaVoz",
       "cerrarPendienteAsr",
       "conIdentidadVoz",
+      "contarReentrega",
       "crearIngesta",
       "decidirIdentidadSesion",
       "drenarResultadosAsr",
@@ -185,7 +186,9 @@
       "idiomaDe",
       "ordenDePendiente",
       "procesarResultadoAsr",
-      "sinPrefijoDeLaFilaAnterior"
+      "sinPrefijoDeLaFilaAnterior",
+      "sinReentregas",
+      "textoYaEscrito"
     ],
     "tipos.ts": [],
     "tramos.ts": [

@@ -14,6 +14,7 @@ import {
 } from '../lib/audioMath'
 import { getFluTimingCfg } from '../lib/fluTranscriptMotor.js'
 import { analyzeWakeTurn, requiresWakeWord } from '../lib/wakeTurnCommit.js'
+import { aplicarWakePendiente } from './wakePending'
 import { loadSessionState, saveSessionState } from '../lib/fluStorage'
 import { requestFluContract } from '../lib/gemini'
 import { buildContractParams } from '../lib/contractParams'
@@ -152,6 +153,7 @@ export function useFluVoiceAssistant({
   // Wake words efectivas (Ajustes o default): UN solo criterio.
   const resolvedWakeWords = resolveWakeWords(wakeWords)
   const activeTurnIdRef = useRef(0)
+  const wakePendienteRef = useRef({ wakeWord: '', at: 0 })
   const sessionTurnRecordedRef = useRef('') // ultimo turnId de fila ya registrado (Paso 0: sin snapshots duplicados)
   const sessionLocutionsRecordedRef = useRef(new Set())
   const lastEmittedTurnRef = useRef(0) // turno de la ultima locucion emitida: resolucion tardia idempotente
@@ -1278,32 +1280,18 @@ export function useFluVoiceAssistant({
           else interim = transcript
         }
 
-        // El modo bilingüe cambia el locale del ASR: es conducta de la ESCUCHA
-        // (del hook), no de la conversación. Se decide con el texto del evento,
-        // en AMBOS modos.
+        // Wake partida + locale + probe + motor: dueño único `wakePending`.
+        const desdeResultado = Math.max(0, Number(event?.resultIndex) || 0)
+        const wake = aplicarWakePendiente({ interim, finalText, wakePendiente: wakePendienteRef.current, wakeWords: resolvedWakeWords || [], ahora: Date.now(), wakePendingMs: FLU_CONFIG.timing?.wakePendingMs, evento: event, desdeResultado })
+        finalText = wake.finalText
+        wakePendienteRef.current = wake.wakePendiente
         if (interim || finalText) maybeSwitchRecognitionLocaleRef.current(interim || finalText)
         if (finalText) { const w = analyzeWakeTurn(finalText, { lastCommitted: userRowsTextView.current.at(-1) || '' }); voiceProbe('asrFinal', { engine: localEngineActive ? 'whisper' : 'chrome', ms: event?.metrics?.durationMs ?? null, speechLikeMs: event?.metrics?.speechLikeMs ?? null, rms: event?.metrics?.rms ?? null, turn: activeTurnIdRef.current, wake: w.wakeWordMatched, inline: w.hasInlineBoundary, before: w.passiveOnly.slice(0, 80), after: w.afterWake.slice(0, 80), len: w.cleaned.length, text: w.cleaned }) }
-        // MOTOR del producto: ÚNICA ruta de la frase y de la fila en AMBOS modos.
-        // PUENTE ASR: Chrome arrastra el final ANTERIOR en `results[0]`; el motor
-        // compone el final desde 0 por diseño. Aquí se le entregan SOLO los
-        // resultados NUEVOS y se reindexa a 0: el final es la hipótesis completa
-        // del tramo NUEVO, no del anterior (medido 7d337663: la frase de la
-        // locución previa se colaba en la siguiente). No se deduplica por texto
-        // en el módulo; el recorte es del EVENTO, en el hook.
-        const desdeResultado = Math.max(0, Number(event?.resultIndex) || 0)
-        const eventoDelMotor =
-          desdeResultado > 0
-            ? {
-                ...event,
-                results: Array.from(event?.results || []).slice(desdeResultado),
-                resultIndex: 0,
-              }
-            : event
         if (conversationActiveRef?.current) {
-          if (motorConversacionRef.current) motorConversacionRef.current.evento(eventoDelMotor)
+          if (motorConversacionRef.current) motorConversacionRef.current.evento(wake.evento)
           return
         }
-        if (motorConversacionRef.current) motorConversacionRef.current.evento(eventoDelMotor)
+        if (motorConversacionRef.current) motorConversacionRef.current.evento(wake.evento)
       }
 
       Recognition.onerror = (event) => {

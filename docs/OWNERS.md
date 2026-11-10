@@ -65,6 +65,12 @@ mismo commit. Si no puedes borrarlo ahora, no añadas el nuevo ahora.
 |---|---|---|
 | ¿Cómo se compone el motor para el producto? | `producto.ts:123` `crearMotorConversacionProducto` | Une adaptadores reales y el motor. |
 | ¿El evento ASR trae un final? | `producto.ts:79` `traeFinal` | El final marca la frase; no cierra la locución. |
+| ¿Qué wake retenida se pega al final cuando el ASR la parte? | `src/voice/hooks/wakePending.js:1` `aplicarWakePendiente` | Consumidor único: `useFluVoiceAssistant.js` (`onresult`). Kill list: el bloque inline de wake partida que vivía en el hook. |
+| ¿Qué hora sella una fila de conversación? | `src/core/db/conversationRowWriter.ts:122` `escribirRegistroConversacion` | La hora de la VOZ (inicio del tramo); el sync conserva el cierre. Consumidor: el chat. |
+| ¿Cuándo se descarta una reentrega en el stop? | `sesion.ts:contarReentrega` (consumidor `texto.ts:sinReentregas`) | Solo si el texto ya está escrito (`speechMerge.utterancesRelate`); un texto distinto se commitea. |
+| ¿Cuándo un GENERAR_VIDEO no llama a Gemini? | `deterministicArbiter.js:resolveDeterministicSkipGeminiContract` | Navigation → `handleNavigationCommand`/`requestMediaRef`; el contrato IA no duplica. Consumidor: `useFluVoiceAssistant` §2B. |
+| ¿Qué tema usa un video sin tema explícito? | `generationTopic.ts:buildGenerationTopic` | Contexto del usuario (última frase con tema), no el placeholder "video". Consumidor: `App.requestMediaRef`. |
+| ¿De dónde salen las claves cliente? | `useConfigPersistence.ts` (`resolveTextApiKey`/`resolveFalApiKey` + semilla) | localStorage; la env solo siembra una vez. |
 | ¿Cómo se mapea una fila a snapshot de audio/firma del turno? | `turnSnapshot.js:20` `snapshotDeTurno` · `:43` `grabarSnapshotDeTurno` · `:76` `grabarRevisionDeFila` | Único dueño de `recordSessionTurn` para locuciones; se consume por la fachada. |
 | ¿Cómo se persiste la fila? | `adapters.ts:430` `crearAlmacenDexieProducto` → `src/core/db/conversationRowWriter.ts:101` `escribirRegistroConversacion` | Único escritor físico de `fluDb.conversations`. |
 | ¿Cómo se refleja en el store/UI? | `src/voice/compose/conversationMotorProducto.js:111` `row.committed` → `addConversationEntry` (133); `speaker.labeled` (95) → `setEntrySpeakerName` (104) | Llamador espejo; no es un segundo escritor. |

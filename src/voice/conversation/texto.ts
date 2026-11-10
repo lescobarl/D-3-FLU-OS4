@@ -6,6 +6,7 @@
  * un huérfano expira contado. No escribe filas: pide el cierre a la sesión.
  */
 import { continuaLaFrase } from '../core/locucion.js'
+import { utterancesRelate } from '../lib/speechMerge.js'
 import { esEcoDeTts } from './eco.ts'
 import { decidirFrontera } from './frontera.ts'
 import type { DecisionFrontera } from './frontera.ts'
@@ -47,12 +48,15 @@ export function crearFlujoTexto({
   sesion,
   tramos,
   pendientes,
+  contarReentrega,
 }: {
   dependencias: Pick<DependenciasConversacion, 'reloj' | 'ultimoTextoDicho' | 'config'>
   configuracion: ConfiguracionConversacion
   sesion: Sesion
   tramos: RegistroTramos
   pendientes: Pendientes
+  /** Dueño del motivo `turnoYaEscrito` (inyectado por `ingesta`). */
+  contarReentrega: (locutionId: string | null, tramo: TramoMuestreado | null) => void
 }): FlujoTexto {
   const estado = sesion.estado
 
@@ -267,9 +271,40 @@ export function crearFlujoTexto({
   }
 
   /**
+   * true si el texto del pendiente YA está escrito en una fila de la sesión
+   * (reentrega del mismo enunciado). Dueño único de la relación de texto:
+   * `speechMerge.utterancesRelate`; no se tira texto con contenido nuevo.
+   * @param texto Texto del pendiente.
+   * @returns true si una fila ya contiene esa misma frase.
+   * @revisor CREAR NUEVO — la reentrega del stop no tenía dueño tras retirar el
+   *   descarte por fin de audio; esta función la unifica por texto.
+   */
+  function textoYaEscrito(texto: string): boolean {
+    const limpio = String(texto || '').trim()
+    if (!limpio) return false
+    for (const fila of estado.filas.values()) {
+      const previo = String(fila.texto || '').trim()
+      if (previo && utterancesRelate(previo, limpio)) return true
+    }
+    return false
+  }
+
+  /**
+   * Filtra las reentregas del stop (descarte contado) y devuelve el resto.
+   * @revisor CREAR NUEVO — el stop necesitaba el mismo criterio de reentrega
+   *   que la ingesta sin duplicar el descarte por audio.
+   */
+  function sinReentregas(lotes: readonly EntradaPendiente[]): EntradaPendiente[] {
+    return lotes.filter((lote) => {
+      if (!textoYaEscrito(lote.texto)) return true
+      contarReentrega(lote.tramoId, lote.tramo ?? null)
+      return false
+    })
+  }
+
+  /**
    * Orden de un pendiente por el inicio REAL de su audio. Un pendiente con texto
-   * NUNCA se tira en el volcado: la reentrega de una fila ya escrita la decide
-   * su dueño al ingerir (ingesta.ts); aquí solo se descarta el grupo sin texto.
+   * NUNCA se tira en el volcado salvo que sea reentrega (`sinReentregas`).
    */
   function ordenDePendiente(p: EntradaPendiente): number {
     const inicio = Number(p.tramo?.inicio)
@@ -279,8 +314,10 @@ export function crearFlujoTexto({
   /** Abre el primer grupo; el resto queda retenido en orden de audio. */
   async function flushPendientes(): Promise<void> {
     if (estado.abierta) return
-    const lotes = drenarPendientes().sort(
-      (a, b) => ordenDePendiente(a) - ordenDePendiente(b),
+    const lotes = sinReentregas(
+      drenarPendientes().sort(
+        (a, b) => ordenDePendiente(a) - ordenDePendiente(b),
+      ),
     )
     const primero = lotes[0]
     if (!primero) return
@@ -327,7 +364,7 @@ export function crearFlujoTexto({
       const cerrada = estado.abierta ?? abierta
       await sesion.cerrarLocucion(cerrada, motivo, 'stop', cerrada.final)
     }
-    for (const siguiente of lotes) {
+    for (const siguiente of sinReentregas(lotes)) {
       const ultimo = estado.ultimoTramoId ? tramos.vigente(estado.ultimoTramoId) : null
       const previa = ultimaFilaPorFin(estado.filas.values())
       const tramo =

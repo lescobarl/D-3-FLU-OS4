@@ -56,7 +56,13 @@
 
 # Módulo CONVERSACIÓN — dueño del módulo y sus consumidores externos
 /src/core/config/sharedConfig.ts           @lescobarl
+/src/App.tsx                            @lescobarl
+/src/lib/generationTopic.ts             @lescobarl
 /src/voice/conversation/**              @lescobarl
+/src/voice/lib/deterministicArbiter.js  @lescobarl
+/src/voice/hooks/wakePending.js          @lescobarl
+/src/voice/lib/fluConfig.js             @lescobarl
+/src/voice/hooks/useFluVoiceAssistant.js @lescobarl
 /src/voice/lib/conversationRow.js       @lescobarl
 /src/voice/lib/speakerDirectory.js      @lescobarl
 /src/core/db/conversationRowWriter.ts   @lescobarl

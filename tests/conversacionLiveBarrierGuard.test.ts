@@ -66,6 +66,13 @@ const FUENTES = {
     'utf8',
   ),
   cola: readFileSync(join(RAIZ, 'src/voice/conversation/cola.ts'), 'utf8'),
+  app: readFileSync(join(RAIZ, 'src/App.tsx'), 'utf8'),
+  rowWriter: readFileSync(join(RAIZ, 'src/core/db/conversationRowWriter.ts'), 'utf8'),
+  hook: readFileSync(join(RAIZ, 'src/voice/hooks/useFluVoiceAssistant.js'), 'utf8'),
+  arbiter: readFileSync(join(RAIZ, 'src/voice/lib/deterministicArbiter.js'), 'utf8'),
+  topic: readFileSync(join(RAIZ, 'src/lib/generationTopic.ts'), 'utf8'),
+  configPersistence: readFileSync(join(RAIZ, 'src/hooks/useConfigPersistence.ts'), 'utf8'),
+  wake: readFileSync(join(RAIZ, 'src/voice/hooks/wakePending.js'), 'utf8'),
 } as const
 
 type Fuente = keyof typeof FUENTES
@@ -74,6 +81,11 @@ type CasoId =
   | 'descarte-por-audio'
   | 'medida-sin-paso'
   | 'srGap-corta-wake'
+  | 'video-como-imagen'
+  | 'fila-sella-cierre'
+  | 'clave-solo-env'
+  | 'stop-sin-dedupe'
+  | 'navegacion-con-ia'
 
 /** Patrón viejo de cada caso y en qué dueño vivía. */
 const PATRONES: Readonly<Record<CasoId, { fuente: Fuente; patron: string }>> = {
@@ -92,6 +104,26 @@ const PATRONES: Readonly<Record<CasoId, { fuente: Fuente; patron: string }>> = {
   'srGap-corta-wake': {
     fuente: 'texto',
     patron: 'function marcarVigente',
+  },
+  'video-como-imagen': {
+    fuente: 'app',
+    patron: "workspaceImage.generateFromContract(scenePrompt, 'image_prompt')",
+  },
+  'fila-sella-cierre': {
+    fuente: 'rowWriter',
+    patron: 'timestamp: Number.isFinite(marca) ? marca : Date.now(),',
+  },
+  'clave-solo-env': {
+    fuente: 'configPersistence',
+    patron: 'useState<string>(() => resolveTextApiKey())',
+  },
+  'stop-sin-dedupe': {
+    fuente: 'texto',
+    patron: 'for (const siguiente of lotes) {',
+  },
+  'navegacion-con-ia': {
+    fuente: 'arbiter',
+    patron: 'if (!domain) return null',
   },
 }
 
@@ -143,6 +175,15 @@ describe('sesión real 5318166b — la caja pinta lo que se dicta', () => {
     expect(FUENTES.cola).toContain('ultimo:')
     expect(FUENTES.ingesta).toContain('pasoReintento')
     expect(FUENTES.ingesta).toContain('minNuevaVozMs')
+    expect(FUENTES.wake).toContain('export function aplicarWakePendiente')
+    expect(FUENTES.hook).toContain('aplicarWakePendiente(')
+    expect(FUENTES.arbiter).toContain("domain: 'navigation'")
+    expect(FUENTES.texto).toContain('function sinReentregas')
+    expect(FUENTES.topic).toContain('previousUser')
+    expect(FUENTES.rowWriter).toContain('marcaInicio')
+    expect(FUENTES.configPersistence).toContain(
+      'saveString(STORAGE_KEYS.TEXT_API_KEY, resolved)',
+    )
   })
 })
 
@@ -171,6 +212,11 @@ describe('PRUEBA DE DETECTOR (el detector no es decorativo)', () => {
     'descarte-por-audio': 'tramo.fin > previa.tramo.fin',
     'medida-sin-paso': 'estado.muestrasEnUltimoIntento < minimo',
     'srGap-corta-wake': 'function marcarVigente',
+    'video-como-imagen': "workspaceImage.generateFromContract(scenePrompt, 'image_prompt')",
+    'fila-sella-cierre': 'timestamp: Number.isFinite(marca) ? marca : Date.now(),',
+    'clave-solo-env': 'useState<string>(() => resolveTextApiKey())',
+    'stop-sin-dedupe': 'for (const siguiente of lotes) {',
+    'navegacion-con-ia': 'if (!domain) return null',
   }
 
   for (const id of Object.keys(PATRONES) as CasoId[]) {

@@ -94,7 +94,7 @@ function shortTitleFromBody(body: string, titleMaxChars: number): string {
  * cuando el artifact no trae título (p. ej. `App` usa 'Video'/'Documento').
  * Un título igual al tipo no informa; en ese caso se usa el tema de generación.
  */
-const PLACEHOLDER_DOC_TITLES = new Set(['video', 'documento']);
+const PLACEHOLDER_DOC_TITLES = new Set(['video', 'documento', 'pdf', 'doc']);
 
 /**
  * Resuelve el TÍTULO visible de un documento/video sin confundirlo con el
@@ -141,34 +141,47 @@ export function normalizeWorkspaceDocumentFields(
  */
 export function buildGenerationTopic(state: GenerationConversationSlice): { tema: string; contenido: string } {
     const history = Array.isArray(state.conversationHistory) ? state.conversationHistory : [];
-    let lastUser = '';
-    for (let i = history.length - 1; i >= 0; i -= 1) {
+    const userTexts: string[] = [];
+    for (let i = history.length - 1; i >= 0 && userTexts.length < 4; i -= 1) {
         const entry = history[i];
         if (!entry) continue;
         const role = String(entry.role || '').toLowerCase();
         const speaker = String(resolveRowSpeakerLabel(entry) || '');
         if (role === 'user' || (speaker && speaker !== 'FLU' && speaker !== 'flu')) {
-            lastUser = (entry.text || '').trim();
-            break;
+            userTexts.push((entry.text || '').trim());
         }
     }
+    const lastUser = userTexts[0] || '';
+    // CONTEXTO: si el mandato actual no trae tema ("genera un video"), el tema
+    // es la última frase del usuario CON tema, no el placeholder del tipo.
+    const previousUser = userTexts.find((text, index) => index > 0 && cleanTopicFromCommand(text)) || '';
     const lastResp = (state.lastResponse || '').trim();
     const artifact = state.workspaceArtifact;
     const isContractGeneration =
         artifact && ['doc', 'video', 'pdf'].includes(String(artifact.tipo || '').toLowerCase());
-
     if (isContractGeneration && artifact) {
         const raw = (artifact.contenido || artifact.titulo || '').trim();
         const cleanedArtifact = cleanTopicFromCommand(raw);
         const cleanedUser = cleanTopicFromCommand(lastUser);
-        const source = raw || lastUser;
-        const tema = (cleanedArtifact || cleanedUser || lastUser || artifact.titulo || 'Documento').slice(0, 200);
-        const contenido = (source || cleanedUser || cleanedArtifact || '').slice(0, 1200);
+        const cleanedPrevious = cleanTopicFromCommand(previousUser);
+        const temaBase = [cleanedArtifact, cleanedUser, cleanedPrevious, previousUser, raw, lastUser, artifact.titulo, lastResp]
+            .map((value) => String(value || '').trim())
+            .find((value) => value && !PLACEHOLDER_DOC_TITLES.has(value.toLowerCase())) || '';
+        const tema = (temaBase || 'Documento').slice(0, 200);
+        // El CONTENIDO del artifact manda; si es un placeholder/ vacío, se usa el
+        // contexto del usuario. La respuesta-filler del asistente NUNCA es cuerpo.
+        const contenido = raw && !PLACEHOLDER_DOC_TITLES.has(raw.toLowerCase())
+            ? raw.slice(0, 1200)
+            : [cleanedUser || lastUser, previousUser].filter(Boolean).join('\n').slice(0, 1200);
         return { tema, contenido };
     }
 
     const cleanedUser = cleanTopicFromCommand(lastUser);
-    const tema = (cleanedUser || lastUser || artifact?.titulo || artifact?.contenido || lastResp || '').slice(0, 200);
-    const contenido = [cleanedUser || lastUser, lastResp].filter(Boolean).join('\n').slice(0, 1200);
+    const cleanedPrevious = cleanTopicFromCommand(previousUser);
+    const temaBase = [cleanedUser, cleanedPrevious, lastUser, previousUser, artifact?.titulo, artifact?.contenido, lastResp]
+        .map((value) => String(value || '').trim())
+        .find((value) => value && !PLACEHOLDER_DOC_TITLES.has(value.toLowerCase())) || '';
+    const tema = temaBase.slice(0, 200);
+    const contenido = [cleanedUser || lastUser, previousUser, lastResp].filter(Boolean).join('\n').slice(0, 1200);
     return { tema, contenido };
 }

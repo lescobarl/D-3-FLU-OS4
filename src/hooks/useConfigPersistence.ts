@@ -14,7 +14,7 @@
 // ============================================================
 
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { STORAGE_KEYS, UI_DEFAULTS, resolveTextApiKey, resolveDedicatedGeminiApiKey, resolveFalVideoModel } from '../core/config/appConfig';
+import { STORAGE_KEYS, UI_DEFAULTS, resolveTextApiKey, resolveDedicatedGeminiApiKey, resolveFalApiKey, resolveFalVideoModel } from '../core/config/appConfig';
 import { FLU_CONFIG } from '../voice/api/config'
 import { getSpeechVoices, subscribeSpeechVoices } from '../voice/api/speech';
 import { useAuditLog } from './useAuditLog';
@@ -128,7 +128,16 @@ export function useConfigPersistence(): ConfigPersistence {
     // ---- Text (Gemini) Config ----
     // Usa resolveTextApiKey() centralizado desde appConfig para evitar
     // duplicación de lógica de resolución de API key (Rule #1: NO HARDCODE)
-    const [apiKey, setApiKey] = useState<string>(() => resolveTextApiKey());
+    // Semilla de persistencia: si la clave vino del entorno (VITE_*), se guarda
+    // UNA vez en el almacenamiento del navegador para que un reinicio del
+    // dev-server sin ese entorno no la pierda (medido 2026-11-10).
+    const [apiKey, setApiKey] = useState<string>(() => {
+        const resolved = resolveTextApiKey();
+        if (resolved && !loadString(STORAGE_KEYS.TEXT_API_KEY)) {
+            saveString(STORAGE_KEYS.TEXT_API_KEY, resolved);
+        }
+        return resolved;
+    });
 
     const [textModel, setTextModel] = useState<string>(() => loadString(STORAGE_KEYS.TEXT_MODEL));
     const [textApiUrl, setTextApiUrl] = useState<string>(() => loadString(STORAGE_KEYS.TEXT_API_URL));
@@ -142,7 +151,13 @@ export function useConfigPersistence(): ConfigPersistence {
     const [imageModel, setImageModel] = useState<string>(() => loadString(STORAGE_KEYS.IMAGE_MODEL));
     const [imageApiUrl, setImageApiUrl] = useState<string>(() => loadString(STORAGE_KEYS.IMAGE_API_URL));
     // ---- Video (fal.ai) ----
-    const [falApiKey, setFalApiKey] = useState<string>(() => loadString(STORAGE_KEYS.FALAI_API_KEY));
+    const [falApiKey, setFalApiKey] = useState<string>(() => {
+        const resolved = resolveFalApiKey();
+        if (resolved && !loadString(STORAGE_KEYS.FALAI_API_KEY)) {
+            saveString(STORAGE_KEYS.FALAI_API_KEY, resolved);
+        }
+        return resolved;
+    });
     const [falVideoModel, setFalVideoModel] = useState<string>(() => resolveFalVideoModel());
 
     // ---- OCR Config (local Tesseract default + endpoint remoto opcional) ----

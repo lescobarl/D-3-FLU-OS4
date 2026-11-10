@@ -599,7 +599,7 @@
     {
       "id": "turno-ya-escrito",
       "owner": "src/voice/conversation/ingesta.ts",
-      "description": "El motivo turnoYaEscrito tiene un solo dueno: la reentrega de texto de ingesta.",
+      "description": "El motivo turnoYaEscrito tiene un solo dueno: el callback de ingesta; ingesta y el stop lo consumen sin repetir el literal.",
       "pattern": "contarDescarte\\(\\s*['\"]turnoYaEscrito['\"]",
       "roots": ["src/voice/conversation"],
       "kind": "sites",

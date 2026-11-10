@@ -227,7 +227,7 @@ export const FLU_CONFIG = {
     },
   },
   timing: {
-    resumeAfterSpeechMs: 50, nameCommandDeferMs: 1200,
+    resumeAfterSpeechMs: 50, nameCommandDeferMs: 1200, wakePendingMs: 4000,
     /** Fase 7 — reanudación dinámica según longitud de respuesta (clamp [min,max]). */
     resumeAfterSpeechMinMs: 50,
     resumeAfterSpeechMaxMs: 500,

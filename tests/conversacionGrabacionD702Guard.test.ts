@@ -66,9 +66,13 @@ describe('sesión real d70267b8 — reinicio de turno, log y diarización', () =
       join(RAIZ, 'src/voice/hooks/useFluVoiceAssistant.js'),
       'utf8',
     )
-    expect(hook).toContain('const eventoDelMotor')
-    expect(hook).toContain('slice(desdeResultado)')
-    expect(hook).toContain('resultIndex: 0')
+    expect(hook).toContain('aplicarWakePendiente(')
+    const wakePending = readFileSync(
+      join(RAIZ, 'src/voice/hooks/wakePending.js'),
+      'utf8',
+    )
+    expect(wakePending).toContain('slice(desdeResultado)')
+    expect(wakePending).toContain('resultIndex: 0')
     expect(hook).toContain("requestRecognitionRestartRef.current?.('frontera-turno', 0)")
 
     const adapters = readFileSync(

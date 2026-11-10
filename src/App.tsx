@@ -1714,28 +1714,27 @@ function App() {
                     // (idempotente por comando). NO se despacha evento: el bus
                     // era la segunda ruta y permitía re-generar (fuga de crédito).
                     const isVideo = tipo === 'video';
-                    const ran = requestMediaRef.current(isVideo ? 'video' : 'doc', transcript, () => {
-                        integrationStore.setWorkspaceArtifact({
-                            id: uuidv4(),
-                            respuesta: contenido || titulo || respuestaVoz,
-                            titulo: titulo || (isVideo ? 'Video' : 'Documento'),
-                            tipo: isVideo ? 'video' : 'doc',
-                            contenido: contenido || '',
-                            prompt_visual: promptVisual || '',
-                            puntos_clave,
-                            origen: 'ia',
-                            timestamp: Date.now(),
+                    // El video tiene UN dueño: GENERAR_VIDEO (navigation). Si el
+                    // árbitro ya lo resolvió, el contrato IA NO duplica la generación
+                    // (doble ruta medida 2026-11-10 21:36:41/58).
+                    if (isVideo && navegacion.comando === COMMAND_IDS.GENERAR_VIDEO) {
+                        relayLog('LOG', 'App', 'onContractResolved: video lo ejecuta GENERAR_VIDEO (navigation); el contrato IA no duplica');
+                    } else {
+                        const ran = requestMediaRef.current(isVideo ? 'video' : 'doc', transcript, () => {
+                            integrationStore.setWorkspaceArtifact({
+                                id: uuidv4(),
+                                respuesta: contenido || titulo || respuestaVoz,
+                                titulo: titulo || (isVideo ? 'Video' : 'Documento'),
+                                tipo: isVideo ? 'video' : 'doc',
+                                contenido: contenido || '',
+                                prompt_visual: promptVisual || '',
+                                puntos_clave,
+                                origen: 'ia',
+                                timestamp: Date.now(),
+                            });
                         });
-                    });
-                    if (ran) {
-                        relayLog('LOG', 'App', `onContractResolved: workspace ${isVideo ? 'video' : 'doc'} → generación ÚNICA (ruta idempotente)`);
-                        // Bug #5: para un video, además del guion/ensamblado se genera
-                        // una ESCENA visual del asunto (imagen real en el Pizarrón).
-                        if (isVideo) {
-                            const scenePrompt = cleanForSpeech(promptVisual || contenido || titulo || '');
-                            if (scenePrompt.length >= 5) {
-                                workspaceImage.generateFromContract(scenePrompt, 'image_prompt');
-                            }
+                        if (ran) {
+                            relayLog('LOG', 'App', `onContractResolved: workspace ${isVideo ? 'video' : 'doc'} → generación ÚNICA (ruta idempotente)`);
                         }
                     }
                     }

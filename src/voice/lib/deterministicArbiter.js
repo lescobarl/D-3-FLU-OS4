@@ -513,7 +513,31 @@ export function resolveDeterministicSkipGeminiContract({
         ? 'environment'
         : null
 
-  if (!domain) return null
+  if (!domain) {
+    // NAVEGACIÓN (BUSCAR/NAVEGAR/GENERAR_VIDEO/GENERAR_DOCUMENTO): su dueño es
+    // `handleNavigationCommand`. Sin esta rama el mandato caía a Gemini y el
+    // contrato IA volvía a generar (doble ruta medida 2026-11-10 21:36:41/58).
+    const navigation = resolveDeterministicCommand(text, { language })
+    if (navigation?.matched && navigation.domain === 'navigation') {
+      const comando = typeof navigation.action === 'string' ? navigation.action : ''
+      if (comando) {
+        return {
+          domain: 'navigation',
+          contract: {
+            respuesta_voz: '',
+            navegacion: { comando, destino: null, parametros: {} },
+            workspace: null,
+            musica: null,
+            configuracion: null,
+            juego: null,
+            ambiente: null,
+            metadata: { provider: 'deterministic-arbiter', transcript: text, rawText: '' },
+          },
+        }
+      }
+    }
+    return null
+  }
 
   const action =
     domain === 'config'

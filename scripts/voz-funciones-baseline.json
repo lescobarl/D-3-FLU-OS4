@@ -965,6 +965,9 @@
       "requiresWakeWord",
       "resolveInlineWakeAtCommit"
     ],
+    "src/voice/hooks/wakePending.js": [
+      "aplicarWakePendiente"
+    ],
     "src/voice/lib/wakeWord.js": [
       "buildWakeWordPattern",
       "configuredWakeWords",
