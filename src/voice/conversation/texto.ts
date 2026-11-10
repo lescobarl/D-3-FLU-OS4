@@ -117,7 +117,11 @@ export function crearFlujoTexto({
     if (!mismaVoz) return nuevo
     if (nuevo.toLowerCase().startsWith(previo.toLowerCase())) {
       const resto = nuevo.slice(previo.length).trim()
-      return resto || nuevo
+      // Texto idéntico: sin partición es la MISMA frase dicha otra vez (fila
+      // legítima, se conserva). Con partición de voz TODO el texto pertenece
+      // al audio ya commiteado: la voz nueva NO re-incluye nada de la fila
+      // anterior y su locución sigue vacía hasta su cola propia.
+      return resto || (partidaDeVoz ? '' : nuevo)
     }
     return nuevo
   }
@@ -191,9 +195,14 @@ export function crearFlujoTexto({
     medida: MedidaMotor | undefined,
     tramoOrigen: string,
   ): void {
+    // La línea ACUMULADA del producto re-incluye el texto de la última fila ya
+    // commiteada; se queda solo la cola nueva ANTES de la revisión. Con
+    // `partidaDeVoz` el prefijo pertenece al audio ya commiteado, sea de la
+    // voz que sea (dueño único `sinPrefijoDeLaFilaAnterior`).
+    const textoAplicado = sinPrefijoDeLaFilaAnterior(texto, voz, abierta.partidaDeVoz)
     sesion.aplicarRevision(
       abierta,
-      texto,
+      textoAplicado,
       finalValido,
       voz,
       finalValido ? medida : undefined,

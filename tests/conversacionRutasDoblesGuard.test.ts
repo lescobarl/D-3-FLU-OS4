@@ -1,3 +1,4 @@
+// BARRERA: rutas-dobles-medidas
 /**
  * conversacionRutasDoblesGuard — barrera medida de las rutas dobles del módulo
  * CONVERSACIÓN.
@@ -15,6 +16,10 @@
  *   atribución del texto.
  *  - El final se compone desde 0 (hipótesis completa), no con `resultIndex`.
  *  - No se descarta por prefijo de texto (`previo.includes(nuevo)`).
+ *  - El cierre de la locución tiene DOS puertas medidas (voz distinta o
+ *    silencio ≥ silenceCloseMs); el final del ASR no es una tercera.
+ *  - El dedupe del despacho tiene UN dueño (el plan en audioMath); el cableado
+ *    no filtra por texto. El recorte del prefijo de fila tiene UN dueño.
  *
  * La línea base solo BAJA: si una métrica baja, se actualiza en el mismo
  * cambio; si sube, este guard falla. Además, la base versionada no puede subir
@@ -42,12 +47,21 @@ const BASELINE = JSON.parse(
   funciones: Record<string, readonly string[]>
 }
 
-const FUENTES: readonly Fuente[] = readdirSync(DIRECTORIO)
-  .filter((nombre) => /\.(?:ts|js)$/.test(nombre))
-  .map((nombre) => ({
-    nombre,
-    src: readFileSync(join(DIRECTORIO, nombre), 'utf8'),
-  }))
+const FUENTES: readonly Fuente[] = [
+  ...readdirSync(DIRECTORIO)
+    .filter((nombre) => /\.(?:ts|js)$/.test(nombre))
+    .map((nombre) => ({
+      nombre,
+      src: readFileSync(join(DIRECTORIO, nombre), 'utf8'),
+    })),
+  {
+    nombre: 'compose/conversationMotorProducto.js',
+    src: readFileSync(
+      join(process.cwd(), 'src/voice/compose/conversationMotorProducto.js'),
+      'utf8',
+    ),
+  },
+]
 
 const fuente = (nombre: string): string =>
   FUENTES.find((archivo) => archivo.nombre === nombre)?.src ?? ''
@@ -73,6 +87,14 @@ function walk(dir: string): string[] {
 
 const CONTINUIDAD_OWNERS = walk(join(process.cwd(), 'src')).filter((file) =>
   /function continuaLaFrase\b/.test(readFileSync(file, 'utf8')),
+).length
+
+/** Dueños del dedupe del despacho: el plan (audioMath) decide por firma y
+ *  ventana; un filtro por texto en OTRO archivo es una ruta doble. */
+const DISPATCH_DEDUPE_OWNERS = walk(join(process.cwd(), 'src/voice')).filter((file) =>
+  /ultimaDespachada|isAsrRevision|lastSignature\s*===\s*signature/.test(
+    readFileSync(file, 'utf8'),
+  ),
 ).length
 
 /** Fuentes de TODO src, con ruta relativa: mide consumidores fuera del m?dulo. */
@@ -225,6 +247,11 @@ function medir(fuentes: readonly Fuente[] = FUENTES) {
       0,
     ),
     continuidadOwners: CONTINUIDAD_OWNERS,
+    dispatchDedupeOwners: DISPATCH_DEDUPE_OWNERS,
+    closureDoors: contar(fuenteEn('frontera.ts'), /return\s*\{\s*cerrar:\s*true/g),
+    prefixStripOwner: fuentes.filter((archivo) =>
+      /sinPrefijoDeLaFilaAnterior\(/.test(archivo.src),
+    ).length,
     ...medirPropiedadSemantica(FUENTES_SRC),
   }
 }
@@ -362,10 +389,12 @@ describe('CONVERSACIÓN — rutas dobles medidas', () => {
     expect(fuente('texto.ts')).toContain('const vigente = tramos.vigente(tramoId)')
   })
 
-  it('el cierre por final tiene un solo dueño (frontera)', () => {
-    expect(medir().cierreDecisionOwners).toBe(1)
-    expect(fuente('frontera.ts')).toContain('finalDeFrase')
-    expect(fuente('ingesta.ts')).toContain('finalDeFrase: true')
+  it('el cierre por final quedó retirado: DOS puertas y UN dueño por decisión', () => {
+    expect(medir().closureDoors).toBe(2)
+    expect(medir().dispatchDedupeOwners).toBe(1)
+    expect(medir().prefixStripOwner).toBe(1)
+    expect(fuente('frontera.ts')).not.toContain('finalDeFrase')
+    expect(fuente('ingesta.ts')).not.toContain('finalDeFrase')
     expect(fuente('texto.ts')).not.toContain('finalDeFrase')
   })
 

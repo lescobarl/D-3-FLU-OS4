@@ -282,12 +282,46 @@ export function crearIngesta({
       embebedor.comparar(vector, previo) >= umbral
     if (mismaVoz) {
       // Misma voz: la etiqueta se conserva y el tramo continuo NO cambia
-      // de etiqueta; el contador avanza hasta el fin medido.
+      // de etiqueta; el contador avanza hasta el fin medido y la cadena de
+      // voces distintas se rompe (la confirmación arranca de cero).
       if (mismotramo) estado.medidoHastaFin = Math.max(estado.medidoHastaFin, finAlMedir)
+      estado.contadorCambioVoz = 0
+      estado.candidatoCambioVoz = null
       return null
     }
+    // CONFIRMACIÓN del cambio (Caso 1+3): UNA ventana distinta no parte la
+    // fila (el embebedor tartamudea en la frontera de un tramo); se exigen
+    // `confirmacionesCambioVoz` ventanas SEGUIDAS. La primera distinta sella
+    // el fin medido: la siguiente ventana sale de audio NUEVO, nunca del
+    // mismo tramo contado dos veces.
+    estado.contadorCambioVoz += 1
+    if (estado.contadorCambioVoz < (configuracion.confirmacionesCambioVoz || 2)) {
+      // RETENCIÓN (definición correcta): la primera ventana sospechosa NO se
+      // queda en la fila anterior. Se guarda su límite y el texto que había
+      // ANTES de ella; si la segunda confirma, A cierra con ese texto y la
+      // ventana (texto incluido) pasa al hablante nuevo.
+      const entrante = mismotramo ? null : tramos.resolver(tramoId)
+      const limite = mismotramo
+        ? finAlMedir - cola.length
+        : entrante?.inicio ?? finAlMedir - cola.length
+      if (mismotramo) estado.medidoHastaFin = finAlMedir
+      estado.candidatoCambioVoz = {
+        limite,
+        textoAntes: String(estado.abierta?.texto || ''),
+      }
+      return null
+    }
+    estado.contadorCambioVoz = 0
+    const candidato = estado.candidatoCambioVoz
+    estado.candidatoCambioVoz = null
+    const actual = estado.abierta
+    if (candidato && actual && String(actual.texto || '') !== candidato.textoAntes) {
+      // A se queda con lo que dijo ANTES de la ventana sospechosa; el texto
+      // acumulado que llega después se recorta contra esta fila y va a B.
+      estado.abierta = { ...actual, texto: candidato.textoAntes }
+    }
     if (mismotramo) {
-      const limite = finAlMedir - cola.length
+      const limite = candidato?.limite ?? finAlMedir - cola.length
       if (limite <= abierta.inicio || limite >= abierta.fin) return null
       return partirLocucionPorCambioDeVoz(
         {
@@ -305,11 +339,13 @@ export function crearIngesta({
     }
     const entrante = tramos.resolver(tramoId)
     if (!entrante) return null
+    const limite = candidato?.limite ?? entrante.inicio
+    if (limite < 0 || limite >= entrante.fin) return null
     const tramoRegistrado = tramos.vigente(tramoId)
     return partirLocucionPorCambioDeVoz(
       {
         tramoId,
-        inicio: entrante.inicio,
+        inicio: limite,
         fin: entrante.fin,
         sampleRate: entrante.sampleRate,
         silencioPrevioMs: tramoRegistrado?.silencioPrevioMs ?? 0,
@@ -429,9 +465,11 @@ export function crearIngesta({
       { inicio: datos.inicio, fin: datos.fin, sampleRate: datos.sampleRate },
       turno,
       idioma,
-      // El hecho de la partición: la anterior se RECORTÓ dentro de su audio
-      // (continuación real) vs. el VAD ya la había cortado (tramo nuevo).
-      datos.recortarAnterior !== null,
+      // TODO caparazón de partición de voz lleva la marca, se haya recortado
+      // la anterior dentro de su audio o la haya cortado el VAD: la línea
+      // acumulada del producto re-incluye el texto ya commiteado y el recorte
+      // de prefijo de la fila anterior debe disparar SIEMPRE.
+      true,
     )
     // 3. Identidad de la voz nueva con el MISMO vector (etiqueta perezosa).
     if (!aplicarIdentidadAlTramoAbierto(vector, ventana.length)) return null
@@ -791,48 +829,11 @@ export function crearIngesta({
     }
     // La ATRIBUCIÓN va después de la VOZ: si el tramo entrante es otra voz, ya
     // se abrió SU locución; si no, el texto decide continuación/pendiente.
-    const tramoVoz = (await verificarCambioVoz(tramoId)) ?? tramoId
-    // DOS FRASES EN EL MISMO TRAMO: el ASR cerró una frase nueva y el tramo de
-    // audio no cambió. El tramo no puede ser dueño de dos filas: se cierra la
-    // primera y la segunda abre SU locución con un tramo sintético al final del
-    // audio real (mismo dueño `tramoSinteticoParaTexto`).
-    const abiertaParaFinal = estado.abierta
-    const continuaFinal =
-      Boolean(abiertaParaFinal) &&
-      continuaLaFrase(abiertaParaFinal?.texto || '', entrada.texto)
-    if (
-      entrada.final &&
-      abiertaParaFinal &&
-      String(abiertaParaFinal.texto || '').trim() &&
-      !continuaFinal
-    ) {
-      const locucionAnterior = abiertaParaFinal
-      const cierreFinal = decidirFrontera(
-        {
-          medida: { hayVoz: true, silencioMs: 0 },
-          textoAjeno: true,
-          abierta: true,
-          finalDeFrase: true,
-        },
-        configuracion,
-      )
-      await sesion.cerrarLocucion(
-        locucionAnterior,
-        'system',
-        cierreFinal.causa ?? 'frontera',
-        locucionAnterior.final,
-      )
-      // La frase nueva necesita SU id: el tramo de audio puede ser el mismo
-      // (dos frases en un tramo) o uno ya commiteado. Solo si NO es el tramo de
-      // la locución cerrada y sigue vivo se reutiliza su ventana real.
-      const entrante = tramos.vigente(tramoVoz)
-      tramoId =
-        tramoVoz && tramoVoz !== locucionAnterior.locutionId && entrante
-          ? tramoVoz
-          : tramoSinteticoParaTexto()
-    }
+    // Un `final` del ASR NO cierra la locución (solo la marca): la puerta es
+    // la frontera (voz medida o silencio medido).
+    const tramoVoz = await verificarCambioVoz(tramoId)
     const tramoDestino = tramoDestinoDeTexto(
-      tramoId,
+      tramoVoz ?? tramoId,
       entrada.texto,
       entrada.silencioPrevioMs,
     )

@@ -934,8 +934,8 @@ describe('fila nueva - no repite el texto de la fila anterior', () => {
   })
 })
 
-describe('cierre por final de frase', () => {
-  it('un final de otra frase cierra la anterior y abre la nueva en el acto', async () => {
+describe('el final NO es puerta de cierre', () => {
+  it('un final de otra frase queda pendiente: la anterior sigue abierta hasta la frontera', async () => {
     const { api } = crearEscenario()
     await api.start()
     const tramoA = await abrirConVoz(api, 0)
@@ -949,11 +949,18 @@ describe('cierre por final de frase', () => {
     const tramoB = estadoB.tramoAudio?.tramoId
     if (!tramoB) throw new Error('sin tramo B')
 
+    // El final de B NO cierra: su texto es ajeno y queda pendiente; A sigue
+    // abierta con su frase (la única puerta de cierre es la frontera medida).
     const estado = await api.ingestAsr(
       asr(tramoB, { texto: 'dos', final: true }),
     )
-    expect(estado.filas.map((fila) => fila.texto)).toEqual(['uno'])
-    expect(estado.locucionAbierta?.texto).toBe('dos')
+    expect(estado.filas.map((fila) => fila.texto)).toEqual([])
+    expect(estado.locucionAbierta?.texto).toBe('uno')
+
+    // El silencio medido (puerta de abajo) cierra A y su fila sale UNA vez.
+    const cerrado = await cerrarPorSilencio(api, inicioB + SAMPLE_RATE)
+    expect(cerrado.filas.map((fila) => fila.texto)).toEqual(['uno'])
+    expect(cerrado.locucionAbierta).toBeNull()
   })
 })
 

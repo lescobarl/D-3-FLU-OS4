@@ -312,6 +312,12 @@ export interface ConfiguracionConversacion {
   readonly minSilenceMs: number
   /** Silencio sin texto ajeno que cierra por la segunda vía. */
   readonly silenceCloseMs: number
+  /**
+   * Ventanas SEGUIDAS de voz distinta que confirman un cambio antes de partir
+   * la locución (Caso 1+3). Una sola puede ser el tartamudeo del embebedor en
+   * la frontera de un tramo.
+   */
+  readonly confirmacionesCambioVoz: number
   /** Ventana de retención del ASR huérfano. */
   readonly orphanBufferMs: number
   /** ASR: motor preferido e idioma fijo de la nube. */
@@ -339,6 +345,9 @@ export const CONVERSACION_CONFIG: ConfiguracionConversacion = Object.freeze({
   get silenceCloseMs(): number {
     return Number(getTranscriptPauseCfg()?.srGapCommitMs) || 0
   },
+  // UNA ventana de voz distinta no parte la fila: el embebedor puede
+  // tartamudear en la frontera de un tramo; se exigen DOS seguidas.
+  confirmacionesCambioVoz: 2,
   orphanBufferMs: 8000,
   asr: Object.freeze({ engine: 'auto', lang: 'es' }),
   maxRetentionMin: 120,

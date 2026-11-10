@@ -48,4 +48,10 @@
   'tests/nombreRespuestaDiferidaGuard.test.ts',
   'tests/guardianGuard.test.ts',
   'tests/onboardingCierreHablaGuard.test.ts',
+  'tests/conversacionCierreDosPuertasGuard.test.ts',
+  'tests/conversacionDespachoUnicoDuenoGuard.test.ts',
+  'tests/conversacionCambioVozConfirmadoGuard.test.ts',
+  'tests/conversacionPrefijoFilaPartidaGuard.test.ts',
+  'tests/tramoUnicoGuard.test.ts',
+  'tests/barreraUnicaGuard.test.ts',
 ]

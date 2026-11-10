@@ -63,6 +63,9 @@ export type EstadoCierre = {
   /** Muestras retenidas en el último intento de medida temprana (freno). */
   muestrasEnUltimoIntento: number
   contadorVoces: number
+  /** Confirmación de cambio de voz (Caso 1+3): pertenece a la locución abierta. */
+  contadorCambioVoz: number
+  candidatoCambioVoz: { limite: number; textoAntes: string } | null
   /** Bautizo pendiente del comando «ok flu soy X» (problema 5). */
   nombrePendiente: string
 }
@@ -247,6 +250,10 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
   } = contexto
   /** Abre la única locución abierta; el llamador garantiza que no hay otra. */
   function abrirLocucion(datos: DatosApertura): void {
+    // El contador/candidato de cambio de voz pertenecen a la locución ABIERTA:
+    // una locución nueva arranca la confirmación de cero (sin arrastre).
+    estado.contadorCambioVoz = 0
+    estado.candidatoCambioVoz = null
     const vozId = String(datos.voz.vozId || '').trim()
     // MANDATO DEL DUEÑO (2026-10-30, problema 4): sin medida positiva NO hay
     // continuidad. Una locución sin vozId no hereda la etiqueta anterior; solo
@@ -567,6 +574,10 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
     causa: CausaCierre,
     final: boolean,
   ): Promise<void> {
+    // El candidato de cambio de voz no sobrevive al cierre: pertenece a la
+    // locución que se cierra, no a la siguiente.
+    estado.contadorCambioVoz = 0
+    estado.candidatoCambioVoz = null
     const sesion = estado.sessionId ?? ''
     const tramo: TramoMuestreado = {
       inicio: locucion.inicio,

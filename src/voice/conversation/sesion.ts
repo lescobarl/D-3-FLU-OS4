@@ -78,6 +78,10 @@ export type EstadoSesion = {
   medidaVozEnCurso: boolean
   /** Fin del tramo cubierto por la última medida de voz (partición Caso 1+3). */
   medidoHastaFin: number
+  /** Ventanas SEGUIDAS de voz distinta ya contadas (confirmación Caso 1+3). */
+  contadorCambioVoz: number
+  /** Primera ventana sospechosa retenida: su audio y su texto van al hablante nuevo si se confirma. */
+  candidatoCambioVoz: { limite: number; textoAntes: string } | null
   oyentes: Set<(evento: EventoConversacion) => void>
 }
 
@@ -126,6 +130,8 @@ export function crearEstadoSesion(idiomaInicial: IdiomaLocucion): EstadoSesion {
     contadorVoces: 0,
     medidaVozEnCurso: false,
     medidoHastaFin: 0,
+    contadorCambioVoz: 0,
+    candidatoCambioVoz: null,
     oyentes: new Set(),
   }
 }
@@ -312,6 +318,8 @@ export function crearSesion(
     estado.contadorVoces = 0
     estado.medidaVozEnCurso = false
     estado.medidoHastaFin = 0
+    estado.contadorCambioVoz = 0
+    estado.candidatoCambioVoz = null
   }
 
   return {

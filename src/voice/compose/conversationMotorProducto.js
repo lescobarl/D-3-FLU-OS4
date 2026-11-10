@@ -72,8 +72,6 @@ export function crearMotorConversacionHook({
     // proveedor devuelve '' y el módulo acuña el propio (N/A).
     recordingId: () => getSessionRecordingStatus().sessionId || '',
   })
-  /** Última frase canónica despachada: el planificador decide dedup; esto evita repetir el mismo texto. */
-  let ultimaDespachada = ''
   /** Última locución commiteada: `row.committed` puede repetirse al promover la fila. */
   let ultimaCommiteada = ''
   /** Timer único de la frase viva: agrupa ráfagas de interinos en un render. */
@@ -98,8 +96,10 @@ export function crearMotorConversacionHook({
    */
   function despacharFraseVigente(interim) {
     const frase = String(motor.instantanea().fraseCanonica || '').trim()
-    if (!frase || frase === ultimaDespachada) return
-    ultimaDespachada = frase
+    // Dedupe del despacho: el ÚNICO dueño es el planificador de audioMath
+    // (compara firma y ventana); el cableado NO filtra repeticiones: cada
+    // frase vigente se entrega y el plan decide.
+    if (!frase) return
     // Cualquier frase nueva cancela una respuesta de nombre pendiente: el
     // usuario sigue hablando. El defer vive aquí, en el cableado del motor;
     // el hook solo despacha. No se toca el VAD.
@@ -258,7 +258,6 @@ export function crearMotorConversacionHook({
     // Frontera de TURNO: una locución nueva. La promoción de la MISMA fila no lo es.
     if (esNuevaLocucion) {
       ultimaCommiteada = evento.fila.locutionId
-      ultimaDespachada = ''
       onLocucionCommiteada?.(evento.fila)
     }
     if (liveTimer) clearTimeout(liveTimer)

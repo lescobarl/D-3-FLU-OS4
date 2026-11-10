@@ -1,0 +1,46 @@
+{
+  "barreras": [
+    {
+      "id": "rutas-dobles-medidas",
+      "test": "tests/conversacionRutasDoblesGuard.test.ts",
+      "motivo": "Metricas y casos declarados de rutas dobles de conversacion.",
+      "fecha": "2026-11-10"
+    },
+    {
+      "id": "cierre-dos-puertas",
+      "test": "tests/conversacionCierreDosPuertasGuard.test.ts",
+      "motivo": "El cierre solo tiene las puertas de voz y silencio; el final del ASR no cierra.",
+      "fecha": "2026-11-10"
+    },
+    {
+      "id": "despacho-unico",
+      "test": "tests/conversacionDespachoUnicoDuenoGuard.test.ts",
+      "motivo": "El dedupe del despacho tiene un solo dueno (planConversationDispatch).",
+      "fecha": "2026-11-10"
+    },
+    {
+      "id": "cambio-voz-confirmado",
+      "test": "tests/conversacionCambioVozConfirmadoGuard.test.ts",
+      "motivo": "Una ventana distinta no parte: se exigen dos y la primera se retiene para el hablante nuevo.",
+      "fecha": "2026-11-10"
+    },
+    {
+      "id": "prefijo-fila-partida",
+      "test": "tests/conversacionPrefijoFilaPartidaGuard.test.ts",
+      "motivo": "La locucion partida no re-incluye el texto de la fila anterior.",
+      "fecha": "2026-11-10"
+    },
+    {
+      "id": "tramo-unico",
+      "test": "tests/tramoUnicoGuard.test.ts",
+      "motivo": "El tramo sintetico y el tramoId con uuid solo nacen en sus duenos.",
+      "fecha": "2026-11-10"
+    },
+    {
+      "id": "barrera-unica",
+      "test": "tests/barreraUnicaGuard.test.ts",
+      "motivo": "Cada prohibicion tiene un solo test dueno; dos barreras para la misma prohibicion es una ruta doble.",
+      "fecha": "2026-11-10"
+    }
+  ]
+}

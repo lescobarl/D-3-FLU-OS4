@@ -62,6 +62,8 @@ function crearProbe(
     tramosDeLaAbierta: new Set(),
     muestrasEnUltimoIntento: 0,
     contadorVoces: 0,
+    contadorCambioVoz: 0,
+    candidatoCambioVoz: null,
     nombrePendiente: '',
   }
   const reglas = crearReglasCierre({
@@ -147,6 +149,8 @@ function crearProbePendiente() {
     tramosDeLaAbierta: new Set(),
     muestrasEnUltimoIntento: 0,
     contadorVoces: 0,
+    contadorCambioVoz: 0,
+    candidatoCambioVoz: null,
     nombrePendiente: '',
   }
   const guardadas = new Map<string, Fila>()

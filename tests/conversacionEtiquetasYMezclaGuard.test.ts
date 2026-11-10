@@ -262,7 +262,11 @@ describe('Caso 1+3 — dos voces SIN pausa (módulo real, embebedor falso)', () 
     await entregarAudio(escenario.api, VOZ(), cursor)
     await entregarAudio(escenario.api, VOZ(), cursor)
     await frase(escenario.api, 'ok flu crea una cita', 'T5')
-    // Voz B SIN pausa: 2 s más; el evento siguiente dispara la verificación.
+    // Voz B SIN pausa: la PRIMERA ventana distinta confirma el cambio (NO parte)
+    // y la SEGUNDA parte: la anterior cierra recortada a la cola medida.
+    await entregarAudio(escenario.api, VOZ(), cursor)
+    await entregarAudio(escenario.api, VOZ(), cursor)
+    await frase(escenario.api, 'con el doctor', 'T5')
     await entregarAudio(escenario.api, VOZ(), cursor)
     await entregarAudio(escenario.api, VOZ(), cursor)
     await frase(escenario.api, 'con el doctor', 'T5')
@@ -280,7 +284,7 @@ describe('Caso 1+3 — dos voces SIN pausa (módulo real, embebedor falso)', () 
     expect(filas[1]).toMatchObject({
       texto: 'con el doctor',
       etiqueta: 'Hablante 2',
-      tramo: { inicio: 40000, fin: 64000, sampleRate: SAMPLE_RATE },
+      tramo: { inicio: 40000, fin: 96000, sampleRate: SAMPLE_RATE },
     })
 
     // El cierre de la voz anterior declara la causa de la partición.
@@ -301,6 +305,11 @@ describe('Caso 1+3 — dos voces SIN pausa (módulo real, embebedor falso)', () 
     await entregarAudio(escenario.api, VOZ(), cursor)
     await frase(escenario.api, 'ok flu crea una cita', 'T5')
     // Voz B SIN pausa; el ASR reemite la línea acumulada con el prefijo de A.
+    // La primera ventana distinta confirma; la segunda, con la línea acumulada,
+    // parte la fila y el recorte de prefijo deja SOLO la cola de la voz nueva.
+    await entregarAudio(escenario.api, VOZ(), cursor)
+    await entregarAudio(escenario.api, VOZ(), cursor)
+    await frase(escenario.api, 'con el doctor', 'T5')
     await entregarAudio(escenario.api, VOZ(), cursor)
     await entregarAudio(escenario.api, VOZ(), cursor)
     await frase(escenario.api, 'ok flu crea una cita con el doctor', 'T5')
@@ -503,7 +512,9 @@ describe('Caso 1+3 — dos voces SIN pausa (módulo real, embebedor falso)', () 
 describe('voz — corte de VAD y umbral de continuidad medido', () => {
   /**
    * A habla 2 s, el VAD corta con 1.5 s (< 5 s de cierre) y B arranca en OTRO
-   * tramo. El texto de B NO continúa la frase de A.
+   * tramo. El texto de B NO continúa la frase de A. La PRIMERA ventana distinta
+   * se RETIENE (no parte ni se queda en A) y la SEGUNDA confirma: A cierra con
+   * su texto previo y B recibe las DOS ventanas.
    */
   async function correrCorteDeVad(api: ConversacionApi) {
     await api.start({ turnId: 'T5' })
@@ -514,11 +525,22 @@ describe('voz — corte de VAD y umbral de continuidad medido', () => {
     await entregarSilencio(api, cursor, 1500)
     await entregarAudio(api, VOZ(), cursor)
     await entregarAudio(api, VOZ(), cursor)
-    const durante = await api.ingestAsr({
+    await api.ingestAsr({
       tramoId: '',
       // CONTINUACIÓN de la frase abierta: mide la PARTICIÓN POR VOZ, no la
-      // frontera por final de frase nueva.
+      // frontera por final de frase nueva. Primera ventana: sospecha retenida;
+      // NO parte ni se queda en A.
       texto: 'necesito para mi con el doctor',
+      final: true,
+      turnId: 'T5',
+    })
+    await entregarAudio(api, VOZ(), cursor)
+    await entregarAudio(api, VOZ(), cursor)
+    const durante = await api.ingestAsr({
+      tramoId: '',
+      // Segunda ventana: confirma; A cierra en el inicio de la primera y B
+      // recibe la acumulada.
+      texto: 'necesito para mi con el doctor y el viernes',
       final: true,
       turnId: 'T5',
     })
@@ -534,13 +556,15 @@ describe('voz — corte de VAD y umbral de continuidad medido', () => {
     // La voz de A se midió ANTES del corte (la plantilla existe).
     expect(tramoA).not.toBe('')
     // La locución anterior ya cerró y SU fila está escrita: no se esperó el
-    // silencio de 5 s ni quedó el texto de B en pendientes como única salida.
+    // silencio de 5 s. La fila de A lleva la acumulada que le revisó la primera
+    // ventana de B; la voz nueva abre con SOLO su cola (sin repetir la fila).
     expect(durante.filas).toHaveLength(1)
     expect(durante.filas[0]).toMatchObject({
       locutionId: tramoA,
       texto: 'necesito para mi',
+      tramo: { inicio: 0, fin: 56000, sampleRate: SAMPLE_RATE },
     })
-    expect(durante.locucionAbierta?.texto).toBe('necesito para mi con el doctor')
+    expect(durante.locucionAbierta?.texto).toBe('con el doctor y el viernes')
     expect(durante.locucionAbierta?.locutionId).not.toBe(tramoA)
     expect(eventos).toContainEqual(
       expect.objectContaining({ tipo: 'locution.closed', causa: 'voz' }),
@@ -549,7 +573,7 @@ describe('voz — corte de VAD y umbral de continuidad medido', () => {
     await cerrarPorSilencio(escenario.api)
     expect(filasDe(escenario.api).map((fila) => fila.texto)).toEqual([
       'necesito para mi',
-      'necesito para mi con el doctor',
+      'con el doctor y el viernes',
     ])
   })
 
@@ -567,6 +591,7 @@ describe('voz — corte de VAD y umbral de continuidad medido', () => {
     const { tramoA: tramoMisma, durante: sinPartir } = await correrCorteDeVad(misma.api)
     expect(sinPartir.filas).toHaveLength(0)
     expect(sinPartir.locucionAbierta?.locutionId).toBe(tramoMisma)
+    expect(sinPartir.locucionAbierta?.texto).toBe('necesito para mi con el doctor y el viernes')
 
     const distinta = crearEscenarioConConfig(
       { umbralExistenteVoz: () => 0.66 },
@@ -579,7 +604,7 @@ describe('voz — corte de VAD y umbral de continuidad medido', () => {
       locutionId: tramoDistinta,
       texto: 'necesito para mi',
     })
-    expect(partida.locucionAbierta?.texto).toBe('necesito para mi con el doctor')
+    expect(partida.locucionAbierta?.texto).toBe('con el doctor y el viernes')
   })
 })
 

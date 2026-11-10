@@ -19,6 +19,9 @@
     "reentregaOwners": 1,
     "directSilenceCloses": 0,
     "continuidadOwners": 1,
+    "dispatchDedupeOwners": 1,
+    "closureDoors": 2,
+    "prefixStripOwner": 1,
     "turnMintOwners": 0,
     "voiceMeasureOwners": 0,
     "nameRegisterOwners": 0
@@ -71,6 +74,11 @@
       "crearCola",
       "crearPendientes",
       "mismoEnunciado"
+    ],
+    "compose/conversationMotorProducto.js": [
+      "crearMotorConversacionHook",
+      "despacharFraseVigente",
+      "leerUltimoTextoDicho"
     ],
     "eco.ts": [
       "esEcoDeTts",

@@ -255,7 +255,7 @@ describe('Caso 9 — cada cierre declara motivo y causa (5 causas con el módulo
       fin: 2 * SAMPLE_RATE + MUESTRAS_CORTE,
       medida: VOZ(),
     })
-    await api.ingestAsr({
+    const trasFinal = await api.ingestAsr({
       tramoId: '',
       texto: 'dos',
       final: true,
@@ -265,8 +265,10 @@ describe('Caso 9 — cada cierre declara motivo y causa (5 causas con el módulo
         sampleRate: SAMPLE_RATE,
       },
     })
+    // El final ajeno NO cierra ni pega su texto a la caja: sigue 'uno'.
+    expect(trasFinal.box.texto).toBe('uno')
     // El texto ajeno por sí solo NO cierra; la puerta es el silencio de 5 s.
-    await api.ingestAudio({
+    const cerrado = await api.ingestAudio({
       muestras: new Float32Array(SAMPLE_RATE * 5),
       sampleRate: SAMPLE_RATE,
       inicio: 2 * SAMPLE_RATE + MUESTRAS_CORTE,
@@ -275,11 +277,13 @@ describe('Caso 9 — cada cierre declara motivo y causa (5 causas con el módulo
     })
 
     const cerrados = cierresDe(eventos)
-    // El FINAL de la frase nueva cierra la anterior (causa frontera) y el
-    // silencio de 5 s cierra la nueva (causa silencio): dos cierres declarados.
-    expect(cerrados).toHaveLength(2)
-    expect(cerrados[0]).toMatchObject({ motivo: 'system', causa: 'frontera' })
-    expect(cerrados[1]).toMatchObject({ motivo: 'system', causa: 'silencio' })
+    // UNA sola puerta: el silencio medido cierra la locución anterior y su
+    // fila sale UNA vez. El texto ajeno queda pendiente, no se descarta.
+    expect(cerrados).toHaveLength(1)
+    expect(cerrados[0]).toMatchObject({ motivo: 'system', causa: 'silencio' })
+    expect(cerrado.filas.map((fila) => fila.texto)).toEqual(['uno'])
+    expect(cerrado.descartes).toEqual([])
+    expect(cerrado.locucionAbierta).toBeNull()
   })
 
   it('stop: el cierre de usuario declara su motivo', async () => {
@@ -449,8 +453,9 @@ describe('Caso 9 — la caja de última frase == última fila commiteada al dete
       final: true,
       tramo: { inicio: SAMPLE_RATE, fin: SAMPLE_RATE * 2, sampleRate: SAMPLE_RATE },
     })
-    // El final de 'dos' cierra 'uno' y abre 'dos' en el acto (frase nueva).
-    expect(api.snapshot().box.texto).toBe('dos')
+    // El final de 'dos' NO cierra 'uno': el texto ajeno queda pendiente y la
+    // caja sigue con la frase abierta (la puerta de cierre es la frontera).
+    expect(api.snapshot().box.texto).toBe('uno')
 
     const detenida = await api.stop('system')
     expect(
