@@ -28,19 +28,35 @@ const RAIZ = process.cwd()
 const PATRONES = [
   { id: 'sintetico', re: /tramos\.sintetico\s*\(/g },
   { id: 'tramoSinteticoParaTexto', re: /tramoSinteticoParaTexto\b/g },
-  { id: 'tramoIdUuid', re: /tramoId\s*[:=][^\n;]*\bid\.uuid\s*\(/g },
+  // Incluye `id.uuid()`, `uuid()` y `dependencias.id.uuid()`.
+  { id: 'tramoIdUuid', re: /tramoId\s*[:=][^\n;]*\b(?:id\.)?uuid\s*\(/g },
 ] as const
 
 /** Dueños declarados: archivo → patrones permitidos. */
 const DUEÑOS: Readonly<Record<string, readonly string[]>> = Object.freeze({
-  'src/voice/conversation/ingesta.ts': ['sintetico', 'tramoSinteticoParaTexto', 'tramoIdUuid'],
+  'src/voice/conversation/ingesta.ts': [
+    'sintetico',
+    'tramoSinteticoParaTexto',
+    'tramoIdUuid',
+    'tramoIdAlias',
+  ],
   // `texto.ts` puede pedir la fábrica para su texto tardío, pero NO acuñar un
-  // tramoId con uuid (el parche inline de cline).
+  // tramoId con uuid ni por alias (el parche inline de cline).
   'src/voice/conversation/texto.ts': ['sintetico'],
   'src/voice/conversation/tramos.ts': [],
 })
 
 type Infraccion = { archivo: string; patron: string }
+
+/** `const x = ...uuid()` … `tramoId: x` (uuid en dos pasos). */
+function aliasUuid(src: string): boolean {
+  const alias = [
+    ...src.matchAll(/const\s+([A-Za-z_$][\w$]*)\s*=\s*[^\n;]*\b(?:id\.)?uuid\s*\(/g),
+  ]
+  return alias.some((match) =>
+    new RegExp(`tramoId\\s*[:=]\\s*${match[1]}\\b`).test(src),
+  )
+}
 
 /** Detecta los sitios de un texto; fuera de los dueños, todos son infracción. */
 export function detectar(archivo: string, src: string): Infraccion[] {
@@ -51,6 +67,9 @@ export function detectar(archivo: string, src: string): Infraccion[] {
     if (coincidencias.length > 0 && !permitidos.includes(patron.id)) {
       infracciones.push({ archivo, patron: patron.id })
     }
+  }
+  if (aliasUuid(src) && !permitidos.includes('tramoIdAlias')) {
+    infracciones.push({ archivo, patron: 'tramoIdAlias' })
   }
   return infracciones
 }
@@ -88,6 +107,22 @@ describe('tramo único — el tramo sintético y el uuid como tramoId solo nacen
       '}',
     ].join('\n')
     expect(detectar('src/voice/conversation/texto.ts', parcheCline)).toContainEqual({
+      archivo: 'src/voice/conversation/texto.ts',
+      patron: 'tramoIdUuid',
+    })
+  })
+
+  it('el uuid en dos pasos y el uuid() directo también se detectan (familia)', () => {
+    const dosPasos = [
+      'const nuevo = dependencias.id.uuid()',
+      'return { tramoId: nuevo }',
+    ].join('\n')
+    expect(detectar('src/voice/conversation/texto.ts', dosPasos)).toContainEqual({
+      archivo: 'src/voice/conversation/texto.ts',
+      patron: 'tramoIdAlias',
+    })
+    const directo = 'const fila = { tramoId: uuid() }'
+    expect(detectar('src/voice/conversation/texto.ts', directo)).toContainEqual({
       archivo: 'src/voice/conversation/texto.ts',
       patron: 'tramoIdUuid',
     })

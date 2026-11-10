@@ -657,55 +657,6 @@
         "src/voice/lib/speakerDirectory.js": 1
       },
       "goal": 1
-    },
-    {
-      "id": "dedupe-despacho",
-      "owner": "src/voice/lib/audioMath.js",
-      "description": "El dedupe del despacho de la frase canonica tiene UN solo dueno: planConversationDispatch decide por firma y ventana de revision. El cableado (compose) no filtra por texto: un ultimaDespachada re-introducido es una ruta doble que duplica o pierde el despacho.",
-      "pattern": "ultimaDespachada|isAsrRevision|lastSignature\\s*===\\s*signature",
-      "roots": ["src/voice"],
-      "kind": "files",
-      "allowed": {
-        "src/voice/lib/audioMath.js": 1
-      },
-      "goal": 1
-    },
-    {
-      "id": "puertas-cierre",
-      "owner": "src/voice/conversation/frontera.ts",
-      "description": "La locucion abierta cierra por DOS puertas medidas: voz distinta (particion) o silencio >= silenceCloseMs. Una tercera puerta (un final del ASR cerrando en el acto) es una ruta doble del cierre.",
-      "pattern": "return\\s*\\{\\s*cerrar:\\s*true",
-      "roots": ["src/voice"],
-      "kind": "sites",
-      "allowed": {
-        "src/voice/conversation/frontera.ts": 2
-      },
-      "goal": 2
-    },
-    {
-      "id": "prefijo-fila",
-      "owner": "src/voice/conversation/texto.ts",
-      "description": "El recorte del prefijo de la fila anterior tiene UN solo dueno (sinPrefijoDeLaFilaAnterior) y con la particion por voz el prefijo pertenece al audio ya commiteado: la fila de la voz nueva lleva solo su cola.",
-      "pattern": "function\\s+sinPrefijoDeLaFilaAnterior",
-      "roots": ["src/voice"],
-      "kind": "sites",
-      "allowed": {
-        "src/voice/conversation/texto.ts": 1
-      },
-      "goal": 1
-    },
-    {
-      "id": "tramo-unico",
-      "owner": "src/voice/conversation/ingesta.ts",
-      "description": "El tramo sintetico y el tramoId acuñado con id.uuid() tienen UN solo dueño: ingesta acuña el sintetico de texto y el de la particion de voz; tramos.ts es la fabrica. Un id.uuid() inline como tramoId (parche de cline en texto.ts) es una ruta duplicada.",
-      "pattern": "tramos\\.sintetico\\s*\\(|tramoSinteticoParaTexto|tramoId\\s*[:=][^\\n;]*id\\.uuid\\s*\\(",
-      "roots": ["src"],
-      "kind": "sites",
-      "allowed": {
-        "src/voice/conversation/ingesta.ts": 7,
-        "src/voice/conversation/texto.ts": 1
-      },
-      "goal": 8
     }
   ]
 }
