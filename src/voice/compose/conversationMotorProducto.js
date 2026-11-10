@@ -153,7 +153,14 @@ export function crearMotorConversacionHook({
       if (liveTimer) clearTimeout(liveTimer)
       liveTimer = setTimeout(() => {
         liveTimer = 0
-        const viva = evento.abierta ? String(evento.fraseCanonica || '') : ''
+        // La frase viva es la que se está dictando AHORA: el pendiente manda
+        // sobre la línea abierta (que puede ser la frase anterior esperando su
+        // cierre). Así la caja transcribe conforme se escucha.
+        const viva = String(
+          evento.fraseCanonicaPendiente ||
+            (evento.abierta ? evento.fraseCanonica : '') ||
+            '',
+        )
         if (viva !== ultimaViva) {
           ultimaViva = viva
           onLiveTranscript(viva)

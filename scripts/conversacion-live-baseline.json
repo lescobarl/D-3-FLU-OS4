@@ -1,0 +1,55 @@
+{
+  "_nota": "Línea base REAL de dos sesiones del dueño (2026-11-10). 5318166b: Chrome transcribía en vivo y la caja no pintaba la frase retenida; la línea abierta vivió 76 s y al parar se descartaron dos pendientes con texto. 69a4fa97 (20:58): el final llegó sin wake y la wake+frase solo como intermedio; el srGap cortó antes de la revisión y la fila quedó sin consulta. Ambas fixtures son sesiones reales (texto redactado a longitud o conservado del dictado); el tramo 20:58 se reconstruyó de las líneas reales capturadas del debug.log antes de que rotara a las 21:15, no es sintético. El techo de los casos es 0: si reaparece un patrón viejo, el guard falla.",
+  "sessionId": "5318166b-80e1-4a8c-80e0-871f7f1b21ab",
+  "fecha": "2026-11-10",
+  "minEvents": 160,
+  "metricas": {
+    "events": 165,
+    "sessionId": "5318166b-80e1-4a8c-80e0-871f7f1b21ab",
+    "asrFinal": 6,
+    "maxGapEntreFinalesMs": 27040,
+    "maxLocucionAbiertaMs": 75704,
+    "maxFinalsEnUnaLocucion": 3,
+    "descarteObsoleto": 2,
+    "srGap": 0,
+    "vozMedidaEntreStopYCierre": 55,
+    "intervalos": 7
+  },
+  "sessionCorte": "69a4fa97-0cca-453a-8de1-26bd458f7c28",
+  "minEventsCorte": 8,
+  "metricasCorte": {
+    "events": 8,
+    "sessionId": "69a4fa97-0cca-453a-8de1-26bd458f7c28",
+    "finalSinWake": 1,
+    "wakeInterim": 1,
+    "revisionCompleta": 1,
+    "srGapAntesDeRevision": 1,
+    "filaCommiteada": 1
+  },
+  "casos": [
+    {
+      "id": "caja-sin-pendiente",
+      "owner": "src/voice/conversation/sesion.ts:264",
+      "limite": 0,
+      "descripcion": "La frase viva solo se publicaba si la locución abierta tenía texto; la frase retenida que se dictaba ahora quedaba invisible. El dueño nuevo es sesion.ts:emitirCaja + mostrarPendiente."
+    },
+    {
+      "id": "descarte-por-audio",
+      "owner": "src/voice/conversation/ingesta.ts:116",
+      "limite": 0,
+      "descripcion": "El stop descartaba un pendiente con texto por su fin de audio, aunque su texto fuera distinto. Se eliminó la ruta: el volcado commitea todo texto y la reentrega la decide su dueño esReentregaDeLaFila."
+    },
+    {
+      "id": "medida-sin-paso",
+      "owner": "src/voice/conversation/ingesta.ts:882",
+      "limite": 0,
+      "descripcion": "La medida de voz se relanzaba cada mínimo sin poder acuñar identidad; 55 embeddings se acumularon en la ventana stop-cierre. El reintento usa el paso de voz nueva configurado y la línea ya cierra durante el habla en vez de vivir 76 s."
+    },
+    {
+      "id": "srGap-corta-wake",
+      "owner": "src/voice/conversation/ingesta.ts:790",
+      "limite": 0,
+      "descripcion": "El reloj del hueco se movió a solo-resultados-de-la-línea-abierta y cortó la wake que llegaba como intermedio tras un final sin wake. Dueño único del reloj: ingesta.ts, cada resultado del ASR; la visibilidad del pendiente la resuelve la caja."
+    }
+  ]
+}

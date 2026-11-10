@@ -345,3 +345,178 @@ export function medirConversacionReal({ eventos, turnos }) {
     identityRegisters,
   }
 }
+
+/**
+ * Mide la sesion REAL del incidente 5318166b (2026-11-10): la linea abierta
+ * 76 s, tres finals dentro, cero srGap, dos pendientes con texto descartados y
+ * las medidas de voz entre el stop y el primer cierre.
+ *
+ * La fixture es la sesion real (texto redactado a longitud); no es un test
+ * sintetico. El consumidor unico es `tests/conversacionLiveBarrierGuard.test.ts`.
+ * @param {{ eventos: object[] }} grabacion Eventos de la fixture real.
+ * @returns {object} Metricas del incidente.
+ * @revisor CREAR NUEVO - medidor de la fixture real; reusa los parsers del modulo.
+ */
+export function medirIncidenteLive({ eventos }) {
+  const finales = eventos
+    .map((evento) => {
+      const final = jsonTrasPrefijo(mensaje(evento), 'asrFinal ')
+      return final ? Number(evento.t) : null
+    })
+    .filter((t) => t !== null)
+
+  let maxGapEntreFinalesMs = 0
+  for (let i = 1; i < finales.length; i += 1) {
+    maxGapEntreFinalesMs = Math.max(maxGapEntreFinalesMs, finales[i] - finales[i - 1])
+  }
+
+  const descartes = eventos
+    .map((evento) => jsonTrasPrefijo(mensaje(evento), 'conversacion.descarte '))
+    .filter(Boolean)
+  const abiertas = new Map()
+  const intervalos = []
+  let maxLocucionAbiertaMs = 0
+  let maxFinalsEnUnaLocucion = 0
+  for (const evento of eventos) {
+    const texto = mensaje(evento)
+    if (texto.startsWith('conversacion.locucion.abierta ')) {
+      const datos = jsonTrasPrefijo(texto, 'conversacion.locucion.abierta ')
+      if (datos?.locutionId) abiertas.set(datos.locutionId, Number(evento.t))
+      continue
+    }
+    if (texto.startsWith('conversacion.locucion.cerrada ')) {
+      const datos = jsonTrasPrefijo(texto, 'conversacion.locucion.cerrada ')
+      const inicio = datos?.locutionId ? abiertas.get(datos.locutionId) : undefined
+      if (inicio === undefined) continue
+      const fin = Number(evento.t)
+      maxLocucionAbiertaMs = Math.max(maxLocucionAbiertaMs, fin - inicio)
+      const dentro = finales.filter((t) => t >= inicio && t <= fin).length
+      maxFinalsEnUnaLocucion = Math.max(maxFinalsEnUnaLocucion, dentro)
+      intervalos.push({ inicio, fin })
+      abiertas.delete(datos.locutionId)
+    }
+  }
+
+  const stop = eventos.find((evento) => mensaje(evento).includes('[REC] stop'))
+  const primerCierre = stop
+    ? eventos.find(
+        (evento) =>
+          mensaje(evento).startsWith('conversacion.locucion.cerrada ') &&
+          Number(evento.t) > Number(stop.t),
+      )
+    : null
+  const vozMedidaEntreStopYCierre =
+    stop && primerCierre
+      ? eventos.filter(
+          (evento) =>
+            mensaje(evento).startsWith('vozMedida ') &&
+            Number(evento.t) > Number(stop.t) &&
+            Number(evento.t) <= Number(primerCierre.t),
+        ).length
+      : 0
+
+  const primerConversacion = eventos.find((evento) =>
+    mensaje(evento).startsWith('conversacion.'),
+  )
+  const prefijo = primerConversacion
+    ? mensaje(primerConversacion).slice(0, mensaje(primerConversacion).indexOf(' '))
+    : ''
+  const sessionId = primerConversacion
+    ? jsonTrasPrefijo(mensaje(primerConversacion), prefijo)?.sessionId ?? null
+    : null
+
+  return {
+    events: eventos.length,
+    sessionId,
+    asrFinal: finales.length,
+    maxGapEntreFinalesMs,
+    maxLocucionAbiertaMs,
+    maxFinalsEnUnaLocucion,
+    descarteObsoleto: descartes.filter((descarte) => descarte.motivo === 'obsoleto').length,
+    srGap: eventos.filter((evento) => mensaje(evento).includes('srGap')).length,
+    vozMedidaEntreStopYCierre,
+    intervalos: intervalos.length,
+  }
+}
+
+/**
+ * Mide el CORTE DE LA WAKE de la sesion real 69a4fa97 (2026-11-10 20:58): el
+ * final llegó sin wake y la wake+frase solo como intermedio; el srGap de la
+ * linea abierta disparó antes de que la revision contuviera la frase.
+ *
+ * La fixture es la sesion real; el consumidor unico es
+ * `tests/conversacionLiveBarrierGuard.test.ts`.
+ * @param {{ eventos: object[] }} grabacion Eventos de la fixture real.
+ * @returns {object} Metricas del corte.
+ * @revisor CREAR NUEVO - medidor de la fixture real; reusa los parsers del modulo.
+ */
+export function medirCorteDeWake({ eventos }) {
+  const finales = eventos
+    .map((evento) => {
+      const datos = jsonTrasPrefijo(mensaje(evento), 'asrFinal ')
+      return datos ? { t: Number(evento.t), datos } : null
+    })
+    .filter(Boolean)
+  const finalSinWake = finales.find(
+    (final) => final.datos.wake === false && Number(final.datos.len) > 0,
+  )
+  const palabraFinal = String(finalSinWake?.datos?.text || '')
+    .trim()
+    .split(/\s+/)
+    .pop()
+  const srGaps = eventos
+    .map((evento) => {
+      const datos = jsonTrasPrefijo(mensaje(evento), 'srGap ')
+      return datos ? { t: Number(evento.t), datos } : null
+    })
+    .filter(Boolean)
+  let wakeInterim = null
+  let revisionCompleta = null
+  for (const evento of eventos) {
+    const datos = jsonTrasPrefijo(mensaje(evento), 'asrRaw ')
+    if (!datos || !Array.isArray(datos.items)) continue
+    for (const item of datos.items) {
+      const texto = String(item?.t || '')
+      if (Number(item?.f) !== 0 || !/okay\s+flu/i.test(texto)) continue
+      const t = Number(evento.t)
+      if (!wakeInterim) wakeInterim = { t, texto }
+      if (
+        finalSinWake &&
+        palabraFinal &&
+        !revisionCompleta &&
+        texto.toLowerCase().includes(palabraFinal.toLowerCase())
+      ) {
+        revisionCompleta = { t, texto }
+      }
+    }
+  }
+  const srGapAntesDeRevision = Boolean(
+    finalSinWake &&
+      revisionCompleta &&
+      srGaps.some((gap) => gap.t > finalSinWake.t && gap.t < revisionCompleta.t),
+  )
+  const fila = eventos.find((evento) => {
+    const datos = jsonTrasPrefijo(mensaje(evento), 'conversacion.locucion.cerrada ')
+    return (
+      datos &&
+      datos.descarte === null &&
+      Number(evento.t) > (revisionCompleta?.t || wakeInterim?.t || 0)
+    )
+  })
+  const primerConversacion = eventos.find((evento) => mensaje(evento).startsWith('conversacion.'))
+  const prefijo = primerConversacion
+    ? mensaje(primerConversacion).slice(0, mensaje(primerConversacion).indexOf(' '))
+    : ''
+  const sessionId = primerConversacion
+    ? jsonTrasPrefijo(mensaje(primerConversacion), prefijo)?.sessionId ?? null
+    : null
+  return {
+    events: eventos.length,
+    sessionId,
+    finalSinWake: finalSinWake ? 1 : 0,
+    wakeInterim: wakeInterim ? 1 : 0,
+    revisionCompleta: revisionCompleta ? 1 : 0,
+    srGapAntesDeRevision: srGapAntesDeRevision ? 1 : 0,
+    filaCommiteada: fila ? 1 : 0,
+  }
+}

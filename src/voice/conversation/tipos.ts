@@ -132,7 +132,6 @@ export type MotivoDescarteConversacion =
   | 'eco'
   | 'huerfano'
   | 'turnoYaEscrito'
-  | 'obsoleto'
   | 'control'
 
 /** Descarte contado con su locución y su motivo. */
@@ -176,6 +175,10 @@ export type EventoConversacion =
       abierta: boolean
       fraseCanonica: string
       fraseParaMostrar: string
+      /** Texto de la frase retenida que se dicta ahora (la caja la pinta en vivo). */
+      textoPendiente: string
+      fraseCanonicaPendiente: string
+      fraseParaMostrarPendiente: string
     }>
   | Readonly<{ tipo: 'asr.status'; sessionId: string; estado: EstadoAsr; detalle?: string }>
   | Readonly<{ tipo: 'barge.in'; sessionId: string; locutionId: string; texto: string }>
@@ -184,7 +187,7 @@ export type EventoConversacion =
 export type InstantaneaConversacion = Readonly<{
   sessionId: string | null
   activa: boolean
-  box: Readonly<{ texto: string; abierta: boolean }>
+  box: Readonly<{ texto: string; abierta: boolean; textoPendiente: string }>
   /** Frase canónica completa (con wake si la hubo). */
   fraseCanonica: string
   /** Misma frase sin la wake: solo presentación. */

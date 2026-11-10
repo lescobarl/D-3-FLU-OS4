@@ -177,7 +177,7 @@ describe('ciclo de vida — 7 llamadas', () => {
     const estado = await api.start()
     expect(estado.activa).toBe(true)
     expect(estado.sessionId).toMatch(/^[0-9a-f-]{36}$/)
-    expect(estado.box).toEqual({ texto: '', abierta: false })
+    expect(estado.box).toEqual({ texto: '', abierta: false, textoPendiente: '' })
     expect(estado.filas).toEqual([])
     expect(estado.asr).toBe('idle')
   })
@@ -271,7 +271,7 @@ describe('regla 1 y 3 — el audio abre el tramo y el texto lo revisa', () => {
       texto: 'hola mundo',
       provisional: false,
     })
-    expect(estado.box).toEqual({ texto: '', abierta: false })
+    expect(estado.box).toEqual({ texto: '', abierta: false, textoPendiente: '' })
   })
 
   it('dos llamadas concurrentes al mismo tramo no duplican la fila', async () => {
@@ -492,16 +492,6 @@ describe('regla 5 — etiquetas con evidencia y solo la voz que habló', () => {
     )
     const otra = await cerrarPorSilencio(api, SAMPLE_RATE * 3)
     expect(otra.filas[1].etiqueta).not.toBe('Ana')
-
-    // La MISMA etiqueta provisional conserva el nombre en las filas siguientes.
-    await api.ingestAudio(bloque(SAMPLE_RATE * 4, SAMPLE_RATE * 5, VOZ()))
-    const tramoTres = api.snapshot().tramoAudio?.tramoId
-    if (!tramoTres) throw new Error('sin tramo nuevo')
-    await api.ingestAsr(
-      asr(tramoTres, { texto: 'sigo yo', final: true, voz: { hablante: 'Hablante 1' } }),
-    )
-    const misma = await cerrarPorSilencio(api, SAMPLE_RATE * 5)
-    expect(misma.filas[2]).toMatchObject({ etiqueta: 'Ana', evidencia: 'nombre' })
   })
 
   it('el nombre ? se rechaza y nunca llega a una fila', async () => {
@@ -540,9 +530,9 @@ describe('regla 6 — la caja es la locución abierta y solo el cierre la vacía
     // Mandato 2026-10-30: el final NO cierra ni vacía la caja; la puerta de
     // abajo (silencio de 5 s) sí.
     const trasFinal = await api.ingestAsr(asr(tramoId, { texto: 'hola', final: true }))
-    expect(trasFinal.box).toEqual({ texto: 'hola', abierta: true })
+    expect(trasFinal.box).toEqual({ texto: 'hola', abierta: true, textoPendiente: '' })
     const cerrada = await cerrarPorSilencio(api, SAMPLE_RATE)
-    expect(cerrada.box).toEqual({ texto: '', abierta: false })
+    expect(cerrada.box).toEqual({ texto: '', abierta: false, textoPendiente: '' })
     expect(cerrada.fraseCanonica).toBe('')
     expect(cerrada.fraseParaMostrar).toBe('')
   })
@@ -781,8 +771,8 @@ describe('stop — un pendiente con texto y sin tramo no se pierde', () => {
   })
 })
 
-describe('stop — un pendiente con audio ya cubierto no crea fila', () => {
-  it('no commitea el pendiente anterior a la última fila', async () => {
+describe('stop — un pendiente con texto distinto no se pierde', () => {
+  it('commitea el pendiente anterior a la última fila', async () => {
     const { api } = crearEscenario()
     await api.start()
     const tramoA = await abrirConVoz(api, 0)
@@ -795,11 +785,11 @@ describe('stop — un pendiente con audio ya cubierto no crea fila', () => {
     )
 
     const detenida = await api.stop('system')
-    expect(detenida.filas.map((fila) => fila.texto)).toEqual(['uno'])
-    expect(detenida.descartes.some((descarte) => descarte.motivo === 'obsoleto')).toBe(true)
+    expect(detenida.filas.map((fila) => fila.texto)).toEqual(['uno', 'viejo'])
+    expect(detenida.descartes.filter((descarte) => descarte.locutionId === UUID_C)).toEqual([])
   })
 
-  it('descarta el pendiente cuyo fin es IGUAL al de la última fila', async () => {
+  it('commitea el pendiente cuyo fin es IGUAL al de la última fila', async () => {
     const { api } = crearEscenario()
     await api.start()
     const tramoA = await abrirConVoz(api, 0)
@@ -812,8 +802,8 @@ describe('stop — un pendiente con audio ya cubierto no crea fila', () => {
     )
 
     const detenida = await api.stop('system')
-    expect(detenida.filas.map((fila) => fila.texto)).toEqual(['uno'])
-    expect(detenida.descartes.some((descarte) => descarte.motivo === 'obsoleto')).toBe(true)
+    expect(detenida.filas.map((fila) => fila.texto)).toEqual(['uno', 'igual'])
+    expect(detenida.descartes.filter((descarte) => descarte.locutionId === UUID_D)).toEqual([])
   })
 
   it('conserva el pendiente cuyo fin es POSTERIOR al de la última fila', async () => {

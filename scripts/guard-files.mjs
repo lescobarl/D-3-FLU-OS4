@@ -54,4 +54,5 @@
   'tests/conversacionPrefijoFilaPartidaGuard.test.ts',
   'tests/tramoUnicoGuard.test.ts',
   'tests/barreraUnicaGuard.test.ts',
+  'tests/conversacionLiveBarrierGuard.test.ts',
 ]

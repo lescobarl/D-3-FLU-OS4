@@ -45,12 +45,16 @@ export type EstadoSesion = {
   ultimoTramoId: string
   ultimaEtiqueta: string
   /**
-   * Marca del reloj del ÚLTIMO resultado del ASR. Es la medida del hueco que cierra la
-   * locución cuando el reconocedor se queda mudo (`srGapCommitMs`, dueño la sonda del
-   * hueco): sin ella, un ASR caído no cierra nada y la locución vive 43 s
-   * juntando dos frases (medido 2026-11-08 02:26-02:27 en la sesión del dueño).
+   * Marca del reloj del ÚLTIMO resultado que pertenece a la línea ABIERTA.
+   * Es la medida del hueco que cierra la locución cuando el reconocedor se queda
+   * mudo (`srGapCommitMs`, dueño la sonda del hueco): sin ella, un ASR caído no
+   * cierra nada y la locución vive 43 s juntando dos frases (medido 2026-11-08
+   * 02:26-02:27 en la sesión del dueño). La mueve cada resultado del ASR; el
+   * hueco es silencio del ASR, no de la fila abierta.
    */
   ultimoResultadoMs: number
+  /** Texto de la frase que se retiene y se está dictando AHORA (se pinta en la caja). */
+  textoPendiente: string
   cierreAsrPendiente: MotivoCierre | null
   descartes: DescarteConversacion[]
   filas: Map<string, Fila>
@@ -98,6 +102,12 @@ export type Sesion = Readonly<{
   exigirActiva(): string
   fraseActual(): Readonly<{ canonica: string; paraMostrar: string }>
   emitirCaja(): void
+  /**
+   * Publica el texto de la frase retenida que se dicta ahora. Único escritor:
+   * el flujo de texto (`texto.ts`); la caja lo pinta junto al texto abierto.
+   * @param texto Texto vigente del pendiente (vacío al aplicar a la línea abierta).
+   */
+  mostrarPendiente(texto: string): void
   snapshot(): InstantaneaConversacion
   contarDescarte: ContarDescarte
   reiniciar(sessionId: string, turno: string, idioma: IdiomaLocucion): void
@@ -123,6 +133,7 @@ export function crearEstadoSesion(idiomaInicial: IdiomaLocucion): EstadoSesion {
     ultimoTramoId: '',
     ultimaEtiqueta: '',
     ultimoResultadoMs: 0,
+    textoPendiente: '',
     cierreAsrPendiente: null,
     descartes: [],
     filas: new Map(),
@@ -226,10 +237,11 @@ export function crearSesion(
     return { canonica: partida.canonica, paraMostrar: partida.paraMostrar }
   }
 
-  /** Emite `box.updated` con el texto abierto y su presentación. */
+  /** Emite `box.updated` con el texto abierto, el retenido y su presentación. */
   function emitirCaja(): void {
     if (!estado.sessionId) return
     const frase = fraseActual()
+    const pendiente = partidor.partir(estado.textoPendiente)
     emitir({
       tipo: 'box.updated',
       sessionId: estado.sessionId,
@@ -237,7 +249,24 @@ export function crearSesion(
       abierta: Boolean(estado.abierta),
       fraseCanonica: frase.canonica,
       fraseParaMostrar: frase.paraMostrar,
+      textoPendiente: estado.textoPendiente,
+      fraseCanonicaPendiente: pendiente.canonica,
+      fraseParaMostrarPendiente: pendiente.paraMostrar,
     })
+  }
+
+  /**
+   * Publica el texto de la frase retenida que se dicta ahora. Único escritor:
+   * el flujo de texto; la caja lo pinta aunque la locución anterior siga abierta.
+   * @param texto Texto vigente del pendiente (vacío al aplicar a la línea abierta).
+   * @revisor CREAR NUEVO — la caja solo pintaba `estado.abierta`; el pendiente
+   *   que se dicta en vivo no tenía emisor y la pantalla se congelaba.
+   */
+  function mostrarPendiente(texto: string): void {
+    const limpio = String(texto || '').trim()
+    if (limpio === estado.textoPendiente) return
+    estado.textoPendiente = limpio
+    emitirCaja()
   }
 
   /** Snapshot síncrono; la retención solo oculta del snapshot, no borra filas. */
@@ -250,6 +279,7 @@ export function crearSesion(
       box: {
         texto: estado.abierta?.texto ?? '',
         abierta: Boolean(estado.abierta),
+        textoPendiente: estado.textoPendiente,
       },
       fraseCanonica: frase.canonica,
       fraseParaMostrar: frase.paraMostrar,
@@ -322,6 +352,7 @@ export function crearSesion(
     estado.silencioPendienteMs = 0
     estado.ultimoTramoId = ''
     estado.ultimaEtiqueta = ''
+    estado.textoPendiente = ''
     estado.cierreAsrPendiente = null
     estado.descartes = []
     estado.estadoAsr = 'idle'
@@ -347,6 +378,7 @@ export function crearSesion(
     exigirActiva,
     fraseActual,
     emitirCaja,
+    mostrarPendiente,
     snapshot,
     contarDescarte,
     ...reglas,

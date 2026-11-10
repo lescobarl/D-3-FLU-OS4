@@ -786,7 +786,12 @@ export function crearIngesta({
   /** Ingesta un resultado del ASR por su tramo (regla 3). */
   async function ingestaAsr(entrada: AsrIngestado): Promise<InstantaneaConversacion> {
     sesion.exigirActiva()
-    // Marca del hueco: cada resultado del ASR reinicia el reloj de `srGapCommitMs`.
+    // El reloj mide el SILENCIO DEL ASR, no el de la fila: cualquier resultado
+    // (final o intermedio) prueba que el reconocedor sigue vivo. No se mueve a
+    // `texto.ts`: al moverlo a "solo resultados de la línea abierta" se cortó una
+    // wake que llegaba como intermedio tras un final sin wake (medido 2026-11-10
+    // 20:58:37.707: srGap 3,510 s antes de la revisión "Okay flu Platícame...").
+    // La visibilidad del pendiente la resuelve la caja (`textoPendiente`).
     estado.ultimoResultadoMs = dependencias.reloj.ahora()
     await drenarResultadosAsr()
     await cerrarPendienteAsr()
@@ -873,7 +878,15 @@ export function crearIngesta({
       // en cada bloque (medido 2026-10-31, sesión 89a0d948: 19.886 intentos y
       // ~31.000 trazas en 182 s de audio; la UI se congelaba). Se reintenta solo
       // cuando el búfer creció lo mínimo que ya justifica volver a medir.
-      if (totalMuestras - estado.muestrasEnUltimoIntento < minimo) return
+      // El paso lo fija el mínimo para ACUÑAR una voz nueva (`minNuevaVozMs`):
+      // medir cada 1,5 s no puede cambiar la identidad y deja una cola de
+      // embeddings que retrasa el cierre (medido 2026-11-10: 55 medidas en la
+      // ventana stop→cierre, 31 con vector).
+      const pasoReintento = Math.max(
+        minimo,
+        Math.round(((Number(dependencias.config.minNuevaVozMs?.()) || 0) / 1000) * sampleRate),
+      )
+      if (totalMuestras - estado.muestrasEnUltimoIntento < pasoReintento) return
       estado.muestrasEnUltimoIntento = totalMuestras
     }
     const locutionId = locucion.locutionId

@@ -96,6 +96,13 @@ test(`FLU Playback (${SESSION_PATH ? session.sessionId : 'sin sesión'})`, async
         { timeout: 180000 },
     );
 
+    // La app puede recargar la página al sembrar participantes/idioma; el
+    // prepare es idempotente y debe repetirse sobre la página FINAL antes de
+    // reproducir. Sin esto, `start` ve `state.ready=false` de la página nueva.
+    await page.evaluate(async () => {
+        await (window as any).__fluPlayback?.prepare?.();
+    });
+
     // La app ya está escuchando por el cable. Se reproduce el WAV por la salida
     // del cable: Chrome SpeechRecognition lo oye como si fuera el usuario.
     await page.evaluate(async () => {

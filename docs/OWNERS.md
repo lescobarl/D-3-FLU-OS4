@@ -57,6 +57,7 @@ mismo commit. Si no puedes borrarlo ahora, no añadas el nuevo ahora.
 | ¿Quién acuña un tramo (sintético o de partición)? | `tramos.ts:50` `crearRegistroTramos` (fábrica `sintetico`) · `ingesta.ts:140` `tramoSinteticoParaTexto` · `ingesta.ts:366` `partirLocucionPorCambioDeVoz` (identificador de tramo con uuid) | `texto.ts` NO acuña tramos: pide el id a `ingesta.ts`; un `id.uuid()` inline para el identificador del tramo es ruta doble. |
 | ¿Cómo se miden las muestras y su duración? | `muestras.ts:28` `vozMsDeMuestras` | La identidad sale de la VOZ del audio medido, no del tramo ni de la captura. |
 | ¿Cómo se serializan las llamadas y se manejan los pendientes? | `cola.ts:25` `crearCola` · `cola.ts:74` `crearPendientes` · `texto.ts:44` `crearFlujoTexto` (`finalizarPendientes` 280) | Una cola; los pendientes conservan su tramo real. |
+| ¿Qué texto se pinta en la caja mientras se dicta? | `sesion.ts:240` `emitirCaja` · `sesion.ts:264` `mostrarPendiente` · `ingesta.ts:790` reloj del hueco | El pendiente vivo se pinta aunque la locución anterior siga abierta; el reloj del hueco lo mueve cada resultado del ASR (silencio del ASR, no de la fila). Consumidor: `conversationMotorProducto.js:160` (`fraseCanonicaPendiente`). |
 
 ## Producto y persistencia
 

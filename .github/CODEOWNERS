@@ -43,7 +43,9 @@
 /scripts/conversacion-grabacion-baseline.json @lescobarl
 /scripts/conversacion-grabacion-baseline-80a.json @lescobarl
 /scripts/conversacion-grabacion-baseline-d702.json @lescobarl
+/scripts/conversacion-live-baseline.json @lescobarl
 /tests/conversacionGrabacionD702Guard.test.ts @lescobarl
+/tests/conversacionLiveBarrierGuard.test.ts @lescobarl
 /tests/fixtures/flu-recordings/** @lescobarl
 
 # Gate de dueños (archivos nuevos)
@@ -53,6 +55,7 @@
 /.githooks/pre-commit         @lescobarl
 
 # Módulo CONVERSACIÓN — dueño del módulo y sus consumidores externos
+/src/core/config/sharedConfig.ts           @lescobarl
 /src/voice/conversation/**              @lescobarl
 /src/voice/lib/conversationRow.js       @lescobarl
 /src/voice/lib/speakerDirectory.js      @lescobarl

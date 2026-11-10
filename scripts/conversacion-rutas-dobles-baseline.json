@@ -166,6 +166,7 @@
       "emitirCaja",
       "exigirActiva",
       "fraseActual",
+      "mostrarPendiente",
       "registrarMedidaVoz",
       "reiniciar",
       "snapshot"
@@ -176,7 +177,6 @@
       "cerrarPorFrontera",
       "crearFlujoTexto",
       "datosPendiente",
-      "descartarPendienteCubierto",
       "drenarPendientes",
       "encolar",
       "finalDentroDeLaAbierta",
@@ -184,7 +184,6 @@
       "flushPendientes",
       "idiomaDe",
       "ordenDePendiente",
-      "pendientesVigentes",
       "procesarResultadoAsr",
       "sinPrefijoDeLaFilaAnterior"
     ],

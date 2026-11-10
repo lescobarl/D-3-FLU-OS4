@@ -22,7 +22,6 @@ import type {
 } from './tipos.ts'
 import type {
   ConfiguracionConversacion,
-  Fila,
   IdiomaLocucion,
   MedidaMotor,
   MedidaVad,
@@ -85,6 +84,8 @@ export function crearFlujoTexto({
       medidaMotor: datos.medidaMotor,
       ...(datos.muestrasIniciales ? { muestrasIniciales: datos.muestrasIniciales } : {}),
     })
+    // La línea abierta es la frase viva: el pendiente ya no manda en la caja.
+    sesion.mostrarPendiente('')
   }
 
   /**
@@ -208,6 +209,8 @@ export function crearFlujoTexto({
       finalValido ? medida : undefined,
       tramoOrigen,
     )
+    // El resultado actualizó la frase viva: la caja vuelve a la línea abierta.
+    sesion.mostrarPendiente('')
   }
 
   /** Idioma de la locución: la nube queda fija al arrancar; local autodetecta. */
@@ -238,6 +241,9 @@ export function crearFlujoTexto({
       medida: entrada.medida,
       recibidoAt: dependencias.reloj.ahora(),
     })
+    // La frase que se retiene es la que se está dictando AHORA: se pinta en la
+    // caja aunque la locución anterior siga abierta (regla: transcribir al oír).
+    sesion.mostrarPendiente(pendientes.ultimo()?.texto ?? '')
   }
 
   /**
@@ -261,31 +267,10 @@ export function crearFlujoTexto({
   }
 
   /**
-   * Descarta (contado) el pendiente cuyo audio ya está cubierto por una fila
-   * commiteada. Dueño único de la pregunta; `ultimaFilaPorFin` decide la fila.
-   * @param p Pendiente a evaluar.
-   * @param previa Última fila commiteada por fin de audio.
-   * @returns true si el pendiente se descartó.
+   * Orden de un pendiente por el inicio REAL de su audio. Un pendiente con texto
+   * NUNCA se tira en el volcado: la reentrega de una fila ya escrita la decide
+   * su dueño al ingerir (ingesta.ts); aquí solo se descarta el grupo sin texto.
    */
-  function descartarPendienteCubierto(
-    p: EntradaPendiente,
-    previa: Fila | null,
-  ): boolean {
-    const tramo = p.tramo ?? tramos.resolver(p.tramoId)
-    if (!tramo || !previa || tramo.fin > previa.tramo.fin) return false
-    sesion.contarDescarte('obsoleto', p.tramoId, tramo)
-    return true
-  }
-
-  /** Filtra con el dueño único; lo consumen el flush y el stop. */
-  function pendientesVigentes(
-    lotes: readonly EntradaPendiente[],
-  ): EntradaPendiente[] {
-    const previa = ultimaFilaPorFin(estado.filas.values())
-    return lotes.filter((lote) => !descartarPendienteCubierto(lote, previa))
-  }
-
-  /** Orden de un pendiente por el inicio REAL de su audio. */
   function ordenDePendiente(p: EntradaPendiente): number {
     const inicio = Number(p.tramo?.inicio)
     return Number.isFinite(inicio) ? inicio : Number.MAX_SAFE_INTEGER
@@ -297,10 +282,9 @@ export function crearFlujoTexto({
     const lotes = drenarPendientes().sort(
       (a, b) => ordenDePendiente(a) - ordenDePendiente(b),
     )
-    const vigentes = pendientesVigentes(lotes)
-    const primero = vigentes[0]
+    const primero = lotes[0]
     if (!primero) return
-    for (const lote of vigentes.slice(1)) pendientes.encolar(lote)
+    for (const lote of lotes.slice(1)) pendientes.encolar(lote)
     const tramo = primero.tramo ?? tramos.resolver(primero.tramoId)
     if (!tramo) {
       // Durante la sesión NO se inventa un tramo: el grupo espera al stop, que
@@ -321,10 +305,9 @@ export function crearFlujoTexto({
     const lotes = drenarPendientes().sort(
       (a, b) => ordenDePendiente(a) - ordenDePendiente(b),
     )
-    const vigentes = pendientesVigentes(lotes)
     if (estado.abierta) {
       const abierta = estado.abierta
-      const primero = vigentes[0]
+      const primero = lotes[0]
       // A y el primer grupo solo se funden si son la MISMA frase o la MISMA voz.
       // Si son frases ajenas, A se cierra ANTES y el grupo emite su fila; nunca
       // se deja que `unirRevision` conserve A y pierda B (o al revés).
@@ -339,15 +322,14 @@ export function crearFlujoTexto({
           primero.medida,
           primero.tramoId,
         )
-        vigentes.shift()
+        lotes.shift()
       }
       const cerrada = estado.abierta ?? abierta
       await sesion.cerrarLocucion(cerrada, motivo, 'stop', cerrada.final)
     }
-    for (const siguiente of vigentes) {
+    for (const siguiente of lotes) {
       const ultimo = estado.ultimoTramoId ? tramos.vigente(estado.ultimoTramoId) : null
       const previa = ultimaFilaPorFin(estado.filas.values())
-      if (descartarPendienteCubierto(siguiente, previa)) continue
       const tramo =
         siguiente.tramo ??
         tramos.resolver(siguiente.tramoId) ??
@@ -368,6 +350,7 @@ export function crearFlujoTexto({
       const locucion = estado.abierta
       if (locucion) await sesion.cerrarLocucion(locucion, motivo, 'stop', locucion.final)
     }
+    sesion.mostrarPendiente('')
   }
 
   /** Procesa un resultado ya identificado por tramo (cola ordenada). */

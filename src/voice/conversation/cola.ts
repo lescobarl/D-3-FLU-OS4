@@ -41,6 +41,8 @@ export type Pendientes = Readonly<{
   encolar(entrada: EntradaPendiente): void
   expurgar(): void
   primero(): EntradaPendiente | null
+  /** El pendiente vivo MÁS reciente: la frase que se está dictando ahora. */
+  ultimo(): EntradaPendiente | null
   quitarPrimero(): void
   reiniciar(): void
 }>
@@ -138,6 +140,18 @@ export function crearPendientes({
       pendientes = vigentes
     },
     primero: () => pendientes[0] ?? null,
+    /**
+     * El pendiente vivo MÁS reciente: la frase que se está dictando ahora.
+     * @revisor CREAR NUEVO — el retén solo exponía el más antiguo; la caja
+     *   necesita el vigente para pintarlo en vivo sin cerrar la línea anterior.
+     */
+    ultimo: () => {
+      let ultima: EntradaPendiente | null = null
+      for (const pendiente of pendientes) {
+        if (!ultima || pendiente.recibidoAt >= ultima.recibidoAt) ultima = pendiente
+      }
+      return ultima
+    },
     quitarPrimero: () => {
       pendientes = pendientes.slice(1)
     },

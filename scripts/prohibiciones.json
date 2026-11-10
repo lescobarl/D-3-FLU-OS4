@@ -41,6 +41,12 @@
       "test": "tests/barreraUnicaGuard.test.ts",
       "motivo": "Cada prohibicion tiene un solo test dueno; dos barreras para la misma prohibicion es una ruta doble.",
       "fecha": "2026-11-10"
+    },
+    {
+      "id": "conversacion-vivo",
+      "test": "tests/conversacionLiveBarrierGuard.test.ts",
+      "motivo": "La caja pinta la frase retenida que se dicta, el reloj del hueco solo lo mueve la linea abierta y el stop no tira texto.",
+      "fecha": "2026-11-10"
     }
   ]
 }
