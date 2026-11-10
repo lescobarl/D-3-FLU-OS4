@@ -29,7 +29,7 @@ import {
   crearPartidorWake,
 } from '../src/voice/conversation/adapters'
 import { CONVERSACION_CONFIG } from '../src/voice/conversation/ports'
-import { duracionMsDeMuestras } from '../src/voice/conversation/muestras'
+import { vozMsDeMuestras } from '../src/voice/conversation/muestras'
 import type {
   AsrPort,
   ConfigPort,
@@ -466,6 +466,42 @@ describe('regla 5 — etiquetas con evidencia y solo la voz que habló', () => {
     )
     const otra = await cerrarPorSilencio(api, SAMPLE_RATE * 3)
     expect(otra.filas[1]).toMatchObject({ etiqueta: 'Ana', evidencia: 'nombre' })
+  })
+
+  it('sin vector, el comando sustituye la etiqueta YA escrita y no bautiza a la siguiente', async () => {
+    const { api } = crearEscenario()
+    await api.start()
+    const tramoUno = await abrirConVoz(api, 0)
+    // La fila del comando nace SIN voz medida: etiqueta provisional "Hablante 1".
+    await api.ingestAsr(
+      asr(tramoUno, { texto: 'ok flu soy ana', final: true, voz: { hablante: 'Hablante 1' } }),
+    )
+    const cerrada = await cerrarPorSilencio(api, SAMPLE_RATE)
+    expect(cerrada.filas[0]).toMatchObject({ etiqueta: 'Hablante 1' })
+
+    // El bautizo llega DESPUÉS del commit (row.committed): el WHERE es la etiqueta.
+    await api.registerName({ nombre: 'Ana', etiqueta: 'Hablante 1' })
+    expect(api.snapshot().filas[0]).toMatchObject({ etiqueta: 'Ana', evidencia: 'nombre' })
+
+    // Otra voz: el nombre no puede colarse en ella.
+    await api.ingestAudio(bloque(SAMPLE_RATE * 2, SAMPLE_RATE * 3, VOZ()))
+    const tramoDos = api.snapshot().tramoAudio?.tramoId
+    if (!tramoDos) throw new Error('sin tramo nuevo')
+    await api.ingestAsr(
+      asr(tramoDos, { texto: 'otra voz', final: true, voz: { vozId: 'B', hablante: 'Hablante 2' } }),
+    )
+    const otra = await cerrarPorSilencio(api, SAMPLE_RATE * 3)
+    expect(otra.filas[1].etiqueta).not.toBe('Ana')
+
+    // La MISMA etiqueta provisional conserva el nombre en las filas siguientes.
+    await api.ingestAudio(bloque(SAMPLE_RATE * 4, SAMPLE_RATE * 5, VOZ()))
+    const tramoTres = api.snapshot().tramoAudio?.tramoId
+    if (!tramoTres) throw new Error('sin tramo nuevo')
+    await api.ingestAsr(
+      asr(tramoTres, { texto: 'sigo yo', final: true, voz: { hablante: 'Hablante 1' } }),
+    )
+    const misma = await cerrarPorSilencio(api, SAMPLE_RATE * 5)
+    expect(misma.filas[2]).toMatchObject({ etiqueta: 'Ana', evidencia: 'nombre' })
   })
 
   it('el nombre ? se rechaza y nunca llega a una fila', async () => {
@@ -964,9 +1000,15 @@ describe('el final NO es puerta de cierre', () => {
   })
 })
 
-describe('identidad - duración del audio medido', () => {
-  it('la conversión muestras→ms es la real, no la del tramo', () => {
-    expect(duracionMsDeMuestras(9 * SAMPLE_RATE, SAMPLE_RATE)).toBe(9000)
-    expect(duracionMsDeMuestras(0, SAMPLE_RATE)).toBe(0)
+describe('identidad - duración de la VOZ medida', () => {
+  it('la duración de identidad cuenta VOZ real, no la longitud de la captura', () => {
+    const unSegundoDeVoz = new Float32Array(SAMPLE_RATE)
+    for (let i = 0; i < unSegundoDeVoz.length; i += 1) {
+      unSegundoDeVoz[i] = Math.sin((2 * Math.PI * 220 * i) / SAMPLE_RATE) * 0.5
+    }
+    expect(vozMsDeMuestras(unSegundoDeVoz, SAMPLE_RATE)).toBe(1000)
+    // 1 s de captura SIN voz no son 1 s de evidencia de identidad.
+    expect(vozMsDeMuestras(new Float32Array(SAMPLE_RATE), SAMPLE_RATE)).toBe(0)
+    expect(vozMsDeMuestras(new Float32Array(0), SAMPLE_RATE)).toBe(0)
   })
 })

@@ -58,12 +58,18 @@ export type EstadoSesion = {
   /** Plantillas de TODAS las voces medidas en la sesión (decisión B: efímeras). */
   plantillasVoz: Map<string, PlantillaVoz>
   /**
-   * Nombre del bautizo pendiente (problema 5, mandato 2026-10-30): el comando
-   * «ok flu soy X» llega con la locución ABIERTA, antes de que la medida de
-   * respaldo (al cerrar) resuelva la voz. `cierre.cerrarLocucion` lo aplica a
-   * la voz que cierre la locución del comando.
+   * Nombre declarado para una etiqueta PROVISIONAL (`Hablante N`) mientras esa
+   * voz aún no tiene vector. El comando «ok flu soy X» sustituye la ETIQUETA ya
+   * escrita (mandato del dueño): no espera a la medida. Al medirse la voz,
+   * registrarMedidaVoz migra el nombre a `nombresPorVoz`.
    */
-  nombrePendiente: string
+  nombresPorEtiqueta: Map<string, string>
+  /**
+   * Bautizo pendiente de una locución ABIERTA sin etiqueta (API `registerName`
+   * antes de que la fila exista). Se aplica SOLO a esa locución; nunca a la
+   * siguiente (el pendiente global fue el defecto medido 2026-11-10).
+   */
+  pendienteNombre: { locutionId: string; nombre: string } | null
   /** PCM retenido de la locución abierta (tope en `configuracion`), para medir. */
   muestrasAbierta: Float32Array[]
   /** Tramos cuyo audio YA entró en `muestrasAbierta` (evita duplicarlo al reatribuir). */
@@ -121,8 +127,9 @@ export function crearEstadoSesion(idiomaInicial: IdiomaLocucion): EstadoSesion {
     descartes: [],
     filas: new Map(),
     nombresPorVoz: new Map(),
+    nombresPorEtiqueta: new Map(),
+    pendienteNombre: null,
     plantillasVoz: new Map(),
-    nombrePendiente: '',
     muestrasAbierta: [],
     tramosDeLaAbierta: new Set(),
     muestrasEnUltimoIntento: 0,
@@ -146,13 +153,24 @@ export function crearEstadoSesion(idiomaInicial: IdiomaLocucion): EstadoSesion {
  * @param identidad Decisión de la regla de identidad.
  */
 export function registrarMedidaVoz(
-  estado: Pick<EstadoSesion, 'plantillasVoz' | 'contadorVoces'>,
+  estado: Pick<
+    EstadoSesion,
+    'plantillasVoz' | 'contadorVoces' | 'nombresPorVoz' | 'nombresPorEtiqueta'
+  >,
   vector: readonly number[],
   identidad: IdentidadDecidida,
 ): void {
   // Sin vozId no hay identidad: turno corto pendiente. No se acuna plantilla
   // ni se incrementa el contador de voces (auditoria 2026-11-01).
   if (!String(identidad.vozId || '').trim()) return
+  const etiquetaDicha = String(identidad.hablante || '').trim()
+  const nombreDeEtiqueta = etiquetaDicha
+    ? estado.nombresPorEtiqueta.get(etiquetaDicha)
+    : undefined
+  // El nombre que el comando dio a la etiqueta provisional manda sobre el
+  // rótulo anónimo: la voz medida hereda el nombre de ESA etiqueta.
+  const etiqueta = nombreDeEtiqueta || etiquetaDicha
+  if (nombreDeEtiqueta) estado.nombresPorVoz.set(identidad.vozId, nombreDeEtiqueta)
   if (!identidad.continuidad) estado.contadorVoces += 1
   const existente = estado.plantillasVoz.get(identidad.vozId)
   if (existente) {
@@ -165,12 +183,12 @@ export function registrarMedidaVoz(
       ancla.length === 0 ||
       compareCosineSignatures([...vector], [...ancla]) >= sameVoiceFloor()
     if (mismaVoz) existente.vector = [...vector]
-    if (identidad.hablante) existente.etiqueta = identidad.hablante
+    if (etiqueta) existente.etiqueta = etiqueta
     return
   }
   estado.plantillasVoz.set(identidad.vozId, {
     vector: [...vector],
-    etiqueta: identidad.hablante,
+    etiqueta,
   })
 }
 
@@ -309,8 +327,9 @@ export function crearSesion(
     estado.estadoAsr = 'idle'
     estado.motorAsr = null
     estado.nombresPorVoz.clear()
+    estado.nombresPorEtiqueta.clear()
+    estado.pendienteNombre = null
     estado.plantillasVoz.clear()
-    estado.nombrePendiente = ''
     estado.muestrasAbierta = []
     estado.tramosDeLaAbierta = new Set()
     estado.muestrasEnUltimoIntento = 0

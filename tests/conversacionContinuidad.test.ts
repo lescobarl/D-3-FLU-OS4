@@ -64,7 +64,8 @@ function crearProbe(
     contadorVoces: 0,
     contadorCambioVoz: 0,
     candidatoCambioVoz: null,
-    nombrePendiente: '',
+    nombresPorEtiqueta: new Map(),
+    pendienteNombre: null,
   }
   const reglas = crearReglasCierre({
     estado,
@@ -151,7 +152,8 @@ function crearProbePendiente() {
     contadorVoces: 0,
     contadorCambioVoz: 0,
     candidatoCambioVoz: null,
-    nombrePendiente: '',
+    nombresPorEtiqueta: new Map(),
+    pendienteNombre: null,
   }
   const guardadas = new Map<string, Fila>()
   const actualizaciones: Array<{ locutionId: string; cambios: CambiosFila }> = []

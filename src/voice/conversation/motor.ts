@@ -199,11 +199,11 @@ export function crearConversacion(dependencias: DependenciasConversacion): Conve
     const nombre = String(datos.nombre || '').trim()
     if (!nombre) throw new Error('nombre vacio: no se bautiza una voz sin nombre')
     if (nombre === '?') throw new Error('nombre ? prohibido')
+    const etiquetaDicha = String(datos.etiqueta || '').trim()
     let vozId = String(datos.vozId || estado.abierta?.voz.vozId || '').trim()
-    if (!vozId && datos.etiqueta) {
+    if (!vozId && etiquetaDicha) {
       // La locución del comando ya cerró: la voz se identifica por la etiqueta
       // que venía usando (una plantilla por voz).
-      const etiquetaDicha = String(datos.etiqueta || '').trim()
       const candidatas = [...estado.plantillasVoz].filter(
         ([, plantilla]) => String(plantilla.etiqueta || '').trim() === etiquetaDicha,
       )
@@ -213,70 +213,96 @@ export function crearConversacion(dependencias: DependenciasConversacion): Conve
       // siguientes salieron «Luis» con cos 0.397. Con una sola candidata no hay duda.
       if (candidatas.length === 1) vozId = candidatas[0][0]
     }
-    if (!vozId) {
-      // MANDATO (2026-10-30, problema 5): la medida de respaldo resuelve la voz
-      // al CERRAR; mientras la locución del comando sigue abierta aún no hay
-      // vozId. El nombre queda PENDIENTE y `cierre.cerrarLocucion` lo aplica a
-      // la voz que cierre la locución del comando (con vozId queda registrada
-      // para sus filas siguientes; sin medida, marca solo la fila del comando).
-      estado.nombrePendiente = nombre
-      registro.registrar('conversacion.nombre.pendiente', { sessionId, nombre })
+    if (vozId) {
+      // Etiqueta que ESA voz venía usando (su plantilla): es el WHERE del UPDATE.
+      // Se captura ANTES de tocar nada; `reetiquetarFila` la sube al nombre.
+      const etiquetaDeLaVoz = String(estado.plantillasVoz.get(vozId)?.etiqueta || '').trim()
+      const etiquetaWhere = etiquetaDeLaVoz || etiquetaDicha
+      estado.nombresPorVoz.set(vozId, nombre)
+      if (etiquetaWhere) estado.nombresPorEtiqueta.set(etiquetaWhere, nombre)
+      let renombradas = 0
+      if (etiquetaWhere) {
+        for (const fila of [...estado.filas.values()]) {
+          if (fila.deleted || fila.sessionId !== sessionId) continue
+          // Solo las filas de ESA voz: las que llevan su etiqueta automática.
+          if (fila.etiqueta !== etiquetaWhere) continue
+          if (await sesion.reetiquetarFila(fila.locutionId, vozId, nombre)) renombradas += 1
+        }
+      }
+      // La plantilla aprende el nombre: las filas SIGUIENTES de esa voz nacen con él.
+      const plantillaDeLaVoz = estado.plantillasVoz.get(vozId)
+      if (plantillaDeLaVoz) plantillaDeLaVoz.etiqueta = nombre
+      if (renombradas > 0) {
+        registro.registrar('conversacion.nombre.renombrado', {
+          sessionId,
+          vozId,
+          nombre,
+          filas: renombradas,
+        })
+      }
+      if (estado.abierta && estado.abierta.voz.vozId === vozId) {
+        estado.abierta = {
+          ...estado.abierta,
+          voz: { ...estado.abierta.voz, nombre, nombreConfirmado: true },
+        }
+      } else if (estado.abierta && !estado.abierta.voz.vozId && datos.vozId) {
+        estado.abierta = { ...estado.abierta, voz: { ...estado.abierta.voz, vozId } }
+      }
+      sesion.emitir({
+        tipo: 'speaker.labeled',
+        sessionId,
+        locutionId: estado.abierta?.locutionId ?? '',
+        etiqueta: nombre,
+        evidencia: 'nombre',
+      })
+      registro.registrar('conversacion.voz.bautizada', {
+        sessionId,
+        vozId,
+        nombre,
+        locutionId: estado.abierta?.locutionId ?? null,
+      })
       return sesion.snapshot()
     }
-    // Etiqueta que ESA voz venía usando (su plantilla): es el WHERE del UPDATE.
-    // Se captura ANTES de tocar nada; `reetiquetarFila` la sube al nombre.
-    const etiquetaDeLaVoz = String(estado.plantillasVoz.get(vozId)?.etiqueta || '').trim()
-    estado.nombresPorVoz.set(vozId, nombre)
-    let renombradas = 0
-    const etiquetaDicha = String(datos.etiqueta || '').trim()
-    if (vozId && etiquetaDeLaVoz) {
-      for (const fila of [...estado.filas.values()]) {
-        if (fila.deleted || fila.sessionId !== sessionId) continue
-        // Solo las filas de ESA voz: las que llevan su etiqueta automática.
-        if (fila.etiqueta !== etiquetaDeLaVoz) continue
-        if (await sesion.reetiquetarFila(fila.locutionId, vozId, nombre)) renombradas += 1
-      }
-    } else if (!vozId && etiquetaDicha) {
-      // SIN voz medida (`turnMeasured: 0`): el WHERE es la ETIQUETA de la fila
-      // que dijo el nombre — «UPDATE filas SET hablante = 'Luis' WHERE hablante
-      // = 'Hablante 1'». Dentro de una sesión, una etiqueta es una sola voz.
+    // SIN voz medida: la fila del comando YA está escrita. El WHERE es su ETIQUETA
+    // («Hablante N»), no un vector que aún no existe. Esta rama es la que ejecuta
+    // el mandato «sustituye Hablante N por el nombre»; antes quedaba detrás de un
+    // return inalcanzable (el `!vozId` de arriba) y el nombre se filtraba a la
+    // locución siguiente.
+    if (etiquetaDicha) {
+      estado.nombresPorEtiqueta.set(etiquetaDicha, nombre)
+      let renombradas = 0
       for (const fila of [...estado.filas.values()]) {
         if (fila.deleted || fila.sessionId !== sessionId) continue
         if (fila.etiqueta !== etiquetaDicha) continue
         if (await sesion.reetiquetarFila(fila.locutionId, '', nombre, 'nombre')) renombradas += 1
       }
-    }
-    // La plantilla aprende el nombre: las filas SIGUIENTES de esa voz nacen con él.
-    const plantillaDeLaVoz = estado.plantillasVoz.get(vozId)
-    if (plantillaDeLaVoz) plantillaDeLaVoz.etiqueta = nombre
-    if (renombradas > 0) {
       registro.registrar('conversacion.nombre.renombrado', {
         sessionId,
-        vozId,
+        vozId: '',
         nombre,
         filas: renombradas,
+        etiqueta: etiquetaDicha,
       })
+      registro.registrar('conversacion.voz.bautizada', {
+        sessionId,
+        vozId: '',
+        nombre,
+        locutionId: null,
+      })
+      return sesion.snapshot()
     }
-    if (estado.abierta && estado.abierta.voz.vozId === vozId) {
-      estado.abierta = {
-        ...estado.abierta,
-        voz: { ...estado.abierta.voz, nombre, nombreConfirmado: true },
-      }
-    } else if (estado.abierta && !estado.abierta.voz.vozId && datos.vozId) {
-      estado.abierta = { ...estado.abierta, voz: { ...estado.abierta.voz, vozId } }
+    // Sin voz y sin etiqueta: solo una locución ABIERTA puede recibir el nombre al
+    // cerrar. El pendiente va ACOTADO a esa locución; nunca queda global.
+    const abierta = estado.abierta
+    if (!abierta) {
+      registro.registrar('conversacion.nombre.sinDestino', { sessionId, nombre })
+      return sesion.snapshot()
     }
-    sesion.emitir({
-      tipo: 'speaker.labeled',
+    estado.pendienteNombre = { locutionId: abierta.locutionId, nombre }
+    registro.registrar('conversacion.nombre.pendiente', {
       sessionId,
-      locutionId: estado.abierta?.locutionId ?? '',
-      etiqueta: nombre,
-      evidencia: 'nombre',
-    })
-    registro.registrar('conversacion.voz.bautizada', {
-      sessionId,
-      vozId,
       nombre,
-      locutionId: estado.abierta?.locutionId ?? null,
+      locutionId: abierta.locutionId,
     })
     return sesion.snapshot()
   }

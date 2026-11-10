@@ -72,6 +72,11 @@ export type EntradaEtiqueta = Readonly<{
    * la etiqueta cae a la semilla (compatibilidad de dobles de prueba).
    */
   pendiente?: string
+  /**
+   * Nombres declarados para etiquetas PROVISIONALES (`Hablante N`): el comando
+   * «ok flu soy X» sustituye la etiqueta ya escrita sin esperar al vector.
+   */
+  nombresPorEtiqueta?: ReadonlyMap<string, string>
 }>
 
 /** Etiqueta resuelta con la evidencia que la sostiene. */
@@ -101,6 +106,8 @@ export type CierreLocucion = Readonly<{
   esEtiquetaAnonima: (etiqueta: string) => boolean
   /** Etiqueta TEMPORAL (`Hablante ?`) mientras la medida no ha llegado. */
   pendienteEtiqueta?: string
+  /** Nombres declarados para etiquetas provisionales (bautizo sin vector). */
+  nombresPorEtiqueta?: ReadonlyMap<string, string>
   /**
    * TIMBRE medido de la voz que cierra la locución (null si no hubo medida):
    * la fila lo guarda como evidencia del vínculo fila↔voz por timbre.
@@ -152,6 +159,14 @@ export function resolverEtiqueta(entrada: EntradaEtiqueta): EtiquetaResuelta {
   const elegido = candidatos.find((candidato) => candidato.etiqueta !== '')
   if (!elegido) throw new Error('semilla vacia: la etiqueta no puede quedar vacia')
   if (elegido.etiqueta === '?') throw new Error('etiqueta ? prohibida')
+  // BAUTIZO POR ETIQUETA: un `Hablante N` sobre el que el dueño dijo su nombre se
+  // sustituye por el nombre SIN esperar a que haya vector. La etiqueta es el WHERE
+  // del comando; la voz medida hereda el nombre en registrarMedidaVoz.
+  const nombreDeEtiqueta =
+    elegido.evidencia !== 'nombre' && esEtiquetaAnonima(elegido.etiqueta)
+      ? String(entrada.nombresPorEtiqueta?.get(elegido.etiqueta) || '').trim()
+      : ''
+  if (nombreDeEtiqueta) return { etiqueta: nombreDeEtiqueta, evidencia: 'nombre' }
   return { etiqueta: elegido.etiqueta, evidencia: elegido.evidencia }
 }
 
@@ -189,6 +204,7 @@ export function construirFila(entrada: CierreLocucion): ResultadoFila {
     semilla: entrada.semillaEtiqueta,
     esEtiquetaAnonima: entrada.esEtiquetaAnonima,
     pendiente: entrada.pendienteEtiqueta,
+    nombresPorEtiqueta: entrada.nombresPorEtiqueta,
   })
 
   return {

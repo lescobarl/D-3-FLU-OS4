@@ -19,7 +19,7 @@ import type { PlantillaVoz } from './identidad.ts'
 import { registrarMedidaVoz } from './sesion.ts'
 import { compareCosineSignatures } from '../lib/speakerCore.js'
 import { sameVoiceFloor } from '../lib/speakerClusters.js'
-import { concatenarMuestras, duracionMsDeMuestras } from './muestras.ts'
+import { concatenarMuestras, vozMsDeMuestras } from './muestras.ts'
 import { logCaughtError } from '../../lib/caughtError.ts'
 import { normalizeForMatch } from '../../lib/textUtils.ts'
 import { recordSessionEvent } from '../api/sessionLog.ts'
@@ -66,8 +66,10 @@ export type EstadoCierre = {
   /** Confirmación de cambio de voz (Caso 1+3): pertenece a la locución abierta. */
   contadorCambioVoz: number
   candidatoCambioVoz: { limite: number; textoAntes: string } | null
-  /** Bautizo pendiente del comando «ok flu soy X» (problema 5). */
-  nombrePendiente: string
+  /** Nombres declarados para etiquetas provisionales (bautizo sin vector). */
+  nombresPorEtiqueta: Map<string, string>
+  /** Bautizo pendiente, ACOTADO a la locución abierta que lo recibió. */
+  pendienteNombre: { locutionId: string; nombre: string } | null
 }
 
 /** Servicios que la sesión entrega a las reglas de cierre. */
@@ -419,6 +421,8 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
       return locucion.voz
     }
     const muestras = concatenarMuestras(estado.muestrasAbierta)
+    // La evidencia que decide la voz es la VOZ medida, no la longitud del tramo.
+    const vozMs = vozMsDeMuestras(muestras, locucion.sampleRate)
     let vector: readonly number[] | null = null
     try {
       vector = await embebedor.medir(muestras, locucion.sampleRate)
@@ -439,7 +443,7 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
       vector,
       plantillas: plantillasDe(estado.plantillasVoz),
       umbral: config.umbralContinuidadVoz(),
-      duracionMs: duracionMsDeMuestras(muestras.length, locucion.sampleRate),
+      duracionMs: vozMs,
       minNuevaVozMs: config.minNuevaVozMs?.() ?? 0,
       palabras: String(locucion.texto || '').trim().split(/\s+/).filter(Boolean).length,
       minNuevaVozPalabras: config.minNuevaVozPalabras?.() ?? 0,
@@ -599,20 +603,20 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
     let vozCerrada = vozMedida === locucion.voz ? locucion.voz : fusionarVoz(locucion.voz, vozMedida)
     const continuidadVoz =
       vozMedida === locucion.voz ? locucion.continuidadVoz : Boolean(vozMedida.continuidad)
-    // BAUTIZO PENDIENTE (problema 5, mandato 2026-10-30): el nombre del comando
-    // «ok flu soy X» llegó con la locución ABIERTA (la medida de respaldo aún no
-    // resuelve la voz). Se aplica a la voz que cierra ESTA locución: con vozId el
-    // nombre queda REGISTRADO para esa voz (sus filas siguientes lo llevan y la
-    // plantilla aprende el nombre); sin medida, solo marca la fila del comando.
-    if (estado.nombrePendiente) {
+    // BAUTIZO PENDIENTE ACOTADO (problema 5): el nombre llegó con una locución
+    // ABIERTA sin etiqueta; se aplica SOLO a esa locución al cerrar. Nunca a la
+    // siguiente: el pendiente global bautizaba la voz ajena que cerrara después
+    // (defecto medido 2026-11-10: «No manches» salió como Luis con vozId null).
+    const pendiente = estado.pendienteNombre
+    if (pendiente && pendiente.locutionId === locucion.locutionId) {
       const vozIdCerrada = String(vozCerrada.vozId || '').trim()
       if (vozIdCerrada) {
-        estado.nombresPorVoz.set(vozIdCerrada, estado.nombrePendiente)
+        estado.nombresPorVoz.set(vozIdCerrada, pendiente.nombre)
         const plantilla = estado.plantillasVoz.get(vozIdCerrada)
-        if (plantilla) plantilla.etiqueta = estado.nombrePendiente
+        if (plantilla) plantilla.etiqueta = pendiente.nombre
       }
-      vozCerrada = { ...vozCerrada, nombre: estado.nombrePendiente, nombreConfirmado: true }
-      estado.nombrePendiente = ''
+      vozCerrada = { ...vozCerrada, nombre: pendiente.nombre, nombreConfirmado: true }
+      estado.pendienteNombre = null
       registro.registrar('conversacion.nombre.aplicado', {
         sessionId: sesion,
         locutionId: locucion.locutionId,
@@ -647,6 +651,7 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
       semillaEtiqueta: config.semillaEtiqueta(),
       esEtiquetaAnonima: config.esEtiquetaAnonima,
       pendienteEtiqueta,
+      nombresPorEtiqueta: estado.nombresPorEtiqueta,
       firma,
     }
     estado.abierta = null

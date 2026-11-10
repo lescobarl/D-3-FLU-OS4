@@ -252,6 +252,18 @@ function medir(fuentes: readonly Fuente[] = FUENTES) {
     prefixStripOwner: fuentes.filter((archivo) =>
       /sinPrefijoDeLaFilaAnterior\(/.test(archivo.src),
     ).length,
+    // El bautizo sin vector NO puede dejar un pendiente global que bautice a la
+    // locución siguiente: el nombre se aplica por ETIQUETA a las filas escritas.
+    nombrePendienteGlobales: fuentes.reduce(
+      (total, archivo) => total + contar(archivo.src, /\bnombrePendiente\b/g),
+      0,
+    ),
+    // Un solo dueño recorre las filas ya escritas y las renombra por etiqueta.
+    bautizoPorEtiquetaCallSites: fuentes.reduce(
+      (total, archivo) =>
+        total + contar(archivo.src, /reetiquetarFila\([^\r\n]*'nombre'/g),
+      0,
+    ),
     ...medirPropiedadSemantica(FUENTES_SRC),
   }
 }
@@ -376,11 +388,28 @@ describe('CONVERSACIÓN — rutas dobles medidas', () => {
     )
   })
 
-  it('la duración de identidad sale del audio medido, no del tramo', () => {
+  it('la duración de identidad sale de la VOZ del audio medido, no del tramo', () => {
     expect(medir().identityDurationFromTramo).toBe(0)
-    expect(fuente('muestras.ts')).toContain('duracionMsDeMuestras')
-    expect(fuente('cierre.ts')).toContain('duracionMsDeMuestras')
-    expect(fuente('ingesta.ts')).toContain('duracionMsDeMuestras')
+    // Un solo dueño de la conversión voz→ms: lo consumen cierre e ingesta.
+    expect(fuente('muestras.ts')).toContain('function vozMsDeMuestras')
+    expect(fuente('muestras.ts')).toContain('countVoicedSamples')
+    expect(fuente('cierre.ts')).toContain('vozMsDeMuestras(')
+    expect(fuente('ingesta.ts')).toContain('vozMsDeMuestras(')
+    // Nadie más dentro del módulo reimplementa la CONVERSIÓN voz→ms. El conteo
+    // de VOZ de la puerta del adaptador es otra responsabilidad (piso de voz).
+    expect(
+      FUENTES.filter((archivo) => /countVoicedSamples\s*\([^)]*\)\s*\//.test(archivo.src)).map(
+        (archivo) => archivo.nombre,
+      ),
+    ).toEqual(['muestras.ts'])
+  })
+
+  it('el bautizo sin vector renombra por ETIQUETA y no deja pendiente global', () => {
+    expect(medir().nombrePendienteGlobales).toBe(0)
+    expect(medir().bautizoPorEtiquetaCallSites).toBe(1)
+    expect(fuente('motor.ts')).toContain('nombresPorEtiqueta')
+    expect(fuente('motor.ts')).not.toContain('nombrePendiente')
+    expect(fuente('cierre.ts')).not.toContain('nombrePendiente')
   })
 
   it('los pendientes conservan su tramo real y no fabrican {inicio:0,fin:1}', () => {
@@ -605,6 +634,8 @@ describe('CONVERSACIÓN — un nombre no cruza de voz', () => {
     const estado = {
       plantillasVoz: new Map([['v1', { vector: [...ANCLA], etiqueta: 'Luis' }]]),
       contadorVoces: 1,
+      nombresPorVoz: new Map<string, string>(),
+      nombresPorEtiqueta: new Map<string, string>(),
     }
     registrarMedidaVoz(estado as never, AJENA, {
       vozId: 'v1',

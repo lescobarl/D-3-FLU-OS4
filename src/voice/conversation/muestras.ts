@@ -9,22 +9,26 @@
  * La lógica de concatenación vive en el DUEÑO ÚNICO (`pcmChunks.concatFloat32`);
  * aquí solo se publica la superficie del módulo (structureDuplicationGuard).
  */
+import { countVoicedSamples } from '../lib/voicedActivity.js'
+
 export { concatFloat32 as concatenarMuestras } from '../lib/pcmChunks.js'
 
 /**
- * Duración REAL en milisegundos del audio medido. Dueño único de la conversión
- * muestras→ms: la medida de voz y la medida tardía la consumen; la duración del
- * tramo (`fin - inicio`) NO es la del audio retenido (una locución sembrada con
- * audio de otro tramo mide más de lo que dice su ventana).
- * @param muestras Número de muestras PCM medidas.
+ * Duración REAL de VOZ en milisegundos del audio medido. Dueño único de la
+ * conversión voz→ms: la identidad temprana, la tardía y el cierre la consumen.
+ * La longitud de la captura y la del tramo (`fin - inicio`) NO son voz: una
+ * ventana con silencio superaba el piso `minNuevaVozMs` y la plantilla de 0,9 s
+ * de VOZ partía la fila (outlier de la sesión 68c837da).
+ * @param muestras PCM medido (mono).
  * @param sampleRate Frecuencia de muestreo.
- * @returns Milisegundos (0 si no hay muestras o frecuencia válida).
+ * @returns Milisegundos de VOZ real (0 sin muestras, sin voz o tasa inválida).
+ * @revisor CREAR NUEVO — reemplaza `duracionMsDeMuestras` (captura) como dueño
+ * único de la duración de identidad; ahora la evidencia es la VOZ real.
  */
-export function duracionMsDeMuestras(muestras: number, sampleRate: number): number {
-  const total = Number(muestras)
+export function vozMsDeMuestras(muestras: Float32Array, sampleRate: number): number {
   const tasa = Number(sampleRate)
-  if (!(total > 0) || !(tasa > 0)) return 0
-  return (total / tasa) * 1000
+  if (!(tasa > 0) || !muestras || muestras.length === 0) return 0
+  return Math.round((countVoicedSamples(muestras, { sampleRate: tasa }) / tasa) * 1000)
 }
 
 /**

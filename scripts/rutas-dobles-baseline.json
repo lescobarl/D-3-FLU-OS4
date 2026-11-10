@@ -637,7 +637,7 @@
     {
       "id": "bautizo-nombre-voz",
       "owner": "src/voice/compose/conversationMotorProducto.js",
-      "description": "El bautizo de la voz de la sesion («ok flu soy X») tiene UN solo disparador: el cableado del motor en row.committed, que es el unico que conoce el texto canonico y la etiqueta de la fila (WHERE del renombrado). Un segundo call site de registrarNombre es ruta doble: el que llega segundo no casa la etiqueta ya renombrada y cae en nombrePendiente, que se aplica a la voz de la locucion siguiente.",
+      "description": "El bautizo de la voz de la sesion («ok flu soy X») tiene UN solo disparador: el cableado del motor en row.committed, que es el unico que conoce el texto canonico y la etiqueta de la fila (WHERE del renombrado). Un segundo call site de registrarNombre es ruta doble: el que llega segundo no casa la etiqueta ya renombrada y repite el recorrido del bautizo.",
       "pattern": "\\.registrarNombre\\s*\\??\\.?\\s*\\(",
       "roots": ["src/voice"],
       "kind": "sites",

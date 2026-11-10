@@ -15,7 +15,7 @@ import type { BufferAsr, RegistroTramos } from './tramos.ts'
 import type { Sesion } from './sesion.ts'
 import { decidirIdentidad, plantillasDe } from './identidad.ts'
 import type { IdentidadDecidida } from './identidad.ts'
-import { colaDeMuestras, duracionMsDeMuestras, retenerCola } from './muestras.ts'
+import { colaDeMuestras, retenerCola, vozMsDeMuestras } from './muestras.ts'
 import { fusionarVoz, ultimaFilaPorFin } from './fila.ts'
 import { registrarMedidaVoz } from './sesion.ts'
 import { asrEmpujaAudio } from './ports.ts'
@@ -374,7 +374,7 @@ export function crearIngesta({
    */
   function aplicarIdentidadAlTramoAbierto(
     vector: readonly number[],
-    muestrasMedidas: number,
+    vozMs: number,
   ): boolean {
     const embebedor = dependencias.embebedor
     const recien = estado.abierta
@@ -382,7 +382,8 @@ export function crearIngesta({
     const identidad = decidirIdentidadSesion(
       vector,
       embebedor,
-      duracionMsDeMuestras(muestrasMedidas, recien.sampleRate),
+      // La evidencia de identidad es la VOZ medida, no la duración del tramo.
+      vozMs,
       String(recien.texto || '').trim().split(/\s+/).filter(Boolean).length,
     )
     registrarMedidaVoz(estado, vector, identidad)
@@ -472,7 +473,14 @@ export function crearIngesta({
       true,
     )
     // 3. Identidad de la voz nueva con el MISMO vector (etiqueta perezosa).
-    if (!aplicarIdentidadAlTramoAbierto(vector, ventana.length)) return null
+    if (
+      !aplicarIdentidadAlTramoAbierto(
+        vector,
+        vozMsDeMuestras(ventana, datos.sampleRate),
+      )
+    ) {
+      return null
+    }
     estado.muestrasAbierta = [ventana]
     estado.medidoHastaFin = Math.max(estado.medidoHastaFin, datos.fin)
     dependencias.registro.registrar('conversacion.locucion.partida', {
@@ -877,10 +885,12 @@ export function crearIngesta({
     // búfer completo: en la sesión 8149df78, 12 de 124 mediciones copiaban hasta
     // 709.824 muestras para extraer un vector de 512.
     const ventanaMedida = Math.max(1, Math.round(configuracion.minSegundosVozMedida * sampleRate))
-    embebedor.medir(colaDeMuestras(estado.muestrasAbierta, ventanaMedida), sampleRate).then(
+    const colaMedida = colaDeMuestras(estado.muestrasAbierta, ventanaMedida)
+    const vozMs = vozMsDeMuestras(colaMedida, sampleRate)
+    embebedor.medir(colaMedida, sampleRate).then(
       (vector) =>
         encolar(() =>
-          Promise.resolve().then(() => aplicarMedidaVoz(locutionId, vector, totalMuestras)),
+          Promise.resolve().then(() => aplicarMedidaVoz(locutionId, vector, vozMs)),
         ).catch(
           (error: unknown) => {
             // AGENTS §1.5: ningún fallo capturado se pierde. La medida no se
@@ -945,7 +955,7 @@ export function crearIngesta({
   async function reetiquetarConMedidaTardia(
     locucionId: string,
     vector: readonly number[],
-    muestrasMedidas: number,
+    vozMs: number,
   ): Promise<void> {
     const embebedor = dependencias.embebedor
     const fila = estado.filas.get(locucionId)
@@ -955,7 +965,7 @@ export function crearIngesta({
     const identidad = decidirIdentidadSesion(
       vector,
       embebedor,
-      duracionMsDeMuestras(muestrasMedidas, fila.tramo.sampleRate),
+      vozMs,
       String(fila.texto || '').trim().split(/\s+/).filter(Boolean).length,
     )
     registrarMedidaVoz(estado, vector, identidad)
@@ -978,7 +988,7 @@ export function crearIngesta({
   async function aplicarMedidaVoz(
     locucionId: string,
     vector: readonly number[] | null,
-    muestrasMedidas = 0,
+    vozMs = 0,
   ): Promise<void> {
     estado.medidaVozEnCurso = false
     const embebedor = dependencias.embebedor
@@ -989,13 +999,14 @@ export function crearIngesta({
       abierta.locutionId === locucionId &&
       !String(abierta.voz.vozId || '').trim()
     if (!esSuya || abierta === null) {
-      await reetiquetarConMedidaTardia(locucionId, vector, muestrasMedidas)
+      await reetiquetarConMedidaTardia(locucionId, vector, vozMs)
       return
     }
     const identidad = decidirIdentidadSesion(
       vector,
       embebedor,
-      duracionMsDeMuestras(muestrasMedidas, abierta.sampleRate),
+      // La duración que decide la voz nueva es la VOZ medida, no el tramo.
+      vozMs,
       String(abierta.texto || '').trim().split(/\s+/).filter(Boolean).length,
     )
     registrarMedidaVoz(estado, vector, identidad)

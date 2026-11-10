@@ -6,9 +6,8 @@
  * `scripts/rutas-dobles-baseline.json`). Aquí se mide la otra mitad: `row.committed`
  * se REPITE al promover la fila (`revision > 1`), y el bautizo solo puede dispararse
  * con una locución NUEVA (`esNuevaLocucion`, el mismo predicado que la frontera de
- * turno). El disparo de más no es cosmético: llega con la etiqueta ya renombrada, no
- * casa el WHERE y deja un `nombrePendiente` que se aplica a la voz de la locución
- * SIGUIENTE (`motor.registrarNombre` sin voz medida + cierre de la locución).
+ * turno). El disparo de más no es cosmético: llega con la etiqueta ya renombrada,
+ * no casa el WHERE y repite el recorrido de filas que ya hicieron el bautizo.
  *
  * Mide el compositor REAL; el módulo se sustituye por su frontera (su contrato
  * vive en `tests/conversacionApi.test.ts`). El nombre se resuelve con el detector

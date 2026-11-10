@@ -51,6 +51,10 @@ const h = vi.hoisted(() => {
     conversationState: 'IDLE',
     conversationEpoch: 1,
     activePersonId: '',
+    setLastCommittedTranscript: vi.fn(),
+    setEntrySpeakerName: vi.fn(),
+    addConversationEntry: vi.fn(),
+    noteSpeakerHighWater: vi.fn(),
   };
   const recognition = {
     lang: '',
@@ -478,8 +482,7 @@ describe('replay 2026-10-19 · defecto 5: la orden a mitad del dictado no borra 
 
     // 2b) BAUTIZO UNICO, medido sobre la sesion REAL: la fila del comando dice
     //     «Okay flu soy Luis», asi que la voz se bautiza UNA vez. Con dos
-    //     disparadores, el sobrante caia en `nombrePendiente` y bautizaba a la voz
-    //     de la locucion SIGUIENTE.
+    //     disparadores, el sobrante repetia el recorrido del bautizo.
     const bautizos = () =>
       (relayLog as unknown as { mock: { calls: unknown[][] } }).mock.calls.filter(
         ([, canal, contexto]) =>

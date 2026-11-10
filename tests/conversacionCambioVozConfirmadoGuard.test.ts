@@ -232,6 +232,39 @@ describe('cambio de voz — una ventana distinta NO parte la fila', () => {
     expect(escenario.api.snapshot().locucionAbierta!.locutionId).toBe(idA)
   })
 
+  it('una plantilla con 0,9 s de VOZ no parte: el outlier de la sesión 68c837da', async () => {
+    const escenario = montar(2)
+    const { api, eventos } = escenario
+    await api.start({ idioma: 'es' })
+    for (let i = 0; i < 10; i += 1) {
+      const inicio = i * BLOQUE
+      await api.ingestAudio({
+        muestras: new Float32Array(BLOQUE),
+        sampleRate: SR,
+        inicio,
+        fin: inicio + BLOQUE,
+        medida: SILENCIO(100),
+      })
+    }
+    // A: 0,9 s de VOZ + 0,1 s de silencio = 1,0 s de captura. La voz nueva
+    // exige `minNuevaVozMs` (1000) de VOZ: 900 < 1000 la deja pendiente.
+    await emitir(api, 220, 9, 16000)
+    await api.ingestAudio({
+      muestras: new Float32Array(Math.round(SR * 0.1)),
+      sampleRate: SR,
+      inicio: 30400,
+      fin: 30400 + Math.round(SR * 0.1),
+      medida: SILENCIO(0),
+    })
+    await api.ingestAsr(evento(TEXTO_A))
+    // B sin pausa: la voz abierta sigue pendiente y NO se parte.
+    await emitir(api, 440, 16, 32000)
+    await api.ingestAsr(evento(`${TEXTO_A} ${COLA_B1}`))
+    await emitir(api, 440, 16, 57600)
+    await api.ingestAsr(evento(ACUMULADO))
+    expect(cerradosPorVoz(eventos)).toHaveLength(0)
+  })
+
   it('la SEGUNDA ventana distinta parte: la anterior cierra recortada y la nueva abre su locución', async () => {
     const escenario = montar(2)
     const { idA } = await correrTurno(escenario)

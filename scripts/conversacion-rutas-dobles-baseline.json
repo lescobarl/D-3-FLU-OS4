@@ -24,7 +24,9 @@
     "prefixStripOwner": 1,
     "turnMintOwners": 0,
     "voiceMeasureOwners": 0,
-    "nameRegisterOwners": 0
+    "nameRegisterOwners": 0,
+    "nombrePendienteGlobales": 0,
+    "bautizoPorEtiquetaCallSites": 1
   },
   "funciones": {
     "adapters.ts": [
@@ -135,8 +137,8 @@
     ],
     "muestras.ts": [
       "colaDeMuestras",
-      "duracionMsDeMuestras",
-      "retenerCola"
+      "retenerCola",
+      "vozMsDeMuestras"
     ],
     "pasivo.ts": [
       "renombrarFilaDeUsuario"

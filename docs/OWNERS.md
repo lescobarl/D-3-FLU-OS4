@@ -55,7 +55,7 @@ mismo commit. Si no puedes borrarlo ahora, no añadas el nuevo ahora.
 | ¿Cómo entra el ASR y se resuelve el tramo? | `ingesta.ts:65` `crearIngesta` (`ingestaAsr` 693, `drenarResultadosAsr` 513) · `ingesta.ts:115` `esReentregaDeLaFila` · `ingesta.ts:140` `tramoSinteticoParaTexto` · `tramos.ts:178` `crearBufferAsr` | El módulo atribuye el texto dentro de su cola. |
 | ¿Cómo se verifica el cambio de voz? | `ingesta.ts:220` `verificarCambioVoz` · `ingesta.ts:366` `partirLocucionPorCambioDeVoz` | Mide el tramo entrante antes de atribuir texto. |
 | ¿Quién acuña un tramo (sintético o de partición)? | `tramos.ts:50` `crearRegistroTramos` (fábrica `sintetico`) · `ingesta.ts:140` `tramoSinteticoParaTexto` · `ingesta.ts:366` `partirLocucionPorCambioDeVoz` (identificador de tramo con uuid) | `texto.ts` NO acuña tramos: pide el id a `ingesta.ts`; un `id.uuid()` inline para el identificador del tramo es ruta doble. |
-| ¿Cómo se miden las muestras y su duración? | `muestras.ts:23` `duracionMsDeMuestras` | La identidad sale del audio medido, no del tramo. |
+| ¿Cómo se miden las muestras y su duración? | `muestras.ts:28` `vozMsDeMuestras` | La identidad sale de la VOZ del audio medido, no del tramo ni de la captura. |
 | ¿Cómo se serializan las llamadas y se manejan los pendientes? | `cola.ts:25` `crearCola` · `cola.ts:74` `crearPendientes` · `texto.ts:44` `crearFlujoTexto` (`finalizarPendientes` 280) | Una cola; los pendientes conservan su tramo real. |
 
 ## Producto y persistencia
@@ -69,7 +69,7 @@ mismo commit. Si no puedes borrarlo ahora, no añadas el nuevo ahora.
 | ¿Cómo se refleja en el store/UI? | `src/voice/compose/conversationMotorProducto.js:111` `row.committed` → `addConversationEntry` (133); `speaker.labeled` (95) → `setEntrySpeakerName` (104) | Llamador espejo; no es un segundo escritor. |
 | ¿Cómo se evita que el store reescriba la fila del módulo? | `src/hooks/useConversationPersistence.ts:171` `debePersistirEntrada` · `:149` `mismaFilaPersistida` | `conversacionEscrituraUnica` lo prueba. |
 | ¿Cómo se renombra el hablante desde la UI? | `adapters.ts:494` `renameRowSpeakerName` (re-export en `src/voice/api/conversation.ts:10`) | Una sola vía de renombre. |
-| ¿Quién etiqueta las filas de la sesión con el nombre dicho? | `motor.ts:197` `registrarNombre` (puerto `producto.ts:286`) · disparador ÚNICO `src/voice/compose/conversationMotorProducto.js:185` en `row.committed` | `registrarNombre`: solo la sesión. Fija `nombresPorVoz`/`nombrePendiente` y emite `speaker.labeled`. No escribe directorio ni base. Un segundo call site es ruta doble (caso declarado en `scripts/rutas-dobles-baseline.json`). El nombre que recibe lo resuelve el directorio (`conversationMotorProducto.js:178`); la captura cruda del ASR nunca se entrega. |
+| ¿Quién etiqueta las filas de la sesión con el nombre dicho? | `motor.ts:197` `registrarNombre` (puerto `producto.ts:286`) · disparador ÚNICO `src/voice/compose/conversationMotorProducto.js:185` en `row.committed` | `registrarNombre`: solo la sesión. Fija `nombresPorVoz`/`nombresPorEtiqueta` y un `pendienteNombre` ACOTADO a la locución abierta; emite `speaker.labeled`. El renombrado por ETIQUETA recorre `estado.filas` (no espera vector). No escribe directorio ni base. Un segundo call site es ruta doble (caso declarado en `scripts/rutas-dobles-baseline.json`). El nombre que recibe lo resuelve el directorio (`conversationMotorProducto.js:178`); la captura cruda del ASR nunca se entrega. |
 | ¿Quién registra el nombre propio en la identidad global? | `src/voice/lib/speakerIdentityRegister.js:334` `registerSpeakerIdentityFromCommand` → `:87` `registerSpeakerIdentity` (consumidor `useFluVoiceAssistant.js:381`) | Directorio por voz + base + clusters + primario. No reescribe filas (fila inmutable). |
 | ¿Cómo se resuelve el nombre que introduce una locución («soy X»)? | `src/voice/lib/speakerDirectory.js:102` `knownVoiceNames` · `:137` `preferKnownVoiceName` (consumidores: `speakerPolicy.js:50` registro de identidad y `conversationMotorProducto.js:178` disparador del bautizo) | La captura del ASR NO es el nombre de una voz: se prefiere el nombre YA conocido («Luis Sigue Sin» → «Luis»). Una segunda copia de la regla es ruta doble (caso `nombre-dicho-preferencia-conocida`). El registro de identidad enriquece la lista con los clusters vivos de la sesión (estado suyo); la regla es la MISMA. |
 
@@ -96,8 +96,9 @@ Estas cuatro zonas parecen dos y no lo son. No las «unifiques» sin leer la not
    deciden pertenencia y revisión. Preguntas distintas.
 4. **Nombre de sesión vs identidad global.** `motor.registrarNombre` es la
    etiqueta de continuidad de la SESIÓN (dueño y disparador único en el mapa):
-   fija `nombresPorVoz`/`nombrePendiente` y emite `speaker.labeled` para las
-   filas futuras. `registerSpeakerIdentityFromCommand`
+   fija `nombresPorVoz`/`nombresPorEtiqueta` (y un `pendienteNombre` acotado a
+   la locución abierta) y emite `speaker.labeled` para las filas futuras.
+   `registerSpeakerIdentityFromCommand`
    (`src/voice/lib/speakerIdentityRegister.js:334`) es la identidad
    PERSISTENTE: directorio por voz, base de participantes, clusters y primario.
    Borrar uno rompe su parte; no son dos copias del mismo responsable.
