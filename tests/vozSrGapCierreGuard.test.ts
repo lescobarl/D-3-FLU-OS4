@@ -87,6 +87,27 @@ describe('cierre por silencio: el turno cierra y escribe su fila', () => {
     expect(await fluDb.conversations.count(), 'sin fila antes del umbral').toBe(0)
   })
 
+  it('bloques de 128 muestras: no se pierde audio y el stop resuelve tras commitear', async () => {
+    const motor = crearMotorConversacionProducto({ idioma: 'es', ultimoTextoDicho: () => '' })
+    motor.abrir()
+    // El AudioWorklet entrega 128 muestras: 80 bloques = 0,64 s de voz.
+    for (let i = 0; i < 80; i += 1) motor.audio(tono(8), SR, i * 128)
+    await motor.evento({
+      resultIndex: 0,
+      results: [{ 0: { transcript: 'prueba de bloques' }, isFinal: false, length: 1 }],
+    })
+    // Silencio suficiente en el MISMO tamaño de bloque: la frontera debe cerrar.
+    const desde = 80 * 128
+    const necesario = Math.ceil(
+      ((CONVERSACION_CONFIG.silenceCloseMs / 1000) * SR) / 128,
+    ) + 4
+    for (let i = 0; i < necesario; i += 1) motor.audio(silencio(8), SR, desde + i * 128)
+    const cierre = motor.cerrar('user')
+    expect(cierre, 'el cierre expone su promesa').toBeInstanceOf(Promise)
+    await cierre
+    expect(await fluDb.conversations.count(), 'la fila se persistió').toBe(1)
+  })
+
   it('el hook NO tiene una segunda ruta de cierre (srGap retirado)', () => {
     const hook = readFileSync('src/voice/hooks/useFluVoiceAssistant.js', 'utf8')
     expect(hook.includes('srGap'), 'el aviso del watchdog se retiró con la tubería').toBe(false)

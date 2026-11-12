@@ -10,24 +10,24 @@
  *   1. nombre CONFIRMADO (`ok flu soy XXX`)  → evidencia `nombre`
  *   2. plantilla de sesión casada (`etiquetaVoz`) → evidencia `medida`
  *      (la voz que vuelve recupera SU etiqueta: problema 4)
- *   3. medida con IDENTIDAD POSITIVA          → evidencia `medida`
+ *   3. etiqueta de la VOZ MEDIDA (propia o anónima `Hablante N`) → `medida`
  *   4. continuidad con la etiqueta anterior   → evidencia `continuidad`
- *   5. medida ANÓNIMA (`Hablante N`)          → evidencia `medida`
- *   6. etiqueta TEMPORAL (`Hablante ?`)       → evidencia `pendiente`
- *   7. semilla de la configuración            → evidencia `semilla`
+ *   5. etiqueta TEMPORAL (`Hablante X`)       → evidencia `pendiente`
+ *   6. no identificado (`Hablante XX`)        → evidencia `medida`/`semilla`
  *
  * La etiqueta TEMPORAL es el mandato del dueño (2026-10-30): «puedes poner un
  * hablante temporal si aun no llega, y cuando lo tengas reemplazar». Se usa
  * cuando la fila NO tiene voz medida (sin `vozId` no hay plantilla, ni medida
- * anónima, ni continuidad): la fila nace con la pendiente y la medida tardía la
+ * anónima, ni continuidad): la fila nace con `Hablante X` y la medida tardía la
  * reemplaza (`AlmacenPort.actualizar`). Una voz YA medida conserva su etiqueta
  * —la medida no se descarta por el largo del tramo, solo se exige para ACUÑAR
  * una voz nueva—.
  *
- * `Hablante N` es una agrupación sin identidad (definición en
- * `speakerCore.isAutoSpeakerLabel`): no puede pisar la continuidad de una voz
- * ya etiquetada. Solo una medida con identidad positiva (etiqueta con nombre)
- * adelanta a la continuidad.
+ * Una medida ANÓNIMA (`Hablante N`) NO es identidad, pero tampoco es la fila
+ * anterior: gana a la continuidad para que una voz distinta nunca herede el
+ * nombre de la voz previa (la mujer salía «Luis»). La VISTA muestra `Hablante N`
+ * tal cual: es una voz MEDIDA desconocida, distinta de `Hablante XX` (audio
+ * insuficiente) y de `Hablante X` (medida aún no llegada).
  *
  * `provisional` es `true` mientras el final del mismo tramo no haya llegado.
  * La fila commiteada es INMUTABLE (mandato del dueño 2026-10-30): no hay
@@ -58,6 +58,11 @@ export type VozEtiqueta = Readonly<{
    * ya conocida recupera SU etiqueta aunque otra voz haya hablado en medio.
    */
   etiquetaVoz?: string
+  /**
+   * Se MIDIÓ pero el audio no alcanza para un vector/para acuñar voz: la fila
+   * es `Hablante XX` (no identificado), nunca `Hablante X` (en espera).
+   */
+  medidaInsuficiente?: boolean
 }>
 
 /** Entrada para resolver la etiqueta: voz, etiqueta anterior y semilla. */
@@ -104,7 +109,7 @@ export type CierreLocucion = Readonly<{
   semillaEtiqueta: string
   /** Predicado de etiqueta anónima (`Hablante N`/pendiente): no es identidad. */
   esEtiquetaAnonima: (etiqueta: string) => boolean
-  /** Etiqueta TEMPORAL (`Hablante ?`) mientras la medida no ha llegado. */
+  /** Etiqueta TEMPORAL (`Hablante X`, en espera) mientras la medida no ha llegado. */
   pendienteEtiqueta?: string
   /** Nombres declarados para etiquetas provisionales (bautizo sin vector). */
   nombresPorEtiqueta?: ReadonlyMap<string, string>
@@ -134,27 +139,29 @@ export type ResultadoFila = Readonly<
 export function resolverEtiqueta(entrada: EntradaEtiqueta): EtiquetaResuelta {
   const { voz, anterior, semilla, esEtiquetaAnonima } = entrada
   const hablante = String(voz.hablante || '').trim()
-  // Una etiqueta anónima no es identidad: solo adelanta a la continuidad una
-  // medida que SÍ identifica (etiqueta con nombre propio).
-  const medidaIdentifica = hablante !== '' && !esEtiquetaAnonima(hablante)
   // Sin medida no se inventa identidad, pero la fila NUNCA queda «?»: se usa la
-  // etiqueta anterior o la semilla de config (`Hablante 1`) y se conserva la
-  // evidencia `pendiente` para que la medida tardía la reemplace.
+  // etiqueta TEMPORAL (`Hablante X`, en espera) o la semilla (`Hablante XX`, no
+  // identificado) y se conserva la evidencia para que la medida tardía la
+  // reemplace.
   const respaldo = String(semilla || '').trim()
-  const usaPendiente = Boolean(String(entrada.pendiente || '').trim())
+  const pendienteEtiqueta = String(entrada.pendiente || '').trim()
+  const medidaInsuficiente = voz.medidaInsuficiente === true
   const candidatos: ReadonlyArray<EtiquetaResuelta> = [
     { etiqueta: voz.nombreConfirmado ? String(voz.nombre || '').trim() : '', evidencia: 'nombre' },
     // La plantilla casada identifica la voz física (anónima o con nombre): gana
     // a la continuidad con la fila anterior (A→B→A recupera la etiqueta de A).
     { etiqueta: String(voz.etiquetaVoz || '').trim(), evidencia: 'medida' },
-    ...(medidaIdentifica ? [{ etiqueta: hablante, evidencia: 'medida' as const }] : []),
-    { etiqueta: voz.continuidad ? String(anterior ?? '').trim() : '', evidencia: 'continuidad' },
-    // Medida ANÓNIMA: solo existe si una medida acuñó la voz (vozId).
+    // La etiqueta de la VOZ MEDIDA manda sobre la continuidad: una voz distinta
+    // (aunque su etiqueta sea anónima) no hereda el nombre de la fila anterior
+    // (la mujer salía «Luis»).
     { etiqueta: hablante, evidencia: 'medida' },
-    // Sin voz medida no hay identidad que afirmar: evidencia TEMPORAL, pero
-    // etiqueta de continuidad/semilla (regla 5: nunca «?»).
-    { etiqueta: respaldo, evidencia: usaPendiente ? 'pendiente' : 'semilla' },
-    { etiqueta: String(semilla || '').trim(), evidencia: 'semilla' },
+    { etiqueta: voz.continuidad ? String(anterior ?? '').trim() : '', evidencia: 'continuidad' },
+    // Se intentó medir y no alcanzó: XX (no identificado), NUNCA X (en espera).
+    ...(medidaInsuficiente ? [{ etiqueta: respaldo, evidencia: 'medida' as const }] : []),
+    // La medida todavía NO llegó: X (en espera) mientras la voz siga pendiente.
+    { etiqueta: pendienteEtiqueta, evidencia: 'pendiente' },
+    // Sin etiqueta temporal, el estado honesto es no identificado (XX).
+    { etiqueta: respaldo, evidencia: 'semilla' },
   ]
   const elegido = candidatos.find((candidato) => candidato.etiqueta !== '')
   if (!elegido) throw new Error('semilla vacia: la etiqueta no puede quedar vacia')
@@ -162,8 +169,10 @@ export function resolverEtiqueta(entrada: EntradaEtiqueta): EtiquetaResuelta {
   // BAUTIZO POR ETIQUETA: un `Hablante N` sobre el que el dueño dijo su nombre se
   // sustituye por el nombre SIN esperar a que haya vector. La etiqueta es el WHERE
   // del comando; la voz medida hereda el nombre en registrarMedidaVoz.
+  // Una medida INSUFICIENTE no hereda un nombre por etiqueta: XX no es una voz
+  // identificable y el bautizo debe ir a su N/vector, nunca a todas las XX.
   const nombreDeEtiqueta =
-    elegido.evidencia !== 'nombre' && esEtiquetaAnonima(elegido.etiqueta)
+    !medidaInsuficiente && elegido.evidencia !== 'nombre' && esEtiquetaAnonima(elegido.etiqueta)
       ? String(entrada.nombresPorEtiqueta?.get(elegido.etiqueta) || '').trim()
       : ''
   if (nombreDeEtiqueta) return { etiqueta: nombreDeEtiqueta, evidencia: 'nombre' }
@@ -186,6 +195,9 @@ export function construirFila(entrada: CierreLocucion): ResultadoFila {
   const inicio = Number(entrada.inicio)
   const fin = Number(entrada.fin)
   const sampleRate = Number(entrada.sampleRate)
+  // El TEXTO manda sobre la duración: una frase corta (incluso de 1 muestra)
+  // no se pierde; su hablante será `Hablante XX` porque la medida no alcanza.
+  // Solo un tramo que no avanza o sin tasa es inválido (no hay audio).
   const tramoValido =
     Number.isFinite(inicio) &&
     inicio >= 0 &&
@@ -266,6 +278,13 @@ export function ultimaFilaPorFin(filas: Iterable<Fila>): Fila | null {
  */
 export function fusionarVoz(base: EvidenciaVoz, nueva: EvidenciaVoz | undefined): EvidenciaVoz {
   if (!nueva) return base
+  // Una identidad POSITIVA manda sobre un intento anterior fallido: si la
+  // medida temprana no alcanzó pero el cierre midió la voz, la fila no puede
+  // quedarse en `Hablante XX`. El estado insuficiente solo se conserva cuando
+  // la evidencia entrante NO trae voz medida y la base ya lo declaraba.
+  const identidadPositiva = Boolean(
+    String(nueva.vozId ?? '').trim() || String(nueva.hablante ?? '').trim(),
+  )
   return {
     vozId: nueva.vozId ?? base.vozId,
     nombre: nueva.nombre ?? base.nombre,
@@ -273,5 +292,9 @@ export function fusionarVoz(base: EvidenciaVoz, nueva: EvidenciaVoz | undefined)
     hablante: nueva.hablante ?? base.hablante,
     continuidad: nueva.continuidad ?? base.continuidad,
     overlap: nueva.overlap ?? base.overlap,
+    // El vector medido es evidencia de identidad y no se descarta al fusionar.
+    vector: nueva.vector ?? base.vector,
+    insuficiente:
+      nueva.insuficiente ?? (identidadPositiva ? false : base.insuficiente),
   }
 }

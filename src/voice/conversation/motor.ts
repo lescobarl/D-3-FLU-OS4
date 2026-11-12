@@ -69,12 +69,12 @@ export function crearConversacion(dependencias: DependenciasConversacion): Conve
   const { reloj, id, registro, asr } = dependencias
   const configuracion = dependencias.configuracion ?? CONVERSACION_CONFIG
   const estado = crearEstadoSesion(configuracion.asr.lang)
-  const sesion: Sesion = crearSesion(dependencias, estado, configuracion)
-  const cola: ColaSerializada = crearCola()
   const tramos: RegistroTramos = crearRegistroTramos({
     reloj,
     orphanBufferMs: configuracion.orphanBufferMs,
   })
+  const sesion: Sesion = crearSesion(dependencias, tramos, estado, configuracion)
+  const cola: ColaSerializada = crearCola()
   const pendientes: Pendientes = crearPendientes({
     reloj,
     orphanBufferMs: configuracion.orphanBufferMs,
@@ -168,7 +168,11 @@ export function crearConversacion(dependencias: DependenciasConversacion): Conve
     if (stopKind !== 'user' && stopKind !== 'system' && stopKind !== 'watchdog') {
       throw new Error(`stop(${String(stopKind)}) no es un motivo de fila`)
     }
-    await ingesta.drenarResultadosAsr()
+    // CONGELA la entrada ANTES de volcar: lo que el ASR entregue a partir de aquí
+    // («cerrando») ya no entra. El volcado forzado procesa SOLO lo que estaba
+    // aceptado en el buffer antes del stop.
+    estado.cerrando = true
+    await ingesta.drenarResultadosAsr(true)
     estado.cierreAsrPendiente = null
     if (estado.abierta) {
       const locucion = estado.abierta
@@ -263,39 +267,64 @@ export function crearConversacion(dependencias: DependenciasConversacion): Conve
       })
       return sesion.snapshot()
     }
-    // SIN voz medida: la fila del comando YA está escrita. El WHERE es su ETIQUETA
-    // («Hablante N»), no un vector que aún no existe. Esta rama es la que ejecuta
-    // el mandato «sustituye Hablante N por el nombre»; antes quedaba detrás de un
-    // return inalcanzable (el `!vozId` de arriba) y el nombre se filtraba a la
-    // locución siguiente.
+    // SIN voz medida: la fila del comando YA está escrita. El WHERE es su
+    // ETIQUETA, pero `X` y `XX` son ESTADOS compartidos, no voces: renombrar
+    // todas las filas de ese estado pegaría el nombre a voces ajenas (regla 9).
+    // Con un estado compartido solo se toca la locución que pronunció el nombre.
+    const pendienteEtiqueta = String(dependencias.config.etiquetaPendiente?.() || '').trim()
+    const noIdentificada = String(dependencias.config.semillaEtiqueta?.() || '').trim()
+    const etiquetaEsEstado =
+      Boolean(etiquetaDicha) &&
+      ((Boolean(pendienteEtiqueta) && etiquetaDicha === pendienteEtiqueta) ||
+        (Boolean(noIdentificada) && etiquetaDicha === noIdentificada))
+    const locucionId = String(datos.locucionId || '').trim()
     if (etiquetaDicha) {
-      estado.nombresPorEtiqueta.set(etiquetaDicha, nombre)
+      // `Hablante N` (voz medida por vector) y nombres propios SÍ son el WHERE
+      // de esa voz: se renombran sus filas ya escritas. Un ESTADO compartido
+      // (X/XX) solo puede renombrar la locución que pronunció el nombre.
+      if (!etiquetaEsEstado) estado.nombresPorEtiqueta.set(etiquetaDicha, nombre)
+      const destinos = etiquetaEsEstado
+        ? [locucionId ? estado.filas.get(locucionId) : undefined]
+        : [...estado.filas.values()].filter(
+            (fila) =>
+              !fila.deleted &&
+              fila.sessionId === sessionId &&
+              fila.etiqueta === etiquetaDicha,
+          )
       let renombradas = 0
-      for (const fila of [...estado.filas.values()]) {
-        if (fila.deleted || fila.sessionId !== sessionId) continue
-        if (fila.etiqueta !== etiquetaDicha) continue
+      for (const fila of destinos) {
+        if (!fila || fila.deleted || fila.sessionId !== sessionId) continue
         if (await sesion.reetiquetarFila(fila.locutionId, '', nombre, 'nombre')) renombradas += 1
       }
-      registro.registrar('conversacion.nombre.renombrado', {
-        sessionId,
-        vozId: '',
-        nombre,
-        filas: renombradas,
-        etiqueta: etiquetaDicha,
-      })
-      registro.registrar('conversacion.voz.bautizada', {
-        sessionId,
-        vozId: '',
-        nombre,
-        locutionId: null,
-      })
-      return sesion.snapshot()
+      if (renombradas > 0) {
+        registro.registrar('conversacion.nombre.renombrado', {
+          sessionId,
+          vozId: '',
+          nombre,
+          filas: renombradas,
+          etiqueta: etiquetaDicha,
+          ...(locucionId ? { locucionId } : {}),
+        })
+        registro.registrar('conversacion.voz.bautizada', {
+          sessionId,
+          vozId: '',
+          nombre,
+          locutionId: locucionId || null,
+        })
+        return sesion.snapshot()
+      }
     }
-    // Sin voz y sin etiqueta: solo una locución ABIERTA puede recibir el nombre al
-    // cerrar. El pendiente va ACOTADO a esa locución; nunca queda global.
+    // Sin fila que reetiquetar: solo una locución ABIERTA puede recibir el nombre
+    // al cerrar. El pendiente va ACOTADO a esa locución; nunca queda global.
     const abierta = estado.abierta
     if (!abierta) {
       registro.registrar('conversacion.nombre.sinDestino', { sessionId, nombre })
+      return sesion.snapshot()
+    }
+    // El nombre es de la locución que lo dijo: si ya cerró, no se aplica a la
+    // siguiente (el pendiente global bautizaba la voz ajena; defecto 2026-11-10).
+    if (locucionId && abierta.locutionId !== locucionId) {
+      registro.registrar('conversacion.nombre.sinDestino', { sessionId, nombre, locucionId })
       return sesion.snapshot()
     }
     estado.pendienteNombre = { locutionId: abierta.locutionId, nombre }

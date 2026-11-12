@@ -55,4 +55,7 @@
   'tests/tramoUnicoGuard.test.ts',
   'tests/barreraUnicaGuard.test.ts',
   'tests/conversacionLiveBarrierGuard.test.ts',
-]
+  'tests/vozVideoHudGuard.test.ts',
+  'tests/vozTurnoHablanteGuard.test.ts',
+  'tests/conversacionReglasCierreGuard.test.ts',
+  'tests/vozFlujoLatenciaGuard.test.ts',]

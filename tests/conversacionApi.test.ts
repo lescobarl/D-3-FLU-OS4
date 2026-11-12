@@ -11,6 +11,8 @@
  */
 import { describe, expect, it } from 'vitest'
 import { isAutoSpeakerLabel } from '../src/voice/lib/speakerCore.js'
+import { detectListeningControl } from '../src/voice/lib/audioMath.js'
+import { FLU_CONFIG } from '../src/voice/lib/fluConfig.js'
 import {
   crearConversacion,
   esEcoDeTts,
@@ -69,7 +71,10 @@ const crearRegistro = () => {
 
 const configDePrueba = (): ConfigPort => ({
   wakeWords: () => ['ok flu'],
-  semillaEtiqueta: () => 'Hablante 1',
+  // Estados REALES del producto: XX (no identificado) y X (en espera). `N` lo
+  // produce `etiquetaAnonima` para una voz medida.
+  semillaEtiqueta: () => FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker,
+  etiquetaPendiente: () => FLU_CONFIG.voiceIdentity.labels.pendingSpeaker,
   esEtiquetaAnonima: isAutoSpeakerLabel,
   umbralContinuidadVoz: () => 0.8,
   etiquetaAnonima: (indice) => `Hablante ${indice}`,
@@ -255,23 +260,46 @@ describe('regla 1 y 3 — el audio abre el tramo y el texto lo revisa', () => {
     expect(api.snapshot().box.texto).toBe('hola mundo entero')
   })
 
-  it('el final del mismo tramo cierra UNA fila con el texto CONFIRMADO', async () => {
+  it('el final del mismo tramo cierra UNA fila sin truncar la frase ya oída', async () => {
     const { api } = crearEscenario()
     await api.start()
     const tramoId = await abrirConVoz(api)
     await api.ingestAsr(asr(tramoId, { texto: 'hola mundo entero' }))
     await api.ingestAsr(asr(tramoId, { texto: 'hola mundo', final: true }))
-    // Regla E: el final es la HIPÓTESIS CONFIRMADA y sustituye la línea
-    // acumulada (no se conserva una versión más larga con ruido). El silencio
-    // (puerta de abajo) cierra UNA fila.
+    // Regla 1/2/12 del dueño (2026-11-12): la transcripción no decrece. El final
+    // puede ampliar o corregir, pero un final más corto NO borra la cola ya
+    // visible. El silencio (puerta de abajo) cierra UNA fila insert-only.
     const estado = await cerrarPorSilencio(api, SAMPLE_RATE)
     expect(estado.filas).toHaveLength(1)
     expect(estado.filas[0]).toMatchObject({
       locutionId: tramoId,
-      texto: 'hola mundo',
+      texto: 'hola mundo entero',
       provisional: false,
     })
     expect(estado.box).toEqual({ texto: '', abierta: false, textoPendiente: '' })
+  })
+
+  it('un final tardío suma el audio de la continuación al tramo abierto', async () => {
+    const { api } = crearEscenario()
+    await api.start()
+    const tramoA = await abrirConVoz(api, 0)
+    await api.ingestAsr(asr(tramoA, { texto: 'hola' }))
+    // El VAD corta el tramo vivo, pero la locución sigue ABIERTA.
+    await api.ingestAudio(bloque(SAMPLE_RATE, SAMPLE_RATE * 2, SILENCIO(900)))
+    // Habla nueva: abre OTRO tramo de audio mientras A sigue abierta.
+    const inicioB = SAMPLE_RATE * 6
+    const finB = inicioB + SAMPLE_RATE
+    await api.ingestAudio(bloque(inicioB, finB, VOZ()))
+    // Vuelve a cortar antes de que llegue el final del ASR.
+    await api.ingestAudio(bloque(finB, finB + SAMPLE_RATE, SILENCIO(900)))
+    // El final llega sin tramo (como lo entrega el producto): se atribuye a A y
+    // debe sumar el audio de B; antes A medía solo su primer tramo (Hablante XX).
+    const estado = await api.ingestAsr(asr('', { texto: 'hola mundo', final: true }))
+    expect(estado.locucionAbierta?.tramo.fin).toBeGreaterThanOrEqual(finB)
+    const cerrada = await cerrarPorSilencio(api, finB + SAMPLE_RATE)
+    expect(cerrada.filas).toHaveLength(1)
+    expect(cerrada.filas[0]?.texto).toBe('hola mundo')
+    expect(cerrada.filas[0]?.tramo.fin).toBeGreaterThanOrEqual(finB)
   })
 
   it('dos llamadas concurrentes al mismo tramo no duplican la fila', async () => {
@@ -436,8 +464,25 @@ describe('regla 5 — etiquetas con evidencia y solo la voz que habló', () => {
       asr(tramoDos, { texto: 'otra voz', final: true, voz: { vozId: 'B' } }),
     )
     const otra = await cerrarPorSilencio(api, SAMPLE_RATE * 3)
-    expect(otra.filas[1].etiqueta).toBe('Hablante 1')
+    // Sin medida de esa voz y sin etiqueta temporal, el estado honesto es XX.
+    expect(otra.filas[1].etiqueta).toBe(FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker)
     expect(otra.filas[1].etiqueta).not.toBe('Ana')
+  })
+
+  it('un vector conocido en la base se presenta con su nombre propio (regla 8)', async () => {
+    const { api } = crearEscenario({
+      anclasBase: () => [{ name: 'Luis', vector: [1, 0] }],
+      embebedor: {
+        medir: async () => [1, 0],
+        comparar: (a, b) => a[0]! * b[0]! + a[1]! * b[1]!,
+      },
+    })
+    await api.start()
+    const tramo = await abrirConVoz(api, 0)
+    await api.ingestAsr(asr(tramo, { texto: 'hola soy luis', final: true }))
+    const cerrada = await cerrarPorSilencio(api, SAMPLE_RATE)
+    // El vector casa con el ancla medida de la base: nombre, no `Hablante N`.
+    expect(cerrada.filas[0]?.etiqueta).toBe('Luis')
   })
 
   it('sin voz identificada el nombre queda PENDIENTE y bautiza la voz que cierra (problema 5)', async () => {
@@ -666,7 +711,7 @@ describe('ASR por puerto — un motor, estados y audio local', () => {
 })
 
 describe('huérfanos y descartes contados', () => {
-  it('un ASR sin tramo con TEXTO no se pierde al expirar', async () => {
+  it('un ASR sin tramo con TEXTO no inventa fila al expirar: se cuenta huérfano', async () => {
     const { api, reloj } = crearEscenario()
     await api.start()
     const antes = await api.ingestAsr(asr(UUID_A, { texto: 'viejo', final: true }))
@@ -674,22 +719,21 @@ describe('huérfanos y descartes contados', () => {
     expect(antes.box.abierta).toBe(false)
 
     reloj.avanzar(CONVERSACION_CONFIG.orphanBufferMs + 1)
-    const despues = await api.ingestAsr(
+    await api.ingestAsr(
       asr(UUID_B, {
         texto: 'nuevo',
         final: true,
         tramo: { inicio: 0, fin: SAMPLE_RATE, sampleRate: SAMPLE_RATE },
       }),
     )
-    // El pendiente con texto NO se tira. Sin tramo no se inventa durante la
-    // sesión: "nuevo" (con tramo) abre primero; "viejo" espera y sale al stop.
+    // Sin tramo/audio no hay locución: al stop no se inventa una fila. «viejo»
+    // se cuenta como huérfano; la norma es no crear registros tras cerrar.
     const cerrada = await cerrarPorSilencio(api, SAMPLE_RATE)
     expect(cerrada.filas.map((fila) => fila.texto)).toEqual(['nuevo'])
-    expect(despues.descartes.filter((descarte) => descarte.motivo === 'huerfano')).toEqual([])
 
     const detenida = await api.stop('system')
-    expect(detenida.filas.map((fila) => fila.texto)).toEqual(['nuevo', 'viejo'])
-    expect(detenida.descartes.filter((descarte) => descarte.motivo === 'huerfano')).toEqual([])
+    expect(detenida.filas.map((fila) => fila.texto)).toEqual(['nuevo'])
+    expect(detenida.descartes.filter((descarte) => descarte.motivo === 'huerfano')).toHaveLength(1)
   })
 
   it('un ASR sin tramo ni audio se retiene, no inventa fila', async () => {
@@ -698,6 +742,25 @@ describe('huérfanos y descartes contados', () => {
     await api.ingestAsr(asr(UUID_A, { texto: 'sin tramo', final: true }))
     expect(api.snapshot().filas).toEqual([])
     expect(api.snapshot().descartes).toEqual([])
+  })
+})
+
+describe('control de escucha — solo el comando exacto sale de conversación', () => {
+  it('"hago un silencio" es un turno normal: se escribe su fila', async () => {
+    // El puerto REAL del producto: el detector de `audioMath` sobre la config viva.
+    const config: ConfigPort = {
+      ...configDePrueba(),
+      esComandoDeControl: (texto) =>
+        Boolean(detectListeningControl(texto, FLU_CONFIG.voiceCommands)),
+    }
+    const { api } = crearEscenario({ config })
+    await api.start()
+    const tramoId = await abrirConVoz(api)
+    await api.ingestAsr(asr(tramoId, { texto: 'hago un silencio', final: true }))
+    const cerrado = await cerrarPorSilencio(api, SAMPLE_RATE)
+    // No se descarta como control: la frase pasa a conversación con su fila.
+    expect(cerrado.descartes.filter((descarte) => descarte.motivo === 'control')).toEqual([])
+    expect(cerrado.filas.map((fila) => fila.texto)).toEqual(['hago un silencio'])
   })
 })
 
@@ -753,8 +816,8 @@ describe('cola — un texto de tramo nuevo abre su locución al cerrar la anteri
   })
 })
 
-describe('stop — un pendiente con texto y sin tramo no se pierde', () => {
-  it('commitea el texto pendiente al parar', async () => {
+describe('stop — un pendiente con texto y sin tramo no inventa fila', () => {
+  it('cuenta el huérfano y deja solo la locución con audio', async () => {
     const { api } = crearEscenario()
     await api.start()
     const tramoA = await abrirConVoz(api, 0)
@@ -762,12 +825,12 @@ describe('stop — un pendiente con texto y sin tramo no se pierde', () => {
     await cerrarPorSilencio(api, SAMPLE_RATE)
 
     // Llega texto de un tramo que el registro ya no resuelve, sin locución
-    // abierta: hoy queda pendiente y el stop lo descarta como huérfano.
+    // abierta: no hay audio que lo sostenga y el stop lo cuenta como huérfano.
     await api.ingestAsr(asr(UUID_B, { texto: 'dos', final: true }))
 
     const detenida = await api.stop('system')
-    expect(detenida.filas.map((fila) => fila.texto)).toEqual(['uno', 'dos'])
-    expect(detenida.descartes.filter((descarte) => descarte.motivo === 'huerfano')).toEqual([])
+    expect(detenida.filas.map((fila) => fila.texto)).toEqual(['uno'])
+    expect(detenida.descartes.filter((descarte) => descarte.motivo === 'huerfano')).toHaveLength(1)
   })
 })
 
@@ -848,11 +911,10 @@ describe('stop — las parciales de la MISMA frase se funden en UNA fila', () =>
     await api.ingestAsr(asr(UUID_B, { texto: 'Sí pero te van a poner ese pero', final: true }))
 
     const detenida = await api.stop('system')
-    expect(detenida.filas.map((fila) => fila.texto)).toEqual([
-      parciales[parciales.length - 1],
-      'Sí pero te van a poner ese pero',
-    ])
-    expect(detenida.descartes.filter((descarte) => descarte.motivo === 'huerfano')).toEqual([])
+    // La frase parcial con audio real es UNA fila. El texto sin tramo no crea
+    // una segunda fila después del stop: se cuenta huérfano.
+    expect(detenida.filas.map((fila) => fila.texto)).toEqual([parciales[parciales.length - 1]])
+    expect(detenida.descartes.filter((descarte) => descarte.motivo === 'huerfano')).toHaveLength(1)
   })
 })
 
@@ -939,8 +1001,8 @@ describe('cola - pendientes con su tramo real y locución vacía', () => {
   })
 })
 
-describe('fila nueva - no repite el texto de la fila anterior', () => {
-  it('si la línea acumulada empieza con la fila ya escrita, la fila nueva lleva solo la cola', async () => {
+describe('fila nueva — no pierde palabras de una frase nueva', () => {
+  it('una frase nueva que empieza como la anterior conserva TODAS sus palabras', async () => {
     const { api } = crearEscenario()
     await api.start()
     const tramoA = await abrirConVoz(api, 0)
@@ -955,8 +1017,10 @@ describe('fila nueva - no repite el texto de la fila anterior', () => {
     const estado = await api.ingestAsr(
       asr(tramoB, { texto: 'uno dos', final: true }),
     )
+    // Es otra locución y otro audio: «uno dos» es una frase NUEVA, no un
+    // duplicado de «uno». Recortarla perdería una palabra (regla 12).
     expect(estado.filas.map((fila) => fila.texto)).toEqual(['uno'])
-    expect(estado.locucionAbierta?.texto).toBe('dos')
+    expect(estado.locucionAbierta?.texto).toBe('uno dos')
   })
 })
 

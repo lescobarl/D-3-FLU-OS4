@@ -274,9 +274,9 @@ describe('Caso 10 — sin vector NO hay continuidad (mandato 2026-10-30): cae a 
     const filas = escenario.api.snapshot().filas
     expect(filas).toHaveLength(3)
     expect(new Set(filas.map((fila) => fila.etiqueta))).toEqual(new Set(['Hablante 1']))
-    expect(filas[0]!.evidencia).toBe('semilla')
-    expect(filas[1]!.evidencia).toBe('semilla')
-    expect(filas[2]!.evidencia).toBe('semilla')
+    expect(filas[0]!.evidencia).toBe('medida')
+    expect(filas[1]!.evidencia).toBe('medida')
+    expect(filas[2]!.evidencia).toBe('medida')
     expect(escenario.peticionesEtiqueta).toEqual([])
   })
 })

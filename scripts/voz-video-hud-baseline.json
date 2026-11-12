@@ -1,0 +1,25 @@
+{
+  "measuredAt": "2026-11-11T02:42:52Z",
+  "source": "debug.log 02:00/02:01 + tests/vozVideoHudGuard.test.ts",
+  "before": {
+    "failed": 2,
+    "passed": 5,
+    "failedCases": [
+      "VIDEO: el arbitro devolvia flu (debia ser GENERAR_VIDEO)",
+      "INTERIM: onFraseCanonica despachaba en interino"
+    ]
+  },
+  "after": {
+    "failed": 0,
+    "passed": 7
+  },
+  "cases": [
+    "video",
+    "interim",
+    "single",
+    "inline",
+    "hud",
+    "nav",
+    "fila"
+  ]
+}

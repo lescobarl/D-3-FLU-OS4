@@ -76,8 +76,7 @@ export const FLU_CONFIG = {
   },
   voiceIdentity: {
     labels: {
-      fallbackSpeaker: 'Hablante 1', pendingSpeaker: SPEAKER_ASSIGN.pendingSpeaker,
-      /** Plantilla de etiqueta automática («Hablante {n}») — sin literales quemados. */
+      fallbackSpeaker: 'Hablante XX', pendingSpeaker: 'Hablante X',
       template: 'Hablante {n}',
     },
     confidence: {
@@ -87,6 +86,7 @@ export const FLU_CONFIG = {
         low: '(?)',
       },
     },
+    cierre: SPEAKER_ASSIGN.cierre,
     capture: {
       passiveBufferMs: 30000,
       /** Fallback OFFLINE: errores de Chrome que pueden habilitar Whisper local (config). */
@@ -303,7 +303,7 @@ export const FLU_CONFIG = {
       stallMs: 52000,
       /** En conversación: sin texto nuevo (ignorando ecos SR) → rebuild. */
       conversationStallMs: 4200,
-      stallCheckMs: 350,
+      /** Voz reciente para el gate del rebuild. */ stallVoiceWindowMs: 1500, stallCheckMs: 350,
       stallRebuildMinMs: 6000,
       /** Mínimo entre rebuilds en conversación activa. */
       conversationStallRebuildMinMs: 1600,

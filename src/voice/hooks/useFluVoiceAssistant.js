@@ -334,13 +334,15 @@ export function useFluVoiceAssistant({
         // B.6: la query de la IA sale de la MISMA frase canónica del módulo; el
         // planificador único decide revisión y dedup sobre ese texto.
         onFraseCanonica: (frase, opciones = {}) => {
-          const interim = opciones.interim === true
-          // El turno de la FRASE se captura ANTES del commit (el despacho corre con la locución abierta).
+          // El interino SOLO actualiza la transcripción viva (onLiveTranscript).
+          // El despacho (IA/comando/video) espera al final: si corre antes, la app
+          // responde mientras el usuario todavía describe qué quiere generar.
+          if (opciones.interim === true) return
           lastEmittedTranscriptRef.current = frase
           lastEmittedTurnRef.current = activeTurnIdRef.current
           tryDispatchConversationActionRef.current(frase, {
-            interim,
-            source: interim ? 'asr-interim' : 'asr-final',
+            interim: false,
+            source: 'asr-final',
           })
         },
         // Frontera de TURNO (locución nueva): la siguiente frase es otro turno.
@@ -400,12 +402,14 @@ export function useFluVoiceAssistant({
     }
     motorConversacionRef.current.abrir()
   }, [identitySession, participantVoiceAnchors, setSpeakerClusters])
-  const cerrarMotorConversacion = useCallback((motivo) => {
-    if (!motorConversacionRef.current) return
-    motorConversacionRef.current.cerrar(motivo)
+  /** Cierra el módulo y espera su cola (el motor corta la entrada al instante). */
+  const cerrarMotorConversacion = useCallback(async (motivo) => {
+    const motor = motorConversacionRef.current
+    if (!motor) return
     motorConversacionRef.current = null
+    await motor.cerrar(motivo)
   }, [])
-  useEffect(() => () => cerrarMotorConversacion('system'), [cerrarMotorConversacion])
+  useEffect(() => () => void cerrarMotorConversacion('system'), [cerrarMotorConversacion])
 
   // Fallback LOCAL del ASR (degradar a Whisper, gatear sus resultados y recuperar
   // Chrome): dueno unico en `useLocalAsrFallback`. El cableado se pasa por ref para
@@ -2372,14 +2376,20 @@ export function useFluVoiceAssistant({
   }, [awaitConversationAction])
 
   const stopListening = useCallback(async ({ closing = false } = {}) => {
+    // El medidor cuenta desde la SOLICITUD del dueño, no desde el stop interno.
+    relayLog('LOG', 'useFluVoiceAssistant', '[REC] stop: request', { closing, isListening: isListeningRef.current, conversationActive: Boolean(conversationActiveRef?.current) })
     // La sesión del módulo se CIERRA siempre que esté abierta: `cerrar` finaliza
     // la locución abierta con su texto fusionado y publica su fila (Anexo B 1/2).
     // OJO: `conversationMode.exit()` apaga la bandera ANTES de llamar aquí, así
     // que la bandera no dice si hay una sesión de conversación viva.
     if (motorConversacionRef.current) {
-      if (closing && recognitionRef.current) await finalizeRecognition()
-      cerrarMotorConversacion(closing ? 'user' : 'system')
       isListeningRef.current = false
+      // ORDEN: primero se cierra el motor (corte síncrono de entrada + backlog
+      // descartado) y DESPUÉS se finaliza el reconocedor. Si se finaliza antes,
+      // los ~1,5 s de `finalizeRecognition` dejan al motor abierto y abre otra
+      // locución con audio de memoria después de que el usuario cerró.
+      await cerrarMotorConversacion(closing ? 'user' : 'system')
+      if (closing && recognitionRef.current) await finalizeRecognition()
       if (closing) {
         await cleanupAudio()
         setStatus('idle')
@@ -2397,6 +2407,7 @@ export function useFluVoiceAssistant({
   }, [
     cerrarMotorConversacion,
     cleanupAudio,
+    conversationActiveRef,
     finalizeRecognition,
   ])
 

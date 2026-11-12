@@ -103,7 +103,7 @@ describe('bautizo de voz — un disparo por locución', () => {
   it('«ok flu soy X» bautiza UNA vez, con el nombre dicho y la etiqueta de la fila', () => {
     commitear(FILA)
     expect(hoisted.registrarNombre).toHaveBeenCalledTimes(1)
-    expect(hoisted.registrarNombre).toHaveBeenCalledWith('Luis', 'Hablante 1')
+    expect(hoisted.registrarNombre).toHaveBeenCalledWith('Luis', 'Hablante 1', 'L1')
   })
 
   it('la REVISIÓN de la misma fila no vuelve a bautizar (una locución, un disparo)', () => {
@@ -169,7 +169,7 @@ describe('bautizo de voz — el nombre lo resuelve el directorio', () => {
     registerVoiceName('speaker_1', 'Luis')
     commitear({ ...FILA, texto: 'ok flu soy Luis sigue sin funcionar' })
     expect(hoisted.registrarNombre).toHaveBeenCalledTimes(1)
-    expect(hoisted.registrarNombre).toHaveBeenCalledWith('Luis', 'Hablante 1')
+    expect(hoisted.registrarNombre).toHaveBeenCalledWith('Luis', 'Hablante 1', 'L1')
   })
 
   it('«ok flu soy Luis regís regístrame» bautiza «Luis», no «Luis Regis»', () => {
@@ -177,13 +177,13 @@ describe('bautizo de voz — el nombre lo resuelve el directorio', () => {
     // «regís regístrame» y bautizó «Luis Regis». Las formas verbales son sufijo de
     // confirmación (`confirmationSuffix`, dueño único del vocabulario).
     commitear({ ...FILA, texto: 'okay flu soy Luis regís regístrame' })
-    expect(hoisted.registrarNombre).toHaveBeenCalledWith('Luis', 'Hablante 1')
+    expect(hoisted.registrarNombre).toHaveBeenCalledWith('Luis', 'Hablante 1', 'L1')
   })
 
   it('una voz NUEVA que se presenta conserva su nombre (no hay conocido que preferir)', () => {
     registerVoiceName('speaker_1', 'Luis')
     commitear({ ...FILA, texto: 'ok flu soy Marta' })
-    expect(hoisted.registrarNombre).toHaveBeenCalledWith('Marta', 'Hablante 1')
+    expect(hoisted.registrarNombre).toHaveBeenCalledWith('Marta', 'Hablante 1', 'L1')
   })
 
   it('el nombre sale con GRAFIA CANONICA aunque la base lo guarde en minusculas', () => {
@@ -191,7 +191,7 @@ describe('bautizo de voz — el nombre lo resuelve el directorio', () => {
     // y el evento del bautizo salio con `{"nombre":"luis"}`.
     registerVoiceName('speaker_1', 'luis')
     commitear({ ...FILA })
-    expect(hoisted.registrarNombre).toHaveBeenCalledWith('Luis', 'Hablante 1')
+    expect(hoisted.registrarNombre).toHaveBeenCalledWith('Luis', 'Hablante 1', 'L1')
   })
 
   it('el compositor NO entrega la captura cruda a registrarNombre', () => {

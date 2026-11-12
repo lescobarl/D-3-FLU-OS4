@@ -6,10 +6,14 @@ import { cleanForSpeech, stripDiacritics } from './audioMath.js'
 import { FLU_CONFIG } from './fluConfig.js'
 import { resolveRowVoiceName } from './speakerDirectory.js'
 import { normalizeSpeakerLabel, parseSpeakerIndex, isProperSpeakerName } from './voiceIdentity.js'
-import { autoSpeakerLabel, isAutoSpeakerLabel } from './speakerCore.js'
+import { autoSpeakerLabel, getFallbackSpeaker, isAutoSpeakerLabel } from './speakerCore.js'
 import { equalsTrimmed } from '../../lib/textUtils.ts'
 
 export const SPEAKER_ID_CALCULATING = 'calculando'
+/** Clave estable de la fila EN ESPERA (`Hablante X`), distinta de la no identificada. */
+export const SPEAKER_ID_PENDING = 'speaker_pending'
+/** Clave estable de la fila NO IDENTIFICADA (`Hablante XX`). */
+export const SPEAKER_ID_UNIDENTIFIED = 'speaker_unidentified'
 const SPEAKER_ID_FLU = 'flu'
 
 const SPEAKER_ID_PATTERN = /^speaker_[a-z0-9_]+$/
@@ -30,15 +34,20 @@ function isValidSpeakerId(speakerId = '') {
   return SPEAKER_ID_PATTERN.test(id)
 }
 
-export function labelToSpeakerId(label = '') {
+export function labelToSpeakerId(label = '', config = FLU_CONFIG) {
   const name = normalizeSpeakerLabel(cleanForSpeech(label))
   if (!name) return SPEAKER_ID_CALCULATING
   const index = parseSpeakerIndex(name)
   if (index != null) return `speaker_${index}`
-  // ETIQUETA PENDIENTE ("Hablante ?"): clave PROPIA y estable. Sin esto el slug la convertia
-  // en `speaker_name_hablante` y el consumidor la leia como NOMBRE PROPIO (auditoria
-  // 2026-10-22): la voz pendiente competia como identidad y ademas perdia el `?`.
-  if (isAutoSpeakerLabel(name)) return 'speaker_pending'
+  const lower = name.toLowerCase()
+  const pending = String(config?.voiceIdentity?.labels?.pendingSpeaker || '').trim()
+  const fallback = String(getFallbackSpeaker(config)).trim()
+  // X (EN ESPERA) y XX (NO IDENTIFICADO) son estados distintos y NUNCA comparten
+  // clave: una fila en espera no puede leerse como la no identificada.
+  if (pending && lower === pending.toLowerCase()) return SPEAKER_ID_PENDING
+  if (fallback && lower === fallback.toLowerCase()) return SPEAKER_ID_UNIDENTIFIED
+  // Cualquier otra agrupacion anonima (p. ej. una grafia heredada) es no identificada.
+  if (isAutoSpeakerLabel(name, config)) return SPEAKER_ID_UNIDENTIFIED
   const slug = stripDiacritics(name)
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '_')
@@ -56,7 +65,7 @@ export function labelToSpeakerId(label = '') {
  * su nombre escrito se muestran tal cual (compatibilidad).
  *
  * Mandato 2026-10-18 (bug de voz, debug.log): una voz SIN EVIDENCIA REGISTRADA (p. ej. la
- * mujer sin ancla) NUNCA cae al respaldo generico "Hablante 1" ni a un nombre derivado de
+ * mujer sin ancla) NUNCA cae al respaldo generico «Hablante XX» ni a un nombre derivado de
  * su clave. Su etiqueta es la de SU VOZ: si el id es `speaker_N`, «Hablante N» (la misma
  * que asigna la diarizacion); sin id automatico, "Identificando...".
  */
@@ -65,6 +74,9 @@ export function resolveRowSpeakerLabel(row = {}, config = FLU_CONFIG) {
     // Filas NUEVAS del módulo: la etiqueta persistida manda. No se re-resuelve
     // por voz; el fallback por directorio queda solo para filas legacy/import.
     if (row?.meta?.origin === 'conversation-module') {
+        // La etiqueta persistida es el estado REAL del módulo: N→N, X→X,
+        // XX→XX y nombre→nombre. La vista NO reinterpreta ni colapsa estados:
+        // `Hablante N` es una voz MEDIDA desconocida, no una no identificada.
         return escrita || speakerIdToDefaultName(String(row?.speakerId || '').trim(), config);
     }
     // FREEZE (mandato del dueno 2026-10-17): un NOMBRE PROPIO congelado en la fila se muestra
@@ -89,9 +101,11 @@ export function resolveRowSpeakerLabel(row = {}, config = FLU_CONFIG) {
     }
     const respaldo = String(config?.voiceIdentity?.labels?.fallbackSpeaker || FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker).trim();
     // Etiqueta AUTOMATICA escrita por la DIARIZACION (distinta del respaldo): es la etiqueta
-    // de la voz MEDIDA (su cluster real), no un invento del display. El respaldo generico
-    // JAMAS se estampa como etiqueta.
-    if (isAutoSpeakerLabel(escrita) && escrita !== respaldo) return escrita;
+    // de la voz MEDIDA (su cluster real, cosido por la clave). SIN timbre manda el rotulo
+    // historico (la MISMA voz re-clusterizada conserva su «Hablante 3/4»). CON timbre, la
+    // etiqueta es la de SU clave: un rotulo automatico de OTRA voz no manda (la mujer no
+    // hereda «Hablante 1» de Luis).
+    if (!signature?.length && isAutoSpeakerLabel(escrita) && escrita !== respaldo) return escrita;
     // La clave da la etiqueta de SU voz (`speaker_N` -> «Hablante N», estable) o el nombre
     // de su clave cuando la fila no trae timbre con que contradecirlo (freeze 2026-10-17).
     return speakerIdToDefaultName(id, config) || escrita;
@@ -101,6 +115,10 @@ export function speakerIdToDefaultName(speakerId = '', config = FLU_CONFIG) {
   const id = String(speakerId || '').trim()
   if (id === SPEAKER_ID_CALCULATING) return getIdentifyingSpeakerName(config)
   if (id === SPEAKER_ID_FLU) return 'Flu'
+  if (id === SPEAKER_ID_PENDING) {
+    return String(config?.voiceIdentity?.labels?.pendingSpeaker || '').trim()
+  }
+  if (id === SPEAKER_ID_UNIDENTIFIED) return getFallbackSpeaker(config)
   const autoMatch = id.match(/^speaker_(\d+)$/)
   // Plantilla UNICA de config (`autoSpeakerLabel`): no se re-escribe «Hablante N» aqui.
   if (autoMatch) return autoSpeakerLabel(Number(autoMatch[1]), config)

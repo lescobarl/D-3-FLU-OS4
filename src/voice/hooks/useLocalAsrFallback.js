@@ -30,6 +30,8 @@ import {
   resolveSilentDegrade,
 } from '../lib/voiceLocalFallback'
 import { WATCHDOG_ACTIONS, resolveWatchdogStep } from '../lib/asrWatchdog.js'
+import { countVoicedSamplesInBlocks } from '../lib/voicedActivity.js'
+import { getConversationMinVoicedSamples } from '../lib/micCapture.js'
 import { analyzeWakeTurn } from '../lib/wakeTurnCommit.js'
 import { resolveNavigationCommand } from '../lib/voiceCommands.js'
 
@@ -215,15 +217,30 @@ export function useLocalAsrFallback({
     const runtimeCfg = getLocalFallbackRuntimeConfig()
     const localActive = isLocal()
     const probeUntil = probeUntilRef.current
+    const recognitionActive = recognitionActiveRef.current
+    const rate = sampleRateRef.current || audioSampleRate
+    // VOZ RECIENTE: el rebuild `stall` no puede tirar un segmento que Chrome
+    // esta reconociendo. El conteo es del dueno `voicedActivity`; el piso es el
+    // mismo de la identidad (`conversationMinVoicedMs`), no un literal nuevo.
+    const voiceWindowMs =
+      Number(restartCfg.stallVoiceWindowMs) || Number(restartCfg.silentMicStallMs) || 0
+    const hasRecentSpeech =
+      !localActive &&
+      recognitionActive &&
+      countVoicedSamplesInBlocks(chunksRef.current, {
+        sampleRate: rate,
+        windowMs: voiceWindowMs,
+      }) >= getConversationMinVoicedSamples(rate)
     const step = resolveWatchdogStep({
       sinceMeaningful: now - (lastMeaningfulIngressAtRef.current || 0),
       sinceEnd: now - (lastRecognitionEndAtRef.current || 0),
       sinceRebuild: now - (lastStallRebuildAtRef.current || 0),
       localActive,
-      recognitionActive: recognitionActiveRef.current,
+      recognitionActive,
       restartPending: recognitionRestartPendingRef.current,
       probePending: Boolean(probeUntil),
       probeExpired: Boolean(probeUntil) && now >= probeUntil,
+      hasRecentSpeech,
       recoveryDue:
         now - (lastFinalAtRef.current || 0) >= runtimeCfg.recoveryMs ||
         segmentsSinceRecoveryRef.current >= runtimeCfg.recoverySegments,
@@ -245,7 +262,7 @@ export function useLocalAsrFallback({
       return 'handled'
     }
     if (step.action === WATCHDOG_ACTIONS.REBUILD) {
-      relayLog('LOG', 'useFluVoiceAssistant', `[WD] rebuild kind=${step.kind} sinceMeaningful=${now - (lastMeaningfulIngressAtRef.current || 0)} recognitionActive=${recognitionActiveRef.current} restartPending=${recognitionRestartPendingRef.current}`)
+      relayLog('LOG', 'useFluVoiceAssistant', `[WD] rebuild kind=${step.kind} sinceMeaningful=${now - (lastMeaningfulIngressAtRef.current || 0)} recognitionActive=${recognitionActiveRef.current} restartPending=${recognitionRestartPendingRef.current} hasRecentSpeech=${hasRecentSpeech}`)
       if (step.kind === 'stall') lastStallRebuildAtRef.current = now
       stallRebuildStreakRef.current += 1
       if (!rebuildRecognitionRef.current()) {

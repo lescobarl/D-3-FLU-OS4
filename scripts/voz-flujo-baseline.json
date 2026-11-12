@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "measuredAt": "2026-11-12T01:58:00Z",
+  "source": "debug.log sesion 01:49:43-01:51:31 (prueba del dueno)",
+  "measuredBefore": {
+    "stallRebuilds": 12,
+    "stallConVozUltimos3s": 11,
+    "asrRawEventos": 258,
+    "asrRawDuplicados": 2,
+    "mayorHuecoSinAsrMs": 28679,
+    "cierreTrasStopMs": 42181,
+    "locucionesCerradasTrasStop": 5,
+    "locucionesConTextoTrasStop": 3
+  },
+  "measurement": {
+    "stallVoiceWindowMs": 1500
+  },
+  "forbiddenNow": {
+    "stallConVoz": 0,
+    "locucionesConTextoTrasStop": 0,
+    "cierreTrasStopMs": 2500
+  },
+  "owners": {
+    "analyzer": "scripts/analiza-voz-log.mjs:voz:log",
+    "watchdog": "src/voice/lib/asrWatchdog.js:resolveWatchdogStep",
+    "watchdogConsumer": "src/voice/hooks/useLocalAsrFallback.js:watchdogTick",
+    "voiceEvidence": "src/voice/lib/voicedActivity.js:countVoicedSamplesInBlocks",
+    "close": "src/voice/conversation/producto.ts:cerrar",
+    "closeConsumer": "src/voice/hooks/useFluVoiceAssistant.js:cerrarMotorConversacion"
+  }
+}

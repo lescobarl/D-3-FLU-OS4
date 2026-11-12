@@ -186,8 +186,13 @@ const TEXTO_TS = readFileSync(
 
 /** Recortes del prefijo que declaran el hecho de la partición (dos puertas). */
 function recortesConPartidaDeVoz(src: string): number {
-  return (src.match(/sinPrefijoDeLaFilaAnterior\(texto,\s*voz,\s*abierta\.partidaDeVoz\)/g) ?? [])
-    .length
+  // El recorte puede llevar la ventana del tramo como 4.º argumento (mismo
+  // audio); lo que la guarda exige es que AMBAS puertas declaren la partición.
+  return (
+    src.match(
+      /sinPrefijoDeLaFilaAnterior\(texto,\s*voz,\s*abierta\.partidaDeVoz(?:,\s*[^)]+)?\)/g,
+    ) ?? []
+  ).length
 }
 
 describe('prefijo de fila — la locución partida no re-incluye la fila anterior', () => {

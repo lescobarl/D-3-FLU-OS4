@@ -122,7 +122,7 @@ describe('producto — el tramo lo resuelve el módulo al procesar', () => {
     expect(adios.meta?.conversacion?.tramo).toMatchObject({ inicio: 48000, fin: 64000 })
   }, 300_000)
 
-  it('un final ajeno SIN tramo vivo cierra la línea abierta sin pegarle su texto', async () => {
+  it('un final ajeno NO cierra: espera tiempo/stop y no mezcla las frases', async () => {
     const eventos: EventoConversacion[] = []
     const motor = crearMotorConversacionProducto({
       idioma: 'es',
@@ -152,28 +152,23 @@ describe('producto — el tramo lo resuelve el módulo al procesar', () => {
         (evento): evento is Extract<EventoConversacion, { tipo: 'row.committed' }> =>
           evento.tipo === 'row.committed',
       )
-    // La frase nueva cierra la anterior en el acto: UNA fila con SU texto,
-    // sin el texto ajeno. La frase nueva queda abierta en SU línea.
-    expect(filas()).toHaveLength(1)
-    expect(filas()[0]!.fila.texto).toBe(primera)
-    expect(filas()[0]!.fila.texto).not.toContain(segunda)
-    expect(motor.instantanea().locucionAbierta?.texto).toBe(segunda)
+    // El final NO es frontera (regla 3): no hay fila nueva y la línea abierta
+    // sigue siendo la primera, con SU texto. La segunda queda retenida.
+    expect(filas()).toHaveLength(0)
+    expect(motor.instantanea().locucionAbierta?.texto).toBe(primera)
 
-    const cerrada = new Promise<void>((resolver) => {
+    // El stop de sesión es frontera de tiempo: la frase ABIERTA (con audio real)
+    // se escribe UNA vez. El texto ajeno sin tramo/audio no inventa una fila.
+    const unaFila = new Promise<void>((resolver) => {
       motor.suscribir((evento) => {
-        if (evento.tipo === 'row.committed') resolver()
+        if (evento.tipo === 'row.committed' && evento.fila.texto === primera) resolver()
       })
     })
     await motor.cerrar('user')
-    await cerrada
+    await unaFila
     const persistidas = await fluDb.conversations.toArray()
-    expect(persistidas).toHaveLength(2)
-    const textos = persistidas.map((fila) => fila.text)
-    expect(textos).toContain(primera)
-    expect(textos).toContain(segunda)
-    // Ninguna fila mezcla las dos frases.
-    expect(
-      persistidas.some((fila) => fila.text.includes(primera) && fila.text.includes(segunda)),
-    ).toBe(false)
-  })
+    expect(persistidas).toHaveLength(1)
+    expect(persistidas[0]!.text).toBe(primera)
+    expect(persistidas[0]!.text).not.toContain(segunda)
+  }, 300_000)
 })

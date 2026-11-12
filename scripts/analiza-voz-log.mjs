@@ -70,6 +70,109 @@ if (matches.size) {
     console.log('  Match (worker): ' + [...matches.entries()].map(([k, v]) => k + '=' + v).join(' '));
 }
 
+// --- FLUJO: watchdog stall con voz y cierre tras stop -------------------------
+// Dueño del análisis: este script. La línea base congela el antes y los límites
+// que NO pueden volver a aparecer en una sesión real.
+const aMs = (t) => {
+    const [h, m, s] = String(t || '').split(':');
+    return ((Number(h) * 60 + Number(m)) * 60 + Number(s)) * 1000;
+};
+let baseline = null;
+try {
+    baseline = JSON.parse(readFileSync(new URL('./voz-flujo-baseline.json', import.meta.url), 'utf8'));
+} catch {
+    baseline = null;
+}
+const ventanaVoz = Number(baseline?.measurement?.stallVoiceWindowMs) || 0;
+const prohibido = baseline?.forbiddenNow || {};
+let stall = 0;
+let stallConVoz = 0;
+let ultimaVoz = null;
+let ultimoStop = null;
+let ultimaCierreTrasStop = null;
+let cierresTrasStop = 0;
+let cierresConTextoTrasStop = 0;
+let aperturasTrasStop = 0;
+// La marca de solicitud del dueño es la que cuenta; en logs viejos (sin ella)
+// se conserva el stop interno del reconocedor para no perder la medición.
+const marcaStop = lineas.some((linea) => /\[REC\] stop: request/.test(linea))
+    ? /\[REC\] stop: request/
+    : /\[REC\] stop: finalizeRecognition/;
+for (const linea of lineas) {
+    const m = LINEA.exec(linea);
+    if (!m) continue;
+    const t = aMs(m[1] + '.' + m[2]);
+    if (/VozProbe vozMedida/.test(linea) && /"motivo":"ok"/.test(linea)) ultimaVoz = t;
+    if (/\[WD\] rebuild kind=stall/.test(linea)) {
+        stall += 1;
+        // Señal exacta: el propio watchdog publica la evidencia que usó.
+        // En logs viejos sin el campo se conserva la aproximación temporal.
+        if (/hasRecentSpeech=true/.test(linea)) stallConVoz += 1;
+        else if (
+            !/hasRecentSpeech=/.test(linea) &&
+            ultimaVoz !== null &&
+            t - ultimaVoz <= ventanaVoz
+        ) {
+            stallConVoz += 1;
+        }
+    }
+    if (marcaStop.test(linea)) {
+        ultimoStop = t;
+        ultimaCierreTrasStop = null;
+        cierresTrasStop = 0;
+        cierresConTextoTrasStop = 0;
+        aperturasTrasStop = 0;
+    }
+    if (/conversacion\.locucion\.abierta/.test(linea) && ultimoStop !== null && t >= ultimoStop) {
+        aperturasTrasStop += 1;
+    }
+    if (/conversacion\.locucion\.cerrada/.test(linea) && ultimoStop !== null && t >= ultimoStop) {
+        ultimaCierreTrasStop = t;
+        cierresTrasStop += 1;
+        if (/"descarte":null/.test(linea)) cierresConTextoTrasStop += 1;
+    }
+}
+const cierreTrasStopMs =
+    ultimoStop !== null && ultimaCierreTrasStop !== null
+        ? Math.round(ultimaCierreTrasStop - ultimoStop)
+        : null;
+console.log('');
+console.log('--- FLUJO (watchdog/stop) ---');
+console.log('stall rebuilds         : ' + stall + ' (con voz: ' + stallConVoz + ')');
+console.log(
+    'cierre tras stop       : ' +
+        (cierreTrasStopMs === null ? '?' : cierreTrasStopMs + 'ms') +
+        ' cerradas=' +
+        cierresTrasStop +
+        ' con_texto=' +
+        cierresConTextoTrasStop +
+        ' abiertas_nuevas=' +
+        aperturasTrasStop,
+);
+if (baseline) {
+    const fallos = [];
+    if (stallConVoz > Number(prohibido.stallConVoz ?? 0)) {
+        fallos.push('stallConVoz=' + stallConVoz + ' > ' + (prohibido.stallConVoz ?? 0));
+    }
+    if (cierresConTextoTrasStop > Number(prohibido.locucionesConTextoTrasStop ?? 0)) {
+        fallos.push(
+            'locucionesConTextoTrasStop=' +
+                cierresConTextoTrasStop +
+                ' > ' +
+                (prohibido.locucionesConTextoTrasStop ?? 0),
+        );
+    }
+    if (cierreTrasStopMs !== null && cierreTrasStopMs > Number(prohibido.cierreTrasStopMs ?? 0)) {
+        fallos.push('cierreTrasStopMs=' + cierreTrasStopMs + ' > ' + (prohibido.cierreTrasStopMs ?? 0));
+    }
+    if (fallos.length) {
+        console.log('BARRERA FLUJO: ROJO -> ' + fallos.join(' | '));
+        process.exitCode = 1;
+    } else {
+        console.log('BARRERA FLUJO: VERDE');
+    }
+}
+
 /** Palabras normalizadas para comparar texto sin acentos ni puntuacion. */
 const palabras = (s) =>
     String(s || '')

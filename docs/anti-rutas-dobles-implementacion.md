@@ -1,12 +1,18 @@
 # Anti rutas dobles — especificación de implementación
 
-> **Para quién es este documento:** un agente (Claude, Kilo, OpenCode o cualquier
-> herramienta) que debe IMPLEMENTAR esta solución en un proyecto nuevo o en un
-> módulo nuevo. Es una especificación completa y autocontenida: piezas,
-> contratos exactos (stdin/CLI/exit codes), formatos de datos, orden de
-> instalación, validación y lecciones medidas del despliegue original
-> (repositorio FLU-OS4, rama `main` `d5b69fe1` + `feature/ratchet-src-completo`
-> `4ce180ba`, 2026-11-05/06).
+> **Para quién es este documento:** un agente (Claude Code, Kilo, OpenCode, Cline o
+> cualquier otra herramienta) que debe IMPLEMENTAR esta solución en un proyecto
+> nuevo, en un módulo nuevo, en una prohibición nueva o en una herramienta nueva.
+> Es una especificación completa y autocontenida: piezas, contratos exactos
+> (stdin/CLI/exit codes), formatos de datos, orden de instalación, validación,
+> recetas de extensión y lecciones medidas del despliegue original.
+>
+> **Despliegue original de referencia:** repositorio FLU-OS4, rama
+> `feature/ratchet-src-completo` en `704cbf78` (2026-11-10), sobre `main`
+> `d5b69fe1`. Incluye el núcleo de tres puertas, 8 prohibiciones declaradas en
+> el manifiesto, barreras por responsabilidad, barrera de lo vivo (sesiones
+> reales), capa multi-herramienta (Claude Code, Kilo, opencode, Cline) y
+> protección del criterio (CODEOWNERS + branch protection).
 
 ---
 
@@ -17,11 +23,19 @@ responde la misma pregunta de diseño que ya responde uno existente ("¿Cómo se
 elige el motor ASR?", "¿Cómo se cierra una locución?", …). Cada duplicado
 bifurca el criterio y deja dos sitios que pueden divergir.
 
+**Problema de segundo orden (medido).** La barrera misma se puede duplicar u
+omitir: dos tests declarando la misma prohibición, un guard léxico que no ve un
+sitio de llamada duplicado, un test sintético que queda verde mientras el
+defecto vive en sesiones reales. La solución incluye por tanto **meta-barreras**
+(manifiesto de prohibiciones, guard de sitios, barrera de métricas vivas) que
+vigilan a la barrera.
+
 **Solución: una barrera en tres puertas, con dueño único por pregunta.**
 
-1. **Antes de escribir** (hook `PreToolUse` / plugin del host): una escritura
-   nueva bajo `src/` que duplique responsabilidad se bloquea antes de tocar
-   disco.
+1. **Antes de escribir** (hook `PreToolUse` / plugin del host / guardian para
+   hosts sin hooks): una escritura nueva bajo `src/` que duplique
+   responsabilidad se bloquea antes de tocar disco (o se revierte justo
+   después).
 2. **En el commit** (hook `commit-msg`): un commit que añada funciones
    sospechosas sin declarar veredicto se bloquea.
 3. **En el PR/CI** (paso `--diff`): la rama que traiga duplicados sin veredicto
@@ -45,14 +59,21 @@ declaración.
 | **Falla cerrada** | Cualquier error de la puerta (input ilegible, git inaccesible, script ausente) BLOQUEA; nunca deja pasar. |
 | **No retroactiva** | El gate no juzga la historia: si no existía en la base de comparación, se omite. La rama que introduce el gate no se bloquea a sí misma. |
 | **Criterio desde la referencia** | Los casos y umbrales se leen del commit de referencia (HEAD en `--staged`, la base en `--diff`), no del árbol de trabajo: un cambio no puede debilitar el criterio que lo juzga. |
-| **Ratchet solo sube** | Las líneas base (rutas dobles, nombres de función) solo pueden crecer o bajar techos; nunca aflojarse en el mismo cambio que las viola. |
-| **Independiente del host** | La MISMA puerta sirve a Claude Code, Kilo y opencode: nombres de tool en cualquier capitalización, claves en variantes (`file_path`/`filePath`), payload por stdin. |
+| **Ratchet solo sube** | Las líneas base (rutas dobles, nombres de función, métricas, literales) solo pueden crecer o bajar techos; nunca aflojarse en el mismo cambio que las viola. |
+| **Independiente del host** | La MISMA puerta sirve a Claude Code, Kilo, opencode, Cline y cualquier otro host: nombres de tool en cualquier capitalización, claves en variantes (`file_path`/`filePath`), payload por stdin. |
 | **Sin `sh`** | Ninguna pieza depende de un shell: los hosts corren sobre Bun en Windows y `sh` no está en PATH. Lanza Node directamente. |
 | **Node del PATH, no `process.execPath`** | En hosts Bun, `process.execPath` es el binario del host (kilo.exe/opencode.exe), no un intérprete. Usa `node` del PATH o la variable opcional `FLU_NODE`. |
+| **Una prohibición, un test dueño** | El manifiesto `prohibiciones.json` declara quién guarda cada prohibición con su marcador `// BARRERA: <id>`. Dos tests para la misma prohibición es una ruta doble (lo mide `barreraUnicaGuard`). |
+| **Medir sitios, no solo nombres** | El ratchet de nombres mide funciones; no ve un `id.uuid()` inline que acuña lo que el dueño acuña. Se mide el SITIO de la llamada, con familia de patrones (directo y alias en dos pasos). |
+| **Lo vivo se mide con grabaciones reales** | Los tests sintéticos quedaban verdes con la caja muda en sesiones reales. La barrera de métricas corre sobre sesiones REALES del dueño (fixture redactada) con igualdad exacta y detectores de patrón viejo. |
+| **Propósito por forma** | Un mismo propósito con otro nombre y otro cuerpo deja verdes los checks léxicos y de esqueleto. El registro de propósitos detecta por FORMA (regex) y declara dueño + variantes con motivo. |
+| **Toda barrera se falsifica** | Cada guard incluye su entrada infractora (falsificación) y se acepta rojo→verde por reinyección del defecto real, no por suite verde. |
 
 ---
 
 ## 3. Inventario de piezas
+
+### 3.1 Núcleo: motor del revisor y tres puertas
 
 | Pieza | Rol | Puertas donde corre |
 |---|---|---|
@@ -62,20 +83,51 @@ declaración.
 | `scripts/revisor-puertas.mjs` | Evaluación compartida: ¿bloquea? ¿veredicto declarado? informe | importado por las 3 puertas |
 | `scripts/revisor-prehook.mjs` | Puerta PreToolUse: simula el Write/Edit y evalúa las funciones nuevas | hook del host |
 | `scripts/revisor-git.mjs` | Puerta de git: compara índice/HEAD contra referencia | commit-msg `--staged --msg`, CI `--diff` |
-| `scripts/revisor-plugin-adapter.mjs` | Adaptador ÚNICO para los plugins de host (normaliza + ejecuta + traduce bloqueo) | plugins de Kilo y opencode |
-| `.kilo/plugin/revisor.js` | Plugin de Kilo Code (auto-registro) | `tool.execute.before` de Kilo |
-| `.opencode/plugins/revisor.js` | Plugin NATIVO de opencode (sin terceros, sin sh) | `tool.execute.before` de opencode |
-| `.claude/settings.json` | Hooks PreToolUse de Claude Code | `Write` → owner-gate; `Write\|Edit` → revisor-prehook |
+| `scripts/guard-architecture.mjs` | Dueños duplicados por símbolo + PUERTOS declarados (§4.15) | pre-commit `--staged` |
 | `.githooks/pre-commit` | Gate del commit: dueño + arquitectura + lint + tipos | git commit |
 | `.githooks/commit-msg` | Gate del mensaje: revisor `--staged` | git commit |
 | `scripts/install-hooks.mjs` | Activa `core.hooksPath=.githooks` (vía `prepare` de npm) | npm install |
 | `.github/workflows/ci.yml` | Pasos de CI: owner-gate `--diff`, revisor `--diff`, guards, lint, tipos, tests | push y PR |
+
+### 3.2 Barreras por responsabilidad y declaración
+
+| Pieza | Rol | Puertas donde corre |
+|---|---|---|
+| `scripts/rutas-dobles.mjs` + `scripts/rutas-dobles-baseline.json` | Guard de rutas dobles POR RESPONSABILIDAD (catálogo de casos con dueño, techo solo baja) | `npm run lint` |
+| `scripts/<modulo>-rutas-dobles-baseline.json` + su guard | Segunda capa POR MÓDULO: métricas medidas por operación (no por símbolo) + nombres de función congelados (§4.17) | `lint:guards` |
+| `scripts/prohibiciones.json` + `tests/barreraUnicaGuard.test.ts` | Meta-barrera: una prohibición, un test dueño; marcador `// BARRERA: <id>` (§4.16) | `lint:guards` |
+| `tests/tramoUnicoGuard.test.ts` | Meta-barrera de SITIOS: la acuñación de un objeto clave solo nace en su dueño, familia de patrones incluida (§4.16) | `lint:guards` |
+| `scripts/purposeOwners.mjs` + `tests/purposeOwnershipGuard.test.ts` | Registro de PROPÓSITOS con dueño + variantes; detección por forma, no por nombre (§4.19) | `lint:guards` |
+| `scripts/funciones-ratchet.mjs` + `scripts/*-funciones-baseline.json` | Ratchet de NOMBRES de función (solo sube) | guards de ratchet en `lint:guards` |
+| `scripts/guard-literales.mjs` + `scripts/literales-allowlist.json` | Ratchet de literales repetidos (≥ 18 chars en ≥ 2 archivos) (§4.20) | `npm run lint` |
+| `scripts/voice-profile-owner-baseline.json` + `scripts/baja-rutas-baseline.json` | Líneas base de ruta única por módulo (contador + `minSources`; mismo formato mínimo de §4.17) | `lint:guards` |
+
+### 3.3 Barrera de lo vivo (sesiones reales)
+
+| Pieza | Rol | Puertas donde corre |
+|---|---|---|
+| `scripts/conversacionGrabacionMetricas.mjs` | Dueño ÚNICO de la medición de una grabación real (parsers + medidores) | importado por sus guards |
+| `scripts/conversacion-live-baseline.json` + `tests/conversacionLiveBarrierGuard.test.ts` | Métricas EXACTAS de las sesiones reales del dueño + detectores de patrón viejo con techo 0 (§4.18) | `lint:guards` |
+| `scripts/conversacion-grabacion-baseline*.json` + sus guards | Misma familia para replays de sesiones grabadas (contrato de grabación) | `lint:guards` |
+
+### 3.4 Capa multi-herramienta
+
+| Pieza | Rol | Puertas donde corre |
+|---|---|---|
+| `scripts/revisor-plugin-adapter.mjs` | Adaptador ÚNICO para los plugins de host (normaliza + ejecuta + traduce bloqueo) | plugins de Kilo y opencode |
+| `.kilo/plugin/revisor.js` | Plugin de Kilo Code (auto-registro) | `tool.execute.before` de Kilo |
+| `.opencode/plugins/revisor.js` | Plugin NATIVO de opencode (sin terceros, sin sh) | `tool.execute.before` de opencode |
+| `.claude/settings.json` | Hooks PreToolUse de Claude Code | `Write` → owner-gate; `Write\|Edit` → revisor-prehook |
+| `scripts/guardian.mjs` + `.clinerules` | Guardian (Puerta 1) para hosts SIN hooks: watcher que re-corre las mismas puertas con `--pretende-nuevo`/`--desde-vacio` + protocolo manual | watcher del repo |
+
+### 3.5 Registro e infraestructura de guards
+
+| Pieza | Rol | Puertas donde corre |
+|---|---|---|
 | `scripts/guard-files.mjs` | Lista `GUARD_FILES` (un DATO): los tests que corren en `lint:guards` y pre-commit | la importa vitest y el conteo |
 | `vitest.guards.config.ts` | Config de vitest cuyo `include` es `GUARD_FILES` | `npm run lint:guards` |
-| `scripts/rutas-dobles.mjs` + `scripts/rutas-dobles-baseline.json` | Guard de rutas dobles POR RESPONSABILIDAD (catálogo de casos con dueño) | `npm run lint` |
-| `scripts/funciones-ratchet.mjs` + `scripts/voz-funciones-baseline.json` + `scripts/src-funciones-baseline.json` | Ratchet de NOMBRES de función (solo sube) | guards de ratchet en `lint:guards` |
+| `tests/revisor*.test.ts`, `tests/rutasDoblesGuard.test.ts`, `tests/vozFuncionesRatchetGuard.test.ts`, `tests/srcFuncionesRatchetGuard.test.ts`, `tests/barreraUnicaGuard.test.ts`, `tests/tramoUnicoGuard.test.ts`, `tests/conversacionLiveBarrierGuard.test.ts`, `tests/purposeOwnershipGuard.test.ts` | Guards de comportamiento que blindan cada pieza | `lint:guards` |
 | `.github/CODEOWNERS` + branch protection | El criterio/gate es inmutable sin aprobación del dueño | GitHub |
-| `tests/revisor*.test.ts`, `tests/rutasDoblesGuard.test.ts`, `tests/vozFuncionesRatchetGuard.test.ts`, `tests/srcFuncionesRatchetGuard.test.ts` | Guards de comportamiento que blindan cada pieza | `lint:guards` |
 
 ---
 
@@ -342,13 +394,13 @@ Guarda por RESPONSABILIDAD declarada. Formato de
 `scripts/rutas-dobles-baseline.json`:
 ```json
 {
-  "_nota": "El techo solo baja...",
+  "_nota": "El techo solo baja: si un fichero deja de casar, se borra aqui en el mismo cambio. Un fichero nuevo que case es ROJO.",
   "minSources": 400,
   "cases": [
     {
       "id": "apertura-locucion",
       "owner": "src/voice/conversation/cierre.ts",
-      "description": "El ensamblado de DatosApertura vive en el dueño; cada flujo tiene UN único sitio que lo pide.",
+      "description": "El ensamblado de DatosApertura vive en el dueno; cada flujo tiene UN unico sitio que lo pide.",
       "pattern": "abrirLocucion\\(\\s*\\{",
       "roots": ["src/voice/conversation"],
       "kind": "sites",
@@ -362,6 +414,11 @@ El guard falla (exit 1) si: aparece un fichero NUEVO que casa (ruta doble
 nueva); un fichero permitido deja de casar (la lista solo se recorta); el total
 supera `goal` (el techo solo baja); el escaneo lee menos fuentes que
 `minSources` (medida vacua). `--report` lista casos y recuentos.
+
+Esta es la PRIMERA capa. Un módulo con acoplamiento semántico fuerte (estado
+compartido, atribución de texto/voz, despacho) añade una SEGUNDA capa por
+módulo (§4.17), porque la propiedad semántica no se mide bien por nombre de
+símbolo.
 
 ### 4.11 Ratchet de nombres de función
 
@@ -392,9 +449,9 @@ funciones no dispara; `minSources` anti-vacuidad.
 
 El gate es INMUTABLE sin aprobación del dueño. CODEOWNERS cubre: `AGENTS.md`,
 todos los `scripts/` del criterio (gate, revisor, ratchets, líneas base,
-guard-files), `docs/OWNERS.md`, `.claude/settings.json`, `.githooks/`,
-`vitest.guards.config.ts`, `package.json`, `/tests/*Guard*.test.ts(x)` y el
-módulo protegido (`/src/voice/conversation/**`).
+guard-files, manifiesto), `docs/OWNERS.md`, `.claude/settings.json`,
+`.githooks/`, `vitest.guards.config.ts`, `package.json`,
+`/tests/*Guard*.test.ts(x)` y el módulo protegido (`/src/voice/conversation/**`).
 
 Branch protection en `main`: require pull request + 1 aprobación + dismiss de
 aprobaciones obsoletas + **require review from Code Owners** + check requerido
@@ -432,6 +489,202 @@ guardian cierra ese hueco alcanzándolos JUSTO DESPUÉS del Write.
 - El guardian NO sustituye el protocolo manual ni las puertas 2/3: es la red
   que hace REAL la Puerta 1 donde no hay API de hooks.
 
+### 4.15 `guard-architecture.mjs` — dueños duplicados y PUERTOS declarados
+
+Un símbolo dueño tiene UNA definición. Excepción declarada: un dueño puede
+aparecer UNA vez más en la FACHADA del módulo como adaptador que solo delega
+(encola y llama a la implementación). Ese **puerto** es DATO, no una ceguera:
+
+```js
+export const PUERTOS = Object.freeze({
+  registrarNombre: 'src/voice/conversation/producto.ts',
+})
+```
+
+Reglas medidas:
+- La definición del dueño sigue exigiendo UNA sola; el puerto se declara en el
+  mapa `PUERTOS` (símbolo → archivo de la fachada).
+- Una TERCERA definición sigue siendo `dueño duplicado` (rojo).
+- Un puerto declarado SIN uso en las fuentes es error (declaración muerta).
+
+### 4.16 `prohibiciones.json` — manifiesto: una prohibición, un test dueño
+
+Cada prohibición que se ha guardado (cierre con dos puertas, despacho único,
+cambio de voz confirmado, prefijo de fila partida, tramo único, …) se declara
+UNA sola vez, con su test dueño:
+
+```json
+{
+  "barreras": [
+    {
+      "id": "cierre-dos-puertas",
+      "test": "tests/conversacionCierreDosPuertasGuard.test.ts",
+      "motivo": "El cierre solo tiene las puertas de voz y silencio; el final del ASR no cierra.",
+      "fecha": "2026-11-10"
+    }
+  ]
+}
+```
+
+Y el test dueño lleva el marcador en su cabecera:
+```ts
+// @vitest-environment node
+// BARRERA: cierre-dos-puertas
+```
+
+`barreraUnicaGuard` contrasta el manifiesto contra los marcadores y es ROJO si:
+- dos entradas del manifiesto comparten `id` (barrera duplicada);
+- el mismo marcador aparece en DOS archivos de test (dos tests dueños = ruta doble);
+- un marcador no tiene entrada en el manifiesto (prohibición sin declarar);
+- una entrada no tiene su marcador en el archivo declarado (manifiesto mentiroso);
+- la entrada está incompleta (falta `id`/`test`/`motivo`/`fecha`) o el test no existe.
+
+**Por qué existe (medido).** Cline duplicó una barrera — dos tests declarando
+la misma prohibición — y el arnés no lo vio: `guard:duplicados` es léxico y el
+guard de conversación no cuenta prohibiciones de tests. El manifiesto convierte
+"una prohibición, un test" en dato contrastable, y el propio guard incluye sus
+falsificaciones (id duplicado → rojo, marcador en dos archivos → rojo,
+prohibición sin manifiesto → rojo).
+
+**Hermana: `tramoUnicoGuard` (medir sitios, no solo nombres).** El ratchet de
+nombres mide FUNCIONES; no ve un `id.uuid()` inline que acuña un `tramoId`
+fuera de su dueño. Este guard mide SITIOS en todo `src` con una FAMILIA de
+patrones (el directo y el alias en dos pasos: `const x = uuid(); { tramoId: x }`),
+declara los dueños como archivo → patrones permitidos, y se falsifica con el
+parche infractor real.
+
+### 4.17 Línea base POR MÓDULO (métricas por operación + funciones congeladas)
+
+Segunda capa sobre el catálogo (§4.10), para módulos donde la propiedad a
+proteger es semántica (turno, voz, nombre, despacho) y no se mide por nombre de
+símbolo. Forma (`scripts/<modulo>-rutas-dobles-baseline.json`):
+
+```json
+{
+  "fecha": "2026-11-04",
+  "dueno": "src/voice/conversation",
+  "nota": "Solo baja: incluye la propiedad semantica medida por operacion, no por nombre de simbolo. Un infractor con nombre nuevo sube la metrica y falla.",
+  "metricas": {
+    "dispatchDedupeOwners": 1,
+    "closureDoors": 2,
+    "prefixStripOwner": 1,
+    "turnMintOwners": 0
+  },
+  "funciones": {
+    "ingesta.ts": ["abrirCaparazon", "verificarCambioVoz", "partirLocucionPorCambioDeVoz", "..."]
+  }
+}
+```
+
+Contrato del guard:
+- **`metricas`** se miden POR OPERACIÓN (cuántos archivos/sitios responden la
+  pregunta), no por símbolo. Un infractor con nombre NUEVO sube la métrica y
+  falla, aunque el nombre no esté en ningún ratchet. El guard exige igualdad
+  EXACTA con la línea base, y la línea base no puede SUBIR respecto a la
+  referencia de git (el mismo cambio no la afloja). Solo puede bajar: la baja
+  y su re-baseline van en el MISMO commit.
+- **`funciones`** quedan congeladas por archivo: una función nueva del módulo
+  exige decidir su dueño (declararla en la línea base en el MISMO cambio).
+  Quitar funciones no dispara. El escaneo cubre también los `.js` del módulo
+  (un `turnSnapshot.js` no es invisible), con mínimo de fuentes anti-vacuidad.
+- La forma mínima sirve para módulos pequeños: un contador + `minSources`
+  (`{ "duplicateRoutes": 0, "minSources": 400 }` en
+  `voice-profile-owner-baseline.json` / `baja-rutas-baseline.json`).
+
+### 4.18 Barrera de lo vivo — métricas EXACTAS de sesiones reales
+
+Los tests sintéticos quedaban verdes mientras la sesión real fallaba (la caja
+no pintaba la frase retenida que se dictaba, la línea abierta vivió 76 s, el
+stop descartaba pendientes con texto). La barrera de lo vivo mide sobre
+**sesiones reales del dueño**, no sobre escenarios sintéticos.
+
+**Fixture.** Una grabación real (`tests/fixtures/flu-recordings/<sessionId>/`):
+`events.ndjson` + `turns.ndjson`, texto redactado a longitud y vectores de voz
+fuera de versión (se conservan tiempos, longitudes, hashes, turnId, hablante y
+motivos). El tramo que no está en el debug.log se reconstruye de las líneas
+reales capturadas antes de que rotara el log — y se declara así en la nota.
+
+**Dueño único de la medición.** Un módulo de métricas
+(`scripts/conversacionGrabacionMetricas.mjs`) exporta los medidores
+(`medirIncidenteLive`, `medirCorteDeWake`, …) con `@revisor CREAR NUEVO`;
+el guard es su único consumidor. Un medidor nuevo se añade ahí, nunca inline
+en el test.
+
+**Línea base** (`scripts/conversacion-live-baseline.json`):
+```json
+{
+  "sessionId": "5318166b-...", "fecha": "2026-11-10", "minEvents": 160,
+  "metricas": { "events": 165, "asrFinal": 6, "maxLocucionAbiertaMs": 75704, "...": "..." },
+  "sessionCorte": "69a4fa97-...", "minEventsCorte": 8, "metricasCorte": { "...": "..." },
+  "casos": [
+    { "id": "caja-sin-pendiente", "owner": "src/voice/conversation/sesion.ts:264",
+      "limite": 0, "descripcion": "..." }
+  ]
+}
+```
+
+Contrato del guard (`conversacionLiveBarrierGuard`):
+1. **ANTI-VACUIDAD primero:** la fixture debe conservar el defecto medido
+   (mínimos de eventos, duración de la línea abierta ≥ lo medido, descartes ≥ 1,
+   srGap = 0, …). Si la fixture se vacía o se "arregla", la barrera se declara
+   inválida antes de comparar nada.
+2. **Igualdad exacta:** las métricas medidas hoy son EXACTAMENTE la línea base.
+   Cualquier cambio real de conducta rompe el guard y obliga al dueño a
+   re-baselinear con decisión explícita (nunca en el mismo commit que cambia la
+   conducta).
+3. **Detectores de patrón viejo:** cada caso declara el patrón del código
+   infractor y su archivo; si reaparece (`limite`, típicamente 0), rojo.
+4. **Los dueños nuevos existen:** el guard afirma que el dueño nuevo vive en su
+   archivo (el fix no es un espejismo) y que el archivo del `owner` existe.
+5. **PRUEBA DE DETECTOR:** cada detector se falsifica dentro del guard — fuente
+   mutada con el patrón viejo → cuenta 1; fuente real → cuenta 0. Un detector
+   que no distingue es decorativo y se rechaza.
+
+### 4.19 Registro de propósitos (`purposeOwners.mjs`)
+
+Para el caso medido en que el MISMO propósito tiene implementaciones legítimas
+con OTRO nombre y OTRO algoritmo (tres remuestreadores: `downsample`,
+`downsampleTo16k`, `resampleLinear`) y tanto el guard léxico como el de
+esqueleto quedan verdes. Cuando unificarlas cambiaría conducta validada (la
+decimación está PINNED por tests), el propósito se CIERRA POR CLASIFICACIÓN:
+
+```js
+export const PURPOSES = [
+  {
+    id: 'resample',
+    proposito: 'Cambiar la tasa de muestreo de una senal de audio.',
+    dueno: { file: 'src/voice/lib/asr/resample.js', symbol: 'downsample' },
+    variantes: [
+      { file: 'src/voice/lib/embeddingFrames.js', symbol: 'downsampleTo16k',
+        motivo: 'DECIMACION ... su conducta esta PINNED por tests/embeddingFrames.test.ts ...' }
+    ],
+    formas: [
+      { re: /function\s+(downsample)\b/, forma: 'downsample' },
+      { re: /function\s+(resample[A-Za-z0-9]*)\b/, forma: 'resampleX' }
+    ]
+  }
+]
+```
+
+Contrato: los candidatos se detectan por FORMA (regex), no por nombre exacto.
+Un candidato que no es el dueño ni una variante declarada → ROJO (cuarta
+implementación). El dueño ausente del árbol → ROJO (registro muerto). La
+barrera impide la N+1-ésima implementación por forma; las variantes se declaran
+con su motivo de divergencia.
+
+### 4.20 Guard de literales + allowlist
+
+Ratchet de literales repetidos: un literal entre comillas de ≥ 18 caracteres
+presente en ≥ 2 archivos queda CONGELADO en `scripts/literales-allowlist.json`.
+Un literal repetido NUEVO → ROJO; un literal de la lista que ya no se repite →
+borrarlo de la allowlist en el MISMO commit (si no, ROJO); `minSources` 400
+anti-vacuidad.
+
+**Gotcha medido:** mencionar un nombre de función entre backticks en un
+comentario crea la SEGUNDA copia del literal en ≥ 2 archivos y rompe el gate.
+No nombrar símbolos en comentarios; la allowlist solo la mueve el dueño
+(CODEOWNERS la cubre), nunca el agente para salir del paso.
+
 ---
 
 ## 5. Orden de implementación
@@ -449,8 +702,9 @@ guardian cierra ese hueco alcanzándolos JUSTO DESPUÉS del Write.
    `revisor-git.mjs` (contratos de §4.1/4.4/4.5, con lectura del criterio
    desde la referencia y no-retroactividad).
 5. **Catálogo de casos** `rutas-dobles-baseline.json` + `rutas-dobles.mjs`
-   (§4.10) y **ratchets** `funciones-ratchet.mjs` + línea base inicial (§4.11)
-   generada del árbol existente.
+   (§4.10), **línea base por módulo** (§4.17) para el módulo semánticamente
+   acoplado y **ratchets** `funciones-ratchet.mjs` + líneas base (§4.11)
+   generadas del árbol existente.
 6. **Adaptador + plugins de host** (§4.6/4.7): adaptador compartido, plugin de
    Kilo, plugin nativo de opencode, hooks de Claude en `.claude/settings.json`.
    Sin `sh` en ninguna pieza.
@@ -461,9 +715,12 @@ guardian cierra ese hueco alcanzándolos JUSTO DESPUÉS del Write.
    commit-msg, `install-hooks.mjs` + `prepare`.
 9. **Guard list**: `guard-files.mjs` + `vitest.guards.config.ts`; registrar
    TODO guard nuevo en el mismo commit.
-10. **Tests de cada pieza** (§6), empezando por la reinyección del defecto.
-11. **CI** (§4.9) y **CODEOWNERS + branch protection** (§4.13).
-12. **Correr el gate completo una vez** (`npm run lint` + `lint:guards`) y
+10. **Manifiesto** `prohibiciones.json` (§4.16): una entrada por cada
+    prohibición ya guardada, con su marcador `// BARRERA:` en el test dueño y
+    el `barreraUnicaGuard` + `tramoUnicoGuard` registrados.
+11. **Tests de cada pieza** (§6), empezando por la reinyección del defecto.
+12. **CI** (§4.9) y **CODEOWNERS + branch protection** (§4.13).
+13. **Correr el gate completo una vez** (`npm run lint` + `lint:guards`) y
     verificar el conteo de tests.
 
 ### 5.2 Módulo NUEVO dentro del proyecto existente
@@ -472,15 +729,97 @@ guardian cierra ese hueco alcanzándolos JUSTO DESPUÉS del Write.
    dueño, consumidor único y kill list, ANTES de crear los archivos.
 2. Para cada responsabilidad crítica, añadir un caso al catálogo de rutas
    dobles (`pattern` medible, `owner`, `allowed`, `goal`) o una fila de
-   línea base en el ratchet, en el MISMO cambio que el código.
+   línea base en el ratchet, en el MISMO cambio que el código. Si el módulo
+   tiene propiedad semántica, añadir su línea base por módulo (§4.17) en el
+   mismo cambio.
 3. Correr el revisor antes de cada función nueva:
    `node scripts/revisor-funciones.mjs --pregunta ... --nombre ... --borrador <archivo>`.
    Con candidatos ≥ umbral: `REUSAR`/`EXTENDER` el dueño existente, o declarar
    `@revisor CREAR NUEVO — justificación` en el JSDoc.
-4. Añadir los guards de comportamiento del módulo a `GUARD_FILES` y las rutas
-   nuevas a `CODEOWNERS` (dueño del módulo).
+4. Añadir los guards de comportamiento del módulo a `GUARD_FILES`, declarar
+   cada prohibición en `prohibiciones.json` con su marcador (§4.16) y las
+   rutas nuevas a `CODEOWNERS` (dueño del módulo).
 5. Registrar la línea base nueva del ratchet si el módulo es nuevo territorio
    (`minSources` actualizado) en el mismo commit.
+
+### 5.3 Prohibición NUEVA (receta de extensión, 8 pasos)
+
+1. **Declarar la prohibición** en `scripts/prohibiciones.json` (`id`, `test`,
+   `motivo`, `fecha`) — antes o en el mismo cambio que el guard, nunca después.
+2. **Crear el guard** en `tests/<id>Guard.test.ts` con el marcador
+   `// BARRERA: <id>` en la cabecera y el dueño del módulo declarado en el JSDoc.
+3. **Definir detectores medibles**: patrones (o FAMILIA de patrones: directo +
+   alias en dos pasos) por sitio/archivo; si mide métricas, extraer la medición
+   a un módulo dueño (`scripts/<modulo>Metricas.mjs`) con `@revisor CREAR NUEVO`,
+   nunca inline en el test.
+4. **Datos declarados**: si la barrera congela números, añadir su línea base
+   (contador + `minSources`, o `metricas` + `funciones` si es por módulo) en el
+   mismo cambio.
+5. **Falsificación DENTRO del guard**: la entrada infractora exacta (el parche
+   real que se quiere impedir) debe marcar rojo; la fuente real, verde.
+6. **Registrar en `GUARD_FILES`** en el MISMO commit y verificar el delta del
+   conteo de `lint:guards` (un guard sin fila no es barrera).
+7. **Aceptación por reinyección**: inyectar el defecto real en el código →
+   guard ROJO → revertir → VERDE (protocolo §6).
+8. **Gate completo sin suite**: `npm run lint` + `npm run typecheck` +
+   `lint:guards`; la suite completa queda en CI/para el dueño (§7.10).
+
+### 5.4 Herramienta NUEVA (multi-herramienta)
+
+Solo la Puerta 1 (antes de escribir) es específica del host. Las puertas 2 y 3
+las corren git y CI y cubren a TODAS las herramientas por igual.
+
+| Herramienta | Puerta 1 (pre-escritura) | Puerta 2 (commit) | Puerta 3 (CI) |
+|---|---|---|---|
+| Claude Code | hooks `PreToolUse` en `.claude/settings.json` | `.githooks/commit-msg` | `ci.yml` |
+| Kilo Code | `.kilo/plugin/revisor.js` (`tool.execute.before`) | `.githooks/commit-msg` | `ci.yml` |
+| opencode | `.opencode/plugins/revisor.js` (plugin nativo) | `.githooks/commit-msg` | `ci.yml` |
+| Cline (sin API de hooks) | `guardian.mjs` (watcher) + `.clinerules` (manual) | `.githooks/commit-msg` | `ci.yml` |
+| Cualquier otro host | una de las dos recetas siguientes | `.githooks/commit-msg` | `ci.yml` |
+
+**Receta A — host CON API de hooks:**
+1. Implementar el plugin mínimo del host que llama
+   `aplicarPuertasRevisor(tool, args)` del adaptador compartido (§4.6). Reglas:
+   `spawnSync` sin shell, `FLU_NODE || 'node'` (nunca `process.execPath`),
+   lanzar `Error` para cancelar, timeout (30 s).
+2. Nada de `sh -c` ni terceros: el ejecutor de hooks de opencode hardcodeaba
+   `Bun.spawn(["sh","-c",...])` y en Windows la puerta nunca corría.
+3. **Prueba de host real**: reiniciar el host, verificar que el plugin se
+   registra y ejecutar un Write bloqueante REAL (archivo nuevo sin dueño en
+   `src/` → bloqueado antes de tocar disco).
+
+**Receta B — host SIN API de hooks:**
+1. Dejar correr `guardian.mjs` (watcher por directorio + debounce) — reusa las
+   MISMAS puertas con `--pretende-nuevo`/`--desde-vacio`, no una segunda
+   implementación.
+2. Escribir el protocolo manual en `.clinerules` (dueño declarado, veredicto
+   `@revisor`, aviso de que el guardian puede borrar archivos).
+3. **Prueba por reinyección**: con el watcher corriendo, escribir un archivo
+   sin dueño bajo `src/` → borrado en segundos con su informe; o
+   `node scripts/guardian.mjs --una-vez <ruta>` → exit 2 y el archivo
+   desaparece.
+
+### 5.5 Parametrización plug & play (qué se toca al portar a otro proyecto)
+
+| Qué se parametriza | Dónde | Cambio típico |
+|---|---|---|
+| Raíz del código vigilado | pathspec `:(icase)src/` en owner-gate y guardian | `src/` → `lib/` |
+| Extensiones de código | owner-gate, guardian, guard-files | el set `.ts/.tsx/.js/.jsx/.mjs/.cjs` |
+| Umbrales del revisor | `revisor-funciones.mjs` | `MIN_PUNTAJE` 0.25, `CLON_BLOQUEO` 0.9, `MIN_TOKENS_CLON` 24, `UMBRAL_FUNCION` 0.7, `UMBRAL_CASO` 0.5, `MIN_MOTIVO` 8 |
+| Stopwords y sinónimos | `revisor-funciones.mjs` | diccionario ES/EN del dominio |
+| Catálogo de casos | `scripts/rutas-dobles-baseline.json` | `cases` con `pattern`/`owner`/`allowed`/`goal` del dominio |
+| Línea base por módulo | `scripts/<modulo>-rutas-dobles-baseline.json` | `metricas` + `funciones` del módulo |
+| Manifiesto de prohibiciones | `scripts/prohibiciones.json` | `barreras` del proyecto |
+| Ratchets de nombres | `scripts/*-funciones-baseline.json` | nombres por archivo del árbol |
+| Allowlist de literales | `scripts/literales-allowlist.json` | literales repetidos congelados |
+| Anti-vacuidad | `minSources` (400) | nº de archivos del repo |
+| Binario de Node | `process.env.FLU_NODE \|\| 'node'` | nombre de la variable si el proyecto ya usa otra |
+| Etiqueta de veredicto | JSDoc + trailers | `@revisor` (o el nombre que elija el proyecto) |
+| Mapa de dueños | `docs/OWNERS.md` | preguntas/duenos del proyecto |
+| Prohibiciones a declarar | política (`AGENTS.md`) | las reglas del proyecto |
+
+Todo lo demás (motor, adaptador, puertas, guardian, hooks de git, CI) se porta
+tal cual; solo cambian las rutas y los datos.
 
 ---
 
@@ -514,6 +853,16 @@ guardian cierra ese hueco alcanzándolos JUSTO DESPUÉS del Write.
    owner-gate con el archivo ya escrito pasa SIN `--pretende-nuevo` (exit 0) y
    bloquea CON él (exit 2); revisor-prehook con el contenido ya en disco pasa
    SIN `--desde-vacio` (exit 0) y bloquea un clon CON él (exit 2).
+9. **Aceptación por falsificación (medida, por guard)**: inyectar el defecto
+   real en el código → el guard queda ROJO → revertir → VERDE. La falsificación
+   se mide por guard (p. ej. 2 defectos inyectados y los 2 detectados; el guard
+   que no detecta su defecto no se acepta). La falsificación vive DENTRO del
+   guard además de la reinyección manual.
+10. **Anti-vacuidad de fixtures reales**: antes de comparar métricas, la
+    fixture debe conservar el defecto medido (mínimos de eventos/duración). Una
+    fixture "arreglada" o vacía invalida la barrera.
+11. **Prueba de detector**: cada detector de patrón viejo se falsifica con su
+    entrada infractora (mutado → 1, real → 0); el detector decorativo se rechaza.
 
 ---
 
@@ -553,6 +902,45 @@ guardian cierra ese hueco alcanzándolos JUSTO DESPUÉS del Write.
     previa se hace REAL con el guardian (mismas puertas, flags `--pretende-nuevo`
     / `--desde-vacio`) + protocolo manual en `.clinerules`; sin guardian, la
     puerta la aplica el host A MANO.
+12. **La barrera también necesita barrera**: Cline duplicó una barrera (dos
+    tests declarando la misma prohibición) y el arnés no lo vio — el guard de
+    duplicados es léxico y el guard de conversación no cuenta prohibiciones de
+    tests. Solución: manifiesto `prohibiciones.json` + marcador
+    `// BARRERA: <id>` + `barreraUnicaGuard` (§4.16).
+13. **El ratchet de nombres mide funciones, no SITIOS**: el parche inline de
+    Cline acuñaba un `tramoId` con `id.uuid()` fuera del dueño y el ratchet
+    quedaba verde (la función `tramoSinteticoParaTexto` seguía en su sitio).
+    Solución: guard de sitios con FAMILIA de patrones, alias en dos pasos
+    incluido (§4.16).
+14. **Los tests sintéticos no ven los defectos en vivo**: la caja no pintaba la
+    frase retenida que se dictaba y la línea abierta vivió 76 s con dos
+    pendientes descartados al parar; los tests sintéticos quedaban verdes.
+    Solución: barrera de métricas sobre sesiones REALES del dueño, con igualdad
+    exacta y detectores de patrón viejo con techo 0 (§4.18).
+15. **Mismo propósito con otro algoritmo**: tres remuestreadores con nombres y
+    cuerpos distintos dejaban verdes el guard léxico y el de esqueleto; el
+    unificarlos cambiaba conducta PINNED por tests. Solución: registro de
+    propósitos por FORMA con variantes declaradas y motivo (§4.19).
+16. **Mencionar un nombre de función entre backticks en un comentario** lo
+    copia en ≥ 2 ficheros y rompe el guard de literales (≥ 18 chars, ≥ 2
+    archivos). No nombrar símbolos en comentarios; la allowlist solo la mueve
+    el dueño (§4.20).
+17. **La atribución de la frontera de voz se decide MIDIENDO**: la primera
+    ventana distinta se RETIENE y pasa al hablante NUEVO (A cierra con su texto
+    previo); la alternativa "A absorbe las palabras de B1" pierde el arranque
+    del hablante nuevo. El contrato correcto quedó congelado en la barrera
+    (`cambio-voz-confirmado`: dos ventanas seguidas, contador que se resetea al
+    abrir/cerrar locución y con voz igual).
+18. **Un flag derivado de un dato opcional miente**: pasar
+    `recortarAnterior !== null` como "locución partida" daba false tras un
+    corte de VAD y la fila partida re-incluía el texto de la fila anterior. La
+    puerta que PARTE pasa `partidaDeVoz: true` SIEMPRE; el prefijo se recorta
+    contra la fila anterior y, si el texto entero coincide, se descarta.
+19. **Ratchet de métricas vivas = igualdad exacta**: cualquier cambio real de
+    conducta rompe el guard y obliga al dueño a re-baselinear con decisión
+    explícita (la línea base no sube respecto a la referencia; el techo solo
+    baja). Es la versión "lo vivo" del principio de criterio desde la
+    referencia.
 
 ---
 
@@ -561,8 +949,14 @@ guardian cierra ese hueco alcanzándolos JUSTO DESPUÉS del Write.
 - La reinyección del escenario real bloquea en las 3 puertas (antes/después
   demostrado).
 - La mutación de cada línea base se vuelve ROJA y su reversión VERDE.
+- Cada guard nuevo se acepta por FALSIFICACIÓN: el defecto inyectado marca
+  rojo y su reversión verde; la falsificación vive dentro del guard.
+- La prohibición nueva tiene manifiesto (`prohibiciones.json`) + marcador
+  `// BARRERA:` + test dueño único, y `barreraUnicaGuard` queda verde.
+- Las métricas vivas son EXACTAS contra la línea base y la fixture conserva el
+  defecto medido (anti-vacuidad); cada detector pasa su prueba de detector.
 - `lint:guards` y el gate de pre-commit incluyen el guard nuevo (conteo
-  verificado).
-- El criterio (umbrales, catálogo, línea base) se lee de la referencia: el
-  mismo cambio no lo debilita.
+  verificado; registro en `GUARD_FILES` en el mismo commit).
+- El criterio (umbrales, catálogo, líneas base, manifiesto, allowlist) se lee
+  de la referencia: el mismo cambio no lo debilita.
 - La validación EN VIVO (host real, DoD del dueño) queda reservada al dueño.

@@ -74,6 +74,12 @@ export type EvidenciaVoz = Readonly<{
   /** ¿Hubo solape de voces? Se declara, no se adivina. */
   overlap?: boolean
   /**
+   * Se INTENTÓ medir y el audio no alcanzó para un vector (o el vector no
+   * alcanza el mínimo para acuñar voz). La fila se presenta como `Hablante XX`,
+   * no como `Hablante X` (que significa «la medida todavía no llegó»).
+   */
+  insuficiente?: boolean
+  /**
    * Vector MEDIDO del turno (evidencia de timbre). Lo usa `resolverVoz` para no aplicar un
    * nombre registrado a una medida que no es la de esa voz (medido 2026-11-09 10:35: dos
    * filas con cos 0.436 contra el ancla de Luis salieron «Luis»).
@@ -123,6 +129,11 @@ export type DatosNombre = Readonly<{
    * el módulo la resuelve contra su plantilla (misma clave por voz).
    */
   etiqueta?: string
+  /**
+   * Locución que pronunció el nombre. Acota el renombrado cuando NO hay vector:
+   * solo su fila puede recibir el nombre; nunca todas las `X`/`XX` de la sesión.
+   */
+  locucionId?: string
 }>
 
 /** Motivo de un descarte contado (nunca silencioso). */
@@ -173,10 +184,18 @@ export type EventoConversacion =
       sessionId: string
       texto: string
       abierta: boolean
+      /**
+       * Id de la locución abierta. La caja lo usa para no retroceder dentro de
+       * la MISMA frase: el final confirmado puede ser más corto que el interino
+       * ya visible y la regla 2 prohíbe que la caja decrezca.
+       */
+      locucionAbiertaId: string
       fraseCanonica: string
       fraseParaMostrar: string
       /** Texto de la frase retenida que se dicta ahora (la caja la pinta en vivo). */
       textoPendiente: string
+      /** Id de la frase retenida: la caja no decrece dentro del MISMO pendiente. */
+      textoPendienteId: string
       fraseCanonicaPendiente: string
       fraseParaMostrarPendiente: string
     }>
@@ -244,6 +263,13 @@ export type DependenciasConversacion = Readonly<{
    * `speechLikeMs`/`rms` del PCM retenido cuando el motor no trae métricas.
    */
   medidor: MedidorTramoPort
+  /**
+   * Anclas de voz MEDIDAS de la base (solo lectura). Se consultan como
+   * candidatas de identidad: una voz ya registrada se presenta con su nombre
+   * desde el primer turno (regla 8). El filtro de modelo/nombre lo hace el
+   * compositor con `seedRegisteredAnchors`.
+   */
+  anclasBase?: () => ReadonlyArray<{ name?: string; vector?: readonly number[] }>
 }>
 
 /** Las 7 llamadas del plan. */

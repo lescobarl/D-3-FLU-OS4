@@ -36,7 +36,7 @@ export type RegistroTramos = Readonly<{
     tramoId: string
     turnId: string
     ultimo?: TramoRegistrado | null
-    previa?: Readonly<{ fin: number; sampleRate: number }> | null
+    previa?: Readonly<{ inicio: number; fin: number; sampleRate: number }> | null
     sampleRate?: number
   }): TramoMuestreado
   limpiar(): void
@@ -128,8 +128,12 @@ export function crearRegistroTramos({
           : ultimo?.sampleRate ??
             previa?.sampleRate ??
             DEFAULT_SAMPLE_RATE
+      // La ventana sintética REUSA la del último tramo real: un texto tardío no
+      // tiene audio propio, pero jamás se representa con una sola muestra (una
+      // fila de 1 muestra no es habla). Sin tramo previo queda un mínimo de 2.
       const fin = Math.max(2, ultimo?.fin ?? previa?.fin ?? 2)
-      const tramo = { inicio: fin - 1, fin, sampleRate: tasa }
+      const inicio = Math.max(0, Math.min(ultimo?.inicio ?? previa?.inicio ?? 0, fin - 2))
+      const tramo = { inicio, fin, sampleRate: tasa }
       tramos.set(tramoId, {
         tramoId,
         ...tramo,

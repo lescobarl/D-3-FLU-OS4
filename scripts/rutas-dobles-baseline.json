@@ -645,6 +645,18 @@
         "src/voice/lib/speakerDirectory.js": 1
       },
       "goal": 1
+    },
+    {
+      "id": "despacho-trigger-unico",
+      "owner": "src/voice/hooks/useFluVoiceAssistant.js",
+      "description": "La frase canonica se despacha por UN solo trigger (onFraseCanonica); onLocucionCommiteada registra la fila y no despacha. Un segundo tryDispatchConversationActionRef.current es ruta doble: re-despacha una frase ya entregada y produce respuestas/acciones duplicadas.",
+      "pattern": "tryDispatchConversationActionRef\\.current\\s*\\(",
+      "roots": ["src/voice"],
+      "kind": "sites",
+      "allowed": {
+        "src/voice/hooks/useFluVoiceAssistant.js": 1
+      },
+      "goal": 1
     }
   ]
 }

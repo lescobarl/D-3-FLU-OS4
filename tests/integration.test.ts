@@ -398,8 +398,8 @@ describe('💬 Conversation Memory', () => {
         expect(history).toHaveLength(1);
         expect(history[0].role).toBe('user');
         expect(history[0].text).toBe('Hola FLU');
-        // OS2 parity: default speakerName is 'Hablante 1' (resuelto al MOSTRAR por la VOZ)
-        expect(resolveRowSpeakerLabel(history[0])).toBe('Hablante 1');
+        // Sin diarización no hay identidad: el estado visible es «no identificado» (XX).
+        expect(resolveRowSpeakerLabel(history[0])).toBe(FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker);
     });
 
     it('debe asignar UUIDv4 a cada entrada', () => {
@@ -1028,7 +1028,7 @@ describe('👥 Multi-Speaker Conversations', () => {
     it('debe usar default speakerName cuando no se proporciona', () => {
         addUserRow('Hola');
         const history = useIntegrationStore.getState().conversationHistory;
-        expect(resolveRowSpeakerLabel(history[0])).toBe('Hablante 1');
+        expect(resolveRowSpeakerLabel(history[0])).toBe(FLU_CONFIG.voiceIdentity.labels.fallbackSpeaker);
     });
 });
 

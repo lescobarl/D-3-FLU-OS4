@@ -325,7 +325,7 @@ describe('CONVERSACIÓN — rutas dobles medidas', () => {
     expect(FUENTES.map((archivo) => archivo.nombre)).toContain('turnSnapshot.js')
   })
 
-  it('la fila NUEVA del módulo muestra su etiqueta persistida, no la re-resuelve', () => {
+  it('la fila NUEVA del módulo conserva su etiqueta real: N no se convierte en XX', () => {
     resetVoiceDirectory()
     const vector = new Array(16).fill(0)
     vector[0] = 1
@@ -606,19 +606,22 @@ describe('CONVERSACIÓN — la caja no repinta la misma frase', () => {
   })
 })
 
-describe('CONVERSACIÓN — el hueco del ASR cierra la locución (srGap CON consumidor)', () => {
-  it('el módulo pregunta al dueño del hueco y sella el reloj en cada resultado', () => {
-    // MEDIDO 2026-11-08: `resolveSrGapTrigger` no tenía NINGÚN consumidor y la locución
-    // vivía 43 s con huecos de ASR de 6,4 s (fila de 405 caracteres con dos frases).
-    expect(fuente('ingesta.ts')).toContain('resolveSrGapTrigger({')
+describe('CONVERSACIÓN — el hueco del ASR NO es una puerta de cierre', () => {
+  it('ingesta NO consume srGap para cerrar; el cierre es VAD/voz (dos puertas)', () => {
+    // El `srGap` es un aviso de ASR estancado, no silencio medido. Cerrar con él
+    // partía la fila antes del final y el texto tardío se descartaba como
+    // `turnoYaEscrito` (medido 2026-11-11, sesión del dueño 20:57:15).
+    expect(fuente('ingesta.ts')).not.toContain('resolveSrGapTrigger({')
+    expect(fuente('ingesta.ts')).not.toContain('hueco.fire')
     expect(fuente('ingesta.ts')).toContain('estado.ultimoResultadoMs = ')
-    expect(fuente('sesion.ts')).toContain('ultimoResultadoMs: number')
+    expect(fuente('frontera.ts')).toContain("causa: 'voz'")
+    expect(fuente('frontera.ts')).toContain("textoAjeno ? 'frontera' : 'silencio'")
   })
 
-  it('FALSIFICACIÓN: sin consumidor la sonda vuelve a ser una ruta muerta', () => {
-    const sinConsumidor = "import { decidirFrontera } from './frontera.ts'\nconst m = medida"
-    expect(sinConsumidor).not.toContain('resolveSrGapTrigger({')
-    expect('if (hueco.fire)').toContain('fire')
+  it('FALSIFICACIÓN: reintroducir el cierre por srGap vuelve a la puerta triple', () => {
+    const conTerceraPuerta = 'if (hueco.fire) { await decidirFrontera(...) }'
+    expect(conTerceraPuerta).toContain('hueco.fire')
+    expect(fuente('ingesta.ts')).not.toContain('hueco.fire')
   })
 })
 

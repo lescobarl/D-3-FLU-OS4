@@ -41,6 +41,9 @@ export const WATCHDOG_ACTIONS = Object.freeze({
  * @param {boolean} [m.restartPending] hay un reinicio de Chrome en vuelo.
  * @param {boolean} [m.probePending] hay una ventana de prueba de Chrome abierta.
  * @param {boolean} [m.probeExpired] la ventana de prueba vencio.
+ * @param {boolean} [m.hasRecentSpeech] hay VOZ medida en la ventana PCM reciente
+ *   (`stallVoiceWindowMs`). Un rebuild `stall` con voz presente corta el segmento
+ *   que Chrome esta reconociendo; el dueno lo aporta desde `voicedActivity`.
  * @param {boolean} [m.recoveryDue] toca reintentar Chrome (inactividad de FINALES
  *   aceptados o numero de segmentos; lo mide el dueno del fallback).
  * @param {object} [m.restartCfg] `getConversationRestartConfig(true)`.
@@ -55,6 +58,7 @@ export function resolveWatchdogStep({
   restartPending = false,
   probePending = false,
   probeExpired = false,
+  hasRecentSpeech = false,
   recoveryDue = false,
   restartCfg = {},
 } = {}) {
@@ -66,7 +70,11 @@ export function resolveWatchdogStep({
   }
 
   const cooldown = Number(restartCfg.stallRebuildMinMs) || 0
+  // STALL = Chrome activo pero mudo. Con VOZ reciente NO se reconstruye: Chrome
+  // puede estar procesando un segmento largo y el reinicio lo tira. El silencio
+  // real (sin voz) y el `dead` por onend son las unicas puertas de recuperacion.
   if (
+    !hasRecentSpeech &&
     recognitionActive &&
     Number(sinceMeaningful) >= Number(restartCfg.silentMicStallMs) &&
     Number(sinceRebuild) >= cooldown
@@ -78,7 +86,11 @@ export function resolveWatchdogStep({
     return { action: WATCHDOG_ACTIONS.REBUILD, kind: 'dead' }
   }
 
-  if (Number(sinceMeaningful) >= Number(restartCfg.stallMs) && Number(sinceRebuild) >= cooldown) {
+  if (
+    !hasRecentSpeech &&
+    Number(sinceMeaningful) >= Number(restartCfg.stallMs) &&
+    Number(sinceRebuild) >= cooldown
+  ) {
     return { action: WATCHDOG_ACTIONS.REBUILD, kind: 'stall' }
   }
 

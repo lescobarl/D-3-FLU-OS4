@@ -226,11 +226,6 @@ export interface IntegrationActions {
      * Write-once: no pisa un nombre propio ya congelado.
      */
     setEntrySpeakerName: (id: string, speakerName: string, options?: SetEntrySpeakerNameOptions) => void;
-    /**
-     * Completa el texto de la fila que era FRAGMENTO de la locucion (misma fila, una entrada):
-     * el texto consolidado entra UNA vez y no se reescribe despues.
-     */
-    completeEntryFragment: (id: string, text: string) => void;
     /** Eliminar del historial todas las entradas de un hablante (por speakerName) */
     removeConversationEntriesBySpeaker: (label: string) => void;
     /** Cambiar estado emocional */
@@ -516,18 +511,44 @@ export const useIntegrationStore = create<IntegrationStore>()(
                     epoch: Number.isFinite(Number(tagged.epoch)) ? Number(tagged.epoch) : get().conversationEpoch,
                 };
                 set((current) => {
-                    // IDEMPOTENCIA POR ID (auditoria 2026-11-01): `row.committed` puede
-                    // repetirse al promover la MISMA locucion. Antes se anadia otra vez y
-                    // la conversacion salia duplicada. El id es el locutionId: misma fila
-                    // => reemplazo en su sitio; id nuevo => append.
+                    // INSERT-ONLY (regla 4): el texto/tramo/hora de una fila se deciden
+                    // UNA vez. Si el id ya existe, SOLO se actualiza el hablante (nombre,
+                    // etiqueta, pending, clave y firma). Un `row.committed` repetido no
+                    // puede reescribir el contenido ni mover la fila de su sitio.
                     const index = current.conversationHistory.findIndex((e) => e.id === conEpoch.id);
-                    const conversationHistory = index >= 0
-                        ? current.conversationHistory.map((e, i) =>
-                            i === index
-                                ? { ...e, ...conEpoch, persistSpeakerName: conEpoch.persistSpeakerName }
-                                : e,
-                        )
-                        : [...current.conversationHistory, conEpoch];
+                    if (index < 0) {
+                        return {
+                            conversationHistory: capConversationHistory([
+                                ...current.conversationHistory,
+                                conEpoch,
+                            ]),
+                        };
+                    }
+                    const previa = current.conversationHistory[index];
+                    const actualizada = {
+                        ...previa,
+                        ...(conEpoch.speakerName !== undefined ? { speakerName: conEpoch.speakerName } : {}),
+                        ...(conEpoch.speakerId !== undefined ? { speakerId: conEpoch.speakerId } : {}),
+                        ...(conEpoch.signature !== undefined ? { signature: conEpoch.signature } : {}),
+                        ...(conEpoch.speakerPending !== undefined
+                            ? { speakerPending: conEpoch.speakerPending }
+                            : {}),
+                        ...(conEpoch.persistSpeakerName !== undefined
+                            ? { persistSpeakerName: conEpoch.persistSpeakerName }
+                            : {}),
+                    };
+                    if (
+                        actualizada.speakerName === previa.speakerName &&
+                        actualizada.speakerId === previa.speakerId &&
+                        actualizada.signature === previa.signature &&
+                        actualizada.speakerPending === previa.speakerPending &&
+                        actualizada.persistSpeakerName === previa.persistSpeakerName
+                    ) {
+                        return {};
+                    }
+                    const conversationHistory = current.conversationHistory.map((e, i) =>
+                        i === index ? actualizada : e,
+                    );
                     return { conversationHistory: capConversationHistory(conversationHistory) };
                 });
             },
@@ -598,17 +619,6 @@ export const useIntegrationStore = create<IntegrationStore>()(
                 })));
             },
 
-            completeEntryFragment: (id: string, text: string) => {
-                const actual = get().conversationHistory.find((e) => e.id === id);
-                if (!actual) return;
-                if (String(actual.text || '') === String(text || '')) return;
-                set((current) => ({
-                    conversationHistory: current.conversationHistory.map((e) =>
-                        e.id === id ? { ...e, text } : e,
-                    ),
-                }));
-            },
-
             removeConversationEntriesBySpeaker: (label: string) => {
                 const normalized = String(label || '').trim();
                 if (!normalized) return;
@@ -674,6 +684,10 @@ export const useIntegrationStore = create<IntegrationStore>()(
                 }, get().activePersonId);
                 set((current) => ({
                     conversationHistory: capConversationHistory([...current.conversationHistory, normalizada]),
+                    // La respuesta viva es la última fila de FLU (IA/web/video/imagen):
+                    // antes `lastResponse` solo lo escribía el comando de nombre y se
+                    // quedaba "Registrado Luis." aunque la IA ya hubiera respondido.
+                    lastResponse: normalizada.text,
                     sessionStats: {
                         ...current.sessionStats,
                         totalFluMessages: current.sessionStats.totalFluMessages + 1,

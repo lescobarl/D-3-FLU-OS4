@@ -19,11 +19,14 @@
 import { describe, expect, it } from 'vitest'
 import { isAutoSpeakerLabel } from '../src/voice/lib/speakerCore.js'
 import { crearReglasCierre, resolverVoz } from '../src/voice/conversation/cierre.ts'
+import { crearRegistroTramos } from '../src/voice/conversation/tramos.ts'
 import type { EstadoCierre, ReglasCierre } from '../src/voice/conversation/cierre.ts'
 import type { CambiosFila, Fila, FilaNueva } from '../src/voice/conversation/ports.ts'
 import type { EvidenciaVoz, EventoConversacion } from '../src/voice/conversation/tipos.ts'
 
 const SEMILLA = 'Hablante 1'
+const crearTramos = () =>
+  crearRegistroTramos({ reloj: { ahora: () => 0 }, orphanBufferMs: 60_000 })
 const UUIDS = [
   '11111111-1111-4111-8111-111111111111',
   '22222222-2222-4222-8222-222222222222',
@@ -88,6 +91,7 @@ function crearProbe(
     id: { uuid: () => '00000000-0000-4000-8000-000000000001' },
     // Caso 7+6: la continuidad no mide el tramo; el medidor es un stub honesto.
     medidor: { medir: () => ({ speechLikeMs: 0, rms: 0 }) },
+    tramos: crearTramos(),
   })
   return { estado, reglas }
 }
@@ -190,7 +194,7 @@ function crearProbePendiente() {
       wakeWords: () => ['ok flu'],
       semillaEtiqueta: () => SEMILLA,
       // Etiqueta TEMPORAL: el dueño la autorizó mientras no haya medida.
-      etiquetaPendiente: () => 'Hablante ?',
+      etiquetaPendiente: () => 'Hablante X',
       esEtiquetaAnonima: isAutoSpeakerLabel,
       umbralContinuidadVoz: () => 0.8,
       etiquetaAnonima: (indice) => `Hablante ${indice}`,
@@ -198,6 +202,7 @@ function crearProbePendiente() {
     },
     id: { uuid: () => UUIDS[0]! },
     medidor: { medir: () => ({ speechLikeMs: 0, rms: 0 }) },
+    tramos: crearTramos(),
     // Medida ausente (sin audio retenido y null al cerrar): fila TEMPORAL.
     embebedor: { medir: async () => null, comparar: () => 0 },
   })
@@ -222,7 +227,7 @@ describe('continuidad de voz — decisión de la sesión', () => {
     const siguiente = await correrLocucion(probe, {}, {}, UUIDS[1]!)
     expect(siguiente.continuidadApertura, 'sin medida positiva NO hay continuidad').toBe(false)
     expect(siguiente.fila.etiqueta).toBe(SEMILLA)
-    expect(siguiente.fila.evidencia).toBe('semilla')
+    expect(siguiente.fila.evidencia).toBe('medida')
   })
 
   it('misma voz medida (vozId con plantilla de la sesión) → continuidad con SU etiqueta', async () => {
@@ -248,7 +253,7 @@ describe('continuidad de voz — decisión de la sesión', () => {
     const obs = await correrLocucion(probe, { vozId: 'voz-b' }, { vozId: 'voz-b' }, UUIDS[3]!)
     expect(obs.continuidadApertura, 'otra voz no continúa la anterior').toBe(false)
     expect(obs.fila.etiqueta).not.toBe('Luis')
-    expect(obs.fila.evidencia).toBe('semilla')
+    expect(obs.fila.evidencia).toBe('medida')
   })
 
   it('medida tardía de otra voz: la continuidad NO se afirma y no hereda', async () => {
@@ -257,14 +262,14 @@ describe('continuidad de voz — decisión de la sesión', () => {
     expect(obs.continuidadApertura, 'abrió sin medida: sin evidencia positiva').toBe(false)
     expect(obs.continuidadRevision, 'la medida tardía no casó plantilla').toBe(false)
     expect(obs.fila.etiqueta).not.toBe('Luis')
-    expect(obs.fila.evidencia).toBe('semilla')
+    expect(obs.fila.evidencia).toBe('medida')
   })
 
   it('sin etiqueta anterior ni medida → semilla, nunca "?"', async () => {
     const probe = crearProbe()
     const obs = await correrLocucion(probe, {}, {}, UUIDS[5]!)
     expect(obs.fila.etiqueta).toBe(SEMILLA)
-    expect(obs.fila.evidencia).toBe('semilla')
+    expect(obs.fila.evidencia).toBe('medida')
     expect(obs.fila.etiqueta).not.toBe('?')
   })
 
@@ -344,7 +349,7 @@ describe('el final de un tramo no borra lo dicho en tramos anteriores', () => {
 })
 
 describe('el hablante es el ÚNICO campo actualizable de una fila commiteada', () => {
-  it('la fila nace TEMPORAL y la medida tardía reemplaza hablante y firma', async () => {
+  it('sin voz la fila nace XX; el NOMBRE reemplaza el hablante, nunca el texto', async () => {
     const { estado, reglas, guardadas, actualizaciones, eventos } = crearProbePendiente()
     // La medida tardía ya registró su plantilla (vector) antes de reetiquetar.
     estado.plantillasVoz.set('voz-1', { vector: [1, 0], etiqueta: 'Hablante 2' })
@@ -363,14 +368,17 @@ describe('el hablante es el ÚNICO campo actualizable de una fila commiteada', (
 
     const pendiente = guardadas.get(locutionId)
     if (!pendiente) throw new Error('no se guardó la fila')
-    expect(pendiente.etiqueta, 'sin medida: continuidad/semilla, nunca ?').toBe(SEMILLA)
-    expect(pendiente.evidencia).toBe('pendiente')
-
-    expect(await reglas.reetiquetarFila(locutionId, 'voz-1', 'Hablante 2')).toBe(true)
+    // Una fila CERRADA no queda en `Hablante X`: sin voz es no identificada.
+    expect(pendiente.etiqueta, 'sin medida: no identificado (semilla)').toBe(SEMILLA)
+    expect(pendiente.evidencia).toBe('medida')
+    // Una medida tardía NO reescribe una fila cerrada (regla 4). El HABLANTE
+    // solo cambia por un NOMBRE, que es la única actualización permitida.
+    expect(await reglas.reetiquetarFila(locutionId, 'voz-1', 'Hablante 2')).toBe(false)
+    expect(await reglas.reetiquetarFila(locutionId, 'voz-1', 'Luis', 'nombre')).toBe(true)
     const actualizada = guardadas.get(locutionId)
     expect(actualizada).toMatchObject({
-      etiqueta: 'Hablante 2',
-      evidencia: 'medida',
+      etiqueta: 'Luis',
+      evidencia: 'nombre',
       firma: [1, 0],
       texto: pendiente.texto,
       tramo: pendiente.tramo,
@@ -382,8 +390,8 @@ describe('el hablante es el ÚNICO campo actualizable de una fila commiteada', (
     expect(eventos.at(-1)).toMatchObject({
       tipo: 'speaker.labeled',
       locutionId,
-      etiqueta: 'Hablante 2',
-      evidencia: 'medida',
+      etiqueta: 'Luis',
+      evidencia: 'nombre',
     })
     // Segunda medida sobre la fila ya afirmada: no hay nada que reemplazar.
     expect(await reglas.reetiquetarFila(locutionId, 'voz-9', 'Hablante 9')).toBe(false)

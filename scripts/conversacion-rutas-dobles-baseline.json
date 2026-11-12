@@ -101,7 +101,8 @@
     ],
     "identidad.ts": [
       "decidirIdentidad",
-      "plantillasDe"
+      "plantillasDe",
+      "plantillasDeSesion"
     ],
     "index.ts": [],
     "ingesta.ts": [
@@ -150,8 +151,11 @@
       "silenceCloseMs"
     ],
     "producto.ts": [
+      "acumularAudio",
       "crearMotorConversacionProducto",
+      "descartarAudioPendiente",
       "encadenar",
+      "encolarAudioPendiente",
       "traeFinal"
     ],
     "revision.ts": [
@@ -186,9 +190,11 @@
       "idiomaDe",
       "ordenDePendiente",
       "procesarResultadoAsr",
+      "seSolapanEnAudio",
       "sinPrefijoDeLaFilaAnterior",
       "sinReentregas",
-      "textoYaEscrito"
+      "textoYaEscrito",
+      "tramoDePendiente"
     ],
     "tipos.ts": [],
     "tramos.ts": [

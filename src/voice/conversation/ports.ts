@@ -153,16 +153,17 @@ export interface ConfigPort {
   semillaEtiqueta(): string
   /**
    * Etiqueta TEMPORAL de una fila cuya medida de voz todavía no es fiable
-   * (`speakerAssignDefaults.pendingSpeaker`, «Hablante ?»). Fuente única:
-   * `FLU_CONFIG.voiceIdentity.labels.pendingSpeaker`. Opcional para los dobles
+   * («Hablante X», en espera; no es «no identificado»). Fuente única: la config
+   * de etiquetas pendientes. Opcional para los dobles
    * de prueba: sin ella el módulo no usa etiqueta temporal y cae a la semilla.
    * El producto la implementa SIEMPRE.
    */
   etiquetaPendiente?(): string
   /**
-   * `true` si la etiqueta es una agrupación ANÓNIMA (`Hablante N` o pendiente),
-   * no una identidad: no puede afirmar ni heredar un nombre propio. Definición
-   * única en `speakerCore.isAutoSpeakerLabel`; el adaptador solo la delega.
+   * `true` si la etiqueta es una agrupación ANÓNIMA (`Hablante N`, «Hablante X»
+   * o «Hablante XX»), no una identidad: no puede afirmar ni heredar un nombre
+   * propio. Definición única en el predicado de etiqueta anónima; el adaptador
+   * solo la delega.
    */
   esEtiquetaAnonima(etiqueta: string): boolean
   /** Umbral de continuidad de voz (coseno) de la config viva; 0..1. */

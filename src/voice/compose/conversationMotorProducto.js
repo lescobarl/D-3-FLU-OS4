@@ -29,7 +29,14 @@ import { resolveEchoContext } from '../lib/conversationDialogue.js'
 import { detectWakeIntroducedName, splitTranscriptAtWakeWord } from '../lib/audioMath.js'
 import { labelToSpeakerId } from '../lib/conversationRow.js'
 import { autoSpeakerIndexFromKey } from '../lib/speakerCore.js'
-import { voiceKeyFor, knownVoiceNames, preferKnownVoiceName } from '../lib/speakerDirectory.js'
+import {
+  voiceKeyFor,
+  voiceVectorModel,
+  knownVoiceNames,
+  preferKnownVoiceName,
+} from '../lib/speakerDirectory.js'
+import { seedRegisteredAnchors } from '../lib/speakerClusters.js'
+import { getParticipantAnchors } from '../lib/participantVoiceAnchors.ts'
 import { FLU_CONFIG } from '../lib/fluConfig.js'
 import { getLastCompletedSpeechAt } from '../lib/fluSpeech.js'
 import { getSessionRecordingStatus } from '../lib/sessionRecorder.js'
@@ -41,7 +48,7 @@ import { getSessionRecordingStatus } from '../lib/sessionRecorder.js'
  * @param {(fraseCanonica: string) => void} opciones.onLiveTranscript Publica la frase viva (completa, con wake).
  * @param {(fraseCanonica: string, opciones: {interim: boolean}) => void} opciones.onFraseCanonica Despacha la frase canónica.
  * @param {(fila: object) => void} [opciones.onLocucionCommiteada] Cierre de locución (frontera de turno).
- * @returns {{ abrir: () => void, evento: (evento: unknown) => Promise<void>, audio: (muestras: Float32Array, sampleRate: number, inicioMuestras?: number) => void, cerrar: (motivo: string) => void }}
+ * @returns {{ abrir: () => void, evento: (evento: unknown) => Promise<void>, audio: (muestras: Float32Array, sampleRate: number, inicioMuestras?: number) => void, cerrar: (motivo: string) => Promise<void> }}
  */
 export function crearMotorConversacionHook({
   idioma,
@@ -71,6 +78,13 @@ export function crearMotorConversacionHook({
     // recorder (encendido antes de la escucha). Sin recorder activo el
     // proveedor devuelve '' y el módulo acuña el propio (N/A).
     recordingId: () => getSessionRecordingStatus().sessionId || '',
+    // Anclas de la base (solo lectura): el filtro de modelo/nombre lo ejerce
+    // seedRegisteredAnchors, dueño único de qué ancla es válida en la sesión.
+    anclasBase: () => {
+      const sembradas =
+        seedRegisteredAnchors([], getParticipantAnchors(), { model: voiceVectorModel() }) || []
+      return sembradas.map((cluster) => ({ name: cluster.label, vector: cluster.signature }))
+    },
   })
   /** Última locución commiteada: `row.committed` puede repetirse al promover la fila. */
   let ultimaCommiteada = ''
@@ -83,11 +97,24 @@ export function crearMotorConversacionHook({
    * «se atora y luego salta». El texto no cambia: el render no se repite.
    */
   let ultimaViva = ''
+  /**
+   * Locución dueña de `ultimaViva`. Dentro de la MISMA frase la caja es
+   * MONÓTONA: el final confirmado puede ser más corto que el interino ya
+   * visible y no puede borrar palabras (regla 2). Al limpiar la caja se
+   * reinicia y la frase siguiente empieza de cero.
+   */
+  let ultimaVivaLocucion = ''
   /** Última expresión del mandato de nombre ya despachada (clave: el NOMBRE, no el texto). */
   let ultimoNombreDespachado = ''
   let nameCommandDeferTimer = 0
   let nameCommandDeferPayload = null
   let cerrado = false
+  /**
+   * Generación del ciclo de escucha. El cierre vacía la caja DESPUÉS de que el
+   * motor terminó de commitear los pendientes, pero solo si sigue siendo el
+   * mismo ciclo: una apertura nueva no puede heredar el vaciado del anterior.
+   */
+  let generacion = 0
 
   /**
    * Despacha la frase canónica vigente tras ingerir un evento del reconocedor.
@@ -153,14 +180,36 @@ export function crearMotorConversacionHook({
       if (liveTimer) clearTimeout(liveTimer)
       liveTimer = setTimeout(() => {
         liveTimer = 0
-        // La frase viva es la que se está dictando AHORA: el pendiente manda
-        // sobre la línea abierta (que puede ser la frase anterior esperando su
-        // cierre). Así la caja transcribe conforme se escucha.
-        const viva = String(
-          evento.fraseCanonicaPendiente ||
-            (evento.abierta ? evento.fraseCanonica : '') ||
-            '',
-        )
+        // La caja compone la frase ABIERTA y la RETENIDA: no puede desaparecer
+        // la línea anterior mientras sigue abierta (reglas 1/2). Cuando la
+        // retenida se abre como su propia locución, la anterior ya se commiteó y
+        // su texto pasa a la conversación: ahí la caja sí puede limpiarse.
+        const abiertaFrase = evento.abierta ? String(evento.fraseCanonica || '').trim() : ''
+        const pendienteFrase = String(evento.fraseCanonicaPendiente || '').trim()
+        // Nunca se pinta una versión MÁS CORTA de la misma frase: si una contiene
+        // a la otra, gana la más larga; solo se concatenan frases distintas.
+        const vivaCalculada = !abiertaFrase
+          ? pendienteFrase
+          : !pendienteFrase
+            ? abiertaFrase
+            : pendienteFrase.startsWith(abiertaFrase)
+              ? pendienteFrase
+              : abiertaFrase.startsWith(pendienteFrase)
+                ? abiertaFrase
+                : `${abiertaFrase} ${pendienteFrase}`
+        const locucionViva = evento.abierta
+          ? String(evento.locucionAbiertaId || '')
+          : String(evento.textoPendienteId || '')
+        const mismaFrase =
+          locucionViva !== '' && locucionViva === ultimaVivaLocucion
+        // Regla 2: dentro de la MISMA locución la caja nunca decrece. El final
+        // confirmado puede traer menos palabras que el interino ya pintado; la
+        // fila de conversación usará el final, pero la caja conserva lo visible.
+        const viva =
+          mismaFrase && ultimaViva.length > vivaCalculada.length
+            ? ultimaViva
+            : vivaCalculada
+        ultimaVivaLocucion = locucionViva
         if (viva !== ultimaViva) {
           ultimaViva = viva
           onLiveTranscript(viva)
@@ -175,6 +224,9 @@ export function crearMotorConversacionHook({
       // `speakerPending` sigue vivo hasta que llegue la medida, que emite otra vez
       // este evento ya con evidencia `medida`/`nombre`.
       if (evento.evidencia !== 'pendiente') {
+        // El hablante es el ÚNICO campo actualizable y se publica TAL CUAL lo
+        // resolvió el módulo: N→N, X→X, XX→XX, nombre→nombre. La vista no
+        // reinterpreta el estado (dueño único: resolveRowSpeakerLabel).
         useIntegrationStore
           .getState()
           .setEntrySpeakerName(evento.locutionId, evento.etiqueta, { resolved: true, persist: false })
@@ -185,7 +237,6 @@ export function crearMotorConversacionHook({
       return
     }
     if (evento.tipo !== 'row.committed') return
-    useIntegrationStore.getState().setLastCommittedTranscript(evento.fila.texto)
     // ¿Locución NUEVA o promoción de la MISMA fila (`revision > 1`)? UNA sola
     // lectura del predicado; la usan el bautizo y la frontera de turno. Antes
     // cada uno llevaba su propia variable para la misma pregunta.
@@ -213,7 +264,14 @@ export function crearMotorConversacionHook({
         ),
         knownVoiceNames(),
       )
-    if (nombreDicho) motor.registrarNombre(nombreDicho, evento.fila.etiqueta)
+    if (nombreDicho) {
+      motor.registrarNombre(nombreDicho, evento.fila.etiqueta, evento.fila.locutionId)
+    }
+    // La navegación conserva la última PETICIÓN DE INFORMACIÓN: "ok flu soy
+    // Luis" no es una consulta y no debe pisar la petición anterior. La caja sí
+    // conserva la frase del comando: no se limpia el vivo hasta la frase
+    // siguiente o el stop (abajo), así no retrocede a una frase más vieja.
+    if (!nombreDicho) useIntegrationStore.getState().setLastCommittedTranscript(evento.fila.texto)
     // Revisión por FUSIÓN de una continuación/duplicado: el snapshot inicial ya
     // existe con el mismo locutionId; el dueño único recibe el texto/tramo/firma
     // finales como revisión (analizador: última por locutionId).
@@ -239,6 +297,8 @@ export function crearMotorConversacionHook({
       role: 'user',
       text: evento.fila.texto,
       timestamp: evento.fila.updated_at,
+      // La fila publica el hablante REAL del módulo (N/X/XX/nombre). La vista
+      // lo muestra tal cual: N no se convierte en XX (regla 7).
       speakerName: evento.fila.etiqueta,
       speakerId: clavePorTimbre,
       signature: firma,
@@ -269,12 +329,23 @@ export function crearMotorConversacionHook({
     }
     if (liveTimer) clearTimeout(liveTimer)
     liveTimer = 0
-    onLiveTranscript('')
+    // Una fila de nombre no tiene fuente de navegación donde caer: su frase se
+    // queda en la caja hasta la siguiente frase/stop, sin retroceder (reglas 1/2).
+    if (!nombreDicho) {
+      // La caja se limpia para pasar los datos a la conversación: aquí SÍ se
+      // reinicia la monotonía de la frase.
+      ultimaViva = ''
+      ultimaVivaLocucion = ''
+      onLiveTranscript('')
+    }
   })
 
   return {
     abrir: () => {
+      generacion += 1
       cerrado = false
+      ultimaViva = ''
+      ultimaVivaLocucion = ''
       return motor.abrir()
     },
     evento: (evento) => {
@@ -290,14 +361,22 @@ export function crearMotorConversacionHook({
     audio: (muestras, sampleRate, inicioMuestras) => motor.audio(muestras, sampleRate, inicioMuestras),
     cerrar: (motivo) => {
       cerrado = true
+      const token = ++generacion
       const resultado = motor.cerrar(motivo)
       if (liveTimer) clearTimeout(liveTimer)
       liveTimer = 0
       if (nameCommandDeferTimer) clearTimeout(nameCommandDeferTimer)
       nameCommandDeferTimer = 0
       nameCommandDeferPayload = null
-      onLiveTranscript('')
-      return resultado
+      // La caja se vacía cuando el motor ya persistió lo pendiente: si se vacía
+      // antes, la última frase visible desaparece aunque su fila llegue después.
+      return Promise.resolve(resultado).finally(() => {
+        if (token === generacion) {
+          ultimaViva = ''
+          ultimaVivaLocucion = ''
+          onLiveTranscript('')
+        }
+      })
     },
   }
 }

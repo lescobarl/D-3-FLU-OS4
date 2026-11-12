@@ -64,7 +64,10 @@ import {
   rmsOfBlocks,
   ventanaConVoz,
 } from '../lib/voicedActivity.js'
-import { getConversationMinVoicedSamples } from '../lib/micCapture.js'
+import {
+  getConversationMinVoicedSamples,
+  getConversationSpeakerTailMs,
+} from '../lib/micCapture.js'
 import { voiceProbe } from '../lib/voiceProbe.ts'
 import {
   escribirRegistroConversacion,
@@ -233,7 +236,7 @@ export function crearConfigFlu(): ConfigPort {
       Boolean(detectListeningControl(texto, FLU_CONFIG.voiceCommands)),
     etiquetaAnonima: (indice) => autoSpeakerLabel(indice),
     // Etiqueta TEMPORAL mientras la medida de la voz no es fiable (mandato del
-    // dueño 2026-10-30). Fuente única: `speakerAssignDefaults.pendingSpeaker`.
+    // dueño 2026-10-30). Fuente única: la config de etiquetas pendientes.
     etiquetaPendiente: () => String(FLU_CONFIG.voiceIdentity.labels.pendingSpeaker || ''),
     // Regla 2 del eco: el mínimo de palabras de la cola que abre el fragmento.
     // Fuente única: assistantEchoMinWords (+1: repetir solo las 3 últimas
@@ -257,7 +260,20 @@ export function crearConfigFlu(): ConfigPort {
 export function crearEmbebedorProducto(): EmbebedorPort {
   return {
     medir: async (muestras, sampleRate) => {
-      const { inicio, fin, hayVoz } = ventanaConVoz(muestras, { sampleRate })
+      // VENTANA ACOTADA: la identidad no necesita la locución entera. Al cerrar
+      // se pasaba el audio completo (hasta 60 s) al worker y el cierre esperaba
+      // segundos a un embedding de 14-60 s (medido 2026-11-11: cierre 40 s
+      // después del habla). La cola de voz ya tiene su dueño de configuración
+      // (`conversationSpeakerTailMs`): se embebe esa cola, no el búfer entero.
+      const tailMs = Number(getConversationSpeakerTailMs())
+      const maxMuestras =
+        Number.isFinite(tailMs) && tailMs > 0
+          ? Math.max(1, Math.round((tailMs / 1000) * sampleRate))
+          : 0
+      const { inicio, fin, hayVoz } = ventanaConVoz(muestras, {
+        sampleRate,
+        ...(maxMuestras > 0 ? { maxSamples: maxMuestras } : {}),
+      })
       if (!hayVoz || fin <= inicio) {
         voiceProbe('vozMedida', { motivo: 'sinVoz', muestras: muestras.length, sampleRate })
         return null

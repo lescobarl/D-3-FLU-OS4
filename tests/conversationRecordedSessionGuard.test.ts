@@ -66,8 +66,6 @@ function simularIdentidad(rows: Row[], minNuevaVozMs = 8_000) {
       umbral: 0.72,
       duracionMs,
       minNuevaVozMs: minNuevaVozMs,
-      palabras: row.text.trim().split(/\s+/).filter(Boolean).length,
-      minNuevaVozPalabras: 8,
       umbralExistente: 0.64,
       etiquetaNueva: () => `Hablante ${next}`,
       comparar: cosine,
@@ -130,16 +128,20 @@ function simularFusion(rows: Row[]) {
   return merged;
 }
 
-describe('sesiÃ³n real 6b471291 â€” dos voces y sin duplicados', () => {
-  it('solo las dos voces largas pueden acunar hablante; los turnos cortos no', () => {
+describe('sesión real 6b471291 — voces medidas y sin duplicados', () => {
+  it('cada audio largo con vector propio acuña su voz; los turnos cortos no', () => {
     const { speakers } = simularIdentidad(fixture.rows, 8_000);
     expect(fixture.rows).toHaveLength(17);
-    expect(speakers).toBe(2);
+    // 20,6 s (hombre), 8,5 s (tercera voz: «Hola amigo», ya no la excluye el
+    // número de palabras) y 36,3 s (mujer): TRES voces medidas.
+    expect(speakers).toBe(3);
   });
 
   it('un turno corto con voz nueva queda pendiente (no crea hablante)', () => {
+    // Â«CortoÂ» es el mÃ­nimo REAL para acuÃ±ar voz (8 s), no un umbral de palabras:
+    // el texto corto ya no convierte un audio largo en insuficiente.
     const corto = fixture.rows.filter(
-      (row) => (row.audioEndSample - row.audioStartSample) / row.sampleRate < 12,
+      (row) => ((row.audioEndSample - row.audioStartSample) / row.sampleRate) * 1000 < 8_000,
     );
     expect(corto.length).toBeGreaterThan(0);
     const { speakers } = simularIdentidad(corto, 8_000);

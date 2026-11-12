@@ -1,0 +1,25 @@
+{
+  "measuredAt": "2026-11-11T17:40:00Z",
+  "source": "debug.log sesion 10fdae4b + tests/vozTurnoHablanteGuard.test.ts",
+  "before": {
+    "failed": 4,
+    "passed": 1,
+    "failedCases": [
+      "HABLANTE: continuidad Luis pisaba la medida Hablante 2",
+      "LABELS: fallback Hablante 1 / pendiente Hablante ?",
+      "TRAMO: 1 muestra creaba fila",
+      "VISTA: Hablante N no se presentaba como Hablante XX"
+    ]
+  },
+  "after": {
+    "failed": 0,
+    "passed": 5
+  },
+  "cases": [
+    "hablante-medido-gana-continuidad",
+    "labels-X-XX",
+    "tramo-minimo",
+    "silencio-no-control",
+    "transicion-X-XX-nombre"
+  ]
+}

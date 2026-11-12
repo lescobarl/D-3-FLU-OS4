@@ -418,6 +418,45 @@ describe('producto — engine new escribe la fila desde el reconocedor real', ()
     // escritores. La reentrega del mismo final la resuelve la cola del módulo.
   });
 
+  it('la caja no decrece: un final confirmado más corto no borra lo ya visible', async () => {
+    darSoporteNavegador();
+    const { result } = montar();
+    await waitFor(() => expect(result.current.isSupported).toBe(true));
+
+    await act(async () => {
+      await result.current.startListening();
+    });
+    act(() => h.recognition.onstart?.());
+    await alimentarVoz();
+
+    // El interino ya pintó la frase completa.
+    await act(async () => {
+      h.recognition.onresult?.(eventoAsr('ok flu hola mundo entero', false));
+    });
+    await waitFor(() =>
+      expect(result.current.liveTranscript).toBe('ok flu hola mundo entero'),
+    );
+
+    // El final confirmado es más corto: la CAJA conserva lo visible (regla 2),
+    // aunque la fila de conversación use la hipótesis confirmada (regla 4).
+    await act(async () => {
+      h.recognition.onresult?.(eventoAsr('ok flu hola mundo', true));
+    });
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    expect(result.current.liveTranscript).toBe('ok flu hola mundo entero');
+
+    await act(async () => {
+      await result.current.stopListening({ closing: true });
+    });
+    await waitFor(async () => {
+      const filas = await fluDb.conversations.toArray();
+      expect(filas).toHaveLength(1);
+      // La fila conserva la transcripción COMPLETA ya oída: el final más corto
+      // no la trunca (regla 1/2/12).
+      expect(filas[0]?.text).toBe('ok flu hola mundo entero');
+    });
+  });
+
   it('un reinicio del reconocedor (onend → onstart) NO reinicia la sesión del módulo', async () => {
     darSoporteNavegador();
     const { result } = montar();
@@ -540,6 +579,54 @@ describe('producto — engine new escribe la fila desde el reconocedor real', ()
 
     expect(await fluDb.conversations.count()).toBe(1);
     expect(h.setCommitted).toHaveBeenCalledTimes(1);
+  });
+
+  it('la caja compone la línea ABIERTA y la RETENIDA sin perder palabras', async () => {
+    darSoporteNavegador();
+    const { result } = montar();
+    await waitFor(() => expect(result.current.isSupported).toBe(true));
+
+    await act(async () => {
+      await result.current.startListening();
+    });
+    act(() => h.recognition.onstart?.());
+
+    // T1: frase abierta. El final solo la marca.
+    await alimentarVoz();
+    await act(async () => {
+      h.recognition.onresult?.(eventoAsr('ok flu primera', true));
+    });
+    await waitFor(() => expect(result.current.liveTranscript).toBe('ok flu primera'));
+
+    // Silencio de 900 ms (corta el audio, NO cierra la locución) + T2.
+    await act(async () => {
+      h.pcm?.(new Float32Array(SR_PCM), { sampleIndex: pcmIndex });
+      pcmIndex += SR_PCM;
+    });
+    await alimentarVoz();
+    await act(async () => {
+      h.recognition.onresult?.(eventoAsr('ok flu segunda', true));
+    });
+
+    // La segunda frase queda RETENIDA y la primera sigue ABIERTA: la caja no
+    // puede perder ninguna de las dos (reglas 1/2).
+    await waitFor(() => {
+      expect(result.current.liveTranscript).toContain('ok flu primera');
+      expect(result.current.liveTranscript).toContain('ok flu segunda');
+    });
+
+    // El stop pasa los datos a conversación (las DOS frases) y la caja se limpia.
+    h.recognition.stop.mockImplementation(() => h.recognition.onend?.());
+    await act(async () => {
+      await result.current.stopListening({ closing: true });
+    });
+    await waitFor(() => expect(result.current.liveTranscript).toBe(''));
+    // El stop escribió al menos la línea abierta; el pendiente tiene su propio
+    // guard de módulo (`conversacionDescartesMotivoGuard`). Aquí se mide la caja:
+    // mostró las DOS frases y se limpió al pasar a conversación.
+    await waitFor(async () => {
+      expect(await fluDb.conversations.count()).toBeGreaterThanOrEqual(1);
+    });
   });
 
   it('un onstart tardío tras el stop no reabre el motor ni crea fila', async () => {

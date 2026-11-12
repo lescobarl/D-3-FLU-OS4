@@ -17,6 +17,8 @@
 /scripts/rutas-dobles-baseline.json @lescobarl
 /scripts/funciones-ratchet.mjs @lescobarl
 /scripts/voz-funciones-baseline.json @lescobarl
+/scripts/voz-video-hud-baseline.json @lescobarl
+/scripts/voz-turno-hablante-baseline.json @lescobarl
 /scripts/src-funciones-baseline.json @lescobarl
 /scripts/guard-duplicados25.mjs @lescobarl
 /scripts/duplicados25-baseline.json @lescobarl
@@ -37,6 +39,8 @@
 /tests/conversacionEtiquetasYMezclaGuard.test.ts @lescobarl
 /tests/conversacionRutasDoblesGuard.test.ts @lescobarl
 /scripts/conversacion-rutas-dobles-baseline.json @lescobarl
+/tests/conversacionReglasCierreGuard.test.ts @lescobarl
+/scripts/conversacion-reglas-baseline.json @lescobarl
 /tests/conversacionGrabacionGuard.test.ts @lescobarl
 # Medidor y líneas base de la conversación REAL (el criterio que juzga el agente)
 /scripts/conversacionGrabacionMetricas.mjs @lescobarl
@@ -63,6 +67,10 @@
 /src/voice/hooks/wakePending.js          @lescobarl
 /src/voice/lib/fluConfig.js             @lescobarl
 /src/voice/hooks/useFluVoiceAssistant.js @lescobarl
+/src/voice/hooks/useLocalAsrFallback.js @lescobarl
+/src/voice/lib/asrWatchdog.js          @lescobarl
+/scripts/analiza-voz-log.mjs            @lescobarl
+/scripts/voz-flujo-baseline.json        @lescobarl
 /src/voice/lib/conversationRow.js       @lescobarl
 /src/voice/lib/speakerDirectory.js      @lescobarl
 /src/core/db/conversationRowWriter.ts   @lescobarl

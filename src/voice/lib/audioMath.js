@@ -218,8 +218,8 @@ function isBareContentGenerationTrigger(text = '', voiceCommands = {}) {
   const afterWake = cleanForSpeech(split.afterWake || split.commandText || snapshot)
 
   const triggerPhrases = [
-    ...(voiceCommands.generateVideo || []),
-    ...(voiceCommands.generateDocument || []),
+    ...(voiceCommands.generateVideo || voiceCommands.commands?.generateVideo || []),
+    ...(voiceCommands.generateDocument || voiceCommands.commands?.generateDocument || []),
   ]
   if (!triggerPhrases.length) return false
 
@@ -771,7 +771,7 @@ export function detectUiVoiceCommand(text = '', commands = {}) {
   }
 
   // F4 — generación de video
-  if (matchesCommandPhrase(text, commands.generateVideo || [])) {
+  if (matchesCommandPhrase(text, commands.generateVideo || [], { tolerant: true })) {
     return COMMAND_IDS.GENERAR_VIDEO
   }
 

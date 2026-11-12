@@ -96,16 +96,20 @@ export function parseSpeakerIndex(label = '', config = FLU_CONFIG) {
 }
 
 /**
- * Etiqueta ANONIMA de la sesion: `Hablante N` o la etiqueta PENDIENTE
- * (`voiceIdentity.labels.pendingSpeaker`). Las dos son agrupaciones sin identidad,
- * asi que ninguna puede afirmar ni heredar un nombre propio.
+ * Etiqueta ANONIMA de la sesion: `Hablante N`, la etiqueta PENDIENTE
+ * (`voiceIdentity.labels.pendingSpeaker`, «Hablante X») o la NO IDENTIFICADA
+ * (`voiceIdentity.labels.fallbackSpeaker`, «Hablante XX»). Las tres son
+ * agrupaciones sin identidad, asi que ninguna puede afirmar ni heredar un
+ * nombre propio.
  */
 export function isAutoSpeakerLabel(label = '', config = FLU_CONFIG) {
   const text = String(label || '').trim()
   const patron = speakerLabelPattern(config)
   if (patron && patron.test(text)) return true
   const pending = String(config?.voiceIdentity?.labels?.pendingSpeaker || '').trim()
-  return Boolean(pending) && text.toLowerCase() === pending.toLowerCase()
+  if (pending && text.toLowerCase() === pending.toLowerCase()) return true
+  const fallback = String(config?.voiceIdentity?.labels?.fallbackSpeaker || '').trim()
+  return Boolean(fallback) && text.toLowerCase() === fallback.toLowerCase()
 }
 
 

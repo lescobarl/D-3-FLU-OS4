@@ -45,21 +45,16 @@ const TURN_WINDOW = Object.freeze({
   preflightLedgerMax: 240,
 })
 
-/** Etiquetas de la asignacion. */
-const LABELS = Object.freeze({
-  /**
-   * Etiqueta PROVISIONAL del turno mientras su voz no esta medida. NO es un nombre propio
-   * ni una etiqueta automatica `Hablante N`: dice "no se sabe todavia", asi que tampoco
-   * hereda el nombre del turno anterior ni el del participante primario.
-   */
-  pendingSpeaker: 'Hablante ?',
-})
+/** Cierre de locucion: un tramo por debajo de esta duracion no crea fila. */
+const CIERRE = Object.freeze({ minTramoMs: 10 })
+
+// Las ETIQUETAS visibles (X = en espera, XX = no identificado) tienen UN dueno:
+// `FLU_CONFIG.voiceIdentity.labels`. Que vivan aqui tambien seria una segunda fuente.
 
 export const SPEAKER_ASSIGN = Object.freeze({
   ...THRESHOLDS,
   ...TURN_WINDOW,
-  ...LABELS,
   thresholds: THRESHOLDS,
   turnWindow: TURN_WINDOW,
-  labels: LABELS,
+  cierre: CIERRE,
 })

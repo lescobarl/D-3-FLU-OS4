@@ -14,8 +14,9 @@
 import { construirFila, fusionarVoz } from './fila.ts'
 import type { CierreLocucion, VozEtiqueta } from './fila.ts'
 import { decidirRevision } from './revision.ts'
-import { decidirIdentidad, plantillasDe } from './identidad.ts'
+import { decidirIdentidad, plantillasDeSesion } from './identidad.ts'
 import type { PlantillaVoz } from './identidad.ts'
+import type { RegistroTramos } from './tramos.ts'
 import { registrarMedidaVoz } from './sesion.ts'
 import { compareCosineSignatures } from '../lib/speakerCore.js'
 import { sameVoiceFloor } from '../lib/speakerClusters.js'
@@ -87,6 +88,14 @@ export type ContextoCierre = Readonly<{
   embebedor?: EmbebedorPort
   /** Medidor del tramo cerrado (Caso 7+6): obligatorio, nada de medida null. */
   medidor: MedidorTramoPort
+  /**
+   * Audio REAL por tramo: respaldo de la medida al cerrar. La voz se mide sobre
+   * el audio de la locución aunque `muestrasAbierta` se haya vaciado; una fila
+   * cerrada nunca queda en `Hablante X` (regla 5/6).
+   */
+  tramos: RegistroTramos
+  /** Anclas medidas de la base (solo lectura): vector conocido → nombre propio. */
+  anclasBase?: () => ReadonlyArray<{ name?: string; vector?: readonly number[] }>
 }>
 
 /** Datos de apertura de la única locución abierta. */
@@ -210,6 +219,8 @@ export function resolverVoz(
     // Etiqueta de la plantilla casada (problema 4): la voz que vuelve recupera
     // SU etiqueta y no hereda la de la fila anterior (A→B→A devuelve la de A).
     etiquetaVoz: vozId ? plantillasVoz.get(vozId)?.etiqueta || undefined : undefined,
+    // Medida intentada sin vector suficiente: la fila es XX, no X.
+    medidaInsuficiente: voz.insuficiente === true,
   }
 }
 
@@ -249,6 +260,8 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
     id,
     embebedor,
     medidor,
+    tramos,
+    anclasBase,
   } = contexto
   /** Abre la única locución abierta; el llamador garantiza que no hay otra. */
   function abrirLocucion(datos: DatosApertura): void {
@@ -334,10 +347,17 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
     )
     // Un final que NO crece, NO es revisión y NO es prefijo del texto ya dicho
     // (p. ej. el sufijo suelto "duplicados" tras una frase larga) no puede
-    // reemplazar la frase: se conserva lo dicho. Antes el final autoritativo
-    // borraba la frase larga y su fila se perdía.
+    // reemplazar la frase: se conserva lo dicho.
+    //
+    // REGLA DEL DUEÑO (2026-11-12): la transcripción NUNCA decrece; la caja y
+    // la frase canónica no pierden palabras ya oídas. El final sigue siendo la
+    // hipótesis confirmada cuando crece o corrige con el mismo tamaño, pero si
+    // llega MÁS CORTO no borra la cola ya visible (antes `finalEsPrefijo`
+    // reemplazaba por el prefijo y truncaba la frase y los comandos).
+    const finalNoTrunca =
+      Boolean(textoFinal) && textoFinal.length >= previoTramo.length
     const textoDelTramo = final
-      ? textoFinal && (decision.pintar || finalEsPrefijo)
+      ? finalNoTrunca && (decision.pintar || finalEsPrefijo)
         ? textoFinal
         : previoTramo
       : decision.texto;
@@ -413,14 +433,27 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
    * @returns Evidencia de voz que cierra; la misma si no se mide.
    */
   async function medirVozAlCerrar(locucion: LocucionAbierta): Promise<EvidenciaVoz> {
-    if (
-      !embebedor ||
-      String(locucion.voz.vozId || '').trim() ||
-      estado.muestrasAbierta.length === 0
-    ) {
+    if (!embebedor || String(locucion.voz.vozId || '').trim()) {
       return locucion.voz
     }
-    const muestras = concatenarMuestras(estado.muestrasAbierta)
+    // La voz se mide sobre el audio REAL de la locución. `muestrasAbierta` es el
+    // camino vivo, pero puede haberse vaciado; el registro de tramos conserva
+    // la ventana cerrada y es el respaldo que evita commitear `Hablante X`.
+    let muestras = concatenarMuestras(estado.muestrasAbierta)
+    if (muestras.length === 0) {
+      const delTramo = tramos.muestras(locucion.locutionId, {
+        inicio: locucion.inicio,
+        fin: locucion.fin,
+        sampleRate: locucion.sampleRate,
+      })
+      if (delTramo) muestras = concatenarMuestras(delTramo)
+    }
+    if (muestras.length === 0) {
+      // No hay audio que medir: la fila cerrada es NO IDENTIFICADA (`XX`), nunca
+      // `X` (que significa «la medida aún no llegó» y solo vale en la caja).
+      registrarEventoVoz('conversacion.voz.medida.sinAudio', locucion, 0)
+      return { ...locucion.voz, insuficiente: true }
+    }
     // La evidencia que decide la voz es la VOZ medida, no la longitud del tramo.
     const vozMs = vozMsDeMuestras(muestras, locucion.sampleRate)
     let vector: readonly number[] | null = null
@@ -434,19 +467,17 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
       })
     }
     if (!vector) {
-      // Traza MEDIDA (Caso 12): la fila nace TEMPORAL y esta es la razón del
-      // audio que se midió (el piso de VOZ lo aplica el embebedor del adaptador).
+      // Traza MEDIDA (Caso 12): se intentó medir y no hubo vector suficiente.
+      // La fila NO queda «en espera»: es `Hablante XX` (regla 6).
       registrarEventoVoz('conversacion.voz.medida.sinVector', locucion, muestras.length)
-      return locucion.voz
+      return { ...locucion.voz, insuficiente: true }
     }
     const identidad = decidirIdentidad({
       vector,
-      plantillas: plantillasDe(estado.plantillasVoz),
+      plantillas: plantillasDeSesion(estado.plantillasVoz, anclasBase),
       umbral: config.umbralContinuidadVoz(),
       duracionMs: vozMs,
       minNuevaVozMs: config.minNuevaVozMs?.() ?? 0,
-      palabras: String(locucion.texto || '').trim().split(/\s+/).filter(Boolean).length,
-      minNuevaVozPalabras: config.minNuevaVozPalabras?.() ?? 0,
       umbralExistente: config.umbralExistenteVoz?.() ?? config.umbralContinuidadVoz(),
       // Perezoso: la plantilla SOLO se resuelve si la voz es nueva (Caso 10).
       etiquetaNueva: () => config.etiquetaAnonima(estado.contadorVoces + 1),
@@ -458,11 +489,14 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
       vozId: identidad.vozId,
       hablante: identidad.hablante,
       continuidad: identidad.continuidad,
+      insuficiente: identidad.insuficiente === true,
+      vozMs,
     })
     return {
       vozId: identidad.vozId,
       hablante: identidad.hablante,
       continuidad: identidad.continuidad,
+      ...(identidad.insuficiente ? { insuficiente: true } : {}),
     }
   }
 
@@ -623,6 +657,19 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
         vozId: vozIdCerrada || null,
         nombre: vozCerrada.nombre,
       })
+    }
+    // INVARIANTE: una fila CERRADA nunca queda en `Hablante X`. `X` es el estado
+    // transitorio de la caja mientras la locución está viva; al cerrar, o hay
+    // voz/nombre, o es `Hablante XX` (no identificado).
+    const etiquetaResoluble =
+      Boolean(vozCerrada.nombreConfirmado) ||
+      Boolean(String(vozCerrada.hablante || '').trim()) ||
+      Boolean(
+        String(vozCerrada.vozId || '').trim() &&
+          estado.plantillasVoz.get(String(vozCerrada.vozId).trim())?.etiqueta,
+      )
+    if (!etiquetaResoluble && vozCerrada.insuficiente !== true) {
+      vozCerrada = { ...vozCerrada, insuficiente: true }
     }
     // TIMBRE DE LA FILA (mandato del dueño 2026-10-11/13): la fila lleva la firma
     // de SU voz — el vector de la plantilla de sesión, refrescado por la medida —

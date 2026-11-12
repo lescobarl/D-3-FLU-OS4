@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "source": "sesión real 2026-11-11 20:54-20:58 (debug.log; el archivo rotó después)",
+  "measuredBefore": {
+    "locucionesCerradas": 23,
+    "medidasCerrada": 3,
+    "sinVector": 6,
+    "turnoYaEscrito": 15,
+    "locucionesCerradasSinMedida": 4,
+    "falsasXX": 1,
+    "fantasmasPostStop": 10
+  },
+  "forbiddenNow": {
+    "srGap_close": 0,
+    "medida_sin_muestras": 0,
+    "gate_palabras_identidad": 0,
+    "tramo_sintetico_stop": 0
+  },
+  "allowedNow": {
+    "stop_drena_asr_sin_forzar": 1
+  },
+  "owners": {
+    "medirVozAlCerrar": "src/voice/conversation/cierre.ts",
+    "decidirIdentidad": "src/voice/conversation/identidad.ts",
+    "finalizarPendientes": "src/voice/conversation/texto.ts",
+    "detener": "src/voice/conversation/motor.ts",
+    "ingestaAsr": "src/voice/conversation/ingesta.ts"
+  }
+}

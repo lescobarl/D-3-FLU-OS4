@@ -10,6 +10,7 @@ import type { ReglasCierre } from './cierre.ts'
 import { compareCosineSignatures } from '../lib/speakerCore.js'
 import { sameVoiceFloor } from '../lib/speakerClusters.js'
 import type { IdentidadDecidida, PlantillaVoz } from './identidad.ts'
+import type { RegistroTramos } from './tramos.ts'
 import type {
   ContarDescarte,
   DescarteConversacion,
@@ -38,6 +39,13 @@ export type EstadoSesion = {
   idiomaActual: IdiomaLocucion
   estadoAsr: EstadoAsr
   motorAsr: MotorAsr | null
+  /**
+   * `true` desde el stop hasta que la sesión queda inactiva: los resultados ASR
+   * que lleguen después del cierre de escucha NO se ingieren (regla: stop es
+   * frontera; nada entra después). El volcado inicial del stop se hace con
+   * `drenarResultadosAsr(true)`, que es la única puerta que lo ignora.
+   */
+  cerrando: boolean
   abierta: LocucionAbierta | null
   tramoAudio: TramoAudio | null
   silencioPendienteMs: number
@@ -55,6 +63,8 @@ export type EstadoSesion = {
   ultimoResultadoMs: number
   /** Texto de la frase que se retiene y se está dictando AHORA (se pinta en la caja). */
   textoPendiente: string
+  /** Id de la frase retenida: la caja no decrece dentro del MISMO pendiente. */
+  pendienteTramoId: string
   cierreAsrPendiente: MotivoCierre | null
   descartes: DescarteConversacion[]
   filas: Map<string, Fila>
@@ -106,8 +116,9 @@ export type Sesion = Readonly<{
    * Publica el texto de la frase retenida que se dicta ahora. Único escritor:
    * el flujo de texto (`texto.ts`); la caja lo pinta junto al texto abierto.
    * @param texto Texto vigente del pendiente (vacío al aplicar a la línea abierta).
+   * @param tramoId Id de la frase retenida (la caja lo usa para no decrecer).
    */
-  mostrarPendiente(texto: string): void
+  mostrarPendiente(texto: string, tramoId?: string): void
   snapshot(): InstantaneaConversacion
   contarDescarte: ContarDescarte
   reiniciar(sessionId: string, turno: string, idioma: IdiomaLocucion): void
@@ -123,6 +134,7 @@ export function crearEstadoSesion(idiomaInicial: IdiomaLocucion): EstadoSesion {
     activa: false,
     sessionId: null,
     turnoActual: '',
+    cerrando: false,
     turnosConFila: new Set(),
     idiomaActual: idiomaInicial,
     estadoAsr: 'idle',
@@ -134,6 +146,7 @@ export function crearEstadoSesion(idiomaInicial: IdiomaLocucion): EstadoSesion {
     ultimaEtiqueta: '',
     ultimoResultadoMs: 0,
     textoPendiente: '',
+    pendienteTramoId: '',
     cierreAsrPendiente: null,
     descartes: [],
     filas: new Map(),
@@ -213,8 +226,17 @@ export function registrarMedidaVoz(
 export function crearSesion(
   dependencias: Pick<
     DependenciasConversacion,
-    'reloj' | 'id' | 'almacen' | 'config' | 'partidor' | 'registro' | 'embebedor' | 'medidor'
+    | 'reloj'
+    | 'id'
+    | 'almacen'
+    | 'config'
+    | 'partidor'
+    | 'registro'
+    | 'embebedor'
+    | 'medidor'
+    | 'anclasBase'
   >,
+  tramos: RegistroTramos,
   estado: EstadoSesion,
   configuracion: ConfiguracionConversacion,
 ): Sesion {
@@ -247,9 +269,11 @@ export function crearSesion(
       sessionId: estado.sessionId,
       texto: estado.abierta?.texto ?? '',
       abierta: Boolean(estado.abierta),
+      locucionAbiertaId: estado.abierta?.locutionId ?? '',
       fraseCanonica: frase.canonica,
       fraseParaMostrar: frase.paraMostrar,
       textoPendiente: estado.textoPendiente,
+      textoPendienteId: estado.pendienteTramoId,
       fraseCanonicaPendiente: pendiente.canonica,
       fraseParaMostrarPendiente: pendiente.paraMostrar,
     })
@@ -262,10 +286,12 @@ export function crearSesion(
    * @revisor CREAR NUEVO — la caja solo pintaba `estado.abierta`; el pendiente
    *   que se dicta en vivo no tenía emisor y la pantalla se congelaba.
    */
-  function mostrarPendiente(texto: string): void {
+  function mostrarPendiente(texto: string, tramoId = ''): void {
     const limpio = String(texto || '').trim()
-    if (limpio === estado.textoPendiente) return
+    const id = limpio ? String(tramoId || '').trim() : ''
+    if (limpio === estado.textoPendiente && id === estado.pendienteTramoId) return
     estado.textoPendiente = limpio
+    estado.pendienteTramoId = id
     emitirCaja()
   }
 
@@ -339,12 +365,15 @@ export function crearSesion(
     id,
     embebedor,
     medidor,
+    tramos,
+    anclasBase: dependencias.anclasBase,
   })
 
   /** Resetea el estado de una sesión nueva sin perder filas ni oyentes. */
   function reiniciar(sessionId: string, turno: string, idioma: IdiomaLocucion): void {
     estado.sessionId = sessionId
     estado.turnoActual = turno
+    estado.cerrando = false
     estado.turnosConFila.clear()
     estado.idiomaActual = idioma
     estado.abierta = null
@@ -353,6 +382,7 @@ export function crearSesion(
     estado.ultimoTramoId = ''
     estado.ultimaEtiqueta = ''
     estado.textoPendiente = ''
+    estado.pendienteTramoId = ''
     estado.cierreAsrPendiente = null
     estado.descartes = []
     estado.estadoAsr = 'idle'

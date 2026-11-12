@@ -49,6 +49,7 @@ export function crearFlujoTexto({
   tramos,
   pendientes,
   contarReentrega,
+  tramoParaTexto,
 }: {
   dependencias: Pick<DependenciasConversacion, 'reloj' | 'ultimoTextoDicho' | 'config'>
   configuracion: ConfiguracionConversacion
@@ -57,6 +58,11 @@ export function crearFlujoTexto({
   pendientes: Pendientes
   /** Dueño del motivo `turnoYaEscrito` (inyectado por `ingesta`). */
   contarReentrega: (locutionId: string | null, tramo: TramoMuestreado | null) => void
+  /**
+   * Acuña el tramo de un texto que llegó sin tramo vivo. El id lo pide a la
+   * ingesta (dueño del tramo sintético); aquí no se inventa un id inline.
+   */
+  tramoParaTexto: () => string
 }): FlujoTexto {
   const estado = sesion.estado
 
@@ -79,7 +85,7 @@ export function crearFlujoTexto({
   }): void {
     sesion.abrirLocucion({
       tramoId: datos.tramoId,
-      texto: sinPrefijoDeLaFilaAnterior(datos.texto, datos.voz),
+      texto: sinPrefijoDeLaFilaAnterior(datos.texto, datos.voz, false, datos.tramo),
       tramo: datos.tramo,
       turnId: datos.turnId,
       idioma: datos.idioma,
@@ -93,17 +99,34 @@ export function crearFlujoTexto({
   }
 
   /**
-   * Quita de la línea nueva el texto que YA está en la última fila commiteada.
-   * El producto compone la línea ACUMULADA (frase anterior + cola); al abrir la
-   * locución de una frase nueva esa línea repetía la fila anterior y creaba un
-   * duplicado con otro hablante. Dueño único de la dedupe por prefijo de FILA.
-   * @param texto Línea acumulada de la locución que abre.
-   * @returns Solo la cola nueva (o el texto completo si no es prefijo).
+   * ¿Dos ventanas son el MISMO audio? Solo entonces el texto de la fila
+   * anterior puede estar contenido en el texto entrante.
+   * @param a Ventana entrante.
+   * @param b Ventana de la fila anterior.
+   */
+  function seSolapanEnAudio(
+    a: { inicio: number; fin: number; sampleRate: number } | null | undefined,
+    b: { inicio: number; fin: number; sampleRate: number } | null | undefined,
+  ): boolean {
+    if (!a || !b) return false
+    if (Number(a.sampleRate) !== Number(b.sampleRate)) return false
+    return a.fin > b.inicio && b.fin > a.inicio
+  }
+
+  /**
+   * Quita el prefijo ya commiteado SOLO cuando el audio es el mismo (partición
+   * de voz o ventana solapada). Una frase NUEVA que empieza como la anterior no
+   * se recorta: sus palabras son suyas (regla 12).
+   * @param texto Texto entrante.
+   * @param voz Voz del tramo entrante.
+   * @param partidaDeVoz La partición declara que el prefijo es audio ya commiteado.
+   * @param tramoNuevo Ventana del tramo entrante (si se conoce).
    */
   function sinPrefijoDeLaFilaAnterior(
     texto: string,
     voz: EvidenciaVoz,
     partidaDeVoz = false,
+    tramoNuevo: { inicio: number; fin: number; sampleRate: number } | null = null,
   ): string {
     const previa = ultimaFilaPorFin(estado.filas.values())
     const previo = String(previa?.texto || '').trim()
@@ -116,10 +139,13 @@ export function crearFlujoTexto({
     const mismaVoz =
       previa?.evidencia === 'pendiente' ||
       previa?.evidencia === 'semilla' ||
-      (Boolean(etiqueta) && Boolean(hablante) && etiqueta === hablante) ||
-      // Hecho de la partición: el prefijo pertenece al audio ya commiteado.
-      partidaDeVoz
-    if (!mismaVoz) return nuevo
+      (Boolean(etiqueta) && Boolean(hablante) && etiqueta === hablante)
+    // Y SOLO si el audio es el mismo: una frase nueva no pierde su inicio.
+    const mismoAudio = partidaDeVoz || seSolapanEnAudio(tramoNuevo, previa?.tramo)
+    if (!mismoAudio) return nuevo
+    // En una PARTICIÓN de voz el prefijo pertenece al audio ya commiteado,
+    // sea de la voz que sea: la etiqueta nueva (N) no impide el recorte.
+    if (!mismaVoz && !partidaDeVoz) return nuevo
     if (nuevo.toLowerCase().startsWith(previo.toLowerCase())) {
       const resto = nuevo.slice(previo.length).trim()
       // Texto idéntico: sin partición es la MISMA frase dicha otra vez (fila
@@ -204,7 +230,7 @@ export function crearFlujoTexto({
     // commiteada; se queda solo la cola nueva ANTES de la revisión. Con
     // `partidaDeVoz` el prefijo pertenece al audio ya commiteado, sea de la
     // voz que sea (dueño único `sinPrefijoDeLaFilaAnterior`).
-    const textoAplicado = sinPrefijoDeLaFilaAnterior(texto, voz, abierta.partidaDeVoz)
+    const textoAplicado = sinPrefijoDeLaFilaAnterior(texto, voz, abierta.partidaDeVoz, abierta)
     sesion.aplicarRevision(
       abierta,
       textoAplicado,
@@ -228,6 +254,10 @@ export function crearFlujoTexto({
     // El tramo se captura AL ENCOLAR: el registro lo expira a los 8 s y, si se
     // resolviera al stop, el pendiente perdería su ventana real (fila con un
     // tramo inventado de una muestra y la hora del stop).
+    //
+    // Sin tramo NI audio real no hay fila: el pendiente conserva su id vacío y
+    // el stop lo cuenta `huerfano` (regla 1: la ventana no se inventa). Si el
+    // texto trae tramo real, se captura aquí aunque el registro expire después.
     const vigente = tramos.vigente(tramoId)
     const tramo =
       entrada.tramo ??
@@ -235,7 +265,7 @@ export function crearFlujoTexto({
         ? { inicio: vigente.inicio, fin: vigente.fin, sampleRate: vigente.sampleRate }
         : undefined)
     pendientes.encolar({
-      tramoId,
+      tramoId: String(tramoId || '').trim(),
       texto,
       final: Boolean(entrada.final),
       idioma: idiomaDe(entrada),
@@ -247,7 +277,8 @@ export function crearFlujoTexto({
     })
     // La frase que se retiene es la que se está dictando AHORA: se pinta en la
     // caja aunque la locución anterior siga abierta (regla: transcribir al oír).
-    sesion.mostrarPendiente(pendientes.ultimo()?.texto ?? '')
+    const ultimo = pendientes.ultimo()
+    sesion.mostrarPendiente(ultimo?.texto ?? '', ultimo?.tramoId ?? '')
   }
 
   /**
@@ -279,12 +310,20 @@ export function crearFlujoTexto({
    * @revisor CREAR NUEVO — la reentrega del stop no tenía dueño tras retirar el
    *   descarte por fin de audio; esta función la unifica por texto.
    */
-  function textoYaEscrito(texto: string): boolean {
+  function textoYaEscrito(
+    texto: string,
+    tramo: { sampleRate: number; inicio: number; fin: number } | null = null,
+  ): boolean {
     const limpio = String(texto || '').trim()
     if (!limpio) return false
     for (const fila of estado.filas.values()) {
       const previo = String(fila.texto || '').trim()
-      if (previo && utterancesRelate(previo, limpio)) return true
+      if (!previo) continue
+      // Reentrega = MISMO audio REAL y solapado. Sin tramo (o con un tramo
+      // sintético que aún no existe) no se descarta: una repetición legítima
+      // («sí», «hola» dos veces) es una frase nueva (regla 12).
+      if (!tramo || !fila.tramo) continue
+      if (seSolapanEnAudio(tramo, fila.tramo) && utterancesRelate(previo, limpio)) return true
     }
     return false
   }
@@ -296,7 +335,7 @@ export function crearFlujoTexto({
    */
   function sinReentregas(lotes: readonly EntradaPendiente[]): EntradaPendiente[] {
     return lotes.filter((lote) => {
-      if (!textoYaEscrito(lote.texto)) return true
+      if (!textoYaEscrito(lote.texto, lote.tramo ?? null)) return true
       contarReentrega(lote.tramoId, lote.tramo ?? null)
       return false
     })
@@ -311,6 +350,23 @@ export function crearFlujoTexto({
     return Number.isFinite(inicio) ? inicio : Number.MAX_SAFE_INTEGER
   }
 
+  /**
+   * Resuelve el tramo REAL de un pendiente. Sin audio real no hay fila: el id
+   * vacío puede pedirse a la ingesta, pero la ventana NUNCA se inventa.
+   * @param p Pendiente drenado, con su tramo declarado o su id.
+   * @returns El id resuelto y su ventana real, o null si no tiene audio.
+   */
+  function tramoDePendiente(
+    p: EntradaPendiente,
+  ): Readonly<{ tramoId: string; tramo: TramoMuestreado }> | null {
+    const existente = String(p.tramoId || '').trim()
+    const tramo = p.tramo ?? tramos.resolver(existente)
+    if (!tramo) return null
+    // El id vacío lo acuña la ingesta (dueño del tramo sintético): una locución
+    // sin UUIDv4 no puede escribir `row.committed`.
+    return { tramoId: existente || tramoParaTexto(), tramo }
+  }
+
   /** Abre el primer grupo; el resto queda retenido en orden de audio. */
   async function flushPendientes(): Promise<void> {
     if (estado.abierta) return
@@ -322,10 +378,11 @@ export function crearFlujoTexto({
     const primero = lotes[0]
     if (!primero) return
     for (const lote of lotes.slice(1)) pendientes.encolar(lote)
+    // Un pendiente SIN tramo real espera al stop de sesión: un `final` no es
+    // frontera y no puede inventar una locución (reglas 1/2/3). Solo se abre
+    // con su audio real y siempre después de una frontera (voz/tiempo).
     const tramo = primero.tramo ?? tramos.resolver(primero.tramoId)
     if (!tramo) {
-      // Durante la sesión NO se inventa un tramo: el grupo espera al stop, que
-      // crea UN sintético por grupo sin audio real (nunca uno por pendiente).
       pendientes.encolar(primero)
       return
     }
@@ -334,7 +391,9 @@ export function crearFlujoTexto({
     const muestrasIniciales = tramos.muestras(primero.tramoId, tramo)
     // El turno VIGENTE manda: el pendiente esperó al commit de la locución
     // anterior y el hook ya avanzó el turno.
-    abrirDesde(datosPendiente(primero, tramo, muestrasIniciales, estado.turnoActual || primero.turnId))
+    abrirDesde(
+      datosPendiente(primero, tramo, muestrasIniciales, estado.turnoActual || primero.turnId),
+    )
   }
 
   /** Al cerrar la sesión, cada FRASE pendiente acaba en UNA fila o descarte. */
@@ -365,25 +424,33 @@ export function crearFlujoTexto({
       await sesion.cerrarLocucion(cerrada, motivo, 'stop', cerrada.final)
     }
     for (const siguiente of sinReentregas(lotes)) {
-      const ultimo = estado.ultimoTramoId ? tramos.vigente(estado.ultimoTramoId) : null
-      const previa = ultimaFilaPorFin(estado.filas.values())
-      const tramo =
-        siguiente.tramo ??
-        tramos.resolver(siguiente.tramoId) ??
-        (String(siguiente.texto || '').trim()
-          ? tramos.sintetico({
-              tramoId: siguiente.tramoId,
-              turnId: siguiente.turnId,
-              ultimo,
-              previa: previa?.tramo ?? null,
-            })
-          : null)
-      if (!tramo) {
-        sesion.contarDescarte('huerfano', siguiente.tramoId, null)
+      if (!String(siguiente.texto || '').trim()) {
+        sesion.contarDescarte('huerfano', siguiente.tramoId, siguiente.tramo ?? null)
         continue
       }
-      const muestrasIniciales = tramos.muestras(siguiente.tramoId, tramo)
-      abrirDesde(datosPendiente(siguiente, tramo, muestrasIniciales, siguiente.turnId))
+      const resuelto = tramoDePendiente(siguiente)
+      if (!resuelto) {
+        sesion.contarDescarte('huerfano', siguiente.tramoId, siguiente.tramo ?? null)
+        continue
+      }
+      const { tramoId, tramo } = resuelto
+      // Una frase pendiente que ya tiene fila (mismo tramo/locución) es una
+      // reentrega del turno: no se abre otra locución fantasma al stop. El
+      // motivo lo cuenta el dueño del descarte como huérfano (ingesta es quien
+      // decide la reentrega de un turno).
+      if (estado.filas.has(tramoId)) {
+        sesion.contarDescarte('huerfano', tramoId, tramo)
+        continue
+      }
+      const muestrasIniciales = tramos.muestras(tramoId, tramo)
+      abrirDesde(
+        datosPendiente(
+          { ...siguiente, tramoId },
+          tramo,
+          muestrasIniciales,
+          siguiente.turnId,
+        ),
+      )
       const locucion = estado.abierta
       if (locucion) await sesion.cerrarLocucion(locucion, motivo, 'stop', locucion.final)
     }
@@ -435,7 +502,7 @@ export function crearFlujoTexto({
     // del producto puede repetir la ÚLTIMA FILA ya commiteada. Se queda solo la
     // cola nueva; dueño único `sinPrefijoDeLaFilaAnterior`.
     if (abierta && !String(abierta.texto || '').trim() && String(texto).trim()) {
-      texto = sinPrefijoDeLaFilaAnterior(texto, voz, abierta.partidaDeVoz)
+      texto = sinPrefijoDeLaFilaAnterior(texto, voz, abierta.partidaDeVoz, abierta)
     }
     // Una locución ABIERTA y VACÍA no puede bloquear el texto que llega de otro
     // tramo: se cierra descartada (sinTexto) y el texto abre su propia locución.
@@ -472,6 +539,9 @@ export function crearFlujoTexto({
     }
 
     if (abierta) {
+      // El `final` del ASR NO cierra (regla 3): solo marca la frase. La línea
+      // anterior se cierra por voz medida o por tiempo; mientras tanto el texto
+      // que no continúa se retiene como pendiente.
       // La frontera por TIEMPO se mide con el silencio MEDIDO antes del tramo
       // entrante, no con el hueco de índices ni con la última medida acumulada.
       const silencioPrevioMs =

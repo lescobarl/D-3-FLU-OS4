@@ -11,8 +11,9 @@
  * Mandato del dueño (2026-10-30, problema 4): se compara contra TODAS las
  * plantillas de la sesión, no solo contra la última voz. Así una voz que
  * vuelve (A→B→A) recupera SU etiqueta y no hereda la del hablante intermedio.
- * Las plantillas viven SOLO en la sesión (decisión B: nada persiste entre
- * sesiones).
+ * Las plantillas MEDIDAS viven en la sesión; las anclas de la base se consultan
+ * como candidatas de SOLO LECTURA (regla 8: vector conocido → nombre propio) y
+ * no se persisten aquí.
  *
  * Sustituyó en el corte (Paso 3) a la decisión del resolutor de voz retirado;
  * desde el corte esta regla es la ÚNICA autoridad del módulo.
@@ -44,6 +45,33 @@ export function plantillasDe(
   }))
 }
 
+/**
+ * Plantillas de la sesión MÁS las anclas de la base (solo lectura). La voz
+ * medida que casa con un ancla conocida recibe su nombre propio; la que no casa
+ * sigue el camino normal (`Hablante N`). El ancla se identifica con un id
+ * estable de sesión (`base:<nombre>`), nunca con un UUID de voz medida.
+ * @param plantillasVoz Plantillas medidas en la sesión.
+ * @param anclasBase Anclas verificadas de la base (nombre + vector).
+ * @returns Candidatas para `decidirIdentidad`, sesión primero.
+ */
+export function plantillasDeSesion(
+  plantillasVoz: ReadonlyMap<string, PlantillaVoz>,
+  anclasBase?: () => ReadonlyArray<{ name?: string; vector?: readonly number[] }>,
+): readonly PlantillaVozConId[] {
+  const base: PlantillaVozConId[] = []
+  const vistos = new Set<string>()
+  for (const ancla of anclasBase?.() ?? []) {
+    const nombre = String(ancla?.name || '').trim()
+    const vector = Array.isArray(ancla?.vector) ? ancla.vector : []
+    if (!nombre || vector.length === 0) continue
+    const clave = nombre.toLowerCase()
+    if (vistos.has(clave)) continue
+    vistos.add(clave)
+    base.push({ vozId: `base:${clave}`, vector, etiqueta: nombre })
+  }
+  return [...plantillasDe(plantillasVoz), ...base]
+}
+
 /** Entrada de la regla de identidad: medida, plantillas de la sesión y servicios. */
 export type EntradaIdentidad = Readonly<{
   /** Vector medido de la locución. */
@@ -59,10 +87,6 @@ export type EntradaIdentidad = Readonly<{
   duracionMs?: number
   /** Duracion minima para crear una voz nueva (ms); si falta, 0. */
   minNuevaVozMs?: number
-  /** Palabras del texto: una exclamacion corta no acuna voz nueva. */
-  palabras?: number
-  /** Palabras minimas para crear una voz nueva; si falta, 0. */
-  minNuevaVozPalabras?: number
   /** Piso para casar con una voz YA existente (turnos cortos no huerfanos). */
   umbralExistente?: number
   /** Etiqueta anónima de una voz nueva (`Hablante N`); se resuelve SOLO si la voz es nueva. */
@@ -81,6 +105,12 @@ export type IdentidadDecidida = Readonly<{
   continuidad: boolean
   /** Etiqueta de la plantilla casada, o anónima SOLO cuando la voz es nueva. */
   hablante: string
+  /**
+   * `true` si se midió pero el AUDIO del turno no alcanza para acuñar una voz.
+   * La fila es `Hablante XX` (no identificado), distinta de `Hablante X`
+   * (medida aún no llegada). El texto corto NO es insuficiencia de voz.
+   */
+  insuficiente?: boolean
 }>
 
 /**
@@ -116,15 +146,12 @@ export function decidirIdentidad(entrada: EntradaIdentidad): IdentidadDecidida {
   }
   const duracion = Number(entrada.duracionMs)
   const minimo = Number(entrada.minNuevaVozMs) || 0
-  const palabras = Number(entrada.palabras)
-  const minimoPalabras = Number(entrada.minNuevaVozPalabras) || 0
-  if (
-    (Number.isFinite(duracion) && duracion < minimo) ||
-    (Number.isFinite(palabras) && palabras < minimoPalabras)
-  ) {
+  if (Number.isFinite(duracion) && duracion < minimo) {
     // Turno corto: no hay evidencia suficiente para ACUNAR una voz nueva.
-    // La fila nace PENDIENTE y la medida tardia la resolvera.
-    return { vozId: '', continuidad: false, hablante: '' }
+    // La fila nace NO IDENTIFICADA (`Hablante XX`), no en espera: se midió y el
+    // audio no alcanzó (regla 6). `insuficiente` separa este caso de la medida
+    // que todavía no ha llegado (`Hablante X`).
+    return { vozId: '', continuidad: false, hablante: '', insuficiente: true }
   }
   return {
     vozId: entrada.id(),
