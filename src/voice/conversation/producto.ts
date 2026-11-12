@@ -127,12 +127,12 @@ export function crearMotorConversacionProducto({
 }: {
   idioma: IdiomaLocucion
   ultimoTextoDicho: () => string
-  /** Participante activo: aA-sla las filas del motor por usuario. */
+  /** Participante activo: aísla las filas del motor por usuario. */
   participantId?: string
   /**
-   * Id de la grabaciA3n activa (recorder, Caso 11), leA-do al ABRIR: la sesiA3n
-   * ADOPTA ese id y todos sus commits/eventos lo llevan (nunca dos). VacA-o o
-   * sin proveedor => el mA3dulo acuA�a el propio (N/A sin recorder al iniciar).
+   * Id de la grabación activa (recorder, Caso 11), leído al ABRIR: la sesión
+   * ADOPTA ese id y todos sus commits/eventos lo llevan (nunca dos). Vacío o
+   * sin proveedor => el módulo acuña el propio (N/A sin recorder al iniciar).
    */
   recordingId?: () => string | null
   /** Anclas medidas de la base (solo lectura): vector conocido → nombre propio. */
@@ -291,8 +291,8 @@ export function crearMotorConversacionProducto({
       cierreEnCurso = null
       estadoMotor = 'activa'
       cursorMuestras = 0
-      // Caso 11: la conversaciA3n ADOPTA el id de la grabaciA3n activa al abrir la
-      // sesiA3n; sin grabaciA3n (proveedor vacA-o) el mA3dulo acuA�a el propio (N/A).
+      // Caso 11: la conversación ADOPTA el id de la grabación activa al abrir la
+      // sesión; sin grabación (proveedor vacío) el módulo acuña el propio (N/A).
       const grabacion = String(recordingId?.() ?? '').trim()
       void encadenar(() =>
         registrarFallo(

@@ -216,6 +216,14 @@ function medir(fuentes: readonly Fuente[] = FUENTES) {
       fuenteEn('ingesta.ts'),
       /abierta\.locutionId\s*!==\s*tramoId\s*\)\s*return null/g,
     ),
+    // Un solo escritor de la cobertura medida (`marcarMedido`): una segunda
+    // escritura reabriría audio ya medido y volvería a embeber por resultado
+    // (la lentitud letra por letra que frenó el mapa).
+    medidaWrites: fuentes.reduce(
+      (total, archivo) =>
+        total + contar(archivo.src, /medidoHastaPorTramo\.set\(/g),
+      0,
+    ),
     finalWholeLineReplace: contar(fuenteEn('cierre.ts'), /texto:\s*textoFinal/g),
     identityDurationFromTramo: fuentes.reduce(
       (total, archivo) =>
@@ -389,6 +397,12 @@ describe('CONVERSACIÓN — rutas dobles medidas', () => {
     expect(fuente('ingesta.ts')).toMatch(
       /verificarCambioVoz\(tramoOrigen\)[\s\S]*tramoDestinoDeTexto\(/,
     )
+  })
+
+  it('la cobertura medida tiene UN escritor (`marcarMedido`)', () => {
+    expect(medir().medidaWrites).toBe(1)
+    // Único dueño de la transición: ningún flujo escribe el mapa por su cuenta.
+    expect(fuente('ingesta.ts')).toContain('function marcarMedido')
   })
 
   it('la duración de identidad sale de la VOZ del audio medido, no del tramo', () => {

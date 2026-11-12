@@ -2,7 +2,7 @@
 /**
  * useBrowserProfiles - perfiles de navegador curado sobre Dexie (0%).
  *
- * POR QUE ESTE TEST: el hook es el unico camino del PizarrA3n-navegador a los
+ * POR QUE ESTE TEST: el hook es el unico camino del Pizarrón-navegador a los
  * perfiles por persona. Se sustituyen las fronteras (la tabla Dexie y el servicio,
  * que tiene test propio) y se comprueba su politica: un solo servicio con el
  * adaptador de tabla correcto, refresco SOLO si la operacion fue bien, `update`

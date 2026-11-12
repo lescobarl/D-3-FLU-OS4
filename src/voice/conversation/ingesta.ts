@@ -105,6 +105,23 @@ export function crearIngesta({
     sesion.contarDescarte('turnoYaEscrito', locutionId, tramo)
   }
 
+  /**
+   * Marca el fin de audio cubierto por una medida de voz SIN retroceder: el
+   * freno del re-embed compara contra este valor, así que lo ya medido no se
+   * vuelve a medir. Único escritor de `medidoHastaPorTramo` (el tramo abierto
+   * es una clave más); los lectores conservan su defecto propio.
+   * @revisor CREAR NUEVO — cinco sitios escribían el mapa con su propio
+   *   `Math.max` (o sin él) y uno podía retroceder el fin medido; una sola
+   *   transición deja la monotonía en un dueño.
+   * @param tramoId Tramo medido.
+   * @param fin Fin del audio cubierto por la medida.
+   */
+  function marcarMedido(tramoId: string, fin: number): void {
+    const medido =
+      estado.medidoHastaPorTramo.get(tramoId) ?? Number.NEGATIVE_INFINITY
+    if (fin > medido) estado.medidoHastaPorTramo.set(tramoId, fin)
+  }
+
   const flujo: FlujoTexto = crearFlujoTexto({
     dependencias,
     configuracion,
@@ -307,7 +324,7 @@ export function crearIngesta({
     // La ventana del tramo ajeno queda cubierta por esta medida: el siguiente
     // resultado solo re-embebe si el tramo creció otra ventana. Un fallo del
     // embebedor NO sella (vector null): la próxima entrega reintenta.
-    if (!mismotramo) estado.medidoHastaPorTramo.set(tramoId, finAlMedir)
+    if (!mismotramo) marcarMedido(tramoId, finAlMedir)
     if (mismotramo && vigente.locutionId !== tramoId) return null
     const previo = plantillaAbierta.vector
     // La misma voz medida tiene banda 0.69–0.74: usar el piso de continuidad
@@ -323,10 +340,7 @@ export function crearIngesta({
       // Misma voz: la etiqueta se conserva y el tramo continuo NO cambia
       // de etiqueta; el contador avanza hasta el fin medido y la cadena de
       // voces distintas se rompe (la confirmación arranca de cero).
-      if (mismotramo) {
-        const medido = estado.medidoHastaPorTramo.get(tramoId) ?? 0
-        estado.medidoHastaPorTramo.set(tramoId, Math.max(medido, finAlMedir))
-      }
+      if (mismotramo) marcarMedido(tramoId, finAlMedir)
       estado.contadorCambioVoz = 0
       estado.candidatoCambioVoz = null
       return null
@@ -346,7 +360,7 @@ export function crearIngesta({
       const limite = mismotramo
         ? finAlMedir - cola.length
         : entrante?.inicio ?? finAlMedir - cola.length
-      if (mismotramo) estado.medidoHastaPorTramo.set(tramoId, finAlMedir)
+      if (mismotramo) marcarMedido(tramoId, finAlMedir)
       estado.candidatoCambioVoz = {
         limite,
         textoAntes: String(estado.abierta?.texto || ''),
@@ -523,10 +537,7 @@ export function crearIngesta({
       return null
     }
     estado.muestrasAbierta = [ventana]
-    estado.medidoHastaPorTramo.set(
-      datos.tramoId,
-      Math.max(estado.medidoHastaPorTramo.get(datos.tramoId) ?? 0, datos.fin),
-    )
+    marcarMedido(datos.tramoId, datos.fin)
     dependencias.registro.registrar('conversacion.locucion.partida', {
       sessionId: estado.sessionId ?? '',
       locutionId: datos.tramoId,
@@ -937,13 +948,7 @@ export function crearIngesta({
     estado.medidaVozEnCurso = true
     // La medida cubre TODO el audio retenido: el contador del cambio de voz
     // (Caso 1+3) arranca en el fin cubierto por esta medida.
-    estado.medidoHastaPorTramo.set(
-      locucion.locutionId,
-      Math.max(
-        estado.medidoHastaPorTramo.get(locucion.locutionId) ?? 0,
-        locucion.fin,
-      ),
-    )
+    marcarMedido(locucion.locutionId, locucion.fin)
     // Se mide la VENTANA de identidad (la misma que `verificarCambioVoz`), no el
     // búfer completo: en la sesión 8149df78, 12 de 124 mediciones copiaban hasta
     // 709.824 muestras para extraer un vector de 512.

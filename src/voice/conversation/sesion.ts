@@ -53,12 +53,11 @@ export type EstadoSesion = {
   ultimoTramoId: string
   ultimaEtiqueta: string
   /**
-   * Marca del reloj del ÚLTIMO resultado que pertenece a la línea ABIERTA.
-   * Es la medida del hueco que cierra la locución cuando el reconocedor se queda
-   * mudo (`srGapCommitMs`, dueño la sonda del hueco): sin ella, un ASR caído no
-   * cierra nada y la locución vive 43 s juntando dos frases (medido 2026-11-08
-   * 02:26-02:27 en la sesión del dueño). La mueve cada resultado del ASR; el
-   * hueco es silencio del ASR, no de la fila abierta.
+   * Marca del reloj del ÚLTIMO resultado del ASR (final o intermedio): prueba
+   * de que el reconocedor sigue vivo aunque el resultado pertenezca a otra
+   * frase. Se escribe en cada ingesta como observabilidad del hueco del ASR;
+   * el hueco NO es puerta de cierre (solo el silencio medido o el cambio de
+   * hablante cierran la locución). La sesión nueva la reinicia.
    */
   ultimoResultadoMs: number
   /** Texto de la frase que se retiene y se está dictando AHORA (se pinta en la caja). */
@@ -376,37 +375,25 @@ export function crearSesion(
     anclasBase: dependencias.anclasBase,
   })
 
-  /** Resetea el estado de una sesión nueva sin perder filas ni oyentes. */
+  /**
+   * Resetea el estado de una sesión nueva sin perder filas ni oyentes.
+   *
+   * Deriva del estado VACÍO (`crearEstadoSesion`): un campo nuevo nace
+   * reseteado por construcción y no hay dos listas de inicialización que
+   * puedan divergir. Solo `filas` (histórico de la caja) y `oyentes`
+   * (suscripciones vivas) sobreviven al cambio de sesión; `activa` queda en
+   * `false`, que es la invariante del arranque (`motor.iniciar` la exige).
+   * @param sessionId Id de la sesión que abre.
+   * @param turno Turno de sesión ('' si lo acuña cada locución).
+   * @param idioma Idioma vigente de la sesión.
+   */
   function reiniciar(sessionId: string, turno: string, idioma: IdiomaLocucion): void {
-    estado.sessionId = sessionId
-    estado.turnoActual = turno
-    estado.cerrando = false
-    estado.turnosConFila.clear()
-    estado.idiomaActual = idioma
-    estado.abierta = null
-    estado.tramoAudio = null
-    estado.silencioPendienteMs = 0
-    estado.ultimoTramoId = ''
-    estado.ultimaEtiqueta = ''
-    estado.textoPendiente = ''
-    estado.pendienteTramoId = ''
-    estado.cierreAsrPendiente = null
-    estado.descartes = []
-    estado.estadoAsr = 'idle'
-    estado.motorAsr = null
-    estado.nombresPorVoz.clear()
-    estado.nombresPorEtiqueta.clear()
-    estado.pendienteNombre = null
-    estado.plantillasVoz.clear()
-    estado.muestrasAbierta = []
-    estado.tramosDeLaAbierta = new Set()
-    estado.muestrasEnUltimoIntento = 0
-    estado.totalMuestrasEntregadas = 0
-    estado.contadorVoces = 0
-    estado.medidaVozEnCurso = false
-    estado.medidoHastaPorTramo = new Map()
-    estado.contadorCambioVoz = 0
-    estado.candidatoCambioVoz = null
+    Object.assign(estado, crearEstadoSesion(idioma), {
+      sessionId,
+      turnoActual: turno,
+      filas: estado.filas,
+      oyentes: estado.oyentes,
+    })
   }
 
   return {
