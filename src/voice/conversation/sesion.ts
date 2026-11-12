@@ -96,8 +96,15 @@ export type EstadoSesion = {
   contadorVoces: number
   /** ¿Hay una medida de voz en curso para la locución abierta? */
   medidaVozEnCurso: boolean
-  /** Fin del tramo cubierto por la última medida de voz (partición Caso 1+3). */
-  medidoHastaFin: number
+  /**
+   * Fin cubierto por la última medida de voz de CADA tramo (el abierto es una
+   * clave más, por `locutionId`). Freno del re-embed por resultado: con el VAD
+   * cortado dentro de la frase, todos los interinos llegan con el tramo nuevo y
+   * sin este mapa cada uno re-embebía la MISMA ventana en la cola única
+   * (lentitud letra por letra, medido 2026-11-12). En el tramo abierto marca
+   * además hasta dónde llega el contador del cambio de voz (partición Caso 1+3).
+   */
+  medidoHastaPorTramo: Map<string, number>
   /** Ventanas SEGUIDAS de voz distinta ya contadas (confirmación Caso 1+3). */
   contadorCambioVoz: number
   /** Primera ventana sospechosa retenida: su audio y su texto van al hablante nuevo si se confirma. */
@@ -160,7 +167,7 @@ export function crearEstadoSesion(idiomaInicial: IdiomaLocucion): EstadoSesion {
     totalMuestrasEntregadas: 0,
     contadorVoces: 0,
     medidaVozEnCurso: false,
-    medidoHastaFin: 0,
+    medidoHastaPorTramo: new Map(),
     contadorCambioVoz: 0,
     candidatoCambioVoz: null,
     oyentes: new Set(),
@@ -397,7 +404,7 @@ export function crearSesion(
     estado.totalMuestrasEntregadas = 0
     estado.contadorVoces = 0
     estado.medidaVozEnCurso = false
-    estado.medidoHastaFin = 0
+    estado.medidoHastaPorTramo = new Map()
     estado.contadorCambioVoz = 0
     estado.candidatoCambioVoz = null
   }

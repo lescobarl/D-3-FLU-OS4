@@ -49,7 +49,9 @@ function entradaModulo(): ConversationEntry {
     id: REGISTRO_MODULO.locutionId,
     role: 'user',
     text: REGISTRO_MODULO.texto,
-    timestamp: Date.parse(UPDATED_AT),
+    // HORA DE LA VOZ (dueño: `conversationRowWriter`): inicio del tramo =
+    // `sync.updated_at` menos su duración (16_000 / 16_000 Hz = 1 s).
+    timestamp: Date.parse(UPDATED_AT) - 1_000,
     speakerId: labelToSpeakerId(REGISTRO_MODULO.etiqueta),
     speakerName: REGISTRO_MODULO.etiqueta,
     sessionId: REGISTRO_MODULO.sessionId,

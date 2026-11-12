@@ -31,7 +31,7 @@ mismo commit. Si no puedes borrarlo ahora, no añadas el nuevo ahora.
 |---|---|---|
 | ¿El texto nuevo pertenece a la línea abierta? | `fusion.ts:14` `perteneceALineaAbierta` | Usa `continuaLaFrase` y el silencio medido. |
 | ¿Cómo se revisa el texto (extiende/revisa/mantiene)? | `revision.ts:68` `unirRevision` · `revision.ts:94` `decidirRevision` | Si pierde palabras, conserva el anterior y no pinta. |
-| ¿Cómo se compone la hipótesis completa del evento ASR? | `src/voice/lib/speechMerge.js:338` `fraseDelEventoAsr` (adaptador `adapters.ts:162` `componerFraseDelEvento`) | Pregunta distinta de «¿pertenece?»: aquí se compone el texto del evento. |
+| ¿Cómo se compone la hipótesis completa del evento ASR? | `src/voice/lib/speechMerge.js:338` `fraseDelEventoAsr` (compositor del límite `composicion.ts` `componerEvento`) | Pregunta distinta de «¿pertenece?»: aquí se compone el texto del evento contra la frontera de transporte. |
 | ¿Cómo se pega un trozo nuevo a la línea abierta en el producto? | `src/voice/lib/speechMerge.js:454` `mergeIntoOpenLine` (adaptador `adapters.ts:171` `fusionarEnLineaAbierta`) | Composición del límite; no decide revisión. |
 | ¿La frase es eco del TTS? | `eco.ts:46` `esEcoDeTts` | Eco/barge-in contra `ultimoTextoDicho()`. |
 
@@ -64,7 +64,8 @@ mismo commit. Si no puedes borrarlo ahora, no añadas el nuevo ahora.
 | Pregunta | Dueño | Nota |
 |---|---|---|
 | ¿Cómo se compone el motor para el producto? | `producto.ts:123` `crearMotorConversacionProducto` | Une adaptadores reales y el motor. |
-| ¿El evento ASR trae un final? | `producto.ts:79` `traeFinal` | El final marca la frase; no cierra la locución. |
+| ¿El evento ASR trae un final? | `composicion.ts:1` `traeFinal` | El final marca la frase; no cierra la locución. |
+| ¿Qué resultados del evento ya están escritos y no se re-entregan? | `composicion.ts:1` `componerEvento` · `avanzarFrontera` | Frontera de TRANSPORTE por índice, no dedupe por texto (D11: la repetición legítima tras pausa conserva su fila); avanza en `row.committed`. Consumidor único: `producto.ts`. Kill list: los campos `corteFinales`/`ultimoIndiceFinal` que vivían en `producto.ts`. |
 | ¿Qué wake retenida se pega al final cuando el ASR la parte? | `src/voice/hooks/wakePending.js:1` `aplicarWakePendiente` | Consumidor único: `useFluVoiceAssistant.js` (`onresult`). Kill list: el bloque inline de wake partida que vivía en el hook. |
 | ¿Qué hora sella una fila de conversación? | `src/core/db/conversationRowWriter.ts:122` `escribirRegistroConversacion` | La hora de la VOZ (inicio del tramo); el sync conserva el cierre. Consumidor: el chat. |
 | ¿Cuándo se descarta una reentrega en el stop? | `sesion.ts:contarReentrega` (consumidor `texto.ts:sinReentregas`) | Solo si el texto ya está escrito (`speechMerge.utterancesRelate`); un texto distinto se commitea. |
@@ -100,8 +101,9 @@ Estas cuatro zonas parecen dos y no lo son. No las «unifiques» sin leer la not
    cerrar; `pasivo.renombrarFilaDeUsuario` solo fija el nombre canónico de una
    fila por id. No hay segunda medida: el resolver pasivo quedó retirado.
 3. **Composición del límite vs revisión del módulo.**
-   `speechMerge.fraseDelEventoAsr` / `mergeIntoOpenLine` componen la hipótesis
-   del evento; `fusion.perteneceALineaAbierta` y `revision.unirRevision`
+   `speechMerge.fraseDelEventoAsr` compone el texto del evento y `composicion.ts`
+   lo recorta contra la frontera de transporte; `mergeIntoOpenLine` pega el
+   trozo interino; `fusion.perteneceALineaAbierta` y `revision.unirRevision`
    deciden pertenencia y revisión. Preguntas distintas.
 4. **Nombre de sesión vs identidad global.** `motor.registrarNombre` es la
    etiqueta de continuidad de la SESIÓN (dueño y disparador único en el mapa):

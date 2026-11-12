@@ -132,6 +132,11 @@ export function crearIngesta({
    * Dueño ÚNICO de «este texto es la reentrega de una fila ya escrita». Mismo
    * turno y misma frase (exacta, continuación o reemisión solapada) sobre una
    * ventana que toca la fila; una frase nueva no entra.
+   *
+   * La reemisión del final retenido ENTRE turnos no se resuelve aquí: el módulo
+   * nunca deduplica por texto entre turnos (repetición legítima tras pausa
+   * conserva su fila, decisión D11); el producto no re-compone resultados que ya
+   * cubrió una fila commiteada.
    * @param entrada Resultado del ASR con su turno y tramo.
    * @param tramoId Tramo resuelto para el resultado.
    * @returns true si debe contarse como `turnoYaEscrito` y no escribir.
@@ -143,14 +148,10 @@ export function crearIngesta({
       (tramoId ? estado.filas.get(tramoId) : undefined) ??
       ultimaFilaPorFin(estado.filas.values())
     if (!previa) return false
-    const turno = entrada.turnId
-      ? String(entrada.turnId).trim()
-      : estado.turnoActual
+    const turno = entrada.turnId ? String(entrada.turnId).trim() : estado.turnoActual
     if (previa.turnId !== turno) return false
     const tramoEntrante = tramos.resolver(tramoId, entrada.tramo)
-    const solapa = Boolean(
-      tramoEntrante && tramoEntrante.inicio <= previa.tramo.fin,
-    )
+    const solapa = Boolean(tramoEntrante && tramoEntrante.inicio <= previa.tramo.fin)
     const exacta = String(previa.texto || '').trim() === textoEntrante
     if (!solapa && !exacta) return false
     return exacta || continuaLaFrase(previa.texto, textoEntrante)
@@ -264,13 +265,24 @@ export function crearIngesta({
     let finAlMedir: number
     let sampleRate: number
     if (mismotramo) {
-      if (abierta.fin - estado.medidoHastaFin < ventana) return null
+      const medidoAbierta =
+        estado.medidoHastaPorTramo.get(abierta.locutionId) ?? 0
+      if (abierta.fin - medidoAbierta < ventana) return null
       bloques = estado.muestrasAbierta
       finAlMedir = abierta.fin
       sampleRate = abierta.sampleRate
     } else {
       const entrante = tramos.resolver(tramoId)
       if (!entrante) return null
+      // FRENO DEL TRAMO AJENO: con el VAD cortado dentro de la frase, CADA
+      // resultado del ASR llega con el tramo nuevo y sin freno cada interino
+      // re-embebía la MISMA ventana (un embed por resultado, esperado en línea
+      // en la cola ÚNICA: la transcripción se alentaba letra por letra, medido
+      // 2026-11-12). El tramo se embebe UNA vez por ventana; solo se re-embebe
+      // cuando CRECIÓ otra ventana completa de audio nuevo.
+      const medidoHasta =
+        estado.medidoHastaPorTramo.get(tramoId) ?? Number.NEGATIVE_INFINITY
+      if (entrante.fin - medidoHasta < ventana) return null
       bloques = tramos.muestras(tramoId, entrante) ?? []
       finAlMedir = entrante.fin
       sampleRate = entrante.sampleRate
@@ -292,6 +304,10 @@ export function crearIngesta({
     }
     const vigente = estado.abierta
     if (!vector || !vigente) return null
+    // La ventana del tramo ajeno queda cubierta por esta medida: el siguiente
+    // resultado solo re-embebe si el tramo creció otra ventana. Un fallo del
+    // embebedor NO sella (vector null): la próxima entrega reintenta.
+    if (!mismotramo) estado.medidoHastaPorTramo.set(tramoId, finAlMedir)
     if (mismotramo && vigente.locutionId !== tramoId) return null
     const previo = plantillaAbierta.vector
     // La misma voz medida tiene banda 0.69–0.74: usar el piso de continuidad
@@ -307,7 +323,10 @@ export function crearIngesta({
       // Misma voz: la etiqueta se conserva y el tramo continuo NO cambia
       // de etiqueta; el contador avanza hasta el fin medido y la cadena de
       // voces distintas se rompe (la confirmación arranca de cero).
-      if (mismotramo) estado.medidoHastaFin = Math.max(estado.medidoHastaFin, finAlMedir)
+      if (mismotramo) {
+        const medido = estado.medidoHastaPorTramo.get(tramoId) ?? 0
+        estado.medidoHastaPorTramo.set(tramoId, Math.max(medido, finAlMedir))
+      }
       estado.contadorCambioVoz = 0
       estado.candidatoCambioVoz = null
       return null
@@ -327,7 +346,7 @@ export function crearIngesta({
       const limite = mismotramo
         ? finAlMedir - cola.length
         : entrante?.inicio ?? finAlMedir - cola.length
-      if (mismotramo) estado.medidoHastaFin = finAlMedir
+      if (mismotramo) estado.medidoHastaPorTramo.set(tramoId, finAlMedir)
       estado.candidatoCambioVoz = {
         limite,
         textoAntes: String(estado.abierta?.texto || ''),
@@ -504,7 +523,10 @@ export function crearIngesta({
       return null
     }
     estado.muestrasAbierta = [ventana]
-    estado.medidoHastaFin = Math.max(estado.medidoHastaFin, datos.fin)
+    estado.medidoHastaPorTramo.set(
+      datos.tramoId,
+      Math.max(estado.medidoHastaPorTramo.get(datos.tramoId) ?? 0, datos.fin),
+    )
     dependencias.registro.registrar('conversacion.locucion.partida', {
       sessionId: estado.sessionId ?? '',
       locutionId: datos.tramoId,
@@ -915,7 +937,13 @@ export function crearIngesta({
     estado.medidaVozEnCurso = true
     // La medida cubre TODO el audio retenido: el contador del cambio de voz
     // (Caso 1+3) arranca en el fin cubierto por esta medida.
-    estado.medidoHastaFin = Math.max(estado.medidoHastaFin, locucion.fin)
+    estado.medidoHastaPorTramo.set(
+      locucion.locutionId,
+      Math.max(
+        estado.medidoHastaPorTramo.get(locucion.locutionId) ?? 0,
+        locucion.fin,
+      ),
+    )
     // Se mide la VENTANA de identidad (la misma que `verificarCambioVoz`), no el
     // búfer completo: en la sesión 8149df78, 12 de 124 mediciones copiaban hasta
     // 709.824 muestras para extraer un vector de 512.

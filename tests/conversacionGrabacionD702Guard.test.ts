@@ -99,11 +99,14 @@ describe('sesión real d70267b8 — reinicio de turno, log y diarización', () =
     )
     expect(metricas).toContain('muestrasAudio <= 1')
 
-    const producto = readFileSync(
-      join(RAIZ, 'src/voice/conversation/producto.ts'),
+    const composicion = readFileSync(
+      join(RAIZ, 'src/voice/conversation/composicion.ts'),
       'utf8',
     )
-    expect(producto).toContain('hayFinal ? 0 : evento.resultIndex')
+    expect(composicion).toContain(
+      'const recorte = total > vigente.corte ? vigente.corte : 0',
+    )
+    expect(composicion).toMatch(/hayFinal\s*\?\s*recorte\s*:/)
     const ingesta = readFileSync(
       join(RAIZ, 'src/voice/conversation/ingesta.ts'),
       'utf8',

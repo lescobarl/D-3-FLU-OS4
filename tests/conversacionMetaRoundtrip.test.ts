@@ -91,7 +91,10 @@ describe('meta.conversacion — ida y vuelta por el escritor único', () => {
       id: LOCUTION_ID,
       role: 'user',
       text: 'hola flu, prueba de ida y vuelta',
-      timestamp: Date.parse(UPDATED_AT),
+      // HORA DE LA VOZ (dueño: `conversationRowWriter`): la fila se sella al
+      // INICIO del tramo — `sync.updated_at` menos su duración
+      // ((67_890 - 12_345) / 48_000 s = 1157,1875 ms, redondeado a 1157).
+      timestamp: Date.parse(UPDATED_AT) - 1_157,
       speakerId: 'speaker_7',
       speakerName: 'Luis',
       participantId: 'user-a',

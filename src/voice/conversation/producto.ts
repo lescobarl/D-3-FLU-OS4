@@ -25,12 +25,13 @@
  * entrega FRAGMENTOS: re-emite delante el final retenido del enunciado anterior,
  * manda prefijo re-plegado + cola que crece y puede re-escuchar el mismo tramo dos
  * veces (medido 8f3112c2: patrones `10`/`11` y `"bien"` + `" vamos"`). Este límite
- * compone la HIPÓTESIS COMPLETA de cada evento (`componerFraseDelEvento` con
- * `desde=0`) y la entrega al módulo, en UNA cadena serializada: el módulo decide
- * la pertenencia y la revisión; el límite no pega deltas de eventos anteriores.
+ * compone la HIPÓTESIS COMPLETA de cada evento con `composicion.ts` (desde 0 o,
+ * si ya hay filas commiteadas, desde la FRONTERA que estas cubrieron: la
+ * re-emisión retenida no se vuelve a entregar) y la entrega al módulo, en UNA
+ * cadena serializada: el módulo decide la pertenencia y la revisión; el límite no
+ * pega deltas de eventos anteriores.
  */
 import {
-  componerFraseDelEvento,
   crearAlmacenDexieProducto,
   crearConfigFlu,
   crearEmbebedorProducto,
@@ -44,6 +45,12 @@ import {
   fusionarEnLineaAbierta,
   registrarFallo,
 } from './adapters.ts'
+import {
+  avanzarFrontera,
+  componerEvento,
+  FRONTERA_INICIAL,
+} from './composicion.ts'
+import type { EventoComposicion, FronteraComposicion } from './composicion.ts'
 import { crearConversacion } from './motor.ts'
 import { perteneceALineaAbierta } from './fusion.ts'
 import { CONVERSACION_CONFIG } from './ports.ts'
@@ -54,36 +61,8 @@ import type {
   InstantaneaConversacion,
 } from './tipos.ts'
 
-/** Alternativa de transcripción de un resultado del reconocedor. */
-type AlternativaProducto = Readonly<{ transcript?: string }>
-
-/** Resultado del reconocedor (la nube y el motor local comparten esta forma). */
-type ResultadoProducto = ArrayLike<AlternativaProducto> &
-  Readonly<{ isFinal?: boolean }>
-
 /** Evento real de ASR con el índice del primer resultado nuevo. */
-export type EventoProducto = Readonly<{
-  results?: ArrayLike<ResultadoProducto>
-  resultIndex?: number
-  /** Métricas acústicas del evento (el hook ya las manda con esta forma). */
-  metrics?: Readonly<{ durationMs?: number; speechLikeMs?: number; rms?: number }>
-}>
-
-/**
- * ¿El evento trae un final del reconocedor desde `resultIndex`?
- * (Caso 7+6: dueño único de la pregunta "¿es final?"; `isFinal` es la marca
- * de Chrome de que la frase quedó completa.)
- * @param evento Evento real del reconocedor.
- * @returns `true` si algún resultado nuevo es final.
- */
-export function traeFinal(evento: EventoProducto): boolean {
-  const resultados = evento.results
-  if (!resultados) return false
-  for (let i = Number(evento.resultIndex) || 0; i < resultados.length; i += 1) {
-    if (resultados[i]?.isFinal === true) return true
-  }
-  return false
-}
+export type EventoProducto = EventoComposicion
 
 /** Libro del último trozo pegado a la línea abierta (regla: `speechMerge`). */
 type LibroDeLinea = Readonly<{ base: string; chunk: string; line: string }>
@@ -197,6 +176,25 @@ export function crearMotorConversacionProducto({
   let inicioPendiente = -1
   let finPendiente = -1
   let sampleRatePendiente = 0
+  /**
+   * FRONTERA del reconocedor: índices de resultados YA cubiertos por una fila
+   * commiteada. Chrome ACUMULA los resultados de su instancia y re-emite delante
+   * el final retenido al arrancar el enunciado siguiente (patrones 10/11);
+   * compuesto desde 0, ese final viajaba dentro de la frase nueva («después que
+   * cierro la escucha escribe cosas que ya había escrito antes», dueño
+   * 2026-11-12). El motor local REEMPLAZA el array en cada segmento (longitud
+   * 1), así que `total` nunca supera la frontera y su composición queda intacta.
+   * Esto NO es un dedupe por texto (D11: la repetición legítima tras pausa
+   * conserva su fila): es una marca de transporte por índice cuyo dueño es
+   * `composicion.ts`.
+   */
+  let frontera: FronteraComposicion = FRONTERA_INICIAL
+  // La frontera avanza cuando una fila commitea: lo que sostuvo su texto ya
+  // está escrito y no se re-compone. Cubre también el commit del stop.
+  api.subscribe((evento) => {
+    if (evento.tipo !== 'row.committed') return
+    frontera = avanzarFrontera(frontera)
+  })
 
   /**
    * Encola un paso del límite y registra su fallo sin romper la cadena.
@@ -320,14 +318,16 @@ export function crearMotorConversacionProducto({
         if (estadoMotor !== 'activa') return
         const instantanea = api.snapshot()
         const abierta = instantanea.locucionAbierta
-        // El FINAL es la HIPÓTESIS COMPLETA del tramo (desde=0): sustituye la
-        // línea acumulada, no se concatena. Los interinos siguen usando
-        // `resultIndex` (solo los resultados NUEVOS).
-        const hayFinal = traeFinal(evento)
-        const trozo = componerFraseDelEvento(
-          evento.results,
-          hayFinal ? 0 : evento.resultIndex,
-        )
+        // El FINAL es la HIPÓTESIS COMPLETA del tramo: sustituye la línea
+        // acumulada, no se concatena. `composicion.ts` la compone desde la
+        // FRONTERA ya cubierta por filas commiteadas (0 si no hay): la
+        // re-emisión retenida del enunciado anterior no se vuelve a entregar.
+        // Los interinos siguen usando `resultIndex` (solo los resultados
+        // NUEVOS), nunca por debajo de la frontera.
+        const compuesta = componerEvento(evento, frontera)
+        frontera = compuesta.frontera
+        const trozo = compuesta.trozo
+        const hayFinal = compuesta.hayFinal
         if (!trozo) return
         const laContinua =
           abierta !== null &&

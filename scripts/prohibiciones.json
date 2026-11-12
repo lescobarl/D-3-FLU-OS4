@@ -47,6 +47,18 @@
       "test": "tests/conversacionLiveBarrierGuard.test.ts",
       "motivo": "La caja pinta la frase retenida que se dicta, el reloj del hueco solo lo mueve la linea abierta y el stop no tira texto.",
       "fecha": "2026-11-10"
+    },
+    {
+      "id": "tramo-ajeno-medida",
+      "test": "tests/conversacionTramoAjenoMedidaGuard.test.ts",
+      "motivo": "El tramo ajeno se embebe una vez por ventana y solo se re-mide cuando crece minSegundosVozMedida; el interino no re-embebe en la cola unica.",
+      "fecha": "2026-11-12"
+    },
+    {
+      "id": "reemision-turno",
+      "test": "tests/conversacionReemisionTurnoGuard.test.ts",
+      "motivo": "El final retenido que el reconocedor re-emite delante no vuelve a escribirse: marca de transporte por indice que avanza con la fila commiteada, nunca dedupe por texto (D11).",
+      "fecha": "2026-11-12"
     }
   ]
 }

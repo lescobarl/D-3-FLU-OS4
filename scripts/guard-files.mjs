@@ -58,4 +58,7 @@
   'tests/vozVideoHudGuard.test.ts',
   'tests/vozTurnoHablanteGuard.test.ts',
   'tests/conversacionReglasCierreGuard.test.ts',
-  'tests/vozFlujoLatenciaGuard.test.ts',]
+  'tests/vozFlujoLatenciaGuard.test.ts',
+  'tests/conversacionTramoAjenoMedidaGuard.test.ts',
+  'tests/conversacionReemisionTurnoGuard.test.ts',
+  'tests/conversacionComposicion.test.ts',]

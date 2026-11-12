@@ -68,7 +68,8 @@ export {
   crearUtilidadesFilaProducto,
   renameRowSpeakerName,
 } from './adapters.ts'
-export { crearMotorConversacionProducto, traeFinal } from './producto.ts'
+export { crearMotorConversacionProducto } from './producto.ts'
+export { traeFinal } from './composicion.ts'
 export type { EventoProducto, MotorConversacionProducto } from './producto.ts'
 export {
   grabarRevisionDeFila,

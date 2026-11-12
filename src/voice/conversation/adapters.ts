@@ -55,7 +55,7 @@ import { canonicalSpeakerName } from '../lib/speakerLabels.js'
 import { embedAudioForDiarization } from '../lib/voiceIdWorkerClient.js'
 import { useIntegrationStore } from '../../store/integrationStore.ts'
 import { VOICE_DIARIZATION_DEFAULTS } from '../../core/config/sharedConfig.ts'
-import { fraseDelEventoAsr, mergeIntoOpenLine } from '../lib/speechMerge.js'
+import { mergeIntoOpenLine } from '../lib/speechMerge.js'
 import {
   countVoicedSamples,
   countSpeechLikeSamplesInBlocks,
@@ -167,17 +167,6 @@ export async function ejecutarRegistrando(
     logCaughtError(contexto, error)
   }
 }
-
-/**
- * Compone el TROZO de un evento del ASR con sus resultados NUEVOS.
- *
- * El reconocedor entrega fragmentos, no frases acumuladas: re-emite delante el final
- * retenido del enunciado anterior (patrón `10` con `resultIndex=1`), manda prefijo
- * re-plegado + cola creciente y puede re-escuchar el mismo tramo dos veces. El dueño
- * de esa composición es `speechMerge.fraseDelEventoAsr`; se expone aquí porque el
- * límite del módulo vive en este archivo.
- */
-export const componerFraseDelEvento = fraseDelEventoAsr
 
 /**
  * Integra un trozo en la línea abierta con el libro de su último hueco.

@@ -82,6 +82,11 @@
       "despacharFraseVigente",
       "leerUltimoTextoDicho"
     ],
+    "composicion.ts": [
+      "avanzarFrontera",
+      "componerEvento",
+      "traeFinal"
+    ],
     "eco.ts": [
       "esEcoDeTts",
       "palabrasNormalizadas"
@@ -155,8 +160,7 @@
       "crearMotorConversacionProducto",
       "descartarAudioPendiente",
       "encadenar",
-      "encolarAudioPendiente",
-      "traeFinal"
+      "encolarAudioPendiente"
     ],
     "revision.ts": [
       "contarPalabras",

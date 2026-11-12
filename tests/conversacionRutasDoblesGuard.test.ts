@@ -14,7 +14,8 @@
  * - La voz la mide el módulo (`verificarCambioVoz`) sobre el tramo ENTRANTE,
  *   aunque el VAD lo haya cortado a otro tramo, y se verifica ANTES de la
  *   atribución del texto.
- *  - El final se compone desde 0 (hipótesis completa), no con `resultIndex`.
+ *  - El final se compone desde la frontera commiteada (0 si no hay), no con
+ *    `resultIndex`.
  *  - No se descarta por prefijo de texto (`previo.includes(nuevo)`).
  *  - El cierre de la locución tiene DOS puertas medidas (voz distinta o
  *    silencio ≥ silenceCloseMs); el final del ASR no es una tercera.
@@ -201,9 +202,11 @@ function medir(fuentes: readonly Fuente[] = FUENTES) {
     closureConditionOwners: fuentes.filter((archivo) =>
       /silencioMs\s*>=\s*(?:umbrales\.)?silenceCloseMs/.test(archivo.src),
     ).length,
+    // El final se compone en `composicion.ts` contra la frontera de transporte;
+    // componerlo directo desde `resultIndex` (sin la frontera) es la ruta doble.
     finalResultIndex: contar(
-      fuenteEn('producto.ts'),
-      /componerFraseDelEvento\(\s*evento\.results,\s*evento\.resultIndex\s*\)/g,
+      fuenteEn('composicion.ts'),
+      /fraseDelEventoAsr\(\s*resultados,\s*evento\.resultIndex\s*\)/g,
     ),
     staleMeasureReads: fuentes.reduce(
       (total, archivo) => total + contar(archivo.src, /ultimaMedida/g),
@@ -449,10 +452,14 @@ describe('CONVERSACIÓN — rutas dobles medidas', () => {
     expect(fuente('cierre.ts')).not.toMatch(/texto:\s*textoFinal/)
   })
 
-  it('el final usa la hipótesis completa desde 0, no resultIndex', () => {
-    expect(fuente('producto.ts')).toContain('hayFinal ? 0 : evento.resultIndex')
-    expect(fuente('producto.ts')).not.toMatch(
-      /componerFraseDelEvento\(\s*evento\.results,\s*evento\.resultIndex\s*\)/,
+  it('el final se compone desde la frontera commiteada, nunca desde resultIndex', () => {
+    expect(fuente('composicion.ts')).toContain(
+      'const recorte = total > vigente.corte ? vigente.corte : 0',
+    )
+    expect(fuente('composicion.ts')).toMatch(/hayFinal\s*\?\s*recorte\s*:/)
+    expect(fuente('composicion.ts')).toContain('avanzarFrontera')
+    expect(fuente('composicion.ts')).not.toMatch(
+      /fraseDelEventoAsr\(\s*resultados,\s*evento\.resultIndex\s*\)/,
     )
   })
 })
