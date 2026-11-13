@@ -204,7 +204,12 @@ export interface IntegrationActions {
     noteSpeakerHighWater: (index: number) => void;
     /** Detectar sentimiento de un texto y añadirlo al historial */
     addUserMessage: (text: string, speakerName?: string) => void;
-    addFluMessage: (text: string, meta?: ConversationEntry['meta']) => void;
+    /**
+     * Añadir una respuesta de FLU. `options.turnId` identifica el turno del que
+     * es respuesta: la fila lo lleva y el escritor único (`logFluReply`) es
+     * idempotente por turno.
+     */
+    addFluMessage: (text: string, meta?: ConversationEntry['meta'], options?: { turnId?: number | string | null }) => void;
     /** Dueno unico de una fila de FLU completa (id/timestamp/sentiment/phase/meta). */
     addFluEntry: (entry: ConversationEntry) => void;
     /** Añadir un mensaje de sistema al historial de conversación */
@@ -695,7 +700,8 @@ export const useIntegrationStore = create<IntegrationStore>()(
                 }));
             },
 
-            addFluMessage: (text: string, meta?: ConversationEntry['meta']) => {
+            addFluMessage: (text: string, meta?: ConversationEntry['meta'], options?: { turnId?: number | string | null }) => {
+                const turnId = String(options?.turnId ?? '').trim();
                 get().addFluEntry({
                     role: 'flu',
                     text,
@@ -703,6 +709,7 @@ export const useIntegrationStore = create<IntegrationStore>()(
                     id: nextId(),
                     speakerName: 'FLU',
                     ...(meta ? { meta } : {}),
+                    ...(turnId ? { turnId } : {}),
                 });
             },
             setEmotionalState: (state: EmotionalState) => {

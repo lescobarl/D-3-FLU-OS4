@@ -80,7 +80,9 @@ describe('producto — el texto del tramo se compone con los trozos del evento',
       resultIndex: 1,
       results: [resultado('bien vamos'), resultado(' a hacer')],
     })
-    expect(motor.instantanea().locucionAbierta?.texto).toBe('bien Vamos a hacer')
+    // La línea abierta es la HIPÓTESIS COMPLETA del evento vigente (con su
+    // grafía tal cual la revisó Chrome: aquí «vamos» en minúscula).
+    expect(motor.instantanea().locucionAbierta?.texto).toBe('bien vamos a hacer')
 
     // Dos finales del MISMO evento: el evento trae la HIPÓTESIS COMPLETA desde
     // 0 (con el prefijo ya dicho); son dos re-escuchas y se unen conservando las

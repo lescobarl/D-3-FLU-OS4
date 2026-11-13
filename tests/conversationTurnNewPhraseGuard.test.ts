@@ -28,6 +28,17 @@ describe('turnoYaEscrito — solo reentrega', () => {
     expect(continuaLaFrase('hola', '')).toBe(false);
   });
 
+  it('palabras VACÍAS compartidas no son evidencia de la misma frase (19:05)', () => {
+    // Medido 2026-11-12 19:05: la fila A y el arranque de la habla siguiente
+    // compartían «a»×3 + «vamos» y el arranque se pegó a la fila A; la misma
+    // habla volvió entera en su propia fila (el texto quedó dos veces).
+    const filaA =
+      'voy a empezar otra vez vamos a trabajar con la transcripción la de avisación etcétera voy a contar 1 2 3 4 5 6 7 8 9 10 hago un semi silencio';
+    expect(continuaLaFrase(filaA, ' continúo Okay vamos a ver qué tal')).toBe(false);
+    // La revisión REAL con cuña en medio sigue reconociéndose por su contenido.
+    expect(continuaLaFrase('se vuelve a quedar', 'se vuelve bien Vamos a quedar')).toBe(true);
+  });
+
   it('la puerta de cierre es por TRAMO, no por turno ni por prefijo de texto', () => {
     const cierre = readFileSync(join(process.cwd(), 'src/voice/conversation/cierre.ts'), 'utf8');
     const texto = readFileSync(join(process.cwd(), 'src/voice/conversation/texto.ts'), 'utf8');

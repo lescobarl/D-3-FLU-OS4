@@ -6,11 +6,10 @@
  * un huérfano expira contado. No escribe filas: pide el cierre a la sesión.
  */
 import { continuaLaFrase } from '../core/locucion.js'
-import { utterancesRelate } from '../lib/speechMerge.js'
 import { esEcoDeTts } from './eco.ts'
 import { decidirFrontera } from './frontera.ts'
 import type { DecisionFrontera } from './frontera.ts'
-import { ultimaFilaPorFin, ventanaDentroDe } from './fila.ts'
+import { filaQueCubre, ultimaFilaPorFin, ventanaDentroDe } from './fila.ts'
 import type { Pendientes } from './cola.ts'
 import type { RegistroTramos } from './tramos.ts'
 import type { Sesion } from './sesion.ts'
@@ -20,6 +19,7 @@ import type {
   EntradaPendiente,
   EvidenciaVoz,
   LocucionAbierta,
+  TextoDeReentrega,
 } from './tipos.ts'
 import type {
   ConfiguracionConversacion,
@@ -35,6 +35,8 @@ export type FlujoTexto = Readonly<{
   procesarResultadoAsr(entrada: AsrIngestado): Promise<void>
   flushPendientes(): Promise<void>
   finalizarPendientes(motivo: MotivoCierre): Promise<void>
+  /** Cierre ÚNICO por frontera: funde lo retenido antes del tiempo y cierra. */
+  cerrarPorFrontera(frontera: DecisionFrontera): Promise<void>
 }>
 
 /**
@@ -49,7 +51,9 @@ export function crearFlujoTexto({
   tramos,
   pendientes,
   contarReentrega,
+  esReentrega,
   tramoParaTexto,
+  sumarAudioAtribuido,
 }: {
   dependencias: Pick<DependenciasConversacion, 'reloj' | 'ultimoTextoDicho' | 'config'>
   configuracion: ConfiguracionConversacion
@@ -59,10 +63,23 @@ export function crearFlujoTexto({
   /** Dueño del motivo `turnoYaEscrito` (inyectado por `ingesta`). */
   contarReentrega: (locutionId: string | null, tramo: TramoMuestreado | null) => void
   /**
+   * Dueño ÚNICO de «este texto es la reentrega de una fila ya escrita»: la
+   * INGESTA lo implementa y lo inyecta; este flujo solo pregunta. El volcado
+   * del stop usa la MISMA puerta que la ingesta: antes tenía su propio criterio
+   * por texto y las dos puertas no coincidían (defecto medido 2026-11-12).
+   */
+  esReentrega: (entrada: TextoDeReentrega, tramoId: string) => boolean
+  /**
    * Acuña el tramo de un texto que llegó sin tramo vivo. El id lo pide a la
    * ingesta (dueño del tramo sintético); aquí no se inventa un id inline.
    */
   tramoParaTexto: () => string
+  /**
+   * Atribuye a la locución abierta el audio de un tramo AJENO cuyo texto se
+   * fundió en ella (el audio acompaña al texto). La INGESTA es dueña de la
+   * medida; este flujo solo la invoca para cada tramo que se funde.
+   */
+  sumarAudioAtribuido: (tramoId: string) => void
 }): FlujoTexto {
   const estado = sesion.estado
 
@@ -94,6 +111,10 @@ export function crearFlujoTexto({
       medidaMotor: datos.medidaMotor,
       ...(datos.muestrasIniciales ? { muestrasIniciales: datos.muestrasIniciales } : {}),
     })
+    // Confirmación del final: si la locución abre con SU final ya llegado, la
+    // ventana se arma desde ahora y la frontera adelanta la fila con silencio
+    // confirmado (el final solo arma, no cierra).
+    if (datos.finalLlego) estado.confirmacionFinalDesdeMs = dependencias.reloj.ahora()
     // La línea abierta es la frase viva: el pendiente ya no manda en la caja.
     sesion.mostrarPendiente('')
   }
@@ -128,7 +149,12 @@ export function crearFlujoTexto({
     partidaDeVoz = false,
     tramoNuevo: { inicio: number; fin: number; sampleRate: number } | null = null,
   ): string {
-    const previa = ultimaFilaPorFin(estado.filas.values())
+    // La fila anterior es la que CUBRE el audio entrante: con filas commiteadas
+    // fuera de orden (volcado del stop) «la última por fin» no es la dueña del
+    // prefijo. Sin ventana entrante o sin cobertura se conserva la última.
+    const previa =
+      (tramoNuevo ? filaQueCubre(tramoNuevo, estado.filas.values()) : null) ??
+      ultimaFilaPorFin(estado.filas.values())
     const previo = String(previa?.texto || '').trim()
     const nuevo = String(texto || '').trim()
     if (!previo || !nuevo) return nuevo
@@ -188,9 +214,90 @@ export function crearFlujoTexto({
   async function cerrarPorFrontera(frontera: DecisionFrontera): Promise<void> {
     if (!frontera.cerrar || !frontera.causa) return
     const locucion = estado.abierta
-    if (locucion) {
-      await sesion.cerrarLocucion(locucion, 'system', frontera.causa, locucion.final)
+    if (!locucion) return
+    // Frontera de TIEMPO: lo retenido ANTES del silencio es del MISMO bloque que
+    // cierra y se funde en SU fila. Cambio de voz NO: la retenida es de la voz
+    // nueva y abre su propia fila (regla 10).
+    if (frontera.causa !== 'voz') fundirPendientesPrevios()
+    // Tras la fusión la abierta es OTRO objeto: se cierra el vigente, no el
+    // capturado (que perdería el texto fundido).
+    const vigente = estado.abierta ?? locucion
+    await sesion.cerrarLocucion(vigente, 'system', frontera.causa, vigente.final)
+  }
+
+  /**
+   * Funde en la locución abierta los pendientes retenidos ANTES de una frontera
+   * de TIEMPO. El pendiente se retuvo porque su texto no continuaba la frase,
+   * pero llegó antes del silencio de cierre: es parte del MISMO bloque y la
+   * conversación lo debe a UNA fila (regla 3: la caja solo se parte por tiempo o
+   * cambio de hablante — el tiempo aún no llegaba cuando se retuvo). Sin esta
+   * fusión la frontera commiteaba A sola y el flush abría la retenida como fila
+   * propia: texto partido sin frontera real (defecto medido en vivo 2026-11-12,
+   * sesión fd148fe7: «Hablante XX» era el mismo hablante de la fila anterior).
+   *
+   * Puertas de `seFundeEnLaAbierta`: voz distinta medida (regla 10) o audio
+   * ANTERIOR al de A no se funden; la abierta debe tener texto (un caparazón
+   * vacío no hereda pendientes ajenos). Lo no fundido vuelve al retén para las
+   * puertas existentes (flush del cambio de voz, volcado del stop).
+   */
+  function fundirPendientesPrevios(): void {
+    const abierta = estado.abierta
+    if (!abierta || !String(abierta.texto || '').trim()) return
+    // El retén expira lo que ya no es frase: mismo ciclo de vida que el flush.
+    pendientes.expurgar()
+    const lotes = sinReentregas(
+      drenarPendientes().sort((a, b) => ordenDePendiente(a) - ordenDePendiente(b)),
+    )
+    for (const lote of lotes) {
+      if (!seFundeEnLaAbierta(abierta, lote)) {
+        pendientes.encolar(lote)
+        continue
+      }
+      // El audio acompaña al texto: la medida del cierre cubre el tramo fundido
+      // (su hablante, su hora de voz) aunque sea un tramo ajeno al de A.
+      if (String(lote.tramoId || '').trim()) sumarAudioAtribuido(lote.tramoId)
+      sesion.aplicarRevision(
+        estado.abierta ?? abierta,
+        lote.texto,
+        Boolean(abierta.final || lote.final),
+        lote.voz,
+        lote.medida,
+        String(lote.tramoId || '').trim() || tramoParaTexto(),
+      )
     }
+    // La caja vuelve a la línea abierta: el pendiente fundido ya no manda en ella.
+    sesion.mostrarPendiente('')
+  }
+
+  /**
+   * Puertas de la fusión: la retenida entra en la fila que cierra SOLO si no
+   * hay evidencia de que pertenezca a otro bloque o a otra voz.
+   * @param abierta Locución que cierra por tiempo.
+   * @param p Pendiente retenido antes de la frontera.
+   */
+  function seFundeEnLaAbierta(abierta: LocucionAbierta, p: EntradaPendiente): boolean {
+    // Voz distinta MEDIDA en ambos lados: es otro hablante (regla 10) y su texto
+    // se queda en el retén para abrir su propia fila.
+    const vozAbierta = String(abierta.voz.vozId || '').trim()
+    const vozPendiente = String(p.voz.vozId || '').trim()
+    if (vozAbierta && vozPendiente && vozAbierta !== vozPendiente) return false
+    // Sin audio REAL no hay qué fundir: la fila no hereda texto sin evidencia
+    // (el pendiente sin tramo sigue su curso: retén → stop → huérfano contado).
+    const tramo =
+      p.tramo ?? (String(p.tramoId || '').trim() ? tramos.resolver(p.tramoId) : null)
+    if (!tramo) return false
+    // Audio ANTERIOR al de A: es de un bloque previo (su locución cerró por voz y
+    // no lo absorbió). Su texto no pertenece a la fila que cierra ahora.
+    if (tramo.inicio < abierta.inicio) return false
+    // AUDIO A CABALLO DEL CIERRE: el tramo del pendiente EMPIEZA dentro de A y
+    // SIGUE después de su fin — la voz estaba en curso cuando A cerró (medido
+    // 2026-11-12 19:05: tramo [2632832,2786560] con fin 2735232 de A; el tronco
+    // abrió la locución siguiente sobre ESE mismo tramo). Fundirla pegaba a A
+    // una habla que vuelve entera en su propia fila: el mismo texto en dos
+    // filas. La retenida sigue su curso (flush/stop), igual que la ráfaga que
+    // llega DESPUÉS del cierre (fd148fe7).
+    if (tramo.inicio < abierta.fin && tramo.fin > abierta.fin) return false
+    return true
   }
 
   /**
@@ -302,40 +409,15 @@ export function crearFlujoTexto({
   }
 
   /**
-   * true si el texto del pendiente YA está escrito en una fila de la sesión
-   * (reentrega del mismo enunciado). Dueño único de la relación de texto:
-   * `speechMerge.utterancesRelate`; no se tira texto con contenido nuevo.
-   * @param texto Texto del pendiente.
-   * @returns true si una fila ya contiene esa misma frase.
-   * @revisor CREAR NUEVO — la reentrega del stop no tenía dueño tras retirar el
-   *   descarte por fin de audio; esta función la unifica por texto.
-   */
-  function textoYaEscrito(
-    texto: string,
-    tramo: { sampleRate: number; inicio: number; fin: number } | null = null,
-  ): boolean {
-    const limpio = String(texto || '').trim()
-    if (!limpio) return false
-    for (const fila of estado.filas.values()) {
-      const previo = String(fila.texto || '').trim()
-      if (!previo) continue
-      // Reentrega = MISMO audio REAL y solapado. Sin tramo (o con un tramo
-      // sintético que aún no existe) no se descarta: una repetición legítima
-      // («sí», «hola» dos veces) es una frase nueva (regla 12).
-      if (!tramo || !fila.tramo) continue
-      if (seSolapanEnAudio(tramo, fila.tramo) && utterancesRelate(previo, limpio)) return true
-    }
-    return false
-  }
-
-  /**
    * Filtra las reentregas del stop (descarte contado) y devuelve el resto.
+   * Usa la puerta ÚNICA de reentrega (`esReentrega`, inyectada por `ingesta`):
+   * aquí no se re-decide por texto, así el volcado y la ingesta no divergen.
    * @revisor CREAR NUEVO — el stop necesitaba el mismo criterio de reentrega
    *   que la ingesta sin duplicar el descarte por audio.
    */
   function sinReentregas(lotes: readonly EntradaPendiente[]): EntradaPendiente[] {
     return lotes.filter((lote) => {
-      if (!textoYaEscrito(lote.texto, lote.tramo ?? null)) return true
+      if (!esReentrega(lote, lote.tramoId)) return true
       contarReentrega(lote.tramoId, lote.tramo ?? null)
       return false
     })
@@ -369,6 +451,9 @@ export function crearFlujoTexto({
 
   /** Abre el primer grupo; el resto queda retenido en orden de audio. */
   async function flushPendientes(): Promise<void> {
+    // El retén expira lo que ya no es una frase (texto vacío): su ciclo de vida
+    // se cumple aquí, en la única puerta que lo vuelca en orden.
+    pendientes.expurgar()
     if (estado.abierta) return
     const lotes = sinReentregas(
       drenarPendientes().sort(
@@ -473,6 +558,18 @@ export function crearFlujoTexto({
     let texto = String(entrada.texto || '')
 
     if (dependencias.config.esComandoDeControl?.(texto)) {
+      // El comando de control no es conversación, pero su PARCIAL ya está en la
+      // línea abierta. Si este texto pertenece a esa misma locución, se aplica
+      // el texto completo y se cierra por la puerta única de cierre, que lo
+      // descarta como «control» (cierre.ts). Medido 2026-11-12 18:25:32: el
+      // parcial «cer» quedó abierto y el stop lo publicó como fila; el final
+      // «cerrando escucha» llegó después y se tiraba.
+      const abierta = estado.abierta
+      if (abierta && tramoId && abierta.locutionId === tramoId) {
+        aplicarTextoDeLaAbierta(abierta, texto, true, entrada.voz ?? {}, undefined, tramoId)
+        await sesion.cerrarLocucion(estado.abierta ?? abierta, 'system', 'asr', true)
+        return
+      }
       sesion.contarDescarte('control', tramoId, null)
       return
     }
@@ -534,6 +631,9 @@ export function crearFlujoTexto({
       // voz medido). Sin cierres ansiosos, la fila sale UNA vez con la frase
       // completa, no palabras cortas por cada final.
       aplicarTextoDeLaAbierta(abierta, texto, finalValido, voz, entrada.medida, tramoId)
+      // Confirmación del final: el final válido arma la ventana que la frontera
+      // consume (silencio de reloj sin voz). Un interino no arma nada.
+      if (finalValido) estado.confirmacionFinalDesdeMs = dependencias.reloj.ahora()
       // Sin flush aquí: ver la nota de `flushPendientes` (turno vigente).
       return
     }
@@ -576,6 +676,9 @@ export function crearFlujoTexto({
       // pinta ya.
       const finalValido = finalDentroDeLaAbierta(abierta, entrada)
       aplicarTextoDeLaAbierta(abierta, texto, finalValido, voz, entrada.medida, tramoId)
+      // Confirmación del final: la continuación puede traer el final de la
+      // frase completa; si es válido arma la ventana de la frontera.
+      if (finalValido) estado.confirmacionFinalDesdeMs = dependencias.reloj.ahora()
       return
     }
 
@@ -602,5 +705,5 @@ export function crearFlujoTexto({
     // cierra; la locución abierta espera la frontera (silencio, voz, ajeno, fin).
   }
 
-  return { procesarResultadoAsr, flushPendientes, finalizarPendientes }
+  return { procesarResultadoAsr, flushPendientes, finalizarPendientes, cerrarPorFrontera }
 }

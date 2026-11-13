@@ -14,20 +14,38 @@ import { useIntegrationStore } from '../../store/integrationStore.ts';
 
 /**
  * Registra una intervención hablada de FLU en el historial de conversación.
- * Idempotente por turno: si la ÚLTIMA fila ya es de FLU con el mismo texto, no
- * duplica (evita el doble registro cuando dos rutas hablan lo mismo). Un texto
+ * Idempotente por turno: si `turnId` llega y ESE turno ya tiene su fila de FLU,
+ * no se escribe otra (dos rutas pueden hablar lo mismo del mismo turno). Sin
+ * `turnId` (acuses y locuciones fuera de turno) la idempotencia es por
+ * adyacencia: la ÚLTIMA fila de FLU con el mismo texto no se repite. Un texto
  * repetido tras una fila del usuario SÍ se registra (en un juego es legítimo).
+ * @param text Texto hablado por FLU.
+ * @param options.turnId Turno del que es respuesta (identidad de la fila).
  */
-export function logFluReply(text: string): void {
+export function logFluReply(
+    text: string,
+    options: { turnId?: number | string | null } = {},
+): void {
     const clean = String(text || '').trim();
     if (!clean) return;
+    const turnId = String(options.turnId ?? '').trim();
     const store = useIntegrationStore.getState();
     const history = store.conversationHistory;
+    if (turnId) {
+        const yaRespondido = history.some(
+            (entry) => entry?.role === 'flu' && String(entry?.turnId ?? '').trim() === turnId,
+        );
+        if (yaRespondido) return;
+    }
     const last = history[history.length - 1];
-    if (last?.role === 'flu' && String(last.text || '').trim() === clean) return;
+    if (!turnId && last?.role === 'flu' && String(last.text || '').trim() === clean) return;
     // P9.83: si el ULTIMO turno es un evento de sistema, esta respuesta ES su respuesta.
     // Se marca de forma ESTRUCTURAL (no por el texto): el filtro de persistencia deja de
     // depender de una lista de literales que se rompia con cualquier cambio de redaccion.
     const respuestaAEvento = Boolean(last?.meta?.systemEvent);
-    store.addFluMessage(clean, respuestaAEvento ? { systemEventReply: true } : undefined);
+    store.addFluMessage(
+        clean,
+        respuestaAEvento ? { systemEventReply: true } : undefined,
+        turnId ? { turnId } : undefined,
+    );
 }

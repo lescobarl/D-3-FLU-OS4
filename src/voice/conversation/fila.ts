@@ -36,6 +36,7 @@
  */
 import type { EvidenciaVoz } from './tipos.ts'
 import type {
+  AnclaAudio,
   EvidenciaEtiqueta,
   Fila,
   FilaNueva,
@@ -118,6 +119,11 @@ export type CierreLocucion = Readonly<{
    * la fila lo guarda como evidencia del vínculo fila↔voz por timbre.
    */
   firma: readonly number[] | null
+  /**
+   * Hora de VOZ del fin del tramo (ms), derivada del ancla de la sesión. La
+   * fila la arrastra hasta el almacén; sin ancla se omite.
+   */
+  marcaFinMs?: number
 }>
 
 /** Motivo del descarte cuando no hay fila (se cuenta, no se silencia). */
@@ -233,9 +239,59 @@ export function construirFila(entrada: CierreLocucion): ResultadoFila {
       overlap: Boolean(entrada.overlap),
       provisional: !entrada.final,
       reason: entrada.reason,
+      ...(Number.isFinite(Number(entrada.marcaFinMs))
+        ? { marcaFinMs: Number(entrada.marcaFinMs) }
+        : {}),
     },
     descarte: null,
   }
+}
+
+/**
+ * Hora de VOZ del fin de un tramo: el ancla muestra↔reloj de la sesión más el
+ * tiempo transcurrido desde su primera muestra. Es la hora REAL en que se habló
+ * la frase (no la hora de escritura), así una fila dictada hace minutos y
+ * escrita en el stop conserva su instante.
+ * @param ancla Ancla de la sesión (null si aún no entró audio).
+ * @param tramo Tramo a fechar.
+ * @returns Milisegundos desde epoch, o `null` si no se puede fechar con honestidad
+ *   (sin ancla o con frecuencias distintas: mezclar tasas inventaría una hora).
+ */
+export function horaDelFinDelTramo(
+  ancla: AnclaAudio | null,
+  tramo: TramoMuestreado,
+): number | null {
+  if (!ancla) return null
+  const fin = Number(tramo.fin)
+  const inicioAncla = Number(ancla.muestra)
+  const rate = Number(ancla.sampleRate)
+  if (!Number.isFinite(fin) || !Number.isFinite(inicioAncla) || !Number.isFinite(rate) || rate <= 0) {
+    return null
+  }
+  if (Number(tramo.sampleRate) !== rate) return null
+  if (fin < inicioAncla) return null
+  return Math.round(Number(ancla.ms) + ((fin - inicioAncla) / rate) * 1000)
+}
+
+/**
+ * Fila commiteada cuyo TRAMO se solapa con la ventana entrante: es la fila de la
+ * que puede venir un prefijo ya escrito. Cuando varias solapan gana la de mayor
+ * `fin` (la que cubre más audio).
+ * @param tramo Ventana del texto que entra.
+ * @param filas Filas vivas de la sesión.
+ * @returns La fila que cubre la ventana, o null si ninguna la toca.
+ */
+export function filaQueCubre(tramo: TramoMuestreado, filas: Iterable<Fila>): Fila | null {
+  const inicio = Number(tramo?.inicio)
+  const fin = Number(tramo?.fin)
+  if (!Number.isFinite(inicio) || !Number.isFinite(fin)) return null
+  let cubre: Fila | null = null
+  for (const fila of filas) {
+    if (Number(fila.tramo.sampleRate) !== Number(tramo.sampleRate)) continue
+    if (!(fila.tramo.fin > inicio && fin > fila.tramo.inicio)) continue
+    if (!cubre || fila.tramo.fin > cubre.tramo.fin) cubre = fila
+  }
+  return cubre
 }
 
 /**

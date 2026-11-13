@@ -269,11 +269,16 @@
       "deriveUserLastText",
       "deriveUserRowSpeakers",
       "deriveUserRowTexts",
+      "esTurnoDeUsuario",
+      "formatearContextoSinRespuesta",
+      "fraseCanonicaDelTurno",
       "getDialogueContextSlice",
       "isFluSpeaker",
       "lastFluEntry",
       "resolveEchoContext",
       "selectVisiblePhrase",
+      "separarTurnosSinRespuesta",
+      "sinTurnoDelHistorial",
       "trimDialogueHistory"
     ],
     "src/voice/lib/conversationMode.ts": [

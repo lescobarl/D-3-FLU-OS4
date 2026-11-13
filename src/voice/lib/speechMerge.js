@@ -302,7 +302,7 @@ function claveDePalabra(texto = '') {
  *
  * @param {string} elegido variante vigente
  * @param {string} candidata variante hermana del mismo tramo
- * @returns {string} union alineada (o la variante mas completa si no se puede unir)
+ * @returns {string} union alineada (o la candidata, la hipotesis MAS NUEVA, si no se puede unir)
  */
 export function unirVariantesDelMismoTramo(elegido = '', candidata = '') {
   const a = palabrasCrudas(elegido)
@@ -322,7 +322,6 @@ export function unirVariantesDelMismoTramo(elegido = '', candidata = '') {
   const yaEsta = (clave) => salida.some((palabra) => claveDePalabra(palabra) === clave)
   let i = 0
   let j = 0
-  let anadidasAlFinal = 0
   while (i < a.length && j < b.length) {
     if (ka[i] === kb[j]) {
       salida.push(a[i])
@@ -344,14 +343,20 @@ export function unirVariantesDelMismoTramo(elegido = '', candidata = '') {
     i += 1
   }
   while (j < b.length) {
-    if (!yaEsta(kb[j])) {
-      salida.push(b[j])
-      anadidasAlFinal += 1
-    }
+    if (!yaEsta(kb[j])) salida.push(b[j])
     j += 1
   }
-  // Cola grande y ajena: es otra locucion pegada. No se une (lo decide el tramo).
-  if (anadidasAlFinal > 3) return elegido.length >= candidata.length ? String(elegido) : String(candidata)
+  // Palabras de la candidata que NO están en la subsecuencia común: si son más
+  // de 3 es otra locución pegada (o un texto sin nada compartido), no una
+  // variante. No se une: se queda la CANDIDATA, la hipótesis MAS NUEVA del
+  // evento. Preferir la más larga (o pegar todo, que era lo que pasaba cuando
+  // las palabras ajenas caían en el medio del alineamiento) dejaba que un final
+  // viejo retenido (re-emisión de Chrome) tapara el enunciado nuevo mientras la
+  // frontera estaba rancia — medido 994bbf46 2026-11-12: el final de 643
+  // caracteres ganó contra «voy a preparar…», «voy a pasarle la voz a una
+  // mujer» y «conmigo»; las filas nuevas nunca se escribieron.
+  const ajenas = b.length - tabla[0][0]
+  if (ajenas > 3) return String(candidata)
   return salida.join(' ')
 }
 

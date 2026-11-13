@@ -94,9 +94,12 @@ import {
   deriveDialogueHistory,
   deriveUserRowSpeakers,
   deriveUserRowTexts,
+  fraseCanonicaDelTurno,
   getDialogueContextSlice,
   isFluSpeaker,
+  sinTurnoDelHistorial,
 } from '../lib/conversationDialogue.js'
+import { crearEsperaDeFilaDeTurno } from '../conversation/index'
 import { getFallbackSpeaker, isAutoSpeakerLabel, payloadSeparacionDeTurno } from '../lib/speakerCore.js';
 import { COMMAND_IDS } from '../lib/commandIds.js'
 import { voiceProbe, isVoiceProbeEnabled } from '../lib/voiceProbe'
@@ -146,31 +149,42 @@ export function useFluVoiceAssistant({
     useIntegrationStore.getState().setLastCommittedTranscript(typeof text === 'string' ? text : '')
   }, [])
   // §9 ÚNICO punto de commit de la locución: la frase llega YA canónica del
-  // MÓDULO (Anexo B 2/6); `trim` es identidad, así display === fila por construcción.
+  // MÓDULO (Anexo B 2/6); `trim` es identidad, así display === fila por
+  // construcción. `commitTurnPhrase` es la PUERTA del cierre (solo
+  // `commitAndResolveTurn` la usa) y delega en la ÚNICA regla del turno
+  // (`fraseCanonicaDelTurno`), la misma que aplica la petición a la IA.
   const commitTurnPhrase = useCallback((text, fallback = '') => {
-    return String(text || '').trim() || String(fallback || '').trim()
+    return fraseCanonicaDelTurno(text, fallback)
   }, [])
   // Wake words efectivas (Ajustes o default): UN solo criterio.
   const resolvedWakeWords = resolveWakeWords(wakeWords)
   const activeTurnIdRef = useRef(0)
+  /**
+   * Esperas por la FILA de un turno (dueño: el MÓDULO). La petición a la IA
+   * espera SU fila: la frase canónica y el turnId salen de aquí, no de la
+   * captura cruda del ASR. El registro vive en su módulo (`turnRowWait`).
+   */
+  const esperaDeFilaRef = useRef(null)
+  if (!esperaDeFilaRef.current) {
+    esperaDeFilaRef.current = crearEsperaDeFilaDeTurno(
+      () => FLU_CONFIG.timing.turnCommitWaitMs,
+    )
+  }
   const wakePendienteRef = useRef({ wakeWord: '', at: 0 })
   const sessionTurnRecordedRef = useRef('') // ultimo turnId de fila ya registrado (Paso 0: sin snapshots duplicados)
   const sessionLocutionsRecordedRef = useRef(new Set())
   const lastEmittedTurnRef = useRef(0) // turno de la ultima locucion emitida: resolucion tardia idempotente
   // §9 par ÚNICO `commit + resolución`: TODAS las ramas cierran aquí; la fila
-  // es SIEMPRE el valor commiteado y el display no diverge.
+  // es SIEMPRE el valor commiteado y el display no diverge. La fila del USUARIO
+  // no se escribe aquí: la escribe el módulo (`row.committed`) y esta resolución
+  // solo entrega el contrato que produce la voz de FLU.
   const commitAndResolveTurn = useCallback(
-    async ({ capture, fallbackCapture = '', contract, commitOnly = false, ...payload } = {}) => {
+    async ({ capture, fallbackCapture = '', contract, ...payload } = {}) => {
       // ÚNICA frase canónica del turno (display === fila), la del MÓDULO (Anexo B 2/6).
       const canonicalPhrase = commitTurnPhrase(capture, fallbackCapture)
       const evidenciaAcustica = payload.evidenciaAcustica === true // solo la DECLARA quien midio VOZ
       // Garbage descartada (anti-alucinación): no se commitea ni se consulta a IA.
       if (!canonicalPhrase) return
-      // `commitOnly`: fila del USUARIO inmediata; la resolución posterior re-commitea el MISMO valor.
-      if (commitOnly) {
-        await onContractResolved?.({ contract: null, userCommitOnly: true, transcript: canonicalPhrase, speakerName: payload.speakerName, evidenciaAcustica, phase: payload.phase, turnId: activeTurnIdRef.current })
-        return canonicalPhrase
-      }
       // El turno de la fila es el de la FRASE (no el vivo): la resolucion tardia escribe SU fila.
       const turnIdDeLaFrase = canonicalPhrase && canonicalPhrase === lastEmittedTranscriptRef.current && lastEmittedTurnRef.current ? lastEmittedTurnRef.current : activeTurnIdRef.current
       const result = await onContractResolved?.({ contract, ...payload, evidenciaAcustica, transcript: canonicalPhrase, turnId: turnIdDeLaFrase })
@@ -326,6 +340,33 @@ export function useFluVoiceAssistant({
   const lastModuleLabelRef = useRef('')
   const languageRef = useRef(language)
   languageRef.current = language
+  /**
+   * Publica la FILA commiteada del módulo: libera la petición que la espera.
+   *
+   * Las filas las commitea el MÓDULO (dueño del turno): el hook no inventa el
+   * turnId ni lee la fila por ninguna otra ruta. El registro de esperas vive en
+   * su módulo (`turnRowWait`), único que guarda la última fila y libera
+   * esperas; aquí solo se delega el evento del motor.
+   * @param {object} fila Fila commiteada del módulo (`row.committed`).
+   */
+  const resolverFilaDelTurno = useCallback((fila) => {
+    esperaDeFilaRef.current.publicar(fila)
+  }, [])
+
+  /**
+   * Espera la FILA del turno antes de pedir el contrato a la IA.
+   *
+   * El final del ASR adelanta la petición, pero la locución cierra con la
+   * frontera MEDIDA (silencio ~2 s): pedir antes de su fila respondía a una
+   * frase y hablaba otra. Sin fila en `turnCommitWaitMs` (texto descartado, ASR
+   * mudo) resuelve null y la petición responde con la frase del ASR.
+   * @param {string|number} turnId Turno ABIERTO en el módulo al despachar.
+   * @returns {Promise<object|null>} Fila del turno o null si no llega.
+   */
+  const esperarFilaDelTurno = useCallback((turnId) => {
+    return esperaDeFilaRef.current.esperar(turnId)
+  }, [])
+
   const abrirMotorConversacion = useCallback(() => {
     if (!motorConversacionRef.current) {
       motorConversacionRef.current = crearMotorConversacionHook({
@@ -347,6 +388,9 @@ export function useFluVoiceAssistant({
         },
         // Frontera de TURNO (locución nueva): la siguiente frase es otro turno.
         onLocucionCommiteada: (fila) => {
+          // La FILA del turno es el disparador de la petición a la IA: se
+          // publica ANTES de cualquier otra escritura de este callback.
+          resolverFilaDelTurno(fila)
           // Paso 0: UNA instantánea por locución commiteada, con los campos
           // REALES de la fila; la revisión del mismo turnId no añade snapshot.
           const turnId = String(fila?.turnId ?? '').trim()
@@ -367,11 +411,11 @@ export function useFluVoiceAssistant({
               locutionId,
               sampleRate: sampleRateRef.current,
             })
-            // FRONTERA DE TURNO (dueño: este callback, no el módulo): el
-            // reconocedor arranca limpio para que Chrome no re-emita el final de
-            // la locución anterior en el turno nuevo. Se reinicia SOLO al abrir
-            // un turno nuevo, no en cada revisión de la misma locución.
-            requestRecognitionRestartRef.current?.('frontera-turno', 0)
+            // FRONTERA DE TURNO: la marca de transporte por índice vive en el
+            // límite del producto (`composicion.ts`) y avanza con la fila
+            // commiteada. Reiniciar aquí el reconocedor abortaba la hipótesis
+            // en vuelo: medido 2026-11-12, 11 rebuild `dead` en 7 min y
+            // palabras perdidas en cada commit. Un solo dueño de la frontera.
           }
           // El turno lo acuña el módulo: el hook solo espeja la fila commiteada.
           if (turnId) activeTurnIdRef.current = turnId
@@ -401,7 +445,7 @@ export function useFluVoiceAssistant({
       })
     }
     motorConversacionRef.current.abrir()
-  }, [identitySession, participantVoiceAnchors, setSpeakerClusters])
+  }, [identitySession, participantVoiceAnchors, setSpeakerClusters, resolverFilaDelTurno])
   /** Cierra el módulo y espera su cola (el motor corta la entrada al instante). */
   const cerrarMotorConversacion = useCallback(async (motivo) => {
     const motor = motorConversacionRef.current
@@ -410,6 +454,17 @@ export function useFluVoiceAssistant({
     await motor.cerrar(motivo)
   }, [])
   useEffect(() => () => void cerrarMotorConversacion('system'), [cerrarMotorConversacion])
+
+  /**
+   * La locución ABIERTA del módulo, con su texto (su instantánea es el dueño
+   * del hecho). El watchdog distingue «frase viva» de «Chrome mudo con la
+   * locución vacía»: medido 2026-11-12 18:22 y 19:05 (37,2 s sin una palabra).
+   * @returns La locución abierta (`texto` incluido), o `null`.
+   */
+  const leerLocucionAbierta = useCallback(
+    () => motorConversacionRef.current?.instantanea?.()?.locucionAbierta ?? null,
+    [],
+  )
 
   // Fallback LOCAL del ASR (degradar a Whisper, gatear sus resultados y recuperar
   // Chrome): dueno unico en `useLocalAsrFallback`. El cableado se pasa por ref para
@@ -437,6 +492,7 @@ export function useFluVoiceAssistant({
     relayLog,
     audioSampleRate: AUDIO_SAMPLE_RATE,
     getRestartConfig: getConversationRestartConfig,
+    leerLocucionAbierta,
     degradeEnabled: isLocalFallbackEnabled(),
   })
 
@@ -710,6 +766,22 @@ export function useFluVoiceAssistant({
     [dialogueView],
   )
 
+  /**
+   * Historial para la IA SIN el turno vigente.
+   *
+   * El turno vigente viaja como petición FINAL (el último mensaje del modelo);
+   * si además entrara en el historial, el modelo lo leería como una petición
+   * anterior sin responder. El recorte es la regla del diálogo
+   * (`sinTurnoDelHistorial`, recibe TODAS las entradas con su `turnId` del
+   * módulo) y aquí solo se le entrega el contexto vigente.
+   * @param {string|number} turnId Turno que se está pidiendo.
+   * @returns {Array<object>} Historial sin las filas de ESE turno.
+   */
+  const getHistoryForTurn = useCallback(
+    (turnId) => sinTurnoDelHistorial(getConversationContext(), turnId),
+    [getConversationContext],
+  )
+
   const requestFluContractForTranscript = useCallback(
     async ({
       transcript,
@@ -719,6 +791,7 @@ export function useFluVoiceAssistant({
       theme,
       role,
       phase: contractPhase,
+      turnId = '',
     }) => {
       if (knowledgeMode === 'minutes') {
         const local = resolveMinuteLookupRef.current(transcript, language)
@@ -741,9 +814,9 @@ export function useFluVoiceAssistant({
           phase: contractPhase,
           language,
           knowledgeMode,
-          history: getConversationContext(),
           knowledgeBase: knowledgeBaseRef.current,
           knowledgeBase2: knowledgeMode === 'minutes' ? getMinuteKnowledgeBaseRef.current() : '',
+          history: getHistoryForTurn(turnId),
         },
         {
           consumeRecentMemory: () => {
@@ -782,7 +855,7 @@ export function useFluVoiceAssistant({
         relayLog('ERROR', 'useFluVoiceAssistant', `latencia IA (fallo) tras ${Date.now() - iaStartMs}ms`); throw err
       }
     },
-    [apiKey, getConversationContext, language],
+    [apiKey, getHistoryForTurn, language],
   )
 
   const persistDialogueSession = useCallback(async () => {
@@ -1153,7 +1226,12 @@ export function useFluVoiceAssistant({
       recordSource: source, // grabación CRUDA pre-ganancia: silencios reales, sonido natural
       sampleRate: sampleRateRef.current || AUDIO_SAMPLE_RATE,
       processEvery,
-      onRawPcmBlock: (input, meta) => motorConversacionRef.current?.audio(input, sampleRateRef.current || AUDIO_SAMPLE_RATE, meta?.sampleIndex),
+      // Puerta ÚNICA del audio al módulo: con la escucha cerrada no entra PCM,
+      // así el final que se espera en el stop no abre otra locución.
+      onRawPcmBlock: (input, meta) => {
+        if (!isListeningRef.current) return
+        motorConversacionRef.current?.audio(input, sampleRateRef.current || AUDIO_SAMPLE_RATE, meta?.sampleIndex)
+      },
       onPcmBlock: (input) => {
         chunksRef.current.push(new Float32Array(input))
         chunkTotalSamplesRef.current += input.length
@@ -2033,13 +2111,26 @@ export function useFluVoiceAssistant({
 
       // El turno queda resuelto; la LOCUCION EN VUELO no se vacia (su cierre real la commitea).
       openPreviewTurnRef.current = false
-      captureTurnAudio() // §9 sella el audio ANTES del commit-only (que vacía el buffer)
-      // §9: una sola frase canónica para el turno (display y fila salen de ESTE valor).
-      const canonicalPhrase = await commitAndResolveTurn({
-        capture: fullTranscript || question,
-        fallbackCapture: question, // texto validado del turno (si la captura cruda es basura)
-        commitOnly: true,
-      })
+      captureTurnAudio() // §9 sella el audio ANTES de la espera por la fila
+      // §9: una sola frase canónica para el turno. El turno lo acuña el MÓDULO
+      // (`locucionAbierta.turnId`): aquí solo se LEE lo que el módulo ya abrió.
+      const turnoEnVuelo = String(
+        motorConversacionRef.current?.instantanea?.()?.locucionAbierta?.turnId ?? '',
+      ).trim()
+      // La petición a la IA sale de la FILA del turno (dueño de la frase): el
+      // final del ASR adelanta la petición al cierre real de la locución
+      // (silencio medido). Sin fila, responde la frase del ASR.
+      const filaDelTurno = await esperarFilaDelTurno(turnoEnVuelo)
+      // El espejo de `activeTurnIdRef` lo escribe SU único dueño en la frontera
+      // de turno (`onLocucionCommiteada`, con la fila del módulo); liberar la
+      // espera basta: aquí no se vuelve a espejar el turno.
+      const turnIdDelTurno = String(filaDelTurno?.turnId ?? turnoEnVuelo).trim()
+      // La frase canónica del turno es la ÚNICA regla (la misma del cierre):
+      // el texto de la fila commiteada, con la captura del ASR como respaldo.
+      const canonicalPhrase = fraseCanonicaDelTurno(
+        filaDelTurno?.texto,
+        fullTranscript || question,
+      )
       if (!canonicalPhrase) return
 
       // B.6: la IA recibe la MISMA frase commiteada, sin la wake (splitter unico, Anexo B.11).
@@ -2121,6 +2212,8 @@ export function useFluVoiceAssistant({
             theme: session.theme,
             role: session.role,
             phase: 'SESION_ACTIVA',
+            // El turno vigente NO entra en el historial: va como petición final.
+            turnId: turnIdDelTurno,
           }),
           // Fast-path determinista UNIFICADO (§3.1): el árbitro resuelve y despacha
           // configuración/juego/ambiente desde un único punto, en paralelo con la IA.
@@ -2255,6 +2348,7 @@ export function useFluVoiceAssistant({
       captureTurnAudio,
       conversationActiveRef,
       commitAndResolveTurn,
+      esperarFilaDelTurno,
       getConversationContext,
       requestFluContractForTranscript,
       requestRecognitionRestart,
@@ -2384,12 +2478,13 @@ export function useFluVoiceAssistant({
     // que la bandera no dice si hay una sesión de conversación viva.
     if (motorConversacionRef.current) {
       isListeningRef.current = false
-      // ORDEN: primero se cierra el motor (corte síncrono de entrada + backlog
-      // descartado) y DESPUÉS se finaliza el reconocedor. Si se finaliza antes,
-      // los ~1,5 s de `finalizeRecognition` dejan al motor abierto y abre otra
-      // locución con audio de memoria después de que el usuario cerró.
-      await cerrarMotorConversacion(closing ? 'user' : 'system')
+      // ORDEN (medido 2026-11-12 18:25:32): la entrada de audio se corta AQUÍ
+      // (`onRawPcmBlock` exige `isListeningRef`) y el motor se mantiene abierto
+      // solo para recibir el FINAL de Chrome —llegó 409 ms después del stop—;
+      // después se cierra. Al revés, el final se tiraba y el cierre publicaba
+      // el parcial del comando («cer») como si fuera conversación.
       if (closing && recognitionRef.current) await finalizeRecognition()
+      await cerrarMotorConversacion(closing ? 'user' : 'system')
       if (closing) {
         await cleanupAudio()
         setStatus('idle')

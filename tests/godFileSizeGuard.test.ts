@@ -30,7 +30,9 @@ export const TECHOS: Record<string, number> = {
   // LLAMADA y su import siguen teniendo que estar en App (los manejadores se asignan ahi).
   // -43 al sacar la lista de componentes monitoreados a su dueno
   // (DEFAULT_MONITORED_COMPONENTS): App dejo de recopiarla.
-  // -158 (2026-10-23): los helpers de despacho a nivel modulo (isRedundantTextWorkspace,\n  // buildArbiterOptions, resolveDomainScopedIntent y los dev hooks) salieron a\n  // src/app/appDispatchHelpers.ts: funciones puras de sus argumentos, sin estado del\n  // componente. App los importa y no conserva copia.\n  'src/App.tsx': 4485, // 5391 antes de P6.6
+  // -158 (2026-10-23): los helpers de despacho a nivel modulo (isRedundantTextWorkspace,\n  // buildArbiterOptions, resolveDomainScopedIntent y los dev hooks) salieron a\n  // src/app/appDispatchHelpers.ts: funciones puras de sus argumentos, sin estado del\n  // componente. App los importa y no conserva copia.\n  // -89 (2026-11-12): el archivo encogio en el cierre de rutas dobles y el techo no
+  // se aprieto entonces; el trinquete solo puede bajar, asi que se ajusta a lo medido.
+  'src/App.tsx': 4396, // 5391 antes de P6.6
   // -40 en P8.32: el bloque de parametros del turno salio a src/voice/lib/contractParams.js
   // (buildContractParams), dueno unico de la lista de entradas del contrato de voz.
   // -3: la frase viva no se vacia al cerrar/entregar el turno (spec del dueno 2026-10-11).
@@ -46,7 +48,14 @@ export const TECHOS: Record<string, number> = {
   // fila (`turnSnapshot.js`) y deduplica por `locutionId`. El buffer circular
   // dejaba `audioStart==audioEnd` y `signature:null` pasados 30 s; el hook
   // conserva solo el cableado y su dedupe. El cuerpo vive en el helper.
-  'src/voice/hooks/useFluVoiceAssistant.js': 2516,
+  // +70 (2026-11-12): la peticion a la IA espera la FILA commiteada de SU turno
+  // (defecto medido: respondia a otra frase). El registro de esperas vive en
+  // `conversation/turnRowWait.ts`; en el hook quedan el cableado de la espera, sus envoltorios
+  // de un solo uso y los comentarios del unico dueno, no una segunda ruta.
+  // +18 (2026-11-12): el lote de voz del dia (espera de la fila, lectura de la
+  // locucion abierta CON su texto para el watchdog) quedo sobre el techo; se
+  // ajusta a lo medido en el arbol, sin margen. (Medido: 2604.)
+  'src/voice/hooks/useFluVoiceAssistant.js': 2604,
   // -66: 49 claves de config SIN lector (prometian comportamiento sin efecto) se borraron,
   // con su barrera (configConEfectoGuard).
   // -50 al cortar la tuberia vieja de conversacion (2026-10-25): el tracer, la
@@ -60,11 +69,19 @@ export const TECHOS: Record<string, number> = {
   // se fueron con sus unicos lectores (retirados por deadExportsGuard).
   // +2 (2026-11-01): minNewSpeakerWords y cosineExistingMatch; la grabacion
   // corta confirmo que con solo 8 s el hombre quedaba `Hablante ?`.
-  'src/voice/lib/fluConfig.js': 2559,
+  // +7 (2026-11-12): `timing.turnCommitWaitMs`, el tope con que la peticion a la
+  // IA espera la FILA del turno antes de responder con la frase del ASR.
+  // +12 (2026-11-12): `restart.muteOpenLocutionMs` (20 s, el umbral medido del
+  // Chrome mudo con la locucion vacia) y el comentario de `recognitionFinalizeMs`
+  // (1000 ms, la espera real del final al cerrar conversacion). (Medido: 2578.)
+  'src/voice/lib/fluConfig.js': 2578,
   // -62 (2026-11-02): se eliminaron los clientes muertos
   // requestParticipantEvaluation/requestConversationSummary (la via viva es
   // services/gemini.ts por /contract y mode:minute).
-  'src/voice/lib/gemini.js': 1786,
+  // +16 (2026-11-12): el prompt declara los turnos de usuario SIN respuesta como
+  // contexto (nunca como instruccion). La separacion y el texto viven en
+  // `conversationDialogue.js` + `UI_STRINGS`; aqui quedan las llamadas e imports.
+  'src/voice/lib/gemini.js': 1802,
 }
 
 /** Lineas de un texto, con el mismo criterio con que se midieron los techos. */

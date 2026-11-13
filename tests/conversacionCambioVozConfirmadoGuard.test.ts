@@ -15,6 +15,12 @@
  * [1,0]; 440 Hz → [0,1]; comparar = producto punto). El VAD real se sustituye
  * por una medida declarada por bloque (el VAD solo mide; la frontera decide).
  *
+ * LA VOZ B ES CONOCIDA: el turno abre con una locución propia de B que acuña su
+ * plantilla en la sesión. Solo una voz DISTINTA YA CONOCIDA confirma un cambio
+ * (defecto 753c2361: ventanas cortas de la MISMA voz se partieron contra la
+ * plantilla abierta; una voz desconocida en una ventana suelta es ambigua y no
+ * evidencia un hablante nuevo — la nueva se acuña al abrir SU locución).
+ *
  * FALSIFICACIÓN: con `confirmacionesCambioVoz: 1` la primera ventana distinta
  * ya parte la fila y el guard falla.
  */
@@ -35,6 +41,7 @@ import type {
   MedidaVad,
 } from '../src/voice/conversation/ports'
 import { isAutoSpeakerLabel } from '../src/voice/lib/speakerCore.js'
+import { VOICE_DIARIZATION_DEFAULTS } from '../src/core/config/sharedConfig'
 
 const SR = 16000
 const BLOQUE = 1600 // 100 ms
@@ -86,6 +93,8 @@ const CONFIG_PRUEBA: ConfigPort = {
 
 /** Texto de la voz A (8 palabras: acuña la voz con la medida temprana). */
 const TEXTO_A = 'uno dos tres cuatro cinco seis siete ocho'
+/** Texto del turno propio de B: acuña su plantilla en la sesión. */
+const TEXTO_B = 'soy la segunda voz de la prueba'
 /** Palabras de B que el ASR pega a la línea acumulada ANTES de la partición. */
 const COLA_B1 = 'y sigo y ahora hablo yo'
 /** Línea ACUMULADA que reemite el ASR tras la partición (prefijo + cola nueva). */
@@ -97,21 +106,27 @@ type Escenario = Readonly<{
 }>
 
 /** Monta el motor real con la confirmación pedida y el embebedor de tonos. */
-function montar(confirmaciones: number): Escenario {
+function montar(
+  confirmaciones: number,
+  extra: Partial<ConfiguracionConversacion> = {},
+  configExtra: Partial<ConfigPort> = {},
+): Escenario {
   const reloj = { ahora: () => 1_700_000_000_000 }
   const configuracion: ConfiguracionConversacion = {
     ...CONVERSACION_CONFIG,
     minSegundosVozMedida: 1.0,
     silenceCloseMs: 5000,
     confirmacionesCambioVoz: confirmaciones,
+    ...extra,
   }
+  const config: ConfigPort = { ...CONFIG_PRUEBA, ...configExtra }
   const api = crearConversacion({
     reloj,
     id: crearIdUuid(),
     registro: { registrar: () => undefined },
     almacen: crearAlmacenMemoria({ reloj }),
-    config: CONFIG_PRUEBA,
-    partidor: crearPartidorWake(CONFIG_PRUEBA),
+    config,
+    partidor: crearPartidorWake(config),
     medidor: crearMedidorTramo(),
     ultimoTextoDicho: () => '',
     embebedor: embebedorFalso,
@@ -154,53 +169,86 @@ const cerradosPorVoz = (
       e.tipo === 'locution.closed' && e.causa === 'voz',
   )
 
-const filaCommiteada = (eventos: EventoConversacion[]): Extract<
-  EventoConversacion,
-  { tipo: 'row.committed' }
-> | null =>
+const filaCommiteada = (
+  eventos: EventoConversacion[],
+  locutionId: string,
+): Extract<EventoConversacion, { tipo: 'row.committed' }> | null =>
   eventos.filter(
     (e): e is Extract<EventoConversacion, { tipo: 'row.committed' }> =>
-      e.tipo === 'row.committed',
+      e.tipo === 'row.committed' && e.fila.locutionId === locutionId,
   )[0] ?? null
 
 /**
- * Corre el turno de dos voces: 1 s de silencio (el tramo no nace en 0), A
- * habla 4 s (3 + 1 tras su texto), B habla 3,2 s (1,6 + 1,6). Los eventos del
- * ASR llegan al cierre de cada ventana: evB1 RETIENE la primera ventana (no
- * parte ni la deja en A) y evB2 confirma: A cierra en el inicio de la primera
- * ventana y B recibe las dos.
+ * Arranca la sesión y ACUÑA la voz B en un turno propio: 1 s de silencio,
+ * 2,2 s de B (440 Hz) con su texto (la medida temprana la registra) y 5 s de
+ * silencio que commitean su fila. Devuelve la muestra donde arranca la VOZ del
+ * turno de A (tras su 1 s de silencio).
  */
-async function correrTurno(
-  escenario: Escenario,
-): Promise<{ idA: string }> {
-  const { api } = escenario
+async function arrancarConVozB(api: ConversacionApi): Promise<number> {
   await api.start({ idioma: 'es' })
-  // 1 s de silencio: el tramo de A arranca en la muestra 16000.
+  let cursor = 0
   for (let i = 0; i < 10; i += 1) {
-    const inicio = i * BLOQUE
     await api.ingestAudio({
       muestras: new Float32Array(BLOQUE),
       sampleRate: SR,
-      inicio,
-      fin: inicio + BLOQUE,
+      inicio: cursor,
+      fin: cursor + BLOQUE,
       medida: SILENCIO(100),
     })
+    cursor += BLOQUE
   }
-  // Voz A: 3 s de tono 220 Hz (muestras 16000..64000).
-  await emitir(api, 220, 30, 16000)
+  await emitir(api, 440, 22, cursor)
+  cursor += 22 * BLOQUE
+  await api.ingestAsr(evento(TEXTO_B))
+  // Frontera de TIEMPO: la fila de B se commitea y su locución cierra.
+  await api.ingestAudio({
+    muestras: new Float32Array(SR * 5),
+    sampleRate: SR,
+    inicio: cursor,
+    fin: cursor + SR * 5,
+    medida: SILENCIO(5000),
+  })
+  cursor += SR * 5
+  // 1 s de silencio del turno de A: su tramo no nace en 0.
+  for (let i = 0; i < 10; i += 1) {
+    await api.ingestAudio({
+      muestras: new Float32Array(BLOQUE),
+      sampleRate: SR,
+      inicio: cursor,
+      fin: cursor + BLOQUE,
+      medida: SILENCIO(100),
+    })
+    cursor += BLOQUE
+  }
+  return cursor
+}
+
+/**
+ * Corre el turno de dos voces: A habla 4 s (3 + 1 tras su texto), B habla 3,2 s
+ * (1,6 + 1,6). Los eventos del ASR llegan al cierre de cada ventana: evB1
+ * RETIENE la primera ventana (no parte ni la deja en A) y evB2 confirma: A
+ * cierra en el inicio de la primera ventana y B recibe las dos.
+ */
+async function correrTurno(
+  escenario: Escenario,
+): Promise<{ idA: string; desde: number }> {
+  const { api } = escenario
+  const desde = await arrancarConVozB(api)
+  // Voz A: 3 s de tono 220 Hz desde `desde`.
+  await emitir(api, 220, 30, desde)
   const idA = api.snapshot().locucionAbierta!.locutionId
   await api.ingestAsr(evento(TEXTO_A))
-  // Voz A sigue 1 s más: la medida temprana acuña su voz (8 palabras, 4 s).
-  await emitir(api, 220, 10, 64000)
-  // Voz B: 1,6 s de tono 440 Hz (muestras 80000..105600).
-  await emitir(api, 440, 16, 80000)
+  // Voz A sigue 1 s más: la medida temprana acuña su voz.
+  await emitir(api, 220, 10, desde + 48000)
+  // Voz B CONOCIDA: 1,6 s de tono 440 Hz.
+  await emitir(api, 440, 16, desde + 64000)
   // PRIMERA ventana distinta: sospecha retenida; NO parte ni se queda en A.
   await api.ingestAsr(evento(`${TEXTO_A} ${COLA_B1}`))
-  // Voz B sigue 1,6 s más (fin 131200).
-  await emitir(api, 440, 16, 105600)
+  // Voz B sigue 1,6 s más.
+  await emitir(api, 440, 16, desde + 89600)
   // SEGUNDA ventana distinta: confirma y corta en el INICIO de la primera.
   await api.ingestAsr(evento(ACUMULADO))
-  return { idA }
+  return { idA, desde }
 }
 
 describe('cambio de voz — una ventana distinta NO parte la fila', () => {
@@ -210,22 +258,12 @@ describe('cambio de voz — una ventana distinta NO parte la fila', () => {
 
   it('la primera ventana distinta sella el fin medido y NO cierra la locución', async () => {
     const escenario = montar(2)
-    await escenario.api.start({ idioma: 'es' })
-    for (let i = 0; i < 10; i += 1) {
-      const inicio = i * BLOQUE
-      await escenario.api.ingestAudio({
-        muestras: new Float32Array(BLOQUE),
-        sampleRate: SR,
-        inicio,
-        fin: inicio + BLOQUE,
-        medida: SILENCIO(100),
-      })
-    }
-    await emitir(escenario.api, 220, 30, 16000)
+    const desde = await arrancarConVozB(escenario.api)
+    await emitir(escenario.api, 220, 30, desde)
     const idA = escenario.api.snapshot().locucionAbierta!.locutionId
     await escenario.api.ingestAsr(evento(TEXTO_A))
-    await emitir(escenario.api, 220, 10, 64000)
-    await emitir(escenario.api, 440, 16, 80000)
+    await emitir(escenario.api, 220, 10, desde + 48000)
+    await emitir(escenario.api, 440, 16, desde + 64000)
     await escenario.api.ingestAsr(evento(`${TEXTO_A} ${COLA_B1}`))
 
     expect(cerradosPorVoz(escenario.eventos)).toHaveLength(0)
@@ -267,86 +305,138 @@ describe('cambio de voz — una ventana distinta NO parte la fila', () => {
 
   it('la SEGUNDA ventana distinta parte: la anterior cierra recortada y la nueva abre su locución', async () => {
     const escenario = montar(2)
-    const { idA } = await correrTurno(escenario)
+    const { idA, desde } = await correrTurno(escenario)
     const cerrados = cerradosPorVoz(escenario.eventos)
     expect(cerrados).toHaveLength(1)
     expect(cerrados[0]!.locutionId).toBe(idA)
-    expect(cerrados[0]!.tramo).toEqual({ inicio: 16000, fin: 89600, sampleRate: SR })
-    const filaA = filaCommiteada(escenario.eventos)
+    expect(cerrados[0]!.tramo).toEqual({ inicio: desde, fin: desde + 73600, sampleRate: SR })
+    const filaA = filaCommiteada(escenario.eventos, idA)
     expect(filaA).not.toBeNull()
     expect(filaA!.fila.texto).toBe(TEXTO_A)
-    expect(filaA!.fila.tramo.fin).toBe(89600)
+    expect(filaA!.fila.tramo.fin).toBe(desde + 73600)
     const abierta = escenario.api.snapshot().locucionAbierta
     expect(abierta!.locutionId).not.toBe(idA)
     // La primera ventana de B ya no queda en A: su tramo arranca en el corte
-    // de la PRIMERA ventana (89600) y B recibe las dos.
-    expect(abierta!.tramo.inicio).toBe(89600)
+    // de la PRIMERA ventana y B recibe las dos.
+    expect(abierta!.tramo.inicio).toBe(desde + 73600)
     // La línea acumulada NO re-incluye el texto de la fila anterior.
     expect(abierta!.texto).toBe(`${COLA_B1} la frase de la voz nueva`)
   })
 
   it('FALSIFICACIÓN: con UNA sola confirmación la primera ventana distinta ya parte', async () => {
-    const escenario = montar(1)
-    await escenario.api.start({ idioma: 'es' })
-    for (let i = 0; i < 10; i += 1) {
-      const inicio = i * BLOQUE
-      await escenario.api.ingestAudio({
-        muestras: new Float32Array(BLOQUE),
-        sampleRate: SR,
-        inicio,
-        fin: inicio + BLOQUE,
-        medida: SILENCIO(100),
-      })
+    /** Corre UNA ventana de B tras A, con las confirmaciones pedidas. */
+    const unaVentana = async (confirmaciones: number) => {
+      const escenario = montar(confirmaciones)
+      const desde = await arrancarConVozB(escenario.api)
+      await emitir(escenario.api, 220, 30, desde)
+      await escenario.api.ingestAsr(evento(TEXTO_A))
+      await emitir(escenario.api, 220, 10, desde + 48000)
+      await emitir(escenario.api, 440, 16, desde + 64000)
+      await escenario.api.ingestAsr(evento(`${TEXTO_A} ${COLA_B1}`))
+      return escenario
     }
-    await emitir(escenario.api, 220, 30, 16000)
-    await escenario.api.ingestAsr(evento(TEXTO_A))
-    await emitir(escenario.api, 220, 10, 64000)
-    await emitir(escenario.api, 440, 16, 80000)
-    await escenario.api.ingestAsr(evento(`${TEXTO_A} ${COLA_B1}`))
-
+    const escenario = await unaVentana(1)
     expect(cerradosPorVoz(escenario.eventos).length).toBeGreaterThan(0)
     // Y con la confirmación del plan (2), la misma ventana NO parte.
-    const confirmado = montar(2)
-    await confirmado.api.start({ idioma: 'es' })
-    for (let i = 0; i < 10; i += 1) {
-      const inicio = i * BLOQUE
-      await confirmado.api.ingestAudio({
-        muestras: new Float32Array(BLOQUE),
-        sampleRate: SR,
-        inicio,
-        fin: inicio + BLOQUE,
-        medida: SILENCIO(100),
-      })
-    }
-    await emitir(confirmado.api, 220, 30, 16000)
-    await confirmado.api.ingestAsr(evento(TEXTO_A))
-    await emitir(confirmado.api, 220, 10, 64000)
-    await emitir(confirmado.api, 440, 16, 80000)
-    await confirmado.api.ingestAsr(evento(`${TEXTO_A} ${COLA_B1}`))
+    const confirmado = await unaVentana(2)
     expect(cerradosPorVoz(confirmado.eventos)).toHaveLength(0)
+  })
+
+  it('sesión 753c2361: ventanas de 1050 y 900 ms de VOZ no parten (piso real 1500)', async () => {
+    // Voz A conocida (temprana, tono 220). Las ventanas del caso medido traen
+    // 1050 ms de VOZ de OTRO tono (880) dentro de la ventana de 1,5 s: el
+    // embebedor las mide como voz distinta. El cálculo privado anterior partía
+    // (19:01:38.953 con 1050 ms y 19:02:02.170 con 900 ms); la decisión de
+    // identidad las declara INSUFICIENTES: la VOZ de la ventana no alcanza el
+    // piso real para acuñar/reconocer un hablante.
+    expect(VOICE_DIARIZATION_DEFAULTS.minNewSpeakerMs).toBe(1500)
+    const MEDIDO_VOZ_MS = 1050
+    const [VOZ_MS, SIN_VOZ_MS] = [MEDIDO_VOZ_MS, 1500 - MEDIDO_VOZ_MS]
+    const BLOQUE_50 = SR / 20 // 50 ms
+
+    /** Corre el caso medido con el piso de voz pedido. */
+    const correr = async (minNuevaVozMs: number) => {
+      const escenario = montar(
+        2,
+        { minSegundosVozMedida: 1.5 },
+        { minNuevaVozMs: () => minNuevaVozMs },
+      )
+      const { api } = escenario
+      await api.start({ idioma: 'es' })
+      for (let i = 0; i < 10; i += 1) {
+        await api.ingestAudio({
+          muestras: new Float32Array(BLOQUE),
+          sampleRate: SR,
+          inicio: i * BLOQUE,
+          fin: (i + 1) * BLOQUE,
+          medida: SILENCIO(100),
+        })
+      }
+      let cursor = 10 * BLOQUE
+      const bloque50 = async (frecuencia: number | null, cuantos: number) => {
+        for (let i = 0; i < cuantos; i += 1) {
+          await api.ingestAudio({
+            muestras:
+              frecuencia === null
+                ? new Float32Array(BLOQUE_50)
+                : tono(frecuencia, 50),
+            sampleRate: SR,
+            inicio: cursor,
+            fin: cursor + BLOQUE_50,
+            medida: VOZ(),
+          })
+          cursor += BLOQUE_50
+        }
+      }
+      // La ventana MEDIDA: 1050 ms de VOZ (880 Hz) + 450 ms sin VOZ.
+      const ventana = async () => {
+        await bloque50(880, Math.round(VOZ_MS / 50))
+        await bloque50(null, Math.round(SIN_VOZ_MS / 50))
+      }
+      // A: 1,5 s de tono 220 Hz; la medida temprana acuña su voz.
+      await bloque50(220, 30)
+      await api.ingestAsr(evento('necesito para mi'))
+      await ventana()
+      await api.ingestAsr(evento('necesito para mi con el doctor'))
+      await ventana()
+      await api.ingestAsr(evento('necesito para mi con el doctor y el viernes'))
+      return escenario
+    }
+
+    const medido = await correr(VOICE_DIARIZATION_DEFAULTS.minNewSpeakerMs)
+    expect(cerradosPorVoz(medido.eventos)).toHaveLength(0)
+    expect(medido.api.snapshot().locucionAbierta?.texto).toBe(
+      'necesito para mi con el doctor y el viernes',
+    )
+
+    // FALSIFICACIÓN: con el piso por debajo de la ventana (1000 < 1050) las
+    // MISMAS dos ventanas sí son evidencia y parten (el defecto medido).
+    const sinPiso = await correr(1000)
+    expect(cerradosPorVoz(sinPiso.eventos).length).toBeGreaterThan(0)
   })
 
   it('el contador no se arrastra: una sospecha sin confirmar no parte la locución siguiente', async () => {
     const escenario = montar(2)
     const { api } = escenario
-    await api.start({ idioma: 'es' })
+    const desde = await arrancarConVozB(api)
     // A + primera ventana de B: sospecha retenida, NO confirma.
-    await emitir(api, 220, 30, 16000)
+    await emitir(api, 220, 30, desde)
     await api.ingestAsr(evento(TEXTO_A))
-    await emitir(api, 220, 10, 64000)
-    await emitir(api, 440, 16, 80000)
+    await emitir(api, 220, 10, desde + 48000)
+    await emitir(api, 440, 16, desde + 64000)
     await api.ingestAsr(evento(`${TEXTO_A} ${COLA_B1}`))
     // Silencio medido: cierra A sin confirmar el cambio.
+    const cierre = desde + 89600
     await api.ingestAudio({
       muestras: new Float32Array(SR * 5),
       sampleRate: SR,
-      inicio: 105600,
-      fin: 105600 + SR * 5,
+      inicio: cierre,
+      fin: cierre + SR * 5,
       medida: SILENCIO(5000),
     })
     // Nueva locución: A + primera ventana de B. Con el contador arrastrado,
     // esta primera ventana partiría (causa voz); con el reset, NO parte.
-    const base = 105600 + SR * 5
+    const base = cierre + SR * 5
     await emitir(api, 220, 30, base)
     await api.ingestAsr(evento(TEXTO_A))
     await emitir(api, 220, 10, base + 48000)

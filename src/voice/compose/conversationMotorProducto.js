@@ -48,7 +48,7 @@ import { getSessionRecordingStatus } from '../lib/sessionRecorder.js'
  * @param {(fraseCanonica: string) => void} opciones.onLiveTranscript Publica la frase viva (completa, con wake).
  * @param {(fraseCanonica: string, opciones: {interim: boolean}) => void} opciones.onFraseCanonica Despacha la frase canónica.
  * @param {(fila: object) => void} [opciones.onLocucionCommiteada] Cierre de locución (frontera de turno).
- * @returns {{ abrir: () => void, evento: (evento: unknown) => Promise<void>, audio: (muestras: Float32Array, sampleRate: number, inicioMuestras?: number) => void, cerrar: (motivo: string) => Promise<void> }}
+ * @returns {{ abrir: () => void, evento: (evento: unknown) => Promise<void>, audio: (muestras: Float32Array, sampleRate: number, inicioMuestras?: number) => void, instantanea: () => object, cerrar: (motivo: string) => Promise<void> }}
  */
 export function crearMotorConversacionHook({
   idioma,
@@ -359,6 +359,10 @@ export function crearMotorConversacionHook({
       return ingesta
     },
     audio: (muestras, sampleRate, inicioMuestras) => motor.audio(muestras, sampleRate, inicioMuestras),
+    // Lectura pura del módulo, sin envoltorio: el hook pregunta qué turno está
+    // ABIERTO antes de pedir el contrato a la IA. El turno lo acuña el módulo; el
+    // hook no lo inventa ni reutiliza el de un evento anterior.
+    instantanea: motor.instantanea,
     cerrar: (motivo) => {
       cerrado = true
       const token = ++generacion

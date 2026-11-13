@@ -188,6 +188,16 @@ export async function seedRecordedParticipants(page: Page, participants: any[]):
     await page.evaluate(
         async ({ db, parts }: { db: string; parts: any[] }) => {
             const now = Date.now();
+            // MEDIDO (2026-11-13): la app siembra su anónimo al arrancar y
+            // `reconcileAnonymousDuplicates` deduplica por NOMBRE conservando el
+            // `createdAt` más viejo. Con `createdAt: now`, el anónimo recién
+            // creado por la app (unos ms antes) ganaba y el participante
+            // GRABADO quedaba logical-deleted: el picker no ofrecía su id y
+            // `selectOption` reintentaba hasta el timeout global (Playwright
+            // murió a los 20 min sin llegar a reproducir nada). El participante
+            // grabado existía ANTES de este entorno: su alta se fecha un día
+            // antes para que la reconciliación conserve EL GRABADO.
+            const createdAt = now - 24 * 60 * 60 * 1000;
             const sync = { revision: 1, updated_at: new Date(now).toISOString(), deleted: false };
             await new Promise<void>((resolve, reject) => {
                 const request = indexedDB.open(db);
@@ -196,7 +206,7 @@ export async function seedRecordedParticipants(page: Page, participants: any[]):
                     const database = request.result;
                     const tx = database.transaction(['participants', 'onboardingStates'], 'readwrite');
                     for (const p of parts) {
-                        tx.objectStore('participants').put({ ...p, createdAt: now, updatedAt: now, sync });
+                        tx.objectStore('participants').put({ ...p, createdAt, updatedAt: now, sync });
                         tx.objectStore('onboardingStates').put({
                             id: p.id,
                             stepIndex: 99,

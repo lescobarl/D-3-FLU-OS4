@@ -53,6 +53,8 @@ import {
 import type { EventoComposicion, FronteraComposicion } from './composicion.ts'
 import { crearConversacion } from './motor.ts'
 import { perteneceALineaAbierta } from './fusion.ts'
+import { continuaLaFrase } from '../core/locucion.js'
+import { normalizeMicText } from '../lib/speechMerge.js'
 import { CONVERSACION_CONFIG } from './ports.ts'
 import type { IdiomaLocucion, MotivoCierre } from './ports.ts'
 import type {
@@ -189,11 +191,32 @@ export function crearMotorConversacionProducto({
    * `composicion.ts`.
    */
   let frontera: FronteraComposicion = FRONTERA_INICIAL
+  /**
+   * ¿La sesión ACTUAL del reconocedor todavía no commitea? Su hipótesis cubre
+   * SOLO el audio de esa sesión; la línea abierta puede traer texto del MISMO
+   * tramo dicho antes del reinicio, y se compone BASE + hipótesis, nunca por
+   * reemplazo (medido 2026-11-12: una sesión nueva a mitad de frase borraba de
+   * la caja lo ya dicho). `abrir()` la marca y el commit la cierra.
+   */
+  let sesionNueva = true
+  /**
+   * Texto de la línea abierta en el PRIMER evento de la sesión: la base que la
+   * sesión nueva solo puede alargar. Se captura UNA vez (`null` = sin capturar).
+   */
+  let baseDeSesion: string | null = null
+  // Texto de la última fila commiteada (toda la sesión): con él se reconoce la
+  // RE-EMISIÓN del replay de una sesión nueva (su texto ya está escrito).
+  let ultimoTextoCommiteado = ''
   // La frontera avanza cuando una fila commitea: lo que sostuvo su texto ya
-  // está escrito y no se re-compone. Cubre también el commit del stop.
+  // está escrito y no se re-compone. Cubre también el commit del stop. El
+  // commit además CIERRA la ventana de la sesión: lo que siga es otra locución
+  // y se compone desde su propia hipótesis (reemplazo), no pegada a la base.
   api.subscribe((evento) => {
     if (evento.tipo !== 'row.committed') return
     frontera = avanzarFrontera(frontera)
+    sesionNueva = false
+    baseDeSesion = null
+    ultimoTextoCommiteado = String(evento.fila.texto ?? '').trim()
   })
 
   /**
@@ -286,6 +309,16 @@ export function crearMotorConversacionProducto({
     abrir: () => {
       libroDeLinea = null
       locucionDelLibro = ''
+      // La frontera de transporte es POR SESIÓN del reconocedor: `abrir()` es
+      // su único punto de arranque (el único llamador es `Recognition.onstart`,
+      // useFluVoiceAssistant.js). La sesión nueva trae un array de resultados
+      // que empieza en 0; conservar el `corte` de la vieja mordía sus primeros
+      // resultados — medido 2026-11-12 19:04:07: un final de 732 caracteres
+      // empezó a mitad de frase (« a detalle tres…») porque el primer evento de
+      // la sesión nueva ya traía más resultados que el corte heredado.
+      frontera = FRONTERA_INICIAL
+      sesionNueva = true
+      baseDeSesion = null
       if (estadoMotor !== 'inactiva') return
       descartarAudioPendiente()
       cierreEnCurso = null
@@ -322,13 +355,36 @@ export function crearMotorConversacionProducto({
         // acumulada, no se concatena. `composicion.ts` la compone desde la
         // FRONTERA ya cubierta por filas commiteadas (0 si no hay): la
         // re-emisión retenida del enunciado anterior no se vuelve a entregar.
-        // Los interinos siguen usando `resultIndex` (solo los resultados
-        // NUEVOS), nunca por debajo de la frontera.
+        // Los INTERINOS también traen la hipótesis completa de la instancia
+        // (Chrome revisa resultados anteriores, no solo la cola): se reemplaza
+        // el texto del tramo en vez de pegar deltas (defecto «batiendo»).
         const compuesta = componerEvento(evento, frontera)
         frontera = compuesta.frontera
         const trozo = compuesta.trozo
         const hayFinal = compuesta.hayFinal
         if (!trozo) return
+        // RE-EMISIÓN DEL REPLAY de una sesión NUEVA (medido 994bbf46
+        // 2026-11-12): tras el rebuild Chrome re-emite SOLO el final retenido
+        // de la locución anterior. Compuesto desde la frontera rancia (0), su
+        // texto es exactamente el de la última fila commiteada: ya está
+        // escrito, no se re-ingesta. Si la línea abierta lo adoptaba, el final
+        // NUEVO más corto no podía reemplazarlo (regla del dueño «la
+        // transcripción nunca decrece») y la frase vieja se duplicaba tapando
+        // los enunciados nuevos. La frontera avanza igual (el final del replay
+        // cubre el índice 0): los eventos siguientes componen desde 1 y sus
+        // interinos/finales viajan. El motor local no hace replay (sus eventos
+        // SIEMPRE traen metrics) y su repetición legítima conserva su fila
+        // (D11: el producto tampoco deduplica por texto entre locuciones).
+        if (
+          sesionNueva &&
+          hayFinal &&
+          !evento.metrics &&
+          ultimoTextoCommiteado !== '' &&
+          normalizeMicText(trozo) === normalizeMicText(ultimoTextoCommiteado)
+        ) {
+          frontera = avanzarFrontera(frontera)
+          return
+        }
         const laContinua =
           abierta !== null &&
           perteneceALineaAbierta({
@@ -343,13 +399,40 @@ export function crearMotorConversacionProducto({
           libroDeLinea = null
           locucionDelLibro = clave
         }
-        const lineaPrevia = !hayFinal && laContinua && abierta ? abierta.texto : ''
-        const fusion = hayFinal
+        const previa = laContinua && abierta ? abierta.texto : ''
+        if (sesionNueva && baseDeSesion === null) baseDeSesion = previa
+        // La hipótesis de una instancia VIGENTE cubre todo lo que la línea ya
+        // muestra: REEMPLAZA el texto del tramo (`revision.ts` nunca pierde
+        // palabras ya oídas). En una sesión NUEVA la hipótesis es PARCIAL: se
+        // pega sobre la base que la línea tenía al arrancar y sus eventos se
+        // recomponen contra ESA base (idempotente, sin libro que acumule), para
+        // que una revisión de Chrome no borre lo dicho antes del reinicio.
+        // `nuevaInstancia` sigue cubriendo el array que ENCOGE dentro de una
+        // sesión (el motor local lo reemplaza en cada segmento).
+        const reemplaza = !sesionNueva && (hayFinal || !compuesta.nuevaInstancia)
+        // SESIÓN NUEVA con base no vacía: la hipótesis de la instancia nueva se
+        // funde sobre la base (la parte que el reinicio no re-emite). Un FINAL
+        // que NO la continúa es OTRA locución y se manda SOLO (medido 994bbf46:
+        // la base absorbía «voy a preparar…» porque su primera palabra estaba
+        // dentro del final retenido y la frase nueva se perdía). Los INTERINOS
+        // siguen fundiéndose SIEMPRE: la fusión se protege sola (un interino
+        // ajeno devuelve la base sin cambio y la línea no se mueve).
+        const fusion = reemplaza
           ? { linea: trozo, libro: null }
-          : fusionarEnLineaAbierta(lineaPrevia, libroDeLinea, trozo)
-        libroDeLinea = hayFinal ? null : fusion.libro
+          : sesionNueva &&
+              hayFinal &&
+              baseDeSesion !== null &&
+              baseDeSesion !== '' &&
+              !continuaLaFrase(String(baseDeSesion), trozo)
+            ? { linea: trozo, libro: null }
+            : fusionarEnLineaAbierta(
+                sesionNueva ? String(baseDeSesion ?? '') : previa,
+                sesionNueva ? null : libroDeLinea,
+                trozo,
+              )
+        libroDeLinea = reemplaza || sesionNueva ? null : fusion.libro
         if (!fusion.linea) return
-        if (!hayFinal && fusion.linea === lineaPrevia) return
+        if (!hayFinal && fusion.linea === previa) return
         const metrics = evento.metrics
         await registrarFallo(
           'conversacion.producto.ingest.error',
@@ -371,6 +454,15 @@ export function crearMotorConversacionProducto({
               : {}),
           }),
         )
+        // La frontera avanza cuando el final se APLICA, no cuando la fila
+        // commitea: entre uno y otro media el silencio de cierre y puede mediar
+        // un worker ocupado (medido 994bbf46 2026-11-12: 61 s de cola parada;
+        // en esa ventana la re-emision retenida reescribia la frase vieja y
+        // tapaba los finales nuevos). Si el interino gano al final del MISMO
+        // evento, lo contiene entero (startsWith): avanzar no pierde su texto.
+        // El commit sigue avanzando el corte (idempotente) para las filas sin
+        // final (el stop).
+        if (hayFinal) frontera = avanzarFrontera(frontera)
       })
     },
 

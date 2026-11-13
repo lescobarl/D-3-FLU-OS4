@@ -44,6 +44,7 @@
       "crearUtilidadesFilaProducto",
       "crearVadProducto",
       "ejecutarRegistrando",
+      "medirConTope",
       "normalizarParaComparar",
       "registrarFallo",
       "renameRowSpeakerName",
@@ -94,7 +95,9 @@
     ],
     "fila.ts": [
       "construirFila",
+      "filaQueCubre",
       "fusionarVoz",
+      "horaDelFinDelTramo",
       "resolverEtiqueta",
       "ultimaFilaPorFin",
       "ventanaDentroDe"
@@ -121,6 +124,7 @@
       "crearIngesta",
       "decidirIdentidadSesion",
       "drenarResultadosAsr",
+      "elTramoVivoEsDeLaAbierta",
       "esReentregaDeLaFila",
       "fronteraPorVoz",
       "ingestaAsr",
@@ -193,19 +197,23 @@
       "finalDentroDeLaAbierta",
       "finalizarPendientes",
       "flushPendientes",
+      "fundirPendientesPrevios",
       "idiomaDe",
       "ordenDePendiente",
       "procesarResultadoAsr",
+      "seFundeEnLaAbierta",
       "seSolapanEnAudio",
       "sinPrefijoDeLaFilaAnterior",
       "sinReentregas",
-      "textoYaEscrito",
       "tramoDePendiente"
     ],
     "tipos.ts": [],
     "tramos.ts": [
       "crearBufferAsr",
       "crearRegistroTramos"
+    ],
+    "turnRowWait.ts": [
+      "crearEsperaDeFilaDeTurno"
     ],
     "turnSnapshot.js": [
       "grabarRevisionDeFila",

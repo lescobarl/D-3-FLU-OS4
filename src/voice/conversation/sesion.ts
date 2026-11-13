@@ -21,6 +21,7 @@ import type {
   TramoAudio,
 } from './tipos.ts'
 import type {
+  AnclaAudio,
   ConfiguracionConversacion,
   EstadoAsr,
   Fila,
@@ -91,6 +92,12 @@ export type EstadoSesion = {
   muestrasEnUltimoIntento: number
   /** Muestras PCM entregadas a la ingesta en la sesión (Caso 5, sin tope). */
   totalMuestrasEntregadas: number
+  /**
+   * Ancla muestra↔reloj del primer bloque entregado (null hasta el primer
+   * audio): fecha cualquier tramo en hora de VOZ aunque su fila se escriba
+   * después. La escribe SOLO la ingesta; el cierre la lee para sellar la fila.
+   */
+  anclaAudio: AnclaAudio | null
   /** Voces nuevas contadas en la sesión (`Hablante N`). */
   contadorVoces: number
   /** ¿Hay una medida de voz en curso para la locución abierta? */
@@ -108,6 +115,13 @@ export type EstadoSesion = {
   contadorCambioVoz: number
   /** Primera ventana sospechosa retenida: su audio y su texto van al hablante nuevo si se confirma. */
   candidatoCambioVoz: { limite: number; textoAntes: string } | null
+  /**
+   * Hora del RELOJ en que el final del ASR se aplicó a la locución abierta
+   * (la arma el flujo de texto; cada bloque con voz la rearma la ingesta).
+   * La frontera adelanta el cierre con `finalCloseConfirmMs` de silencio sin
+   * voz desde esta marca. null = sin final aplicado a la locución abierta.
+   */
+  confirmacionFinalDesdeMs: number | null
   oyentes: Set<(evento: EventoConversacion) => void>
 }
 
@@ -164,11 +178,13 @@ export function crearEstadoSesion(idiomaInicial: IdiomaLocucion): EstadoSesion {
     tramosDeLaAbierta: new Set(),
     muestrasEnUltimoIntento: 0,
     totalMuestrasEntregadas: 0,
+    anclaAudio: null,
     contadorVoces: 0,
     medidaVozEnCurso: false,
     medidoHastaPorTramo: new Map(),
     contadorCambioVoz: 0,
     candidatoCambioVoz: null,
+    confirmacionFinalDesdeMs: null,
     oyentes: new Set(),
   }
 }

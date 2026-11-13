@@ -180,6 +180,16 @@ describe('bautizo de voz — el nombre lo resuelve el directorio', () => {
     expect(hoisted.registrarNombre).toHaveBeenCalledWith('Luis', 'Hablante 1', 'L1')
   })
 
+  it('«… Soy Luis vamos a revisar» bautiza «Luis», no «Luis Vamos» (19:05)', () => {
+    // MEDIDO 2026-11-12 19:05 (ancla «Hablante 1»): el registro guardó «Luis
+    // Vamos» porque la captura se tragó la cola del mandato tras el nombre.
+    commitear({
+      ...FILA,
+      texto: 'este vamos a ver vamos a revisar Okay flujo Soy Luis vamos a revisar',
+    })
+    expect(hoisted.registrarNombre).toHaveBeenCalledWith('Luis', 'Hablante 1', 'L1')
+  })
+
   it('una voz NUEVA que se presenta conserva su nombre (no hay conocido que preferir)', () => {
     registerVoiceName('speaker_1', 'Luis')
     commitear({ ...FILA, texto: 'ok flu soy Marta' })

@@ -73,6 +73,38 @@ describe('fluConversationLog — hablar deja fila en el historial', () => {
     });
 });
 
+describe('fluConversationLog — la fila de FLU pertenece a SU turno', () => {
+    beforeEach(() => {
+        useIntegrationStore.getState().resetConversationHistory();
+    });
+
+    it('la fila guarda el turnId que la identifica', () => {
+        logFluReply('Son las nueve y media.', { turnId: 42 });
+        expect(fluRows()).toHaveLength(1);
+        expect(String(fluRows()[0].turnId)).toBe('42');
+    });
+
+    it('un turno con fila de FLU no escribe otra (aunque cambie el texto)', () => {
+        logFluReply('Son las nueve y media.', { turnId: 42 });
+        logFluReply('Son las nueve y media.', { turnId: 42 });
+        logFluReply('Texto tardío del mismo turno.', { turnId: 42 });
+        expect(fluRows()).toHaveLength(1);
+        expect(fluRows()[0].text).toBe('Son las nueve y media.');
+    });
+
+    it('el mismo texto en turnos distintos SÍ se registra (identidad de turno, no de texto)', () => {
+        logFluReply('Listo.', { turnId: 7 });
+        logFluReply('Listo.', { turnId: 8 });
+        expect(fluRows()).toHaveLength(2);
+    });
+
+    it('sin turnId la idempotencia sigue siendo por adyacencia', () => {
+        logFluReply('Entendido.');
+        logFluReply('Entendido.');
+        expect(fluRows()).toHaveLength(1);
+    });
+});
+
 describe('fluConversationLog — un solo escritor de la fila de FLU', () => {
     it('App.tsx no llama addFluMessage directo', () => {
         expect(addFluMessageCalls(readFileSync(join(process.cwd(), 'src/App.tsx'), 'utf8'))).toEqual([]);

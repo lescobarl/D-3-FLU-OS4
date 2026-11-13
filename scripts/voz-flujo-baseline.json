@@ -15,8 +15,25 @@
   "measurement": {
     "stallVoiceWindowMs": 1500
   },
+  "measuredMudo": {
+    "fecha": "2026-11-12 01:06:10.259-01:06:47.482",
+    "sesion": "cf3ef5c1 (la mujer): locucion abierta sin una palabra, cero [WD] en la ventana",
+    "locucionAbiertaSinTextoMs": 37223,
+    "rebuildsEnLaVentana": 0
+  },
+  "measuredMudoTemprano": {
+    "fecha": "2026-11-13 14:32:39.844-14:32:59.751",
+    "sesion": "7d61e92f (la mujer): ultimo resultado de Chrome 14:32:39.844; voz medida ok 1290-1500 ms 14:32:48.501-53.223; primer interim 14:32:59.751",
+    "primerInterimMs": 19907,
+    "compasRespaldoMs": 4200,
+    "rebuildsEnLaVentana": 0
+  },
   "forbiddenNow": {
     "stallConVoz": 0,
+    "rebuildMudoConTexto": 0,
+    "rebuildMudoTempranoPorLocucion": 1,
+    "mudoTempranoAntesDelCompas": 0,
+    "bautizoEtiquetaCompartida": 0,
     "locucionesConTextoTrasStop": 0,
     "cierreTrasStopMs": 2500
   },
@@ -24,6 +41,9 @@
     "analyzer": "scripts/analiza-voz-log.mjs:voz:log",
     "watchdog": "src/voice/lib/asrWatchdog.js:resolveWatchdogStep",
     "watchdogConsumer": "src/voice/hooks/useLocalAsrFallback.js:watchdogTick",
+    "watchdogMudoThreshold": "src/voice/lib/fluConfig.js:FLU_CONFIG.activeListen.restart.muteOpenLocutionMs",
+    "watchdogMudoTempranoThreshold": "src/voice/lib/fluConfig.js:FLU_CONFIG.activeListen.restart.conversationStallMs",
+    "watchdogMudoTempranoLatch": "src/voice/hooks/useLocalAsrFallback.js:mudoTempranoLocucionRef",
     "voiceEvidence": "src/voice/lib/voicedActivity.js:countVoicedSamplesInBlocks",
     "close": "src/voice/conversation/producto.ts:cerrar",
     "closeConsumer": "src/voice/hooks/useFluVoiceAssistant.js:cerrarMotorConversacion"

@@ -70,7 +70,7 @@ import { resolveTurnArtifactKind } from './lib/turnArtifactKind';
 import { isMinuteGenerationRequest, isRecoverableRecognitionError } from './voice/api/audio'
 import { COMMAND_IDS, getCommandSpeech, normalizeJuego, resolveDeterministicCommand, resolveNoteVoiceIntent } from './voice/api/commands'
 import { FLU_CONFIG } from './voice/api/config'
-import { buildFluSpeechAuditRows, createConversationModeController, deriveUserLastText, evaluateListenParity, logFluReply, resolvedActionIdentity, resolveRowSpeakerLabel, selectVisiblePhrase } from './voice/api/conversation'
+import { buildFluSpeechAuditRows, createConversationModeController, deriveUserLastText, evaluateListenParity, resolvedActionIdentity, resolveRowSpeakerLabel, selectVisiblePhrase } from './voice/api/conversation'
 import { applyKnownVoiceName, forgetVoiceName, isAutoSpeakerLabel, participantVoiceAnchorsForDiarization, resolveVoiceIdentity, resolveVoiceParticipants } from './voice/api/identity'
 import { resolveGeminiErrorPresentation } from './voice/api/media'
 import { cancelSpeech, isSpeechBusy, speakResponse, waitForSpeechIdle } from './voice/api/speech'
@@ -263,7 +263,7 @@ type ResolvedContract = Omit<FluContract, 'workspace'> & {
 
 /** Payload entregado por el motor de voz al resolver un contrato. */
 type ContractResolution = FastPathExecutedMarks & {
-    userCommitOnly?: boolean; effectOnly?: boolean; // efecto de SERVICIO: no escribe la conversacion
+    effectOnly?: boolean; // efecto de SERVICIO: no escribe la conversacion
     turnId?: number | string | null; // identidad del turno: la fila se reutiliza por IDENTIDAD
     transcript?: string;
     speakerName?: string; evidenciaAcustica?: boolean;
@@ -374,7 +374,7 @@ function App() {
     // Ref for speakFlu to fix closure issue: useCallback with [] deps captures
     // speakFlu from the FIRST render's closure. Keeping a ref ensures the callback
     // always reads the latest speakFlu even across re-renders.
-    const speakFluRef = useRef<(text: string, lang: string) => Promise<void>>(async () => {});
+    const speakFluRef = useRef<(text: string, lang: string, opts?: import('./hooks/useNavigationCommands').FluSpeechOptions) => Promise<void>>(async () => {});
     // Guarda "ya se anunció el saludo de cierre" para no repetirlo con cada
     // re-render/re-efecto del mismo participante (una vez por activación).
 
@@ -1164,14 +1164,12 @@ function App() {
                 }
             }
             const phase: string = resolved?.phase || '';
-            const userCommitOnly: boolean = resolved?.userCommitOnly === true;
 
             // §9 — la fila del USUARIO la escribe SOLO el módulo de conversación
             // (`row.committed`, ÚNICO escritor en AMBOS modos). El escritor pasivo
             // de App quedó retirado (2026-10-30, problema 6: era una ruta doble).
             // Un SERVICIO (`effectOnly`) aplica su efecto y no escribe la conversación.
             if (rawOnly && transcript && !cleanForSpeech(transcript)) return;
-            if (userCommitOnly) return;
 
             // ============================================================
             // OS2 parity: raw transcript logging with dedup
@@ -1194,8 +1192,9 @@ function App() {
                     phase,
                 }, 'Raw transcript logged').catch((e) => logCaughtError('src/App.tsx: auditLog.logEvent', e));
 
-                // El aviso de turno comprometido lo da `onLocucionCommiteada` del
-                // motor (ÚNICO escritor, ambos modos): una sola cuenta por turno.
+                // El aviso de turno comprometido lo da el callback de cierre de
+                // locución del motor (ÚNICO escritor, ambos modos): una sola
+                // cuenta por turno.
 
                 return;
             }
@@ -1821,8 +1820,9 @@ function App() {
                     nowMs,
                     responseWindowMs,
                 );
-                integrationStore.setLastResponse(respuestaVoz);
-                logFluReply(respuestaVoz);
+                // La fila de FLU la escribe el ÚNICO dueño al hablar (`speakFlu`
+                // → `logFluReply`, con el turnId de esta resolución): aquí no hay
+                // segundo escritor ni `lastResponse` paralelo.
 
                 // ============================================================
                 // APLICAR EMOCIÓN DE GEMINI ANTES DE SPEAKING
@@ -1990,7 +1990,7 @@ function App() {
                     // Use speakFluRef.current to always read the latest speakFlu function
                     // regardless of useCallback stale closure
                     const currentSpeakFlu = speakFluRef.current;
-                    speakPromise = currentSpeakFlu(respuestaVoz, languageRef.current).catch((speechErr: unknown) => {
+                    speakPromise = currentSpeakFlu(respuestaVoz, languageRef.current, { turnId: resolved?.turnId }).catch((speechErr: unknown) => {
                         logCaughtError('[App] speakFlu failed', speechErr);
                     });
                 }

@@ -295,6 +295,14 @@ export const TIMEOUT_POLICY_MS = {
     sustainedActionRecheck: 1_000,
     falVideoPoll: 3_000,
     falVideoFetchAbort: 200_000,
+    /**
+     * Tope de espera de la medida de voz (worker de embeddings). Un worker
+     * ocupado no puede congelar la cola de conversación: medido 994bbf46
+     * (2026-11-12) la cola se paró 61 s esperando un embedding. Pasado el
+     * tope la medida se declara nula (los consumidores ya saben vivir sin
+     * ella) y el worker termina su tarea por su cuenta.
+     */
+    voiceEmbedMeasure: 6_000,
 } as const;
 
 /**

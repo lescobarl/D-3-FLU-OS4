@@ -87,12 +87,30 @@ const ventanaVoz = Number(baseline?.measurement?.stallVoiceWindowMs) || 0;
 const prohibido = baseline?.forbiddenNow || {};
 let stall = 0;
 let stallConVoz = 0;
+let mudo = 0;
+let mudoConTexto = 0;
+let mudoTemprano = 0;
+let mudoTempranoConTexto = 0;
+let mudoTempranoAntesDelCompas = 0;
+const mudoTempranoPorLocucion = new Map();
 let ultimaVoz = null;
 let ultimoStop = null;
 let ultimaCierreTrasStop = null;
 let cierresTrasStop = 0;
 let cierresConTextoTrasStop = 0;
 let aperturasTrasStop = 0;
+// Instante de apertura por locución: el cierre con texto tras el stop SOLO es
+// defecto si la locución NACIÓ después del stop. La que ya estaba abierta se
+// cierra con su final, que es el comportamiento aceptado (medido 2026-11-13
+// 18:46:31: la locución 18ba5849 abrió a las 30.790, el stop llegó a las
+// 31.474 y su final «cerrando» la cerró a las 31.683, 209 ms después: el stop
+// espera el final de Chrome con la entrada cortada).
+const aperturaPorLocucion = new Map();
+// BAUTIZO SIN VOZ: el nombre se aplicó a UNA fila sobre la etiqueta de estado
+// compartida (`Hablante X/XX`) porque la locución del comando no tenía `vozId`.
+// Medido 2026-11-13 18:44:17.108: vozId="", filas=1, etiqueta="Hablante XX":
+// las filas anteriores y posteriores de la voz conservaron «Hablante 1».
+let bautizoEtiquetaCompartida = 0;
 // La marca de solicitud del dueño es la que cuenta; en logs viejos (sin ella)
 // se conserva el stop interno del reconocedor para no perder la medición.
 const marcaStop = lineas.some((linea) => /\[REC\] stop: request/.test(linea))
@@ -116,6 +134,28 @@ for (const linea of lineas) {
             stallConVoz += 1;
         }
     }
+    if (/\[WD\] rebuild kind=mudo/.test(linea)) {
+        mudo += 1;
+        // El rebuild `mudo` solo es legítimo con la locución abierta VACÍA: con
+        // texto estaría cortando una frase que Chrome ya estaba oyendo.
+        if (/sinTextoEnAbierta=false/.test(linea)) mudoConTexto += 1;
+        // MUDO TEMPRANO: una vez por locución (candado del consumidor). Se
+        // cuenta por `locucionId`, que el propio log publica.
+        if (/mudoTemprano=true/.test(linea)) {
+            mudoTemprano += 1;
+            if (/sinTextoEnAbierta=false/.test(linea)) mudoTempranoConTexto += 1;
+            // COMPÁS DEL AUDIO PROPIO: el mudo temprano solo es legítimo cuando
+            // ESTA locución acumuló el compás del respaldo. Medido 18:44:08.183:
+            // locucionMs=43 (43 ms) y el rebuild cortó el comando que Chrome
+            // estaba oyendo; la fila cerró sin `vozId` y el nombre no alcanzó a
+            // las filas de la voz. En logs viejos (sin locucionMs) no se mide.
+            const locucionMs = Number(/locucionMs=(\d+)/.exec(linea)?.[1]);
+            const compas = Number(baseline?.measuredMudoTemprano?.compasRespaldoMs) || 4200;
+            if (Number.isFinite(locucionMs) && locucionMs < compas) mudoTempranoAntesDelCompas += 1;
+            const id = /locucionId=(\S+)/.exec(linea)?.[1] || '-';
+            mudoTempranoPorLocucion.set(id, (mudoTempranoPorLocucion.get(id) || 0) + 1);
+        }
+    }
     if (marcaStop.test(linea)) {
         ultimoStop = t;
         ultimaCierreTrasStop = null;
@@ -123,13 +163,25 @@ for (const linea of lineas) {
         cierresConTextoTrasStop = 0;
         aperturasTrasStop = 0;
     }
-    if (/conversacion\.locucion\.abierta/.test(linea) && ultimoStop !== null && t >= ultimoStop) {
-        aperturasTrasStop += 1;
+    if (/conversacion\.nombre\.renombrado/.test(linea)) {
+        // La etiqueta compartida (`Hablante X/XX`) NO es una voz: renombrar solo
+        // su fila deja fuera a las demás participaciones de la misma voz. Un
+        // bautizo legítimo exige `vozId` medido y la etiqueta de esa voz.
+        if (/"vozId":""/.test(linea) && /"etiqueta":"Hablante\s+X+\b/.test(linea)) {
+            bautizoEtiquetaCompartida += 1;
+        }
+    }
+    if (/conversacion\.locucion\.abierta/.test(linea)) {
+        const id = /"locutionId":"([^"]+)"/.exec(linea)?.[1] || '';
+        if (id) aperturaPorLocucion.set(id, t);
+        if (ultimoStop !== null && t >= ultimoStop) aperturasTrasStop += 1;
     }
     if (/conversacion\.locucion\.cerrada/.test(linea) && ultimoStop !== null && t >= ultimoStop) {
         ultimaCierreTrasStop = t;
         cierresTrasStop += 1;
-        if (/"descarte":null/.test(linea)) cierresConTextoTrasStop += 1;
+        const id = /"locutionId":"([^"]+)"/.exec(linea)?.[1] || '';
+        const abrioTrasStop = aperturaPorLocucion.has(id) && aperturaPorLocucion.get(id) >= ultimoStop;
+        if (abrioTrasStop && /"descarte":null/.test(linea)) cierresConTextoTrasStop += 1;
     }
 }
 const cierreTrasStopMs =
@@ -139,6 +191,19 @@ const cierreTrasStopMs =
 console.log('');
 console.log('--- FLUJO (watchdog/stop) ---');
 console.log('stall rebuilds         : ' + stall + ' (con voz: ' + stallConVoz + ')');
+console.log('mudo rebuilds          : ' + mudo + ' (con texto en la abierta: ' + mudoConTexto + ')');
+const maxMudoTempranoPorLocucion = Math.max(0, ...mudoTempranoPorLocucion.values());
+console.log(
+    'mudo temprano          : ' +
+        mudoTemprano +
+        ' (por locucion max: ' +
+        maxMudoTempranoPorLocucion +
+        ', con texto: ' +
+        mudoTempranoConTexto +
+        ', antes del compas: ' +
+        mudoTempranoAntesDelCompas +
+        ')',
+);
 console.log(
     'cierre tras stop       : ' +
         (cierreTrasStopMs === null ? '?' : cierreTrasStopMs + 'ms') +
@@ -149,10 +214,46 @@ console.log(
         ' abiertas_nuevas=' +
         aperturasTrasStop,
 );
+console.log(
+    'bautizo sin voz         : ' +
+        bautizoEtiquetaCompartida +
+        ' (nombre aplicado a UNA fila de etiqueta compartida)',
+);
 if (baseline) {
     const fallos = [];
     if (stallConVoz > Number(prohibido.stallConVoz ?? 0)) {
         fallos.push('stallConVoz=' + stallConVoz + ' > ' + (prohibido.stallConVoz ?? 0));
+    }
+    if (mudoConTexto > Number(prohibido.rebuildMudoConTexto ?? 0)) {
+        fallos.push('rebuildMudoConTexto=' + mudoConTexto + ' > ' + (prohibido.rebuildMudoConTexto ?? 0));
+    }
+    const topeTemprano = Number(prohibido.rebuildMudoTempranoPorLocucion ?? 1);
+    if (maxMudoTempranoPorLocucion > topeTemprano) {
+        fallos.push(
+            'rebuildMudoTempranoPorLocucion=' +
+                maxMudoTempranoPorLocucion +
+                ' > ' +
+                topeTemprano,
+        );
+    }
+    if (mudoTempranoConTexto > 0) {
+        fallos.push('rebuildMudoTempranoConTexto=' + mudoTempranoConTexto + ' > 0');
+    }
+    if (mudoTempranoAntesDelCompas > Number(prohibido.mudoTempranoAntesDelCompas ?? 0)) {
+        fallos.push(
+            'mudoTempranoAntesDelCompas=' +
+                mudoTempranoAntesDelCompas +
+                ' > ' +
+                (prohibido.mudoTempranoAntesDelCompas ?? 0),
+        );
+    }
+    if (bautizoEtiquetaCompartida > Number(prohibido.bautizoEtiquetaCompartida ?? 0)) {
+        fallos.push(
+            'bautizoEtiquetaCompartida=' +
+                bautizoEtiquetaCompartida +
+                ' > ' +
+                (prohibido.bautizoEtiquetaCompartida ?? 0),
+        );
     }
     if (cierresConTextoTrasStop > Number(prohibido.locucionesConTextoTrasStop ?? 0)) {
         fallos.push(

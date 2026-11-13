@@ -30,6 +30,7 @@ import {
   resolveSilentDegrade,
 } from '../lib/voiceLocalFallback'
 import { WATCHDOG_ACTIONS, resolveWatchdogStep } from '../lib/asrWatchdog.js'
+import { isFluSpeaking } from '../lib/fluSpeech.js'
 import { countVoicedSamplesInBlocks } from '../lib/voicedActivity.js'
 import { getConversationMinVoicedSamples } from '../lib/micCapture.js'
 import { analyzeWakeTurn } from '../lib/wakeTurnCommit.js'
@@ -37,6 +38,11 @@ import { resolveNavigationCommand } from '../lib/voiceCommands.js'
 
 /**
  * @param {object} deps Refs y acciones del hook principal.
+ * @param {() => ({ texto?: string } | null)} [deps.leerLocucionAbierta] La
+ *   locución abierta del módulo, con su texto (su dueño es `instantanea`), o
+ *   `null`. Con texto es una frase viva; vacía es la firma del Chrome mudo
+ *   (medido 2026-11-12 18:22 y 19:05). Con la locución abierta el stall no
+ *   reconstruye: es la prueba de habla que el piso PCM de identidad no ve.
  * @param {boolean} [deps.degradeEnabled] Politica de produccion: `false` deja
  *   Chrome como unico motor y conserva el rebuild del watchdog (backup
  *   `rescate/wip-pre-s9`); `true` permite el fallback local (lab/opt-in).
@@ -77,6 +83,7 @@ export function useLocalAsrFallback({
   relayLog,
   audioSampleRate,
   getRestartConfig,
+  leerLocucionAbierta,
   degradeEnabled = true,
 }) {
   const degradeEligibleSinceRef = useRef(0)
@@ -87,6 +94,8 @@ export function useLocalAsrFallback({
   /** Ultimo FINAL aceptado (el parcial NO cuenta): reloj de la recuperacion. */
   const lastFinalAtRef = useRef(0)
   const lastDegradeEvalAtRef = useRef(0)
+  /** Locucion a la que YA se le dio el rebuild `mudo` temprano: una por locucion. */
+  const mudoTempranoLocucionRef = useRef('')
 
   /** UNICO predicado de "este motor es el local" (delegado a su dueno). */
   const isLocal = useCallback(
@@ -172,6 +181,7 @@ export function useLocalAsrFallback({
     segmentsSinceRecoveryRef.current = 0
     probeUntilRef.current = 0
     lastFinalAtRef.current = 0
+    mudoTempranoLocucionRef.current = ''
   }, [])
 
   /** Chrome produjo un RESULTADO: si habia ventana de prueba, queda como activo. */
@@ -231,6 +241,40 @@ export function useLocalAsrFallback({
         sampleRate: rate,
         windowMs: voiceWindowMs,
       }) >= getConversationMinVoicedSamples(rate)
+    // LOCUCIÓN ABIERTA: habla que el piso de identidad no alcanza a ver. El
+    // hecho lo posee el módulo (su instantánea de sesión); aquí solo se lee.
+    // Medido 2026-11-12 18:22: la mujer hablaba con 30–480 ms de voz por
+    // ventana de 1,5 s y el watchdog la trataba como micrófono muerto.
+    const locucionAbierta = leerLocucionAbierta?.() ?? null
+    const hayLocucionAbierta = Boolean(locucionAbierta)
+    // SIN TEXTO EN LA ABIERTA: la firma del Chrome mudo. Medido 19:05: 37,2 s
+    // con la locución abierta y CERO resultados (el stall no podía tocarla
+    // —hay locución— y el dead exige inactivo); cerró con `descarte:sinTexto`.
+    // Sin una palabra escrita no hay frase que un rebuild pueda cortar.
+    const sinTextoEnLaAbierta =
+      hayLocucionAbierta && !String(locucionAbierta.texto || '').trim()
+    // AUDIO PROPIO de la locucion abierta (`fin - inicio` de su tramo). El
+    // reloj global (`sinceMeaningful`) es del motor, no de ESTA locucion: en
+    // 18:44:08.183 traia 4238 ms del turno anterior y disparo el mudo 0,57 s
+    // despues de abrir 4d84debd, cuyo audio propio era de 43 ms. La frase que
+    // Chrome estaba oyendo quedo fuera de la ventana de medida (240 ms de voz,
+    // sin `vozId`) y el nombre no alcanzo a las filas de la voz.
+    const openLocutionMs =
+      hayLocucionAbierta &&
+      Number(locucionAbierta.tramo?.sampleRate) > 0
+        ? Math.max(
+            0,
+            ((Number(locucionAbierta.tramo.fin) - Number(locucionAbierta.tramo.inicio)) /
+              Number(locucionAbierta.tramo.sampleRate)) *
+              1000,
+          )
+        : 0
+    // MUDO TEMPRANO: el rebuild de `stallMs` ya se le dio a ESTA locucion. Sin
+    // este candado el reloj se rearma con cada onstart y el motor se cortaria
+    // cada pocos segundos en medio de la misma frase (defecto medido 18:22).
+    // La llave es el `locutionId` que ya publica la instantanea del modulo.
+    const mudoTempranoHecho =
+      hayLocucionAbierta && mudoTempranoLocucionRef.current === locucionAbierta.locutionId
     const step = resolveWatchdogStep({
       sinceMeaningful: now - (lastMeaningfulIngressAtRef.current || 0),
       sinceEnd: now - (lastRecognitionEndAtRef.current || 0),
@@ -241,9 +285,15 @@ export function useLocalAsrFallback({
       probePending: Boolean(probeUntil),
       probeExpired: Boolean(probeUntil) && now >= probeUntil,
       hasRecentSpeech,
+      hasOpenLocution: hayLocucionAbierta,
+      hasEmptyOpenLocution: sinTextoEnLaAbierta,
+      openLocutionMs,
+      mudoTempranoHecho,
       recoveryDue:
         now - (lastFinalAtRef.current || 0) >= runtimeCfg.recoveryMs ||
         segmentsSinceRecoveryRef.current >= runtimeCfg.recoverySegments,
+      // El hecho lo posee `isFluSpeaking`; aqui solo se aporta al paso.
+      fluSpeaking: isFluSpeaking(),
       restartCfg,
       runtimeCfg,
     })
@@ -262,7 +312,10 @@ export function useLocalAsrFallback({
       return 'handled'
     }
     if (step.action === WATCHDOG_ACTIONS.REBUILD) {
-      relayLog('LOG', 'useFluVoiceAssistant', `[WD] rebuild kind=${step.kind} sinceMeaningful=${now - (lastMeaningfulIngressAtRef.current || 0)} recognitionActive=${recognitionActiveRef.current} restartPending=${recognitionRestartPendingRef.current} hasRecentSpeech=${hasRecentSpeech}`)
+      relayLog('LOG', 'useFluVoiceAssistant', `[WD] rebuild kind=${step.kind} sinceMeaningful=${now - (lastMeaningfulIngressAtRef.current || 0)} recognitionActive=${recognitionActiveRef.current} restartPending=${recognitionRestartPendingRef.current} hasRecentSpeech=${hasRecentSpeech} locucionAbierta=${hayLocucionAbierta} sinTextoEnAbierta=${sinTextoEnLaAbierta} locucionMs=${Math.round(openLocutionMs)} locucionId=${locucionAbierta?.locutionId || '-'} mudoTemprano=${step.early === true}`)
+      if (step.early === true && locucionAbierta?.locutionId) {
+        mudoTempranoLocucionRef.current = locucionAbierta.locutionId
+      }
       if (step.kind === 'stall') lastStallRebuildAtRef.current = now
       stallRebuildStreakRef.current += 1
       if (!rebuildRecognitionRef.current()) {
@@ -299,6 +352,7 @@ export function useLocalAsrFallback({
     degradeEnabled,
     getRestartConfig,
     isLocal,
+    leerLocucionAbierta,
     lastMeaningfulIngressAtRef,
     lastRecognitionEndAtRef,
     lastSrResultAtRef,

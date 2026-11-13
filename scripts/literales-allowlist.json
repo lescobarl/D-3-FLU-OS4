@@ -401,6 +401,7 @@
     "— Elegir participante —",
     "⚠️ No se pudo leer la imagen. Verifica que sea un archivo JPG o PNG e inténtalo de nuevo.",
     "📄 Analizar documento",
-    "🔍 Analizando con IA..."
+    "🔍 Analizando con IA...",
+    "finalCloseConfirmMs"
   ]
 }

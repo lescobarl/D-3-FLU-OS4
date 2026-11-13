@@ -76,6 +76,7 @@ export {
   grabarSnapshotDeTurno,
   snapshotDeTurno,
 } from './turnSnapshot.js'
+export { crearEsperaDeFilaDeTurno } from './turnRowWait.ts'
 export { renombrarFilaDeUsuario } from './pasivo.ts'
 export type { DependenciasRenombreFila } from './pasivo.ts'
 export type {

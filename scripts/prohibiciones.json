@@ -9,8 +9,14 @@
     {
       "id": "cierre-dos-puertas",
       "test": "tests/conversacionCierreDosPuertasGuard.test.ts",
-      "motivo": "El cierre solo tiene las puertas de voz y silencio; el final del ASR no cierra.",
+      "motivo": "El cierre solo tiene las puertas de voz y silencio; el final del ASR no cierra por contenido, solo arma la ventana de silencio confirmado (finalCloseConfirmMs).",
       "fecha": "2026-11-10"
+    },
+    {
+      "id": "final-confirmado",
+      "test": "tests/conversacionFinalConfirmadoGuard.test.ts",
+      "motivo": "La fila adelanta con el final + silencio de reloj confirmado (finalCloseConfirmMs, 800 ms) sin voz; cada bloque con voz rearma la ventana y la puerta de abajo (silencio VAD) sigue como respaldo.",
+      "fecha": "2026-11-12"
     },
     {
       "id": "despacho-unico",
@@ -57,8 +63,56 @@
     {
       "id": "reemision-turno",
       "test": "tests/conversacionReemisionTurnoGuard.test.ts",
-      "motivo": "El final retenido que el reconocedor re-emite delante no vuelve a escribirse: marca de transporte por indice que avanza con la fila commiteada, nunca dedupe por texto (D11).",
+      "motivo": "El final retenido que el reconocedor re-emite DELANTE no vuelve a escribirse dentro de la MISMA sesion: marca de transporte por indice que avanza con la fila commiteada, nunca dedupe por texto (D11). La marca es POR SESION: `abrir()` (onstart) la reinicia a 0.",
       "fecha": "2026-11-12"
+    },
+    {
+      "id": "frontera-sesion",
+      "test": "tests/conversacionFronteraSesionGuard.test.ts",
+      "motivo": "La frontera de transporte es de UNA sesion del reconocedor: `abrir()` (onstart) la vuelve a cero, el primer evento multi-resultado de la sesion nueva no se muerde (medido 19:04:07: final de 732 chars a mitad de frase) y una sesion nueva a mitad de frase conserva la base ya dicha en vez de reemplazarla.",
+      "fecha": "2026-11-12"
+    },
+    {
+      "id": "hipotesis-viva",
+      "test": "tests/conversacionHipotesisVivaGuard.test.ts",
+      "motivo": "El interino compone la hipotesis COMPLETA desde la frontera y reemplaza el texto del tramo; solo una instancia nueva del reconocedor se pega a la linea abierta.",
+      "fecha": "2026-11-12"
+    },
+    {
+      "id": "flu-escritor",
+      "test": "tests/conversacionFluEscritorGuard.test.ts",
+      "motivo": "La fila de FLU tiene un solo dueno: speakFlu registra por logFluReply ANTES de hablar, idempotente por turnId; App no escribe la fila.",
+      "fecha": "2026-11-12"
+    },
+    {
+      "id": "turno-ia",
+      "test": "tests/conversacionTurnoIaGuard.test.ts",
+      "motivo": "La peticion a la IA sale de la FILA del turno commiteada por el modulo (espera con techo), el turno vigente se recorta del historial y los turnos sin respuesta viajan como contexto declarado.",
+      "fecha": "2026-11-12"
+    },
+    {
+      "id": "pendientes-vivo",
+      "test": "tests/conversacionPendientesVivoGuard.test.ts",
+      "motivo": "La frase retenida se abre en su frontera (no en el stop), se fecha con la hora de VOZ del ancla (marcaFinMs) y la reentrega tiene una sola puerta inyectada por la ingesta.",
+      "fecha": "2026-11-12"
+    },
+    {
+      "id": "pendiente-fusion",
+      "test": "tests/conversacionPendienteFusionGuard.test.ts",
+      "motivo": "El texto retenido ANTES de una frontera de TIEMPO se funde en la locucion que cierra (una fila, un insert; defecto fd148fe7 «Hablante XX»); la frase que llega DESPUES del silencio abre su propia fila.",
+      "fecha": "2026-11-12"
+    },
+    {
+      "id": "watchdog-habla",
+      "test": "tests/vozWatchdogHablaGuard.test.ts",
+      "motivo": "Mientras FLU habla, el watchdog no toca el reconocedor (ni rebuild `dead` ni recuperacion): un solo dueno del microfono (voiceStallPolicy). Defecto 753c2361: rebuild `dead` dentro del TTS transcribio la cola de FLU como «Hablante XX».",
+      "fecha": "2026-11-12"
+    },
+    {
+      "id": "audio-atribuido-medida",
+      "test": "tests/conversacionAudioAtribuidoMedidaGuard.test.ts",
+      "motivo": "La medida de la locucion abierta recibe la continuacion EN VIVO del tramo cuyo texto ya se le atribuyo (elTramoVivoEsDeLaAbierta); sin ella el comando media 240 ms, cerraba sin voz y el nombre solo renombraba su fila (defecto 18:44: filas:1).",
+      "fecha": "2026-11-13"
     }
   ]
 }

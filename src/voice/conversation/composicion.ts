@@ -16,6 +16,9 @@
  * El motor local REEMPLAZA el array de resultados en cada segmento (longitud
  * 1), así que `total` nunca supera la frontera y su composición queda intacta:
  * con `total <= corte` la frontera no aplica (si no, se tragaría sus segmentos).
+ * La re-emisión PURA del final retenido no se resuelve aquí: en la MISMA sesión
+ * la descarta la ingesta (reentrega del mismo turno) y en una sesión NUEVA la
+ * reconoce el producto (texto igual a la última fila commiteada).
  */
 import { fraseDelEventoAsr } from '../lib/speechMerge.js'
 
@@ -67,36 +70,50 @@ export function traeFinal(evento: EventoComposicion): boolean {
 }
 
 /**
- * Compone el trozo de UN evento contra la frontera vigente y devuelve la
+ * Compone la HIPÓTESIS del evento contra la frontera vigente y devuelve la
  * frontera que deja (con el máximo índice final visto).
  *
- * El FINAL se compone desde la frontera ya cubierta por filas commiteadas (0
- * si no hay): la re-emisión retenida del enunciado anterior no se vuelve a
- * entregar. Los interinos siguen usando `resultIndex` (solo los resultados
- * NUEVOS), nunca por debajo de la frontera. Un evento con MENOS resultados que
- * la frontera es una instancia NUEVA del reconocedor (reinicio del fallback u
- * `onend`): sus índices empiezan en 0 y la frontera vieja se descarta.
+ * TODO evento —final o interino— se compone desde la frontera ya cubierta por
+ * filas commiteadas (0 si no hay): la hipótesis es la frase COMPLETA del tramo,
+ * no los resultados nuevos desde `resultIndex`. Chrome revisa resultados
+ * ANTERIORES y una cola nueva sola no puede corregirlos; pegarla sobre la línea
+ * abierta producía el texto «batiendo» (palabras del principio detrás de las
+ * últimas, medido 2026-11-12). La línea abierta se REEMPLAZA por la hipótesis
+ * (el módulo une por revisión y nunca pierde palabras).
+ *
+ * Un evento con MENOS resultados que la frontera es una instancia NUEVA del
+ * reconocedor (reinicio del fallback u `onend`): sus índices empiezan en 0 y la
+ * frontera vieja se descarta; el llamador lo sabe por `nuevaInstancia` y no
+ * puede reemplazar con ella la línea que ya venía acumulada.
  * @revisor CREAR NUEVO — único dueño de la composición contra la frontera de
  *   transporte; reemplaza el bloque inline de `producto.ts` para poder probarlo
  *   (rojo/verde) sin el producto real.
  * @param evento Evento real del reconocedor.
  * @param frontera Frontera vigente de la instancia.
- * @returns Trozo compuesto, si trae final y la frontera nueva.
+ * @returns Hipótesis compuesta, si trae final, instancia nueva y frontera nueva.
  */
 export function componerEvento(
   evento: EventoComposicion,
   frontera: FronteraComposicion,
-): Readonly<{ trozo: string; hayFinal: boolean; frontera: FronteraComposicion }> {
+): Readonly<{
+  trozo: string
+  hayFinal: boolean
+  nuevaInstancia: boolean
+  frontera: FronteraComposicion
+}> {
   const resultados = evento.results
   const total = resultados ? resultados.length : 0
-  let vigente = frontera
-  if (total < vigente.corte) vigente = FRONTERA_INICIAL
+  const nuevaInstancia = total < frontera.corte
+  const vigente = nuevaInstancia ? FRONTERA_INICIAL : frontera
   const hayFinal = traeFinal(evento)
+  // El corte por índice SOLO aplica cuando supera al total: el motor local
+  // reemplaza el array en cada segmento (longitud 1) y recortar por una
+  // frontera vieja se tragaría su segmento entero. `total == corte` con un
+  // resultado ÚNICO es el final COLAPSADO de Chrome (la hipótesis completa del
+  // tramo): se compone entero; la re-emisión PURA del final retenido la
+  // descartan la ingesta (mismo turno) y el producto (sesión nueva, replay).
   const recorte = total > vigente.corte ? vigente.corte : 0
-  const trozo = fraseDelEventoAsr(
-    resultados,
-    hayFinal ? recorte : Math.max(Number(evento.resultIndex) || 0, recorte),
-  )
+  const trozo = fraseDelEventoAsr(resultados, recorte)
   // Hasta dónde llegó el reconocedor: el máximo índice final VISTO es lo que
   // cubre una fila cuando commitea.
   let ultimoFinal = vigente.ultimoFinal
@@ -107,7 +124,12 @@ export function componerEvento(
       }
     }
   }
-  return { trozo, hayFinal, frontera: { corte: vigente.corte, ultimoFinal } }
+  return {
+    trozo,
+    hayFinal,
+    nuevaInstancia,
+    frontera: { corte: vigente.corte, ultimoFinal },
+  }
 }
 
 /**

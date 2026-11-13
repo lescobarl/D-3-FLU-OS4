@@ -10,8 +10,9 @@
  *
  * Monta el motor REAL del producto (Dexie con fake-indexeddb, VAD real, cola
  * real) y mide: (1) cada fila lleva SU tramo de audio, no `[0, cursor]`;
- * (2) el texto del tramo nuevo cierra el anterior por FRONTERA; (3) MUTACIÓN:
- * con el tramo resuelto mal, el texto se pega al anterior y hay una sola fila.
+ * (2) el texto retenido ANTES de la frontera de silencio se funde en la fila
+ * que cierra (regla 3, defecto fd148fe7); (3) el texto ajeno SIN tramo no se
+ * mezcla ni inventa fila.
  */
 import 'fake-indexeddb/auto'
 import { beforeEach, describe, expect, it } from 'vitest'
@@ -88,12 +89,15 @@ describe('producto — el tramo lo resuelve el módulo al procesar', () => {
       (evento): evento is Extract<EventoConversacion, { tipo: 'row.committed' }> =>
         evento.tipo === 'row.committed',
     )
-    expect(filas).toHaveLength(1)
-    expect(filas[0].fila.texto).toBe('hola')
-    // La fila lleva SU tramo: de la primera voz a su fin, no `[0, cursor]`.
+    // La retenida ('adios') llegó ANTES del silencio de cierre: es del MISMO
+    // bloque y se funde en la fila que cierra (UNA fila, UN insert; defecto
+    // fd148fe7: el texto se partía sin frontera real). La fila cubre el audio
+    // del bloque completo: de la primera voz al fin del tramo fundido.
+    expect(filas.map((fila) => fila.fila.texto)).toEqual(['hola adios'])
+    // La fila lleva SU tramo: de la primera voz al fin del bloque, no `[0, cursor]`.
     expect(filas[0].fila.tramo).toEqual({
       inicio: 16000,
-      fin: 32000,
+      fin: 64000,
       sampleRate: SR,
     })
 
@@ -101,25 +105,15 @@ describe('producto — el tramo lo resuelve el módulo al procesar', () => {
       (evento): evento is Extract<EventoConversacion, { tipo: 'locution.closed' }> =>
         evento.tipo === 'locution.closed',
     )
-    expect(cierres).toHaveLength(1)
-    expect(cierres[0].causa).toBe('silencio')
+    expect(cierres.map((cierre) => cierre.causa)).toEqual(['silencio'])
 
-    // Cierre real de la sesión: la segunda locución nace en T2 (muestra 48000).
-    const dosFilas = new Promise<void>((resolver) => {
-      motor.suscribir((evento) => {
-        if (evento.tipo === 'row.committed' && evento.fila.texto === 'adios') resolver()
-      })
-    })
-    motor.cerrar('user')
-    await dosFilas
+    // El stop no crea ni reescribe filas: la del bloque ya estaba en el almacén.
+    await motor.cerrar('user')
 
     const persistidas = await fluDb.conversations.toArray()
-    expect(persistidas).toHaveLength(2)
-    const adios = persistidas.find((fila) => fila.text === 'adios')
-    const hola = persistidas.find((fila) => fila.text === 'hola')
-    if (!hola || !adios) throw new Error('faltan las dos filas')
-    expect(hola.meta?.conversacion?.tramo).toMatchObject({ inicio: 16000, fin: 32000 })
-    expect(adios.meta?.conversacion?.tramo).toMatchObject({ inicio: 48000, fin: 64000 })
+    expect(persistidas).toHaveLength(1)
+    expect(persistidas[0]!.text).toBe('hola adios')
+    expect(persistidas[0]!.meta?.conversacion?.tramo).toMatchObject({ inicio: 16000, fin: 64000 })
   }, 300_000)
 
   it('un final ajeno NO cierra: espera tiempo/stop y no mezcla las frases', async () => {

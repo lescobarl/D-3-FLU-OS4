@@ -73,7 +73,11 @@ describe('sesión real d70267b8 — reinicio de turno, log y diarización', () =
     )
     expect(wakePending).toContain('slice(desdeResultado)')
     expect(wakePending).toContain('resultIndex: 0')
-    expect(hook).toContain("requestRecognitionRestartRef.current?.('frontera-turno', 0)")
+    // La frontera de turno ya NO reinicia el reconocedor: su único dueño es la
+    // marca de transporte por índice del límite (`composicion.ts`, `avanzarFrontera`),
+    // que avanza con la fila commiteada. El reinicio por commit abortaba la
+    // hipótesis en vuelo y alimentaba los rebuild `dead` (medido 2026-11-12).
+    expect(hook).not.toContain("requestRecognitionRestartRef.current?.('frontera-turno', 0)")
 
     const adapters = readFileSync(
       join(RAIZ, 'src/voice/conversation/adapters.ts'),
@@ -106,7 +110,12 @@ describe('sesión real d70267b8 — reinicio de turno, log y diarización', () =
     expect(composicion).toContain(
       'const recorte = total > vigente.corte ? vigente.corte : 0',
     )
-    expect(composicion).toMatch(/hayFinal\s*\?\s*recorte\s*:/)
+    // Final e interino se componen igual: la hipótesis completa del tramo
+    // desde la frontera (`nuevaInstancia` decide si se reemplaza o se pega).
+    expect(composicion).toContain(
+      'const trozo = fraseDelEventoAsr(resultados, recorte)',
+    )
+    expect(composicion).toContain('nuevaInstancia')
     const ingesta = readFileSync(
       join(RAIZ, 'src/voice/conversation/ingesta.ts'),
       'utf8',

@@ -73,9 +73,9 @@ export function normalizeVoiceCommandText(text = '') {
   )
 }
 
-// Palabras vacías mínimas (es/en) para comparar acciones LLM contra el
-// transcript del turno: no aportan contenido y solo añadirían ruido.
-const COMMAND_STOPWORDS = new Set([
+// Palabras vacías mínimas (es/en): no aportan contenido y solo añadirían
+// ruido. Dueño único del vocabulario (comparación de acciones LLM y de frases).
+export const SPEECH_STOPWORDS = new Set([
   'a', 'al', 'la', 'las', 'el', 'los', 'lo', 'le', 'les', 'de', 'del', 'para', 'por',
   'con', 'sin', 'en', 'y', 'o', 'u', 'que', 'una', 'un', 'unos', 'unas', 'hoy',
   'the', 'and', 'for', 'to', 'of', 'in', 'on', 'at', 'an', 'a',
@@ -105,7 +105,7 @@ export function actionBelongsToTranscript(actionText = '', transcript = '', wake
   // Subcadena directa (caso más común: el LLM copia el fragmento exacto).
   if (normSpoken.includes(normAction) || normAction.includes(normSpoken)) return true
 
-  const tokens = (raw) => raw.split(' ').filter((word) => word && !COMMAND_STOPWORDS.has(word))
+  const tokens = (raw) => raw.split(' ').filter((word) => word && !SPEECH_STOPWORDS.has(word))
   const actionTokens = tokens(normAction)
   if (actionTokens.length === 0) return false
   const spokenTokens = new Set(tokens(normSpoken))
@@ -1640,8 +1640,15 @@ export function detectIntroducedName(text = '', { mustOpen = true } = {}) {
     const tokens = rawCandidate.split(' ').filter(Boolean)
     if (!tokens.length || tokens.length > 3) continue
 
+    // NOMBRE COMPUESTO solo si el intro CIERRA la frase: con letras después del
+    // match, lo capturado es el nombre + la cola del mandato («soy luis vamos a
+    // revisar» => «Luis», no «Luis Vamos»; medido 2026-11-12 19:05, el registro
+    // guardó «Luis Vamos»). Un nombre de dos o tres tokens («soy Luis Adan»)
+    // termina la presentación y sigue capturándose entero.
+    const restoDelIntro = normalized.slice((match.index || 0) + match[0].length)
+    const cierraLaFrase = !/[a-záéíóúüñ]/i.test(restoDelIntro)
     // ASR suele pegar más frase tras el nombre («soy luis y no sustituyo…»). Probar prefijos.
-    for (let count = tokens.length; count >= 1; count -= 1) {
+    for (let count = cierraLaFrase ? tokens.length : 1; count >= 1; count -= 1) {
       const candidate = tokens.slice(0, count).join(' ')
       if (tokens.slice(0, count).some((token) => NAME_STOPWORDS.has(token))) continue
       if (!isPlausiblePersonName(candidate)) continue

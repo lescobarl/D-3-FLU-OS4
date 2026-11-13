@@ -762,6 +762,32 @@ describe('control de escucha — solo el comando exacto sale de conversación', 
     expect(cerrado.descartes.filter((descarte) => descarte.motivo === 'control')).toEqual([])
     expect(cerrado.filas.map((fila) => fila.texto)).toEqual(['hago un silencio'])
   })
+
+  it('el parcial del comando no se publica: el final lo cierra como control', async () => {
+    // MEDIDO 2026-11-12 18:25:32: la línea abierta tenía el parcial «cer»; el
+    // final «cerrando escucha» llegó 409 ms después del stop. Antes, el final
+    // se descartaba sin tocar la línea y el stop publicaba «cer» como fila.
+    const config: ConfigPort = {
+      ...configDePrueba(),
+      esComandoDeControl: (texto) =>
+        Boolean(detectListeningControl(texto, FLU_CONFIG.voiceCommands)),
+    }
+    const { api } = crearEscenario({ config })
+    await api.start()
+    const tramoId = await abrirConVoz(api)
+    await api.ingestAsr(asr(tramoId, { texto: 'cer' }))
+    expect(api.snapshot().locucionAbierta?.texto).toBe('cer')
+    const cerrado = await api.ingestAsr(
+      asr(tramoId, { texto: 'cerrando escucha', final: true }),
+    )
+    // La locución del comando se cierra descartada como control: ni fila ni
+    // línea abierta que el stop pueda publicar.
+    expect(cerrado.locucionAbierta).toBe(null)
+    expect(cerrado.filas.map((fila) => fila.texto)).toEqual([])
+    expect(cerrado.descartes.filter((descarte) => descarte.motivo === 'control')).toHaveLength(1)
+    const detenida = await api.stop('user')
+    expect(detenida.filas.map((fila) => fila.texto)).toEqual([])
+  })
 })
 
 describe('eventos — los 6 del plan se emiten desde el flujo real', () => {
@@ -1047,9 +1073,12 @@ describe('el final NO es puerta de cierre', () => {
     expect(estado.filas.map((fila) => fila.texto)).toEqual([])
     expect(estado.locucionAbierta?.texto).toBe('uno')
 
-    // El silencio medido (puerta de abajo) cierra A y su fila sale UNA vez.
+    // El silencio medido (puerta de abajo) cierra A y SU fila sale UNA vez. La
+    // frase de B llegó ANTES del silencio: es del MISMO bloque y se funde en la
+    // fila que cierra (regla 3: la caja solo se parte por tiempo o cambio de
+    // hablante; defecto fd148fe7 — el texto se partía sin frontera real).
     const cerrado = await cerrarPorSilencio(api, inicioB + SAMPLE_RATE)
-    expect(cerrado.filas.map((fila) => fila.texto)).toEqual(['uno'])
+    expect(cerrado.filas.map((fila) => fila.texto)).toEqual(['uno dos'])
     expect(cerrado.locucionAbierta).toBeNull()
   })
 })

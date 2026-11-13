@@ -15,7 +15,7 @@
  * HOJA: no importa nada que importe a este modulo (sin ciclos). `conversationStream` importa
  * de aqui `countSharedSpeechWords` y `utterancesSameRevision`, y los re-exporta.
  */
-import { cleanForSpeech, speechWords } from '../lib/audioMath.js'
+import { SPEECH_STOPWORDS, cleanForSpeech, speechWords } from '../lib/audioMath.js'
 import { utterancesRelate } from '../lib/speechMerge.js'
 import { getTranscriptPolicyCfg } from '../lib/fluTranscriptMotor.js'
 
@@ -121,8 +121,18 @@ export function frasesSolapadas(anterior = '', nuevo = '') {
   const a = speechWords(anterior)
   const b = speechWords(nuevo)
   if (a.length < 4 || b.length < 4) return false
-  const setB = new Set(b.map((word) => word.toLowerCase()))
-  const shared = a.filter((word) => setB.has(word.toLowerCase())).length
-  const min = Math.min(a.length, b.length)
-  return shared >= 4 && shared >= min * 0.5
+  // La evidencia son las palabras CON CONTENIDO compartidas: las vacías («a»,
+  // «de», «la») están en cualquier frase y declaraban «misma frase» a dos
+  // frases distintas (medido 2026-11-12 19:05: la fila A y el arranque de la
+  // habla siguiente compartían «a»×3 + «vamos»; el arranque se pegó a la fila
+  // A y luego volvió entero en su propia fila). Vocabulario: audioMath.
+  const aSet = new Set(a.filter((word) => !SPEECH_STOPWORDS.has(word)))
+  const bSet = new Set(b.filter((word) => !SPEECH_STOPWORDS.has(word)))
+  const shared = [...aSet].filter((word) => bSet.has(word)).length
+  // Misma proporción que antes, ahora sobre contenido: una frase corta con una
+  // cuña/corrección en medio se reconoce con 2 palabras compartidas («se vuelve
+  // a quedar» / «se vuelve bien vamos a quedar»); en frases largas, 4.
+  if (shared < 2) return false
+  const min = Math.min(aSet.size, bSet.size)
+  return shared >= 4 || shared >= min * 0.5
 }

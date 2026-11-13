@@ -470,7 +470,12 @@ describe('CONVERSACIÓN — rutas dobles medidas', () => {
     expect(fuente('composicion.ts')).toContain(
       'const recorte = total > vigente.corte ? vigente.corte : 0',
     )
-    expect(fuente('composicion.ts')).toMatch(/hayFinal\s*\?\s*recorte\s*:/)
+    // TODO evento (final e interino) se compone desde la frontera: Chrome
+    // revisa resultados anteriores y una cola sola no puede corregirlos.
+    expect(fuente('composicion.ts')).toContain(
+      'const trozo = fraseDelEventoAsr(resultados, recorte)',
+    )
+    expect(fuente('composicion.ts')).toContain('nuevaInstancia')
     expect(fuente('composicion.ts')).toContain('avanzarFrontera')
     expect(fuente('composicion.ts')).not.toMatch(
       /fraseDelEventoAsr\(\s*resultados,\s*evento\.resultIndex\s*\)/,

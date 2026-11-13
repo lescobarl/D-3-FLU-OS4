@@ -38,6 +38,8 @@ export interface FluSpeechOptions {
     volume?: number;
     rate?: number;
     pitch?: number;
+    /** Turno del que la frase es respuesta (identidad de la fila de FLU). NO es opción de voz. */
+    turnId?: number | string | null;
 }
 
 /** Contrato de auditoría usado por los comandos de navegación. */
@@ -117,10 +119,13 @@ export function useNavigationCommands(
     const speakFlu = useCallback(async (text: string, lang: string, opts?: FluSpeechOptions) => {
         clearResumeListeningTimer();
         await os2SuspendRecognition?.();
-        await speakResponse(text, lang, opts);
         // FLU es un participante: TODA locución suya queda en el historial
-        // (contexto de la IA). Escritor único de la fila: `logFluReply`.
-        logFluReply(text);
+        // (contexto de la IA) y la fila se escribe ANTES de hablar (la ventana
+        // de eco del TTS cubre la locución completa). Único escritor:
+        // `logFluReply`; el turnId identifica la fila del turno.
+        const { turnId, ...speechOptions } = opts ?? {};
+        logFluReply(text, { turnId });
+        await speakResponse(text, lang, speechOptions);
         await waitForSpeechIdle();
         // Reanuda la escucha SIEMPRE que la conversacion siga activa (el guard vive dentro).
         resumeAfterSpeechRef.current?.(text.length);

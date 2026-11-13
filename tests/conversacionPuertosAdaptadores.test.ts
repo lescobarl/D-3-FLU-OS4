@@ -70,6 +70,7 @@ describe('configuración del plan — una sola fuente', () => {
     expect(CONVERSACION_CONFIG).toEqual({
       minSilenceMs: 900,
       silenceCloseMs: Number(getTranscriptPauseCfg().srGapCommitMs),
+      finalCloseConfirmMs: 800,
       orphanBufferMs: 8000,
       asr: { engine: 'auto', lang: 'es' },
       maxRetentionMin: 120,
@@ -252,6 +253,44 @@ describe('VAD del producto — el silencio es de COLA, no acumulado histórico',
     expect(medida.silencioMs).toBeCloseTo(210, 6)
     // La voz al FINAL del bloque deja cola cero (no arrastra el silencio previo).
     expect(vad.medir(encadenar(silencio(210), tono(210)), SR_VAD).silencioMs).toBeCloseTo(0, 6)
+  })
+
+  it('HISTÉRESIS: una trama suelta de 30 ms NO cuenta como voz ni resetea el silencio', () => {
+    const vad = crearVadProducto()
+    vad.medir(silencio(300), SR_VAD)
+    // Un clic de una trama (30 ms) sobre el piso: ruido, no voz.
+    const blip = vad.medir(tono(30), SR_VAD)
+    expect(blip.hayVoz).toBe(false)
+    expect(blip.silencioMs).toBeCloseTo(330, 6)
+    // La racha de silencio sigue: el reloj no se reseteó con el ruido.
+    const despues = vad.medir(silencio(300), SR_VAD)
+    expect(despues.hayVoz).toBe(false)
+    expect(despues.silencioMs).toBeCloseTo(630, 6)
+  })
+
+  it('HISTÉRESIS: dos tramas seguidas confirman la voz y cortan la racha', () => {
+    const vad = crearVadProducto()
+    vad.medir(silencio(300), SR_VAD)
+    // Dos tramas de voz seguidas (~60 ms): voz confirmada, cola cero.
+    const conVoz = vad.medir(tono(60), SR_VAD)
+    expect(conVoz.hayVoz).toBe(true)
+    expect(conVoz.silencioMs).toBeCloseTo(0, 6)
+    const despues = vad.medir(silencio(300), SR_VAD)
+    expect(despues.hayVoz).toBe(false)
+    expect(despues.silencioMs).toBeCloseTo(300, 6)
+  })
+
+  it('HISTÉRESIS: la racha cruza bloques (trama al final de uno + trama al inicio del otro)', () => {
+    const vad = crearVadProducto()
+    vad.medir(silencio(300), SR_VAD)
+    // Una trama suelta al final del bloque: todavía no es voz.
+    const primero = vad.medir(encadenar(silencio(300), tono(30)), SR_VAD)
+    expect(primero.hayVoz).toBe(false)
+    // La trama siguiente (inicio del bloque nuevo) completa la racha de dos.
+    const segundo = vad.medir(encadenar(tono(30), silencio(300)), SR_VAD)
+    expect(segundo.hayVoz).toBe(true)
+    // La cola cuenta SOLO el silencio posterior a la voz confirmada.
+    expect(segundo.silencioMs).toBeCloseTo(300, 6)
   })
 })
 

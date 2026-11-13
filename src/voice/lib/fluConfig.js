@@ -234,12 +234,25 @@ export const FLU_CONFIG = {
     /** Factor por carácter para escalar el retraso dentro de [min, max]. */
     resumeAfterSpeechPerCharMs: 0.5,
     recognitionStopMs: 250,
-    recognitionFinalizeMs: 200,
+    /**
+     * Tope de espera del FINAL del reconocedor al cerrar conversación. Medido
+     * 2026-11-12 18:25:32: el stop se pidió a las .597 y Chrome entregó su
+     * final «cerrando escucha» a las 33.006 (409 ms después). Con 200 ms la
+     * espera vencía antes del final y la última frase se perdía.
+     */
+    recognitionFinalizeMs: 1000,
     /**
      * Ventana de idempotencia de la RESPUESTA: la misma respuesta para el mismo
      * turno dentro de este margen se considera re-captura/eco y NO se repite.
      */
     responseDedupWindowMs: 8000,
+    /**
+     * Petición a la IA: espera máxima por la FILA del turno (dueño único del
+     * turno). La confirmación del final adelanta la fila (~800 ms de silencio
+     * tras el final, `finalCloseConfirmMs`); sin fila (texto descartado, ASR
+     * mudo) se responde con la frase del ASR en vez de dejar el turno bloqueado.
+     */
+    turnCommitWaitMs: 2000,
     wakeWordCommandDelayMs: 3000,
     /**
      * Espera antes de abrir la escucha al COMPLETAR el onboarding (el TTS de
@@ -303,6 +316,12 @@ export const FLU_CONFIG = {
       stallMs: 52000,
       /** En conversación: sin texto nuevo (ignorando ecos SR) → rebuild. */
       conversationStallMs: 4200,
+      /**
+       * Chrome MUDO con la locución abierta SIN texto: rebuild sin nada que
+       * cortar. Medido 2026-11-12 19:05: 37,2 s abierta y cero resultados; por
+       * encima del tick de 8,4 s de 18:22 (ahí la locución era frase viva).
+       */
+      muteOpenLocutionMs: 20000,
       /** Voz reciente para el gate del rebuild. */ stallVoiceWindowMs: 1500, stallCheckMs: 350,
       stallRebuildMinMs: 6000,
       /** Mínimo entre rebuilds en conversación activa. */

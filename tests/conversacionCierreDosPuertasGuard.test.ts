@@ -3,10 +3,14 @@
  * conversacionCierreDosPuertasGuard — la locución cierra por DOS puertas, no tres.
  *
  * El cierre de una locución abierta solo puede llegar por voz medida DISTINTA
- * (partición, Caso 1+3) o por silencio medido ≥ `silenceCloseMs`. La tercera
- * puerta (un `final` del ASR cerrando la locución anterior en el acto) quedó
- * RETIRADA: un final MARCA la frase completa pero no cierra, y el texto ajeno
- * no cierra por sí solo (se retiene como pendiente).
+ * (partición, Caso 1+3) o por silencio. El silencio tiene DOS medidas del mismo
+ * hecho: el VAD medido (>= `silenceCloseMs`, puerta de abajo) o la confirmación
+ * del final (silencio de RELOJ >= `finalCloseConfirmMs` desde el final del ASR
+ * aplicado, sin voz en el camino). El final MARCA la frase y ARMA la ventana,
+ * pero no cierra por contenido (mandato 2026-10-30): sin silencio no hay cierre.
+ * La tercera puerta (un `final` del ASR cerrando la locución anterior en el
+ * acto) quedó RETIRADA: el texto ajeno no cierra por sí solo (se retiene como
+ * pendiente).
  *
  * Mide la frontera REAL y cuenta los `return { cerrar: true }`: deben ser DOS.
  * FALSIFICACIÓN: una tercera puerta re-introducida sube el conteo a 3 y el
@@ -60,6 +64,7 @@ describe('conversación — el cierre tiene SOLO dos puertas', () => {
         medida: { hayVoz: true, silencioMs: 0 },
         textoAjeno: false,
         abierta: true,
+        finalDesdeMs: 10_000,
       }),
     ).toEqual({ cerrar: false, causa: null })
     // El texto ajeno por sí solo NO cierra (era la tercera puerta).
@@ -91,6 +96,51 @@ describe('conversación — el cierre tiene SOLO dos puertas', () => {
         textoAjeno: false,
         abierta: false,
       }),
+    ).toEqual({ cerrar: false, causa: null })
+  })
+
+  it('la confirmación del final adelanta la puerta del silencio, pero el final por sí solo NO cierra', () => {
+    const confirmado = Number(CONVERSACION_CONFIG.finalCloseConfirmMs)
+    expect(confirmado).toBeGreaterThan(0)
+    expect(confirmado).toBeLessThan(CONVERSACION_CONFIG.silenceCloseMs)
+    // Final aplicado + silencio de reloj suficiente SIN voz: cierra por silencio
+    // aunque el VAD todavía no haya medido `silenceCloseMs`.
+    expect(
+      decidirFrontera({
+        medida: { hayVoz: false, silencioMs: 0 },
+        textoAjeno: false,
+        abierta: true,
+        finalDesdeMs: confirmado,
+      }),
+    ).toEqual({ cerrar: true, causa: 'silencio' })
+    // La ventana a la mitad NO cierra: el silencio no confirmó todavía.
+    expect(
+      decidirFrontera({
+        medida: { hayVoz: false, silencioMs: 0 },
+        textoAjeno: false,
+        abierta: true,
+        finalDesdeMs: confirmado - 1,
+      }),
+    ).toEqual({ cerrar: false, causa: null })
+    // Sin marca de final (entrada ausente) la puerta 2 solo mide el VAD.
+    expect(
+      decidirFrontera({
+        medida: { hayVoz: false, silencioMs: 0 },
+        textoAjeno: false,
+        abierta: true,
+      }),
+    ).toEqual({ cerrar: false, causa: null })
+    // Con el umbral apagado (<= 0) la ventana de confirmación no existe.
+    expect(
+      decidirFrontera(
+        {
+          medida: { hayVoz: false, silencioMs: 0 },
+          textoAjeno: false,
+          abierta: true,
+          finalDesdeMs: 10_000,
+        },
+        { minSilenceMs: 900, silenceCloseMs: 3500, finalCloseConfirmMs: 0 },
+      ),
     ).toEqual({ cerrar: false, causa: null })
   })
 

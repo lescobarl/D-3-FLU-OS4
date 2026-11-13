@@ -24,9 +24,16 @@ describe('auditoría de rutas de ejecución (una por intención)', () => {
     });
 
     it('respuesta FLU: un único commit (logFluReply) en el módulo dueño', () => {
-        // El escritor de la fila de FLU vive en UN módulo; App solo lo invoca.
+        // El escritor de la fila de FLU vive en UN módulo y su ÚNICO invocador
+        // es `speakFlu` (hablar y registrar van juntos, ANTES de hablar): App no
+        // escribe la fila ni invoca al escritor directamente.
         expect(count(app(), /addFluMessage\(/g)).toBe(0);
-        expect(count(app(), /logFluReply\(/g)).toBeGreaterThan(0);
+        expect(count(app(), /logFluReply\(/g)).toBe(0);
+        const navModule = readFileSync(
+            join(process.cwd(), 'src/hooks/useNavigationCommands.ts'),
+            'utf8',
+        );
+        expect(count(navModule, /logFluReply\(/g)).toBe(1);
         const logModule = readFileSync(
             join(process.cwd(), 'src/voice/lib/fluConversationLog.ts'),
             'utf8',

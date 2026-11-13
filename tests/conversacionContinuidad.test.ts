@@ -54,6 +54,7 @@ function crearProbe(
 ): Probe {
   const estado: EstadoCierre = {
     sessionId: 'sesion-guard',
+    anclaAudio: null,
     turnoActual: '',
     turnosConFila: new Set(),
     abierta: null,
@@ -67,6 +68,7 @@ function crearProbe(
     contadorVoces: 0,
     contadorCambioVoz: 0,
     candidatoCambioVoz: null,
+    confirmacionFinalDesdeMs: null,
     nombresPorEtiqueta: new Map(),
     pendienteNombre: null,
   }
@@ -143,6 +145,7 @@ async function correrLocucion(
 function crearProbePendiente() {
   const estado: EstadoCierre = {
     sessionId: 'sesion-pendiente',
+    anclaAudio: null,
     turnoActual: '',
     turnosConFila: new Set(),
     abierta: null,
@@ -156,6 +159,7 @@ function crearProbePendiente() {
     contadorVoces: 0,
     contadorCambioVoz: 0,
     candidatoCambioVoz: null,
+    confirmacionFinalDesdeMs: null,
     nombresPorEtiqueta: new Map(),
     pendienteNombre: null,
   }

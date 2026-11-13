@@ -326,6 +326,17 @@ export type LocucionAbierta = Readonly<{
   partidaDeVoz: boolean
 }>
 
+/**
+ * Texto mínimo para preguntar si es la REENTREGA de una fila ya escrita. Lo
+ * comparten la ingesta (resultado del ASR) y el volcado del stop (pendiente):
+ * una sola firma para la puerta única de reentrega.
+ */
+export type TextoDeReentrega = Readonly<{
+  texto?: string
+  turnId?: string
+  tramo?: TramoMuestreado
+}>
+
 /** Texto de un tramo ajeno retenido hasta que se pueda abrir sin mezclarse. */
 export type EntradaPendiente = Readonly<{
   tramoId: string

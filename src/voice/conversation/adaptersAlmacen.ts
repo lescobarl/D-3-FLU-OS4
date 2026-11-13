@@ -127,7 +127,14 @@ export function crearAlmacenDexie({
     guardar: async (fila: FilaNueva): Promise<Fila> =>
       db.transaccion(async () => {
         const previo = await db.leer(fila.locutionId)
-        const registro = aRegistro(fila, sincronizar(previo?.sync, reloj.ahora()))
+        // HORA DE VOZ: si el dominio fecha el fin del tramo, la tupla lo usa en
+        // lugar del reloj de escritura. El `timestamp` de `conversations` se
+        // deriva de `updated_at − duración`, así una frase escrita en el stop
+        // conserva la hora en que se habló. Sin marca, reloj del almacén.
+        const ahora = Number.isFinite(Number(fila.marcaFinMs))
+          ? Number(fila.marcaFinMs)
+          : reloj.ahora()
+        const registro = aRegistro(fila, sincronizar(previo?.sync, ahora))
         await db.escribir(registro)
         return aFila(registro)
       }),

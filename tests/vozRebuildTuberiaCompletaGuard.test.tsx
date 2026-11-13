@@ -12,8 +12,10 @@
 // SOBREVIVE al reinicio del reconocedor con su locución abierta (edb4a2b6). Un
 // final de Chrome NO cierra la locución: el cierre es la frontera VAD, y la fila
 // se escribe al cerrar. Este guard mide:
-//   1. FINAL de Chrome + rebuild por temporizador -> la locución sigue en la caja
-//      y NO se escribe fila (el final no es cierre);
+//   1. Chrome MUDO con la locución vacía -> rebuild por temporizador (`kind=mudo`,
+//      2026-11-12 19:05) y la locución SIGUE VIVA: su final llega después del
+//      rebuild y NO se escribe fila (el final no es cierre). Con la locución CON
+//      texto el rebuild está cerrado (`vozFlujoLatenciaGuard`, defecto 18:22);
 //   2. silencio ≥ silenceCloseMs -> la locución CIERRA y llega a Dexie con la
 //      frase completa (una locución = un tramo = una fila).
 // ============================================================
@@ -134,6 +136,7 @@ vi.mock('../src/voice/lib/fluDebug', async (original) => ({
 import { FLU_CONFIG } from '../src/voice/lib/fluConfig';
 import { useFluVoiceAssistant } from '../src/voice/hooks/useFluVoiceAssistant';
 import { acquireSpeechRecognition } from '../src/voice/lib/speechRecognitionLocal';
+import { relayLog } from '../src/lib/clientLogRelay';
 import { fluDb } from '../src/core/db/fluDatabase';
 import { getVadEnergyThreshold } from '../src/voice/lib/asr/asrConfig.js';
 
@@ -242,7 +245,7 @@ afterEach(() => {
 });
 
 describe('P9.60 - tuberia completa: el rebuild del watchdog no puede perder la locucion', () => {
-  it('FINAL sin cierre + rebuild por temporizador -> la locucion sigue viva (y no hay fila)', async () => {
+  it('Chrome MUDO con la locución vacía -> rebuild por temporizador y la locución sigue viva', async () => {
     const onContract = vi.fn();
     await fluDb.conversations.clear();
     // Se falsean SOLO los temporizadores del watchdog: `setImmediate` queda REAL
@@ -250,30 +253,45 @@ describe('P9.60 - tuberia completa: el rebuild del watchdog no puede perder la l
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'] });
     const vista = await arrancarEscucha(onContract);
 
-    // PCM real del micrófono: 1 s de silencio y 1 s de voz abre el tramo del enunciado.
+    // PCM real del micrófono: 1 s de silencio abre el piso y la VOZ del
+    // micrófono abre la locución del módulo (todavía SIN texto: Chrome no ha
+    // entregado nada). La locución acumula su audio PROPIO: `openLocutionMs`
+    // mide su tramo (`fin - inicio`), así que se alimenta la ventana completa
+    // `muteOpenLocutionMs` + 1 s (medido 19:05: 37,2 s abierta, cero
+    // resultados). Con 1 s de voz el umbral no se alcanza y no hay nada que medir.
+    const umbral = Number(FLU_CONFIG.activeListen.restart.muteOpenLocutionMs);
     for (let i = 0; i < 10; i += 1) empujarAudio(silencio(BLOQUE_MS));
-    for (let i = 0; i < 10; i += 1) empujarAudio(tono(BLOQUE_MS));
+    for (let i = 0; i < Math.ceil(umbral / BLOQUE_MS) + 10; i += 1) {
+      empujarAudio(tono(BLOQUE_MS));
+    }
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1);
     });
 
-    // FINAL de Chrome: NO cierra la locución (el cierre es la frontera VAD).
+    // Chrome MUDO: ningún resultado. La locución sigue abierta y VACÍA; pasada
+    // la ventana `muteOpenLocutionMs` el watchdog reconstruye (`kind=mudo`):
+    // sin una palabra escrita no hay frase que perder (medido 19:05: 37,2 s).
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(umbral + 1000);
+    });
+    expect(vecesCreadoElReconocedor(), 'el watchdog no llegó a reconstruir').toBeGreaterThanOrEqual(2);
+    // El paso que reconstruyó es el MEDIDO: `kind=mudo` con la abierta vacía.
+    const pasos = (relayLog as unknown as { mock: { calls: unknown[][] } }).mock.calls
+      .map((llamada) => String(llamada[2] || ''))
+      .filter((mensaje) => mensaje.includes('[WD] rebuild'))
+    expect(
+      pasos.some((mensaje) => mensaje.includes('kind=mudo') && mensaje.includes('sinTextoEnAbierta=true')),
+      'el rebuild debe declarar kind=mudo con la locución abierta vacía',
+    ).toBe(true)
+
+    // La locución SOBREVIVIÓ al rebuild: el final que llega DESPUÉS (nuevo motor)
+    // entra en la caja del módulo. Un final no cierra: todavía no hay fila.
     await act(async () => {
       h.recognition.onresult?.(chromeEvent([{ isFinal: true, transcript: LARGA }], 0));
       await vi.advanceTimersByTimeAsync(
         FLU_CONFIG.ui?.workspace?.liveTranscriptThrottleMs ?? 120,
       );
     });
-    expect(vista.result.current.liveTranscript, 'la caja del módulo publica la frase').toContain(
-      'voy a hacer una prueba',
-    );
-
-    // El watchdog de conversacion cumple su ventana sin texto nuevo y hace REBUILD
-    // del reconocedor. Con el defecto, aquí se descartaba la locución.
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(6000);
-    });
-    expect(vecesCreadoElReconocedor(), 'el watchdog no llegó a reconstruir').toBeGreaterThanOrEqual(2);
     expect(
       vista.result.current.liveTranscript,
       'el rebuild del watchdog NO puede descartar la locución viva',

@@ -46,6 +46,11 @@ import { localGet } from '../../core/storage/localStore.ts';
 
 import { pickText } from '../../lib/uiStrings.ts';
 import { GENERATION_FAILED_SOURCE } from '../../lib/generationTrace.ts';
+import {
+  esTurnoDeUsuario,
+  formatearContextoSinRespuesta,
+  separarTurnosSinRespuesta,
+} from './conversationDialogue.js';
 export {
   buildVisualAnchorBlock,
   extractVisualSubject,
@@ -904,12 +909,16 @@ export function buildConversationMessages({
   // responder a la pregunta (medido con el cuerpo REAL: con ese prefijo el modelo lite que usa el motor
   // responde "Soy FLU, tu asistente administrativo..."; sin el prefijo, responde a la pregunta).
   // Ese prefijo es PRESENTACION de la app, no hilo de conversacion: se descarta.
-  const esTurnoDeUsuario = (e) => !(e?.role === 'assistant' || e?.role === 'flu')
   let primerTurnoDeUsuario = 0
   while (primerTurnoDeUsuario < recentHistory.length && !esTurnoDeUsuario(recentHistory[primerTurnoDeUsuario])) {
     primerTurnoDeUsuario += 1
   }
-  const conversacion = recentHistory.slice(primerTurnoDeUsuario)
+  // Turnos de usuario que quedaron SIN respuesta (la app no llegó a contestar
+  // o su respuesta se perdió): viajan como CONTEXTO DECLARADO en un bloque
+  // aparte, nunca como instrucciones; la separación es la regla del diálogo.
+  const { conversacion, sinRespuesta } = separarTurnosSinRespuesta(
+    recentHistory.slice(primerTurnoDeUsuario),
+  )
 
   for (const entry of conversacion) {
     // OS4: la historia puede llegar con role 'flu' (integrationStore) en lugar de
@@ -926,6 +935,13 @@ export function buildConversationMessages({
       role: entryRole,
       content,
     })
+  }
+
+  if (sinRespuesta.length) {
+    const contexto = formatearContextoSinRespuesta(sinRespuesta, language)
+    if (contexto) {
+      messages.push({ role: 'system', content: contexto })
+    }
   }
 
   messages.push({

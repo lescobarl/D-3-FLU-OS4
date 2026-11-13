@@ -11,7 +11,7 @@
  * un turno ya commiteado se ignora (descarte contado) y una voz distinta medida
  * inserta SU fila. El estado lo posee la sesión, que lo entrega como contexto.
  */
-import { construirFila, fusionarVoz } from './fila.ts'
+import { construirFila, fusionarVoz, horaDelFinDelTramo } from './fila.ts'
 import type { CierreLocucion, VozEtiqueta } from './fila.ts'
 import { decidirRevision } from './revision.ts'
 import { decidirIdentidad, plantillasDeSesion } from './identidad.ts'
@@ -34,6 +34,7 @@ import type {
 } from './tipos.ts'
 import type {
   AlmacenPort,
+  AnclaAudio,
   ConfigPort,
   EmbebedorPort,
   Fila,
@@ -67,10 +68,18 @@ export type EstadoCierre = {
   /** Confirmación de cambio de voz (Caso 1+3): pertenece a la locución abierta. */
   contadorCambioVoz: number
   candidatoCambioVoz: { limite: number; textoAntes: string } | null
+  /**
+   * Marca de reloj de la confirmación del final (pertenece a la locución
+   * abierta): el flujo de texto la arma, la ingesta la rearma con voz y la
+   * frontera la consume. null = sin final aplicado.
+   */
+  confirmacionFinalDesdeMs: number | null
   /** Nombres declarados para etiquetas provisionales (bautizo sin vector). */
   nombresPorEtiqueta: Map<string, string>
   /** Bautizo pendiente, ACOTADO a la locución abierta que lo recibió. */
   pendienteNombre: { locutionId: string; nombre: string } | null
+  /** Ancla muestra↔reloj de la sesión: fecha el fin del tramo en hora de VOZ. */
+  anclaAudio: AnclaAudio | null
 }
 
 /** Servicios que la sesión entrega a las reglas de cierre. */
@@ -269,6 +278,10 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
     // una locución nueva arranca la confirmación de cero (sin arrastre).
     estado.contadorCambioVoz = 0
     estado.candidatoCambioVoz = null
+    // La confirmación del final también es de la locución abierta: una locución
+    // nueva arranca SIN ventana armada; `abrirDesde` la arma si abre con su
+    // final ya llegado (`finalLlego`).
+    estado.confirmacionFinalDesdeMs = null
     const vozId = String(datos.voz.vozId || '').trim()
     // MANDATO DEL DUEÑO (2026-10-30, problema 4): sin medida positiva NO hay
     // continuidad. Una locución sin vozId no hereda la etiqueta anterior; solo
@@ -616,6 +629,9 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
     // locución que se cierra, no a la siguiente.
     estado.contadorCambioVoz = 0
     estado.candidatoCambioVoz = null
+    // La marca de la confirmación del final tampoco: sin ella, una locución
+    // nueva cerraría antes de tiempo con la ventana de la anterior.
+    estado.confirmacionFinalDesdeMs = null
     const sesion = estado.sessionId ?? ''
     const tramo: TramoMuestreado = {
       inicio: locucion.inicio,
@@ -681,6 +697,10 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
     // hay embebedor (sin él nunca llegará medida) y la config la declara.
     const pendienteEtiqueta =
       embebedor && config.etiquetaPendiente ? String(config.etiquetaPendiente() || '').trim() : ''
+    // HORA DE VOZ del fin del tramo: el almacén la usa como `updated_at` y el
+    // escritor de `conversations` deriva de ella el inicio real de la frase. Sin
+    // ancla no se declara y el almacén cae a su reloj (compatibilidad).
+    const marcaFinMs = horaDelFinDelTramo(estado.anclaAudio, tramo)
     const cierre: CierreLocucion = {
       locutionId: locucion.locutionId,
       sessionId: sesion,
@@ -700,6 +720,7 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
       pendienteEtiqueta,
       nombresPorEtiqueta: estado.nombresPorEtiqueta,
       firma,
+      ...(marcaFinMs !== null ? { marcaFinMs } : {}),
     }
     estado.abierta = null
     estado.muestrasAbierta = []

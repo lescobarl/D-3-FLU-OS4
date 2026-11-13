@@ -82,7 +82,32 @@ export type Fila = Readonly<{
 }>
 
 /** Fila lista para insertar: el almacén completa `[revision, updated_at, deleted]`. */
-export type FilaNueva = Omit<Fila, 'revision' | 'updated_at' | 'deleted'>
+export type FilaNueva = Omit<Fila, 'revision' | 'updated_at' | 'deleted'> & {
+  /**
+   * HORA DE LA VOZ en la que termina el tramo (ms desde epoch), derivada del
+   * ancla muestra↔reloj de la sesión. El almacén la usa como `updated_at`: la
+   * fila de una frase hablada hace minutos no se sella con el reloj del stop
+   * (defecto medido 2026-11-12: cuatro frases dictadas 15:16–15:17 quedaron
+   * escritas con la hora de cierre, 15:19). Sin ancla no se inventa: se omite y
+   * el almacén usa su reloj. NO es un campo de la fila persistida: el almacén lo
+   * consume y no lo guarda.
+   */
+  marcaFinMs?: number
+}
+
+/**
+ * Ancla muestra↔reloj de la sesión: la primera muestra entregada a la ingesta y
+ * la hora en que llegó. Con ella, cualquier tramo de la sesión se puede fechar
+ * en hora de VOZ (no de escritura), aunque su fila se escriba mucho después.
+ */
+export type AnclaAudio = Readonly<{
+  /** Índice de la primera muestra del primer bloque entregado. */
+  muestra: number
+  /** Hora del reloj inyectado al recibir ese bloque. */
+  ms: number
+  /** Frecuencia del bloque que abrió el ancla. */
+  sampleRate: number
+}>
 
 /**
  * Campos actualizables de una fila: SOLO la VOZ — su etiqueta y la evidencia de
@@ -314,6 +339,13 @@ export interface ConfiguracionConversacion {
   /** Silencio sin texto ajeno que cierra por la segunda vía. */
   readonly silenceCloseMs: number
   /**
+   * Confirmación del final: silencio de RELOJ tras el final del ASR que
+   * adelanta la fila. El final solo ARMA la ventana (no cierra por contenido,
+   * mandato 2026-10-30); la frontera cierra cuando pasan estos ms sin voz.
+   * El silencio VAD completo (`silenceCloseMs`) sigue como puerta de abajo.
+   */
+  readonly finalCloseConfirmMs: number
+  /**
    * Ventanas SEGUIDAS de voz distinta que confirman un cambio antes de partir
    * la locución (Caso 1+3). Una sola puede ser el tartamudeo del embebedor en
    * la frontera de un tramo.
@@ -346,6 +378,12 @@ export const CONVERSACION_CONFIG: ConfiguracionConversacion = Object.freeze({
   get silenceCloseMs(): number {
     return Number(getTranscriptPauseCfg()?.srGapCommitMs) || 0
   },
+  // Adelanto de la fila tras el final: 800 ms de silencio SIN voz confirman el
+  // enunciado terminado. Medido contra la pausa interna histórica de 263adae9
+  // (el final de Chrome llega ~1 s después del último audio; con el regreso a
+  // los 1,5 s la ventana no alcanza a disparar). Si una pausa real más larga
+  // partiera la frase, este número se sube (palanca del plan).
+  finalCloseConfirmMs: 800,
   // UNA ventana de voz distinta no parte la fila: el embebedor puede
   // tartamudear en la frontera de un tramo; se exigen DOS seguidas.
   confirmacionesCambioVoz: 2,

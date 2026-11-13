@@ -54,7 +54,7 @@ import {
 import { canonicalSpeakerName } from '../lib/speakerLabels.js'
 import { embedAudioForDiarization } from '../lib/voiceIdWorkerClient.js'
 import { useIntegrationStore } from '../../store/integrationStore.ts'
-import { VOICE_DIARIZATION_DEFAULTS } from '../../core/config/sharedConfig.ts'
+import { VOICE_DIARIZATION_DEFAULTS, TIMEOUT_POLICY_MS } from '../../core/config/sharedConfig.ts'
 import { mergeIntoOpenLine } from '../lib/speechMerge.js'
 import {
   countVoicedSamples,
@@ -235,6 +235,34 @@ export function crearConfigFlu(): ConfigPort {
 }
 
 /**
+ * Mide con el TOPE de la config central (`TIMEOUT_POLICY_MS.voiceEmbedMeasure`).
+ * Los llamadores esperan la medida EN LA COLA ÚNICA y medido 994bbf46
+ * (2026-11-12) la cola se paró 61 s hasta que el worker respondió: un worker
+ * ocupado no puede congelar el módulo. Pasado el tope la medida se declara nula
+ * — los llamadores ya saben vivir sin ella (sinMedidaFiableVoz) — y el worker
+ * termina su tarea por su cuenta (el resultado tarde se descarta).
+ * @param ventanaVoz Ventana de VOZ ya recortada por el dueño único (nunca la captura cruda).
+ * @param sampleRate Frecuencia de la ventana.
+ * @returns Vector (vacío si el worker no respondió a tiempo) y si llegó tarde.
+ */
+async function medirConTope(
+  ventanaVoz: Float32Array,
+  sampleRate: number,
+): Promise<{ vector: readonly number[]; tarde: boolean }> {
+  let temporizador: ReturnType<typeof setTimeout> | undefined
+  try {
+    return await Promise.race([
+      embedAudioForDiarization(ventanaVoz, sampleRate).then((vector: readonly number[]) => ({ vector, tarde: false })),
+      new Promise<{ vector: readonly number[]; tarde: boolean }>((resolve) => {
+        temporizador = setTimeout(() => resolve({ vector: [], tarde: true }), TIMEOUT_POLICY_MS.voiceEmbedMeasure)
+      }),
+    ])
+  } finally {
+    clearTimeout(temporizador)
+  }
+}
+
+/**
  * Embeddings de voz del PRODUCTO: mide en el worker único del proyecto y
  * compara con el coseno de su dueño único. El módulo SOLO decide (`identidad.ts`).
  *
@@ -280,9 +308,9 @@ export function crearEmbebedorProducto(): EmbebedorPort {
         })
         return null
       }
-      const vector = await embedAudioForDiarization(ventanaVoz, sampleRate)
+      const { vector, tarde } = await medirConTope(ventanaVoz, sampleRate)
       voiceProbe('vozMedida', {
-        motivo: vector.length > 0 ? 'ok' : 'sinVector',
+        motivo: tarde ? 'timeout' : vector.length > 0 ? 'ok' : 'sinVector',
         vozMs: Math.round((vozMuestras / sampleRate) * 1000),
         muestras: muestras.length,
         sampleRate,
@@ -339,10 +367,18 @@ export function crearPartidorWake(config: ConfigPort): PartidorPort {
  * tramo no se cortaba en el siguiente hueco (congelación medida en el reproduccion
  * del 2026-10-25: filas de 119–152 s).
  *
+ * HISTÉRESIS: la voz se confirma con DOS tramas seguidas (~60 ms). Una trama
+ * suelta (clic, roce, golpe de teclado de 30 ms) no cuenta como voz ni resetea
+ * el reloj de silencio: es ruido que el reloj absorbe. Sin ella, cada ruido
+ * corto rearmaba la cuenta de `silenceCloseMs` y la fila se atrasaba segundos
+ * enteros en una sala con ruido (defecto medido por el dueño 2026-11-12).
+ *
  * @returns Puerto VAD con el silencio de cola del bloque.
  */
 export function crearVadProducto(): VadPort {
   let silencioColaMs = 0
+  /** Tramas SEGUIDAS con voz: la confirmación exige dos (histéresis). */
+  let rachaVoz = 0
   return {
     medir: (muestras, sampleRate): MedidaVad => {
       const tasa = Number(sampleRate)
@@ -353,7 +389,14 @@ export function crearVadProducto(): VadPort {
       let finVoz = -1
       for (let inicio = 0; inicio < muestras.length; inicio += trama) {
         const fin = Math.min(inicio + trama, muestras.length)
-        if (isVoicedFrame(muestras, inicio, fin)) finVoz = fin
+        if (isVoicedFrame(muestras, inicio, fin)) {
+          rachaVoz += 1
+          // HISTÉRESIS: solo la racha confirmada (>= 2 tramas) cuenta como voz;
+          // la primera trama suelta de un bloque se descarta como ruido.
+          if (rachaVoz >= 2) finVoz = fin
+        } else {
+          rachaVoz = 0
+        }
       }
       if (finVoz >= 0) {
         // La voz corta la racha: solo queda el silencio posterior a ella.
@@ -405,11 +448,14 @@ export function crearAlmacenMemoria({ reloj }: { reloj: RelojPort }): AlmacenPor
   return {
     guardar: async (fila: FilaNueva): Promise<Fila> => {
       const previa = filas.get(fila.locutionId)
+      // `marcaFinMs` es una hora de VOZ que el almacén consume: NO es un campo de
+      // la fila guardada. Se extrae antes del spread para que la Fila no lo lleve.
+      const { marcaFinMs, ...base } = fila
       const guardada: Fila = {
-        ...fila,
-        tramo: { ...fila.tramo },
+        ...base,
+        tramo: { ...base.tramo },
         revision: (previa?.revision ?? 0) + 1,
-        updated_at: reloj.ahora(),
+        updated_at: Number.isFinite(Number(marcaFinMs)) ? Number(marcaFinMs) : reloj.ahora(),
         deleted: previa?.deleted ?? false,
       }
       filas.set(guardada.locutionId, guardada)

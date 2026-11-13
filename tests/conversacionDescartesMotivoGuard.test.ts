@@ -281,9 +281,11 @@ describe('Caso 9 — cada cierre declara motivo y causa (5 causas con el módulo
     // fila sale UNA vez. El texto ajeno queda pendiente, no se descarta.
     expect(cerrados).toHaveLength(1)
     expect(cerrados[0]).toMatchObject({ motivo: 'system', causa: 'silencio' })
-    expect(cerrado.filas.map((fila) => fila.texto)).toEqual(['uno'])
-    expect(cerrado.descartes).toEqual([])
+    // La frase ajena llegó ANTES del silencio de cierre: es del MISMO bloque y
+    // se funde en la fila que cierra (UNA fila, UN insert; regla 3).
+    expect(cerrado.filas.map((fila) => fila.texto)).toEqual(['uno dos'])
     expect(cerrado.locucionAbierta).toBeNull()
+    expect(cerrado.descartes).toEqual([])
   })
 
   it('stop: el cierre de usuario declara su motivo', async () => {
