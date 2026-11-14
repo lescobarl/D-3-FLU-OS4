@@ -3,14 +3,16 @@
  * conversacionCierreDosPuertasGuard — la locución cierra por DOS puertas, no tres.
  *
  * El cierre de una locución abierta solo puede llegar por voz medida DISTINTA
- * (partición, Caso 1+3) o por silencio. El silencio tiene DOS medidas del mismo
- * hecho: el VAD medido (>= `silenceCloseMs`, puerta de abajo) o la confirmación
- * del final (silencio de RELOJ >= `finalCloseConfirmMs` desde el final del ASR
- * aplicado, sin voz en el camino). El final MARCA la frase y ARMA la ventana,
- * pero no cierra por contenido (mandato 2026-10-30): sin silencio no hay cierre.
- * La tercera puerta (un `final` del ASR cerrando la locución anterior en el
- * acto) quedó RETIRADA: el texto ajeno no cierra por sí solo (se retiene como
- * pendiente).
+ * (partición, Caso 1+3) o por TIEMPO. El tiempo tiene DOS medidas del mismo
+ * eje: el silencio —VAD medido (>= `silenceCloseMs`, puerta de abajo) o
+ * confirmación del final (silencio de RELOJ >= `finalCloseConfirmMs` desde el
+ * final del ASR aplicado, sin voz en el camino)— o el TOPE de duración
+ * (`maxLocutionMs`, causa `maximo`): la frase que sigue ganando voz se parte a
+ * los 12 s para que el respaldo transcriba ventanas medibles (contrato ASR
+ * local §5-quinquies). El final MARCA la frase y ARMA la ventana del silencio,
+ * pero no cierra por contenido (mandato 2026-10-30). La tercera puerta (un
+ * `final` del ASR cerrando la locución anterior en el acto) quedó RETIRADA: el
+ * texto ajeno no cierra por sí solo (se retiene como pendiente).
  *
  * Mide la frontera REAL y cuenta los `return { cerrar: true }`: deben ser DOS.
  * FALSIFICACIÓN: una tercera puerta re-introducida sube el conteo a 3 y el
@@ -38,7 +40,7 @@ function puertasDeCierre(src: string): number {
 }
 
 describe('conversación — el cierre tiene SOLO dos puertas', () => {
-  it('frontera.ts devuelve EXACTAMENTE dos cierres: voz medida y silencio medido', () => {
+  it('frontera.ts devuelve EXACTAMENTE dos cierres: voz medida y TIEMPO medido', () => {
     expect(puertasDeCierre(FRONTERA)).toBe(2)
     expect(FRONTERA).toContain("causa: 'voz'")
     expect(FRONTERA).toContain("entrada.textoAjeno ? 'frontera' : 'silencio'")

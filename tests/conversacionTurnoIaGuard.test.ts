@@ -58,6 +58,17 @@ describe('la petición a la IA espera la FILA del turno (dueño: el módulo)', (
         expect(src).toContain('turnId: turnIdDelTurno,')
     })
 
+    it('CONTRATO ASR LOCAL: el texto del respaldo por tramo NO se convierte en petición', () => {
+        // §8 de docs/CONTRATO-ASR-LOCAL.md: una fila `origen: 'local'` no es
+        // accionable — su texto no puede ser la frase canónica del turno ni
+        // llegar al árbitro/IA. El turno degrada a lo que Chrome solo habría
+        // producido (su captura o nada). Falsificación: sin la condición, el
+        // texto del respaldo entra como petición del usuario.
+        // El vocabulario tiene UN dueño (`esOrigenLocal` en bridge.ts): la
+        // guarda exige el predicado, no la comparación contra la cadena.
+        expect(hook()).toContain("esOrigenLocal(filaDelTurno?.origen) ? '' : filaDelTurno?.texto,")
+    })
+
     it('la espera es por turnId y tiene techo de tiempo (sin fila responde el ASR)', () => {
         const src = hook()
         // El registro de esperas vive en su módulo; el hook solo delega.

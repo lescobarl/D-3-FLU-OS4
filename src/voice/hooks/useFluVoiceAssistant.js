@@ -30,6 +30,7 @@ import { relayLog } from '../../lib/clientLogRelay'
 import { recordSessionTurn } from '../lib/sessionRecorder.js'
 import { captureTurnAudioSnapshot, probePcmBlock, turnAudioForDiarize } from '../lib/turnAudioSnapshot.js'
 import { useIntegrationStore } from '../../store/integrationStore'
+import { esOrigenLocal } from '../../types/bridge.ts'
 import { fluAsyncErrorHandler } from '../lib/fluAsyncError.js'
 import {
   FLU_CONFIG,
@@ -423,7 +424,10 @@ export function useFluVoiceAssistant({
           lastModuleLabelRef.current = String(fila?.etiqueta || '')
           // REGISTRO ÚNICO DEL NOMBRE: la fila ya trae la voz MEDIDA por el módulo
           // (`fila.firma`) y el texto que dijo el nombre. No hay otra ruta pasiva.
-          const textoFila = String(fila?.texto || '')
+          // CONTRATO ASR LOCAL: el texto del RESPALDO no es accionable — no
+          // bautiza voces ni dispara wake (con transcripción vacía el registro
+          // no afirma nombre). El resto de la fila (firma, etiqueta) se publica.
+          const textoFila = esOrigenLocal(fila?.origen) ? '' : String(fila?.texto || '')
           const knownNames = [...participantVoiceAnchors.map((anchor) => anchor?.name), ...speakerClustersRef.current.map((cluster) => cluster?.label)].filter(Boolean)
           registerSpeakerIdentityFromCommand({
             transcript: textoFila,
@@ -2127,8 +2131,11 @@ export function useFluVoiceAssistant({
       const turnIdDelTurno = String(filaDelTurno?.turnId ?? turnoEnVuelo).trim()
       // La frase canónica del turno es la ÚNICA regla (la misma del cierre):
       // el texto de la fila commiteada, con la captura del ASR como respaldo.
+      // CONTRATO ASR LOCAL: el texto del RESPALDO (`origen: 'local'`) no es
+      // accionable — no se convierte en petición ni llega al árbitro. El turno
+      // degrada a lo que Chrome solo habría producido (su captura o nada).
       const canonicalPhrase = fraseCanonicaDelTurno(
-        filaDelTurno?.texto,
+        esOrigenLocal(filaDelTurno?.origen) ? '' : filaDelTurno?.texto,
         fullTranscript || question,
       )
       if (!canonicalPhrase) return

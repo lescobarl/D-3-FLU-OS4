@@ -14,12 +14,25 @@ const baseline = JSON.parse(leer('scripts/voz-flujo-baseline.json'))
 describe('flujo de voz: watchdog y cierre medidos', () => {
   const cfg = getConversationRestartConfig(true)
 
-  it('con voz reciente NO reinicia Chrome por stall', () => {
+  it('con voz reciente y SIN locución abierta SÍ reinicia: golpe previo al habla', () => {
     const step = resolveWatchdogStep({
       sinceMeaningful: Number(cfg.stallMs) + 1000,
       sinceRebuild: Number(cfg.stallRebuildMinMs) + 1,
       recognitionActive: true,
       hasRecentSpeech: true,
+      hasOpenLocution: false,
+      restartCfg: cfg,
+    })
+    expect(step).toEqual({ action: WATCHDOG_ACTIONS.REBUILD, kind: 'stall' })
+  })
+
+  it('con voz reciente y locución ABIERTA no reinicia: la frase viva manda', () => {
+    const step = resolveWatchdogStep({
+      sinceMeaningful: Number(cfg.stallMs) + 1000,
+      sinceRebuild: Number(cfg.stallRebuildMinMs) + 1,
+      recognitionActive: true,
+      hasRecentSpeech: true,
+      hasOpenLocution: true,
       restartCfg: cfg,
     })
     expect(step.action).toBe(WATCHDOG_ACTIONS.NONE)
@@ -244,12 +257,14 @@ describe('flujo de voz: watchdog y cierre medidos', () => {
     expect(src).toMatch(/hasRecentSpeech/)
   })
 
-  it('la decisión stall exige ausencia de voz Y de locución abierta', () => {
+  it('la decisión stall protege la locución abierta y no exige silencio sin locución', () => {
     const src = leer('src/voice/lib/asrWatchdog.js')
-    expect(src).toMatch(/!hasRecentSpeech[\s\S]{0,260}silentMicStallMs/)
-    expect(src).toMatch(/!hasRecentSpeech[\s\S]{0,260}stallMs/)
     expect(src).toMatch(/!hasOpenLocution[\s\S]{0,260}silentMicStallMs/)
     expect(src).toMatch(/!hasOpenLocution[\s\S]{0,260}stallMs/)
+    // Sin locución abierta no hay frase que cortar: la voz/ruido de sala no
+    // puede volver a bloquear el rebuild previo al habla (defecto 2026-11-13).
+    expect(src).not.toMatch(/!hasRecentSpeech[\s\S]{0,260}silentMicStallMs/)
+    expect(src).not.toMatch(/!hasRecentSpeech[\s\S]{0,260}stallMs/)
     const consumidor = leer('src/voice/hooks/useLocalAsrFallback.js')
     expect(consumidor).toMatch(/hasOpenLocution: hayLocucionAbierta/)
     const hook = leer('src/voice/hooks/useFluVoiceAssistant.js')

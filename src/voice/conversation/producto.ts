@@ -40,6 +40,7 @@ import {
   crearPartidorWake,
   crearRegistroCaughtError,
   crearRelojSistema,
+  crearTranscriptorSidecarProducto,
   crearVadProducto,
   ejecutarRegistrando,
   fusionarEnLineaAbierta,
@@ -144,6 +145,12 @@ export function crearMotorConversacionProducto({
   const id = crearIdUuid()
   const config = crearConfigFlu()
   const registro = crearRegistroCaughtError()
+  // RESPALDO LOCAL por tramo (contrato ASR local, opción c 2026-11-14): Chrome
+  // sigue siendo el transcriptor primario y el dueño de comandos; este puerto
+  // solo transcribe el tramo CERRADO cuando el final de Chrome es vacío o
+  // implausible, lo hace en el SIDECAR nativo (faster-whisper) y espera su
+  // resultado ANTES de escribir la fila. Sin sidecar disponible, Chrome manda.
+  const transcriptor = crearTranscriptorSidecarProducto()
   const api: ConversacionApi = crearConversacion({
     reloj,
     id,
@@ -153,6 +160,7 @@ export function crearMotorConversacionProducto({
     partidor: crearPartidorWake(config),
     vad: crearVadProducto(),
     medidor: crearMedidorTramo(),
+    transcriptor,
     ultimoTextoDicho,
     embebedor: crearEmbebedorProducto(),
     anclasBase,
@@ -324,6 +332,11 @@ export function crearMotorConversacionProducto({
       cierreEnCurso = null
       estadoMotor = 'activa'
       cursorMuestras = 0
+      // PRECARGA del respaldo local en segundo plano mientras Chrome escucha
+      // (contrato ASR local §5): el encargo y su resultado quedan logueados por
+      // el adaptador; si el primer tramo agota `timeoutMs`, la fila cae al
+      // texto de Chrome y el motivo se reporta (respaldo.local.timeout).
+      transcriptor.preload()
       // Caso 11: la conversación ADOPTA el id de la grabación activa al abrir la
       // sesión; sin grabación (proveedor vacío) el módulo acuña el propio (N/A).
       const grabacion = String(recordingId?.() ?? '').trim()

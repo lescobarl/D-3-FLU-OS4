@@ -726,6 +726,50 @@ export function crearIngesta({
     }
   }
 
+  /**
+   * TOPE DE LOCUCIÓN (`maxLocutionMs`): parte la frase que sigue viva para que
+   * el respaldo local transcriba ventanas de 12 s (contrato ASR local,
+   * §5-quinquies). Se evalúa al ENTRAR un bloque y DESPUÉS del drenaje de
+   * resultados: la cola de texto del tramo que cierra ya entró en la locución.
+   * Cerrarla al final del bloque perdía el primer resultado posterior (caía
+   * como huérfano: sin locución ni tramo vivos al drenar).
+   *
+   * El tramo se CORTA aquí (`tramoAudio = null`): el bloque entrante abre el
+   * tramo de la ventana siguiente, contiguo al que cierra. Sin el corte, la
+   * cola de la frase se atribuía al tramo ya commiteado y se descartaba como
+   * reentrega (texto perdido, no duplicado).
+   *
+   * La ÚNICA puerta evaluable aquí es el TOPE: la entrada declara medida vacía
+   * (sin voz ni silencio) para no duplicar el cierre por silencio, que conserva
+   * UN dueño al final del bloque.
+   */
+  async function cerrarPorTope(): Promise<void> {
+    const abierta = estado.abierta
+    if (!abierta) return
+    // Duración de AUDIO de la ventana abierta (no es duración de identidad: la
+    // identidad se mide con la VOZ, `vozMsDeMuestras`, no con el tramo).
+    const { inicio: inicioLocucion, fin: finLocucion, sampleRate } = abierta
+    const duracionMs =
+      Number(sampleRate) > 0
+        ? ((finLocucion - inicioLocucion) * 1000) / Number(sampleRate)
+        : 0
+    const frontera = decidirFrontera(
+      {
+        medida: { hayVoz: false, silencioMs: 0 },
+        textoAjeno: false,
+        abierta: true,
+        duracionMs,
+      },
+      configuracion,
+    )
+    if (!frontera.cerrar || frontera.causa !== 'maximo') return
+    // Cierre ÚNICO por frontera: la retenida ANTES del tope es del MISMO bloque
+    // y se funde en su fila (mismo camino que el silencio).
+    await flujo.cerrarPorFrontera(frontera)
+    await flujo.flushPendientes()
+    estado.tramoAudio = null
+  }
+
   /** Ingesta un bloque de audio: mide, corta el tramo y evalúa la frontera. */
   async function ingestaAudio(bloque: BloqueAudio): Promise<InstantaneaConversacion> {
     sesion.exigirActiva()
@@ -774,6 +818,11 @@ export function crearIngesta({
         : null)
     if (!medida) throw new Error('falta medida VAD: sin medida no hay frontera')
 
+    // TOPE DE LOCUCIÓN: se evalúa ANTES de atribuir este bloque (la ventana que
+    // cierra termina en el bloque anterior; el corte deja el tramo libre para
+    // que ESTE bloque abra la ventana siguiente, contigua).
+    await cerrarPorTope()
+
     if (!estado.tramoAudio) {
       if (medida.hayVoz) {
         const tramoId = dependencias.id.uuid()
@@ -815,11 +864,24 @@ export function crearIngesta({
           )
         }
         if (!estado.abierta) {
+          // TOPE DE LOCUCIÓN: si la ventana arranca EXACTAMENTE donde terminó
+          // la última fila commiteada del mismo turno (sin un solo bloque de
+          // aire), es la continuación que partió el tope: la línea acumulada
+          // del producto re-incluye el texto ya commiteado, así que el
+          // caparazón nace con `partidaDeVoz` para que el recorte de prefijo
+          // dispare. Con un hueco real (pausa) la frase es nueva y no se toca.
+          const previa = ultimaFilaPorFin(estado.filas.values())
+          const continuaLaLinea =
+            previa !== null &&
+            previa.turnId === estado.turnoActual &&
+            previa.tramo.sampleRate === sampleRate &&
+            previa.tramo.fin === inicio
           abrirCaparazon(
             tramoId,
             { inicio, fin, sampleRate },
             estado.turnoActual,
             estado.idiomaActual,
+            continuaLaLinea,
           )
         }
         if (dependencias.asr && asrEmpujaAudio(estado.motorAsr)) {

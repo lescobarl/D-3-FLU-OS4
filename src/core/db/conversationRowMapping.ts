@@ -12,7 +12,13 @@
  * de conversación para no invertir la frontera: acepta la forma estructural que
  * comparten `Fila` y `MetaConversacionPersistida`.
  */
-import type { ConversationEntry, ConversationMetaFila } from '../../types/bridge.ts'
+import {
+  esOrigenLocal,
+  ORIGEN_TEXTO,
+  type ConversationEntry,
+  type ConversationMetaFila,
+  type OrigenTranscripcion,
+} from '../../types/bridge.ts'
 
 /** Metadatos canónicos tal como quedan persistidos. */
 export type MetaConversacionPersistida = ConversationMetaFila
@@ -43,6 +49,16 @@ export type OrigenMetaConversacion = Readonly<{
   provisional: boolean
   /** Motivo declarado del cierre. */
   reason: string
+  /**
+   * Origen del TEXTO cuando NO es el transcriptor primario (`local` = respaldo
+   * por tramo). `chrome`/ausente no se persiste: es el origen evidente.
+   */
+  origen?: string
+  /**
+   * Marca YA PERSISTIDA (forma de vuelta): el mapeo es el mismo en los dos
+   * sentidos, así que la reconoce y la conserva (idempotencia).
+   */
+  origenTranscripcion?: OrigenTranscripcion
 }>
 
 /**
@@ -62,6 +78,12 @@ export function mapearMetaConversacion(origen: OrigenMetaConversacion): MetaConv
     overlap: Boolean(origen.overlap),
     provisional: Boolean(origen.provisional),
     reason: origen.reason as MetaConversacionPersistida['reason'],
+    // La marca de origen SOLO se persiste cuando NO es la primaria: el meta de
+    // una fila de Chrome conserva su forma de siempre (idempotencia del mapeo).
+    // La forma de vuelta trae `origenTranscripcion`: también se conserva.
+    ...(esOrigenLocal(origen.origen) || esOrigenLocal(origen.origenTranscripcion)
+      ? { origenTranscripcion: ORIGEN_TEXTO.LOCAL }
+      : {}),
   }
 }
 

@@ -42,6 +42,7 @@ import type {
   FilaNueva,
   IdiomaLocucion,
   MotivoCierre,
+  OrigenTranscripcion,
   TramoMuestreado,
 } from './ports.ts'
 
@@ -119,6 +120,12 @@ export type CierreLocucion = Readonly<{
    * la fila lo guarda como evidencia del vínculo fila↔voz por timbre.
    */
   firma: readonly number[] | null
+  /**
+   * Origen del TEXTO que sostiene la fila: `chrome` (primario) o `local`
+   * (respaldo por tramo aceptado por su puerta). La reconciliación ocurre AQUÍ,
+   * en la MISMA construcción: la fila se escribe una sola vez.
+   */
+  origen?: OrigenTranscripcion
   /**
    * Hora de VOZ del fin del tramo (ms), derivada del ancla de la sesión. La
    * fila la arrastra hasta el almacén; sin ancla se omite.
@@ -239,6 +246,9 @@ export function construirFila(entrada: CierreLocucion): ResultadoFila {
       overlap: Boolean(entrada.overlap),
       provisional: !entrada.final,
       reason: entrada.reason,
+      // El origen SOLO se declara cuando NO es el primario: una fila de Chrome
+      // conserva la forma de siempre y la ausencia se lee como `chrome`.
+      ...(entrada.origen && entrada.origen !== 'chrome' ? { origen: entrada.origen } : {}),
       ...(Number.isFinite(Number(entrada.marcaFinMs))
         ? { marcaFinMs: Number(entrada.marcaFinMs) }
         : {}),

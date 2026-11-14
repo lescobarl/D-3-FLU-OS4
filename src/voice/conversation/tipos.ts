@@ -25,6 +25,7 @@ import type {
   RelojPort,
   ResultadoAsr,
   TramoMuestreado,
+  TranscriptorTramoPort,
   VadPort,
 } from './ports.ts'
 
@@ -153,7 +154,7 @@ export type DescarteConversacion = Readonly<{
 }>
 
 /** Causa declarada del cierre (el motivo de fila es `reason`). */
-export type CausaCierre = 'frontera' | 'silencio' | 'stop' | 'asr' | 'voz'
+export type CausaCierre = 'frontera' | 'silencio' | 'stop' | 'asr' | 'voz' | 'maximo'
 
 /** Evento público del módulo (6 tipos del plan). */
 export type EventoConversacion =
@@ -252,6 +253,13 @@ export type DependenciasConversacion = Readonly<{
   configuracion?: ConfiguracionConversacion
   vad?: VadPort
   asr?: AsrPort
+  /**
+   * Respaldo LOCAL por tramo (contrato ASR local): Whisper sobre el PCM del
+   * tramo CERRADO cuando el final de Chrome es vacío o implausible para el
+   * audio. Sin puerto no hay respaldo: Chrome manda (comportamiento anterior).
+   * Su texto se espera ANTES de construir la fila y nunca ejecuta comandos.
+   */
+  transcriptor?: TranscriptorTramoPort
   /**
    * Embeddings de voz (`adapters.crearEmbebedorProducto`): con el puerto, el
    * módulo mide la identidad por sí mismo (decisión del dueño, Paso 5-A). Sin

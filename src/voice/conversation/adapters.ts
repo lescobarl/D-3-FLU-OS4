@@ -43,7 +43,14 @@ import { relayLog } from '../../lib/clientLogRelay.ts'
 import { normalizeForMatch } from '../../lib/textUtils.ts'
 import { splitTranscriptAtWakeWord } from '../api/audio.ts'
 import { FLU_CONFIG } from '../api/config.ts'
-import { getVadFrameMs } from '../lib/asr/asrConfig.js'
+import { getAsrConfig, getVadFrameMs } from '../lib/asr/asrConfig.js'
+import { downsample } from '../lib/asr/resample.js'
+import { crearSidecarTranscripcion } from '../lib/asr/sidecarTranscriber.ts'
+import type { ClienteSidecar } from '../lib/asr/sidecarTranscriber.ts'
+import {
+  classifyLocalResult,
+  getLocalFallbackRuntimeConfig,
+} from '../lib/voiceLocalFallback.js'
 import { detectListeningControl } from '../lib/audioMath.js'
 import { labelToSpeakerId } from '../lib/conversationRow.js'
 import {
@@ -80,8 +87,10 @@ import type { DbLike } from './adaptersAlmacen.ts'
 import type {
   AlmacenPort,
   CambiosFila,
+  ConfigLocalFinal,
   ConfigPort,
   EmbebedorPort,
+  EntradaRespaldoLocal,
   Fila,
   FilaNueva,
   IdPort,
@@ -91,6 +100,8 @@ import type {
   PuertoVistaFilas,
   RegistroPort,
   RelojPort,
+  ResultadoRespaldoLocal,
+  TranscriptorTramoPort,
   UtilidadesFila,
   VadPort,
 } from './ports.ts'
@@ -231,6 +242,24 @@ export function crearConfigFlu(): ConfigPort {
     // Fuente única: assistantEchoMinWords (+1: repetir solo las 3 últimas
     // palabras de FLU no es eco, es conversación — medido 18:12:34).
     echoMinPalabrasCola: () => VOICE_DIARIZATION_DEFAULTS.assistantEchoMinWords + 1,
+    /**
+     * DISPARADOR del respaldo local por tramo para el módulo (config localFinal).
+     * Solo PROYECTA: el dueño único de leer el bloque es
+     * getLocalFallbackRuntimeConfig (voiceLocalFallback), la misma config que
+     * consume la puerta; aquí no se duplica ningún valor ni umbral.
+     * @revisor CREAR NUEVO — puerto ConfigPort.localFinal: la firma del módulo
+     *   exige una función propia; el cuerpo delega la lectura al dueño único.
+     */
+    localFinal: (): ConfigLocalFinal => {
+      const runtime = getLocalFallbackRuntimeConfig()
+      return {
+        enabled: runtime.enabled,
+        minPalabras: runtime.minPalabras,
+        minPalabrasPorSegundo: runtime.minPalabrasPorSegundo,
+        minVozMs: runtime.minVozMs,
+        minAudioSegundos: runtime.minAudioSegundos,
+      }
+    },
   }
 }
 
@@ -430,6 +459,162 @@ export function crearMedidorTramo(): MedidorTramoPort {
         speechLikeMs: (speechLike * 1000) / tasa,
         rms: rmsOfBlocks(copia, { sampleRate: tasa }),
       }
+    },
+  }
+}
+
+/**
+ * RESPALDO LOCAL por TRAMO del producto (`TranscriptorTramoPort`) sobre el
+ * SIDECAR nativo (faster-whisper small, CPU int8, beam 1, 8 hilos; decisión del
+ * dueño 2026-11-14, opción c). Reemplaza a `crearTranscriptorWhisperProducto`
+ * (Whisper WASM por tramo, retirado como ruta del producto; el motor WASM sigue
+ * siendo dueño de la escucha viva y del laboratorio).
+ *
+ * El módulo espera este resultado ANTES de construir la fila; aquí solo se
+ * CABLEA el cliente del sidecar (asr/sidecarTranscriber.ts) y se aplican las
+ * reglas de la frontera:
+ *  - `preload()` sondea `GET /salud` al abrir la escucha (una sonda por
+ *    apertura), logueado; sin servicio disponible Chrome manda y el motivo
+ *    queda registrado. Con `localFinal.enabled` apagado no se sondea nada;
+ *  - remuestreo al rate del ASR por el dueño único (`resample.downsample`);
+ *  - tope de espera `transcript.localFinal.timeoutMs` (8 s por ventana), en el
+ *    cliente del transporte: la promesa siempre resuelve;
+ *  - PUERTA anti-alucinación en su dueño (`voiceLocalFallback.classifyLocalResult`)
+ *    con la evidencia MEDIDA del tramo (voz, habla, duración y texto).
+ * El texto aceptado NUNCA ejecuta comandos: viaja al cierre como texto de fila.
+ * `enabled` sigue siendo la compuerta del producto y la aplica el módulo
+ * (`cerrarLocucion` → `respaldarConLocal`); sin sidecar disponible el adaptador
+ * devuelve `deshabilitado` aunque la compuerta esté abierta.
+ * @param opciones Cliente inyectable (pruebas); el producto cablea el real.
+ * @revisor CREAR NUEVO — fábrica del puerto del respaldo por tramo en la
+ *   frontera del módulo; el transporte y la puerta son de sus dueños.
+ * @returns Puerto del respaldo local, listo para el módulo.
+ */
+export function crearTranscriptorSidecarProducto(
+  { cliente }: { cliente?: ClienteSidecar } = {},
+): TranscriptorTramoPort {
+  // El endpoint es estático (config); `enabled` se lee VIVO en cada preload.
+  const inicial = getLocalFallbackRuntimeConfig()
+  const clienteUsado =
+    cliente ??
+    crearSidecarTranscripcion({
+      url: String(inicial.sidecarUrl || ''),
+      probeMs: inicial.sidecarProbeMs,
+    })
+  /** Última sonda de salud de la apertura en curso; `null` = aún no se sondeó. */
+  let disponibilidad: Promise<boolean> | null = null
+
+  return {
+    /**
+     * Sondea la salud del sidecar al abrir la escucha. No bloquea: el cierre
+     * espera la misma promesa antes de transcribir. Sin servicio, Chrome sigue
+     * siendo el transcriptor primario.
+     * @revisor CREAR NUEVO — el puerto exige la precarga y su registro; el
+     *   transporte y el contrato `/salud` son del cliente del sidecar.
+     */
+    preload() {
+      // Decisión del dueño 2026-11-14 (opción c): con el respaldo APAGADO no
+      // se paga el servicio (ni su sonda). Mismo lector único de la config.
+      if (!getLocalFallbackRuntimeConfig().enabled) return
+      relayLog('LOG', 'conversacion', 'respaldo.local.preload', { sidecar: true })
+      disponibilidad = clienteUsado.salud().then(
+        (disponible) => {
+          relayLog(
+            disponible ? 'LOG' : 'WARN',
+            'conversacion',
+            disponible ? 'respaldo.local.preload.ok' : 'respaldo.local.sidecar.ausente',
+            { sidecar: true },
+          )
+          return disponible
+        },
+        (error) => {
+          // `salud()` no rechaza por contrato; el registro es por si el doble
+          // inyectado no lo cumple (AGENTS §1.5: nada se captura en silencio).
+          logCaughtError('conversacion.respaldo.local.preload.fallo', error)
+          return false
+        },
+      )
+    },
+
+    /**
+     * Transcribe el PCM del tramo CERRADO en el sidecar y aplica la puerta del
+     * dueño. Sin sidecar disponible NO se paga la petición: la fila conserva el
+     * texto de Chrome.
+     * @param entrada PCM, su frecuencia, idioma y la evidencia medida del tramo.
+     * @returns Texto aceptado por la puerta o el motivo por el que no lo hay
+     *   (`timeout`, `fallo`, `deshabilitado` o el motivo de la puerta).
+     * @revisor CREAR NUEVO — adaptador del puerto: remuestreo, disponibilidad y
+     *   puerta delegada; no reimplementa transcripción ni criterio de habla.
+     */
+    async transcribir(entrada: EntradaRespaldoLocal): Promise<ResultadoRespaldoLocal> {
+      // Sin `preload` previo la sonda se hace aquí y ambas rutas comparten la
+      // promesa: una sola salud por apertura, nunca una por tramo.
+      const pruebaDeSalud = disponibilidad ?? (disponibilidad = clienteUsado.salud())
+      if (!(await pruebaDeSalud)) {
+        voiceProbe('respaldoLocal', {
+          motivo: 'deshabilitado',
+          sidecar: false,
+          audioSegundos: entrada.audioSegundos,
+        })
+        return { texto: '', descarte: 'deshabilitado' }
+      }
+      const cfg = getLocalFallbackRuntimeConfig()
+      const objetivo = Number(getAsrConfig().targetSampleRate)
+      const sampleRate = objetivo > 0 ? objetivo : entrada.sampleRate
+      // El sidecar recibe SIEMPRE el rate del ASR: remuestrear aquí es lo que
+      // impide que un tramo a 48 kHz se transcriba como si fuera otra voz.
+      const muestras = downsample(entrada.muestras, entrada.sampleRate, sampleRate)
+      const resultado = await clienteUsado.transcribir({
+        muestras,
+        sampleRate,
+        idioma: entrada.idioma,
+        timeoutMs: cfg.timeoutMs,
+      })
+      if (resultado.motivo === 'timeout') {
+        // Tope agotado: la sesión NO se congela; la fila usa el texto de Chrome.
+        relayLog('WARN', 'conversacion', 'respaldo.local.timeout', {
+          timeoutMs: cfg.timeoutMs,
+          audioSegundos: entrada.audioSegundos,
+        })
+        voiceProbe('respaldoLocal', {
+          motivo: 'timeout',
+          timeoutMs: cfg.timeoutMs,
+          audioSegundos: entrada.audioSegundos,
+        })
+        return { texto: '', descarte: 'timeout' }
+      }
+      if (resultado.motivo === 'fallo') {
+        // AGENTS §1.5: el catch registra con la excepción y el cierre sigue.
+        logCaughtError('respaldo.local.fallo', resultado.error, {
+          audioSegundos: entrada.audioSegundos,
+        })
+        voiceProbe('respaldoLocal', {
+          motivo: 'fallo',
+          sidecar: true,
+          audioSegundos: entrada.audioSegundos,
+        })
+        return { texto: '', descarte: 'fallo' }
+      }
+      const texto = resultado.texto
+      const decision = classifyLocalResult({
+        isFinal: true,
+        metrics: { speechLikeMs: entrada.speechLikeMs },
+        vozMs: entrada.vozMs,
+        text: texto,
+        audioSeconds: entrada.audioSegundos,
+      })
+      voiceProbe('respaldoLocal', {
+        motivo: decision.keep ? 'ok' : decision.reason,
+        sidecar: true,
+        vozMs: Math.round(entrada.vozMs),
+        speechLikeMs: Math.round(entrada.speechLikeMs),
+        audioSegundos: Math.round(entrada.audioSegundos * 1000) / 1000,
+        palabras: texto ? texto.split(/\s+/).filter(Boolean).length : 0,
+      })
+      if (!decision.keep) {
+        return { texto: '', descarte: decision.reason ?? 'sin-texto' }
+      }
+      return { texto, descarte: null }
     },
   }
 }

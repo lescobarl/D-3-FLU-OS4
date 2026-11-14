@@ -35,11 +35,14 @@ import { vozMsDeMuestras } from '../src/voice/conversation/muestras'
 import type {
   AsrPort,
   ConfigPort,
+  EntradaRespaldoLocal,
   EstadoAsr,
   MedidaVad,
   MotivoCierre,
   OpcionesAsr,
   ResultadoAsr,
+  ResultadoRespaldoLocal,
+  TranscriptorTramoPort,
 } from '../src/voice/conversation/ports'
 
 const SAMPLE_RATE = 16000
@@ -1093,5 +1096,369 @@ describe('identidad - duración de la VOZ medida', () => {
     // 1 s de captura SIN voz no son 1 s de evidencia de identidad.
     expect(vozMsDeMuestras(new Float32Array(SAMPLE_RATE), SAMPLE_RATE)).toBe(0)
     expect(vozMsDeMuestras(new Float32Array(0), SAMPLE_RATE)).toBe(0)
+  })
+})
+
+// ============================================================
+// RESPALDO LOCAL POR TRAMO (docs/CONTRATO-ASR-LOCAL.md)
+// ------------------------------------------------------------
+// Chrome sigue siendo el transcriptor primario; Whisper local es un respaldo
+// POR TRAMO que se espera ANTES del commit. La fila se construye UNA vez con
+// el texto aceptado y `origen: 'local'`; si la puerta no entrega, Chrome (o
+// `sinTexto`). El transcriptor es un doble: la puerta real se mide en
+// `voiceGateRealAudio.test.ts`.
+// ============================================================
+
+/** PCM con VOZ real (seno sobre el piso del VAD) para que `vozMs` no sea 0. */
+function muestrasHabladas(muestras: number): Float32Array {
+  const out = new Float32Array(muestras)
+  for (let i = 0; i < muestras; i += 1) {
+    out[i] = Math.sin((2 * Math.PI * 220 * i) / SAMPLE_RATE) * 0.5
+  }
+  return out
+}
+
+/** Bloque con voz REAL: PCM senoidal + la medida VAD que lo declara voz. */
+function bloqueHablado(inicio: number, fin: number): BloqueAudio {
+  return {
+    muestras: muestrasHabladas(fin - inicio),
+    sampleRate: SAMPLE_RATE,
+    inicio,
+    fin,
+    medida: VOZ(),
+  }
+}
+
+/** Config con el respaldo local habilitado (mismos valores que el dueño). */
+function configConRespaldo(): ConfigPort {
+  return {
+    ...configDePrueba(),
+    localFinal: () => ({
+      enabled: true,
+      minPalabras: 4,
+      minPalabrasPorSegundo: 1,
+      minVozMs: 350,
+      minAudioSegundos: 3,
+    }),
+  }
+}
+
+/** Transcriptor doble que registra lo recibido y devuelve lo declarado. */
+function crearTranscriptorFalso(
+  responder: (entrada: EntradaRespaldoLocal) => Promise<ResultadoRespaldoLocal>,
+) {
+  const llamadas: EntradaRespaldoLocal[] = []
+  const transcriptor: TranscriptorTramoPort = {
+    preload: () => undefined,
+    transcribir: async (entrada) => {
+      llamadas.push(entrada)
+      return responder(entrada)
+    },
+  }
+  return { transcriptor, llamadas }
+}
+
+describe('respaldo local por tramo — se espera ANTES del commit y no abre otra fila', () => {
+  it('Chrome sin final + local aceptado: UNA fila con el texto local, marcada `local`', async () => {
+    const { transcriptor, llamadas } = crearTranscriptorFalso(async () => {
+      // Local TARDA: el cierre debe esperarlo antes de construir la fila.
+      await new Promise((resolve) => setTimeout(resolve, 5))
+      return { texto: 'la mujer habla del jardín', descarte: null }
+    })
+    const { api, eventos } = crearEscenario({ config: configConRespaldo(), transcriptor })
+    await api.start()
+    // 3 s EXACTOS: el borde del mínimo del disparador SÍ invoca el local.
+    await api.ingestAudio(bloqueHablado(0, 3 * SAMPLE_RATE))
+    const cerrado = await cerrarPorSilencio(api, 3 * SAMPLE_RATE)
+
+    expect(cerrado.filas).toHaveLength(1)
+    expect(cerrado.filas[0]).toMatchObject({
+      texto: 'la mujer habla del jardín',
+      origen: 'local',
+    })
+    // La fila se commitea UNA vez, con el texto definitivo (sin segunda escritura).
+    expect(eventos.filter((evento) => evento.tipo === 'row.committed')).toHaveLength(1)
+    // El transcriptor recibió el tramo CERRADO con su evidencia medida.
+    expect(llamadas).toHaveLength(1)
+    expect(llamadas[0].audioSegundos).toBeCloseTo(3, 1)
+    expect(llamadas[0].vozMs).toBeGreaterThan(0)
+    expect(typeof llamadas[0].speechLikeMs).toBe('number')
+    expect(llamadas[0].muestras.length).toBeGreaterThan(0)
+  })
+
+  it('Chrome con rendimiento implausible (0,625 palabras/s) dispara local aunque haya texto', async () => {
+    // Espejo del caso medido b6d82bca c7013264: 12 palabras en 35,6 s (0,34
+    // palabras/s). Aquí 5 palabras en 8 s: supera `minPalabras` y cae por el
+    // ratio (0,625 < 1,0), así el caso mide SOLO el disparador de rendimiento.
+    const { transcriptor, llamadas } = crearTranscriptorFalso(async () => ({
+      texto: 'la mujer cuenta lo que pasó ayer',
+      descarte: null,
+    }))
+    const { api } = crearEscenario({ config: configConRespaldo(), transcriptor })
+    await api.start()
+    const tramoId = await abrirConVoz(api)
+    await api.ingestAudio(bloqueHablado(SAMPLE_RATE, 9 * SAMPLE_RATE))
+    await api.ingestAsr(asr(tramoId, { texto: 'esto es lo que pasó', final: true }))
+    const cerrado = await cerrarPorSilencio(api, 9 * SAMPLE_RATE)
+
+    expect(llamadas).toHaveLength(1)
+    expect(llamadas[0].audioSegundos).toBeCloseTo(9, 1)
+    expect(cerrado.filas).toHaveLength(1)
+    expect(cerrado.filas[0]).toMatchObject({
+      texto: 'la mujer cuenta lo que pasó ayer',
+      origen: 'local',
+    })
+  })
+
+  it('sin VOZ medida el disparador NO invoca Whisper (el hueco no paga el modelo)', async () => {
+    // Espejo del hueco 67–95 s de b6d82bca: tramo con "voz" VAD pero PCM sin
+    // voz real (vozMs=0 < minVozMs). La puerta lo rechazaría DESPUÉS de
+    // transcribir; el disparador debe cortarlo ANTES: el modelo no se paga.
+    const { transcriptor, llamadas } = crearTranscriptorFalso(async () => ({
+      texto: 'texto que nunca debe pedirse',
+      descarte: null,
+    }))
+    const { api } = crearEscenario({ config: configConRespaldo(), transcriptor })
+    await api.start()
+    // 4 s con "voz" VAD pero PCM mudo: por encima del mínimo de AUDIO, así el
+    // caso mide SOLO la regla de voz (con 1 s cortaría por 'audio-corto').
+    await api.ingestAudio(bloque(0, 4 * SAMPLE_RATE, VOZ()))
+    const cerrado = await cerrarPorSilencio(api, 4 * SAMPLE_RATE)
+
+    expect(llamadas).toHaveLength(0)
+    expect(cerrado.filas).toEqual([])
+    expect(cerrado.descartes.filter((descarte) => descarte.motivo === 'sinTexto')).toHaveLength(1)
+  })
+
+  it('un tramo de 1,09 s NO invoca el local: paga el encoder fijo sin ser ventana', async () => {
+    // MEDIDO (§5-quinquies): una ventana de 1,09 s del audio real b6d82bca
+    // tardó 9,3–21,7 s (secuencial): paga el encoder de 30 s + prompt. El
+    // disparador exige `minAudioSegundos` ADEMÁS de `minVozMs`; con voz REAL
+    // en el PCM el caso mide SOLO el mínimo de audio.
+    const { transcriptor, llamadas } = crearTranscriptorFalso(async () => ({
+      texto: 'texto que nunca debe pedirse',
+      descarte: null,
+    }))
+    const { api } = crearEscenario({ config: configConRespaldo(), transcriptor })
+    await api.start()
+    const fin = Math.round(1.09 * SAMPLE_RATE)
+    await api.ingestAudio(bloqueHablado(0, fin))
+    const cerrado = await cerrarPorSilencio(api, fin)
+
+    expect(llamadas).toHaveLength(0)
+    expect(cerrado.filas).toEqual([])
+    expect(cerrado.descartes.filter((descarte) => descarte.motivo === 'sinTexto')).toHaveLength(1)
+  })
+
+  it('un comando de control de Chrome NO se sustituye: el disparador no invoca local', async () => {
+    // Dueño de la compuerta de comandos: `ConfigPort.esComandoDeControl`. Un
+    // comando de Chrome se queda como comando; el respaldo no lo pisa.
+    const { transcriptor, llamadas } = crearTranscriptorFalso(async () => ({
+      texto: 'texto local que no debe usarse',
+      descarte: null,
+    }))
+    const config: ConfigPort = {
+      ...configConRespaldo(),
+      esComandoDeControl: (texto) => /sube el volumen/i.test(texto),
+    }
+    const { api } = crearEscenario({ config, transcriptor })
+    await api.start()
+    // Voz REAL y ≥ mínimo de audio: sin ellos el disparador cortaría por
+    // 'sin-voz'/'audio-corto' y el caso no mediría la compuerta de comandos.
+    const estado = await api.ingestAudio(bloqueHablado(0, 4 * SAMPLE_RATE))
+    const tramoId = estado.locucionAbierta?.locutionId
+    if (!tramoId) throw new Error('el audio con voz no abrio locucion')
+    await api.ingestAsr(asr(tramoId, { texto: 'sube el volumen', final: true }))
+    const cerrado = await cerrarPorSilencio(api, 4 * SAMPLE_RATE)
+
+    expect(llamadas).toHaveLength(0)
+    // Un comando de control no es conversación: cierra como descarte 'control',
+    // sin fila (mismo dueño que la compuerta de comandos del cierre).
+    expect(cerrado.filas).toEqual([])
+    expect(cerrado.descartes.filter((descarte) => descarte.motivo === 'control')).toHaveLength(1)
+  })
+
+  it('local MÁS CORTO que Chrome: se conserva Chrome (el parcial no se come)', async () => {
+    // El disparador corre (5 palabras en 9 s = 0,55 palabras/s < 1,0), pero el
+    // respaldo trae menos contenido que el final de Chrome: sustituir acortaría
+    // la fila. Regla: local solo reemplaza si no pierde palabras.
+    const { transcriptor, llamadas } = crearTranscriptorFalso(async () => ({
+      texto: 'la mujer',
+      descarte: null,
+    }))
+    const { api } = crearEscenario({ config: configConRespaldo(), transcriptor })
+    await api.start()
+    const tramoId = await abrirConVoz(api)
+    await api.ingestAudio(bloqueHablado(SAMPLE_RATE, 9 * SAMPLE_RATE))
+    await api.ingestAsr(asr(tramoId, { texto: 'esto es lo que pasó', final: true }))
+    const cerrado = await cerrarPorSilencio(api, 9 * SAMPLE_RATE)
+
+    expect(llamadas).toHaveLength(1)
+    expect(cerrado.filas).toHaveLength(1)
+    expect(cerrado.filas[0]?.texto).toBe('esto es lo que pasó')
+    expect(cerrado.filas[0] && 'origen' in cerrado.filas[0]).toBe(false)
+  })
+
+  it('Chrome con texto plausible: local NO corre (sin coste extra)', async () => {
+    const { transcriptor, llamadas } = crearTranscriptorFalso(async () => ({
+      texto: 'texto local que no debe usarse',
+      descarte: null,
+    }))
+    const { api } = crearEscenario({ config: configConRespaldo(), transcriptor })
+    await api.start()
+    const tramoId = await abrirConVoz(api)
+    // Voz REAL hasta 4 s: el caso mide 'no-hace-falta', no el mínimo de audio.
+    await api.ingestAudio(bloqueHablado(SAMPLE_RATE, 4 * SAMPLE_RATE))
+    await api.ingestAsr(asr(tramoId, { texto: 'hola mundo entero amigo', final: true }))
+    const cerrado = await cerrarPorSilencio(api, 4 * SAMPLE_RATE)
+
+    expect(llamadas).toHaveLength(0)
+    expect(cerrado.filas).toHaveLength(1)
+    expect(cerrado.filas[0]?.texto).toBe('hola mundo entero amigo')
+    // Una fila de Chrome conserva la forma de siempre: sin marca de origen.
+    expect(cerrado.filas[0] && 'origen' in cerrado.filas[0]).toBe(false)
+  })
+
+  it('Chrome sin texto y local rechazado por la puerta: no se escribe fila', async () => {
+    const { transcriptor, llamadas } = crearTranscriptorFalso(async () => ({
+      texto: '',
+      descarte: 'sin-voz',
+    }))
+    const { api, eventos } = crearEscenario({ config: configConRespaldo(), transcriptor })
+    await api.start()
+    // 4 s de voz REAL: el disparador SÍ pide el local (y la puerta lo rechaza).
+    await api.ingestAudio(bloqueHablado(0, 4 * SAMPLE_RATE))
+    const cerrado = await cerrarPorSilencio(api, 4 * SAMPLE_RATE)
+
+    expect(llamadas).toHaveLength(1)
+    expect(cerrado.filas).toEqual([])
+    expect(cerrado.descartes.filter((descarte) => descarte.motivo === 'sinTexto')).toHaveLength(1)
+    expect(eventos.filter((evento) => evento.tipo === 'row.committed')).toHaveLength(0)
+  })
+
+  it('un fallo del transcriptor no rompe el cierre: queda el texto de Chrome', async () => {
+    const { transcriptor, llamadas } = crearTranscriptorFalso(async () => {
+      throw new Error('modelo no disponible')
+    })
+    const { api } = crearEscenario({ config: configConRespaldo(), transcriptor })
+    await api.start()
+    // Voz REAL y ≥ mínimo de audio: el disparador pasa ANTES de transcribir;
+    // con PCM mudo o 1 s no llegaría al transcriptor y no mediría el fallo.
+    const estado = await api.ingestAudio(bloqueHablado(0, 4 * SAMPLE_RATE))
+    const tramoId = estado.locucionAbierta?.locutionId
+    if (!tramoId) throw new Error('el audio con voz no abrio locucion')
+    await api.ingestAsr(asr(tramoId, { texto: 'hola', final: true }))
+    const cerrado = await cerrarPorSilencio(api, 4 * SAMPLE_RATE)
+
+    expect(llamadas).toHaveLength(1)
+    expect(cerrado.filas).toHaveLength(1)
+    expect(cerrado.filas[0]?.texto).toBe('hola')
+    expect(cerrado.filas[0] && 'origen' in cerrado.filas[0]).toBe(false)
+  })
+
+  it('sin transcriptor inyectado el modulo cierra solo con Chrome (compatibilidad)', async () => {
+    const { api } = crearEscenario({ config: configConRespaldo() })
+    await api.start()
+    const tramoId = await abrirConVoz(api)
+    await api.ingestAsr(asr(tramoId, { texto: 'hola', final: true }))
+    const cerrado = await cerrarPorSilencio(api, SAMPLE_RATE)
+    expect(cerrado.filas).toHaveLength(1)
+    expect(cerrado.filas[0]?.texto).toBe('hola')
+  })
+})
+
+// ============================================================
+// TOPE DE LOCUCIÓN (`maxLocutionMs`)
+// ------------------------------------------------------------
+// La frase que sigue ganando voz se PARTE a los 12 s: el respaldo local
+// transcribe VENTANAS (contrato ASR local, §5-quinquies) y una locución de
+// 35 s no es una ventana medible. La partición no puede perder ni duplicar
+// texto: el tope se evalúa DESPUÉS del drenaje (el primer resultado posterior
+// entra en la fila que cierra) y la ventana nueva nace con `partidaDeVoz` para
+// recortar la línea acumulada de Chrome que re-incluye lo ya commiteado.
+// ============================================================
+describe('tope de locución — la fila se parte a maxLocutionMs sin perder texto', () => {
+  /** Ingiere VOZ en bloques de 1 s, de `desdeSegundos` a `hastaSegundos`. */
+  async function hablar(
+    api: ConversacionApi,
+    desdeSegundos: number,
+    hastaSegundos: number,
+  ): Promise<void> {
+    for (let s = desdeSegundos; s < hastaSegundos; s += 1) {
+      await api.ingestAudio(bloque(s * SAMPLE_RATE, (s + 1) * SAMPLE_RATE, VOZ()))
+    }
+  }
+
+  it('12 s de voz continua: dos filas CONTIGUAS con todo el texto, sin duplicar', async () => {
+    const asrFalso = crearAsrFalso()
+    const { api, eventos } = crearEscenario({
+      asr: asrFalso.asrPort,
+      configuracion: { ...CONVERSACION_CONFIG, asr: { engine: 'local', lang: 'es' } },
+    })
+    await api.start()
+
+    await hablar(api, 0, 1)
+    asrFalso.resultado({ texto: 'uno dos tres', final: false, idioma: 'es' })
+    await hablar(api, 1, 6)
+    asrFalso.resultado({ texto: 'uno dos tres cuatro cinco', final: false, idioma: 'es' })
+    await hablar(api, 6, 12)
+    // El resultado del BORDE se empuja ANTES del bloque que dispara el tope: al
+    // entrar ese bloque se drena (la locución aún vive) y gana su fila. Cerrar
+    // al FINAL del bloque lo perdía como huérfano (sin tramo ni locución vivos).
+    asrFalso.resultado({
+      texto: 'uno dos tres cuatro cinco seis siete',
+      final: false,
+      idioma: 'es',
+    })
+    // Bloque 12→13 s: drena el borde y, con 12 s medidos, parte la locución.
+    await hablar(api, 12, 13)
+    asrFalso.resultado({
+      texto: 'uno dos tres cuatro cinco seis siete ocho nueve',
+      final: false,
+      idioma: 'es',
+    })
+    await hablar(api, 13, 23)
+    // El cierre de la sesión no es el tope: la ventana B mide 11 s y cierra por
+    // la puerta de abajo (silencio), no por duración.
+    const cerrado = await cerrarPorSilencio(api, 23 * SAMPLE_RATE)
+
+    expect(cerrado.filas.map((fila) => fila.texto)).toEqual([
+      'uno dos tres cuatro cinco seis siete',
+      'ocho nueve',
+    ])
+    // Ventanas CONTIGUAS: A termina exactamente en el tope y B arranca ahí. La
+    // unión de textos es la frase completa: ni una palabra perdida ni repetida.
+    expect(cerrado.filas[0]?.tramo.fin).toBe(12 * SAMPLE_RATE)
+    expect(cerrado.filas[1]?.tramo.inicio).toBe(12 * SAMPLE_RATE)
+    expect(cerrado.filas[0]?.tramo.fin).toBe(cerrado.filas[1]?.tramo.inicio)
+    expect(`${cerrado.filas[0]?.texto} ${cerrado.filas[1]?.texto}`).toBe(
+      'uno dos tres cuatro cinco seis siete ocho nueve',
+    )
+    // La causa la declara la frontera: el corte por duración y el silencio real.
+    expect(
+      eventos
+        .filter((evento) => evento.tipo === 'locution.closed')
+        .map((evento) => evento.causa),
+    ).toEqual(['maximo', 'silencio'])
+    // Nada de lo dicho cayó en un descarte de texto.
+    expect(
+      cerrado.descartes.filter((descarte) =>
+        ['huerfano', 'turnoYaEscrito', 'sinTexto'].includes(descarte.motivo),
+      ),
+    ).toEqual([])
+  })
+
+  it('el tope sale de la configuracion inyectada, no de un literal', async () => {
+    const { api } = crearEscenario({
+      configuracion: { ...CONVERSACION_CONFIG, maxLocutionMs: 3000 },
+    })
+    await api.start()
+    await hablar(api, 0, 1)
+    await api.ingestAsr(asr(await abrirConVoz(api, SAMPLE_RATE), { texto: 'uno dos' }))
+    await hablar(api, 2, 4)
+    const cerrado = await api.stop('user')
+    expect(cerrado.filas).toHaveLength(1)
+    expect(cerrado.filas[0]?.texto).toBe('uno dos')
+    expect(cerrado.filas[0]?.tramo.fin).toBe(3 * SAMPLE_RATE)
   })
 })

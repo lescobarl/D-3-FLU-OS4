@@ -21,7 +21,8 @@ import { DEFAULT_SAMPLE_RATE } from './audioConstants.js'
 import { countSpeechLikeSamplesInBlocks, countVoicedSamplesInBlocks, rmsOfBlocks } from './voicedActivity.js'
 import { logCaughtError } from '../../lib/caughtError'
 import { DISCARD_REASONS, discardLocution } from './phraseDiscard.js'
-import { LOCAL_FALLBACK_DEFAULTS } from './asr/asrDefaults.js'
+import { LOCAL_FALLBACK_DEFAULTS, LOCAL_FINAL_DEFAULTS } from './asr/asrDefaults.js'
+import { collapseRepeatedSpeech } from './speechMerge.js'
 
 /**
  * Códigos de error de Chrome SpeechRecognition que degradan al motor local.
@@ -109,20 +110,36 @@ export function getSilentDegradeConfig() {
 }
 
 /**
- * Config de recuperacion (Chrome se reintenta con el motor local activo) y del
- * gate de resultados locales. Un solo lector para las dos decisiones.
+ * Config de recuperacion (Chrome se reintenta con el motor local activo), del
+ * gate de resultados locales y del DISPARADOR del respaldo por tramo. Un solo
+ * lector de transcript.localFinal: la puerta y el modulo consumen la MISMA
+ * config, cada uno su mitad (aqui no se decide nada, solo se lee).
  *
- * @returns {{ recoveryMs: number, recoverySegments: number, probeMs: number, evalMinMs: number, finalMinSpeechLikeMs: number, partialMinSpeechLikeMs: number }}
+ * @returns {{ recoveryMs: number, recoverySegments: number, probeMs: number, evalMinMs: number, finalMinSpeechLikeMs: number, partialMinSpeechLikeMs: number, enabled: boolean, timeoutMs: number, sidecarUrl: string, sidecarProbeMs: number, minPalabras: number, minPalabrasPorSegundo: number, minVozMs: number, minAudioSegundos: number, maxPalabrasPorSegundo: number, minPalabrasUnicasRatio: number }}
  */
 export function getLocalFallbackRuntimeConfig() {
   const cfg = FLU_CONFIG.voiceIdentity?.capture?.recognition || {}
   const asr = FLU_CONFIG.transcript?.asr || {}
+  const local = FLU_CONFIG.transcript?.localFinal || {}
   const recoveryMs = Number(cfg.localRecoveryMs)
   const recoverySegments = Number(cfg.localRecoverySegments)
   const probeMs = Number(cfg.localRecoveryProbeMs)
   const finalMin = Number(asr.finalMinSpeechLikeMs)
   const partialMin = Number(asr.partialMinSpeechLikeMs)
   const evalMinMs = Number(cfg.silentDegradeEvalMinMs)
+  // Umbrales del RESPALDO POR TRAMO: una sola fuente, transcript.localFinal.
+  const minPalabras = Number(local.minPalabras)
+  const minPorSegundo = Number(local.minPalabrasPorSegundo)
+  const minVozMs = Number(local.minVozMs)
+  const minAudio = Number(local.minAudioSegundos)
+  const maxPorSegundo = Number(local.maxPalabrasPorSegundo)
+  const ratioUnicas = Number(local.minPalabrasUnicasRatio)
+  const timeoutMs = Number(local.timeoutMs)
+  const sidecarProbeMs = Number(local.sidecarProbeMs)
+  // Sin URL no se inventa endpoint: el cliente del sidecar responde «no
+  // disponible» y la fila se queda con Chrome (el valor literal vive en
+  // `fluConfig.js`; este lector solo lo proyecta).
+  const sidecarUrl = String(local.sidecarUrl || '')
   return {
     recoveryMs: recoveryMs > 0 ? recoveryMs : LOCAL_FALLBACK_DEFAULTS.localRecoveryMs,
     recoverySegments:
@@ -131,6 +148,23 @@ export function getLocalFallbackRuntimeConfig() {
     evalMinMs: evalMinMs > 0 ? evalMinMs : LOCAL_FALLBACK_DEFAULTS.silentDegradeEvalMinMs,
     finalMinSpeechLikeMs: finalMin > 0 ? finalMin : LOCAL_FALLBACK_DEFAULTS.finalMinSpeechLikeMs,
     partialMinSpeechLikeMs: partialMin > 0 ? partialMin : LOCAL_FALLBACK_DEFAULTS.partialMinSpeechLikeMs,
+    enabled: local.enabled === true,
+    timeoutMs: timeoutMs > 0 ? timeoutMs : LOCAL_FINAL_DEFAULTS.timeoutMs,
+    sidecarUrl,
+    sidecarProbeMs:
+      sidecarProbeMs > 0 ? sidecarProbeMs : LOCAL_FINAL_DEFAULTS.sidecarProbeMs,
+    minPalabras: minPalabras > 0 ? Math.floor(minPalabras) : LOCAL_FINAL_DEFAULTS.minPalabras,
+    minPalabrasPorSegundo:
+      minPorSegundo > 0 ? minPorSegundo : LOCAL_FINAL_DEFAULTS.minPalabrasPorSegundo,
+    minVozMs: minVozMs > 0 ? minVozMs : LOCAL_FINAL_DEFAULTS.minVozMs,
+    minAudioSegundos:
+      Number.isFinite(minAudio) && minAudio >= 0
+        ? minAudio
+        : LOCAL_FINAL_DEFAULTS.minAudioSegundos,
+    maxPalabrasPorSegundo:
+      maxPorSegundo > 0 ? maxPorSegundo : LOCAL_FINAL_DEFAULTS.maxPalabrasPorSegundo,
+    minPalabrasUnicasRatio:
+      ratioUnicas > 0 && ratioUnicas <= 1 ? ratioUnicas : LOCAL_FINAL_DEFAULTS.minPalabrasUnicasRatio,
   }
 }
 
@@ -153,18 +187,69 @@ export function getLocalFallbackRuntimeConfig() {
  * ALCANCE: "el audio parece habla", NO "habla dirigida a FLU": la voz de fondo
  * (TV/sala) pasa el gate. Separarla es criterio de HABLANTE (diarizacion).
  *
- * @param {{ isFinal?: boolean, metrics?: { speechLikeMs?: number }|null, wakeMatched?: boolean, isNavigationCommand?: boolean }} [m]
- * @returns {{ keep: boolean, reason: 'not-speech'|null, speechLikeMs: number, threshold: number }}
+ * RESPALDO POR TRAMO (docs/CONTRATO-ASR-LOCAL.md §6): cuando el llamador aporta
+ * la evidencia del tramo CERRADO (`vozMs`, `text`, `audioSeconds`), la puerta se
+ * amplia en el MISMO dueno con la evidencia que el modulo ya mide:
+ *   1. voz real del tramo (`vozMs >= minVozMs`): sin voz no hay texto aceptable
+ *      (el hueco 67-95 s de b6d82bca midio 120 ms y «Back to the cojo» no entra);
+ *   2. silencio/no-habla (`speechLikeMs` del tramo, umbral ya existente);
+ *   3. duracion plausible (`maxPalabrasPorSegundo`): texto imposible se rechaza;
+ *   4. repeticion/bucle (`collapseRepeatedSpeech`, dueno de `speechMerge`):
+ *      un decoder en bucle reduce las palabras unicas por debajo del ratio;
+ *   5. idioma/escritura: con idioma latino configurado (es/en), un texto sin una
+ *      sola letra latina es de otro idioma y se rechaza.
+ * La confianza del decoder (`avg_logprob`) NO viaja por el contrato actual del
+ * worker; la puerta se limita a la evidencia acustica MEDIDA, nunca a la fe.
+ *
+ * @param {{ isFinal?: boolean, metrics?: { speechLikeMs?: number }|null, wakeMatched?: boolean, isNavigationCommand?: boolean, vozMs?: number|null, text?: string, audioSeconds?: number }} [m]
+ * @returns {{ keep: boolean, reason: 'sin-voz'|'not-speech'|'sin-texto'|'imposible'|'bucle'|'idioma'|null, speechLikeMs: number, threshold: number, vozMs: number|null }}
  */
-export function classifyLocalResult({ isFinal = true, metrics = null, wakeMatched = false, isNavigationCommand = false } = {}) {
+export function classifyLocalResult({
+  isFinal = true,
+  metrics = null,
+  wakeMatched = false,
+  isNavigationCommand = false,
+  vozMs = null,
+  text = '',
+  audioSeconds = 0,
+} = {}) {
   const cfg = getLocalFallbackRuntimeConfig()
   const threshold = isFinal ? cfg.finalMinSpeechLikeMs : cfg.partialMinSpeechLikeMs
   const speechLikeMs = Number(metrics?.speechLikeMs) || 0
-  if (!metrics) return { keep: true, reason: null, speechLikeMs, threshold }
-  if (speechLikeMs >= threshold || wakeMatched || isNavigationCommand) {
-    return { keep: true, reason: null, speechLikeMs, threshold }
+  const voz = vozMs === null || vozMs === undefined ? null : Math.max(0, Number(vozMs) || 0)
+  const minVozMs = Number(cfg.minVozMs) > 0 ? Number(cfg.minVozMs) : LOCAL_FINAL_DEFAULTS.minVozMs
+  // 1) VOZ REAL del tramo: es la primera puerta del respaldo. Sin voz no se
+  // transcribe y sin voz no se acepta NADA (mejor `sinTexto` que alucinar).
+  if (voz !== null && voz < minVozMs) {
+    return { keep: false, reason: 'sin-voz', speechLikeMs, threshold, vozMs: voz }
   }
-  return { keep: false, reason: 'not-speech', speechLikeMs, threshold }
+  if (!metrics) return { keep: true, reason: null, speechLikeMs, threshold, vozMs: voz }
+  if (speechLikeMs < threshold && !wakeMatched && !isNavigationCommand) {
+    return { keep: false, reason: 'not-speech', speechLikeMs, threshold, vozMs: voz }
+  }
+  // Sin evidencia de tramo (ruta del motor vivo) el gate termina aqui: su
+  // contrato no cambia (wake/navegacion mandan; sin `metrics` no se decide).
+  if (voz === null) return { keep: true, reason: null, speechLikeMs, threshold, vozMs: voz }
+  const limpio = String(text || '').trim()
+  if (!limpio) return { keep: false, reason: 'sin-texto', speechLikeMs, threshold, vozMs: voz }
+  const palabras = limpio.split(/\s+/).filter(Boolean).length
+  const segundos = Number(audioSeconds) > 0 ? Number(audioSeconds) : 0
+  // 3) Duracion plausible: mas palabras que las humanamente posibles.
+  if (segundos > 0 && palabras / segundos > cfg.maxPalabrasPorSegundo) {
+    return { keep: false, reason: 'imposible', speechLikeMs, threshold, vozMs: voz }
+  }
+  // 4) Repeticion/bucle: el colapso del dueno mide cuantas palabras sobreviven.
+  const colapsado = collapseRepeatedSpeech(limpio)
+  const unicas = colapsado ? colapsado.split(/\s+/).filter(Boolean).length : 0
+  if (palabras > 0 && unicas / palabras < cfg.minPalabrasUnicasRatio) {
+    return { keep: false, reason: 'bucle', speechLikeMs, threshold, vozMs: voz }
+  }
+  // 5) Idioma/escritura: es/en son latinos; un texto sin letras latinas es otro
+  // idioma (no hay detector de idioma sin otro motor; esto es lo medible).
+  if (!/[a-záéíóúüñç]/i.test(limpio)) {
+    return { keep: false, reason: 'idioma', speechLikeMs, threshold, vozMs: voz }
+  }
+  return { keep: true, reason: null, speechLikeMs, threshold, vozMs: voz }
 }
 
 /**

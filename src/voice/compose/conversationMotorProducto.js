@@ -23,6 +23,7 @@
  */
 import { metaDeFilaConversacion } from '../../core/db/conversationRowMapping'
 import { logCaughtError } from '../../lib/caughtError.ts'
+import { esOrigenLocal } from '../../types/bridge.ts'
 import { useIntegrationStore } from '../../store/integrationStore'
 import { crearMotorConversacionProducto, grabarRevisionDeFila, traeFinal } from '../conversation/index'
 import { resolveEchoContext } from '../lib/conversationDialogue.js'
@@ -257,6 +258,9 @@ export function crearMotorConversacionHook({
     // hace `registerSpeakerIdentityFromCommand` desde la frontera de turno.
     const nombreDicho =
       esNuevaLocucion &&
+      // CONTRATO ASR LOCAL: el texto del RESPALDO no es accionable — no
+      // bautiza ninguna voz (`registrarNombre` queda fuera de su ruta).
+      !esOrigenLocal(evento.fila.origen) &&
       preferKnownVoiceName(
         detectWakeIntroducedName(
           String(evento.fila.texto || ''),

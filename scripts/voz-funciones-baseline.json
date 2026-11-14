@@ -89,6 +89,12 @@
     "src/voice/lib/asr/resample.js": [
       "downsample"
     ],
+    "src/voice/lib/asr/sidecarTranscriber.ts": [
+      "crearSidecarTranscripcion",
+      "pcmFloat32ABase64",
+      "salud",
+      "transcribir"
+    ],
     "src/voice/lib/asr/voiceActivitySegmenter.js": [
       "closeTurn",
       "createVoiceSegmenter",

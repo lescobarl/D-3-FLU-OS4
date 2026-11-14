@@ -109,6 +109,31 @@ test(`FLU Playback (${SESSION_PATH ? session.sessionId : 'sin sesión'})`, async
         await (window as any).__fluPlayback?.start?.();
     });
 
+    // Barrera de transcripción VIVA: la caja debe publicar texto ANTES de que la
+    // locución se commitee. Si solo aparece al cerrar, vuelve el defecto de
+    // "transcripción por lotes" (medido 2026-11-13).
+    const liveGrowth = await page.evaluate(async () => {
+        const w = window as any;
+        const started = Date.now();
+        let first = '';
+        let maxLen = 0;
+        while (Date.now() - started < 20000) {
+            const live = String(w.__fluStore?.getState?.().currentTranscript || '').trim();
+            if (live) {
+                if (!first) first = live;
+                if (live.length > maxLen) maxLen = live.length;
+                if (first && maxLen > first.length) return { first, maxLen };
+            }
+            await new Promise((resolve) => setTimeout(resolve, 100));
+        }
+        return { first, maxLen };
+    });
+    expect(liveGrowth.first, 'la caja debe publicar la frase viva antes del commit').not.toBe('');
+    expect(
+        liveGrowth.maxLen,
+        'la frase viva debe CRECER antes del cierre (no llegar en un solo lote)',
+    ).toBeGreaterThan(liveGrowth.first.length);
+
     await page.waitForFunction(
         () => {
             const status = (window as any).__fluPlayback?.status?.();

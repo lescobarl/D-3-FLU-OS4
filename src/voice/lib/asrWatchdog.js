@@ -46,9 +46,9 @@ export const WATCHDOG_ACTIONS = Object.freeze({
  * @param {boolean} [m.restartPending] hay un reinicio de Chrome en vuelo.
  * @param {boolean} [m.probePending] hay una ventana de prueba de Chrome abierta.
  * @param {boolean} [m.probeExpired] la ventana de prueba vencio.
- * @param {boolean} [m.hasRecentSpeech] hay VOZ medida en la ventana PCM reciente
- *   (`stallVoiceWindowMs`). Un rebuild `stall` con voz presente corta el segmento
- *   que Chrome esta reconociendo; el dueno lo aporta desde `voicedActivity`.
+ * @param {boolean} [m.hasRecentSpeech] hay VOZ medida en la ventana PCM reciente.
+ *   La exige la rama `mudo` temprana (voz + locucion vacia). El `stall` NO la
+ *   exige cuando no hay locucion abierta: sin frase viva no hay texto que cortar.
  * @param {boolean} [m.hasOpenLocution] el modulo de conversacion tiene una
  *   locucion ABIERTA (hecho de su dueno: la instantanea de la sesion).
  *   Medido 2026-11-12 18:22: la voz de la mujer no alcanzaba el piso de
@@ -158,13 +158,13 @@ export function resolveWatchdogStep({
     return { action: WATCHDOG_ACTIONS.REBUILD, kind: 'mudo' }
   }
 
-  // STALL = Chrome activo pero mudo. Con VOZ reciente NO se reconstruye: Chrome
-  // puede estar procesando un segmento largo y el reinicio lo tira. Con
-  // LOCUCION ABIERTA tampoco: es habla que el piso PCM no alcanza a ver
-  // (medido 18:22, mujer con 30-480 ms de voz por ventana). El silencio real
-  // (sin voz ni locucion) y el `dead` por onend son las puertas de recuperacion.
+  // STALL = Chrome activo pero mudo. La proteccion es la LOCUCION ABIERTA: si
+  // hay una frase viva no se toca (medido 18:22, mujer con 30-480 ms de voz por
+  // ventana). Sin locucion abierta NO hay texto que cortar aunque el PCM mida
+  // voz o ruido de sala: se reconstruye al compas del respaldo, antes de que el
+  // hablante empiece. El `dead` por onend sigue siendo la puerta del Chrome que
+  // termino.
   if (
-    !hasRecentSpeech &&
     !hasOpenLocution &&
     recognitionActive &&
     Number(sinceMeaningful) >= Number(restartCfg.silentMicStallMs) &&
@@ -178,7 +178,6 @@ export function resolveWatchdogStep({
   }
 
   if (
-    !hasRecentSpeech &&
     !hasOpenLocution &&
     Number(sinceMeaningful) >= Number(restartCfg.stallMs) &&
     Number(sinceRebuild) >= cooldown

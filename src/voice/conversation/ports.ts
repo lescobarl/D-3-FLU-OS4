@@ -28,6 +28,14 @@ export type MotivoCierre = 'user' | 'system' | 'watchdog'
  */
 export type EvidenciaEtiqueta = 'nombre' | 'medida' | 'continuidad' | 'semilla' | 'pendiente'
 
+/**
+ * ORIGEN del texto de la fila: Chrome (transcriptor primario y dueño de
+ * comandos) o el respaldo Whisper local por tramo (contrato ASR local). Una
+ * fila de origen `local` NUNCA es accionable: su texto no llega al árbitro de
+ * comandos, solo se pinta/guarda.
+ */
+export type OrigenTranscripcion = 'chrome' | 'local'
+
 /** Tramo de audio con su frecuencia: `[inicio, fin]` sin `sampleRate` no significa nada. */
 export type TramoMuestreado = Readonly<{
   /** Muestra inicial, en el `sampleRate` del tramo. */
@@ -73,6 +81,12 @@ export type Fila = Readonly<{
   provisional: boolean
   /** Motivo declarado del cierre. */
   reason: MotivoCierre
+  /**
+   * Origen del TEXTO: `chrome` (primario) o `local` (respaldo por tramo). Las
+   * filas anteriores a este campo no lo declaran (se leen como Chrome: es lo
+   * único que existía). El texto local nunca es accionable.
+   */
+  origen?: OrigenTranscripcion
   /** Revisión del almacén (incremento atómico). */
   revision: number
   /** Milisegundos desde epoch (UTC), puestos por el reloj inyectado. */
@@ -170,6 +184,29 @@ export interface EmbebedorPort {
   comparar(a: readonly number[], b: readonly number[]): number
 }
 
+/**
+ * Configuración VIVA del respaldo local por tramo (`transcript.localFinal`).
+ * Los valores y sus derivaciones están en el dueño de la config; el módulo solo
+ * los consume. `null`/ausente = respaldo fuera.
+ */
+export type ConfigLocalFinal = Readonly<{
+  /** ¿El respaldo local está habilitado? */
+  enabled: boolean
+  /** Disparador: palabras de Chrome por debajo de este mínimo. */
+  minPalabras: number
+  /** Disparador: palabras/segundo de Chrome por debajo de este ratio. */
+  minPalabrasPorSegundo: number
+  /** Voz mínima del tramo para pedir el respaldo (ms). */
+  minVozMs: number
+  /**
+   * Duración mínima del AUDIO del tramo para pedir el respaldo (s). Una ventana
+   * por debajo paga el encoder fijo de Whisper sin ser ventana de producto
+   * (§5-quinquies: 1,09 s tardó 9,3–21,7 s); el disparador no la paga. 0 = sin
+   * mínimo (solo pruebas).
+   */
+  minAudioSegundos: number
+}>
+
 /** Configuración viva de voz que el módulo consume por puerto. */
 export interface ConfigPort {
   /** Wake words configuradas (fuente única: `FLU_CONFIG.voiceCommands.wakeWords`). */
@@ -209,6 +246,12 @@ export interface ConfigPort {
    * `VOICE_DIARIZATION_DEFAULTS.assistantEchoMinWords` + 1.
    */
   echoMinPalabrasCola(): number
+  /**
+   * Config del RESPALDO LOCAL por tramo (`transcript.localFinal`). Opcional para
+   * los dobles de prueba: sin ella el módulo no pide respaldo (solo Chrome). El
+   * producto la implementa SIEMPRE; los valores NO se duplican aquí.
+   */
+  localFinal?(): ConfigLocalFinal | null
 }
 
 /** Frase canónica y su presentación. La wake se quita SOLO para mostrar. */
@@ -329,6 +372,64 @@ export interface AsrPort {
   abortar(): void
 }
 
+/**
+ * Motivo por el que el respaldo local NO entrega texto. `sin-voz`, `not-speech`,
+ * `imposible`, `bucle` e `idioma` son la PUERTA (dueño `classifyLocalResult`);
+ * `no-hace-falta` es el disparador (Chrome ya dio texto plausible y local no se
+ * pidió); `sin-voz`/`audio-corto`/`comando` los aplica el DISPARADOR antes de
+ * transcribir (sin voz o con una ventana de audio por debajo del mínimo no se
+ * paga el modelo; un comando de control de Chrome no se sustituye);
+ * `timeout`/`fallo`/`deshabilitado` son operativos. Todos dejan la fila con el
+ * texto de Chrome (o `sinTexto`): mejor perder el respaldo que alucinar.
+ */
+export type MotivoRespaldoLocal =
+  | 'sin-voz'
+  | 'audio-corto'
+  | 'not-speech'
+  | 'sin-texto'
+  | 'imposible'
+  | 'bucle'
+  | 'idioma'
+  | 'comando'
+  | 'no-hace-falta'
+  | 'timeout'
+  | 'fallo'
+  | 'deshabilitado'
+
+/** Evidencia del tramo cerrado que la puerta del respaldo necesita. */
+export type EntradaRespaldoLocal = Readonly<{
+  /** PCM del tramo cerrado (mono, a `sampleRate`). */
+  muestras: Float32Array
+  /** Frecuencia del PCM. */
+  sampleRate: number
+  /** Idioma vigente de la locución (es/en). */
+  idioma: IdiomaLocucion
+  /** VOZ real del tramo (ms), medida por el módulo (`vozMsDeMuestras`). */
+  vozMs: number
+  /** Habla del tramo (ms), medida por el medidor del módulo. */
+  speechLikeMs: number
+  /** Duración del audio del tramo en segundos (fin−inicio)/sampleRate. */
+  audioSegundos: number
+}>
+
+/** Resultado del respaldo local: texto aceptado por la puerta o su motivo. */
+export type ResultadoRespaldoLocal = Readonly<
+  | { texto: string; descarte: null }
+  | { texto: ''; descarte: MotivoRespaldoLocal }
+>
+
+/**
+ * Transcriptor LOCAL de un tramo CERRADO (respaldo gateado de Chrome). El
+ * módulo lo espera ANTES de construir la fila: una fila, un texto, un escritor.
+ * El texto que devuelve NUNCA ejecuta comandos.
+ */
+export interface TranscriptorTramoPort {
+  /** Carga el modelo en segundo plano (idempotente; se llama al abrir la escucha). */
+  preload(): void
+  /** Transcribe el tramo si pasa la puerta; si no, devuelve el motivo. */
+  transcribir(entrada: EntradaRespaldoLocal): Promise<ResultadoRespaldoLocal>
+}
+
 /** Preferencia de ASR en configuración: `auto` elige al abrir. */
 export type MotorAsrPreferido = 'auto' | MotorAsr
 
@@ -345,6 +446,13 @@ export interface ConfiguracionConversacion {
    * El silencio VAD completo (`silenceCloseMs`) sigue como puerta de abajo.
    */
   readonly finalCloseConfirmMs: number
+  /**
+   * Tope de duración de UNA locución (ms). La frase que sigue ganando voz se
+   * PARTE en ventanas de esta duración: el respaldo local transcribe por
+   * ventana y una locución de 35 s no es una ventana medible (contrato ASR
+   * local §5-quinquies). `0` = sin tope.
+   */
+  readonly maxLocutionMs: number
   /**
    * Ventanas SEGUIDAS de voz distinta que confirman un cambio antes de partir
    * la locución (Caso 1+3). Una sola puede ser el tartamudeo del embebedor en
@@ -384,6 +492,11 @@ export const CONVERSACION_CONFIG: ConfiguracionConversacion = Object.freeze({
   // los 1,5 s la ventana no alcanza a disparar). Si una pausa real más larga
   // partiera la frase, este número se sube (palanca del plan).
   finalCloseConfirmMs: 800,
+  // TOPE de locución: 12 s. MEDIDO con faster-whisper small (CPU int8, beam 1,
+  // 8 hilos) sobre b6d82bca: ventanas de 12 s en SECUENCIAL, 3,3–5,4 s por
+  // ventana con texto coherente (130/147–150 palabras); 10 s degrada el texto y
+  // ventanas <3 s son patológicas (§5-quinquies del contrato ASR local).
+  maxLocutionMs: 12000,
   // UNA ventana de voz distinta no parte la fila: el embebedor puede
   // tartamudear en la frontera de un tramo; se exigen DOS seguidas.
   confirmacionesCambioVoz: 2,

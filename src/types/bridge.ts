@@ -10,6 +10,29 @@ import type { VisualTipo, WorkspaceTipo } from '../core/config/sharedConfig.ts';
 import type { MusicAction } from '../core/media/musicActions.ts';
 
 /**
+ * ORIGEN del texto de una fila: Chrome (transcriptor primario y dueño de los
+ * comandos) o el respaldo local por tramo (`local`, contrato ASR local). Este
+ * bloque es el ÚNICO dueño del vocabulario: el resto del código pregunta con
+ * `esOrigenLocal` y nunca compara contra la cadena.
+ */
+export const ORIGEN_TEXTO = Object.freeze({
+    CHROME: 'chrome',
+    LOCAL: 'local',
+} as const);
+
+/** Origen del texto de una fila. Ausente = Chrome (filas anteriores al campo). */
+export type OrigenTranscripcion = (typeof ORIGEN_TEXTO)[keyof typeof ORIGEN_TEXTO];
+
+/**
+ * ¿El origen del texto es el respaldo local por tramo?
+ * @param origen Valor crudo (origen u origenTranscripcion) de una fila.
+ * @returns `true` solo para el origen local.
+ */
+export function esOrigenLocal(origen: unknown): boolean {
+    return origen === ORIGEN_TEXTO.LOCAL;
+}
+
+/**
  * Estados del ciclo de conversación integrado.
  * Combina la máquina de estados del avatar con el estado de la voz.
  */
@@ -65,6 +88,13 @@ export interface ConversationMetaFila {
     provisional: boolean;
     /** Motivo declarado del cierre. */
     reason: 'user' | 'system' | 'watchdog';
+    /**
+     * Origen del TEXTO cuando NO es Chrome (el transcriptor primario). La
+     * ausencia se lee como `chrome`: las filas anteriores a este campo solo
+     * pudieron ser de Chrome. `local` marca el respaldo por tramo (Whisper),
+     * cuyo texto nunca es accionable.
+     */
+    origenTranscripcion?: OrigenTranscripcion;
 }
 
 /** Metadatos adicionales de una entrada (OS2: meta.response). */

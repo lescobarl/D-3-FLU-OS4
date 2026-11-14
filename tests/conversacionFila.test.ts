@@ -187,6 +187,17 @@ describe('regla 4 — tramo válido y texto producen una fila', () => {
     })
   })
 
+  it('el origen LOCAL viaja en la fila; una fila de Chrome no declara lo evidente', () => {
+    // CONTRATO ASR LOCAL: solo el origen NO primario se declara. La ausencia
+    // del campo se lee como `chrome` y conserva la forma de siempre.
+    const local = construirFila(cierre({ origen: 'local' }))
+    expect(local.fila).toMatchObject({ origen: 'local' })
+    const chrome = construirFila(cierre({ origen: 'chrome' }))
+    expect(chrome.fila && 'origen' in chrome.fila).toBe(false)
+    const sinOrigen = construirFila(cierre())
+    expect(sinOrigen.fila && 'origen' in sinOrigen.fila).toBe(false)
+  })
+
   it('sin UUIDv4 no hay inserción', () => {
     expect(() => construirFila(cierre({ locutionId: 's1:1' }))).toThrow(/UUIDv4/)
   })

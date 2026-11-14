@@ -123,4 +123,21 @@ describe('meta.conversacion — ida y vuelta por el escritor único', () => {
     expect(recuperado).toEqual(registroEscrito)
     expect(mapearMetaConversacion(origen(registroEscrito))).toEqual(fila.meta?.conversacion)
   })
+
+  it('el origen LOCAL del respaldo también vuelve: `origenTranscripcion` en el meta', async () => {
+    // CONTRATO ASR LOCAL: el meta solo marca el origen NO primario; el sentido
+    // inverso devuelve `origen: 'local'` y una fila de Chrome sigue sin marca
+    // (lo fija el caso anterior por igualdad exacta).
+    const registroEscrito = { ...registro(), origen: 'local' as const }
+    await escribirRegistroConversacion(registroEscrito)
+
+    await fluDb.open()
+    const fila = await fluDb.conversations.get(LOCUTION_ID)
+    if (!fila) throw new Error('la fila no se persistio')
+
+    expect(fila.meta?.conversacion).toMatchObject({ origenTranscripcion: 'local' })
+    const recuperado = registroDesdeFilaConversacion(fila)
+    expect(recuperado?.origen).toBe('local')
+    expect(recuperado).toEqual(registroEscrito)
+  })
 })

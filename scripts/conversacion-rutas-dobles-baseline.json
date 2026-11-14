@@ -41,13 +41,16 @@
       "crearPuertoVistaFilasProducto",
       "crearRegistroCaughtError",
       "crearRelojSistema",
+      "crearTranscriptorSidecarProducto",
       "crearUtilidadesFilaProducto",
       "crearVadProducto",
       "ejecutarRegistrando",
       "medirConTope",
       "normalizarParaComparar",
+      "preload",
       "registrarFallo",
       "renameRowSpeakerName",
+      "transcribir",
       "vista"
     ],
     "adaptersAlmacen.ts": [
@@ -68,10 +71,13 @@
       "guardarFila",
       "medirTramoCerrado",
       "medirVozAlCerrar",
+      "muestrasDeLaLocucion",
+      "necesitaRespaldoLocal",
       "reetiquetarFila",
       "registrarCierre",
       "registrarEventoVoz",
       "resolverVoz",
+      "respaldarConLocal",
       "tramoYaCommiteado"
     ],
     "cola.ts": [
@@ -119,6 +125,7 @@
       "aplicarIdentidadAlTramoAbierto",
       "aplicarMedidaVoz",
       "cerrarPendienteAsr",
+      "cerrarPorTope",
       "conIdentidadVoz",
       "contarReentrega",
       "crearIngesta",

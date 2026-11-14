@@ -11,6 +11,8 @@ import type { ConversationEntry } from '../../types/bridge';
 export interface ConversationLogProps {
     entries?: readonly ConversationEntry[];
     emptyLabel?: string;
+    /** Frase que se está dictando ahora (misma fuente que la caja). */
+    liveText?: string;
 }
 
 declare const ConversationLog: NamedExoticComponent<ConversationLogProps>;
