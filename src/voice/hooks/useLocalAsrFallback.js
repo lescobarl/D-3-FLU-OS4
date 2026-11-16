@@ -96,6 +96,24 @@ export function useLocalAsrFallback({
   const lastDegradeEvalAtRef = useRef(0)
   /** Locucion a la que YA se le dio el rebuild `mudo` temprano: una por locucion. */
   const mudoTempranoLocucionRef = useRef('')
+  /**
+   * CONTADOR DE SESION del Chrome mudo: ms acumulados con una locucion ABIERTA y
+   * SIN texto, a traves de las ventanas que parte el tope. NO se reinicia al
+   * cerrar por `maximo` ni al abrir la ventana siguiente; SOLO con texto de
+   * Chrome observado o al cambiar de motor. Las filas LOCALES no lo tocan.
+   */
+  const muteSpeechMsRef = useRef(0)
+  /** Ultimo tick que acumulo: mide el tramo entre ticks, no el hueco total. */
+  const muteLastTickAtRef = useRef(0)
+  /** Ultimo rebuild de la puerta de SESION (20 s): evita repetirlo cada cooldown. */
+  const lastSessionMuteRebuildAtRef = useRef(0)
+
+  /** Reinicia el contador de sesion: SOLO texto de Chrome o cambio de motor. */
+  const resetMuteClock = useCallback(() => {
+    muteSpeechMsRef.current = 0
+    muteLastTickAtRef.current = 0
+    lastSessionMuteRebuildAtRef.current = 0
+  }, [])
 
   /** UNICO predicado de "este motor es el local" (delegado a su dueno). */
   const isLocal = useCallback(
@@ -118,8 +136,10 @@ export function useLocalAsrFallback({
     lastFinalAtRef.current = now
     segmentsSinceRecoveryRef.current = 0
     probeUntilRef.current = 0
+    // CAMBIO DE MOTOR: el contador de Chrome mudo no sobrevive al motor local.
+    resetMuteClock()
     return true
-  }, [degradeEnabled, isLocal, recognitionActiveRef, recognitionRef, wireRecognitionEventsRef])
+  }, [degradeEnabled, isLocal, recognitionActiveRef, recognitionRef, resetMuteClock, wireRecognitionEventsRef])
 
   const degradeRef = useRef(null)
   degradeRef.current = degrade
@@ -155,6 +175,8 @@ export function useLocalAsrFallback({
     lastOnresultAtRef.current = now
     lastMeaningfulIngressAtRef.current = now
     stallRebuildStreakRef.current = 0
+    // CAMBIO DE MOTOR (local -> Chrome): nueva sesion de escucha, contador a cero.
+    resetMuteClock()
     return true
   }, [
     createRecognition,
@@ -167,6 +189,7 @@ export function useLocalAsrFallback({
     recognitionActiveRef,
     recognitionLocaleRef,
     recognitionRef,
+    resetMuteClock,
     startRecognition,
     wireRecognitionEventsRef,
   ])
@@ -182,7 +205,8 @@ export function useLocalAsrFallback({
     probeUntilRef.current = 0
     lastFinalAtRef.current = 0
     mudoTempranoLocucionRef.current = ''
-  }, [])
+    resetMuteClock()
+  }, [resetMuteClock])
 
   /** Chrome produjo un RESULTADO: si habia ventana de prueba, queda como activo. */
   const noteResult = useCallback(() => {
@@ -253,6 +277,24 @@ export function useLocalAsrFallback({
     // Sin una palabra escrita no hay frase que un rebuild pueda cortar.
     const sinTextoEnLaAbierta =
       hayLocucionAbierta && !String(locucionAbierta.texto || '').trim()
+    // CONTADOR DE SESION del Chrome mudo: suma el tiempo con una locucion
+    // ABIERTA y VACIA. El tope parte la locucion cada 12 s y abre la siguiente;
+    // como no se llavea por `locutionId`, el contador NO se reinicia por ninguno
+    // de los dos hechos. Se reinicia SOLO cuando Chrome escribe (la abierta deja
+    // de estar vacia) o al cambiar de motor. Un final LOCAL no lo toca: Chrome
+    // sigue mudo y la recuperacion debe ocurrir igual.
+    if (localActive || (hayLocucionAbierta && !sinTextoEnLaAbierta)) {
+      muteSpeechMsRef.current = 0
+      lastSessionMuteRebuildAtRef.current = 0
+    } else if (hayLocucionAbierta) {
+      const previo = muteLastTickAtRef.current
+      if (previo > 0) muteSpeechMsRef.current += Math.max(0, now - previo)
+    }
+    muteLastTickAtRef.current = now
+    const muteSpeechMs = muteSpeechMsRef.current
+    const muteRebuildDue =
+      lastSessionMuteRebuildAtRef.current === 0 ||
+      now - lastSessionMuteRebuildAtRef.current >= Number(restartCfg.muteOpenLocutionMs)
     // AUDIO PROPIO de la locucion abierta (`fin - inicio` de su tramo). El
     // reloj global (`sinceMeaningful`) es del motor, no de ESTA locucion: en
     // 18:44:08.183 traia 4238 ms del turno anterior y disparo el mudo 0,57 s
@@ -289,6 +331,8 @@ export function useLocalAsrFallback({
       hasEmptyOpenLocution: sinTextoEnLaAbierta,
       openLocutionMs,
       mudoTempranoHecho,
+      muteSpeechMs,
+      muteRebuildDue,
       recoveryDue:
         now - (lastFinalAtRef.current || 0) >= runtimeCfg.recoveryMs ||
         segmentsSinceRecoveryRef.current >= runtimeCfg.recoverySegments,
@@ -312,11 +356,15 @@ export function useLocalAsrFallback({
       return 'handled'
     }
     if (step.action === WATCHDOG_ACTIONS.REBUILD) {
-      relayLog('LOG', 'useFluVoiceAssistant', `[WD] rebuild kind=${step.kind} sinceMeaningful=${now - (lastMeaningfulIngressAtRef.current || 0)} recognitionActive=${recognitionActiveRef.current} restartPending=${recognitionRestartPendingRef.current} hasRecentSpeech=${hasRecentSpeech} locucionAbierta=${hayLocucionAbierta} sinTextoEnAbierta=${sinTextoEnLaAbierta} locucionMs=${Math.round(openLocutionMs)} locucionId=${locucionAbierta?.locutionId || '-'} mudoTemprano=${step.early === true}`)
+      relayLog('LOG', 'useFluVoiceAssistant', `[WD] rebuild kind=${step.kind} sinceMeaningful=${now - (lastMeaningfulIngressAtRef.current || 0)} recognitionActive=${recognitionActiveRef.current} restartPending=${recognitionRestartPendingRef.current} hasRecentSpeech=${hasRecentSpeech} locucionAbierta=${hayLocucionAbierta} sinTextoEnAbierta=${sinTextoEnLaAbierta} locucionMs=${Math.round(openLocutionMs)} mudoSesionMs=${Math.round(muteSpeechMs)} locucionId=${locucionAbierta?.locutionId || '-'} mudoTemprano=${step.early === true}`)
       if (step.early === true && locucionAbierta?.locutionId) {
         mudoTempranoLocucionRef.current = locucionAbierta.locutionId
       }
       if (step.kind === 'stall') lastStallRebuildAtRef.current = now
+      if (step.kind === 'mudo' && step.early !== true) {
+        // Puerta de SESION: no se repite hasta acumular otra ventana completa.
+        lastSessionMuteRebuildAtRef.current = now
+      }
       stallRebuildStreakRef.current += 1
       if (!rebuildRecognitionRef.current()) {
         // Caso 13: el reinicio declara su motivo; sin el, no se agenda.

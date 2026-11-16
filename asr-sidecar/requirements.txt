@@ -1,4 +1,0 @@
-# Dependencias del sidecar local (medido con el venv del repo, 2026-11-14:
-# Python 3.12.10, faster-whisper 1.2.1, numpy 2.5.4).
-faster-whisper==1.2.1
-numpy

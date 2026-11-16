@@ -134,6 +134,7 @@ vi.mock('../src/voice/lib/fluDebug', async (original) => ({
 // Solo se neutraliza lo que no aporta (los bursts simulados); el resto del modulo real.
 
 import { FLU_CONFIG } from '../src/voice/lib/fluConfig';
+import { WATCHDOG_ACTIONS, resolveWatchdogStep } from '../src/voice/lib/asrWatchdog.js';
 import { useFluVoiceAssistant } from '../src/voice/hooks/useFluVoiceAssistant';
 import { acquireSpeechRecognition } from '../src/voice/lib/speechRecognitionLocal';
 import { relayLog } from '../src/lib/clientLogRelay';
@@ -255,34 +256,60 @@ describe('P9.60 - tuberia completa: el rebuild del watchdog no puede perder la l
 
     // PCM real del micrófono: 1 s de silencio abre el piso y la VOZ del
     // micrófono abre la locución del módulo (todavía SIN texto: Chrome no ha
-    // entregado nada). La locución acumula su audio PROPIO: `openLocutionMs`
-    // mide su tramo (`fin - inicio`), así que se alimenta la ventana completa
-    // `muteOpenLocutionMs` + 1 s (medido 19:05: 37,2 s abierta, cero
-    // resultados). Con 1 s de voz el umbral no se alcanza y no hay nada que medir.
-    const umbral = Number(FLU_CONFIG.activeListen.restart.muteOpenLocutionMs);
+    // entregado nada). Se alimenta en tramos de 500 ms con el reloj del watchdog
+    // avanzando entre ellos: el TOPE parte la locución a los 12 s y abre la
+    // SIGUIENTE (id nuevo), así que la locución viva al disparar la puerta de
+    // sesión ya NO es la primera. El contador de sesión sobrevive a ese cierre.
     for (let i = 0; i < 10; i += 1) empujarAudio(silencio(BLOQUE_MS));
-    for (let i = 0; i < Math.ceil(umbral / BLOQUE_MS) + 10; i += 1) {
-      empujarAudio(tono(BLOQUE_MS));
+    const umbral = Number(FLU_CONFIG.activeListen.restart.muteOpenLocutionMs);
+    let creados = vecesCreadoElReconocedor();
+    for (let t = 0; t < umbral + 3000; t += 500) {
+      for (let i = 0; i < 5; i += 1) empujarAudio(tono(BLOQUE_MS));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(500);
+      });
+      const ahora = vecesCreadoElReconocedor();
+      if (ahora > creados) {
+        // Chrome se reinició: onstart lo devuelve a "activo" (la puerta de
+        // sesión exige Chrome activo, igual que en el producto real).
+        act(() => {
+          h.recognition.onstart?.();
+        });
+        creados = ahora;
+      }
     }
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(1);
-    });
 
-    // Chrome MUDO: ningún resultado. La locución sigue abierta y VACÍA; pasada
-    // la ventana `muteOpenLocutionMs` el watchdog reconstruye (`kind=mudo`):
-    // sin una palabra escrita no hay frase que perder (medido 19:05: 37,2 s).
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(umbral + 1000);
-    });
+    // Chrome MUDO: ningún resultado. La puerta TEMPRANA (`stallMs`) ya disparó y
+    // la puerta de SESIÓN dispara a los `muteOpenLocutionMs` de habla sin texto,
+    // aunque el tope haya cerrado la ventana anterior por `maximo`.
+    expect(vista.result.current.status, 'la escucha sigue viva tras los rebuilds').toBe('listening');
     expect(vecesCreadoElReconocedor(), 'el watchdog no llegó a reconstruir').toBeGreaterThanOrEqual(2);
     // El paso que reconstruyó es el MEDIDO: `kind=mudo` con la abierta vacía.
     const pasos = (relayLog as unknown as { mock: { calls: unknown[][] } }).mock.calls
       .map((llamada) => String(llamada[2] || ''))
       .filter((mensaje) => mensaje.includes('[WD] rebuild'))
+    const sesion = pasos.filter(
+      (mensaje) => mensaje.includes('kind=mudo') && mensaje.includes('mudoTemprano=false'),
+    )
+    expect(sesion.length, 'la puerta de SESIÓN (20 s de habla sin texto) debe disparar').toBeGreaterThanOrEqual(1)
+    expect(
+      sesion.every((mensaje) => Number((mensaje.match(/mudoSesionMs=(\d+)/) || [])[1]) >= umbral),
+      'la puerta de sesión solo dispara con el contador de sesión completo',
+    ).toBe(true)
     expect(
       pasos.some((mensaje) => mensaje.includes('kind=mudo') && mensaje.includes('sinTextoEnAbierta=true')),
       'el rebuild debe declarar kind=mudo con la locución abierta vacía',
     ).toBe(true)
+
+    // El TOPE cerró la locución a los 12 s (causa `maximo`) y la viva es la
+    // ventana SIGUIENTE: eso se afirma, no se elimina.
+    const cierres = (relayLog as unknown as { mock: { calls: unknown[][] } }).mock.calls
+      .filter((llamada) => String(llamada[2] || '') === 'conversacion.locucion.cerrada')
+      .map((llamada) => (llamada[3] || {}) as { causa?: string; locutionId?: string })
+    const cierreMaximo = cierres.filter((cierre) => cierre.causa === 'maximo').pop()
+    expect(cierreMaximo, 'el tope debe cerrar la primera ventana por maximo').toBeTruthy()
+    const idSesion = (sesion[0]?.match(/locucionId=([^\s]+)/) || [])[1]
+    expect(idSesion, 'la locución viva de la puerta de sesión es la SIGUIENTE ventana').not.toBe(cierreMaximo?.locutionId)
 
     // La locución SOBREVIVIÓ al rebuild: el final que llega DESPUÉS (nuevo motor)
     // entra en la caja del módulo. Un final no cierra: todavía no hay fila.
@@ -337,6 +364,43 @@ describe('P9.60 - tuberia completa: el rebuild del watchdog no puede perder la l
     await act(async () => {
       vista.unmount();
       await Promise.resolve();
+    });
+  });
+});
+
+describe('watchdog — métrica de SESIÓN del Chrome mudo', () => {
+  const restartCfg = {
+    muteOpenLocutionMs: 20000,
+    stallRebuildMinMs: 1600,
+    stallMs: 4200,
+    silentMicStallMs: 4200,
+  };
+
+  // FALSIFICACIÓN del contrato: una fila LOCAL commiteada cada 12 s mueve
+  // `sinceMeaningful` a 0 (su final entra por `onresult`), pero NO reinicia la
+  // métrica de sesión. Aun así el rebuild debe disparar a los 20 s de habla sin
+  // texto de Chrome. Si esta aserción no dispara, es ROJO.
+  it('con filas LOCALES recientes (sinceMeaningful=0) el rebuild de sesión AÚN dispara a los 20 s', () => {
+    const base = {
+      recognitionActive: true,
+      hasEmptyOpenLocution: true,
+      sinceMeaningful: 0,
+      sinceRebuild: 60000,
+      muteSpeechMs: 20000,
+      muteRebuildDue: true,
+      restartCfg,
+    };
+    expect(resolveWatchdogStep(base)).toEqual({
+      action: WATCHDOG_ACTIONS.REBUILD,
+      kind: 'mudo',
+    });
+    // Sin el contador completo no hay rebuild: el umbral no se baja.
+    expect(resolveWatchdogStep({ ...base, muteSpeechMs: 19999 })).toEqual({
+      action: WATCHDOG_ACTIONS.NONE,
+    });
+    // Texto de Chrome (o cambio de motor) reinicia el contador: no hay mudo.
+    expect(resolveWatchdogStep({ ...base, muteSpeechMs: 0 })).toEqual({
+      action: WATCHDOG_ACTIONS.NONE,
     });
   });
 });

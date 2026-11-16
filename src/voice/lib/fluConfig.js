@@ -4,7 +4,7 @@ import { SPEECH_LOCALES, DEFAULT_SPEECH_LOCALE, BILINGUAL_LOCALES } from '../../
 import { DEFAULT_SAMPLE_RATE } from './audioConstants.js'
 import { RESET_AVATAR_COLOR_PHRASES } from './voiceCommandPhrases.js'
 import { COMMAND_IDS } from './commandIds.js'
-import { LOCAL_FALLBACK_DEFAULTS, LOCAL_FINAL_DEFAULTS, VAD_DEFAULTS } from './asr/asrDefaults.js'
+import { LOCAL_FALLBACK_DEFAULTS, VAD_DEFAULTS } from './asr/asrDefaults.js'
 import { SPEAKER_ASSIGN } from './speakerAssignDefaults.js'
 
 /** Entorno de desarrollo: los defaults de diagnostico solo se encienden aqui. */
@@ -2041,34 +2041,6 @@ export const FLU_CONFIG = {
       /** Gate del MOTOR LOCAL: sin HABLA en el audio no se emite (B3 intacto). */
       finalMinSpeechLikeMs: LOCAL_FALLBACK_DEFAULTS.finalMinSpeechLikeMs,
       partialMinSpeechLikeMs: LOCAL_FALLBACK_DEFAULTS.partialMinSpeechLikeMs,
-    },
-    /**
-     * RESPALDO LOCAL por TRAMO (docs/CONTRATO-ASR-LOCAL.md): Chrome sigue siendo
-     * el transcriptor y el dueño de comandos; Whisper local entra SOLO cuando el
-     * final de Chrome es vacío o de rendimiento implausible para el audio del
-     * tramo, se espera ANTES del commit (una fila, un texto) y su texto NUNCA
-     * ejecuta acciones. Los umbrales están derivados de la grabación de
-     * referencia b6d82bca (ver `LOCAL_FINAL_DEFAULTS`, dueño de los valores).
-     */
-    localFinal: {
-      enabled: LOCAL_FINAL_DEFAULTS.enabled,
-      modelId: LOCAL_FINAL_DEFAULTS.modelId,
-      timeoutMs: LOCAL_FINAL_DEFAULTS.timeoutMs,
-      /**
-       * ENDPOINT del sidecar local (faster-whisper). Vive AQUÍ y solo aquí: la
-       * auditoría de hardcodes exige que las URLs estén en config, y el cliente
-       * (`asr/sidecarTranscriber.ts`) no lleva endpoint propio. Servicio
-       * apagado o URL vacía = el respaldo por tramo queda deshabilitado y
-       * Chrome manda.
-       */
-      sidecarUrl: 'http://127.0.0.1:8765',
-      sidecarProbeMs: LOCAL_FINAL_DEFAULTS.sidecarProbeMs,
-      minPalabras: LOCAL_FINAL_DEFAULTS.minPalabras,
-      minPalabrasPorSegundo: LOCAL_FINAL_DEFAULTS.minPalabrasPorSegundo,
-      minVozMs: LOCAL_FINAL_DEFAULTS.minVozMs,
-      minAudioSegundos: LOCAL_FINAL_DEFAULTS.minAudioSegundos,
-      maxPalabrasPorSegundo: LOCAL_FINAL_DEFAULTS.maxPalabrasPorSegundo,
-      minPalabrasUnicasRatio: LOCAL_FINAL_DEFAULTS.minPalabrasUnicasRatio,
     },
     /** Umbrales pausa/cola ASR — único bloque numérico (docs/reglas-duras.md). 0 en *MaxWords = solo heurística. */
     pauseAndWeakAsr: {

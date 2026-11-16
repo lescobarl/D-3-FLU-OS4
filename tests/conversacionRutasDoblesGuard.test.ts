@@ -18,8 +18,7 @@
  *    `resultIndex`.
  *  - No se descarta por prefijo de texto (`previo.includes(nuevo)`).
  *  - El cierre de la locución tiene DOS puertas medidas (voz distinta o
- *    TIEMPO: silencio ≥ silenceCloseMs / reloj del final / tope de duración);
- *    el final del ASR no es una tercera.
+ *    silencio ≥ silenceCloseMs); el final del ASR no es una tercera.
  *  - El dedupe del despacho tiene UN dueño (el plan en audioMath); el cableado
  *    no filtra por texto. El recorte del prefijo de fila tiene UN dueño.
  *

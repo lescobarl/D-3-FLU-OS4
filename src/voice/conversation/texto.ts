@@ -347,11 +347,7 @@ export function crearFlujoTexto({
       tramoOrigen,
     )
     // El resultado actualizó la frase viva: la caja vuelve a la línea abierta.
-    // `mostrarPendiente('')` sale sin emitir si el pendiente ya estaba vacío;
-    // por eso el texto que solo crece en la línea ABIERTA no llegaba a la caja
-    // hasta el cierre (medido 2026-11-13: la transcripción se pintaba por lotes).
     sesion.mostrarPendiente('')
-    sesion.emitirCaja()
   }
 
   /** Idioma de la locución: la nube queda fija al arrancar; local autodetecta. */

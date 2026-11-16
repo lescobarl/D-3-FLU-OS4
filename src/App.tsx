@@ -4118,7 +4118,7 @@ const {
                                 activeTab={activeTab}
                                 expandedFrameId={expandedFrameId}
                                 onToggleExpand={handleToggleExpand}
-                                liveTranscript={liveTranscript}
+                                visiblePhrase={visiblePhrase}
                                 conversationHistory={integrationStore.conversationHistory}
                                 voiceParticipants={voiceParticipants}
                                 onRenameProfile={handleRenameProfile}

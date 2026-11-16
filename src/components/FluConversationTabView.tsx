@@ -22,11 +22,10 @@ export interface FluConversationTabViewProps {
     /** Alterna la expansión de un frame por su id. */
     onToggleExpand: (frameId: string) => void;
     /**
-     * Frase viva del reconocedor (misma fuente que la caja). Se pinta como la
-     * primera fila de la bitácora mientras se dicta; al commitearla desaparece y
-     * deja su lugar a la fila real. No se escribe en el store: es presentación.
+     * Frase visible canónica (§9.3): misma cadena que burbuja del avatar y barra.
+     * La deriva App (`selectVisiblePhrase`) una sola vez; la bitácora NO recalcula.
      */
-    liveTranscript: string;
+    visiblePhrase: string;
     /** Historial de conversación (entradas de FLU + usuarios). */
     conversationHistory: readonly ConversationEntry[];
     /** Participantes de voz: label + profileId (unión historial + perfiles). */
@@ -45,13 +44,16 @@ export function FluConversationTabView({
     activeTab,
     expandedFrameId,
     onToggleExpand,
-    liveTranscript,
+    visiblePhrase,
     conversationHistory,
     voiceParticipants,
     onRenameProfile,
     onRemoveParticipant,
 }: FluConversationTabViewProps) {
     const ws = FLU_CONFIG.ui?.workspace || {};
+    // §9.3: la frase visible llega ya derivada desde App (misma que burbuja y
+    // barra). La bitácora no vuelve a seleccionar ni normalizar.
+    const livePhrase = String(visiblePhrase || '');
 
     return (
         <FluTabPanel tabId="conversation" activeTab={activeTab} className="flu-tab-panel--conversation">
@@ -66,9 +68,14 @@ export function FluConversationTabView({
                     onToggleExpand,
                 }}
             >
+                {/* OS3 parity: live phrase display above conversation log — sin label para ahorrar espacio */}
+                <div className="conversation-live-phrase frame-content__response">
+                    <div className="conversation-live-phrase__scroll">
+                        <span>{livePhrase || '\u00a0'}</span>
+                    </div>
+                </div>
                 <ConversationLog
                     entries={conversationHistory}
-                    liveText={liveTranscript}
                     emptyLabel={ws.conversationEmpty || 'Sin conversación'}
                 />
             </PanelFrame>

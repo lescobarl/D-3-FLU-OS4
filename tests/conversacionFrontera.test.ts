@@ -70,53 +70,6 @@ describe('regla 2 — sin locución abierta no hay cierre', () => {
   })
 })
 
-describe('regla 2 — tope de locución (maxLocutionMs)', () => {
-  const CON_TOPE: UmbralesFrontera = {
-    minSilenceMs: 900,
-    silenceCloseMs: 5000,
-    maxLocutionMs: 12000,
-  }
-  const conDuracion = (duracionMs: number, hayVoz = true): EntradaFrontera => ({
-    medida: { hayVoz, silencioMs: 0 },
-    textoAjeno: false,
-    abierta: true,
-    duracionMs,
-  })
-
-  it('con voz presente, la duración en el tope cierra por maximo', () => {
-    expect(decidir(conDuracion(12000), CON_TOPE)).toEqual({ cerrar: true, causa: 'maximo' })
-  })
-
-  it('un milisegundo menos no cierra: la voz sigue ganando', () => {
-    expect(decidir(conDuracion(11999), CON_TOPE)).toEqual({ cerrar: false, causa: null })
-  })
-
-  it('sin duración medida el tope no evalúa (las puertas viejas no lo pasan)', () => {
-    expect(decidir(entrada(0, false, true), CON_TOPE)).toEqual({ cerrar: false, causa: null })
-  })
-
-  it('con el tope apagado (0) la duración no cierra', () => {
-    expect(decidir(conDuracion(60000), { ...CON_TOPE, maxLocutionMs: 0 })).toEqual({
-      cerrar: false,
-      causa: null,
-    })
-  })
-
-  it('si además llegó el silencio de cierre, la causa es el silencio (final real)', () => {
-    expect(
-      decidir(
-        {
-          medida: { hayVoz: false, silencioMs: 5000 },
-          textoAjeno: false,
-          abierta: true,
-          duracionMs: 12000,
-        },
-        CON_TOPE,
-      ),
-    ).toEqual({ cerrar: true, causa: 'silencio' })
-  })
-})
-
 describe('regla 2 — los umbrales salen de la tabla, no de literales', () => {
   it('la config real expone los dos umbrales y el tiempo sale de fluConfig', () => {
     expect(CONVERSACION_CONFIG.minSilenceMs).toBe(900)

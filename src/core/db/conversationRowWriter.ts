@@ -12,11 +12,6 @@
 import { fluDb, type ConversationRow, type SyncTuple } from './fluDatabase.ts'
 import { buildSyncTuple } from './syncTuple.ts'
 import { mapearMetaConversacion, metaDeFilaConversacion } from './conversationRowMapping.ts'
-import {
-  esOrigenLocal,
-  ORIGEN_TEXTO,
-  type OrigenTranscripcion,
-} from '../../types/bridge.ts'
 
 /** Registro plano de una locución, tal como lo entrega el almacén del módulo. */
 export type RegistroConversacion = Readonly<{
@@ -48,11 +43,8 @@ export type RegistroConversacion = Readonly<{
   provisional: boolean
   /** Motivo declarado del cierre. */
   reason: string
-  /**
-   * Origen del TEXTO cuando NO es el transcriptor primario (`local` = respaldo
-   * por tramo). Ausente = `chrome` (las filas anteriores solo pudieron serlo).
-   */
-  origen?: OrigenTranscripcion
+  /** Origen del texto (ausente = 'chrome'; 'local' = transcriptor on-device). */
+  origenTranscripcion?: 'chrome' | 'local'
   /** Tupla de sincronización ya calculada por el almacén. */
   sync: SyncTuple
 }>
@@ -97,7 +89,7 @@ export function registroDesdeFilaConversacion(
     overlap: canonica.overlap,
     provisional: canonica.provisional,
     reason: canonica.reason,
-    ...(esOrigenLocal(canonica.origenTranscripcion) ? { origen: ORIGEN_TEXTO.LOCAL } : {}),
+    origenTranscripcion: canonica.origenTranscripcion ?? 'chrome',
     sync: fila.sync,
   }
 }
@@ -127,7 +119,7 @@ export async function escribirRegistroConversacion(
       overlap: registro.overlap,
       provisional: registro.provisional,
       reason: registro.reason,
-      ...(registro.origen ? { origen: registro.origen } : {}),
+      origenTranscripcion: registro.origenTranscripcion,
     },
     registro.sessionId,
   )

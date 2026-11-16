@@ -45,6 +45,7 @@ export type {
 } from './frontera.ts'
 export { construirFila } from './fila.ts'
 export { resolverEtiqueta } from './fila.ts'
+export { esFilaNoAccionable } from './fila.ts'
 export type {
   CierreLocucion,
   EntradaEtiqueta,

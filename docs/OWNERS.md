@@ -39,7 +39,7 @@ mismo commit. Si no puedes borrarlo ahora, no añadas el nuevo ahora.
 
 | Pregunta | Dueño | Nota |
 |---|---|---|
-| ¿La locución se cierra? ¿Por qué causa? | `frontera.ts:59` `decidirFrontera` | Única condición de cierre: `voz` / `frontera` / `silencio` / `maximo` (tope de duración). |
+| ¿La locución se cierra? ¿Por qué causa? | `frontera.ts:59` `decidirFrontera` | Única condición de cierre: `voz` / `frontera` / `silencio`. |
 | ¿Cómo se cierra y se commitea una locución? | `cierre.ts:211` `crearReglasCierre` (`cerrarLocucion` 535, `commitar` 456, `guardarFila` 436, `reetiquetarFila` 665) | Único emisor de `row.committed`. |
 | ¿Cómo se construye la fila? | `fila.ts:164` `construirFila` | Texto, voz, etiqueta y motivo. |
 | ¿Cómo se resuelve la etiqueta del hablante? | `fila.ts:126` `resolverEtiqueta` | Nombre solo con evidencia; nunca `?`. |
@@ -90,13 +90,6 @@ mismo commit. Si no puedes borrarlo ahora, no añadas el nuevo ahora.
 | Pregunta | Dueño | Nota |
 |---|---|---|
 | ¿Qué tiempos, umbrales y motor se usan? | `ports.ts:334` `CONVERSACION_CONFIG` | Única lectura de `getTranscriptPauseCfg().srGapCommitMs`. |
-
-## ASR local (respaldo por tramo)
-
-| Pregunta | Dueño | Nota |
-|---|---|---|
-| ¿Cuándo se pide el respaldo local y con qué evidencia? | `cierre.ts:565` `necesitaRespaldoLocal` · `cierre.ts:594` `respaldarConLocal` | Disparador antes de transcribir: comando, sin voz, audio corto, texto de Chrome plausible. Consumidor único: `cerrarLocucion`; la fila se construye DESPUÉS del resultado. |
-| ¿Cómo se habla con el sidecar local de transcripción (faster-whisper)? | `src/voice/lib/asr/sidecarTranscriber.ts:1` `crearSidecarTranscripcion` | Contrato HTTP (`/salud`, `/transcribir`), base64 float32 LE y tope con `AbortController`. Consumidor único: `adapters.ts` `crearTranscriptorSidecarProducto`. La URL vive en `fluConfig.js`; el cliente no tiene endpoint propio. Kill list: `crearTranscriptorWhisperProducto` como ruta del producto (retirado en el mismo cambio; el módulo WASM sigue siendo dueño de la escucha viva y del laboratorio). |
 
 ## Lo que NO es ruta doble
 

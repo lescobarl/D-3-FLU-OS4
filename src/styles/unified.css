@@ -2193,6 +2193,17 @@
   font-weight: var(--weight-normal);
 }
 
+/* Live-phrase del pizarrón: conserva su tipografía cuando NO está vacío
+   (antes heredaba de .frame-content__response; ahora la clase es propia del bloque response).
+   La transcripción en vivo se muestra en itálica y azul para distinguirla de la respuesta. */
+.conversation-live-phrase {
+  font-size: var(--text-md);
+  line-height: 1.5;
+  color: #4da6ff;
+  font-weight: var(--weight-normal);
+  font-style: italic;
+}
+
 /* La respuesta de Flu puede tener varias partes (p. ej. la respuesta sustantiva
    + la pregunta final "¿te gustaría saber algo más?"). El límite de 80px ocultaba
    la parte final tras un scroll apenas visible: FLU la pronuncia completa pero en
@@ -2204,6 +2215,7 @@
 }
 
 /* Pizarrón: frames vacíos (solo \u00a0) colapsados — recuperan espacio para las preguntas */
+.frame-content--workspace .conversation-live-phrase.is-empty,
 .frame-content--workspace .frame-content__response.is-empty {
   margin: 0;
   padding: 0;
@@ -3737,11 +3749,6 @@
   line-height: 1.25;
   color: var(--text-primary);
   margin: 0;
-}
-/* Frase que se está dictando: misma fila, tono vivo y sin hablante resuelto. */
-.audit-item--live p {
-  color: var(--accent-cyan);
-  font-style: italic;
 }
 .audit-item__vector {
   font-size: var(--text-xs);

@@ -46,9 +46,9 @@ export const WATCHDOG_ACTIONS = Object.freeze({
  * @param {boolean} [m.restartPending] hay un reinicio de Chrome en vuelo.
  * @param {boolean} [m.probePending] hay una ventana de prueba de Chrome abierta.
  * @param {boolean} [m.probeExpired] la ventana de prueba vencio.
- * @param {boolean} [m.hasRecentSpeech] hay VOZ medida en la ventana PCM reciente.
- *   La exige la rama `mudo` temprana (voz + locucion vacia). El `stall` NO la
- *   exige cuando no hay locucion abierta: sin frase viva no hay texto que cortar.
+ * @param {boolean} [m.hasRecentSpeech] hay VOZ medida en la ventana PCM reciente
+ *   (`stallVoiceWindowMs`). Un rebuild `stall` con voz presente corta el segmento
+ *   que Chrome esta reconociendo; el dueno lo aporta desde `voicedActivity`.
  * @param {boolean} [m.hasOpenLocution] el modulo de conversacion tiene una
  *   locucion ABIERTA (hecho de su dueno: la instantanea de la sesion).
  *   Medido 2026-11-12 18:22: la voz de la mujer no alcanzaba el piso de
@@ -75,7 +75,15 @@ export const WATCHDOG_ACTIONS = Object.freeze({
  *   `Hablante XX` (sin `vozId`: el nombre no alcanzo a las filas de la voz).
  *   Ambas ramas `mudo` exigen que la locucion haya acumulado su propio audio:
  *   sin el piso, un hueco global largo dispara sobre una locucion recien
- *   abierta y corta la frase que Chrome todavia esta procesando.
+ *   abierta y corta la frase que Chrome todavia esta procesando. SOLO mide la
+ *   puerta TEMPRANA (`stallMs`); la puerta de sesion usa `muteSpeechMs`.
+ * @param {number} [m.muteSpeechMs] ms de SESION con la locucion abierta y SIN
+ *   texto de Chrome, acumulados a traves de las ventanas que parte el tope.
+ *   NO se reinicia al cerrar por `maximo` ni al abrir la siguiente; SOLO con
+ *   texto de Chrome o cambio de motor. Las filas LOCALES no lo reinician (Chrome
+ *   sigue mudo y la recuperacion debe ocurrir igual).
+ * @param {boolean} [m.muteRebuildDue] la puerta de sesion no se repitio dentro
+ *   de la ultima ventana `muteOpenLocutionMs` (evita un rebuild por cooldown).
  * @param {boolean} [m.recoveryDue] toca reintentar Chrome (inactividad de FINALES
  *   aceptados o numero de segmentos; lo mide el dueno del fallback).
  * @param {boolean} [m.fluSpeaking] FLU esta HABLANDO (hecho del dueno
@@ -98,6 +106,8 @@ export function resolveWatchdogStep({
   hasEmptyOpenLocution = false,
   openLocutionMs = 0,
   mudoTempranoHecho = false,
+  muteSpeechMs = 0,
+  muteRebuildDue = true,
   recoveryDue = false,
   fluSpeaking = false,
   restartCfg = {},
@@ -142,29 +152,29 @@ export function resolveWatchdogStep({
     return { action: WATCHDOG_ACTIONS.REBUILD, kind: 'mudo', early: true }
   }
 
-  // MUDO: Chrome activo, sin resultados y con la locucion abierta VACIA (medido
-  // 19:05: 37,2 s). No hay frase que proteger: nada de lo que Chrome ignoro
-  // esta escrito, asi que reconstruir no puede cortar texto. El umbral (20 s)
-  // queda por ENCIMA del tick de 8,4 s de 18:22 — ahi la locucion abierta si
-  // era una frase viva de la mujer y el rebuild la partia — y DENTRO de la
-  // ventana medida de 37,2 s.
+  // MUDO DE SESION: Chrome activo y la locucion abierta VACIA. El tope parte la
+  // locucion cada 12 s y abre la siguiente, asi que el audio de UNA ventana
+  // nunca llega a 20 s; lo que se mide es el TIEMPO DE SESION con la abierta
+  // vacia (`muteSpeechMs`), que sobrevive al cierre por `maximo` y a la ventana
+  // nueva. No lo reinician las filas LOCALES (Chrome sigue mudo); SOLO el texto
+  // de Chrome o el cambio de motor. Sin frase escrita no hay texto que cortar.
   if (
     recognitionActive &&
     hasEmptyOpenLocution &&
-    Number(openLocutionMs) >= Number(restartCfg.muteOpenLocutionMs) &&
-    Number(sinceMeaningful) >= Number(restartCfg.muteOpenLocutionMs) &&
+    Number(muteSpeechMs) >= Number(restartCfg.muteOpenLocutionMs) &&
+    muteRebuildDue === true &&
     Number(sinceRebuild) >= cooldown
   ) {
     return { action: WATCHDOG_ACTIONS.REBUILD, kind: 'mudo' }
   }
 
-  // STALL = Chrome activo pero mudo. La proteccion es la LOCUCION ABIERTA: si
-  // hay una frase viva no se toca (medido 18:22, mujer con 30-480 ms de voz por
-  // ventana). Sin locucion abierta NO hay texto que cortar aunque el PCM mida
-  // voz o ruido de sala: se reconstruye al compas del respaldo, antes de que el
-  // hablante empiece. El `dead` por onend sigue siendo la puerta del Chrome que
-  // termino.
+  // STALL = Chrome activo pero mudo. Con VOZ reciente NO se reconstruye: Chrome
+  // puede estar procesando un segmento largo y el reinicio lo tira. Con
+  // LOCUCION ABIERTA tampoco: es habla que el piso PCM no alcanza a ver
+  // (medido 18:22, mujer con 30-480 ms de voz por ventana). El silencio real
+  // (sin voz ni locucion) y el `dead` por onend son las puertas de recuperacion.
   if (
+    !hasRecentSpeech &&
     !hasOpenLocution &&
     recognitionActive &&
     Number(sinceMeaningful) >= Number(restartCfg.silentMicStallMs) &&
@@ -178,6 +188,7 @@ export function resolveWatchdogStep({
   }
 
   if (
+    !hasRecentSpeech &&
     !hasOpenLocution &&
     Number(sinceMeaningful) >= Number(restartCfg.stallMs) &&
     Number(sinceRebuild) >= cooldown

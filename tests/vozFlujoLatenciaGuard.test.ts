@@ -14,25 +14,12 @@ const baseline = JSON.parse(leer('scripts/voz-flujo-baseline.json'))
 describe('flujo de voz: watchdog y cierre medidos', () => {
   const cfg = getConversationRestartConfig(true)
 
-  it('con voz reciente y SIN locución abierta SÍ reinicia: golpe previo al habla', () => {
+  it('con voz reciente NO reinicia Chrome por stall', () => {
     const step = resolveWatchdogStep({
       sinceMeaningful: Number(cfg.stallMs) + 1000,
       sinceRebuild: Number(cfg.stallRebuildMinMs) + 1,
       recognitionActive: true,
       hasRecentSpeech: true,
-      hasOpenLocution: false,
-      restartCfg: cfg,
-    })
-    expect(step).toEqual({ action: WATCHDOG_ACTIONS.REBUILD, kind: 'stall' })
-  })
-
-  it('con voz reciente y locución ABIERTA no reinicia: la frase viva manda', () => {
-    const step = resolveWatchdogStep({
-      sinceMeaningful: Number(cfg.stallMs) + 1000,
-      sinceRebuild: Number(cfg.stallRebuildMinMs) + 1,
-      recognitionActive: true,
-      hasRecentSpeech: true,
-      hasOpenLocution: true,
       restartCfg: cfg,
     })
     expect(step.action).toBe(WATCHDOG_ACTIONS.NONE)
@@ -90,6 +77,7 @@ describe('flujo de voz: watchdog y cierre medidos', () => {
       hasOpenLocution: true,
       hasEmptyOpenLocution: true,
       openLocutionMs: baseline.measuredMudo.locucionAbiertaSinTextoMs,
+      muteSpeechMs: baseline.measuredMudo.locucionAbiertaSinTextoMs,
       restartCfg: cfg,
     })
     expect(step).toEqual({ action: WATCHDOG_ACTIONS.REBUILD, kind: 'mudo' })
@@ -122,14 +110,15 @@ describe('flujo de voz: watchdog y cierre medidos', () => {
       hasOpenLocution: true,
       hasEmptyOpenLocution: true,
       openLocutionMs: Number(cfg.muteOpenLocutionMs),
+      muteSpeechMs: 8383,
       restartCfg: cfg,
     }
     expect(resolveWatchdogStep(tick1822)).toEqual({ action: WATCHDOG_ACTIONS.NONE })
     // Justo debajo del umbral no hay rebuild; en el umbral, sí.
-    expect(resolveWatchdogStep({ ...tick1822, sinceMeaningful: umbral - 1 })).toEqual({
+    expect(resolveWatchdogStep({ ...tick1822, muteSpeechMs: umbral - 1 })).toEqual({
       action: WATCHDOG_ACTIONS.NONE,
     })
-    expect(resolveWatchdogStep({ ...tick1822, sinceMeaningful: umbral })).toEqual({
+    expect(resolveWatchdogStep({ ...tick1822, muteSpeechMs: umbral })).toEqual({
       action: WATCHDOG_ACTIONS.REBUILD,
       kind: 'mudo',
     })
@@ -182,12 +171,12 @@ describe('flujo de voz: watchdog y cierre medidos', () => {
     expect(resolveWatchdogStep({ ...tick, mudoTempranoHecho: true })).toEqual({
       action: WATCHDOG_ACTIONS.NONE,
     })
-    // La red de 20 s NO se retira: si el primer golpe no bastó, el `mudo` de
-    // `muteOpenLocutionMs` sigue actuando (hoy disparó a los 20.083 s).
+    // La red de 20 s NO se retira: si el primer golpe no bastó, la puerta de
+    // SESIÓN (mismo umbral, contador acumulado) sigue actuando.
     expect(
       resolveWatchdogStep({
         ...tick,
-        sinceMeaningful: 20083,
+        muteSpeechMs: Number(cfg.muteOpenLocutionMs),
         mudoTempranoHecho: true,
       }),
     ).toEqual({ action: WATCHDOG_ACTIONS.REBUILD, kind: 'mudo' })
@@ -257,14 +246,12 @@ describe('flujo de voz: watchdog y cierre medidos', () => {
     expect(src).toMatch(/hasRecentSpeech/)
   })
 
-  it('la decisión stall protege la locución abierta y no exige silencio sin locución', () => {
+  it('la decisión stall exige ausencia de voz Y de locución abierta', () => {
     const src = leer('src/voice/lib/asrWatchdog.js')
+    expect(src).toMatch(/!hasRecentSpeech[\s\S]{0,260}silentMicStallMs/)
+    expect(src).toMatch(/!hasRecentSpeech[\s\S]{0,260}stallMs/)
     expect(src).toMatch(/!hasOpenLocution[\s\S]{0,260}silentMicStallMs/)
     expect(src).toMatch(/!hasOpenLocution[\s\S]{0,260}stallMs/)
-    // Sin locución abierta no hay frase que cortar: la voz/ruido de sala no
-    // puede volver a bloquear el rebuild previo al habla (defecto 2026-11-13).
-    expect(src).not.toMatch(/!hasRecentSpeech[\s\S]{0,260}silentMicStallMs/)
-    expect(src).not.toMatch(/!hasRecentSpeech[\s\S]{0,260}stallMs/)
     const consumidor = leer('src/voice/hooks/useLocalAsrFallback.js')
     expect(consumidor).toMatch(/hasOpenLocution: hayLocucionAbierta/)
     const hook = leer('src/voice/hooks/useFluVoiceAssistant.js')
@@ -286,7 +273,7 @@ describe('flujo de voz: watchdog y cierre medidos', () => {
     const paso = leer('src/voice/lib/asrWatchdog.js')
     expect(paso).toMatch(/hasEmptyOpenLocution[\s\S]{0,260}muteOpenLocutionMs/)
     expect(paso).toMatch(/openLocutionMs[\s\S]{0,160}stallMs/)
-    expect(paso).toMatch(/openLocutionMs[\s\S]{0,160}muteOpenLocutionMs/)
+    expect(paso).toMatch(/muteSpeechMs[\s\S]{0,160}muteOpenLocutionMs/)
     expect(paso).toMatch(/hasRecentSpeech[\s\S]{0,200}stallMs/)
     expect(paso).toMatch(/!mudoTempranoHecho[\s\S]{0,200}stallMs/)
     expect(paso).toMatch(/early: true/)

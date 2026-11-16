@@ -52,7 +52,7 @@ const UUID_A = '11111111-1111-4111-8111-111111111111'
 const UUID_B = '22222222-2222-4222-8222-222222222222'
 
 const MOTIVOS_CIERRE: readonly MotivoCierre[] = ['user', 'system', 'watchdog']
-const CAUSAS_CIERRE = ['silencio', 'stop', 'asr', 'voz'] as const
+const CAUSAS_CIERRE = ['silencio', 'stop', 'asr', 'voz', 'maximo'] as const
 const MOTIVOS_DESCARTE = ['tramoInvalido', 'sinTexto', 'eco', 'huerfano'] as const
 
 const fuenteDe = (ruta: string): string =>

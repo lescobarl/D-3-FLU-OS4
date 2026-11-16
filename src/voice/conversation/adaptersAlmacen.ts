@@ -16,10 +16,8 @@ import type {
   Fila,
   FilaNueva,
   MotivoCierre,
-  OrigenTranscripcion,
   RelojPort,
 } from './ports.ts'
-import { esOrigenLocal, ORIGEN_TEXTO } from '../../types/bridge.ts'
 
 /** Tupla de sincronización canónica (misma forma que `SyncTuple` de core/db). */
 export type TuplaSync = Readonly<{
@@ -45,12 +43,8 @@ export type RegistroFila = Readonly<{
   overlap: boolean
   provisional: boolean
   reason: string
-  /**
-   * Origen del TEXTO cuando NO es el primario (`local`). Su ausencia se lee
-   * como Chrome: las filas anteriores a este campo solo pudieron ser de Chrome
-   * y las sanas de hoy tampoco declaran lo evidente.
-   */
-  origen?: OrigenTranscripcion
+  /** Origen del texto (ausente = 'chrome'; 'local' = transcriptor on-device). */
+  origenTranscripcion?: 'chrome' | 'local'
   sync: TuplaSync
 }>
 
@@ -84,8 +78,7 @@ function aRegistro(fila: FilaNueva, sync: TuplaSync): RegistroFila {
     overlap: fila.overlap,
     provisional: fila.provisional,
     reason: fila.reason,
-    // Solo el origen NO primario viaja al registro (Chrome = ausencia).
-    ...(esOrigenLocal(fila.origen) ? { origen: ORIGEN_TEXTO.LOCAL } : {}),
+    origenTranscripcion: fila.origenTranscripcion,
     sync,
   }
 }
@@ -113,7 +106,7 @@ function aFila(registro: RegistroFila): Fila {
     overlap: registro.overlap,
     provisional: registro.provisional,
     reason: registro.reason as MotivoCierre,
-    ...(esOrigenLocal(registro.origen) ? { origen: ORIGEN_TEXTO.LOCAL } : {}),
+    origenTranscripcion: registro.origenTranscripcion,
     revision: registro.sync.revision,
     updated_at: Date.parse(registro.sync.updated_at),
     deleted: registro.sync.deleted,

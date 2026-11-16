@@ -16,23 +16,21 @@ const showEmbeddingPreview = Boolean(FLU_CONFIG.debug?.showEmbeddingPreview)
  */
 const FilaDeConversacion = memo(function FilaDeConversacion({ fila }) {
   const reloj = formatRowClock(fila.entry) || formatCompactLogText(fila.entry?.timestamp)
-  const clase = "audit-item" + (fila.isSystem ? " audit-item--system" : "") + (fila.live ? " audit-item--live" : "")
+  const clase = "audit-item" + (fila.isSystem ? " audit-item--system" : "")
   return (
     <div className={clase}>
       <div className="audit-item__meta">
         <span className="audit-item__clock">{reloj}</span>
-        {fila.speakerName ? <span className="audit-item__speaker">{fila.speakerName}</span> : null}
+        <span className="audit-item__speaker">{fila.speakerName}</span>
       </div>
       {fila.vectorPreview ? <span className="audit-item__vector">{fila.vectorPreview}</span> : null}
       <p>{fila.text}</p>
     </div>
   )
 })
-export const ConversationLog = memo(function ConversationLog({ entries = [], emptyLabel, liveText = '' }) {
+export const ConversationLog = memo(function ConversationLog({ entries = [], emptyLabel }) {
   const listRef = useRef(null)
   const entryCountRef = useRef(0)
-  const liveVisibleRef = useRef(false)
-  const live = String(liveText || '').trim()
   // Cache de filas por ENTRADA: si el texto y el nombre no cambian, la fila conserva su objeto
   // (la fila memoizada no se redibuja). Un cambio de VOZ cambia el nombre -> fila nueva -> se
   // redibuja SOLO esa.
@@ -47,21 +45,6 @@ export const ConversationLog = memo(function ConversationLog({ entries = [], emp
     // presentacion que lo escondia se retiraron: no hay duplicado que tapar.
     const visibleEntries = entries.filter((entry) => !entry?.meta?.systemEvent)
     const rows = []
-    // La frase que se está dictando AHORA es la primera fila de la bitácora:
-    // misma fuente que la caja (liveTranscript), sin escribir una fila provisional
-    // en el store ni duplicar el historial. Al commitear, esta fila desaparece y
-    // aparece la fila real con el mismo texto final.
-    if (live) {
-      rows.push({
-        entry: { id: '__live__', role: 'user', text: live, timestamp: Date.now() },
-        id: '__live__',
-        speakerName: '',
-        vectorPreview: '',
-        text: formatCompactLogText(live),
-        isSystem: false,
-        live: true,
-      })
-    }
     for (let index = visibleEntries.length - 1; index >= 0; index -= 1) {
       const entry = visibleEntries[index]
       const isSystem = entry.role === 'system'
@@ -85,19 +68,17 @@ export const ConversationLog = memo(function ConversationLog({ entries = [], emp
       if (!sinCambios) filasCacheRef.current.set(entry, fila)
     }
     return rows
-  }, [entries, live])
+  }, [entries])
 
   useEffect(() => {
     const node = listRef.current
     if (!node) return
     const isNewRow = entries.length > entryCountRef.current
     entryCountRef.current = entries.length
-    const liveStarted = live !== '' && !liveVisibleRef.current
-    liveVisibleRef.current = live !== ''
-    if (isNewRow || liveStarted) {
+    if (isNewRow) {
       node.scrollTop = 0
     }
-  }, [entries, live])
+  }, [entries])
 
   if (!displayRows.length) {
     return <p className="panel__hint">{emptyLabel}</p>

@@ -64,6 +64,7 @@ vi.mock('../src/voice/conversation/index', () => ({
   }),
   grabarRevisionDeFila: vi.fn(),
   traeFinal: () => true,
+  esFilaNoAccionable: () => false,
 }))
 
 import { crearMotorConversacionHook } from '../src/voice/compose/conversationMotorProducto.js'
@@ -120,14 +121,6 @@ describe('bautizo de voz — un disparo por locución', () => {
 
   it('una fila sin mandato de nombre no bautiza a nadie', () => {
     commitear({ ...FILA, texto: 'hola, ¿qué tal?' })
-    expect(hoisted.registrarNombre).not.toHaveBeenCalled()
-  })
-
-  it('CONTRATO ASR LOCAL: una fila `origen: local` no bautiza (el respaldo no es accionable)', () => {
-    // §8 de docs/CONTRATO-ASR-LOCAL.md: el texto del respaldo por tramo no
-    // ejecuta comandos ni bautiza voces. Falsificación: sin la condición, la
-    // misma fila que sí bautiza arriba lo haría también aquí.
-    commitear({ ...FILA, origen: 'local' })
     expect(hoisted.registrarNombre).not.toHaveBeenCalled()
   })
 })

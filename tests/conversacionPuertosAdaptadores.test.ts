@@ -71,9 +71,12 @@ describe('configuración del plan — una sola fuente', () => {
       minSilenceMs: 900,
       silenceCloseMs: Number(getTranscriptPauseCfg().srGapCommitMs),
       finalCloseConfirmMs: 800,
-      // Tope de locución: la ventana de 12 s medida con faster-whisper small
-      // (§5-quinquies); el respaldo transcribe por ventana.
       maxLocutionMs: 12000,
+      transcriptorTramoTimeoutMs: 8000,
+      transcripcionLocalMinPalabras: 2,
+      transcripcionLocalMinCaracteres: 6,
+      transcripcionLocalRatioUnicas: 0.3,
+      transcripcionLocalMaxPalabrasPorSegundo: 6,
       orphanBufferMs: 8000,
       asr: { engine: 'auto', lang: 'es' },
       maxRetentionMin: 120,

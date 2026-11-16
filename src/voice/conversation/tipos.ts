@@ -254,13 +254,6 @@ export type DependenciasConversacion = Readonly<{
   vad?: VadPort
   asr?: AsrPort
   /**
-   * Respaldo LOCAL por tramo (contrato ASR local): Whisper sobre el PCM del
-   * tramo CERRADO cuando el final de Chrome es vacío o implausible para el
-   * audio. Sin puerto no hay respaldo: Chrome manda (comportamiento anterior).
-   * Su texto se espera ANTES de construir la fila y nunca ejecuta comandos.
-   */
-  transcriptor?: TranscriptorTramoPort
-  /**
    * Embeddings de voz (`adapters.crearEmbebedorProducto`): con el puerto, el
    * módulo mide la identidad por sí mismo (decisión del dueño, Paso 5-A). Sin
    * él, las locuciones cierran con continuidad/semilla, sin medida.
@@ -271,6 +264,12 @@ export type DependenciasConversacion = Readonly<{
    * `speechLikeMs`/`rms` del PCM retenido cuando el motor no trae métricas.
    */
   medidor: MedidorTramoPort
+  /**
+   * Transcriptor local opcional: recupera el texto de una locución que cierra
+   * con voz medida y texto vacío (Chrome mudo). Sin él, esa locución descarta
+   * como `sinTexto` (comportamiento previo).
+   */
+  transcriptorTramo?: TranscriptorTramoPort
   /**
    * Anclas de voz MEDIDAS de la base (solo lectura). Se consultan como
    * candidatas de identidad: una voz ya registrada se presenta con su nombre

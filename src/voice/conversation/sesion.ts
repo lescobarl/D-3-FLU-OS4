@@ -256,7 +256,7 @@ export function crearSesion(
     | 'registro'
     | 'embebedor'
     | 'medidor'
-    | 'transcriptor'
+    | 'transcriptorTramo'
     | 'anclasBase'
   >,
   tramos: RegistroTramos,
@@ -385,10 +385,11 @@ export function crearSesion(
     registro,
     almacen,
     config,
+    configuracion,
     id,
     embebedor,
     medidor,
-    transcriptor: dependencias.transcriptor,
+    transcriptorTramo: dependencias.transcriptorTramo,
     tramos,
     anclasBase: dependencias.anclasBase,
   })

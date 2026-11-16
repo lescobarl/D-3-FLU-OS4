@@ -42,9 +42,9 @@ import type {
   FilaNueva,
   IdiomaLocucion,
   MotivoCierre,
-  OrigenTranscripcion,
   TramoMuestreado,
 } from './ports.ts'
+import { ORIGEN_TRANSCRIPCION_LOCAL } from './ports.ts'
 
 /** Forma UUIDv4 de la clave de fila (`locutionId` = `tramoId`). */
 const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
@@ -121,16 +121,12 @@ export type CierreLocucion = Readonly<{
    */
   firma: readonly number[] | null
   /**
-   * Origen del TEXTO que sostiene la fila: `chrome` (primario) o `local`
-   * (respaldo por tramo aceptado por su puerta). La reconciliación ocurre AQUÍ,
-   * en la MISMA construcción: la fila se escribe una sola vez.
-   */
-  origen?: OrigenTranscripcion
-  /**
    * Hora de VOZ del fin del tramo (ms), derivada del ancla de la sesión. La
    * fila la arrastra hasta el almacén; sin ancla se omite.
    */
   marcaFinMs?: number
+  /** Origen del TEXTO de la fila (ausente = 'chrome'; 'local' = Whisper). */
+  origenTranscripcion?: 'chrome' | 'local'
 }>
 
 /** Motivo del descarte cuando no hay fila (se cuenta, no se silencia). */
@@ -246,11 +242,11 @@ export function construirFila(entrada: CierreLocucion): ResultadoFila {
       overlap: Boolean(entrada.overlap),
       provisional: !entrada.final,
       reason: entrada.reason,
-      // El origen SOLO se declara cuando NO es el primario: una fila de Chrome
-      // conserva la forma de siempre y la ausencia se lee como `chrome`.
-      ...(entrada.origen && entrada.origen !== 'chrome' ? { origen: entrada.origen } : {}),
       ...(Number.isFinite(Number(entrada.marcaFinMs))
         ? { marcaFinMs: Number(entrada.marcaFinMs) }
+        : {}),
+      ...(entrada.origenTranscripcion
+        ? { origenTranscripcion: entrada.origenTranscripcion }
         : {}),
     },
     descarte: null,
@@ -363,4 +359,17 @@ export function fusionarVoz(base: EvidenciaVoz, nueva: EvidenciaVoz | undefined)
     insuficiente:
       nueva.insuficiente ?? (identidadPositiva ? false : base.insuficiente),
   }
+}
+
+/**
+ * ¿La fila es NO ACCIONABLE? Una fila transcrita localmente (Chrome mudo) se
+ * muestra pero NO dispara comando, wake ni turno/IA. Predicado ÚNICO: ningún
+ * consumidor compara la cadena.
+ * @param fila Fila (o cualquier forma con `origenTranscripcion`).
+ * @returns `true` solo si el texto vino del transcriptor local.
+ */
+export function esFilaNoAccionable(
+  fila: Readonly<{ origenTranscripcion?: 'chrome' | 'local' }> | null | undefined,
+): boolean {
+  return fila?.origenTranscripcion === ORIGEN_TRANSCRIPCION_LOCAL
 }

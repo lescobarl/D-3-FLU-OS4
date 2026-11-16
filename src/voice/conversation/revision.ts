@@ -47,11 +47,9 @@ export type TextoUnido = Readonly<{
 /**
  * Número de palabras de un texto (espacios colapsados; vacío = 0).
  * Es la unidad de la regla 3: "más largo" y "pierde palabras" se miden así.
- * También la consume el DISPARADOR del respaldo local del cierre (contrato
- * ASR local): palabras de Chrome frente al audio del tramo. Un solo dueño.
  * @param texto Texto crudo del ASR o de la locución.
  */
-export function contarPalabras(texto: string): number {
+function contarPalabras(texto: string): number {
   const limpio = String(texto || '').trim()
   return limpio ? limpio.split(/\s+/).length : 0
 }

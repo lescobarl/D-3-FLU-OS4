@@ -23,7 +23,7 @@ import {
   classifyLocalResult,
   getLocalFallbackRuntimeConfig,
 } from '../src/voice/lib/voiceLocalFallback.js'
-import { countSpeechLikeSamples, countVoicedSamples, frameRms } from '../src/voice/lib/voicedActivity.js'
+import { countSpeechLikeSamples, frameRms } from '../src/voice/lib/voicedActivity.js'
 
 const RATE = 16000
 const DIR = join(process.cwd(), 'tests', 'fixtures', 'audio')
@@ -53,17 +53,6 @@ function metricaReal(samples: Float32Array) {
     speechLikeMs: (countSpeechLikeSamples(samples, { sampleRate: RATE }) / RATE) * 1000,
     rms: frameRms(samples, 0, samples.length),
   }
-}
-
-/**
- * VOZ real del audio (ms), con el MISMO dueño que mide el cierre
- * (`vozMsDeMuestras` → `countVoicedSamples`). No es la duración de la ventana:
- * una captura con silencio no sostiene texto.
- * @param samples PCM real.
- * @returns Milisegundos de VOZ medida.
- */
-function vozReal(samples: Float32Array): number {
-  return (countVoicedSamples(samples, { sampleRate: RATE }) / RATE) * 1000
 }
 
 describe('gate del motor local con AUDIO REAL', () => {
@@ -129,133 +118,5 @@ describe('gate del motor local con AUDIO REAL', () => {
       keep: false,
       reason: 'not-speech',
     })
-  })
-})
-
-// ============================================================
-// RESPALDO POR TRAMO (docs/CONTRATO-ASR-LOCAL.md §6): la MISMA puerta se
-// amplía con la evidencia que el módulo ya mide sobre el tramo CERRADO.
-// Los casos límite usan el audio real del dueño; los números del hueco son los
-// MEDIDOS en la grabación de referencia b6d82bca.
-// ============================================================
-describe('respaldo por tramo — la puerta exige evidencia del tramo cerrado', () => {
-  const runtime = getLocalFallbackRuntimeConfig()
-  const habla = leerWav('habla-real-600ms.wav')
-  const metricsHabla = metricaReal(habla)
-  const vozHabla = vozReal(habla)
-
-  it('el audio real de habla corta tiene VOZ suficiente para el respaldo', () => {
-    // ANTI-VACUIDAD: los casos positivos de abajo pasan la puerta de VOZ primero.
-    expect(metricsHabla.durationMs).toBeCloseTo(600, 0)
-    expect(vozHabla).toBeGreaterThanOrEqual(runtime.minVozMs)
-  })
-
-  it('el hueco 67–95 s de b6d82bca se RECHAZA: 120 ms de VOZ no sostienen «Back to the cojo»', () => {
-    // MEDIDO en la fila 3c37f4f6 de la grabación de referencia (Playback
-    // b6d82bca): el tramo midió vozMs=120 (< minMs 350) y su descarte fue
-    // `sinTexto`. El texto alucinado de Whisper sobre silencio no debe entrar.
-    const decision = classifyLocalResult({
-      isFinal: true,
-      vozMs: 120,
-      text: 'Back to the cojo',
-      audioSeconds: 4.5,
-    })
-    expect(decision).toMatchObject({ keep: false, reason: 'sin-voz' })
-  })
-
-  it('audio real SIN habla: la VOZ medida (230 ms) no llega al piso y el descarte es `sin-voz`', () => {
-    const muestras = leerWav('no-habla-800ms.wav')
-    expect(vozReal(muestras)).toBeLessThan(runtime.minVozMs)
-    expect(
-      classifyLocalResult({
-        isFinal: true,
-        metrics: metricaReal(muestras),
-        vozMs: vozReal(muestras),
-        text: 'Back to the cojo',
-        audioSeconds: 0.8,
-      }),
-    ).toMatchObject({ keep: false, reason: 'sin-voz' })
-  })
-
-  it('el piso de VOZ es el de la config y su borde se ACEPTA (349 rechaza, 350 conserva)', () => {
-    const base = {
-      isFinal: true,
-      metrics: metricsHabla,
-      text: 'hola',
-      audioSeconds: metricsHabla.durationMs / 1000,
-    }
-    expect(
-      classifyLocalResult({ ...base, vozMs: runtime.minVozMs - 1 }),
-    ).toMatchObject({ keep: false, reason: 'sin-voz' })
-    expect(classifyLocalResult({ ...base, vozMs: runtime.minVozMs })).toMatchObject({
-      keep: true,
-      reason: null,
-    })
-  })
-
-  it('voz y habla reales SIN texto: no hay fila local (mejor sinTexto que alucinar)', () => {
-    expect(
-      classifyLocalResult({
-        isFinal: true,
-        metrics: metricsHabla,
-        vozMs: vozHabla,
-        text: '   ',
-        audioSeconds: metricsHabla.durationMs / 1000,
-      }),
-    ).toMatchObject({ keep: false, reason: 'sin-texto' })
-  })
-
-  it('un texto humano-imposible para la duración real del tramo se RECHAZA', () => {
-    // 10 palabras en 600 ms reales = 16,7 palabras/s; el máximo humano medido
-    // en b6d82bca fue 5,31 palabras/s (fila ef5f8a23).
-    const decision = classifyLocalResult({
-      isFinal: true,
-      metrics: metricsHabla,
-      vozMs: vozHabla,
-      text: 'uno dos tres cuatro cinco seis siete ocho nueve diez',
-      audioSeconds: metricsHabla.durationMs / 1000,
-    })
-    expect(decision).toMatchObject({ keep: false, reason: 'imposible' })
-  })
-
-  it('un decoder en BUCLE (palabras repetidas) se RECHAZA', () => {
-    // Ventana real de 1,8 s (el fixture de habla concatenado 3 veces): 9
-    // palabras = 5 palabras/s, dentro del máximo humano; el descarte lo decide
-    // el colapso del dueño (`collapseRepeatedSpeech`) al quedar 3 únicas.
-    const hablaLarga = new Float32Array(habla.length * 3)
-    hablaLarga.set(habla, 0)
-    hablaLarga.set(habla, habla.length)
-    hablaLarga.set(habla, habla.length * 2)
-    const decision = classifyLocalResult({
-      isFinal: true,
-      metrics: metricaReal(hablaLarga),
-      vozMs: vozReal(hablaLarga),
-      text: 'hola cómo estás hola cómo estás hola cómo estás',
-      audioSeconds: hablaLarga.length / RATE,
-    })
-    expect(decision).toMatchObject({ keep: false, reason: 'bucle' })
-  })
-
-  it('un texto SIN letras latinas (otro idioma) se RECHAZA', () => {
-    const decision = classifyLocalResult({
-      isFinal: true,
-      metrics: metricsHabla,
-      vozMs: vozHabla,
-      text: 'こんにちは',
-      audioSeconds: metricsHabla.durationMs / 1000,
-    })
-    expect(decision).toMatchObject({ keep: false, reason: 'idioma' })
-  })
-
-  it('texto plausible con voz y habla reales: la puerta lo CONSERVA', () => {
-    expect(
-      classifyLocalResult({
-        isFinal: true,
-        metrics: metricsHabla,
-        vozMs: vozHabla,
-        text: 'hola qué tal',
-        audioSeconds: metricsHabla.durationMs / 1000,
-      }),
-    ).toMatchObject({ keep: true, reason: null })
   })
 })

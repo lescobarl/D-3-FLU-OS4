@@ -13,7 +13,7 @@
  */
 import { construirFila, fusionarVoz, horaDelFinDelTramo } from './fila.ts'
 import type { CierreLocucion, VozEtiqueta } from './fila.ts'
-import { contarPalabras, decidirRevision } from './revision.ts'
+import { decidirRevision } from './revision.ts'
 import { decidirIdentidad, plantillasDeSesion } from './identidad.ts'
 import type { PlantillaVoz } from './identidad.ts'
 import type { RegistroTramos } from './tramos.ts'
@@ -35,8 +35,8 @@ import type {
 import type {
   AlmacenPort,
   AnclaAudio,
-  ConfigLocalFinal,
   ConfigPort,
+  ConfiguracionConversacion,
   EmbebedorPort,
   Fila,
   FilaNueva,
@@ -46,13 +46,11 @@ import type {
   MedidaMotor,
   MedidorTramoPort,
   MotivoCierre,
-  MotivoRespaldoLocal,
-  OrigenTranscripcion,
   RegistroPort,
-  ResultadoRespaldoLocal,
   TramoMuestreado,
   TranscriptorTramoPort,
 } from './ports.ts'
+import { CONVERSACION_CONFIG, ORIGEN_TRANSCRIPCION_LOCAL } from './ports.ts'
 
 /** Parte del estado de sesión que consumen las reglas de cierre. */
 export type EstadoCierre = {
@@ -96,19 +94,16 @@ export type ContextoCierre = Readonly<{
   registro: RegistroPort
   almacen: AlmacenPort
   config: ConfigPort
+  /** Tabla del plan inyectada (tope del transcriptor y compuerta de plausibilidad). */
+  configuracion?: ConfiguracionConversacion
   /** Generador UUIDv4: la voz nueva acuña su identidad (medida de respaldo). */
   id: IdPort
   /** Embeddings inyectados; sin puerto no hay medida (solo continuidad/semilla). */
   embebedor?: EmbebedorPort
   /** Medidor del tramo cerrado (Caso 7+6): obligatorio, nada de medida null. */
   medidor: MedidorTramoPort
-  /**
-   * Respaldo LOCAL por tramo (contrato ASR local): Whisper sobre el PCM del
-   * tramo cerrado cuando el final de Chrome es vacío o implausible. Se espera
-   * ANTES de construir la fila y su texto nunca es accionable. Sin puerto no
-   * hay respaldo (Chrome manda).
-   */
-  transcriptor?: TranscriptorTramoPort
+  /** Transcriptor local opcional: recupera una locución con voz y sin texto. */
+  transcriptorTramo?: TranscriptorTramoPort
   /**
    * Audio REAL por tramo: respaldo de la medida al cerrar. La voz se mide sobre
    * el audio de la locución aunque `muestrasAbierta` se haya vaciado; una fila
@@ -281,10 +276,13 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
     id,
     embebedor,
     medidor,
-    transcriptor,
+    transcriptorTramo,
     tramos,
     anclasBase,
   } = contexto
+  // El producto SIEMPRE inyecta la tabla; los dobles de prueba pueden omitirla y
+  // usan la del plan (tope y compuerta de plausibilidad).
+  const configuracion = contexto.configuracion ?? CONVERSACION_CONFIG
   /** Abre la única locución abierta; el llamador garantiza que no hay otra. */
   function abrirLocucion(datos: DatosApertura): void {
     // El contador/candidato de cambio de voz pertenecen a la locución ABIERTA:
@@ -456,21 +454,24 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
    * ventana corta fabricaba `Hablante N`). Si no hay voz medible el vector es
    * null, la fila nace TEMPORAL y su medida tardía la reemplaza (`reetiquetarFila`).
    * @param locucion Locución que se cierra, con su evidencia de voz previa.
-   * @param muestras PCM REAL del tramo (`muestrasDeLaLocucion`), ya capturado.
    * @returns Evidencia de voz que cierra; la misma si no se mide.
    */
-  async function medirVozAlCerrar(
-    locucion: LocucionAbierta,
-    muestras: Float32Array,
-  ): Promise<EvidenciaVoz> {
+  async function medirVozAlCerrar(locucion: LocucionAbierta): Promise<EvidenciaVoz> {
     if (!embebedor || String(locucion.voz.vozId || '').trim()) {
       return locucion.voz
     }
     // La voz se mide sobre el audio REAL de la locución. `muestrasAbierta` es el
     // camino vivo, pero puede haberse vaciado; el registro de tramos conserva
     // la ventana cerrada y es el respaldo que evita commitear `Hablante X`.
-    // Las muestras llegan capturadas: la medida y el respaldo local consumen el
-    // MISMO audio, no dos lecturas que puedan divergir.
+    let muestras = concatenarMuestras(estado.muestrasAbierta)
+    if (muestras.length === 0) {
+      const delTramo = tramos.muestras(locucion.locutionId, {
+        inicio: locucion.inicio,
+        fin: locucion.fin,
+        sampleRate: locucion.sampleRate,
+      })
+      if (delTramo) muestras = concatenarMuestras(delTramo)
+    }
     if (muestras.length === 0) {
       // No hay audio que medir: la fila cerrada es NO IDENTIFICADA (`XX`), nunca
       // `X` (que significa «la medida aún no llegó» y solo vale en la caja).
@@ -520,137 +521,6 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
       hablante: identidad.hablante,
       continuidad: identidad.continuidad,
       ...(identidad.insuficiente ? { insuficiente: true } : {}),
-    }
-  }
-
-  /**
-   * PCM REAL de la locución que se cierra: el vivo (`muestrasAbierta`) o, si se
-   * vació, la ventana que conserva el registro de tramos. Dueño único de esa
-   * decisión: la medida de voz y el respaldo local consumen EL MISMO audio.
-   * @param locucion Locución abierta que se cierra.
-   * @returns Muestras concatenadas (vacío si no hay audio).
-   */
-  function muestrasDeLaLocucion(locucion: LocucionAbierta): Float32Array {
-    let muestras = concatenarMuestras(estado.muestrasAbierta)
-    if (muestras.length === 0) {
-      const delTramo = tramos.muestras(locucion.locutionId, {
-        inicio: locucion.inicio,
-        fin: locucion.fin,
-        sampleRate: locucion.sampleRate,
-      })
-      if (delTramo) muestras = concatenarMuestras(delTramo)
-    }
-    return muestras
-  }
-
-  /**
-   * DISPARADOR del respaldo local (contrato ASR local §5): el final de Chrome
-   * del tramo es vacío o de rendimiento implausible para su audio. Si Chrome ya
-   * dio texto plausible, local NO corre (ahorra CPU y evita alucinaciones).
-   *
-   * ANTES de transcribir comprueba tres cosas que NO se pueden decidir después:
-   *  - VOZ real del tramo (`vozMs`, el mismo dueño que mide el cierre): sin voz
-   *    el modelo no se paga (el hueco de 120 ms de b6d82bca no llega a Whisper);
-   *  - AUDIO mínimo del tramo (`minAudioSegundos`): una ventana de 1,09 s paga el
-   *    encoder fijo de Whisper y tardó 9,3–21,7 s (§5-quinquies); no se paga;
-   *  - comando de control de Chrome (`esComandoDeControl`, dueño de la compuerta
-   *    de comandos): un comando no se sustituye por el respaldo.
-   * @param cfg Config viva del respaldo (config localFinal).
-   * @param textoChrome Texto del tramo según Chrome (puede ser vacío).
-   * @param audioSegundos Duración real del audio del tramo.
-   * @param vozMs VOZ real del tramo (ms), medida por el módulo.
-   * @param esComandoDeControl ¿El texto de Chrome es un comando de control?
-   * @returns Motivo por el que NO se pide el respaldo, o `null` si se pide.
-   */
-  function necesitaRespaldoLocal(
-    cfg: ConfigLocalFinal,
-    textoChrome: string,
-    audioSegundos: number,
-    vozMs: number,
-    esComandoDeControl: boolean,
-  ): MotivoRespaldoLocal | null {
-    if (esComandoDeControl) return 'comando'
-    if (vozMs < cfg.minVozMs) return 'sin-voz'
-    if (audioSegundos < cfg.minAudioSegundos) return 'audio-corto'
-    if (!String(textoChrome || '').trim()) return null
-    const palabras = contarPalabras(textoChrome)
-    if (palabras < cfg.minPalabras) return null
-    if (audioSegundos > 0 && palabras / audioSegundos < cfg.minPalabrasPorSegundo) return null
-    return 'no-hace-falta'
-  }
-
-  /**
-   * Pide el respaldo local del tramo cerrado y aplica su PUERTA. Sin config o
-   * sin puerto no se pide; si no dispara, tampoco. El resultado (texto aceptado
-   * o motivo) viaja al cierre, que construye UNA fila con él. Un fallo del
-   * transcriptor se registra y deja el texto de Chrome: nunca rompe el cierre.
-   * @param locucion Locución que se cierra.
-   * @param medida Medida final del tramo (habla y energía).
-   * @param muestras PCM real del tramo (`muestrasDeLaLocucion`).
-   * @param esComandoDeControl Veredicto ÚNICO del cierre sobre el texto de Chrome
-   *   (lo lee `cerrarLocucion` una vez y lo comparten disparador y compuerta).
-   * @returns Texto aceptado por la puerta o el motivo por el que no lo hay.
-   */
-  async function respaldarConLocal(
-    locucion: LocucionAbierta,
-    medida: MedidaFinal,
-    muestras: Float32Array,
-    esComandoDeControl: boolean,
-  ): Promise<ResultadoRespaldoLocal> {
-    const cfg = config.localFinal?.() ?? null
-    if (!cfg?.enabled || !transcriptor) return { texto: '', descarte: 'deshabilitado' }
-    const audioSegundos =
-      locucion.sampleRate > 0
-        ? Math.max(0, (Number(locucion.fin) - Number(locucion.inicio)) / locucion.sampleRate)
-        : 0
-    // PCM DEL TRAMO, no de la locución entera: el búfer retenido arranca en el
-    // inicio de la locución y conserva el silencio que disparó el cierre. El
-    // puerto promete `muestras = tramo` y el transcriptor por tramo recibe
-    // ventanas acotadas. Medido 2026-11-14 con audio real: una ventana parcial
-    // de 11,57 s llegaba con 15,07 s (tramo + silencio de cierre) y el sidecar
-    // la rechazaba con 400 por el tope de ventana; la fila caía a Chrome.
-    const necesarias = Math.round(audioSegundos * locucion.sampleRate)
-    const muestrasDelTramo =
-      necesarias > 0 && muestras.length > necesarias
-        ? muestras.subarray(0, necesarias)
-        : muestras
-    // La VOZ del tramo la mide el módulo (dueño único de voz→ms) ANTES de
-    // transcribir: el disparador la exige y el transcriptor la recibe medida,
-    // no la recalcula. Sin muestras no hay voz posible (0).
-    const vozMs =
-      muestrasDelTramo.length > 0
-        ? vozMsDeMuestras(muestrasDelTramo, locucion.sampleRate)
-        : 0
-    const motivoDelDisparador = necesitaRespaldoLocal(
-      cfg,
-      locucion.texto,
-      audioSegundos,
-      vozMs,
-      esComandoDeControl,
-    )
-    if (motivoDelDisparador) return { texto: '', descarte: motivoDelDisparador }
-    try {
-      const resultado = await transcriptor.transcribir({
-        muestras: muestrasDelTramo,
-        sampleRate: locucion.sampleRate,
-        idioma: locucion.idioma,
-        vozMs,
-        speechLikeMs: medida.speechLikeMs,
-        audioSegundos,
-      })
-      registrarEventoVoz('conversacion.respaldo.local', locucion, muestrasDelTramo.length, {
-        descarte: resultado.descarte,
-        palabras: contarPalabras(resultado.texto),
-        audioSegundos: Math.round(audioSegundos * 1000) / 1000,
-      })
-      return resultado
-    } catch (error) {
-      // AGENTS §1.5: el catch registra con la excepción; el cierre sigue con Chrome.
-      logCaughtError('conversacion.respaldo.local.fallo', error, {
-        sessionId: estado.sessionId,
-        locutionId: locucion.locutionId,
-      })
-      return { texto: '', descarte: 'fallo' }
     }
   }
 
@@ -760,6 +630,67 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
     registrarCierre(comun.sessionId, comun.locucion.locutionId, comun.tramo, comun.motivo, comun.causa, descarte)
   }
 
+  /**
+   * ÚNICO dueño de la secuencia "fila -> cierre -> commit -> etiqueta":
+   * la usan el cierre síncrono y el commit local tardío. Evita dos copias del
+   * protocolo insert-only (el detector de duplicados medía 23 líneas clonadas).
+   */
+  async function confirmarFilaCommiteada({
+    resultado,
+    vozId,
+    sesion,
+    locucion,
+    tramo,
+    motivo,
+    causa,
+    medida,
+  }: {
+    resultado: ReturnType<typeof construirFila>
+    vozId: string
+    sesion: string
+    locucion: LocucionAbierta
+    tramo: TramoMuestreado
+    motivo: MotivoCierre
+    causa: CausaCierre
+    medida: MedidaFinal
+  }): Promise<void> {
+    if (!resultado.fila) {
+      cerrarDescartada({
+        sessionId: sesion,
+        locucion,
+        tramo,
+        motivo,
+        causa,
+        medida,
+        descarte: resultado.descarte,
+      })
+      return
+    }
+    if (config.esComandoDeControl?.(resultado.fila.texto)) {
+      cerrarDescartada({
+        sessionId: sesion,
+        locucion,
+        tramo,
+        motivo,
+        causa,
+        medida,
+        descarte: 'control',
+      })
+      return
+    }
+    const fila = await guardarFila(resultado.fila, vozId)
+    emitirCierre({ sessionId: sesion, locucion, tramo, motivo, causa, medida })
+    commitar(fila)
+    emitir({
+      tipo: 'speaker.labeled',
+      sessionId: sesion,
+      locutionId: fila.locutionId,
+      etiqueta: fila.etiqueta,
+      evidencia: fila.evidencia,
+    })
+    registrarCierre(sesion, fila.locutionId, tramo, motivo, causa, null)
+  }
+
   async function cerrarLocucion(
     locucion: LocucionAbierta,
     motivo: MotivoCierre,
@@ -790,25 +721,7 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
     // La medida del cierre NO tiene puerta de duración aquí: el habla REAL de la
     // ventana la exige el embebedor del adaptador (problema 3). Duplicar el piso
     // en el módulo impedía medir voces legítimas al cerrar.
-    //
-    // RESPALDO LOCAL (contrato ASR local): disparador y puerta se lanzan AQUÍ,
-    // junto a la medida de voz, para solapar la latencia de Whisper con el
-    // embedder. El resultado se ESPERA antes de construir la fila: una sola
-    // fila por tramo, jamás un segundo escritor. Ambas consumen el mismo PCM.
-    const muestrasDelTramo = muestrasDeLaLocucion(locucion)
-    // UNA lectura del predicado de comandos por cierre (caso `comando-control`
-    // del guard de rutas dobles): el DISPARADOR la exige ANTES de transcribir
-    // (texto de Chrome, §5) y la compuerta de la fila la REUSA (un comando no es
-    // conversación). El texto local nunca es accionable (§8: no despacha ni
-    // bautiza), así que el veredicto del texto de Chrome es el que decide.
-    const esComandoDeControl = config.esComandoDeControl?.(locucion.texto) === true
-    const respaldoEnCurso = respaldarConLocal(
-      locucion,
-      medida,
-      muestrasDelTramo,
-      esComandoDeControl,
-    )
-    const vozMedida = await medirVozAlCerrar(locucion, muestrasDelTramo)
+    const vozMedida = await medirVozAlCerrar(locucion)
     let vozCerrada = vozMedida === locucion.voz ? locucion.voz : fusionarVoz(locucion.voz, vozMedida)
     const continuidadVoz =
       vozMedida === locucion.voz ? locucion.continuidadVoz : Boolean(vozMedida.continuidad)
@@ -860,17 +773,26 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
     // escritor de `conversations` deriva de ella el inicio real de la frase. Sin
     // ancla no se declara y el almacén cae a su reloj (compatibilidad).
     const marcaFinMs = horaDelFinDelTramo(estado.anclaAudio, tramo)
-    // El texto del tramo es el de Chrome O el del respaldo local si su puerta lo
-    // aceptó; `origen` declara cuál lo sostiene. La fila se construye UNA vez con
-    // el texto definitivo: no hay segunda escritura de reconciliación.
-    // El respaldo NO acorta: si local trae menos palabras que el texto de Chrome,
-    // se conserva Chrome (un parcial con más contenido no se come por un respaldo
-    // más corto; §5: el texto plausible de Chrome manda).
-    const respaldo = await respaldoEnCurso
-    const usaLocal =
-      Boolean(respaldo.texto) && contarPalabras(respaldo.texto) >= contarPalabras(locucion.texto)
-    const textoCerrado = usaLocal ? respaldo.texto : locucion.texto
-    const origenCerrado: OrigenTranscripcion = usaLocal ? 'local' : 'chrome'
+    // RECUPERO LOCAL (Chrome MUDO) — ASÍNCRONO: si la locución cierra CON VOZ
+    // medida pero SIN texto, se captura su PCM y se transcribe en segundo plano.
+    // El cierre NO espera: la fila local se inserta cuando el transcriptor
+    // termina (insert-only, por `locutionId`). Si falla o expira, se cuenta
+    // `sinTexto`. La latencia de Whisper no frena la tubería ni tira la ventana.
+    let audioLocal: Float32Array | null = null
+    if (
+      !String(locucion.texto || '').trim() &&
+      transcriptorTramo &&
+      Number(medida.speechLikeMs) > 0
+    ) {
+      const delEstado = concatenarMuestras(estado.muestrasAbierta)
+      if (delEstado.length > 0) {
+        audioLocal = delEstado
+      } else {
+        const delTramo = tramos.muestras(locucion.locutionId, tramo)
+        if (delTramo) audioLocal = concatenarMuestras(delTramo)
+      }
+      if (audioLocal && audioLocal.length === 0) audioLocal = null
+    }
     const cierre: CierreLocucion = {
       locutionId: locucion.locutionId,
       sessionId: sesion,
@@ -878,7 +800,7 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
       inicio: locucion.inicio,
       fin: locucion.fin,
       sampleRate: locucion.sampleRate,
-      texto: textoCerrado,
+      texto: locucion.texto,
       idioma: locucion.idioma,
       overlap: Boolean(locucion.voz.overlap),
       final,
@@ -890,7 +812,6 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
       pendienteEtiqueta,
       nombresPorEtiqueta: estado.nombresPorEtiqueta,
       firma,
-      origen: origenCerrado,
       ...(marcaFinMs !== null ? { marcaFinMs } : {}),
     }
     estado.abierta = null
@@ -898,6 +819,112 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
     estado.tramosDeLaAbierta.clear()
     estado.muestrasEnUltimoIntento = 0
     emitirCaja()
+
+    if (audioLocal && transcriptorTramo) {
+      const topeMs = Math.max(1, Number(configuracion.transcriptorTramoTimeoutMs) || 0)
+      ;(async () => {
+        let temporizador: ReturnType<typeof setTimeout> | undefined
+        const trabajo = Promise.resolve(
+          transcriptorTramo.transcribir({
+            muestras: audioLocal,
+            sampleRate: locucion.sampleRate,
+          }),
+        )
+        // El perdedor de la carrera no puede quedar sin manejar: su rechazo
+        // tardío se registra (nunca se silencia).
+        trabajo.catch((error) =>
+          logCaughtError('conversacion.transcripcion.local.tarde', error, {
+            sessionId: sesion,
+            locutionId: locucion.locutionId,
+          }),
+        )
+        let local = ''
+        try {
+          local = String(
+            (await Promise.race([
+              trabajo,
+              new Promise<string>((_, rechazar) => {
+                temporizador = setTimeout(
+                  () => rechazar(new Error('transcripcion local: timeout')),
+                  topeMs,
+                )
+              }),
+            ])) || '',
+          ).trim()
+          const palabras = local.toLowerCase().split(/\s+/).filter(Boolean)
+          const unicas = new Set(palabras).size
+          const ratioUnicas = palabras.length > 0 ? unicas / palabras.length : 0
+          const segundos = Math.max(
+            0.001,
+            audioLocal.length / (Number(locucion.sampleRate) || 1),
+          )
+          const plausible =
+            palabras.length >= Number(configuracion.transcripcionLocalMinPalabras) &&
+            local.length >= Number(configuracion.transcripcionLocalMinCaracteres) &&
+            ratioUnicas >= Number(configuracion.transcripcionLocalRatioUnicas) &&
+            palabras.length / segundos <=
+              Number(configuracion.transcripcionLocalMaxPalabrasPorSegundo)
+          if (local && !plausible) {
+            registro.registrar('conversacion.transcripcion.local.descartada', {
+              sessionId: sesion,
+              locutionId: locucion.locutionId,
+              palabras: palabras.length,
+            })
+          }
+          if (!local || !plausible) {
+            cerrarDescartada({ sessionId: sesion, locucion, tramo, motivo, causa, medida, descarte: 'sinTexto' })
+            return
+          }
+          const cierreLocal: CierreLocucion = {
+            ...cierre,
+            texto: local,
+            origenTranscripcion: ORIGEN_TRANSCRIPCION_LOCAL,
+          }
+          const resultadoLocal = construirFila(cierreLocal)
+          if (!resultadoLocal.fila) {
+            cerrarDescartada({
+              sessionId: sesion,
+              locucion,
+              tramo,
+              motivo,
+              causa,
+              medida,
+              descarte: resultadoLocal.descarte,
+            })
+            return
+          }
+          await confirmarFilaCommiteada({
+            resultado: resultadoLocal,
+            vozId: String(vozCerrada.vozId || ''),
+            sesion,
+            locucion,
+            tramo,
+            motivo,
+            causa,
+            medida,
+          })
+        } catch (error) {
+          // AGENTS §1.5: se registra con contexto y el cierre sigue (sinTexto).
+          logCaughtError('conversacion.transcripcion.local.fallo', error, {
+            sessionId: sesion,
+            locutionId: locucion.locutionId,
+          })
+          registro.registrar('conversacion.transcripcion.local.fallo', {
+            sessionId: sesion,
+            locutionId: locucion.locutionId,
+          })
+          cerrarDescartada({ sessionId: sesion, locucion, tramo, motivo, causa, medida, descarte: 'sinTexto' })
+        } finally {
+          clearTimeout(temporizador)
+        }
+      })().catch((error) =>
+        logCaughtError('conversacion.cierre.local.tarde', error, {
+          sessionId: sesion,
+          locutionId: locucion.locutionId,
+        }),
+      )
+      return
+    }
 
     const resultado = construirFila(cierre)
     if (!resultado.fila) {
@@ -912,29 +939,20 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
     // se ignora sin tocar la fila (descarte contado, nunca una segunda fila).
     // Caso 1+3: una voz distinta medida (continuidad false) SÍ inserta SU fila
     // — dos voces sin pausa son DOS filas del mismo turno.
-    // Una ORDEN DE CONTROL ("cerrando escucha", "cerrar escucha", ...) no es
-    // conversacion: el hook la ejecuta; el modulo no debe crear otra fila.
-    // Veredicto ÚNICO del cierre (`esComandoDeControl`, leído una vez sobre el
-    // texto de Chrome): evita una segunda ruta del predicado (`comando-control`).
-    if (esComandoDeControl) {
-      cerrarDescartada({ sessionId: sesion, locucion, tramo, motivo, causa, medida, descarte: 'control' })
-      return
-    }
     // Una sola frontera: si el módulo abrió esta locución, es una locución
     // legítima (silencio >5 s o voz distinta). El cierre NO decide otra vez por
     // texto, turno, reentrega ni contención: esa segunda frontera era la que
     // creaba la fila 51 y descartaba las filas 6–9.
-    const fila = await guardarFila(resultado.fila, String(vozCerrada.vozId || ''))
-    emitirCierre({ sessionId: sesion, locucion, tramo, motivo, causa, medida })
-    commitar(fila)
-    emitir({
-      tipo: 'speaker.labeled',
-      sessionId: sesion,
-      locutionId: fila.locutionId,
-      etiqueta: fila.etiqueta,
-      evidencia: fila.evidencia,
+    await confirmarFilaCommiteada({
+      resultado,
+      vozId: String(vozCerrada.vozId || ''),
+      sesion,
+      locucion,
+      tramo,
+      motivo,
+      causa,
+      medida,
     })
-    registrarCierre(sesion, fila.locutionId, tramo, motivo, causa, null)
   }
 
   /**
