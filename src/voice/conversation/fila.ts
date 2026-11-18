@@ -125,7 +125,7 @@ export type CierreLocucion = Readonly<{
    * fila la arrastra hasta el almacén; sin ancla se omite.
    */
   marcaFinMs?: number
-  /** Origen del TEXTO de la fila (ausente = 'chrome'; 'local' = Whisper). */
+  /** Origen del TEXTO de la fila (ausente = 'chrome'; 'local' = fila histórica). */
   origenTranscripcion?: 'chrome' | 'local'
 }>
 

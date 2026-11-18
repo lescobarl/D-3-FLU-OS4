@@ -81,6 +81,14 @@ export type EntradaIdentidad = Readonly<{
   /** Umbral de continuidad resuelto por el puerto de config (0..1). */
   umbral: number
   /**
+   * Duración mínima de VOZ (ms) para afirmar cualquier identidad, también la de
+   * una voz ya conocida. Por debajo, la fila es `Hablante XX` (regla 6): una
+   * ventana corta no distingue voces y una coincidencia por coseno con un piso
+   * bajo etiquetaba a la mujer como el hablante anterior (medido 2026-11-17:
+   * ventana de 540 ms -> Luis en vez de Hablante 2).
+   */
+  minVozIdentidadMs?: number
+  /**
    * Duracion REAL de la evidencia de voz de esta locucion (ms). Un turno corto
    * no basta para acunar una voz nueva: queda pendiente (auditoria 2026-11-01).
    */
@@ -125,6 +133,20 @@ export type IdentidadDecidida = Readonly<{
  * @returns Continuidad con la plantilla casada o una voz nueva con id y etiqueta.
  */
 export function decidirIdentidad(entrada: EntradaIdentidad): IdentidadDecidida {
+  const duracion = Number(entrada.duracionMs)
+  const minimoIdentidad = Number(entrada.minVozIdentidadMs) || 0
+  // REGLA 6: una ventana con menos VOZ que el mínimo de identidad no identifica
+  // a nadie, ni siquiera por coincidencia con una voz conocida. Antes se casaba
+  // con el piso bajo `umbralExistente` y una ventana corta de otra persona
+  // heredaba el nombre del hablante anterior.
+  if (
+    Number.isFinite(duracion) &&
+    duracion > 0 &&
+    minimoIdentidad > 0 &&
+    duracion < minimoIdentidad
+  ) {
+    return { vozId: '', continuidad: false, hablante: '', insuficiente: true }
+  }
   let mejor: PlantillaVozConId | null = null
   let mejorCoseno = Number.NEGATIVE_INFINITY
   for (const plantilla of entrada.plantillas) {
@@ -138,13 +160,13 @@ export function decidirIdentidad(entrada: EntradaIdentidad): IdentidadDecidida {
   if (mejor && mejorCoseno >= entrada.umbral) {
     return { vozId: mejor.vozId, continuidad: true, hablante: mejor.etiqueta }
   }
-  // Un turno corto de una voz YA conocida no debe quedar pendiente: casa con
-  // el mejor existente desde un piso inferior al de acunar voz nueva.
+  // Turno por encima del piso de medida y por debajo de la duración de una voz
+  // nueva: si casa con una voz YA conocida, conserva su etiqueta. El piso bajo
+  // (`umbralExistente`) NO se aplica a ventanas cortas: esas son XX (arriba).
   const umbralExistente = Number(entrada.umbralExistente) || entrada.umbral
   if (mejor && mejorCoseno >= umbralExistente) {
     return { vozId: mejor.vozId, continuidad: true, hablante: mejor.etiqueta }
   }
-  const duracion = Number(entrada.duracionMs)
   const minimo = Number(entrada.minNuevaVozMs) || 0
   if (Number.isFinite(duracion) && duracion < minimo) {
     // Turno corto: no hay evidencia suficiente para ACUNAR una voz nueva.

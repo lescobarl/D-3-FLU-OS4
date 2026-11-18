@@ -34,7 +34,7 @@ import { silence, tone, whiteNoise } from './_speechSignals'
 
 const ROOT = process.cwd()
 const FRAME_MS = 30
-const FLOOR = 0.02
+const FLOOR = 0.01
 const RATES = [16000, 22050, 44100, 48000]
 
 /**

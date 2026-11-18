@@ -65,7 +65,7 @@ describe('voiceSegmenter — turnos por VAD', () => {
 
 /**
  * Prueba de detector (P2.4/P9.72): el segmentador debe DISCRIMINAR, y con la config ausente
- * debe usar el RESPALDO UNICO del VAD (`asrConfig.VAD_DEFAULTS.energyThreshold` = 0.02), no el
+ * debe usar el RESPALDO UNICO del VAD (`asrConfig.VAD_DEFAULTS.energyThreshold` = 0.01), no el
  * literal propio que tenia antes (0.012). Si el respaldo vuelve a divergir, este caso cae.
  */
 describe('voiceSegmenter — el detector no es decorativo', () => {
@@ -75,11 +75,11 @@ describe('voiceSegmenter — el detector no es decorativo', () => {
     return out
   }
 
-  it('con config ausente manda el respaldo unico (0.015 NO abre; 0.05 SI)', () => {
-    const abajo = createVoiceSegmenter().push(framesRms(20, 0.015))
+  it('con config ausente manda el respaldo unico (0.007 NO abre; 0.05 SI)', () => {
+    const abajo = createVoiceSegmenter().push(framesRms(20, 0.007))
     const arriba = createVoiceSegmenter().push(framesRms(20, 0.05))
     const tipos = (events: Array<{ type: string }>) => events.map((event) => event.type)
-    expect(tipos(abajo), 'RMS 0.015 < respaldo unico (0.02): NO puede abrir turno').not.toContain('speech-start')
+    expect(tipos(abajo), 'RMS 0.007 < respaldo unico (0.01): NO puede abrir turno').not.toContain('speech-start')
     expect(tipos(arriba), 'control positivo: RMS 0.05 SI abre').toContain('speech-start')
   })
 

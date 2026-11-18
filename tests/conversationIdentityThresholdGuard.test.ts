@@ -44,4 +44,24 @@ describe('identidad — piso de continuidad del modulo', () => {
     });
     expect(distinta).toEqual({ vozId: 'v2', continuidad: false, hablante: 'Hablante 2' });
   });
+
+  it('una ventana de 540 ms NO casa con una voz conocida: es insuficiente (XX)', () => {
+    const plantilla = { vozId: 'v1', vector: [1, 0], etiqueta: 'Luis' };
+    const base = {
+      vector: [1, 0],
+      plantillas: [plantilla],
+      umbral: 0.72,
+      umbralExistente: 0.64,
+      etiquetaNueva: () => 'Hablante 2',
+      comparar: () => 0.99,
+      id: () => 'v2',
+    };
+    // Medido 2026-11-17: 540 ms de la mujer casaron con Luis por el piso bajo.
+    const corta = decidirIdentidad({ ...base, duracionMs: 540, minVozIdentidadMs: 700 });
+    expect(corta).toEqual({ vozId: '', continuidad: false, hablante: '', insuficiente: true });
+
+    // Con VOZ suficiente la continuidad sigue funcionando.
+    const suficiente = decidirIdentidad({ ...base, duracionMs: 700, minVozIdentidadMs: 700 });
+    expect(suficiente).toEqual({ vozId: 'v1', continuidad: true, hablante: 'Luis' });
+  });
 });

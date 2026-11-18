@@ -55,7 +55,7 @@ export function crearFlujoTexto({
   tramoParaTexto,
   sumarAudioAtribuido,
 }: {
-  dependencias: Pick<DependenciasConversacion, 'reloj' | 'ultimoTextoDicho' | 'config'>
+  dependencias: Pick<DependenciasConversacion, 'reloj' | 'ultimoTextoDicho' | 'config' | 'partidor'>
   configuracion: ConfiguracionConversacion
   sesion: Sesion
   tramos: RegistroTramos
@@ -158,6 +158,18 @@ export function crearFlujoTexto({
     const previo = String(previa?.texto || '').trim()
     const nuevo = String(texto || '').trim()
     if (!previo || !nuevo) return nuevo
+    // Un COMANDO completo con wake no se recorta si la fila anterior era SOLO
+    // la wake (un parcial del mismo comando). Si la fila anterior tiene texto,
+    // el entrante es una continuación y sí se recorta.
+    const previoEsSoloWake =
+      Boolean(previo) &&
+      !String(dependencias.partidor.partir(previo).paraMostrar || '').trim()
+    if (
+      previoEsSoloWake &&
+      dependencias.partidor.partir(nuevo).paraMostrar !== nuevo
+    ) {
+      return nuevo
+    }
     const etiqueta = String(previa?.etiqueta || '').trim()
     const hablante = String(voz?.hablante || '').trim()
     // Solo se deduplica cuando la fila anterior es de la MISMA voz (o quedó
@@ -263,6 +275,7 @@ export function crearFlujoTexto({
         lote.voz,
         lote.medida,
         String(lote.tramoId || '').trim() || tramoParaTexto(),
+        true,
       )
     }
     // La caja vuelve a la línea abierta: el pendiente fundido ya no manda en ella.
@@ -459,7 +472,16 @@ export function crearFlujoTexto({
       drenarPendientes().sort(
         (a, b) => ordenDePendiente(a) - ordenDePendiente(b),
       ),
-    )
+    ).filter((lote) => {
+      // Una frase pendiente que ya tiene fila (mismo tramo/locución) es una
+      // REENTREGA: no se reabre con su `inicio` viejo, porque la conversación es
+      // insert-only (regla 4) y la fila se estiraría con audio ajeno. Mismo muro
+      // que `finalizarPendientes`.
+      const tramoId = String(lote.tramoId || '').trim()
+      if (!tramoId || !estado.filas.has(tramoId)) return true
+      sesion.contarDescarte('huerfano', tramoId, lote.tramo ?? null)
+      return false
+    })
     const primero = lotes[0]
     if (!primero) return
     for (const lote of lotes.slice(1)) pendientes.encolar(lote)
@@ -502,6 +524,7 @@ export function crearFlujoTexto({
           primero.voz,
           primero.medida,
           primero.tramoId,
+          true,
         )
         lotes.shift()
       }
@@ -519,9 +542,9 @@ export function crearFlujoTexto({
         continue
       }
       const { tramoId, tramo } = resuelto
-      // Una frase pendiente que ya tiene fila (mismo tramo/locución) es una
-      // reentrega del turno: no se abre otra locución fantasma al stop. El
-      // motivo lo cuenta el dueño del descarte como huérfano (ingesta es quien
+      // Una frase pendiente que ya tiene fila (mismo tramo/locuciA3n) es una
+      // reentrega del turno: no se abre otra locuciA3n fantasma al stop. El
+      // motivo lo cuenta el dueA�o del descarte como huAcrfano (ingesta es quien
       // decide la reentrega de un turno).
       if (estado.filas.has(tramoId)) {
         sesion.contarDescarte('huerfano', tramoId, tramo)
@@ -551,6 +574,7 @@ export function crearFlujoTexto({
     // segmentó: entra por la puerta de texto ajeno (se retiene como pendiente y
     // su llegada evalúa la frontera), nunca se tira en silencio.
     if (!tramoId && !estado.abierta) {
+      sesion.mostrarPendiente('')
       sesion.contarDescarte('huerfano', null, null)
       return
     }
@@ -558,6 +582,9 @@ export function crearFlujoTexto({
     let texto = String(entrada.texto || '')
 
     if (dependencias.config.esComandoDeControl?.(texto)) {
+      // El texto se pintó como pendiente fuera de la cola; un control no es
+      // conversación y no debe quedarse en la caja.
+      sesion.mostrarPendiente('')
       // El comando de control no es conversación, pero su PARCIAL ya está en la
       // línea abierta. Si este texto pertenece a esa misma locución, se aplica
       // el texto completo y se cierra por la puerta única de cierre, que lo
@@ -577,6 +604,7 @@ export function crearFlujoTexto({
     const dicho = String(dependencias.ultimoTextoDicho() || '').trim()
     if (dicho) {
       if (esEcoDeTts(texto, dicho, dependencias.config.echoMinPalabrasCola())) {
+        sesion.mostrarPendiente('')
         sesion.contarDescarte('eco', tramoId, null)
         return
       }
@@ -600,6 +628,20 @@ export function crearFlujoTexto({
     // cola nueva; dueño único `sinPrefijoDeLaFilaAnterior`.
     if (abierta && !String(abierta.texto || '').trim() && String(texto).trim()) {
       texto = sinPrefijoDeLaFilaAnterior(texto, voz, abierta.partidaDeVoz, abierta)
+    }
+    // MISMO tramo del ASR, pero frase que NO continúa la abierta: es un aporte
+    // NUEVO. Se retiene con tramo propio para que el cierre la AÑADA; aplicarla
+    // al tramo abierto sustituía el principio de la mujer por su cola.
+    if (
+      abierta &&
+      abierta.locutionId === tramoId &&
+      String(abierta.texto || '').trim() &&
+      String(texto || '').trim() &&
+      !texto.toLowerCase().startsWith(abierta.texto.toLowerCase()) &&
+      !continuaLaFrase(abierta.texto, texto)
+    ) {
+      encolar(entrada, tramoId, texto)
+      return
     }
     // Una locución ABIERTA y VACÍA no puede bloquear el texto que llega de otro
     // tramo: se cierra descartada (sinTexto) y el texto abre su propia locución.

@@ -25,7 +25,6 @@ import type {
   RelojPort,
   ResultadoAsr,
   TramoMuestreado,
-  TranscriptorTramoPort,
   VadPort,
 } from './ports.ts'
 
@@ -264,12 +263,6 @@ export type DependenciasConversacion = Readonly<{
    * `speechLikeMs`/`rms` del PCM retenido cuando el motor no trae métricas.
    */
   medidor: MedidorTramoPort
-  /**
-   * Transcriptor local opcional: recupera el texto de una locución que cierra
-   * con voz medida y texto vacío (Chrome mudo). Sin él, esa locución descarta
-   * como `sinTexto` (comportamiento previo).
-   */
-  transcriptorTramo?: TranscriptorTramoPort
   /**
    * Anclas de voz MEDIDAS de la base (solo lectura). Se consultan como
    * candidatas de identidad: una voz ya registrada se presenta con su nombre

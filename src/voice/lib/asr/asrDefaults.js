@@ -25,7 +25,12 @@
 /** Defaults del VAD: trama, piso de energia y criterio de HABLA. @type {VadDefaults} */
 export const VAD_DEFAULTS = Object.freeze({
   frameMs: 30,
-  energyThreshold: 0.02,
+  /**
+   * Piso RMS de voz. 0.01 (antes 0.02): con 0.02 la TV/ambiente de sala no
+   * abría turno. El criterio de HABLA (ZCR/modulación) sigue filtrando ruido
+   * sin voz; el piso solo decide si hay energía suficiente para mirar.
+   */
+  energyThreshold: 0.01,
   /** Voz minima para abrir turno (ms). */
   minSpeechMs: 450,
   /** Silencio para cerrar turno (ms). */

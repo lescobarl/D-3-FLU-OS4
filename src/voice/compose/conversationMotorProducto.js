@@ -346,8 +346,9 @@ export function crearMotorConversacionHook({
     abrir: () => {
       generacion += 1
       cerrado = false
-      ultimaViva = ''
-      ultimaVivaLocucion = ''
+      // NO se reinicia la caja aquí: un rebuild del reconocedor NO es una
+      // frontera de hablante ni de tiempo. La monotonía de la frase viva se
+      // reinicia al commitear la fila o al cerrar la sesión, no al reconectar.
       return motor.abrir()
     },
     evento: (evento) => {

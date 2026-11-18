@@ -256,10 +256,9 @@ describe('P9.60 - tuberia completa: el rebuild del watchdog no puede perder la l
 
     // PCM real del micrófono: 1 s de silencio abre el piso y la VOZ del
     // micrófono abre la locución del módulo (todavía SIN texto: Chrome no ha
-    // entregado nada). Se alimenta en tramos de 500 ms con el reloj del watchdog
-    // avanzando entre ellos: el TOPE parte la locución a los 12 s y abre la
-    // SIGUIENTE (id nuevo), así que la locución viva al disparar la puerta de
-    // sesión ya NO es la primera. El contador de sesión sobrevive a ese cierre.
+    // entregado nada). SIN TOPE, esa locución vacía SIGUE ABIERTA todo el
+    // tiempo; el contador de sesión de la puerta `mudo` sobrevive mientras
+    // Chrome no suelta texto.
     for (let i = 0; i < 10; i += 1) empujarAudio(silencio(BLOQUE_MS));
     const umbral = Number(FLU_CONFIG.activeListen.restart.muteOpenLocutionMs);
     let creados = vecesCreadoElReconocedor();
@@ -281,7 +280,7 @@ describe('P9.60 - tuberia completa: el rebuild del watchdog no puede perder la l
 
     // Chrome MUDO: ningún resultado. La puerta TEMPRANA (`stallMs`) ya disparó y
     // la puerta de SESIÓN dispara a los `muteOpenLocutionMs` de habla sin texto,
-    // aunque el tope haya cerrado la ventana anterior por `maximo`.
+    // con la MISMA locución vacía abierta (ya no hay tope que la parta).
     expect(vista.result.current.status, 'la escucha sigue viva tras los rebuilds').toBe('listening');
     expect(vecesCreadoElReconocedor(), 'el watchdog no llegó a reconstruir').toBeGreaterThanOrEqual(2);
     // El paso que reconstruyó es el MEDIDO: `kind=mudo` con la abierta vacía.
@@ -301,15 +300,8 @@ describe('P9.60 - tuberia completa: el rebuild del watchdog no puede perder la l
       'el rebuild debe declarar kind=mudo con la locución abierta vacía',
     ).toBe(true)
 
-    // El TOPE cerró la locución a los 12 s (causa `maximo`) y la viva es la
-    // ventana SIGUIENTE: eso se afirma, no se elimina.
-    const cierres = (relayLog as unknown as { mock: { calls: unknown[][] } }).mock.calls
-      .filter((llamada) => String(llamada[2] || '') === 'conversacion.locucion.cerrada')
-      .map((llamada) => (llamada[3] || {}) as { causa?: string; locutionId?: string })
-    const cierreMaximo = cierres.filter((cierre) => cierre.causa === 'maximo').pop()
-    expect(cierreMaximo, 'el tope debe cerrar la primera ventana por maximo').toBeTruthy()
-    const idSesion = (sesion[0]?.match(/locucionId=([^\s]+)/) || [])[1]
-    expect(idSesion, 'la locución viva de la puerta de sesión es la SIGUIENTE ventana').not.toBe(cierreMaximo?.locutionId)
+    // SIN TOPE: no hay cierre `maximo`; la MISMA locución vacía sigue abierta y
+    // el rebuild del watchdog no la descarta.
 
     // La locución SOBREVIVIÓ al rebuild: el final que llega DESPUÉS (nuevo motor)
     // entra en la caja del módulo. Un final no cierra: todavía no hay fila.

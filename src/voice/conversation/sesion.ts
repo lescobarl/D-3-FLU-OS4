@@ -197,6 +197,9 @@ export function crearEstadoSesion(idiomaInicial: IdiomaLocucion): EstadoSesion {
  * @param estado Estado mutable de la sesión.
  * @param vector Vector medido que sostiene la decisión.
  * @param identidad Decisión de la regla de identidad.
+ * @param umbralContinuidadVoz Piso de continuidad real (el mismo que decidió la
+ *   identidad). El refresco del ancla exige ese piso, no el de fusión de clusters:
+ *   una ventana dudosa no reescribe la plantilla de la voz.
  */
 export function registrarMedidaVoz(
   estado: Pick<
@@ -205,6 +208,7 @@ export function registrarMedidaVoz(
   >,
   vector: readonly number[],
   identidad: IdentidadDecidida,
+  umbralContinuidadVoz = sameVoiceFloor(),
 ): void {
   // Sin vozId no hay identidad: turno corto pendiente. No se acuna plantilla
   // ni se incrementa el contador de voces (auditoria 2026-11-01).
@@ -225,10 +229,18 @@ export function registrarMedidaVoz(
     // de Luis llevaba el timbre de la mujer (cos 0.436 contra su propio ancla). Un ancla no
     // se envenena con una medida ajena: mismo piso que decide la continuidad.
     const ancla = Array.isArray(existente.vector) ? existente.vector : []
+    const piso = Number(umbralContinuidadVoz)
     const mismaVoz =
       ancla.length === 0 ||
-      compareCosineSignatures([...vector], [...ancla]) >= sameVoiceFloor()
-    if (mismaVoz) existente.vector = [...vector]
+      compareCosineSignatures([...vector], [...ancla]) >=
+        (Number.isFinite(piso) && piso > 0 ? piso : sameVoiceFloor())
+    // CENTROIDE: la plantilla es el promedio de las medidas aceptadas de la MISMA
+    // voz. Una ventana suelta de la misma mujer varía 0.28–0.77; el promedio se
+    // mantiene 0.82–0.94 y no la parte (medido en e4f253e7: `Hablante 3/4` falsos
+    // por comparar contra una sola ventana).
+    if (mismaVoz) {
+      existente.vector = ancla.map((valor, indice) => (valor + vector[indice]) / 2)
+    }
     if (etiqueta) existente.etiqueta = etiqueta
     return
   }
@@ -256,7 +268,6 @@ export function crearSesion(
     | 'registro'
     | 'embebedor'
     | 'medidor'
-    | 'transcriptorTramo'
     | 'anclasBase'
   >,
   tramos: RegistroTramos,
@@ -389,7 +400,6 @@ export function crearSesion(
     id,
     embebedor,
     medidor,
-    transcriptorTramo: dependencias.transcriptorTramo,
     tramos,
     anclasBase: dependencias.anclasBase,
   })

@@ -2018,8 +2018,7 @@ export const FLU_CONFIG = {
       vad: {
         /** Ventana de análisis (ms). */
         frameMs: VAD_DEFAULTS.frameMs,
-        /** Umbral de energía RMS para considerar voz (se mide/ajusta en validación).
-         *  Con 0.015 el ruido de ambiente abría turno y Whisper alucinaba. */
+        /** Umbral RMS: 0.01 abre TV/ambiente; ZCR/modulación filtra ruido sin voz. */
         energyThreshold: VAD_DEFAULTS.energyThreshold,
         /** Voz mínima para abrir turno (ms). Subido a 450: exige voz sostenida
          *  (un chasquido/ruido corto ya no abre turno). */

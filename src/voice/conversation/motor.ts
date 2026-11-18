@@ -348,7 +348,16 @@ export function crearConversacion(dependencias: DependenciasConversacion): Conve
     start: (opciones) => cola.serializar(() => iniciar(opciones)),
     stop: (stopKind) => cola.serializar(() => detener(stopKind)),
     ingestAudio: (bloque) => cola.serializar(() => ingesta.ingestaAudio(bloque)),
-    ingestAsr: (resultado: AsrIngestado) => cola.serializar(() => ingesta.ingestaAsr(resultado)),
+    ingestAsr: (resultado: AsrIngestado) => {
+      // PINTAR PRIMERO: la caja recibe el interim en el acto, fuera de la cola
+      // serial. La verificación de voz sigue en `ingestaAsr` para atribuir/partir,
+      // pero ya no bloquea el texto visible.
+      const texto = String(resultado.texto || '').trim()
+      if (texto && estado.activa) {
+        sesion.mostrarPendiente(texto, String(resultado.tramoId || '').trim())
+      }
+      return cola.serializar(() => ingesta.ingestaAsr(resultado))
+    },
     snapshot: sesion.snapshot,
     subscribe: suscribir,
     registerName: registrarNombre,

@@ -41,10 +41,9 @@
 import { logCaughtError } from '../../lib/caughtError.ts'
 import { relayLog } from '../../lib/clientLogRelay.ts'
 import { normalizeForMatch } from '../../lib/textUtils.ts'
-import { downsample, splitTranscriptAtWakeWord } from '../api/audio.ts'
+import { splitTranscriptAtWakeWord } from '../api/audio.ts'
 import { FLU_CONFIG } from '../api/config.ts'
 import { getVadFrameMs } from '../lib/asr/asrConfig.js'
-import { DEFAULT_TARGET_SAMPLE_RATE } from '../lib/audioConstants.js'
 import { detectListeningControl } from '../lib/audioMath.js'
 import { labelToSpeakerId } from '../lib/conversationRow.js'
 import {
@@ -92,11 +91,9 @@ import type {
   PuertoVistaFilas,
   RegistroPort,
   RelojPort,
-  TranscriptorTramoPort,
   UtilidadesFila,
   VadPort,
 } from './ports.ts'
-import type { WhisperTranscriber } from '../lib/asr/whisperWasmTranscriber.js'
 import { renombrarFilaDeUsuario } from './pasivo.ts'
 
 /** Reloj del sistema: la ÚNICA llamada a `Date.now()` del módulo, inyectada. */
@@ -559,55 +556,4 @@ export function renameRowSpeakerName(rowId: string, speakerName: string): boolea
     vista: crearPuertoVistaFilasProducto(),
     utilidades: crearUtilidadesFilaProducto(),
   })
-}
-
-/**
- * Transcriptor local del PCM de una locución (B2): Whisper WASM on-device sobre
- * el audio retenido (48 kHz), remuestreado a su `targetSampleRate` (16 kHz) por
- * el dueño único `downsample`. Carga perezosa del worker y tope de espera de la
- * config; si no responde, rechaza y el cierre sigue como `sinTexto`. Sin
- * sidecar ni HTTP. El texto que produce NO es accionable (predicado de la fila).
- * @returns Puerto que transcribe el audio de un tramo.
- */
-export function crearTranscriptorTramoProducto(): TranscriptorTramoPort {
-  const targetSampleRate = DEFAULT_TARGET_SAMPLE_RATE
-  let transcriptor: WhisperTranscriber | null = null
-  let precargado = false
-  return {
-    precargar: async () => {
-      try {
-        if (!transcriptor) {
-          const mod = await import('../lib/asr/whisperWasmTranscriber.js')
-          transcriptor = mod.createWhisperWasmTranscriber({ dtype: 'fp32' })
-        }
-        if (!precargado) {
-          await transcriptor.preload()
-          precargado = true
-          // ÉXITO de la precarga: sin esta línea no se podía distinguir "modelo
-          // listo" de "modelo cargándose dentro del deadline" (sesión 1c09c597).
-          relayLog('LOG', 'conversacion', 'conversacion.transcripcion.local.precarga.ok', {
-            motor: 'whisper-wasm',
-            dtype: 'fp32',
-          })
-        }
-      } catch (error) {
-        // La precarga es oportunista: un fallo NO bloquea; el cierre reintenta.
-        logCaughtError('conversacion.transcripcion.local.precarga.fallo', error)
-      }
-    },
-    // La transcripción NO precarga (eso es `precargar`, al abrir la sesión) y su
-    // deadline lo aplica el MÓDULO (config) al llamar a este método; aquí solo
-    // se transcribe el audio ya remuestreado.
-    transcribir: async ({ muestras, sampleRate }) => {
-      const tr =
-        transcriptor ??
-        (transcriptor = (
-          await import('../lib/asr/whisperWasmTranscriber.js')
-        ).createWhisperWasmTranscriber({ dtype: 'fp32' }))
-      const tasa = Number(sampleRate) > 0 ? Number(sampleRate) : targetSampleRate
-      const audio =
-        tasa === targetSampleRate ? muestras : downsample(muestras, tasa, targetSampleRate)
-      return String((await tr.transcribe(audio)) || '').trim()
-    },
-  }
 }

@@ -40,7 +40,6 @@ import {
   crearPartidorWake,
   crearRegistroCaughtError,
   crearRelojSistema,
-  crearTranscriptorTramoProducto,
   crearVadProducto,
   ejecutarRegistrando,
   fusionarEnLineaAbierta,
@@ -145,7 +144,6 @@ export function crearMotorConversacionProducto({
   const id = crearIdUuid()
   const config = crearConfigFlu()
   const registro = crearRegistroCaughtError()
-  const transcriptorTramo = crearTranscriptorTramoProducto()
   const api: ConversacionApi = crearConversacion({
     reloj,
     id,
@@ -155,7 +153,6 @@ export function crearMotorConversacionProducto({
     partidor: crearPartidorWake(config),
     vad: crearVadProducto(),
     medidor: crearMedidorTramo(),
-    transcriptorTramo,
     ultimoTextoDicho,
     embebedor: crearEmbebedorProducto(),
     anclasBase,
@@ -327,9 +324,6 @@ export function crearMotorConversacionProducto({
       cierreEnCurso = null
       estadoMotor = 'activa'
       cursorMuestras = 0
-      // Precarga del transcriptor local (fire-and-forget): la primera
-      // transcripción de la sesión NO debe cargar el modelo dentro del deadline.
-      void transcriptorTramo.precargar?.()
       // Caso 11: la conversación ADOPTA el id de la grabación activa al abrir la
       // sesión; sin grabación (proveedor vacío) el módulo acuña el propio (N/A).
       const grabacion = String(recordingId?.() ?? '').trim()

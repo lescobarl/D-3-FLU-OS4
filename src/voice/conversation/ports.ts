@@ -18,7 +18,11 @@ export type Idioma = 'es' | 'en' | 'both'
 /** Idioma de una locución concreta: una locución no es «both». */
 export type IdiomaLocucion = Exclude<Idioma, 'both'>
 
-/** Valor canónico de una fila transcrita localmente (no accionable). */
+/**
+ * Valor HISTÓRICO de una fila transcrita localmente. No hay productor: solo
+ * protege filas ya persistidas de sesiones anteriores para que no disparen
+ * comandos. Las filas nuevas son siempre `chrome`.
+ */
 export const ORIGEN_TRANSCRIPCION_LOCAL = 'local' as const
 
 /** Motivo declarado del cierre de una locución (`stop(stopKind)`). */
@@ -78,8 +82,7 @@ export type Fila = Readonly<{
   reason: MotivoCierre
   /**
    * Origen del TEXTO de la fila. Ausente = 'chrome' (ASR de la nube). 'local'
-   * = transcrito del PCM con Whisper cuando Chrome no entregó texto (Chrome
-   * mudo). Una fila local NO es accionable (predicado único de la fila).
+   * = fila HISTÓRICA de una sesión anterior (sin productor); NO es accionable.
    */
   origenTranscripcion?: 'chrome' | 'local'
   /** Revisión del almacén (incremento atómico). */
@@ -290,18 +293,6 @@ export interface MedidorTramoPort {
   ): Readonly<{ speechLikeMs: number; rms: number }>
 }
 
-/**
- * Transcriptor local del PCM de una locución (Whisper WASM on-device). Se usa
- * SOLO cuando una locución cierra con voz medida pero texto vacío (Chrome mudo):
- * recupera lo dicho sin sidecar ni HTTP. El texto local no ejecuta comandos.
- */
-export interface TranscriptorTramoPort {
-  /** Pre-carga el modelo (una vez). Se llama fire-and-forget al abrir la sesión. */
-  precargar?(): Promise<void>
-  /** Transcribe el audio de un tramo (la implementación remuestrea si hace falta). */
-  transcribir(entrada: Readonly<{ muestras: Float32Array; sampleRate: number }>): Promise<string>
-}
-
 /** Estado del ASR. `aborted` es estado del ASR, nunca de la fila. */
 export type EstadoAsr =
   | 'idle'
@@ -336,7 +327,7 @@ export type OpcionesAsr = Readonly<{
   alEstado: (estado: EstadoAsr, detalle?: string) => void
 }>
 
-/** ASR por puerto: nube (Chrome) o local (Whisper); el módulo no importa ninguno. */
+/** ASR por puerto: nube (Chrome) o local (motor inyectado); el módulo no importa ninguno. */
 export interface AsrPort {
   /** ¿Este entorno puede abrir el motor pedido? */
   soportado(motor: MotorAsr): boolean
@@ -367,25 +358,6 @@ export interface ConfiguracionConversacion {
    */
   readonly finalCloseConfirmMs: number
   /**
-   * Tope de duración de UNA locución (ms). La frase que sigue ganando voz se
-   * PARTE en ventanas de esta duración. `0` = sin tope.
-   */
-  readonly maxLocutionMs: number
-  /**
-   * Tope de espera del transcriptor local al cerrar una locución vacía (ms).
-   * Si expira, el cierre sigue como `sinTexto` y queda registrado.
-   */
-  readonly transcriptorTramoTimeoutMs: number
-  /**
-   * Compuerta de PLAUSIBILIDAD del texto local (reduce alucinación, NO la
-   * elimina): mínimo de palabras y caracteres, ratio de palabras únicas y tope
-   * de palabras por segundo sobre el audio de la ventana.
-   */
-  readonly transcripcionLocalMinPalabras: number
-  readonly transcripcionLocalMinCaracteres: number
-  readonly transcripcionLocalRatioUnicas: number
-  readonly transcripcionLocalMaxPalabrasPorSegundo: number
-  /**
    * Ventanas SEGUIDAS de voz distinta que confirman un cambio antes de partir
    * la locución (Caso 1+3). Una sola puede ser el tartamudeo del embebedor en
    * la frontera de un tramo.
@@ -399,6 +371,8 @@ export interface ConfiguracionConversacion {
   readonly maxRetentionMin: number
   /** Identidad por medida: segundos mínimos de audio retenido antes de medir. */
   readonly minSegundosVozMedida: number
+  /** Voz medida mínima (ms) para afirmar cualquier identidad (regla 6: XX por debajo). */
+  readonly minVozIdentidadMs: number
   /** Duracion minima para ACUNAR una voz nueva (los turnos cortos quedan pendientes). */
   readonly minSegundosNuevaVoz: number
   /** Palabras minimas para acunar una voz nueva. */
@@ -424,22 +398,6 @@ export const CONVERSACION_CONFIG: ConfiguracionConversacion = Object.freeze({
   // los 1,5 s la ventana no alcanza a disparar). Si una pausa real más larga
   // partiera la frase, este número se sube (palanca del plan).
   finalCloseConfirmMs: 800,
-  // TOPE de locución: 12 s. Una locución continua se parte en ventanas de 12 s;
-  // sin tope se queda abierta y vacía hasta el `sinTexto` (defecto medido
-  // 2026-11-15 02:26, la mujer habló 40,216 s continuos).
-  maxLocutionMs: 12000,
-  // Tope del transcriptor local (Whisper WASM) al cerrar una locución vacía con
-  // voz. MEDIDO: una ventana de 12 s tarda ~5–6 s en CPU con tiny fp32; 4 s
-  // expiraba y tiraba texto real (2026-11-15, sesión 1c09c597). Ocho segundos
-  // dan margen mientras la transcripción siga en el camino síncrono del cierre.
-  // Se escribe con separador para no contarse como el literal 8000 de las
-  // puertas de tiempo (`rutas dobles`); este es un presupuesto de transcriptor.
-  transcriptorTramoTimeoutMs: 8_000,
-  // Compuerta de plausibilidad del texto local (Whisper): reduce alucinación.
-  transcripcionLocalMinPalabras: 2,
-  transcripcionLocalMinCaracteres: 6,
-  transcripcionLocalRatioUnicas: 0.3,
-  transcripcionLocalMaxPalabrasPorSegundo: 6,
   // UNA ventana de voz distinta no parte la fila: el embebedor puede
   // tartamudear en la frontera de un tramo; se exigen DOS seguidas.
   confirmacionesCambioVoz: 2,
@@ -447,9 +405,15 @@ export const CONVERSACION_CONFIG: ConfiguracionConversacion = Object.freeze({
   asr: Object.freeze({ engine: 'auto', lang: 'es' }),
   maxRetentionMin: 120,
   minSegundosVozMedida: 1.5,
+  // Piso de VOZ para afirmar identidad: por debajo, la fila es XX (regla 6).
+  // La ventana de medida es 1.5 s; el habla dentro de ella puede ser mucho menor
+  // (medido: 540 ms) y una ventana corta no distingue voces.
+  minVozIdentidadMs: 700,
   minSegundosNuevaVoz: 8,
   minPalabrasNuevaVoz: 8,
-  maxSegundosVozRetenida: 60,
+  // Tope de PCM retenido por locución (memoria). 120 s cubre frases largas
+  // (una disertación de 70 s no se trunca).
+  maxSegundosVozRetenida: 120,
   overlapMargin: null,
 })
 

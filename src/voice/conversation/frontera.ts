@@ -25,12 +25,10 @@ export type UmbralesFrontera = Readonly<{
   silenceCloseMs: number
   /** Confirmación del final: silencio de reloj tras el final (puerta 2). */
   finalCloseConfirmMs?: number
-  /** Tope de duración de la locución (ms). `0`/ausente = sin tope. */
-  maxLocutionMs?: number
 }>
 
 /** Causa del cierre: voz distinta medida, frontera por texto ajeno o silencio. */
-export type CausaFrontera = 'voz' | 'frontera' | 'silencio' | 'maximo'
+export type CausaFrontera = 'voz' | 'frontera' | 'silencio'
 
 /** Decisión de la regla 2: si cerrar y por qué. */
 export type DecisionFrontera = Readonly<{
@@ -51,10 +49,6 @@ export type EntradaFrontera = Readonly<{
    * Ausente = sin final aplicado: la puerta 2 solo usa el silencio VAD.
    */
   finalDesdeMs?: number
-  /**
-   * Duración de AUDIO de la locución abierta (ms). Ausente = el tope no evalúa.
-   */
-  duracionMs?: number
 }>
 
 /**
@@ -74,20 +68,15 @@ export function decidirFrontera(
   if (entrada.cambioVoz === true) return { cerrar: true, causa: 'voz' }
 
   const silencioMs = Math.max(0, Number(entrada.medida.silencioMs) || 0)
-  const topeMs = Math.max(0, Number(umbrales.maxLocutionMs) || 0)
-  const topeCierra =
-    topeMs > 0 &&
-    entrada.duracionMs !== undefined &&
-    Math.max(0, Number(entrada.duracionMs) || 0) >= topeMs
-  if (entrada.medida.hayVoz && !topeCierra) return { cerrar: false, causa: null }
+  // Con voz presente en la medida no se cierra por tiempo: la voz gana.
+  if (entrada.medida.hayVoz) return { cerrar: false, causa: null }
 
   // PUERTA 2: SOLO el silencio cierra. El texto ajeno por sí solo NO cierra.
   // Dos medidas del mismo hecho, la que primero se cumpla:
   //  - silencio MEDIDO por el VAD hasta `silenceCloseMs` (puerta de abajo), o
   //  - silencio de RELOJ desde el final confirmado: el final del ASR MARCA la
   //    frase pero NO la cierra (mandato 2026-10-30); la ventana de silencio
-  //    posterior es la que adelanta la fila. Solo dispara si no hubo voz en
-  //    el camino (el llamador rearma la marca en cada bloque con voz).
+  //    posterior es la que adelanta la fila.
   const finalConfirmadoMs = Math.max(0, Number(entrada.finalDesdeMs) || 0)
   const topeConfirmacion = Number(umbrales.finalCloseConfirmMs)
   const silencioCierra =
@@ -95,12 +84,10 @@ export function decidirFrontera(
     (topeConfirmacion > 0 &&
       entrada.finalDesdeMs !== undefined &&
       finalConfirmadoMs >= topeConfirmacion)
-  if (silencioCierra || topeCierra) {
+  if (silencioCierra) {
     return {
       cerrar: true,
-      causa: silencioCierra
-        ? (entrada.textoAjeno ? 'frontera' : 'silencio')
-        : 'maximo',
+      causa: entrada.textoAjeno ? 'frontera' : 'silencio',
     }
   }
   return { cerrar: false, causa: null }

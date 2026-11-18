@@ -20,6 +20,7 @@ import type { RegistroTramos } from './tramos.ts'
 import { registrarMedidaVoz } from './sesion.ts'
 import { compareCosineSignatures } from '../lib/speakerCore.js'
 import { sameVoiceFloor } from '../lib/speakerClusters.js'
+import { continuaLaFrase } from '../core/locucion.js'
 import { concatenarMuestras, vozMsDeMuestras } from './muestras.ts'
 import { logCaughtError } from '../../lib/caughtError.ts'
 import { normalizeForMatch } from '../../lib/textUtils.ts'
@@ -48,13 +49,16 @@ import type {
   MotivoCierre,
   RegistroPort,
   TramoMuestreado,
-  TranscriptorTramoPort,
 } from './ports.ts'
-import { CONVERSACION_CONFIG, ORIGEN_TRANSCRIPCION_LOCAL } from './ports.ts'
+import { CONVERSACION_CONFIG } from './ports.ts'
 
 /** Parte del estado de sesión que consumen las reglas de cierre. */
 export type EstadoCierre = {
   sessionId: string | null
+  /** `false` tras el stop: una transcripción que aún no commitea no escribe. */
+  activa: boolean
+  /** `true` desde el stop hasta que la sesiA3n queda inactiva (cancela trabajo obsoleto). */
+  cerrando: boolean
   turnoActual: string
   turnosConFila: Set<string>
   abierta: LocucionAbierta | null
@@ -94,7 +98,7 @@ export type ContextoCierre = Readonly<{
   registro: RegistroPort
   almacen: AlmacenPort
   config: ConfigPort
-  /** Tabla del plan inyectada (tope del transcriptor y compuerta de plausibilidad). */
+  /** Tabla del plan inyectada (fronteras y compuerta de plausibilidad). */
   configuracion?: ConfiguracionConversacion
   /** Generador UUIDv4: la voz nueva acuña su identidad (medida de respaldo). */
   id: IdPort
@@ -102,8 +106,6 @@ export type ContextoCierre = Readonly<{
   embebedor?: EmbebedorPort
   /** Medidor del tramo cerrado (Caso 7+6): obligatorio, nada de medida null. */
   medidor: MedidorTramoPort
-  /** Transcriptor local opcional: recupera una locución con voz y sin texto. */
-  transcriptorTramo?: TranscriptorTramoPort
   /**
    * Audio REAL por tramo: respaldo de la medida al cerrar. La voz se mide sobre
    * el audio de la locución aunque `muestrasAbierta` se haya vaciado; una fila
@@ -144,6 +146,13 @@ export type AplicarRevision = (
   medida?: MedidaMotor,
   /** Tramo al que pertenece `texto`; sin él, el tramo base de la locución. */
   tramoOrigen?: string,
+  /**
+   * `true` si el texto llega del retén (frase que no continuaba la abierta).
+   * Un aporte nuevo que crece se AÑADE; una revisión directa sigue sustituyendo
+   * su tramo. Así el final que limpia ruido no se parte y la cola de una frase
+   * nueva no borra el principio.
+   */
+  esAporteNuevo?: boolean,
 ) => boolean
 
 /** Aporte de texto de un tramo dentro de la locución abierta (orden de llegada). */
@@ -276,7 +285,6 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
     id,
     embebedor,
     medidor,
-    transcriptorTramo,
     tramos,
     anclasBase,
   } = contexto
@@ -343,6 +351,7 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
     voz,
     medida,
     tramoOrigen,
+    esAporteNuevo = false,
   ) => {
     const origen =
       String(tramoOrigen || locucion.locutionId).trim() || locucion.locutionId;
@@ -378,28 +387,46 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
     // hipótesis confirmada cuando crece o corrige con el mismo tamaño, pero si
     // llega MÁS CORTO no borra la cola ya visible (antes `finalEsPrefijo`
     // reemplazaba por el prefijo y truncaba la frase y los comandos).
+    const esFraseNuevaDelMismoTramo =
+      esAporteNuevo &&
+      indice >= 0 &&
+      Boolean(previoTramo) &&
+      Boolean(textoFinal) &&
+      textoFinal.length > previoTramo.length &&
+      !previoTramo.toLowerCase().startsWith(textoFinal.toLowerCase()) &&
+      !continuaLaFrase(previoTramo, textoFinal)
     const finalNoTrunca =
       Boolean(textoFinal) && textoFinal.length >= previoTramo.length
-    const textoDelTramo = final
-      ? finalNoTrunca && (decision.pintar || finalEsPrefijo)
-        ? textoFinal
-        : previoTramo
-      : decision.texto;
-    let siguientes: readonly TextoPorTramo[] =
-      indice >= 0
-        ? aportes.map((aporte, i) =>
-            i === indice ? { tramoId: origen, texto: textoDelTramo } : aporte,
-          )
-        : [
-            ...aportes.filter((aporte) => aporte.texto.trim()),
-            { tramoId: origen, texto: textoDelTramo },
-          ];
+    const textoDelTramo = esFraseNuevaDelMismoTramo
+      ? textoFinal
+      : final
+        ? finalNoTrunca && (decision.pintar || finalEsPrefijo)
+          ? textoFinal
+          : previoTramo
+        : decision.texto
+    let siguientes: readonly TextoPorTramo[]
+    if (esFraseNuevaDelMismoTramo) {
+      siguientes = [
+        ...aportes.filter((aporte) => aporte.texto.trim()),
+        { tramoId: `${origen}#${aportes.length}`, texto: textoDelTramo },
+      ]
+    } else if (indice >= 0) {
+      siguientes = aportes.map((aporte, i) =>
+        i === indice ? { tramoId: origen, texto: textoDelTramo } : aporte,
+      )
+    } else {
+      siguientes = [
+        ...aportes.filter((aporte) => aporte.texto.trim()),
+        { tramoId: origen, texto: textoDelTramo },
+      ]
+    }
     // El ASR puede reemitir de forma ACUMULATIVA: si el texto de este tramo ya
     // contiene el de los demás, se colapsa para no duplicar lo ya dicho.
     const otros = siguientes.filter(
       (aporte) => aporte.tramoId !== origen && aporte.texto.trim(),
     );
     if (
+      !esFraseNuevaDelMismoTramo &&
       otros.length > 0 &&
       otros.every((aporte) => contieneTexto(textoDelTramo, aporte.texto))
     ) {
@@ -502,13 +529,14 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
       umbral: config.umbralContinuidadVoz(),
       duracionMs: vozMs,
       minNuevaVozMs: config.minNuevaVozMs?.() ?? 0,
+      minVozIdentidadMs: configuracion.minVozIdentidadMs,
       umbralExistente: config.umbralExistenteVoz?.() ?? config.umbralContinuidadVoz(),
       // Perezoso: la plantilla SOLO se resuelve si la voz es nueva (Caso 10).
       etiquetaNueva: () => config.etiquetaAnonima(estado.contadorVoces + 1),
       comparar: embebedor.comparar,
       id: id.uuid,
     })
-    registrarMedidaVoz(estado, vector, identidad)
+    registrarMedidaVoz(estado, vector, identidad, config.umbralContinuidadVoz())
     registrarEventoVoz('conversacion.voz.medida.cerrada', locucion, muestras.length, {
       vozId: identidad.vozId,
       hablante: identidad.hablante,
@@ -773,26 +801,6 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
     // escritor de `conversations` deriva de ella el inicio real de la frase. Sin
     // ancla no se declara y el almacén cae a su reloj (compatibilidad).
     const marcaFinMs = horaDelFinDelTramo(estado.anclaAudio, tramo)
-    // RECUPERO LOCAL (Chrome MUDO) — ASÍNCRONO: si la locución cierra CON VOZ
-    // medida pero SIN texto, se captura su PCM y se transcribe en segundo plano.
-    // El cierre NO espera: la fila local se inserta cuando el transcriptor
-    // termina (insert-only, por `locutionId`). Si falla o expira, se cuenta
-    // `sinTexto`. La latencia de Whisper no frena la tubería ni tira la ventana.
-    let audioLocal: Float32Array | null = null
-    if (
-      !String(locucion.texto || '').trim() &&
-      transcriptorTramo &&
-      Number(medida.speechLikeMs) > 0
-    ) {
-      const delEstado = concatenarMuestras(estado.muestrasAbierta)
-      if (delEstado.length > 0) {
-        audioLocal = delEstado
-      } else {
-        const delTramo = tramos.muestras(locucion.locutionId, tramo)
-        if (delTramo) audioLocal = concatenarMuestras(delTramo)
-      }
-      if (audioLocal && audioLocal.length === 0) audioLocal = null
-    }
     const cierre: CierreLocucion = {
       locutionId: locucion.locutionId,
       sessionId: sesion,
@@ -819,112 +827,6 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
     estado.tramosDeLaAbierta.clear()
     estado.muestrasEnUltimoIntento = 0
     emitirCaja()
-
-    if (audioLocal && transcriptorTramo) {
-      const topeMs = Math.max(1, Number(configuracion.transcriptorTramoTimeoutMs) || 0)
-      ;(async () => {
-        let temporizador: ReturnType<typeof setTimeout> | undefined
-        const trabajo = Promise.resolve(
-          transcriptorTramo.transcribir({
-            muestras: audioLocal,
-            sampleRate: locucion.sampleRate,
-          }),
-        )
-        // El perdedor de la carrera no puede quedar sin manejar: su rechazo
-        // tardío se registra (nunca se silencia).
-        trabajo.catch((error) =>
-          logCaughtError('conversacion.transcripcion.local.tarde', error, {
-            sessionId: sesion,
-            locutionId: locucion.locutionId,
-          }),
-        )
-        let local = ''
-        try {
-          local = String(
-            (await Promise.race([
-              trabajo,
-              new Promise<string>((_, rechazar) => {
-                temporizador = setTimeout(
-                  () => rechazar(new Error('transcripcion local: timeout')),
-                  topeMs,
-                )
-              }),
-            ])) || '',
-          ).trim()
-          const palabras = local.toLowerCase().split(/\s+/).filter(Boolean)
-          const unicas = new Set(palabras).size
-          const ratioUnicas = palabras.length > 0 ? unicas / palabras.length : 0
-          const segundos = Math.max(
-            0.001,
-            audioLocal.length / (Number(locucion.sampleRate) || 1),
-          )
-          const plausible =
-            palabras.length >= Number(configuracion.transcripcionLocalMinPalabras) &&
-            local.length >= Number(configuracion.transcripcionLocalMinCaracteres) &&
-            ratioUnicas >= Number(configuracion.transcripcionLocalRatioUnicas) &&
-            palabras.length / segundos <=
-              Number(configuracion.transcripcionLocalMaxPalabrasPorSegundo)
-          if (local && !plausible) {
-            registro.registrar('conversacion.transcripcion.local.descartada', {
-              sessionId: sesion,
-              locutionId: locucion.locutionId,
-              palabras: palabras.length,
-            })
-          }
-          if (!local || !plausible) {
-            cerrarDescartada({ sessionId: sesion, locucion, tramo, motivo, causa, medida, descarte: 'sinTexto' })
-            return
-          }
-          const cierreLocal: CierreLocucion = {
-            ...cierre,
-            texto: local,
-            origenTranscripcion: ORIGEN_TRANSCRIPCION_LOCAL,
-          }
-          const resultadoLocal = construirFila(cierreLocal)
-          if (!resultadoLocal.fila) {
-            cerrarDescartada({
-              sessionId: sesion,
-              locucion,
-              tramo,
-              motivo,
-              causa,
-              medida,
-              descarte: resultadoLocal.descarte,
-            })
-            return
-          }
-          await confirmarFilaCommiteada({
-            resultado: resultadoLocal,
-            vozId: String(vozCerrada.vozId || ''),
-            sesion,
-            locucion,
-            tramo,
-            motivo,
-            causa,
-            medida,
-          })
-        } catch (error) {
-          // AGENTS §1.5: se registra con contexto y el cierre sigue (sinTexto).
-          logCaughtError('conversacion.transcripcion.local.fallo', error, {
-            sessionId: sesion,
-            locutionId: locucion.locutionId,
-          })
-          registro.registrar('conversacion.transcripcion.local.fallo', {
-            sessionId: sesion,
-            locutionId: locucion.locutionId,
-          })
-          cerrarDescartada({ sessionId: sesion, locucion, tramo, motivo, causa, medida, descarte: 'sinTexto' })
-        } finally {
-          clearTimeout(temporizador)
-        }
-      })().catch((error) =>
-        logCaughtError('conversacion.cierre.local.tarde', error, {
-          sessionId: sesion,
-          locutionId: locucion.locutionId,
-        }),
-      )
-      return
-    }
 
     const resultado = construirFila(cierre)
     if (!resultado.fila) {

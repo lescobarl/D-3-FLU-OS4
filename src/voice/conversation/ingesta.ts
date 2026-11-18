@@ -84,6 +84,7 @@ export function crearIngesta({
     | 'registro'
     | 'embebedor'
     | 'anclasBase'
+    | 'partidor'
   >
   configuracion: ConfiguracionConversacion
   sesion: Sesion
@@ -97,7 +98,6 @@ export function crearIngesta({
   // La ventana que abre tras un TOPE nace de una partición de la línea: su
   // caparazón marca `partidaDeVoz` para que el producto recorte el prefijo ya
   // commiteado (mismo dueño del recorte de prefijo).
-  let ventanaPartidaPorTope = false
   /**
    * Único dueño del motivo `turnoYaEscrito`; lo consumen la ingesta y el stop.
    * @revisor CREAR NUEVO — el motivo tenía dueño inline en ingesta y el stop
@@ -497,7 +497,7 @@ export function crearIngesta({
       // La evidencia de identidad es la VOZ medida, no la duración del tramo.
       vozMs,
     )
-    registrarMedidaVoz(estado, vector, identidad)
+    registrarMedidaVoz(estado, vector, identidad, dependencias.config.umbralContinuidadVoz())
     estado.abierta = conIdentidadVoz(recien, identidad)
     return true
   }
@@ -730,47 +730,7 @@ export function crearIngesta({
     }
   }
 
-  /**
-   * TOPE DE LOCUCIÓN (`maxLocutionMs`): acota la ventana que el respaldo local
-   * puede transcribir cuando Chrome está MUDO (locución abierta y VACÍA). Si la
-   * locución ya tiene texto de Chrome NO se cierra: una frase continua es UNA
-   * fila y el tope partía el enunciado en dos (medido 2026-11-15, sesión
-   * 1c09c597: “…vaya a ocupar” + “la clienta…”). El cierre real sigue siendo
-   * silencio, cambio de voz o stop. Deja la ventana nueva marcada
-   * `partidaDeVoz` para recortar el prefijo ya commiteado (solo aplica a las
-   * ventanas vacías que sí cierran).
-   *
-   * @revisor CREAR NUEVO — regla de tiempo que no existía en el árbol; no
-   * duplica `cerrarPendienteAsr` (esa cierra por ASR terminal, esta por duración
-   * de la locución).
-   */
-  async function cerrarPorTope(): Promise<void> {
-    const abierta = estado.abierta
-    if (!abierta) return
-    // UNA FRASE = UNA FILA: con texto de Chrome no hay respaldo local que acotar;
-    // el tope no puede ser frontera de conversación.
-    if (String(abierta.texto || '').trim()) return
-    const inicio = Number(abierta.inicio)
-    const fin = Number(abierta.fin)
-    const sampleRate = Number(abierta.sampleRate)
-    const duracionTopeMs = sampleRate > 0 ? ((fin - inicio) * 1000) / sampleRate : 0
-    const frontera = decidirFrontera(
-      {
-        medida: { hayVoz: false, silencioMs: 0 },
-        textoAjeno: false,
-        abierta: true,
-        duracionMs: duracionTopeMs,
-      },
-      configuracion,
-    )
-    if (!frontera.cerrar || frontera.causa !== 'maximo') return
-    await flujo.cerrarPorFrontera(frontera)
-    await flujo.flushPendientes()
-    estado.tramoAudio = null
-    ventanaPartidaPorTope = true
-  }
-
-  /** Ingesta un bloque de audio: mide, corta el tramo y evalúa la frontera. */
+    /** Ingesta un bloque de audio: mide, corta el tramo y evalúa la frontera. */
   async function ingestaAudio(bloque: BloqueAudio): Promise<InstantaneaConversacion> {
     sesion.exigirActiva()
     // Tras el stop no se abre nada nuevo: el micrófono puede seguir entregando
@@ -818,10 +778,6 @@ export function crearIngesta({
         : null)
     if (!medida) throw new Error('falta medida VAD: sin medida no hay frontera')
 
-    // TOPE DE LOCUCIÓN: acota solo la ventana VACÍA (Chrome mudo) que el
-    // respaldo local transcribe. Con texto de Chrome la frase sigue abierta:
-    // una frase continua = una fila. Ver `cerrarPorTope`.
-    await cerrarPorTope()
 
     if (!estado.tramoAudio) {
       if (medida.hayVoz) {
@@ -869,9 +825,8 @@ export function crearIngesta({
             { inicio, fin, sampleRate },
             estado.turnoActual,
             estado.idiomaActual,
-            ventanaPartidaPorTope,
+            false,
           )
-          ventanaPartidaPorTope = false
         }
         if (dependencias.asr && asrEmpujaAudio(estado.motorAsr)) {
           dependencias.asr.empujarAudio(bloque.muestras, sampleRate)
@@ -1140,6 +1095,7 @@ export function crearIngesta({
       umbral: dependencias.config.umbralContinuidadVoz(),
       duracionMs,
       minNuevaVozMs: dependencias.config.minNuevaVozMs?.() ?? 0,
+      minVozIdentidadMs: configuracion.minVozIdentidadMs,
       umbralExistente:
         dependencias.config.umbralExistenteVoz?.() ?? dependencias.config.umbralContinuidadVoz(),
       // Perezoso: la plantilla SOLO se resuelve si la voz es nueva (Caso 10).
@@ -1168,7 +1124,7 @@ export function crearIngesta({
     if (fila.sessionId !== estado.sessionId) return
     if (fila.evidencia !== 'pendiente') return
     const identidad = decidirIdentidadSesion(vector, embebedor, vozMs)
-    registrarMedidaVoz(estado, vector, identidad)
+    registrarMedidaVoz(estado, vector, identidad, dependencias.config.umbralContinuidadVoz())
     if (!String(identidad.vozId || '').trim()) return
     const aplicada = await sesion.reetiquetarFila(locucionId, identidad.vozId, identidad.hablante)
     dependencias.registro.registrar('conversacion.fila.medida.tardia', {
@@ -1216,7 +1172,12 @@ export function crearIngesta({
       // La duración que decide la voz nueva es la VOZ medida, no el tramo.
       vozMs,
     )
-    registrarMedidaVoz(estado, vector, identidad)
+    // La medida TEMPRANA no cierra la identidad: si la ventana no alcanza el
+    // piso de VOZ, la locución sigue `X` y el CIERRE mide su audio completo.
+    // Aplicarla aquí congelaba `insuficiente` (o casaba una voz ajena por el
+    // piso bajo) antes de tener la evidencia real.
+    if (identidad.insuficiente) return
+    registrarMedidaVoz(estado, vector, identidad, dependencias.config.umbralContinuidadVoz())
     estado.abierta = conIdentidadVoz(abierta, identidad)
   }
 

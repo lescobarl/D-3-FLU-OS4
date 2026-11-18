@@ -26,8 +26,10 @@ al bus de grabación (`Voicemeeter Out B1`). VB-Cable es punto a punto y no
 necesita aplicación.
 
 El playback comprueba (3) y la existencia de (2) antes de reproducir y falla con
-instrucciones si no están configurados. No hay fallback silencioso a Whisper ni
-a un micrófono falso.
+instrucciones si no están configurados. No hay fallback silencioso a Whisper.
+El modo `--fake-audio` es explícito: usa el micrófono falso de Chrome con el WAV
+(sin cable) para auditar completitud del ASR cuando el doble procesado del cable
+pierde tramos.
 
 ## Uso
 
@@ -35,6 +37,7 @@ a un micrófono falso.
 npm run playback -- --session <carpeta> --tail 5000
 npm run playback -- --session <carpeta> --headed
 npm run playback -- --session <carpeta> --report-rows --timeout 600000
+npm run playback -- --session <carpeta> --fake-audio --report-rows --headed
 npm run playback -- --session <carpeta> --output-device "CABLE Input" --input-device "CABLE Output"
 ```
 
@@ -45,11 +48,41 @@ npm run playback -- --session <carpeta> --output-device "CABLE Input" --input-de
 - `--lead-in <ms>`: silencio añadido antes del audio (default 0).
 - `--tail <ms>`: silencio añadido después del audio (default 5000). Da margen
   al ASR para cerrar el último turno.
-- `--report-rows`: imprime las filas finales de la conversación (no las compara
-  con `turns.ndjson`; la validación de contenido es del usuario).
+- `--report-rows`: imprime las filas finales de la conversación. El spec exige
+  al menos UNA fila de usuario: si la app no transcribió, el playback FALLA (no
+  pasa en verde con la conversación vacía).
+- `--fake-audio`: micrófono falso de Chrome leyendo el WAV (sin cable ni
+  VoiceMeeter). Añade 60 s de silencio inicial para cubrir el arranque. Es el
+  modo para auditar completitud; el camino de producto sigue siendo el cable.
 - `--url <url>`: app (default `http://localhost:5173`).
 - `--headed`: navegador visible.
 - `--timeout <ms>`: límite total.
+
+## Reproducir un escenario (runbook)
+
+1. Arranca el motor de VoiceMeeter (`voicemeeter.exe`): el driver solo expone
+   los endpoints; sin el motor no hay routing al bus B1.
+2. Confirma que el micrófono predeterminado de Windows es `Voicemeeter Out B1`
+   y que la reproducción física no está en el cable.
+3. Usa una sesión con `audio.wav` (o `audio.pcm`) y `manifest.json`/`meta.json`.
+   Las sesiones sin audio no se pueden reproducir.
+4. Ejecuta:
+   `npm run playback -- --session "<carpeta>" --report-rows --headed --timeout 600000`
+5. Éxito = `1 passed` y filas `role:"user"` con el texto del audio. Si el SR no
+   arranca, el test falla en 60 s (no consume los minutos del WAV); si no hay
+   ninguna fila de usuario, falla con el diagnóstico (`srLifecycle`, foco,
+   visibilidad, labels del cable).
+
+### Trampas medidas (no repetirlas)
+
+- No redefinir `onstart`/`onresult`/`onerror`/`onend` en el prototipo del SR:
+  reemplaza el IDL nativo y Chrome deja de invocar los handlers (`start=189`,
+  `onstart=0`). Para instrumentar, `addEventListener` por instancia.
+- Pulsar Iniciar con `Playwright.click`, no con `element.click()` dentro de
+  `evaluate`: el segundo no crea activación de usuario.
+- El tope `MicPcm total=1440128` es el buffer de 30 s (`passiveBufferMs`), no un
+  micrófono muerto.
+
 
 ## Qué reconstruye de la grabación
 

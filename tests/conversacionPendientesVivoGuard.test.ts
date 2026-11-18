@@ -174,7 +174,7 @@ describe('producto real — la frase retenida ANTES de la frontera de tiempo se 
 describe('el límite cablea la regla: una sola puerta y el ancla en el cierre', () => {
   it('la ingesta abre el pendiente tras CADA frontera y la reentrega tiene UNA puerta', () => {
     const ingesta = fuente('src/voice/conversation/ingesta.ts')
-    expect(ingesta.match(/await flujo\.flushPendientes\(\)/g) ?? []).toHaveLength(3)
+    expect(ingesta.match(/await flujo\.flushPendientes\(\)/g) ?? []).toHaveLength(2)
     expect(ingesta).toContain('esReentrega: esReentregaDeLaFila')
     const texto = fuente('src/voice/conversation/texto.ts')
     // El retén expira lo que ya no es frase en la ÚNICA puerta que lo vuelca.

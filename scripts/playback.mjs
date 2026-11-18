@@ -90,8 +90,11 @@ async function main() {
   }
 
   let wav
+  // El micrófono falso empieza a leer el WAV al lanzar Chrome: el silencio
+  // inicial cubre el arranque de la app hasta LISTENING.
+  const leadIn = options.fakeAudio && options.leadIn === 0 ? 60000 : options.leadIn
   try {
-    wav = buildPlaybackWav(session, { leadInMs: options.leadIn, tailMs: options.tail })
+    wav = buildPlaybackWav(session, { leadInMs: leadIn, tailMs: options.tail })
   } catch (error) {
     fail(error.message)
   }
@@ -106,6 +109,8 @@ async function main() {
     FLU_PLAYBACK_TIMEOUT_MS: String(options.timeout),
     FLU_PLAYBACK_HEADED: options.headed ? '1' : '0',
     FLU_PLAYBACK_REPORT_ROWS: options.reportRows ? '1' : '0',
+    FLU_PLAYBACK_FAKE_AUDIO: options.fakeAudio ? '1' : '0',
+    FLU_PLAYBACK_WAV_SECONDS: String(wav.seconds),
   }
   let runResult
   try {

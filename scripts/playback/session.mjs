@@ -234,6 +234,7 @@ export function parseArgs(argv) {
     headed: false,
     timeout: DEFAULT_TIMEOUT_MS,
     reportRows: false,
+    fakeAudio: false,
     help: false,
   }
   for (let i = 0; i < argv.length; i += 1) {
@@ -272,6 +273,9 @@ export function parseArgs(argv) {
       case '--report-rows':
         options.reportRows = true
         break
+      case '--fake-audio':
+        options.fakeAudio = true
+        break
       case '--help':
       case '-h':
         options.help = true
@@ -304,6 +308,7 @@ export function usage() {
     '  --headed                          Navegador visible',
     '  --timeout <ms>                    Limite total (default: 600000)',
     '  --report-rows                     Imprime las filas finales de la conversacion',
+    '  --fake-audio                      Micrófono falso de Chrome con el WAV (sin cable)',
     '  --help                            Esta ayuda',
   ].join('\n')
 }
