@@ -285,7 +285,7 @@ export function forgetVoiceName(name = '') {
     if (!objetivo) return 0
     let olvidadas = 0
     voiceNames.forEach((entry, voiceId) => {
-        if (foldSpeakerKey(entry?.name || entry?.label || '') !== objetivo) return
+        if (foldSpeakerKey(entry?.name || '') !== objetivo) return
         voiceNames.delete(voiceId)
         olvidadas += 1
     })
@@ -353,7 +353,29 @@ export function voiceKeyFor({ voiceId = '', signature = null, floor } = {}) {
     if (sig.length && voiceNames.get(id)?.vector?.length) {
       const firma = sig.reduce((suma, valor, indice) => suma + Number(valor || 0) * (indice + 1), 0)
       const sufijo = Math.abs(Math.round(firma * 1e6)).toString(36)
-      return `${id || 'speaker'}_sig_${sufijo}`
+      const candidata = `${id || 'speaker'}_sig_${sufijo}`
+      const previa = voiceNames.get(candidata)
+      // Sin vector previo se conserva la clave de siempre. Con vector: el mismo
+      // timbre reusa la clave; otro timbre con el mismo sufijo se desambigua.
+      if (!previa || !Array.isArray(previa.vector) || previa.vector.length !== sig.length) {
+        return candidata
+      }
+      if (previa.vector.every((valor, indice) => valor === sig[indice])) return candidata
+      let n = 2
+      let alternativa = `${candidata}_${n}`
+      while (voiceNames.has(alternativa)) {
+        const otra = voiceNames.get(alternativa)
+        if (
+          Array.isArray(otra?.vector) &&
+          otra.vector.length === sig.length &&
+          otra.vector.every((valor, indice) => valor === sig[indice])
+        ) {
+          return alternativa
+        }
+        n += 1
+        alternativa = `${candidata}_${n}`
+      }
+      return alternativa
     }
     if (sig.length && id) rememberVoiceVector(id, sig)
     return id

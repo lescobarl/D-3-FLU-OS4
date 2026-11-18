@@ -48,11 +48,6 @@ export type Pendientes = Readonly<{
 }>
 
 /**
- * Crea el retén de pendientes con expiración y descarte contado.
- * @param opciones Reloj, ventana de huérfanos y contador de descartes.
- * @returns Retén con encolado por tramo, expurgo y consumo en orden.
- */
-/**
  * ¿Dos pendientes son el MISMO enunciado? Mismo tramo, o texto que continúa la
  * frase con ventanas de audio a distancia <= `silenceCloseMs`, o uno sin tramo.
  * La comparación es de `continuaLaFrase`; aquí solo se añade la proximidad.
@@ -73,6 +68,11 @@ function mismoEnunciado(
   return distanciaMs <= silenceCloseMs
 }
 
+/**
+ * Crea el retén de pendientes con expiración y descarte contado.
+ * @param opciones Reloj, ventana de huérfanos y contador de descartes.
+ * @returns Retén con encolado por tramo, expurgo y consumo en orden.
+ */
 export function crearPendientes({
   reloj,
   orphanBufferMs,

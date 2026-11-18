@@ -14,7 +14,7 @@
 import { construirFila, fusionarVoz, horaDelFinDelTramo } from './fila.ts'
 import type { CierreLocucion, VozEtiqueta } from './fila.ts'
 import { decidirRevision } from './revision.ts'
-import { decidirIdentidad, plantillasDeSesion } from './identidad.ts'
+import { decidirIdentidad, entradaIdentidadDeSesion } from './identidad.ts'
 import type { PlantillaVoz } from './identidad.ts'
 import type { RegistroTramos } from './tramos.ts'
 import { registrarMedidaVoz } from './sesion.ts'
@@ -57,7 +57,7 @@ export type EstadoCierre = {
   sessionId: string | null
   /** `false` tras el stop: una transcripción que aún no commitea no escribe. */
   activa: boolean
-  /** `true` desde el stop hasta que la sesiA3n queda inactiva (cancela trabajo obsoleto). */
+  /** `true` desde el stop hasta que la sesión queda inactiva (cancela trabajo obsoleto). */
   cerrando: boolean
   turnoActual: string
   turnosConFila: Set<string>
@@ -523,19 +523,20 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
       registrarEventoVoz('conversacion.voz.medida.sinVector', locucion, muestras.length)
       return { ...locucion.voz, insuficiente: true }
     }
-    const identidad = decidirIdentidad({
-      vector,
-      plantillas: plantillasDeSesion(estado.plantillasVoz, anclasBase),
-      umbral: config.umbralContinuidadVoz(),
-      duracionMs: vozMs,
-      minNuevaVozMs: config.minNuevaVozMs?.() ?? 0,
-      minVozIdentidadMs: configuracion.minVozIdentidadMs,
-      umbralExistente: config.umbralExistenteVoz?.() ?? config.umbralContinuidadVoz(),
-      // Perezoso: la plantilla SOLO se resuelve si la voz es nueva (Caso 10).
-      etiquetaNueva: () => config.etiquetaAnonima(estado.contadorVoces + 1),
-      comparar: embebedor.comparar,
-      id: id.uuid,
-    })
+    const identidad = decidirIdentidad(
+      entradaIdentidadDeSesion({
+        vector,
+        plantillasVoz: estado.plantillasVoz,
+        anclasBase,
+        config,
+        minVozIdentidadMs: configuracion.minVozIdentidadMs,
+        duracionMs: vozMs,
+        // Perezoso: la plantilla SOLO se resuelve si la voz es nueva (Caso 10).
+        etiquetaNueva: () => config.etiquetaAnonima(estado.contadorVoces + 1),
+        comparar: embebedor.comparar,
+        id: id.uuid,
+      }),
+    )
     registrarMedidaVoz(estado, vector, identidad, config.umbralContinuidadVoz())
     registrarEventoVoz('conversacion.voz.medida.cerrada', locucion, muestras.length, {
       vozId: identidad.vozId,
@@ -564,7 +565,7 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
     const idVoz = String(vozId || '').trim()
     if (idVoz) {
       const plantilla = estado.plantillasVoz.get(idVoz)
-      if (plantilla) plantilla.etiqueta = fila.etiqueta
+      if (plantilla) estado.plantillasVoz.set(idVoz, { ...plantilla, etiqueta: fila.etiqueta })
     }
     return fila
   }
@@ -763,7 +764,9 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
       if (vozIdCerrada) {
         estado.nombresPorVoz.set(vozIdCerrada, pendiente.nombre)
         const plantilla = estado.plantillasVoz.get(vozIdCerrada)
-        if (plantilla) plantilla.etiqueta = pendiente.nombre
+        if (plantilla) {
+          estado.plantillasVoz.set(vozIdCerrada, { ...plantilla, etiqueta: pendiente.nombre })
+        }
       }
       vozCerrada = { ...vozCerrada, nombre: pendiente.nombre, nombreConfirmado: true }
       estado.pendienteNombre = null
@@ -887,8 +890,9 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
     const etiqueta = String(nombreRegistrado ?? hablante ?? '').trim()
     if (!etiqueta) return false
     // La plantilla aprende la etiqueta que la medida acaba de afirmar.
-    const plantilla = estado.plantillasVoz.get(String(vozId || '').trim())
-    if (plantilla) plantilla.etiqueta = etiqueta
+    const idVoz = String(vozId || '').trim()
+    const plantilla = estado.plantillasVoz.get(idVoz)
+    if (plantilla) estado.plantillasVoz.set(idVoz, { ...plantilla, etiqueta })
     const evidencia = esNombre ? 'nombre' : 'medida'
     // La medida tardía trae el TIMBRE de la voz. Persistirlo en la fila es lo
     // que evita que `voiceKeyFor` caiga a la etiqueta y abra hablantes nuevos

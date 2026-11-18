@@ -391,8 +391,10 @@ describe('CONVERSACIÓN — rutas dobles medidas', () => {
     expect(fuente('ingesta.ts')).toContain('continuaLaFrase')
     // El tramo entrante se mide aunque NO sea el de la locución abierta.
     expect(fuente('ingesta.ts')).toContain('tramos.muestras(tramoId, entrante)')
-    // El piso de continuidad viene de config y existe un solo literal de voz.
-    expect(fuente('ingesta.ts')).toContain('umbralExistenteVoz')
+    // El piso de continuidad viene de config y el ensamblado tiene UN dueño.
+    expect(fuente('identidad.ts')).toContain('umbralExistenteVoz')
+    expect(fuente('ingesta.ts')).toContain('entradaIdentidadDeSesion')
+    expect(fuente('cierre.ts')).toContain('entradaIdentidadDeSesion')
     // El texto se atribuye DESPUÉS de verificar la voz del tramo entrante.
     expect(fuente('ingesta.ts')).toMatch(
       /verificarCambioVoz\(tramoOrigen\)[\s\S]*tramoDestinoDeTexto\(/,

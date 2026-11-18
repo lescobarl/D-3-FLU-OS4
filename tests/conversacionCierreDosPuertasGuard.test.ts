@@ -139,7 +139,7 @@ describe('conversación — el cierre tiene SOLO dos puertas', () => {
           abierta: true,
           finalDesdeMs: 10_000,
         },
-        { minSilenceMs: 900, silenceCloseMs: 3500, finalCloseConfirmMs: 0 },
+        { silenceCloseMs: 3500, finalCloseConfirmMs: 0 },
       ),
     ).toEqual({ cerrar: false, causa: null })
   })

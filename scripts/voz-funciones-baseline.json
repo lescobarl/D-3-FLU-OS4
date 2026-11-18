@@ -79,12 +79,14 @@
       "useTurnLifecycleSync"
     ],
     "src/voice/lib/asr/asrConfig.js": [
+      "backoffReintentoPasivo",
       "getAsrConfig",
       "getVadEnergyThreshold",
       "getVadFrameMs",
       "getVadSegmentConfig",
       "getVadSpeechLikeConfig",
-      "numberOr"
+      "numberOr",
+      "reintentosAntesDeRebuild"
     ],
     "src/voice/lib/asr/resample.js": [
       "downsample"

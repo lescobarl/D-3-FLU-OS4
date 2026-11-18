@@ -84,7 +84,7 @@ export function useLocalAsrFallback({
   audioSampleRate,
   getRestartConfig,
   leerLocucionAbierta,
-  degradeEnabled = true,
+  degradeEnabled = false,
 }) {
   const degradeEligibleSinceRef = useRef(0)
   const stallRebuildStreakRef = useRef(0)
@@ -115,6 +115,22 @@ export function useLocalAsrFallback({
     lastSessionMuteRebuildAtRef.current = 0
   }, [])
 
+  /**
+   * Reinicia los relojes del cambio de motor (degradación/recuperación).
+   * Dueño único de la secuencia: `degrade`, las dos ramas de `recover` y
+   * `resetSession` la repetían línea por línea.
+   * @revisor CREAR NUEVO — la secuencia se escribía cuatro veces con el mismo
+   *   estado; una sola transición evita que una rama quede desincronizada.
+   * @param {number} ahora Marca del reloj del cambio.
+   * @param {number} [probeHastaMs] Fin de la ventana de prueba (0 = sin prueba).
+   */
+  const reiniciarRelojesDeMotor = useCallback((ahora, probeHastaMs = 0) => {
+    recoveryAtRef.current = ahora
+    lastFinalAtRef.current = ahora
+    segmentsSinceRecoveryRef.current = 0
+    probeUntilRef.current = probeHastaMs
+  }, [])
+
   /** UNICO predicado de "este motor es el local" (delegado a su dueno). */
   const isLocal = useCallback(
     (engine = recognitionRef.current) => isLocalRecognitionEngine(engine),
@@ -132,14 +148,11 @@ export function useLocalAsrFallback({
     recognitionRef.current = localEngine
     recognitionActiveRef.current = false
     const now = Date.now()
-    recoveryAtRef.current = now
-    lastFinalAtRef.current = now
-    segmentsSinceRecoveryRef.current = 0
-    probeUntilRef.current = 0
+    reiniciarRelojesDeMotor(now)
     // CAMBIO DE MOTOR: el contador de Chrome mudo no sobrevive al motor local.
     resetMuteClock()
     return true
-  }, [degradeEnabled, isLocal, recognitionActiveRef, recognitionRef, resetMuteClock, wireRecognitionEventsRef])
+  }, [degradeEnabled, isLocal, recognitionActiveRef, recognitionRef, reiniciarRelojesDeMotor, resetMuteClock, wireRecognitionEventsRef])
 
   const degradeRef = useRef(null)
   degradeRef.current = degrade
@@ -159,18 +172,12 @@ export function useLocalAsrFallback({
       // Chrome no arranco: el swap ya restauro un local ARRANCADO.
       recognitionRef.current = swap.fallback
       recognitionActiveRef.current = false
-      recoveryAtRef.current = now
-      lastFinalAtRef.current = now
-      segmentsSinceRecoveryRef.current = 0
-      probeUntilRef.current = 0
+      reiniciarRelojesDeMotor(now)
       return false
     }
     recognitionRef.current = swap.recognition
     recognitionActiveRef.current = false
-    recoveryAtRef.current = now
-    lastFinalAtRef.current = now
-    segmentsSinceRecoveryRef.current = 0
-    probeUntilRef.current = now + runtimeCfg.probeMs
+    reiniciarRelojesDeMotor(now, now + runtimeCfg.probeMs)
     lastSrResultAtRef.current = now
     lastOnresultAtRef.current = now
     lastMeaningfulIngressAtRef.current = now
@@ -189,6 +196,7 @@ export function useLocalAsrFallback({
     recognitionActiveRef,
     recognitionLocaleRef,
     recognitionRef,
+    reiniciarRelojesDeMotor,
     resetMuteClock,
     startRecognition,
     wireRecognitionEventsRef,
@@ -200,13 +208,10 @@ export function useLocalAsrFallback({
   /** Sesion nueva: se arranca en Chrome y se borran los relojes del fallback. */
   const resetSession = useCallback(() => {
     stallRebuildStreakRef.current = 0
-    recoveryAtRef.current = 0
-    segmentsSinceRecoveryRef.current = 0
-    probeUntilRef.current = 0
-    lastFinalAtRef.current = 0
+    reiniciarRelojesDeMotor(0)
     mudoTempranoLocucionRef.current = ''
     resetMuteClock()
-  }, [resetMuteClock])
+  }, [reiniciarRelojesDeMotor, resetMuteClock])
 
   /** Chrome produjo un RESULTADO: si habia ventana de prueba, queda como activo. */
   const noteResult = useCallback(() => {

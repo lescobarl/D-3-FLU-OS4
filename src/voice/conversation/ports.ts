@@ -25,8 +25,11 @@ export type IdiomaLocucion = Exclude<Idioma, 'both'>
  */
 export const ORIGEN_TRANSCRIPCION_LOCAL = 'local' as const
 
+/** Motivos de cierre declarados por `stop(stopKind)`; fuente única del conjunto. */
+export const MOTIVOS_CIERRE = ['user', 'system', 'watchdog'] as const
+
 /** Motivo declarado del cierre de una locución (`stop(stopKind)`). */
-export type MotivoCierre = 'user' | 'system' | 'watchdog'
+export type MotivoCierre = (typeof MOTIVOS_CIERRE)[number]
 
 /**
  * Evidencia con la que se afirmó la etiqueta de una fila.
@@ -146,6 +149,13 @@ export interface IdPort {
 export interface RegistroPort {
   /** Registra un hecho con su contexto y sus datos de diagnóstico. */
   registrar(contexto: string, ...detalles: unknown[]): void
+  /**
+   * Registra un ERROR capturado. El canal no se infiere del nombre del contexto:
+   * el llamador declara que es un error.
+   * @param contexto Contexto del error.
+   * @param detalles Error y datos de diagnóstico.
+   */
+  registrarError?(contexto: string, ...detalles: unknown[]): void
 }
 
 /** Almacén de filas: un solo escritor por sesión; el borrado es lógico. */
@@ -207,8 +217,6 @@ export interface ConfigPort {
   umbralContinuidadVoz(): number
   /** Duracion minima para ACUNAR una voz nueva; un turno corto queda pendiente. */
   minNuevaVozMs?(): number
-  /** Palabras minimas para acunar una voz nueva. */
-  minNuevaVozPalabras?(): number
   /** Piso para casar con una voz existente (turnos cortos no huerfanos). */
   umbralExistenteVoz?(): number
   /** ¿El texto es una orden de CONTROL (cerrar escucha, etc.)? No es conversacion. */
@@ -245,7 +253,10 @@ export interface PartidorPort {
 export type MotorAsr = 'cloud' | 'local'
 
 /** Motor local de ASR: única etiqueta del valor dentro del módulo. */
-const MOTOR_ASR_LOCAL: MotorAsr = 'local'
+export const MOTOR_ASR_LOCAL: MotorAsr = 'local'
+
+/** Motor de nube de ASR: única etiqueta del valor dentro del módulo. */
+export const MOTOR_ASR_CLOUD: MotorAsr = 'cloud'
 
 /**
  * ¿El motor elegido consume PCM por el puerto (`empujarAudio`)?
@@ -373,14 +384,8 @@ export interface ConfiguracionConversacion {
   readonly minSegundosVozMedida: number
   /** Voz medida mínima (ms) para afirmar cualquier identidad (regla 6: XX por debajo). */
   readonly minVozIdentidadMs: number
-  /** Duracion minima para ACUNAR una voz nueva (los turnos cortos quedan pendientes). */
-  readonly minSegundosNuevaVoz: number
-  /** Palabras minimas para acunar una voz nueva. */
-  readonly minPalabrasNuevaVoz: number
   /** Identidad por medida: tope de PCM retenido por locución, en segundos. */
   readonly maxSegundosVozRetenida: number
-  /** Margen de solape medido en Etapa 0; `null` = sin medida → continuidad. */
-  readonly overlapMargin: number | null
 }
 
 /** Defaults del plan. Es la ÚNICA fuente de estos números dentro del módulo. */
@@ -409,12 +414,9 @@ export const CONVERSACION_CONFIG: ConfiguracionConversacion = Object.freeze({
   // La ventana de medida es 1.5 s; el habla dentro de ella puede ser mucho menor
   // (medido: 540 ms) y una ventana corta no distingue voces.
   minVozIdentidadMs: 700,
-  minSegundosNuevaVoz: 8,
-  minPalabrasNuevaVoz: 8,
   // Tope de PCM retenido por locución (memoria). 120 s cubre frases largas
   // (una disertación de 70 s no se trunca).
   maxSegundosVozRetenida: 120,
-  overlapMargin: null,
 })
 
 // ---------------------------------------------------------------------------

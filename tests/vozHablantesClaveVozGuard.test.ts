@@ -21,10 +21,11 @@ import {
   registerVoiceName,
   resetVoiceDirectory,
   resolveVoiceIdentity,
+  voiceKeyFor,
   voiceVectorModel,
 } from '../src/voice/lib/speakerDirectory.js'
 import { resolveRowSpeakerLabel } from '../src/voice/lib/conversationRow.js'
-import { compareCosineSignatures } from '../src/voice/lib/speakerCore.js'
+import { compareCosineSignatures, normalizeEmbeddingVector } from '../src/voice/lib/speakerCore.js'
 
 /** Vector unitario base (eje 0). */
 const EJE = (() => {
@@ -144,5 +145,33 @@ describe('P11.10 - el piso de la BASE es el de identidad registrada (I4, con MOD
     const candidatos = [{ name: 'Luis', vector: V_LUIS, model: MODELO }]
     const conPisoDeSesion = resolveVoiceIdentity(V_BANDA_MEDIA, { candidates: candidatos, registeredFloor: 0.66 })
     expect(conPisoDeSesion?.name, 'asi se comportaba el defecto medido').toBe('Luis')
+  })
+})
+
+describe('clave de voz — colisión de sufijo', () => {
+  // Dos timbres DISTINTOS con la MISMA firma ponderada (Σ v[i]·(i+1) = 1.5):
+  // sin la desambiguación, ambos recibirían la misma clave `_sig_`.
+  const V_BASE = new Array(512).fill(0)
+  V_BASE[511] = 1
+  const V_A = new Array(512).fill(0)
+  V_A[0] = 0.963325
+  V_A[1] = 0.2683375
+  const V_B = new Array(512).fill(0)
+  V_B[0] = -0.6851645
+  V_B[2] = 0.7283882
+  const firma = (v: number[]): number =>
+    normalizeEmbeddingVector(v).reduce((suma, valor, indice) => suma + valor * (indice + 1), 0)
+
+  it('dos timbres con el mismo sufijo reciben claves distintas y no tocan la existente', () => {
+    expect(Math.round(firma(V_A) * 1e6)).toBe(Math.round(firma(V_B) * 1e6))
+    registerVoiceName('speaker_1', 'Luis', { vector: V_BASE })
+    const claveA = voiceKeyFor({ voiceId: 'speaker_1', signature: V_A })
+    expect(claveA).toContain('_sig_')
+    registerVoiceName(claveA, 'Mujer', { vector: V_A })
+    expect(voiceKeyFor({ voiceId: 'speaker_1', signature: V_A })).toBe(claveA)
+    const claveB = voiceKeyFor({ voiceId: 'speaker_1', signature: V_B })
+    expect(claveB, 'dos timbres distintos no comparten clave').not.toBe(claveA)
+    expect(claveB).toBe(`${claveA}_2`)
+    expect(voiceKeyFor({ voiceId: 'speaker_1', signature: V_BASE })).toBe('speaker_1')
   })
 })

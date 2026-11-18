@@ -710,6 +710,33 @@ describe('ASR por puerto — un motor, estados y audio local', () => {
   })
 })
 
+describe('frontera — el umbral de silencio INYECTADO manda', () => {
+  it('cierra con el silenceCloseMs inyectado, no con el de la tabla', async () => {
+    const inyectado = CONVERSACION_CONFIG.silenceCloseMs + 700
+    const { api } = crearEscenario({
+      configuracion: { ...CONVERSACION_CONFIG, silenceCloseMs: inyectado },
+    })
+    await api.start()
+    const tramoId = await abrirConVoz(api, 0)
+    await api.ingestAsr(asr(tramoId, { texto: 'hola', final: true }))
+    const muestras = (ms: number) => Math.round((SAMPLE_RATE * ms) / 1000)
+    const tabla = CONVERSACION_CONFIG.silenceCloseMs
+    const primero = await api.ingestAudio(
+      bloque(SAMPLE_RATE, SAMPLE_RATE + muestras(tabla), SILENCIO(tabla)),
+    )
+    expect(primero.locucionAbierta, 'el umbral de la tabla NO debe cerrar').not.toBeNull()
+    const segundo = await api.ingestAudio(
+      bloque(
+        SAMPLE_RATE + muestras(tabla),
+        SAMPLE_RATE + muestras(tabla) + muestras(inyectado),
+        SILENCIO(inyectado),
+      ),
+    )
+    expect(segundo.locucionAbierta).toBeNull()
+    expect(segundo.filas[0]?.texto).toBe('hola')
+  })
+})
+
 describe('huérfanos y descartes contados', () => {
   it('un ASR sin tramo con TEXTO no inventa fila al expirar: se cuenta huérfano', async () => {
     const { api, reloj } = crearEscenario()

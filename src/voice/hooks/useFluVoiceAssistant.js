@@ -84,6 +84,7 @@ import { isSpeechSynthesisSpeaking, isFluSpeaking, waitForSpeechIdle } from '../
 import { resumeAfterSpeechSuspend, releaseStalledTurn } from '../lib/voiceStallPolicy.js'
 import { isLocalFallbackEnabled, prewarmLocalRecognition, shouldUseLocalFallback } from '../lib/voiceLocalFallback'
 import { useLocalAsrFallback } from './useLocalAsrFallback'
+import { backoffReintentoPasivo, reintentosAntesDeRebuild } from '../lib/asr/asrConfig.js'
 import { logCaughtError } from '../../lib/caughtError';
 import { clearAnimationFrameRef, clearTimeoutRef } from '../../lib/timerRefs'
 import { useTurnLifecycleSync, useOffPathSessionWriter } from './useTurnInfrastructure'
@@ -886,6 +887,7 @@ export function useFluVoiceAssistant({
         if (!isListeningRef.current || !recognitionRef.current || isStoppingRef.current) return
         if (isProcessingRef.current && !conversationActiveRef?.current) return
 
+        const restartCfg = getActiveListenConfig().restart
         recognitionActiveRef.current = false
 
         if (conversationActiveRef?.current) {
@@ -896,12 +898,11 @@ export function useFluVoiceAssistant({
           try {
             stopSpeechRecognition(recognitionRef.current)
           } catch (e) {
-        logCaughtError('[catch] src/voice/hooks/useFluVoiceAssistant.js', e, e?.stack);
-            // ignore
+            logCaughtError('[catch] src/voice/hooks/useFluVoiceAssistant.js', e, e?.stack);
           }
           const retryCount = recognitionRetryCountRef.current + 1
           recognitionRetryCountRef.current = retryCount
-          if (retryCount >= 2 && rebuildRecognitionRef.current()) {
+          if (retryCount >= reintentosAntesDeRebuild(restartCfg) && rebuildRecognitionRef.current()) {
             return
           }
         } else if (startSpeechRecognition(recognitionRef.current)) {
@@ -909,7 +910,6 @@ export function useFluVoiceAssistant({
           return
         }
 
-        const restartCfg = getActiveListenConfig().restart
         try {
           stopSpeechRecognition(recognitionRef.current)
         } catch (e) {
@@ -928,7 +928,7 @@ export function useFluVoiceAssistant({
               restartCfg.maxBackoffMs,
               restartCfg.retryBackoffMs * Math.min(retryCount, 8),
             )
-            : Math.min(220 + retryCount * 40, 800)
+            : backoffReintentoPasivo(restartCfg, retryCount)
           requestRecognitionRestart('reintento', backoff)
         } else if (conversationActiveRef?.current) {
           recognitionRetryCountRef.current = 0

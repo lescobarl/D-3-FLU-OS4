@@ -14,7 +14,7 @@ import { crearIngesta } from './ingesta.ts'
 import type { Ingesta } from './ingesta.ts'
 import { crearEstadoSesion, crearSesion } from './sesion.ts'
 import type { Sesion } from './sesion.ts'
-import { CONVERSACION_CONFIG } from './ports.ts'
+import { CONVERSACION_CONFIG, MOTIVOS_CIERRE, MOTOR_ASR_CLOUD, MOTOR_ASR_LOCAL } from './ports.ts'
 import type {
   AsrPort,
   ConfiguracionConversacion,
@@ -40,8 +40,8 @@ function elegirMotor(
 ): MotorAsr | null {
   const preferido = configuracion.asr.engine
   if (preferido === 'auto') {
-    if (asr.soportado('cloud')) return 'cloud'
-    if (asr.soportado('local')) return 'local'
+    if (asr.soportado(MOTOR_ASR_CLOUD)) return MOTOR_ASR_CLOUD
+    if (asr.soportado(MOTOR_ASR_LOCAL)) return MOTOR_ASR_LOCAL
     return null
   }
   return asr.soportado(preferido) ? preferido : null
@@ -148,7 +148,7 @@ export function crearConversacion(dependencias: DependenciasConversacion): Conve
           estado.estadoAsr = inicial
           sesion.emitir({ tipo: 'asr.status', sessionId, estado: inicial })
         }
-        if (motor === 'cloud') {
+        if (motor === MOTOR_ASR_CLOUD) {
           registro.registrar('conversacion.asr.cloud.audio.sale', {
             sessionId,
             detalle: 'El motor de nube procesa el audio fuera del equipo',
@@ -165,7 +165,7 @@ export function crearConversacion(dependencias: DependenciasConversacion): Conve
   /** Cierra la sesión con el motivo declarado; jamás pierde el texto abierto. */
   async function detener(stopKind: MotivoCierre): Promise<InstantaneaConversacion> {
     const sessionId = sesion.exigirActiva()
-    if (stopKind !== 'user' && stopKind !== 'system' && stopKind !== 'watchdog') {
+    if (!(MOTIVOS_CIERRE as readonly string[]).includes(stopKind)) {
       throw new Error(`stop(${String(stopKind)}) no es un motivo de fila`)
     }
     // CONGELA la entrada ANTES de volcar: lo que el ASR entregue a partir de aquí
@@ -235,7 +235,9 @@ export function crearConversacion(dependencias: DependenciasConversacion): Conve
       }
       // La plantilla aprende el nombre: las filas SIGUIENTES de esa voz nacen con él.
       const plantillaDeLaVoz = estado.plantillasVoz.get(vozId)
-      if (plantillaDeLaVoz) plantillaDeLaVoz.etiqueta = nombre
+      if (plantillaDeLaVoz) {
+        estado.plantillasVoz.set(vozId, { ...plantillaDeLaVoz, etiqueta: nombre })
+      }
       if (renombradas > 0) {
         registro.registrar('conversacion.nombre.renombrado', {
           sessionId,

@@ -21,7 +21,6 @@ import type { MedidaVad } from './ports.ts'
 
 /** Umbrales que la frontera consume; por defecto, la tabla del plan. */
 export type UmbralesFrontera = Readonly<{
-  minSilenceMs: number
   silenceCloseMs: number
   /** Confirmación del final: silencio de reloj tras el final (puerta 2). */
   finalCloseConfirmMs?: number

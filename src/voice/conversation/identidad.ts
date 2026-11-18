@@ -19,6 +19,8 @@
  * desde el corte esta regla es la ÚNICA autoridad del módulo.
  */
 
+import type { ConfigPort } from './ports.ts'
+
 /**
  * Plantilla de una voz medida en la sesión (la clave del mapa es su `vozId`).
  * La muta SOLO `sesion.registrarMedidaVoz` (refresco del vector) y el cierre
@@ -104,6 +106,42 @@ export type EntradaIdentidad = Readonly<{
   /** Generador de id inyectado (UUIDv4): la voz nueva acuña su identidad. */
   id: () => string
 }>
+
+/**
+ * Construye la entrada de `decidirIdentidad` para una medida de la sesión.
+ * Único ensamblado de la decisión: cierre e ingesta lo repetían campo por campo.
+ * La etiqueta viaja como PROVEEDOR perezoso (Caso 10): no se resuelve si la voz
+ * no es nueva.
+ * @revisor CREAR NUEVO — reemplaza dos copias del mismo ensamblado; mantiene la
+ *   etiqueta perezosa y el comparador inyectado.
+ * @param datos Medida, plantillas, config de la sesión y servicios.
+ * @returns Entrada lista para `decidirIdentidad`.
+ */
+export function entradaIdentidadDeSesion(datos: {
+  vector: readonly number[]
+  plantillasVoz: ReadonlyMap<string, PlantillaVoz>
+  anclasBase?: () => ReadonlyArray<{ name?: string; vector?: readonly number[] }>
+  config: ConfigPort
+  minVozIdentidadMs: number
+  duracionMs: number
+  etiquetaNueva: () => string
+  comparar: EntradaIdentidad['comparar']
+  id: () => string
+}): EntradaIdentidad {
+  const umbral = datos.config.umbralContinuidadVoz()
+  return {
+    vector: datos.vector,
+    plantillas: plantillasDeSesion(datos.plantillasVoz, datos.anclasBase),
+    umbral,
+    duracionMs: datos.duracionMs,
+    minNuevaVozMs: datos.config.minNuevaVozMs?.() ?? 0,
+    minVozIdentidadMs: datos.minVozIdentidadMs,
+    umbralExistente: datos.config.umbralExistenteVoz?.() ?? umbral,
+    etiquetaNueva: datos.etiquetaNueva,
+    comparar: datos.comparar,
+    id: datos.id,
+  }
+}
 
 /** Decisión de la regla: la voz que sostiene la locución. */
 export type IdentidadDecidida = Readonly<{

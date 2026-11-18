@@ -21,6 +21,7 @@ import type {
   LocucionAbierta,
   TextoDeReentrega,
 } from './tipos.ts'
+import { MOTOR_ASR_CLOUD } from './ports.ts'
 import type {
   ConfiguracionConversacion,
   IdiomaLocucion,
@@ -365,7 +366,7 @@ export function crearFlujoTexto({
 
   /** Idioma de la locución: la nube queda fija al arrancar; local autodetecta. */
   function idiomaDe(entrada: AsrIngestado): IdiomaLocucion {
-    if (estado.motorAsr === 'cloud') return estado.idiomaActual
+    if (estado.motorAsr === MOTOR_ASR_CLOUD) return estado.idiomaActual
     return entrada.idioma ?? estado.idiomaActual
   }
 
@@ -542,9 +543,9 @@ export function crearFlujoTexto({
         continue
       }
       const { tramoId, tramo } = resuelto
-      // Una frase pendiente que ya tiene fila (mismo tramo/locuciA3n) es una
-      // reentrega del turno: no se abre otra locuciA3n fantasma al stop. El
-      // motivo lo cuenta el dueA�o del descarte como huAcrfano (ingesta es quien
+      // Una frase pendiente que ya tiene fila (mismo tramo/locución) es una
+      // reentrega del turno: no se abre otra locución fantasma al stop. El
+      // motivo lo cuenta el dueño del descarte como huérfano (ingesta es quien
       // decide la reentrega de un turno).
       if (estado.filas.has(tramoId)) {
         sesion.contarDescarte('huerfano', tramoId, tramo)

@@ -4,7 +4,7 @@ import { SPEECH_LOCALES, DEFAULT_SPEECH_LOCALE, BILINGUAL_LOCALES } from '../../
 import { DEFAULT_SAMPLE_RATE } from './audioConstants.js'
 import { RESET_AVATAR_COLOR_PHRASES } from './voiceCommandPhrases.js'
 import { COMMAND_IDS } from './commandIds.js'
-import { LOCAL_FALLBACK_DEFAULTS, VAD_DEFAULTS } from './asr/asrDefaults.js'
+import { LOCAL_FALLBACK_DEFAULTS, VAD_DEFAULTS, RESTART_RETRY_DEFAULTS } from './asr/asrDefaults.js'
 import { SPEAKER_ASSIGN } from './speakerAssignDefaults.js'
 
 /** Entorno de desarrollo: los defaults de diagnostico solo se encienden aqui. */
@@ -309,7 +309,7 @@ export const FLU_CONFIG = {
       retryBackoffMs: 150,
       /** 0 = reintentos ilimitados en conversación (Chrome corta solo). */
       maxRetries: 0,
-      maxBackoffMs: 1800,
+      maxBackoffMs: 1800, ...RESTART_RETRY_DEFAULTS,
       /** Reconocimiento activo pero sin onresult → rebuild (mic colgado). */
       silentMicStallMs: 6500,
       /** Pausas largas TV / anuncios sin cortar escucha (modo pasivo). */

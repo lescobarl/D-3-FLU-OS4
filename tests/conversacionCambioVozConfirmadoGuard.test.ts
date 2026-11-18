@@ -84,7 +84,6 @@ const CONFIG_PRUEBA: ConfigPort = {
   esEtiquetaAnonima: isAutoSpeakerLabel,
   umbralContinuidadVoz: () => 0.8,
   minNuevaVozMs: () => 1000,
-  minNuevaVozPalabras: () => 2,
   umbralExistenteVoz: () => 0.64,
   esComandoDeControl: () => false,
   etiquetaAnonima: (indice) => `Hablante ${indice}`,

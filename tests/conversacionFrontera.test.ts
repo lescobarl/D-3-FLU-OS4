@@ -16,7 +16,7 @@ import type {
 import { CONVERSACION_CONFIG } from '../src/voice/conversation/ports'
 import { getTranscriptPauseCfg } from '../src/voice/lib/fluTranscriptPause.js'
 
-const UMBRALES: UmbralesFrontera = { minSilenceMs: 900, silenceCloseMs: 5000 }
+const UMBRALES: UmbralesFrontera = { silenceCloseMs: 5000 }
 
 const entrada = (
   silencioMs: number,
@@ -79,7 +79,7 @@ describe('regla 2 — los umbrales salen de la tabla, no de literales', () => {
   })
 
   it('con umbrales inyectados el borde se mueve con ellos', () => {
-    const cortos: UmbralesFrontera = { minSilenceMs: 100, silenceCloseMs: 200 }
+    const cortos: UmbralesFrontera = { silenceCloseMs: 200 }
     expect(decidir(entrada(99, true), cortos)).toEqual({ cerrar: false, causa: null })
     expect(decidir(entrada(100, true), cortos)).toEqual({ cerrar: false, causa: null })
     expect(decidir(entrada(200, true), cortos)).toEqual({ cerrar: true, causa: 'frontera' })

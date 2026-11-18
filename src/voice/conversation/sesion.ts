@@ -238,10 +238,13 @@ export function registrarMedidaVoz(
     // voz. Una ventana suelta de la misma mujer varía 0.28–0.77; el promedio se
     // mantiene 0.82–0.94 y no la parte (medido en e4f253e7: `Hablante 3/4` falsos
     // por comparar contra una sola ventana).
-    if (mismaVoz) {
-      existente.vector = ancla.map((valor, indice) => (valor + vector[indice]) / 2)
-    }
-    if (etiqueta) existente.etiqueta = etiqueta
+    if (!mismaVoz && !etiqueta) return
+    estado.plantillasVoz.set(identidad.vozId, {
+      vector: mismaVoz
+        ? ancla.map((valor, indice) => (valor + vector[indice]) / 2)
+        : existente.vector,
+      etiqueta: etiqueta || existente.etiqueta,
+    })
     return
   }
   estado.plantillasVoz.set(identidad.vozId, {

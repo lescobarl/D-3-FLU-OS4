@@ -13,12 +13,12 @@ import type { FlujoTexto } from './texto.ts'
 import type { Pendientes } from './cola.ts'
 import type { BufferAsr, RegistroTramos } from './tramos.ts'
 import type { Sesion } from './sesion.ts'
-import { decidirIdentidad, plantillasDeSesion } from './identidad.ts'
+import { decidirIdentidad, entradaIdentidadDeSesion } from './identidad.ts'
 import type { IdentidadDecidida } from './identidad.ts'
 import { colaDeMuestras, retenerCola, vozMsDeMuestras } from './muestras.ts'
 import { fusionarVoz, ultimaFilaPorFin } from './fila.ts'
 import { registrarMedidaVoz } from './sesion.ts'
-import { asrEmpujaAudio, CONVERSACION_CONFIG } from './ports.ts'
+import { asrEmpujaAudio } from './ports.ts'
 import { logCaughtError } from '../../lib/caughtError.ts'
 import type {
   ConfiguracionConversacion,
@@ -906,8 +906,7 @@ export function crearIngesta({
           ...(finalDesdeMs === undefined ? {} : { finalDesdeMs }),
         },
         {
-          minSilenceMs: CONVERSACION_CONFIG.minSilenceMs,
-          silenceCloseMs: CONVERSACION_CONFIG.silenceCloseMs,
+          silenceCloseMs: configuracion.silenceCloseMs,
           // El umbral vive en la tabla del plan; la configuracion inyectada lo
           // declara (o lo apaga con <= 0) en las pruebas.
           finalCloseConfirmMs: Number(configuracion.finalCloseConfirmMs) || 0,
@@ -1069,7 +1068,9 @@ export function crearIngesta({
         encolar(() =>
           Promise.resolve().then(() => {
             estado.medidaVozEnCurso = false
-            dependencias.registro.registrar('conversacion.voz.medida.fallo', {
+            const registrarError =
+              dependencias.registro.registrarError ?? dependencias.registro.registrar
+            registrarError('conversacion.voz.medida.fallo', {
               sessionId: estado.sessionId,
               locutionId,
               error,
@@ -1089,20 +1090,20 @@ export function crearIngesta({
     embebedor: NonNullable<typeof dependencias.embebedor>,
     duracionMs = 0,
   ): IdentidadDecidida {
-    return decidirIdentidad({
-      vector,
-      plantillas: plantillasDeSesion(estado.plantillasVoz, dependencias.anclasBase),
-      umbral: dependencias.config.umbralContinuidadVoz(),
-      duracionMs,
-      minNuevaVozMs: dependencias.config.minNuevaVozMs?.() ?? 0,
-      minVozIdentidadMs: configuracion.minVozIdentidadMs,
-      umbralExistente:
-        dependencias.config.umbralExistenteVoz?.() ?? dependencias.config.umbralContinuidadVoz(),
-      // Perezoso: la plantilla SOLO se resuelve si la voz es nueva (Caso 10).
-      etiquetaNueva: () => dependencias.config.etiquetaAnonima(estado.contadorVoces + 1),
-      comparar: embebedor.comparar,
-      id: dependencias.id.uuid,
-    })
+    return decidirIdentidad(
+      entradaIdentidadDeSesion({
+        vector,
+        plantillasVoz: estado.plantillasVoz,
+        anclasBase: dependencias.anclasBase,
+        config: dependencias.config,
+        minVozIdentidadMs: configuracion.minVozIdentidadMs,
+        duracionMs,
+        // Perezoso: la plantilla SOLO se resuelve si la voz es nueva (Caso 10).
+        etiquetaNueva: () => dependencias.config.etiquetaAnonima(estado.contadorVoces + 1),
+        comparar: embebedor.comparar,
+        id: dependencias.id.uuid,
+      }),
+    )
   }
 
   /**

@@ -77,3 +77,15 @@ export const LOCAL_FALLBACK_DEFAULTS = Object.freeze({
   finalMinSpeechLikeMs: 180,
   partialMinSpeechLikeMs: 300,
 })
+
+/**
+ * Defaults del reintento del reconocedor FUERA de conversación (modo pasivo).
+ * El hook tenía `220 + n*40` con tope 800 como literales de una sola rama; aquí
+ * quedan como fuente única que `fluConfig` publica y el hook usa de respaldo.
+ */
+export const RESTART_RETRY_DEFAULTS = Object.freeze({
+  passiveRetryBackoffMs: 220,
+  passiveRetryStepMs: 40,
+  passiveRetryMaxMs: 800,
+  retryBeforeRebuild: 2,
+})

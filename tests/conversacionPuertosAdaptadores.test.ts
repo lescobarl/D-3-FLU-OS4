@@ -76,11 +76,8 @@ describe('configuración del plan — una sola fuente', () => {
       maxRetentionMin: 120,
       minSegundosVozMedida: 1.5,
       minVozIdentidadMs: 700,
-      minSegundosNuevaVoz: 8,
-      minPalabrasNuevaVoz: 8,
       maxSegundosVozRetenida: 120,
       confirmacionesCambioVoz: 2,
-      overlapMargin: null,
     })
   })
 

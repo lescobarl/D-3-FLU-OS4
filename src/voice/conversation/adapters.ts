@@ -1,8 +1,9 @@
 /**
  * ADAPTADORES del módulo CONVERSACIÓN.
  *
- * Es el ÚNICO archivo del módulo que importa fuera de `src/voice/conversation/`.
- * Todo acceso externo pasa por aquí; el resto del módulo solo conoce `ports.ts`.
+ * Implementaciones de los puertos que tocan la superficie externa (config,
+ * audio, voz, almacén). NO es la única frontera: cada dueño del módulo importa
+ * su dependencia directa; el mapa está en `docs/OWNERS.md`.
  *
  * Alcance medido de `src/voice/api/**` (superficie pública disponible hoy):
  *  - config:  wake words y etiqueta semilla;
@@ -116,7 +117,8 @@ export function crearIdUuid(): IdPort {
 
 /**
  * Registro del módulo: los HECHOS normales van al relay informativo
- * (`LOG:conversacion`); solo los contextos de fallo usan `logCaughtError`.
+ * (`LOG:conversacion`) y los ERRORES al canal de `catch` por el método
+ * EXPLÍCITO `registrarError` (el canal no se infiere del nombre del contexto).
  * Un cierre de locución o un descarte no son errores: mandarlos por el canal de
  * `catch` llenaba el log de 49 `ERROR:catch` en la sesión 7d337663.
  */
@@ -124,11 +126,16 @@ export function crearRegistroCaughtError(): RegistroPort {
   return {
     registrar: (contexto, ...detalles) => {
       const data = detalles.length === 0 ? undefined : detalles.length === 1 ? detalles[0] : detalles
-      if (/\.fallo$|\.error$/i.test(String(contexto || ''))) {
-        logCaughtError(contexto, ...detalles)
-        return
-      }
       relayLog('LOG', 'conversacion', contexto, data)
+    },
+    /**
+     * Canal EXPLÍCITO de error capturado: el llamador declara el error en la
+     * firma en vez de que el registro lo adivine por el sufijo del contexto.
+     * @revisor CREAR NUEVO — `registrar` publica HECHOS al relay; este publica
+     *   ERRORES a `logCaughtError`. Distinto destino y distinto contrato.
+     */
+    registrarError: (contexto, ...detalles) => {
+      logCaughtError(contexto, ...detalles)
     },
   }
 }
@@ -206,13 +213,6 @@ export function crearConfigFlu(): ConfigPort {
       const umbrales = FLU_CONFIG.voiceIdentity?.capture?.conversationSpeakerThresholds
       const valor = umbrales ? Number(umbrales.minNewSpeakerMs) : Number.NaN
       return Number.isFinite(valor) && valor > 0 ? valor : VOICE_DIARIZATION_DEFAULTS.minNewSpeakerMs
-    },
-    minNuevaVozPalabras: () => {
-      const umbrales = FLU_CONFIG.voiceIdentity?.capture?.conversationSpeakerThresholds
-      const valor = umbrales ? Number(umbrales.minNewSpeakerWords) : Number.NaN
-      return Number.isFinite(valor) && valor > 0
-        ? valor
-        : VOICE_DIARIZATION_DEFAULTS.minNewSpeakerWords
     },
     umbralExistenteVoz: () => {
       const umbrales = FLU_CONFIG.voiceIdentity?.capture?.conversationSpeakerThresholds
