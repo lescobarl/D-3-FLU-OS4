@@ -16,7 +16,7 @@ import { normalizeLang } from '../core/config/localeConfig.ts'
 // ============================================================
 
 import type { IncomingMessage, ServerResponse } from 'http';
-import { appendFileSync, existsSync, renameSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 /**
@@ -849,8 +849,12 @@ export function createGeminiMiddleware({ env = {} }: { env?: Record<string, stri
                 // Medido 2026-10-14: el truncado borraba la evidencia de la corrida del dueno en
                 // cada arranque (y el relay del cliente NO re-encola: lo entregado se pierde).
                 try {
+                    const prevLog = resolve(process.cwd(), 'debug.prev.log');
+                    // Windows no sobrescribe al renombrar: limpiar el destino evita
+                    // EBUSY/EPERM en el segundo arranque y conserva la rotación.
+                    if (existsSync(prevLog)) unlinkSync(prevLog);
                     if (existsSync(clientLogFile)) {
-                        renameSync(clientLogFile, resolve(process.cwd(), 'debug.prev.log'));
+                        renameSync(clientLogFile, prevLog);
                     }
                 } catch (err: unknown) {
                     logCaughtError('[geminiProxy] client log: no se pudo rotar debug.log', errorField(err, 'message') || err);
