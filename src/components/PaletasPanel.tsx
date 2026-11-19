@@ -120,7 +120,7 @@ export function PaletasPanel({
 
     return (
         <CatalogPanelShell
-            title={ui.panelTitle || 'Mis temporadas (paletas dinámicas)'}
+            title={ui.panelTitle || 'Paletas'}
             editor={editor ? (
                     <PaletaEditorForm
                         {...catalogEditorProps(

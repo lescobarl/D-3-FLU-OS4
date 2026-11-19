@@ -21,6 +21,8 @@ import { AGENDA_KINDS, nextAgendaDue } from '../core/agenda/agendaModel';
 import { MONTH_DISPLAY_ES, WEEKDAY_DISPLAY_ES } from '../core/temporal/calendarNames';
 import { dayOfWeek } from '../core/temporal/scheduleEngine';
 import { formatLocalHHMM } from '../lib/timeFormat';
+import { FLU_CONFIG } from '../voice/api/config';
+import { ContactsPanel, type ContactsPanelProps } from './ContactsPanel';
 
 const VIEWS: ReadonlyArray<{ key: AgendaView; label: string }> = [
     { key: 'day', label: 'Hoy' },
@@ -62,6 +64,8 @@ export interface AgendaPanelProps {
     labels?: Partial<Record<AgendaKind, string>>;
     /** Notas (texto, sin fecha): viven en su propia sección, no en el calendario. */
     notes?: AgendaNotesProps;
+    /** Contactos: sección del panel, debajo de Notas. */
+    contacts?: ContactsPanelProps;
     onCancel?: (id: string) => void;
     onAdd?: (input: AgendaAddInput) => void | Promise<void>;
     onEdit?: (id: string, patch: { label?: string; trigger?: AgendaTrigger }) => void | Promise<void>;
@@ -129,6 +133,7 @@ export function AgendaPanel({
     noteColor = '#64748b',
     labels,
     notes,
+    contacts,
     onCancel,
     onAdd,
     onEdit,
@@ -597,6 +602,19 @@ export function AgendaPanel({
                             </button>
                         </form>
                     ) : null}
+                </section>
+            ) : null}
+
+            {/* CONTACTOS — misma sección del panel, debajo de Notas */}
+            {contacts ? (
+                <section
+                    className="hoy-panel__section hoy-panel__section--contacts"
+                    aria-label="Contactos"
+                >
+                    <h4 className="hoy-panel__section-title">
+                        {FLU_CONFIG.contacts?.ui?.contactsViewLabel || 'Contactos'}
+                    </h4>
+                    <ContactsPanel {...contacts} />
                 </section>
             ) : null}
 

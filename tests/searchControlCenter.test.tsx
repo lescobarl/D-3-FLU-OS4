@@ -3,7 +3,7 @@
  * SearchControlCenter - el Centro de Control del Buscador (0%).
  *
  * POR QUE ESTE TEST: 600 lineas (el mayor de la capa ciega) por las que pasan
- * proveedores, categorias, idiomas por rol, seguridad y vista previa. Se sustituye
+ * proveedores, categorias, idiomas por rol y seguridad. Se sustituye
  * la FRONTERA (los endpoints de busqueda y el panel de catalogo embebido) y se
  * ejercita la regla central del patron BORRADOR -> COMMIT: los inputs editan local y
  * al guardar SOLO se persisten los valores que DIFIEREN de la config base (por eso
@@ -17,31 +17,15 @@
  * que difieren de la config base"): reescribir la misma clave deja un override
  * redundante en localStorage.
  */
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const dobles = vi.hoisted(() => ({
     runtime: { providers: {}, maxResultsByType: { web: 10, images: 10, video: 10 }, timeoutMs: 5000, aiEnabled: true },
-    resuelto: {
-        endpoints: { web: '/proxy/search' },
-        providers: { web: ['w1'] },
-        timeoutMs: 5000,
-        maxResultsByType: { web: 10 },
-        effectiveSafe: true,
-        aiEnabled: true,
-        maxChars: 400,
-        aiOverviewTitle: 'Resumen IA',
-    },
-    fetchTypeResults: vi.fn(async () => ({ ok: true, results: [] as unknown[] })),
-    fetchAiOverview: vi.fn(async () => 'resumen'),
-    resolveMergedSearchConfig: vi.fn(),
 }));
 
 vi.mock('../src/hooks/useWorkspaceSearch.js', () => ({
     buildRuntimeConfig: () => dobles.runtime,
-    resolveMergedSearchConfig: (draft: unknown) => dobles.resolveMergedSearchConfig(draft),
-    fetchTypeResults: (...args: unknown[]) => dobles.fetchTypeResults(...(args as [])),
-    fetchAiOverview: (...args: unknown[]) => dobles.fetchAiOverview(...(args as [])),
 }));
 
 vi.mock('../src/components/SearchCatalogPanel.js', () => ({
@@ -86,7 +70,6 @@ const montar = (over: Partial<Record<string, unknown>> = {}) => {
                 overrides={(over.overrides as never) ?? ({} as never)}
                 onChange={onChange as never}
                 onReset={onReset as never}
-                allowlist={(over.allowlist as never) ?? undefined}
                 sites={(over.sites as never) ?? (SITIOS as never)}
                 dynamicDomains={(over.dynamicDomains as never) ?? (new Set<string>() as never)}
                 loading={(over.loading as boolean) ?? false}
@@ -111,12 +94,6 @@ const proveedor = (tipo: string, id: string, campo: string) => screen.getByTestI
 
 beforeEach(() => {
     dobles.runtime = SERVICIOS;
-    dobles.fetchTypeResults.mockClear();
-    dobles.fetchAiOverview.mockClear();
-    dobles.resolveMergedSearchConfig.mockClear();
-    dobles.resolveMergedSearchConfig.mockReturnValue(dobles.resuelto);
-    dobles.fetchTypeResults.mockResolvedValue({ ok: true, results: [] });
-    dobles.fetchAiOverview.mockResolvedValue('resumen');
     vi.spyOn(console, 'error').mockImplementation(() => {});
 });
 
@@ -271,100 +248,5 @@ describe('SearchControlCenter - restablecer (barra global)', () => {
         fireEvent.click(screen.getByTestId('settings-reset-all'));
 
         expect(onChange).toHaveBeenCalledWith({});
-    });
-});
-
-describe('SearchControlCenter - vista previa', () => {
-    it('sin consulta no llama al buscador', () => {
-        montar();
-
-        fireEvent.submit(screen.getByTestId('search-preview-run').closest('form')!);
-
-        expect(dobles.fetchTypeResults).not.toHaveBeenCalled();
-        expect(screen.getByTestId('search-preview-empty')).toBeTruthy();
-    });
-
-    it('con consulta pide resultados e IA, y muestra ambos', async () => {
-        dobles.fetchTypeResults.mockResolvedValue({
-            ok: true,
-            results: [{ title: 'Uno', snippet: 'trozo' }],
-        });
-        montar({ allowlist: ['uno.org'] });
-        fireEvent.change(screen.getByTestId('search-preview-query'), { target: { value: '  volcanes  ' } });
-
-        fireEvent.submit(screen.getByTestId('search-preview-run').closest('form')!);
-
-        await waitFor(() => {
-            expect(screen.getByTestId('search-preview-done')).toBeTruthy();
-        });
-        expect(screen.getByText('Uno')).toBeTruthy();
-        expect(screen.getByText('trozo')).toBeTruthy();
-        expect(screen.getByText('resumen')).toBeTruthy();
-
-        // Parametros: consulta recortada, idioma, seguro y allowlist curada.
-        const params = (dobles.fetchTypeResults.mock.calls[0] as unknown[])[3] as URLSearchParams;
-        expect(params.get('q')).toBe('volcanes');
-        expect(params.get('lang')).toBe('es');
-        expect(params.get('safe')).toBe('1');
-        expect(params.get('allowlist')).toBe('uno.org');
-        expect(dobles.resolveMergedSearchConfig).toHaveBeenCalled();
-    });
-
-    it('sin resultados avisa y sin IA no pinta el resumen', async () => {
-        dobles.fetchTypeResults.mockResolvedValue({ ok: true, results: [] });
-        dobles.fetchAiOverview.mockResolvedValue('');
-        montar();
-
-        fireEvent.change(screen.getByTestId('search-preview-query'), { target: { value: 'nada' } });
-        fireEvent.submit(screen.getByTestId('search-preview-run').closest('form')!);
-
-        await waitFor(() => {
-            expect(screen.getByTestId('search-preview-done')).toBeTruthy();
-        });
-        expect(screen.getByText(ui.previewEmpty)).toBeTruthy();
-        expect(screen.queryByText(ui.previewAi)).toBeNull();
-    });
-
-    it('un fallo del buscador se muestra como error, no como vacio', async () => {
-        dobles.fetchTypeResults.mockResolvedValue({ ok: false, results: [] });
-        montar();
-
-        fireEvent.change(screen.getByTestId('search-preview-query'), { target: { value: 'x' } });
-        fireEvent.submit(screen.getByTestId('search-preview-run').closest('form')!);
-
-        await waitFor(() => {
-            expect(screen.getByTestId('search-preview-error')).toBeTruthy();
-        });
-        expect(dobles.fetchAiOverview).not.toHaveBeenCalled();
-    });
-
-    it('si la busqueda revienta, se registra y sale el aviso de error', async () => {
-        dobles.fetchTypeResults.mockRejectedValue(new Error('proxy caido'));
-        montar();
-
-        fireEvent.change(screen.getByTestId('search-preview-query'), { target: { value: 'x' } });
-        fireEvent.submit(screen.getByTestId('search-preview-run').closest('form')!);
-
-        await waitFor(() => {
-            expect(screen.getByTestId('search-preview-error')).toBeTruthy();
-        });
-        expect(console.error).toHaveBeenCalled();
-    });
-
-    it('mientras consulta se ve el aviso de carga', async () => {
-        let resolver: (valor: unknown) => void = () => {};
-        dobles.fetchTypeResults.mockImplementation(() => new Promise((listo) => {
-            resolver = (valor) => listo(valor as { ok: boolean; results: unknown[] });
-        }));
-        montar();
-        fireEvent.change(screen.getByTestId('search-preview-query'), { target: { value: 'x' } });
-
-        fireEvent.submit(screen.getByTestId('search-preview-run').closest('form')!);
-
-        expect(screen.getByTestId('search-preview-loading')).toBeTruthy();
-        resolver({ ok: true, results: [] });
-        await waitFor(() => {
-            expect(screen.getByTestId('search-preview-done')).toBeTruthy();
-        });
     });
 });

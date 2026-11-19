@@ -31,7 +31,7 @@ import { unifySkeletons } from './bunnySkeleton';
 import { repairFBXMaterials } from './bunnyMaterials';
 import { logCaughtError } from '../../lib/caughtError';
 import { BunnyAnimator } from './bunnyAnimator';
-import { applyComponentVisibility, applyComponentColor } from './bunnyComponents';
+import { applyComponentVisibility } from './bunnyComponents';
 import { loadFbx } from '../workers/fbxWorkerClient';
 import { DecorationsRenderer } from '../decorations/DecorationsRenderer';
 import type { BunnyAnimation } from '../types/bunny';
@@ -62,7 +62,6 @@ export default function BunnyModel({ orientation = 0.525 }: { orientation?: numb
     const blendQueue = useBunnyStore((s) => s.blendQueue);
     const isPlaying = useBunnyStore((s) => s.isPlaying);
     const components = useBunnyStore((s) => s.components);
-    const componentColors = useBunnyStore((s) => s.componentColors);
     const logsEnabled = useBunnyStore((s) => s.logsEnabled);
     const animationSpeed = useBunnyStore((s) => s.animationSpeed);
 
@@ -119,15 +118,6 @@ export default function BunnyModel({ orientation = 0.525 }: { orientation?: numb
                 const initialComponents = useBunnyStore.getState().components;
                 applyComponentVisibility(object, initialComponents);
 
-                // Apply initial component colors now that the model is loaded.
-                // Same race condition as visibility: if the user already changed a
-                // color while the model was still loading, this guarantees the
-                // correct color is applied once the model exists.
-                const initialColors = useBunnyStore.getState().componentColors;
-                Object.entries(initialColors).forEach(([component, color]) => {
-                    if (color) applyComponentColor(object, component, color);
-                });
-
                 animator.preloadAll().then(() => {
                     setLoading(false);
                     setPreloaded(true); // habilita la reproducción: el efecto re-ejecuta con el estado actual del store
@@ -174,23 +164,6 @@ export default function BunnyModel({ orientation = 0.525 }: { orientation?: numb
 
         applyComponentVisibility(model, components);
     }, [components]);
-
-    // ============================================================
-    // COMPONENT COLORS — aplicar colores personalizados por componente
-    // ============================================================
-    // Se ejecuta cuando cambia componentColors. La aplicación inicial
-    // (modelo aún cargando) ya se hizo en el efecto de carga, así que
-    // aquí solo replicamos cambios posteriores.
-
-    useEffect(() => {
-        const model = modelObjRef.current;
-        if (!model) return;
-
-        Object.entries(componentColors).forEach(([component, color]) => {
-            if (!color) return;
-            applyComponentColor(model, component, color);
-        });
-    }, [componentColors]);
 
     // ============================================================
     // ANIMATION PLAYBACK — con cross-fade suave (Phase 5 — Darle Vida)

@@ -23,6 +23,7 @@ import { FLU_CONFIG } from '../voice/api/config';
 import { WorkspaceSearch } from './WorkspaceSearch';
 import { ResultFeed, type ResultFeedItem } from './ResultFeed';
 import { AgendaPanel, type AgendaPanelProps } from './AgendaPanel';
+import type { ContactsPanelProps } from './ContactsPanel';
 import DocumentResultPanel from './DocumentResultPanel';
 import { DocumentsHistoryPanel, downloadDocumentContent, type DocumentsHistoryPanelProps } from './DocumentsHistoryPanel';
 import AppAnalysisPanel from './AppAnalysisPanel';
@@ -176,6 +177,9 @@ export interface WorkspaceHubProps {
     // lateral = AgendaPanel (calendario unificado). Opcional para no romper
     // los usos/test que aún no lo cablean.
     agenda?: AgendaPanelProps;
+
+    /** Contactos: vista nativa del Pizarrón (mismo dueño de datos que App). */
+    contacts?: ContactsPanelProps;
 }
 
 // ------------------------------------------------------------
@@ -284,6 +288,7 @@ export function WorkspaceHub({
     upload,
     language,
     agenda,
+    contacts,
 }: WorkspaceHubProps) {
     // Memoizado: sin esto, el literal de respaldo cambiaba de identidad por render
     // y arrastraba el useMemo de mas abajo (exhaustive-deps lo cantaba).
@@ -841,9 +846,7 @@ export function WorkspaceHub({
 
     return (
         <div className="workspace-hub" data-testid="workspace-hub">
-            {/* Sección 1 — barra de comandos (región permanente, ancho completo).
-                Vive como hermana por encima del cuerpo desplazable para poder
-                extenderse de borde a borde del frame sin márgenes laterales. */}
+            {/* Sección 1 — barra de comandos (región permanente, ancho completo). */}
             <div className="workspace-hub__searchbar">
                 <WorkspaceSearch
                     allowlist={searchAllowlist}
@@ -882,7 +885,7 @@ export function WorkspaceHub({
                                     language={language}
                                 />
                             )}
-                            <AgendaPanel {...agenda} />
+                            <AgendaPanel {...agenda} contacts={contacts} />
                         </aside>
                     </div>
                 ) : (

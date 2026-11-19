@@ -12,14 +12,12 @@
 
 import { SettingsPanelShell } from './SettingsPanelShell';
 import React from 'react';
-import type { FluProfile } from '../types/bridge';
-import { FLU_PROFILES, AVAILABLE_TRAITS, AVAILABLE_TONES, FALAI_CONFIG } from '../core/config/appConfig';
+import { AVAILABLE_TRAITS, AVAILABLE_TONES, FALAI_CONFIG } from '../core/config/appConfig';
 import { OPENROUTER_DEFAULTS, POLLINATIONS_DEFAULTS, AI_PROVIDER_IDS, DEFAULT_AI_PROVIDER } from '../core/config/sharedConfig';
 import { useIntegrationStore } from '../store/integrationStore';
 import FluParticipantSettingsPanel from '../voice/components/FluParticipantSettingsPanel';
 import type { BrandingMode } from '../core/branding/useSeasonalBranding';
 import { getAllPalettes, getPalette } from '../core/branding/seasonalPalettes';
-import { useBunnyStore } from '../avatar/store/bunnyStore';
 import type { VoiceConfig } from '../types/bridge';
 import { useAuditLog } from '../hooks/useAuditLog';
 import { loadSearchConfigOverrides, saveSearchConfigOverrides, getLastStorageError, type SearchConfigOverrides } from '../core/search/searchConfigOverrides';
@@ -64,8 +62,12 @@ export interface FluSettingsPanelProps {
     onClearCache?: () => void;
     wakeWords: string;
     setWakeWords: (value: string) => void;
-    debugLogsEnabled: boolean;
-    setDebugLogsEnabled: (enabled: boolean) => void;
+    verboseLogsEnabled: boolean;
+    setVerboseLogsEnabled: (enabled: boolean) => void;
+    relayLogsEnabled: boolean;
+    setRelayLogsEnabled: (enabled: boolean) => void;
+    recordingEnabled: boolean;
+    setRecordingEnabled: (enabled: boolean) => void;
     handleParticipantConfigChange: (overrides: Record<string, unknown>) => void;
     /** Overrides del buscador (comparte fuente con el Centro de Control). */
     searchOverrides?: SearchConfigOverrides;
@@ -78,11 +80,9 @@ export interface FluSettingsPanelProps {
     brandingMode?: BrandingMode;
     brandingSeason?: string;
     brandingBirthday?: string | null;
-    brandingCelebrateAchievements?: boolean;
     onBrandingModeChange?: (mode: BrandingMode) => void;
     onBrandingSeasonChange?: (season: string) => void;
     onBrandingBirthdayChange?: (birthday: string | null) => void;
-    onBrandingCelebrateAchievementsChange?: (enabled: boolean) => void;
 }
 
 export function FluSettingsPanel({
@@ -109,18 +109,20 @@ export function FluSettingsPanel({
     onClearCache,
     wakeWords,
     setWakeWords,
-    debugLogsEnabled,
-    setDebugLogsEnabled,
+    verboseLogsEnabled,
+    setVerboseLogsEnabled,
+    relayLogsEnabled,
+    setRelayLogsEnabled,
+    recordingEnabled,
+    setRecordingEnabled,
     handleParticipantConfigChange,
     // Branding props
     brandingMode,
     brandingSeason,
     brandingBirthday,
-    brandingCelebrateAchievements,
     onBrandingModeChange,
     onBrandingSeasonChange,
     onBrandingBirthdayChange,
-    onBrandingCelebrateAchievementsChange,
     // External Services props
     ocrApiKey,
     handleOcrApiKeyCommit,
@@ -134,7 +136,6 @@ export function FluSettingsPanel({
     onSearchOverridesChange,
 }: FluSettingsPanelProps) {
     const integrationStore = useIntegrationStore();
-    const { componentColors, setComponentColor, resetComponentColors } = useBunnyStore();
     const audit = useAuditLog();
 
     // ── Búsqueda web: la clave/modelo se escriben DIRECTAMENTE en la fuente de
@@ -218,10 +219,9 @@ export function FluSettingsPanel({
     });
 
     return (
-        <section className="flu-settings-panel">
-            {/* ---- 🔌 Servicios Externos (APIs/llaves) — sección principal ---- */}
-            <SettingsPanelShell title={<><span className="flu-settings-image-config__icon">🔌</span>
-                    <span>Configuración de Servicios Externos</span></>} open bare>
+        <>
+            {/* ---- Servicios Externos (APIs/llaves) — sección principal ---- */}
+            <SettingsPanelShell title="Servicios externos" bare>
                 <div className="flu-settings-image-config__body">
                     <div className="flu-settings-image-config__group">
                         {/* Proveedor de IA */}
@@ -237,9 +237,9 @@ export function FluSettingsPanel({
                             </select>
                         </label>
 
-                        {/* ---- 📝 Texto (Gemini) ---- */}
-                        <div className="flu-settings-section" style={{ marginTop: 12 }}>
-                            <h4 className="flu-settings-section__title">📝 Texto (Gemini 2.5 Flash Lite vía OpenRouter)</h4>
+                        {/* ---- Texto (Gemini) ---- */}
+                        <div className="flu-settings-section">
+                            <h4 className="flu-settings-section__title">Texto (Gemini 2.5 Flash Lite vía OpenRouter)</h4>
                             <div className="flu-settings-section__body">
                                 <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked">
                                     <span className="flu-settings-image-config__section-label">
@@ -248,20 +248,20 @@ export function FluSettingsPanel({
                                     <input
                                         type="text"
                                         className="flu-settings-image-config__input"
-                                        style={{ fontFamily: 'monospace' }}
+
                                         placeholder={OPENROUTER_DEFAULTS.MODEL}
                                         defaultValue={textModel}
                                         onChange={(e) => handleTextModelCommit(e.target.value)}
                                     />
                                 </label>
-                                <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked" style={{ marginTop: 8 }}>
+                                <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked">
                                     <span className="flu-settings-image-config__section-label">
                                         {pickText(language, 'api_key_opcional')}
                                     </span>
                                     <div className="flu-settings-row">
                                         <input
                                             type="password"
-                                            className="flu-settings-image-config__input flu-settings-input-mono"
+                                            className="flu-settings-image-config__input"
                                             style={{ flex: 1 }}
                                             placeholder={pickText(language, 'opcional_openrouter_api_key')}
                                             defaultValue={apiKey}
@@ -283,17 +283,17 @@ export function FluSettingsPanel({
                                     </div>
                                     {apiKey && (
                                         <span className="flu-settings-api-badge">
-                                            ✅ {pickText(language, 'api_key_configurada')}
+                                            {pickText(language, 'api_key_configurada')}
                                         </span>
                                     )}
                                 </label>
-                                <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked" style={{ marginTop: 8 }}>
+                                <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked">
                                     <span className="flu-settings-image-config__section-label">
                                         {pickText(language, 'url_de_api')}
                                     </span>
                                     <input
                                         type="text"
-                                        className="flu-settings-image-config__input flu-settings-input-mono--small"
+                                        className="flu-settings-image-config__input"
                                         placeholder={OPENROUTER_DEFAULTS.API_URL}
                                         defaultValue={textApiUrl}
                                         onChange={(e) => handleTextApiUrlCommit(e.target.value)}
@@ -302,9 +302,9 @@ export function FluSettingsPanel({
                             </div>
                         </div>
 
-                        {/* ---- 🖼️ Imagen (Pollinations) ---- */}
-                        <div className="flu-settings-section" style={{ marginTop: 12 }}>
-                            <h4 className="flu-settings-section__title">🖼️ Imagen (Pollinations)</h4>
+                        {/* ---- Imagen (Pollinations) ---- */}
+                        <div className="flu-settings-section">
+                            <h4 className="flu-settings-section__title">Imagen (Pollinations)</h4>
                             <div className="flu-settings-section__body">
                                 <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked">
                                     <span className="flu-settings-image-config__section-label">
@@ -313,20 +313,20 @@ export function FluSettingsPanel({
                                     <input
                                         type="text"
                                         className="flu-settings-image-config__input"
-                                        style={{ fontFamily: 'monospace' }}
+
                                         placeholder={'Pollinations (default)'}
                                         defaultValue={imageModel}
                                         onChange={(e) => handleImageModelCommit(e.target.value)}
                                     />
                                 </label>
-                                <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked" style={{ marginTop: 8 }}>
+                                <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked">
                                     <span className="flu-settings-image-config__section-label">
                                         {'API Key'}
                                     </span>
                                     <div className="flu-settings-row">
                                         <input
                                             type="password"
-                                            className="flu-settings-image-config__input flu-settings-input-mono"
+                                            className="flu-settings-image-config__input"
                                             style={{ flex: 1 }}
                                             placeholder={pickText(language, 'api_key_opcional_para_servicio_de_imagen')}
                                             defaultValue={imageApiKey}
@@ -347,13 +347,13 @@ export function FluSettingsPanel({
                                         </button>
                                     </div>
                                 </label>
-                                <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked" style={{ marginTop: 8 }}>
+                                <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked">
                                     <span className="flu-settings-image-config__section-label">
                                         {pickText(language, 'url_de_api')}
                                     </span>
                                     <input
                                         type="text"
-                                        className="flu-settings-image-config__input flu-settings-input-mono--small"
+                                        className="flu-settings-image-config__input"
                                         placeholder={POLLINATIONS_DEFAULTS.BASE_URL}
                                         defaultValue={imageApiUrl}
                                         onChange={(e) => handleImageApiUrlCommit(e.target.value)}
@@ -362,9 +362,9 @@ export function FluSettingsPanel({
                             </div>
                         </div>
 
-                        {/* ---- 🖼️ Imagen Gemini (fallback) ---- */}
-                        <div className="flu-settings-section" style={{ marginTop: 12 }}>
-                            <h4 className="flu-settings-section__title">🖼️ Imagen Gemini (fallback)</h4>
+                        {/* ---- Imagen Gemini (fallback) ---- */}
+                        <div className="flu-settings-section">
+                            <h4 className="flu-settings-section__title">Imagen Gemini (fallback)</h4>
                             <div className="flu-settings-section__body">
                                 <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked">
                                     <span className="flu-settings-image-config__section-label">
@@ -373,7 +373,7 @@ export function FluSettingsPanel({
                                     <div className="flu-settings-row">
                                         <input
                                             type="password"
-                                            className="flu-settings-image-config__input flu-settings-input-mono"
+                                            className="flu-settings-image-config__input"
                                             style={{ flex: 1 }}
                                             placeholder={pickText(language, 'opcional_gemini_api_key_nativa')}
                                             defaultValue={geminiApiKey}
@@ -394,15 +394,15 @@ export function FluSettingsPanel({
                                         </button>
                                     </div>
                                 </label>
-                                <p className="flu-settings-hint" style={{ marginTop: 8, fontSize: 12, opacity: 0.7 }}>
+                                <p className="flu-settings-hint">
                                     {pickText(language, 'si_esta_vacia_se_usa_la_api_key_de_openrou')}
                                 </p>
                             </div>
                         </div>
 
-                        {/* ---- 🔤 OCR ---- */}
-                        <div className="flu-settings-section" style={{ marginTop: 12 }}>
-                            <h4 className="flu-settings-section__title">🔤 OCR</h4>
+                        {/* ---- OCR ---- */}
+                        <div className="flu-settings-section">
+                            <h4 className="flu-settings-section__title">OCR</h4>
                             <div className="flu-settings-section__body">
                                 <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked">
                                     <span>Clave API de OCR</span>
@@ -413,7 +413,7 @@ export function FluSettingsPanel({
                                         onChange={(e) => handleOcrApiKeyCommit?.(e.target.value)}
                                     />
                                 </label>
-                                <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked" style={{ marginTop: 8 }}>
+                                <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked">
                                     <span>Modelo de OCR</span>
                                     <input
                                         type="text"
@@ -422,7 +422,7 @@ export function FluSettingsPanel({
                                         onChange={(e) => handleOcrModelCommit?.(e.target.value)}
                                     />
                                 </label>
-                                <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked" style={{ marginTop: 8 }}>
+                                <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked">
                                     <span>URL de API de OCR</span>
                                     <input
                                         type="text"
@@ -434,16 +434,16 @@ export function FluSettingsPanel({
                             </div>
                         </div>
 
-                        {/* ---- 🎬 Video ---- */}
-                        <div className="flu-settings-section" style={{ marginTop: 12 }}>
-                            <h4 className="flu-settings-section__title">🎬 Video</h4>
+                        {/* ---- Video ---- */}
+                        <div className="flu-settings-section">
+                            <h4 className="flu-settings-section__title">Video</h4>
                             <div className="flu-settings-section__body">
                                 <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked">
                                     <span>{pickText(language, 'clave_api_de_fal_ai')}</span>
                                     <div className="flu-settings-row">
                                         <input
                                             type={revealFalKey ? 'text' : 'password'}
-                                            className="flu-settings-image-config__input flu-settings-input-mono"
+                                            className="flu-settings-image-config__input"
                                             style={{ flex: 1 }}
                                             placeholder="key-id:key-secret"
                                             defaultValue={falApiKey || ''}
@@ -459,29 +459,29 @@ export function FluSettingsPanel({
                                         </button>
                                     </div>
                                 </label>
-                                <p className="flu-settings-image-config__hint" style={{ marginTop: 6, opacity: 0.75 }}>
+                                <p className="flu-settings-image-config__hint">
                                     {pickText(language, 'sin_clave_la_generacion_de_video_produce_s')}
                                 </p>
-                                <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked" style={{ marginTop: 8 }}>
+                                <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked">
                                     <span>{pickText(language, 'modelo_de_video_fal_ai')}</span>
                                     <input
                                         type="text"
-                                        className="flu-settings-image-config__input flu-settings-input-mono"
+                                        className="flu-settings-image-config__input"
                                         placeholder={FALAI_CONFIG.VIDEO_MODEL}
                                         defaultValue={falVideoModel || ''}
                                         data-testid="video-falai-model"
                                         onChange={(e) => handleFalVideoModelCommit?.(e.target.value)}
                                     />
                                 </label>
-                                <p className="flu-settings-image-config__hint" style={{ marginTop: 6, opacity: 0.75 }}>
+                                <p className="flu-settings-image-config__hint">
                                     {pickText(language, 'barato_fal_ai_wan_25_preview_text_to_video')}
                                 </p>
                             </div>
                         </div>
 
-                        {/* ---- 🔎 Búsqueda web (Tavily + OpenRouter) ---- */}
-                        <div className="flu-settings-section" style={{ marginTop: 12 }}>
-                            <h4 className="flu-settings-section__title">🔎 Búsqueda web</h4>
+                        {/* ---- Búsqueda web (Tavily + OpenRouter) ---- */}
+                        <div className="flu-settings-section">
+                            <h4 className="flu-settings-section__title">Búsqueda web</h4>
                             <div className="flu-settings-section__body">
                                 <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked">
                                     <span className="flu-settings-image-config__section-label">
@@ -490,7 +490,7 @@ export function FluSettingsPanel({
                                     <div className="flu-settings-row">
                                         <input
                                             type={revealWeb.tavily ? 'text' : 'password'}
-                                            className="flu-settings-image-config__input flu-settings-input-mono"
+                                            className="flu-settings-image-config__input"
                                             style={{ flex: 1 }}
                                             placeholder="tvly-…"
                                             value={webDraft.tavilyKey}
@@ -507,14 +507,14 @@ export function FluSettingsPanel({
                                         </button>
                                     </div>
                                 </label>
-                                <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked" style={{ marginTop: 8 }}>
+                                <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked">
                                     <span className="flu-settings-image-config__section-label">
                                         {pickText(language, 'clave_api_de_openrouter_busqueda_web')}
                                     </span>
                                     <div className="flu-settings-row">
                                         <input
                                             type={revealWeb.openrouter ? 'text' : 'password'}
-                                            className="flu-settings-image-config__input flu-settings-input-mono"
+                                            className="flu-settings-image-config__input"
                                             style={{ flex: 1 }}
                                             placeholder="sk-or-…"
                                             value={webDraft.openrouterKey}
@@ -536,21 +536,21 @@ export function FluSettingsPanel({
                                             style={{ color: 'var(--accent-red, #e5484d)', borderColor: 'var(--accent-red, #e5484d)' }}
                                             data-testid="search-web-save-error"
                                         >
-                                            ⚠️{' '}
+                                            {' '}
                                             {language === 'en'
                                                 ? `Key NOT saved (${webSave.error || 'storage error'})`
                                                 : `La clave NO se guardó (${webSave.error || 'error de almacenamiento'})`}
                                         </span>
                                     ) : null}
                                 </label>
-                                <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked" style={{ marginTop: 8 }}>
+                                <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked">
                                     <span className="flu-settings-image-config__section-label">
                                         {pickText(language, 'modelo_de_openrouter_busqueda_web')}
                                     </span>
                                     <input
                                         type="text"
-                                        className="flu-settings-image-config__input flu-settings-input-mono--small"
-                                        style={{ fontFamily: 'monospace' }}
+                                        className="flu-settings-image-config__input"
+
                                         placeholder={`${OPENROUTER_DEFAULTS.MODEL}:online`}
                                         value={webDraft.openrouterModel}
                                         data-testid="search-web-openrouter-model"
@@ -558,7 +558,7 @@ export function FluSettingsPanel({
                                         onBlur={() => persistWeb(webDraftRef.current)}
                                     />
                                 </label>
-                                <p className="flu-settings-hint" style={{ marginTop: 8, fontSize: 12, opacity: 0.7 }}>
+                                <p className="flu-settings-hint">
                                     {pickText(language, 'cadena_de_busqueda_web_tavily_openrouter_w')}
                                 </p>
                             </div>
@@ -566,7 +566,7 @@ export function FluSettingsPanel({
 
                         {/* Limpiar caché y recargar */}
                         {onClearCache && (
-                            <div className="flu-settings-row" style={{ marginTop: 12, gap: 8 }}>
+                            <div className="flu-settings-row">
                                 <button
                                     type="button"
                                     className="flu-settings-clear-cache-btn"
@@ -577,7 +577,7 @@ export function FluSettingsPanel({
                                         if (confirmed) onClearCache();
                                     }}
                                 >
-                                    🧹 {pickText(language, 'limpiar_cache_y_recargar')}
+                                    {pickText(language, 'limpiar_cache_y_recargar')}
                                 </button>
                             </div>
                         )}
@@ -585,32 +585,13 @@ export function FluSettingsPanel({
                 </div>
             </SettingsPanelShell>
 
-            {/* ---- 🤖 Gobernado por IA (personalidad + branding estacional) ---- */}
-            <SettingsPanelShell title={<><span className="flu-settings-image-config__icon">🤖</span>
-                    <span>Gobernado por IA</span></>} bare>
-                <div className="flu-settings-image-config__body">
-                    {/* ---- 🎭 Configurador de FLU ---- */}
-            <SettingsPanelShell title={<><span className="flu-settings-image-config__icon">🎭</span>
-                    <span>Configurador de FLU</span>
-                    <span className="flu-settings-summary-spacer" />
-                    <span className="flu-settings-profile-inline">👤</span>
-                    <select
-                        value={integrationStore.profile}
-                        onChange={(e) => integrationStore.applyProfile(e.target.value as FluProfile)}
-                        className="flu-settings-image-config__input flu-settings-profile-select"
-                        onClick={(e) => e.stopPropagation()}
-                    >
-                        {FLU_PROFILES.map((p) => (
-                            <option key={p.id} value={p.id}>
-                                {p.id === 'profesor' ? 'Asistente del Maestro' : p.label}
-                            </option>
-                        ))}
-                    </select></>} summaryClassName="flu-settings-image-config__summary flu-settings-image-config__summary--with-profile" bare>
+            {/* ---- Configurador de FLU (personalidad + branding estacional) ---- */}
+            <SettingsPanelShell title="Configurador de FLU" bare>
                 <div className="flu-settings-image-config__body flu-settings-image-config__body--flu-config">
 
                     <div className="flu-settings-section">
                         <div className="flu-settings-section__title">
-                            🧠 Personalidad
+                            Personalidad
                         </div>
                         <div className="flu-settings-section__body flu-settings-section__body--indent">
                             <div className="flu-settings-image-config__group" style={{ border: 'none', padding: 0 }}>
@@ -662,9 +643,9 @@ export function FluSettingsPanel({
                         </div>
                     </div>
 
-                    {/* ---- ✏️ Instrucciones personalizadas ---- */}
+                    {/* ---- Instrucciones personalizadas ---- */}
                     <div className="flu-settings-section">
-                        <div className="flu-settings-section-label">✏️ Instrucciones personalizadas</div>
+                        <div className="flu-settings-section-label">Instrucciones personalizadas</div>
                         <textarea
                             value={integrationStore.config.personality.customInstructions || ''}
                             onChange={(e) => {
@@ -681,7 +662,7 @@ export function FluSettingsPanel({
                     </div>
 
                     <div className="flu-settings-section">
-                        <div className="flu-settings-section__title">⚙️ Avanzado</div>
+                        <div className="flu-settings-section__title">Avanzado</div>
                         <div className="flu-settings-section__body">
                             <label className="flu-settings-image-config__field flu-settings-image-config__field--slider">
                                 <span className="flu-settings-slider-label">Velocidad de animación</span>
@@ -728,9 +709,9 @@ export function FluSettingsPanel({
                         </div>
                     </div>
 
-                    {/* ---- 🧠 Detección de Emociones del Usuario ---- */}
+                    {/* ---- Detección de Emociones del Usuario ---- */}
                     <div className="flu-settings-section">
-                        <div className="flu-settings-section__title">🧠 Detección de emociones del usuario</div>
+                        <div className="flu-settings-section__title">Detección de emociones del usuario</div>
                         <div className="flu-settings-section__body">
                             <label className="flu-settings-image-config__field flu-settings-image-config__field--slider">
                                 <span className="flu-settings-slider-label">Confianza mínima de detección</span>
@@ -780,9 +761,9 @@ export function FluSettingsPanel({
                         </div>
                     </div>
 
-                    {/* ---- 🧠 Teoría de la Mente ---- */}
+                    {/* ---- Teoría de la Mente ---- */}
                     <div className="flu-settings-section">
-                        <div className="flu-settings-section__title">🧠 Teoría de la Mente (participantes)</div>
+                        <div className="flu-settings-section__title">Teoría de la Mente (participantes)</div>
                         <div className="flu-settings-section__body">
                             <label className="flu-settings-image-config__field flu-settings-image-config__field--slider">
                                 <span className="flu-settings-slider-label">Máx. participantes</span>
@@ -823,9 +804,9 @@ export function FluSettingsPanel({
                         </div>
                     </div>
 
-                    {/* ---- 📋 Eventos del Sistema ---- */}
+                    {/* ---- Eventos del Sistema ---- */}
                     <div className="flu-settings-section">
-                        <div className="flu-settings-section__title">📋 Eventos del sistema</div>
+                        <div className="flu-settings-section__title">Eventos del sistema</div>
                         <div className="flu-settings-section__body">
                             <label className="flu-settings-image-config__field flu-settings-image-config__field--slider">
                                 <span className="flu-settings-slider-label">Ventana de memoria (minutos)</span>
@@ -848,8 +829,8 @@ export function FluSettingsPanel({
                         </div>
                     </div>
 
-                    <div className="flu-settings-image-config__group" style={{ marginTop: 6 }}>
-                        <div className="flu-settings-image-config__group-title">🎨 Imagen</div>
+                    <div className="flu-settings-image-config__group">
+                        <div className="flu-settings-image-config__group-title">Imagen</div>
                         <label className="flu-settings-image-config__field flu-settings-image-config__field--checkbox">
                             <input
                                 type="checkbox"
@@ -869,7 +850,7 @@ export function FluSettingsPanel({
                     </div>
 
                     <div className="flu-settings-section">
-                        <div className="flu-settings-section__title">🔊 Voz</div>
+                        <div className="flu-settings-section__title">Voz</div>
                         <div className="flu-settings-section__body">
                             <label className="flu-settings-image-config__field flu-settings-image-config__field--slider">
                                 <span className="flu-settings-slider-label">Velocidad de la voz</span>
@@ -926,12 +907,12 @@ export function FluSettingsPanel({
                 </div>
             </SettingsPanelShell>
 
-            {/* ---- Branding Inteligente por Temporalidad ---- */}
-            <SettingsPanelShell title="🎨 Branding por Temporalidad" bare>
+            {/* ---- Mis temporadas (branding por temporalidad) ---- */}
+            <SettingsPanelShell title="Mis temporadas" bare>
                 <div className="flu-settings-image-config__group">
                     {/* Modo */}
                     <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked">
-                        <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', marginBottom: 4 }}>
+                        <span className="flu-settings-section-label">
                             Modo
                         </span>
                         <select
@@ -948,7 +929,7 @@ export function FluSettingsPanel({
                     {/* Selector de temporada (solo en modo manual) */}
                     {brandingMode === 'manual' && (
                         <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked">
-                            <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', marginBottom: 4 }}>
+                            <span className="flu-settings-section-label">
                                 Temporada
                             </span>
                             <select
@@ -967,7 +948,7 @@ export function FluSettingsPanel({
 
                     {/* Cumpleaños */}
                     <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked">
-                        <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', marginBottom: 4 }}>
+                        <span className="flu-settings-section-label">
                             Mi cumpleaños (opcional)
                         </span>
                         <input
@@ -976,16 +957,6 @@ export function FluSettingsPanel({
                             onChange={(e) => onBrandingBirthdayChange?.(e.target.value || null)}
                             className="flu-settings-image-config__input"
                         />
-                    </label>
-
-                    {/* Celebrar logros */}
-                    <label className="flu-settings-image-config__field flu-settings-image-config__field--checkbox">
-                        <input
-                            type="checkbox"
-                            checked={brandingCelebrateAchievements || false}
-                            onChange={(e) => onBrandingCelebrateAchievementsChange?.(e.target.checked)}
-                        />
-                        <span>Celebrar logros (Materia Gris)</span>
                     </label>
 
                     {/* Preview de paleta activa */}
@@ -1008,12 +979,9 @@ export function FluSettingsPanel({
                     )}
                 </div>
             </SettingsPanelShell>
-                </div>
-            </SettingsPanelShell>
 
-            {/* ---- 🎤 Palabras de Activación ---- */}
-            <SettingsPanelShell title={<><span className="flu-settings-image-config__icon">🎤</span>
-                    <span>Palabras de Activación</span></>} bare>
+            {/* ---- Palabras de Activación ---- */}
+            <SettingsPanelShell title="Palabras de Activación" bare>
                 <div className="flu-settings-image-config__body">
                     <div className="flu-settings-image-config__group">
                         {/* Palabras de activación */}
@@ -1035,13 +1003,12 @@ export function FluSettingsPanel({
                 </div>
             </SettingsPanelShell>
 
-            {/* ---- 📊 Gestión de Logs y Auditoría ---- */}
-            <SettingsPanelShell title={<><span className="flu-settings-image-config__icon">📊</span>
-                    <span>Gestión de Logs y Auditoría</span></>} bare>
+            {/* ---- Gestión de Logs y Auditoría ---- */}
+            <SettingsPanelShell title="Diagnóstico y auditoría" bare>
                 <div className="flu-settings-image-config__body">
                     <div className="flu-settings-image-config__group">
                         {/* Acciones de auditoría */}
-                        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                             <button
                                 type="button"
                                 className="flu-settings-btn"
@@ -1050,37 +1017,60 @@ export function FluSettingsPanel({
                                     alert('Registro de auditoría limpiado correctamente');
                                 }}
                             >
-                                🧹 Limpiar registro de auditoría
+                                Limpiar registro de auditoría
                             </button>
                             <button
                                 type="button"
                                 className="flu-settings-btn"
                                 onClick={() => {
-                                    // Dueno unico de la descarga: downloadBlob (src/lib/downloadFile).
+                                    // Dueño único de la descarga: downloadBlob.
                                     downloadBlob(
                                         new Blob([JSON.stringify(audit.logs, null, 2)], { type: 'application/json' }),
                                         'flu-audit-logs.json',
                                     );
                                 }}
                             >
-                                💾 Exportar registro de auditoría
+                                Exportar registro de auditoría
                             </button>
                         </div>
 
-                        {/* Configuración de logs */}
-                        <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked" style={{ marginTop: 16 }}>
+                        {/* Diagnóstico: tres sistemas independientes */}
+                        <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked">
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                <span>Habilitar logs de depuración</span>
+                                <span>Logs de depuración (verbosos)</span>
                                 <input
                                     type="checkbox"
-                                    checked={debugLogsEnabled}
-                                    onChange={(e) => setDebugLogsEnabled(e.target.checked)}
+                                    checked={verboseLogsEnabled}
+                                    onChange={(e) => setVerboseLogsEnabled(e.target.checked)}
                                 />
                             </div>
                         </label>
+                        <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked">
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                <span>Enviar logs al servidor (debug.log)</span>
+                                <input
+                                    type="checkbox"
+                                    checked={relayLogsEnabled}
+                                    onChange={(e) => setRelayLogsEnabled(e.target.checked)}
+                                />
+                            </div>
+                        </label>
+                        <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked">
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                <span>Grabar sesión (audio + eventos)</span>
+                                <input
+                                    type="checkbox"
+                                    checked={recordingEnabled}
+                                    onChange={(e) => setRecordingEnabled(e.target.checked)}
+                                />
+                            </div>
+                            <small style={{ color: 'var(--text-secondary)' }}>
+                                La grabación incluye audio sensible. Se apaga al cerrar la sesión.
+                            </small>
+                        </label>
 
                         {/* Vista previa de auditoría */}
-                        <div style={{ marginTop: 16 }}>
+                        <div>
                             <span className="flu-settings-sub-title">Últimos eventos registrados</span>
                             {audit.loading ? (
                                 <small style={{ color: 'var(--text-secondary)' }}>Cargando registro de auditoría…</small>
@@ -1102,82 +1092,11 @@ export function FluSettingsPanel({
                 </div>
             </SettingsPanelShell>
 
-            {/* ---- 🎨 Personalización del Avatar ---- */}
-            <SettingsPanelShell title={<><span className="flu-settings-image-config__icon">🎨</span>
-                    <span>Personalización del Avatar</span></>} bare>
-                <div className="flu-settings-image-config__body">
-                    <div className="flu-settings-image-config__group">
-                        {/* Selectores de color por componente */}
-                        <div className="flu-settings-color-pickers" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                            {/* Pantalones */}
-                            <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked">
-                                <span>Pantalones</span>
-                                <input
-                                    type="color"
-                                    className="flu-settings-color-picker"
-                                    defaultValue={componentColors?.Bunny_pants || '#8B4513'}
-                                    onChange={(e) => {
-                                        setComponentColor('Bunny_pants', e.target.value);
-                                    }}
-                                />
-                            </label>
-                            {/* Cuerpo */}
-                            <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked">
-                                <span>Cuerpo</span>
-                                <input
-                                    type="color"
-                                    className="flu-settings-color-picker"
-                                    defaultValue={componentColors?.Bunny_body || '#F4A460'}
-                                    onChange={(e) => {
-                                        setComponentColor('Bunny_body', e.target.value);
-                                    }}
-                                />
-                            </label>
-                            {/* Cara */}
-                            <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked">
-                                <span>Cara</span>
-                                <input
-                                    type="color"
-                                    className="flu-settings-color-picker"
-                                    defaultValue={componentColors?.Bunny_face || '#FFDAB9'}
-                                    onChange={(e) => {
-                                        setComponentColor('Bunny_face', e.target.value);
-                                    }}
-                                />
-                            </label>
-                            {/* Gorra */}
-                            <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked">
-                                <span>Gorra</span>
-                                <input
-                                    type="color"
-                                    className="flu-settings-color-picker"
-                                    defaultValue={componentColors?.Bunny_cap || '#000080'}
-                                    onChange={(e) => {
-                                        setComponentColor('Bunny_cap', e.target.value);
-                                    }}
-                                />
-                            </label>
-                            {/* Botón de restablecimiento */}
-                            <button
-                                type="button"
-                                className="flu-settings-btn flu-settings-btn--danger"
-                                onClick={() => {
-                                    resetComponentColors();
-                                }}
-                                style={{ marginTop: 16 }}
-                            >
-                                🎨 Restablecer colores originales
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </SettingsPanelShell>
-
             <FluParticipantSettingsPanel
                 language={language}
                 onConfigChange={handleParticipantConfigChange}
                 voices={voices}
             />
-        </section>
+        </>
     );
 }

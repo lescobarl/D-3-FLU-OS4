@@ -2,14 +2,11 @@
 import { OPENROUTER_DEFAULTS, AI_PROVIDER_IDS, SEARCH_PROVIDER_IDS, SEARCH_PROXY_ENDPOINTS, VOICE_DIARIZATION_DEFAULTS } from '../../core/config/sharedConfig.ts'
 import { SPEECH_LOCALES, DEFAULT_SPEECH_LOCALE, BILINGUAL_LOCALES } from '../../core/config/localeConfig.ts'
 import { DEFAULT_SAMPLE_RATE } from './audioConstants.js'
-import { RESET_AVATAR_COLOR_PHRASES } from './voiceCommandPhrases.js'
 import { COMMAND_IDS } from './commandIds.js'
 import { LOCAL_FALLBACK_DEFAULTS, VAD_DEFAULTS, RESTART_RETRY_DEFAULTS } from './asr/asrDefaults.js'
 import { SPEAKER_ASSIGN } from './speakerAssignDefaults.js'
-
 /** Entorno de desarrollo: los defaults de diagnostico solo se encienden aqui. */
 const IS_DEV = import.meta.env.DEV
-
 /**
  * Wake words + alias ASR (Chrome confunde flu → flow/blue/flo).
  * Fuente ÚNICA del wake word (§9.4): `voiceCommands.wakeWords` y el sesgo del
@@ -20,10 +17,8 @@ const WAKE_TOKENS = ['flu', 'flow', 'blue', 'flo', 'flujo', 'flui', 'flou']
 export const FLU_WAKE_WORDS = Object.freeze([
   ...WAKE_PREFIXES.flatMap((p) => WAKE_TOKENS.map((t) => `${p} ${t}`)),
 ])
-
 /** Primer alias de wake para un prefijo dado (deriva de FLU_WAKE_WORDS). */
 const firstWakeWith = (prefix) => FLU_WAKE_WORDS.find((w) => w.startsWith(prefix)) || ''
-
 const LISTENING_ACK_PHRASES = Object.freeze([
   'estas escuchando',
   'me escuchas',
@@ -36,14 +31,11 @@ const LISTENING_ACK_PHRASES = Object.freeze([
   'can you hear me',
   `${firstWakeWith('hey ')} are you listening`,
 ])
-
 /** Allowlist curada del navegador: fuente unica de los sitios permitidos. */
 const CURATED_ALLOWLIST = ['wikipedia.org', 'educ.ar']
 /** Variante Familiar: la allowlist curada mas video. */
 const CURATED_ALLOWLIST_FAMILIAR = [...CURATED_ALLOWLIST, 'youtube.com']
-
 // Rutas del proxy de busqueda: importadas del dueno UNICO (sharedConfig).
-
 export const FLU_CONFIG = {
   sessionDefaults: {
     role: 'Asistente del Maestro',
@@ -844,7 +836,7 @@ export const FLU_CONFIG = {
       volume: 1.0,
     },
     ui: {
-      panelTitle: 'Participantes',
+      panelTitle: 'Usuarios',
       addLabel: 'Registrar participante',
       nameLabel: 'Nombre',
       namePlaceholder: 'Ej: Mamá, Luis, Ana…',
@@ -1216,12 +1208,11 @@ export const FLU_CONFIG = {
         videoTitle: 'Vídeos',
         // F5 — Centro de Control del Buscador (panel "Buscador y catálogo").
         searchControlTitle: 'Buscador y catálogo',
-        searchControlIntro: 'Configurá proveedores, catálogo, seguridad y vista previa del buscador.',
+        searchControlIntro: 'Configurá proveedores, catálogo y seguridad del buscador.',
         providersSection: 'Proveedores',
         catalogSection: 'Catálogo de sitios',
         categoriesSection: 'Categorías',
         securitySection: 'Seguridad',
-        previewSection: 'Vista previa (dev)',
         providerGroupWeb: 'Web',
         providerGroupImages: 'Imágenes',
         providerGroupVideo: 'Vídeo',
@@ -1238,14 +1229,6 @@ export const FLU_CONFIG = {
         dailyLimitLabel: 'Límite diario de búsquedas',
         dailyLimitHint: '0 = sin límite',
         dailyLimitMessage: 'Alcanzaste el límite diario de búsquedas. Volvé mañana.',
-        previewQueryLabel: 'Consulta de prueba',
-        previewQueryPlaceholder: 'Escribí una consulta de prueba…',
-        runPreview: 'Probar consulta',
-        previewResults: 'Resultados',
-        previewAi: 'Resumen de IA',
-        previewEmpty: 'Ejecutá una consulta para ver la vista previa.',
-        previewLoading: 'Consultando…',
-        previewError: 'No se pudo completar la consulta de prueba.',
         saveConfig: 'Guardar configuración',
         saveConfigHint: 'Guardá los cambios para aplicarlos al buscador (se persisten como overrides sobre la configuración).',
         resetConfig: 'Restablecer',
@@ -1258,37 +1241,6 @@ export const FLU_CONFIG = {
         categoriesHint: 'Las categorías del catálogo y cuántos sitios tiene cada una. Los tiles del inicio se derivan automáticamente.',
         siteCountWord: 'sitios',
       },
-    },
-  },
-  /**
-   * Materia gris — Fase 3 (F5): gamificación de participaciones.
-   * Regla #1: sin hardcode — la tabla de acciones vive aquí (config-driven).
-   */
-  materiaGris: {
-    enabled: true,
-    actions: {
-      recordatorio_completado: 5,
-      cuento: 10,
-    },
-    maxEntriesPerParticipant: 200,
-    ui: {
-      panelTitle: 'Materia gris',
-      awardLabel: 'Otorgar puntos',
-      participantLabel: 'Participante',
-      participantEmpty: '— Elegir participante —',
-      actionLabel: 'Acción',
-      actionEmpty: '— Elegir acción —',
-      leaderboardLabel: 'Leaderboard',
-      emptyState: 'Aún no hay puntos otorgados.',
-      historyLabel: 'Historial',
-      action_participacion_conversacion: 'Participar en la conversación',
-      action_recordatorio_completado: 'Completar un recordatorio',
-      action_tarea_hogar: 'Tarea del hogar',
-      action_juego_completado: 'Completar un juego',
-      action_cuento: 'Participar en un cuento',
-    },
-    voice: {
-      awarded: 'Listo, puntos otorgados.',
     },
   },
   /**
@@ -1389,6 +1341,7 @@ export const FLU_CONFIG = {
     ui: {
       panelTitle: 'Agenda de contactos',
       addLabel: 'Agregar contacto',
+      saveContactLabel: 'Guardar contacto',
       nameLabel: 'Nombre',
       namePlaceholder: 'Nombre del contacto',
       phoneLabel: 'Teléfono',
@@ -1399,9 +1352,7 @@ export const FLU_CONFIG = {
       relationshipPlaceholder: 'Familiar, amigo… (opcional)',
       birthdayLabel: 'Cumpleaños',
       participantLabel: 'Participante',
-      participantEmpty: '— Ninguno —',
-      notesLabel: 'Notas',
-      notesPlaceholder: 'Notas (opcional)',
+      participantEmpty: 'Ninguno',
       birthdayNearLabel: 'Cumpleaños próximos',
       emptyBirthdayNear: 'No hay cumpleaños en la ventana.',
       todayLabel: '¡Hoy!',
@@ -1412,7 +1363,7 @@ export const FLU_CONFIG = {
       favoriteMark: '★',
       listLabel: 'Contactos',
       emptyState: 'Aún no hay contactos.',
-      removeLabel: 'Eliminar',
+      removeLabel: 'Eliminar', searchPlaceholder: 'Buscar por nombre, teléfono o correo', filterRelationshipLabel: 'Filtrar por relación', allRelationships: 'Todas las relaciones', sortLabel: 'Ordenar contactos', sortName: 'Nombre', sortRecent: 'Recientes', columnName: 'Nombre', columnRelationship: 'Relación', columnPhone: 'Teléfono', columnEmail: 'Correo', columnBirthday: 'Cumpleaños', columnParticipant: 'Participante', columnActions: 'Acciones', noResults: 'Sin resultados.', boardViewLabel: 'Pizarrón', contactsViewLabel: 'Contactos',
     },
     voice: {
       contactAdded: 'Listo, he agregado el contacto.',
@@ -1420,6 +1371,7 @@ export const FLU_CONFIG = {
       contactRemoved: 'He eliminado el contacto.',
     },
   },
+  /**
   /**
    * Acciones de dispositivo — Fase 7 (Módulo I+): llamar, WhatsApp,
    * SMS y correo. Regla #1: sin hardcode — prefijo de país, canal de
@@ -2115,7 +2067,6 @@ export const FLU_CONFIG = {
       echoWindowMs: 3000,
       /** B2: cobertura minima del texto de FLU para que la locucion cuente como ECO (no repeticion real). */
       echoCoverageFloor: 0.6,
-
     },
   },
   voiceCommands: {
@@ -2127,7 +2078,6 @@ export const FLU_CONFIG = {
   *  97f86c73): wake en CADA turno; sin ella el dictado libre iba a la IA y el eco
   *  del TTS de FLU se commiteaba como fila del usuario. */
  requireWakeAlways: true,
- resetAvatarColors: RESET_AVATAR_COLOR_PHRASES,
     openListening: [
       'abrir escucha',
       'abre escucha',
@@ -2539,15 +2489,12 @@ export const FLU_CONFIG = {
     },
   },
 }
-
 export function isSessionResetCommand(comando = '') {
   return String(comando || '').trim() === FLU_CONFIG.navigation.sessionResetCommand
 }
-
 export function getActiveListenConfig() {
   return FLU_CONFIG.activeListen
 }
-
 /** Umbrales de reinicio SR en sesión de conversación (más agresivos que escucha pasiva). */
 export function getConversationRestartConfig(conversationActive = false) {
   const restart = FLU_CONFIG.activeListen?.restart || {}
@@ -2560,11 +2507,9 @@ export function getConversationRestartConfig(conversationActive = false) {
     deadRecognitionMs: restart.conversationDeadRecognitionMs ?? restart.deadRecognitionMs,
   }
 }
-
 export function getConversationConfig() {
   return FLU_CONFIG.activeListen
 }
-
 /**
  * Wake word canonica para copy y prompts: la configurada en Ajustes, o la primera
  * del catalogo si el usuario vacio la lista. Fuente unica (§9.4): en runtime nunca

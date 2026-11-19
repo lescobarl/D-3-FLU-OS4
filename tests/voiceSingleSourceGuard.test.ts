@@ -229,9 +229,9 @@ describe('voiceSingleSourceGuard — una sola fuente de verdad (§9)', () => {
   })
 
   it('G10 — el detector no es decorativo', () => {
-    const config = { voiceCommands: { resetAvatarColors: ['restablecer colores del avatar'] } }
+    const config = { voiceCommands: { clearCache: ['limpia la caché'] } }
     expect(declaredPhrasesWithoutEffect(config, () => null), 'si el resolver no responde, lo marca').toHaveLength(1)
-    expect(declaredPhrasesWithoutEffect(config, () => ({ clave: 'resetAvatarColors' }))).toEqual([])
+    expect(declaredPhrasesWithoutEffect(config, () => ({ clave: 'clearCache' }))).toEqual([])
   })
 })
 
@@ -305,9 +305,9 @@ describe('G12 voiceSingleSource - el juego no secuestra comandos de otros domini
     it('la orden de cambio no secuestra conversacion sin alias de juego', () => {
         conLoteriaActiva(() => {
             // Comandos de config DECLARADOS: los resuelve su dueno, no el juego.
-            expect(resolveGameCommandFromText('restablece los colores del avatar')).toBeNull()
-            expect(resolveGameCommandFromText('resetear colores')).toBeNull()
-            expect(resolveGameCommandFromText('colores por defecto')).toBeNull()
+            expect(resolveGameCommandFromText('limpia la caché')).toBeNull()
+            expect(resolveGameCommandFromText('limpiar cache')).toBeNull()
+            expect(resolveGameCommandFromText('limpiar la cache')).toBeNull()
             // Navegacion DECLARADA (web): tambien se ejecuta durante la partida.
             expect(resolveGameCommandFromText('abre youtube')).toBeNull()
             expect(resolveGameCommandFromText('navega a wikipedia')).toBeNull()

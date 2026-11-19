@@ -125,7 +125,7 @@ export function ParticipantsPanel({
   };
 
   return (
-    <SettingsPanelShell title={ui.panelTitle || 'Participantes'}>
+    <SettingsPanelShell title={ui.panelTitle || 'Usuarios'}>
         {/* Alta */}
         <form className="flu-settings-section" onSubmit={handleSubmit}>
           <div className="flu-settings-section__body">

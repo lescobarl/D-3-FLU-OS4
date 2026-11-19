@@ -22,6 +22,7 @@ import { logCaughtError } from '../lib/caughtError';
 import { localGet, localKeys, localRemove, localSetSafe } from '../core/storage/localStore';
 import { UI_LANGUAGES } from '../core/config/voiceConfigCatalog';
 import { useIntegrationStore } from '../store/integrationStore';
+import { disableSessionRecorder, enableSessionRecorder, getSessionRecordingStatus } from '../voice/api/sessionLog';
 
 // ============================================================
 // Tipos
@@ -85,11 +86,15 @@ export interface ConfigPersistence {
     // Setters
     setLanguage: React.Dispatch<React.SetStateAction<'es' | 'en' | 'both'>>;
     setSessionRole: React.Dispatch<React.SetStateAction<string>>;
-    // Wake words & debug logs (persistentes + write-through a FLU_CONFIG)
+    // Wake words & diagnóstico (persistentes + write-through a FLU_CONFIG)
     wakeWords: string;
     setWakeWords: (value: string) => void;
-    debugLogsEnabled: boolean;
-    setDebugLogsEnabled: (enabled: boolean) => void;
+    verboseLogsEnabled: boolean;
+    setVerboseLogsEnabled: (enabled: boolean) => void;
+    relayLogsEnabled: boolean;
+    setRelayLogsEnabled: (enabled: boolean) => void;
+    recordingEnabled: boolean;
+    setRecordingEnabled: (enabled: boolean) => void;
     wakeWordsRef: React.MutableRefObject<string>;
 }
 
@@ -180,14 +185,21 @@ export function useConfigPersistence(): ConfigPersistence {
         return loadString(STORAGE_KEYS.SESSION_ROLE, FLU_CONFIG.sessionDefaults.role);
     });
 
-    // ---- Wake Words & Debug Logs (persistente + write-through a FLU_CONFIG) ----
+    // ---- Wake Words & Diagnóstico (persistente + write-through a FLU_CONFIG) ----
     const [wakeWords, setWakeWordsState] = useState<string>(() =>
         loadString(STORAGE_KEYS.WAKE_WORDS, FLU_CONFIG.voiceCommands.wakeWords.join('\n')),
     );
-    const [debugLogsEnabled, setDebugLogsEnabledState] = useState<boolean>(() => {
-        const saved = loadString(STORAGE_KEYS.DEBUG_LOGS_ENABLED);
+    const [verboseLogsEnabled, setVerboseLogsEnabledState] = useState<boolean>(() => {
+        const saved = loadString(STORAGE_KEYS.VERBOSE_LOGS_ENABLED);
         return saved === '' ? (FLU_CONFIG.debug.enabled ?? false) : saved === 'true';
     });
+    const [relayLogsEnabled, setRelayLogsEnabledState] = useState<boolean>(() => {
+        const saved = loadString(STORAGE_KEYS.RELAY_LOGS_ENABLED);
+        return saved === '' ? (FLU_CONFIG.debug.relayToServer ?? false) : saved === 'true';
+    });
+    const [recordingEnabled, setRecordingEnabledState] = useState<boolean>(() =>
+        Boolean(getSessionRecordingStatus().enabled),
+    );
     const wakeWordsRef = useRef(wakeWords);
     wakeWordsRef.current = wakeWords;
 
@@ -227,10 +239,20 @@ export function useConfigPersistence(): ConfigPersistence {
             FLU_CONFIG.voiceCommands.wakeWords.push(...value.split('\n').map((w) => w.trim()).filter(Boolean));
         }
     }, []);
-    const setDebugLogsEnabled = useCallback((enabled: boolean) => {
-        setDebugLogsEnabledState(enabled);
-        saveString(STORAGE_KEYS.DEBUG_LOGS_ENABLED, String(enabled));
+    const setVerboseLogsEnabled = useCallback((enabled: boolean) => {
+        setVerboseLogsEnabledState(enabled);
+        saveString(STORAGE_KEYS.VERBOSE_LOGS_ENABLED, String(enabled));
         if (FLU_CONFIG.debug) FLU_CONFIG.debug.enabled = enabled;
+    }, []);
+    const setRelayLogsEnabled = useCallback((enabled: boolean) => {
+        setRelayLogsEnabledState(enabled);
+        saveString(STORAGE_KEYS.RELAY_LOGS_ENABLED, String(enabled));
+        if (FLU_CONFIG.debug) FLU_CONFIG.debug.relayToServer = enabled;
+    }, []);
+    const setRecordingEnabled = useCallback((enabled: boolean) => {
+        if (enabled) enableSessionRecorder();
+        else disableSessionRecorder();
+        setRecordingEnabledState(Boolean(getSessionRecordingStatus().enabled));
     }, []);
 
     useEffect(() => {
@@ -240,8 +262,11 @@ export function useConfigPersistence(): ConfigPersistence {
         }
     }, [wakeWords]);
     useEffect(() => {
-        if (FLU_CONFIG.debug) FLU_CONFIG.debug.enabled = debugLogsEnabled;
-    }, [debugLogsEnabled]);
+        if (FLU_CONFIG.debug) FLU_CONFIG.debug.enabled = verboseLogsEnabled;
+    }, [verboseLogsEnabled]);
+    useEffect(() => {
+        if (FLU_CONFIG.debug) FLU_CONFIG.debug.relayToServer = relayLogsEnabled;
+    }, [relayLogsEnabled]);
 
     // ---- Bandera de wake (piso cerrado/abierto): el configurador (integrationStore)
     // es el UNICO almacen de registro; aqui se ESPEJA al runtime que lee el dueno
@@ -379,7 +404,8 @@ export function useConfigPersistence(): ConfigPersistence {
             STORAGE_KEYS.LANGUAGE,
             STORAGE_KEYS.SESSION_ROLE,
             STORAGE_KEYS.WAKE_WORDS,
-            STORAGE_KEYS.DEBUG_LOGS_ENABLED,
+            STORAGE_KEYS.VERBOSE_LOGS_ENABLED,
+            STORAGE_KEYS.RELAY_LOGS_ENABLED,
             // Config del buscador (llaves/modelo de proveedores web). Sin esto,
             // "Limpiar caché" borraba la key de OpenRouter/Tavily.
             STORAGE_KEYS.SEARCH_CONFIG_OVERRIDES,
@@ -429,8 +455,12 @@ export function useConfigPersistence(): ConfigPersistence {
         setSessionRole,
         wakeWords,
         setWakeWords,
-        debugLogsEnabled,
-        setDebugLogsEnabled,
+        verboseLogsEnabled,
+        setVerboseLogsEnabled,
+        relayLogsEnabled,
+        setRelayLogsEnabled,
+        recordingEnabled,
+        setRecordingEnabled,
         wakeWordsRef,
     };
 }

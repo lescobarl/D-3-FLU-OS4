@@ -8,9 +8,8 @@ import { MONTH_NAMES_ES } from '../temporal/calendarNames';
 //   - Calendario general con festividades globales + estaciones del año
 //   - Cumpleaños del usuario (desde perfil)
 //   - Eventos personalizados (configurados por voz o UI)
-//   - Logros/Materia Gris (hitos del usuario)
 //
-// Prioridad: CustomEvent > Birthday > Achievement > General Calendar > Default
+// Prioridad: CustomEvent > Birthday > General Calendar > Default
 // ============================================================
 
 export interface SeasonalEvent {
@@ -297,12 +296,11 @@ export interface SeasonResult {
 
 /**
  * Obtiene la temporada activa según la fecha actual y los eventos configurados.
- * Sigue la jerarquía de prioridad: CustomEvent > Birthday > Achievement > General Calendar > Default
+ * Sigue la jerarquía de prioridad: CustomEvent > Birthday > General Calendar > Default
  */
 export function getActiveSeason(
     userBirthday?: string | null,
     customEvents?: CustomEvent[],
-    _celebrateAchievements?: boolean,
 ): SeasonResult {
     const now = new Date();
     const todayMonth = now.getMonth() + 1; // 1-12

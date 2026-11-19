@@ -1243,26 +1243,6 @@
   user-select: none;
 }
 
-/* --- Summary with inline profile select --- */
-.flu-settings-image-config__summary--with-profile {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-.flu-settings-summary-spacer {
-  flex: 1;
-}
-.flu-settings-profile-inline {
-  font-size: var(--text-base);
-  line-height: 1;
-}
-.flu-settings-profile-select {
-  font-size: var(--text-sm) !important;
-  padding: 1px 4px !important;
-  max-width: 160px;
-  cursor: pointer;
-}
-
 .flu-settings-image-config__group {
   display: flex;
   flex-direction: column;
@@ -1465,16 +1445,6 @@
 .flu-settings-textarea:focus {
   outline: none;
   border-color: var(--accent-cyan);
-}
-
-/* --- Settings: input with monospace --- */
-.flu-settings-input-mono {
-  font-family: var(--font-mono) !important;
-}
-
-.flu-settings-input-mono--small {
-  font-family: var(--font-mono) !important;
-  font-size: var(--text-sm) !important;
 }
 
 /* --- Session Chip --- */
@@ -3202,7 +3172,7 @@
    Pestaña "Agenda": agrupa el calendario de clases (HorarioPizarron,
    que ya es un acordeón propio con su resumen) y los paneles de agenda
    personal (recordatorios, temporales, diario, ánimo, hábitos,
-   contactos, compras y materia gris). Cada panel usa
+   contactos y compras). Cada panel usa
    .flu-settings-image-config como contenedor; aquí solo se organiza el
    layout en columnas. */
 .agenda-hub {
@@ -5907,9 +5877,8 @@ details[open].flu-card .flu-card__chev {
 .flu-settings-panel {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  /* de App.css (legacy): espaciado vertical del panel de Ajustes */
-  padding: 2px 0;
+  gap: 0;
+  padding: 0;
 }
 
 .flu-settings-section {
@@ -6394,11 +6363,11 @@ details[open].flu-card .flu-card__chev {
     gap: 6px;
     flex-wrap: wrap;
   }
-  
+
   .flu-avatar-column {
     display: none;
   }
-  
+
   .flu-panels-column {
     width: 100%;
   }
@@ -6409,7 +6378,8 @@ details[open].flu-card .flu-card__chev {
    ============================================================ */
 
 .flu-autonomy-panel {
-  padding: 12px;
+  padding: 4px 6px;
+  line-height: 1.2;
   font-family: var(--font-sans);
   font-size: var(--text-sm);
 }
@@ -6418,29 +6388,29 @@ details[open].flu-card .flu-card__chev {
   display: flex;
   justify-content: flex-end;
   align-items: center;
-  margin-bottom: 12px;
+  margin-bottom: 4px;
 }
 
 .flu-autonomy-panel__status {
   font-weight: var(--weight-bold);
   font-size: var(--text-sm);
-  padding: 4px 8px;
+  padding: 2px 6px;
   border-radius: var(--radius-sm);
   background: rgba(0, 0, 0, 0.1);
 }
 
 .flu-autonomy-panel__systems {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-bottom: 16px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 3px;
+  margin-bottom: 6px;
 }
 
 .flu-autonomy-panel__system {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 8px 12px;
+  padding: 3px 8px;
   background: var(--bg-tertiary);
   border-radius: var(--radius-sm);
 }
@@ -6464,53 +6434,55 @@ details[open].flu-card .flu-card__chev {
 .flu-autonomy-panel__health {
   background: var(--bg-tertiary);
   border-radius: var(--radius-sm);
-  padding: 12px;
-  margin-bottom: 16px;
+  padding: 6px 8px;
+  margin-bottom: 6px;
 }
 
 .flu-autonomy-panel__health-title {
   font-weight: var(--weight-semibold);
   color: var(--text-primary);
-  margin-bottom: 8px;
+  margin-bottom: 3px;
 }
 
 .flu-autonomy-panel__health-metrics {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 2px 8px;
 }
 
 .flu-autonomy-panel__health-metric {
   display: flex;
   justify-content: space-between;
+  gap: 4px;
   color: var(--text-secondary);
 }
 
 .flu-autonomy-panel__actions {
   display: flex;
-  gap: 8px;
-  margin-bottom: 16px;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
 }
 
 .flu-autonomy-panel__notifications {
   border-top: 1px solid var(--border-color);
-  padding-top: 12px;
+  padding-top: 6px;
 }
 
 .flu-autonomy-panel__notifications-title {
   font-weight: var(--weight-semibold);
   color: var(--text-primary);
-  margin-bottom: 8px;
+  margin-bottom: 3px;
 }
 
 .flu-autonomy-panel__notifications-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 3px;
 }
 
 .flu-autonomy-panel__notification {
-  padding: 8px 12px;
+  padding: 4px 8px;
   border-radius: var(--radius-sm);
   cursor: pointer;
   transition: opacity 0.2s ease;
@@ -6543,13 +6515,13 @@ details[open].flu-card .flu-card__chev {
 .flu-autonomy-panel__notification-title {
   font-weight: var(--weight-medium);
   color: var(--text-primary);
-  margin-bottom: 2px;
+  margin-bottom: 1px;
 }
 
 .flu-autonomy-panel__notification-message {
   font-size: var(--text-xs);
   color: var(--text-secondary);
-  line-height: 1.4;
+  line-height: 1.2;
 }
 
 /* ============================================================
@@ -7275,4 +7247,326 @@ details[open].flu-card .flu-card__chev {
   gap: 8px;
   align-items: center;
   margin-bottom: 8px;
+}
+
+/* ============================================================
+   Contactos � vista nativa del Pizarr�n (grid consulta)
+   ============================================================ */
+.workspace-hub__viewtabs {
+  display: flex;
+  gap: 4px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.workspace-hub__viewtab {
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-secondary);
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.workspace-hub__viewtab.is-active {
+  color: var(--text-primary);
+  background: var(--bg-card);
+  border-color: var(--border-color);
+}
+
+
+/* ============================================================
+   Contactos � secci�n compacta, misma tipograf�a que Notas
+   ============================================================ */
+.flu-contacts {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: inherit;
+  line-height: 1.25;
+  color: var(--text-primary);
+}
+
+.flu-contacts__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+}
+
+.flu-contacts__search {
+  flex: 1 1 100%;
+  min-width: 0;
+}
+
+.flu-contacts__select {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.flu-contacts__search,
+.flu-contacts__select,
+.flu-contacts__field input,
+.flu-contacts__field textarea {
+  background: transparent;
+  color: var(--text-primary);
+  border: 1px solid var(--board-content-divider, rgba(0, 0, 0, 0.08));
+  border-radius: var(--radius-sm, 6px);
+  padding: 3px 6px;
+  font-size: var(--text-xs, 11px);
+  font-family: inherit;
+}
+
+.flu-contacts__count {
+  flex: none;
+  margin-left: auto;
+  color: var(--text-secondary);
+  font-size: 10px;
+}
+
+.flu-contacts__birthdays {
+  color: var(--text-secondary);
+  font-size: 10px;
+}
+
+.flu-contacts__birthdays-title {
+  font-weight: 600;
+}
+
+.flu-contacts__birthdays-list {
+  margin: 1px 0 0;
+  padding-left: 12px;
+}
+
+.flu-contacts__form-wrap {
+  font-size: 10px;
+}
+
+.flu-contacts__form-summary {
+  cursor: pointer;
+  color: var(--text-secondary);
+  font-size: 10px;
+}
+
+.flu-contacts__form {
+  display: grid;
+  gap: 4px;
+  margin-top: 3px;
+}
+
+.flu-contacts__field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 10px;
+  color: var(--text-secondary);
+}
+
+.flu-contacts__submit {
+  background: transparent;
+  color: var(--text-primary);
+  border: 1px solid var(--board-content-divider, rgba(0, 0, 0, 0.08));
+  border-radius: var(--radius-sm, 6px);
+  padding: 3px 6px;
+  font-size: 11px;
+}
+
+.flu-contacts__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.flu-contacts__row {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 2px 0;
+  border-bottom: 1px solid var(--board-content-divider, rgba(0, 0, 0, 0.08));
+  font-size: 11px;
+}
+
+.flu-contacts__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent-color, #7c6cff);
+  margin-top: 3px;
+  flex: none;
+}
+
+.flu-contacts__dot--fav {
+  background: #f59e0b;
+}
+
+.flu-contacts__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.flu-contacts__name {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--text-primary);
+  font-size: var(--text-xs, 11px);
+  font-weight: var(--weight-medium, 500);
+  line-height: 1.05;
+  text-align: left;
+  cursor: pointer;
+}
+
+.flu-contacts__meta {
+  display: block;
+  color: var(--text-secondary);
+  font-size: 10px;
+  line-height: 1.2;
+}
+
+.flu-contacts__detail {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  color: var(--text-secondary);
+  font-size: 10px;
+  margin-top: 1px;
+}
+
+.flu-contacts__remove {
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--board-content-divider, rgba(0, 0, 0, 0.08));
+  border-radius: var(--radius-sm, 6px);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+}
+
+.flu-contacts__remove:hover {
+  color: #b91c1c;
+}
+
+.flu-contacts__demo {
+  margin-left: 4px;
+  font-size: 8px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  font-weight: 400;
+}
+
+/* Participante dentro de Contactos: mismo tama�o que los dem�s campos */
+.flu-contacts .flu-settings-image-config__field {
+  font-size: 10px;
+  color: var(--text-secondary);
+  gap: 2px;
+}
+.flu-contacts .flu-settings-image-config__field select {
+  background: transparent;
+  color: var(--text-primary);
+  border: 1px solid var(--board-content-divider, rgba(0, 0, 0, 0.08));
+  border-radius: var(--radius-sm, 6px);
+  padding: 3px 6px;
+  font-size: var(--text-xs, 11px);
+  font-family: inherit;
+}
+
+/* ============================================================
+   Configuraci�n � filas planas, texto sin iconos, cerradas
+   ============================================================ */
+.flu-tab-panel--settings .flu-settings-image-config {
+  border: 0;
+  border-bottom: 1px solid var(--border-color);
+  border-radius: 0;
+  background: transparent;
+  padding: 0;
+}
+.flu-tab-panel--settings .flu-settings-image-config:last-of-type {
+  border-bottom: 0;
+}
+
+/* Configuración — densidad uniforme en cabeceras e interiores */
+.flu-tab-panel--settings .flu-settings-image-config__summary {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  color: var(--text-primary);
+  height: 30px;
+  min-height: 30px;
+  line-height: 30px;
+  padding: 0 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  box-sizing: border-box;
+}
+.flu-tab-panel--settings .flu-settings-image-config__body,
+.flu-tab-panel--settings .flu-settings-image-config__group,
+.flu-tab-panel--settings .flu-settings-section__body {
+  gap: 3px;
+}
+.flu-tab-panel--settings .flu-settings-image-config__field {
+  gap: 2px;
+}
+.flu-tab-panel--settings .flu-settings-section {
+  margin-top: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.flu-tab-panel--settings .flu-settings-section__title,
+.flu-tab-panel--settings .flu-settings-image-config__group-title {
+  margin: 0 0 2px;
+}
+.flu-tab-panel--settings .flu-settings-image-config input[type="text"],
+.flu-tab-panel--settings .flu-settings-image-config input[type="number"],
+.flu-tab-panel--settings .flu-settings-image-config input[type="email"],
+.flu-tab-panel--settings .flu-settings-image-config input[type="date"],
+.flu-tab-panel--settings .flu-settings-image-config select {
+  min-height: 24px;
+  padding: 3px 6px;
+}
+.flu-tab-panel--settings .flu-settings-image-config textarea {
+  padding: 3px 6px;
+}
+
+/* Configuraci�n � una sola escala tipogr�fica por rol */
+.flu-tab-panel--settings .flu-settings-image-config__field,
+.flu-tab-panel--settings .flu-settings-section-label,
+.flu-tab-panel--settings .flu-settings-section__title,
+.flu-tab-panel--settings .flu-settings-image-config__group-title,
+.flu-tab-panel--settings .flu-settings-hint {
+  font-size: var(--text-sm);
+}
+.flu-tab-panel--settings .flu-settings-section__title,
+.flu-tab-panel--settings .flu-settings-image-config__group-title {
+  font-weight: var(--weight-semibold);
+  color: var(--text-primary);
+}
+.flu-tab-panel--settings .flu-settings-image-config__field,
+.flu-tab-panel--settings .flu-settings-section-label {
+  font-weight: var(--weight-medium);
+  color: var(--text-secondary);
+}
+.flu-tab-panel--settings .flu-settings-hint {
+  color: var(--text-secondary);
+  opacity: 1;
+}
+.flu-tab-panel--settings .flu-settings-image-config input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+.flu-tab-panel--settings .flu-settings-image-config select,
+.flu-tab-panel--settings .flu-settings-image-config textarea {
+  font-family: inherit;
+  font-size: var(--text-sm);
+}
+
+.flu-tab-panel--settings .flu-settings-slider-label,
+.flu-tab-panel--settings .flu-settings-slider-value,
+.flu-tab-panel--settings .flu-settings-sub-title {
+  font-family: inherit;
+  font-size: var(--text-sm);
 }

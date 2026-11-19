@@ -2,7 +2,7 @@
   "fecha": "2026-11-05",
   "dueno": "src (fuera de src/voice)",
   "nota": "Ratchet de nombres de función de TODO src fuera de src/voice: una función nueva exige declararla aquí en el mismo cambio. src/voice tiene su propia línea base (voz-funciones-baseline.json) y src/voice/conversation la suya (conversacion-rutas-dobles-baseline.json).",
-  "minSources": 345,
+  "minSources": 342,
   "funciones": {
     "src/App.tsx": [
       "App",
@@ -163,7 +163,6 @@
       "validateAnimations"
     ],
     "src/avatar/model/bunnyComponents.ts": [
-      "applyComponentColor",
       "applyComponentVisibility",
       "findGroupByName"
     ],
@@ -308,10 +307,6 @@
     "src/components/ImageGrid.tsx": [
       "ImageGrid",
       "useImageGridUi"
-    ],
-    "src/components/MateriaGrisPanel.tsx": [
-      "MateriaGrisPanel",
-      "handleSubmit"
     ],
     "src/components/MediaResultItem.tsx": [
       "MediaResultItem"
@@ -1386,9 +1381,6 @@
     "src/core/multiuser/confirmationNameRepair.ts": [
       "repairConfirmationNameDuplicates"
     ],
-    "src/core/multiuser/materiaGrisService.ts": [
-      "createMateriaGrisService"
-    ],
     "src/core/multiuser/participantRegistry.ts": [
       "anonymousSeedInFlight",
       "createParticipantRegistry",
@@ -1783,9 +1775,6 @@
     ],
     "src/hooks/useListReload.ts": [
       "useListReload"
-    ],
-    "src/hooks/useMateriaGris.ts": [
-      "useMateriaGris"
     ],
     "src/hooks/useMinuteHandlers.ts": [
       "conversationTextOf",

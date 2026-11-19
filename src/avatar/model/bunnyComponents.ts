@@ -119,42 +119,8 @@ export function applyComponentVisibility(
 }
 
 /**
- * Aplica un color personalizado a todos los meshes del grupo del componente.
- * Convierte el color (con o sin '#') a hex y actualiza el material.
+ * Busca un grupo por nombre en el árbol del modelo.
  */
-export function applyComponentColor(
-    model: THREE.Object3D,
-    component: string,
-    color: string,
-): void {
-    const groupName = COMPONENT_GROUPS[component];
-    if (!groupName) return;
-
-    const targetGroup = findGroupByName(model, groupName);
-    if (!targetGroup) return;
-
-    // Parsear color hex
-    const hexColor = color.startsWith('#') ? color : `#${color}`;
-    const numericColor = parseInt(hexColor.replace('#', ''), 16);
-
-    // Aplicar color a todas las mallas del grupo
-    targetGroup.traverse((child: THREE.Object3D) => {
-        if (child instanceof THREE.Mesh && child.material) {
-            if (Array.isArray(child.material)) {
-                child.material.forEach((mat) => {
-                    if (mat instanceof THREE.MeshStandardMaterial) {
-                        mat.color.setHex(numericColor);
-                        mat.needsUpdate = true;
-                    }
-                });
-            } else if (child.material instanceof THREE.MeshStandardMaterial) {
-                child.material.color.setHex(numericColor);
-                child.material.needsUpdate = true;
-            }
-        }
-    });
-}
-
 export function findGroupByName(root: THREE.Object3D, name: string): THREE.Object3D | null {
     let found: THREE.Object3D | null = null;
     root.traverse((child: THREE.Object3D) => {

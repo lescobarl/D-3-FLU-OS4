@@ -140,7 +140,6 @@ export interface UserPreferencesData {
     sessionRole: string;
     voiceConfig: { speed: string; volume: string; pitch: string };
     uiPreferences: { theme: string; fontSize: string; animations: string };
-    avatarConfig: { color: string; pantsColor: string; bodyColor: string; faceColor: string };
 }
 
 /** Datos del workspace extraídos/restaurados. */
@@ -311,12 +310,6 @@ class DataExtractor {
                     theme: readStorage(STORAGE_KEYS.UI_THEME, 'dark'),
                     fontSize: readStorage(STORAGE_KEYS.UI_FONT_SIZE, 'medium'),
                     animations: readStorage(STORAGE_KEYS.UI_ANIMATIONS, 'true'),
-                },
-                avatarConfig: {
-                    color: readStorage(STORAGE_KEYS.AVATAR_COLOR, '#22c55e'),
-                    pantsColor: readStorage(STORAGE_KEYS.AVATAR_PANTS_COLOR, '#3b82f6'),
-                    bodyColor: readStorage(STORAGE_KEYS.AVATAR_BODY_COLOR, '#ffffff'),
-                    faceColor: readStorage(STORAGE_KEYS.AVATAR_FACE_COLOR, '#fbbf24'),
                 },
             };
         } catch (error) {
@@ -506,21 +499,6 @@ class DataRestorer {
                 }
                 if (data.uiPreferences.animations) {
                     localSet(STORAGE_KEYS.UI_ANIMATIONS, data.uiPreferences.animations);
-                }
-            }
-            
-            if (data.avatarConfig) {
-                if (data.avatarConfig.color) {
-                    localSet(STORAGE_KEYS.AVATAR_COLOR, data.avatarConfig.color);
-                }
-                if (data.avatarConfig.pantsColor) {
-                    localSet(STORAGE_KEYS.AVATAR_PANTS_COLOR, data.avatarConfig.pantsColor);
-                }
-                if (data.avatarConfig.bodyColor) {
-                    localSet(STORAGE_KEYS.AVATAR_BODY_COLOR, data.avatarConfig.bodyColor);
-                }
-                if (data.avatarConfig.faceColor) {
-                    localSet(STORAGE_KEYS.AVATAR_FACE_COLOR, data.avatarConfig.faceColor);
                 }
             }
             

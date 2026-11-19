@@ -1,34 +1,23 @@
 // ============================================================
-// flu-settings-panel.spec.ts — Validación E2E REAL de la Fase D:
-// reorganización del panel FLU (configurador reducido a APIs/llaves).
+// flu-settings-panel.spec.ts — Configuración plana y uniforme.
 //
-// Verifica contra la app real en :5175:
-//   1. La sección "🔌 Configuración de Servicios Externos" (APIs/llaves)
-//      es la PRIMERA y está ABIERTA por defecto (visible).
-//   2. El acordeón "🤖 Gobernado por IA" está COLAPSADO por defecto
-//      (personalidad + branding estacional ocultos).
-//   3. Al expandir "🤖 Gobernado por IA" aparecen "🎭 Configurador de FLU"
-//      y "🎨 Branding por Temporalidad".
-//   4. Las secciones hermanas (🎤 Palabras de Activación, etc.) siguen
-//      presentes fuera del acordeón.
+// Verifica contra la app real:
+//   1. La primera sección es "Servicios externos" y nace CERRADA.
+//   2. Todas las filas de primer nivel tienen la MISMA altura y separación.
+//   3. "Configurador de FLU" y "Mis temporadas" son filas de primer nivel
+//      (no hay "Gobernado por IA" anidando acordeones).
+//   4. Las secciones hermanas siguen fuera de cualquier acordeón.
 // ============================================================
 
 import { test, expect, type Page } from '@playwright/test';
 import { gotoClean, autoSkipOnboarding } from './_helpers';
 
-// Estos specs no validan onboarding: se auto-omite para que su backdrop no
-// intercepte los clics (se reabre async por el estado per-user en IndexedDB).
 test.beforeEach(async ({ page }) => {
     await autoSkipOnboarding(page);
 });
 
-/** Navega a la pestaña principal "settings" y luego al grupo "FLU". */
-async function openFluSettings(page: Page): Promise<void> {
-    // El onboarding (estado per-user) puede reabrirse y su backdrop bloquea
-    // clics; se omite y los clics no dependen de él (force).
-    // Clic in-page (ver tests/e2e/_helpers.ts): el boton puede desaparecer entre
-    // el check y el clic porque autoSkipOnboarding lo retira, y el clic de
-    // Playwright esperaria su accionabilidad hasta agotar el timeout (P8.24).
+/** Navega a Configuración y espera el panel plano. */
+async function openSettings(page: Page): Promise<void> {
     await page
         .evaluate(() => {
             const b = document.querySelector('[data-testid="onboarding-skip"]');
@@ -37,107 +26,103 @@ async function openFluSettings(page: Page): Promise<void> {
         .catch(() => undefined);
     await page.waitForTimeout(300);
 
-    // Pestaña principal de Configuración
     const settingsTab = page.locator('#flu-tab-settings');
-    await settingsTab.waitFor({ state: 'attached', timeout: 15000 });
+    await settingsTab.waitFor({ state: 'attached', timeout: 45000 });
     await settingsTab.click({ force: true, timeout: 15000 });
     await page.waitForTimeout(400);
 
-    // Grupo FLU dentro del panel de settings
-    const fluPill = page.locator('.flu-settings-groups__pill', { hasText: 'FLU' }).first();
-    await fluPill.waitFor({ state: 'attached', timeout: 15000 });
-    await fluPill.click({ force: true, timeout: 15000 });
-    await page.waitForTimeout(400);
-
-    // El panel FLU debe estar presente
     await page.locator('.flu-settings-panel').waitFor({ state: 'attached', timeout: 15000 });
 }
 
-test('Fase D: Servicios Externos (APIs) es la sección principal visible', async ({ page }) => {
+test('Configuración: Servicios externos es la primera y nace cerrada', async ({ page }) => {
     await gotoClean(page, { waitWorkspaceHub: false });
-    await openFluSettings(page);
+    await openSettings(page);
 
     const panel = page.locator('.flu-settings-panel');
-
-    // El primer <details> del panel es "Configuración de Servicios Externos"
     const firstDetails = panel.locator('details').first();
     const firstSummaryText = (await firstDetails.locator('summary').innerText()).trim();
-    expect(firstSummaryText).toContain('Configuración de Servicios Externos');
 
-    // Debe estar ABIERTO (atributo open) → APIs visibles por defecto
-    const isOpen = await firstDetails.getAttribute('open');
-    expect(isOpen).not.toBeNull();
-
-    // El contenido de APIs debe ser visible (no oculto por colapso)
-    await expect(firstDetails.locator('summary')).toBeVisible();
-    // El body del primer details debe estar visible (details abierto muestra su contenido)
-    const bodyVisible = await firstDetails.locator('.flu-settings-image-config__body').isVisible();
-    expect(bodyVisible).toBe(true);
+    expect(firstSummaryText).toContain('Servicios externos');
+    expect(await firstDetails.getAttribute('open')).toBeNull();
+    expect(await firstDetails.locator('.flu-settings-image-config__body').isVisible()).toBe(false);
 });
 
-test('Fase D: acordeón "Gobernado por IA" está colapsado por defecto', async ({ page }) => {
+test('Configuración: todas las filas de primer nivel miden igual', async ({ page }) => {
     await gotoClean(page, { waitWorkspaceHub: false });
-    await openFluSettings(page);
+    await openSettings(page);
+
+    const rows = page.locator('.flu-settings-panel > .flu-settings-image-config > summary');
+    const count = await rows.count();
+    expect(count).toBeGreaterThan(5);
+
+    const boxes: Array<{ x: number; y: number; width: number; height: number }> = [];
+    for (let i = 0; i < count; i += 1) {
+        const box = await rows.nth(i).boundingBox();
+        expect(box).not.toBeNull();
+        boxes.push(box!);
+    }
+
+    const heights = boxes.map((box) => Math.round(box.height * 10) / 10);
+    expect(new Set(heights).size, `alturas distintas: ${heights.join(', ')}`).toBe(1);
+
+    const gaps = boxes.slice(1).map((box, i) => Math.round((box.y - (boxes[i].y + boxes[i].height)) * 10) / 10);
+    expect(new Set(gaps).size, `separaciones distintas: ${gaps.join(', ')}`).toBe(1);
+});
+
+test('Configuración: Configurador y Mis temporadas son de primer nivel', async ({ page }) => {
+    await gotoClean(page, { waitWorkspaceHub: false });
+    await openSettings(page);
 
     const panel = page.locator('.flu-settings-panel');
+    expect(await panel.locator('details', { hasText: 'Gobernado por IA' }).count()).toBe(0);
 
-    // Localizar el acordeón "Gobernado por IA"
-    const gobernado = panel.locator('details', { hasText: 'Gobernado por IA' }).first();
-    await gobernado.waitFor({ state: 'attached', timeout: 15000 });
+    const configurador = panel.locator('details', { hasText: 'Configurador de FLU' }).first();
+    const temporadas = panel.locator('details', { hasText: 'Mis temporadas' }).first();
+    await configurador.waitFor({ state: 'attached', timeout: 15000 });
+    await temporadas.waitFor({ state: 'attached', timeout: 15000 });
 
-    // Debe estar COLAPSADO (sin atributo open)
-    const isOpen = await gobernado.getAttribute('open');
-    expect(isOpen).toBeNull();
-
-    // Su contenido (Configurador de FLU) NO debe ser visible mientras está colapsado
-    const configuradorSummary = gobernado.locator('summary', { hasText: 'Configurador de FLU' });
-    const configuradorVisible = await configuradorSummary.isVisible().catch(() => false);
-    expect(configuradorVisible).toBe(false);
+    expect(await configurador.getAttribute('open')).toBeNull();
+    expect(await temporadas.getAttribute('open')).toBeNull();
 });
 
-test('Fase D: al expandir "Gobernado por IA" aparecen Configurador de FLU y Branding', async ({ page }) => {
-    await gotoClean(page, { waitWorkspaceHub: false });
-    await openFluSettings(page);
-
-    const panel = page.locator('.flu-settings-panel');
-    const gobernado = panel.locator('details', { hasText: 'Gobernado por IA' }).first();
-    await gobernado.waitFor({ state: 'attached', timeout: 15000 });
-
-    // Expandir el acordeón haciendo clic en su summary exacto (el que dice "Gobernado por IA")
-    const gobernadoSummary = gobernado
-        .locator('summary')
-        .filter({ hasText: /^🤖\s*Gobernado por IA$/ })
-        .first();
-    await gobernadoSummary.click();
-    await page.waitForTimeout(400);
-
-    // Ahora Configurador de FLU y Branding por Temporalidad deben ser visibles
-    const configurador = gobernado.locator('summary', { hasText: 'Configurador de FLU' });
-    await configurador.waitFor({ state: 'visible', timeout: 10000 });
-    await expect(configurador).toBeVisible();
-
-    const branding = gobernado.locator('summary', { hasText: 'Branding por Temporalidad' });
-    await branding.waitFor({ state: 'visible', timeout: 10000 });
-    await expect(branding).toBeVisible();
-});
-
-test('Fase D: secciones hermanas siguen presentes fuera del acordeón', async ({ page }) => {
+test('Configuración: secciones hermanas fuera de cualquier acordeón', async ({ page }) => {
     const errors = await gotoClean(page, { waitWorkspaceHub: false });
-    await openFluSettings(page);
+    await openSettings(page);
 
     const panel = page.locator('.flu-settings-panel');
-
-    // Palabras de Activación debe existir como <details> hermano (fuera del acordeón)
     const palabras = panel.locator('details', { hasText: 'Palabras de Activación' }).first();
     await palabras.waitFor({ state: 'attached', timeout: 15000 });
 
-    // El acordeón "Gobernado por IA" NO debe contener a "Palabras de Activación"
-    const gobernado = panel.locator('details', { hasText: 'Gobernado por IA' }).first();
-    const gobernadoHasPalabras = await gobernado
-        .locator('summary', { hasText: 'Palabras de Activación' })
-        .count();
-    expect(gobernadoHasPalabras).toBe(0);
-
-    // El panel FLU no debe tener errores de runtime
+    const configurador = panel.locator('details', { hasText: 'Configurador de FLU' }).first();
+    expect(await configurador.locator('summary', { hasText: 'Palabras de Activación' }).count()).toBe(0);
     expect(errors).toEqual([]);
+});
+
+test('Configuraci�n: labels y controles comparten familia y tama�o', async ({ page }) => {
+    await gotoClean(page, { waitWorkspaceHub: false });
+    await openSettings(page);
+
+    const firstDetails = page.locator('.flu-settings-panel details').first();
+    await firstDetails.locator('summary').click();
+    await page.waitForTimeout(250);
+
+    const styles = await page.evaluate(() => {
+        const panel = document.querySelector('.flu-settings-panel');
+        if (!panel) return [];
+        const nodes = Array.from(
+            panel.querySelectorAll(
+                '.flu-settings-image-config__field > span, .flu-settings-image-config__section-label, .flu-settings-image-config input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]), .flu-settings-image-config select, .flu-settings-image-config textarea, .flu-settings-hint, .flu-settings-slider-label, .flu-settings-slider-value, .flu-settings-sub-title',
+            ),
+        );
+        return nodes
+            .filter((node) => node instanceof HTMLElement && node.offsetParent !== null)
+            .map((node) => {
+                const style = getComputedStyle(node);
+                return { family: style.fontFamily, size: style.fontSize, tag: node.tagName, cls: node.className, text: (node.textContent || '').trim().slice(0, 40) };
+            });
+    });
+
+    expect(styles.length).toBeGreaterThan(3);
+    expect(new Set(styles.map((item) => item.family)).size, JSON.stringify(styles)).toBe(1);
+    expect(new Set(styles.map((item) => item.size)).size, JSON.stringify(styles)).toBe(1);
 });

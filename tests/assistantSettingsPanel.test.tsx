@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * AssistantSettingsPanel - ajustes del asistente personal (0%).
+ * AssistantSettingsPanel - notificaciones y descanso (0%).
  *
  * POR QUE ESTE TEST: es la UI que comparte el estado de DND con el centro de
  * notificaciones (el estado llega por props desde App). Se prueba la conducta
@@ -44,7 +44,7 @@ describe('AssistantSettingsPanel - notificaciones', () => {
     it('muestra el titulo y el canal actual con las cuatro opciones', () => {
         montar({ channel: 'voice' });
 
-        expect(screen.getByText('Asistente personal')).toBeTruthy();
+        expect(screen.getByText('Notificaciones y descanso')).toBeTruthy();
         const select = screen.getByTestId('notification-channel') as HTMLSelectElement;
         expect(select.value).toBe('voice');
         expect([...select.options].map((o) => o.value)).toEqual(['none', 'toast', 'voice', 'both']);

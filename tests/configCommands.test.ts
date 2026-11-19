@@ -130,17 +130,9 @@ describe('configCommands — otros tipos de configuración', () => {
         });
     });
 
-    test('restablece los colores del avatar → set_config resetAvatarColors=reset', () => {
-        expect(resolveConfigCommandFromText('restablece los colores del avatar')).toEqual({
-            accion: 'set_config',
-            componente: 'config',
-            clave: 'resetAvatarColors',
-            valor: 'reset',
-        });
-    });
 });
 
-describe('configCommands — tipos text/list/color/voice (completados)', () => {
+describe('configCommands — tipos text/list/voice (completados)', () => {
     test('pon mi rol de sesión a profesor → set_config sessionRole=profesor', () => {
         expect(resolveConfigCommandFromText('pon mi rol de sesión a profesor')).toEqual({
             accion: 'set_config',
@@ -179,32 +171,8 @@ describe('configCommands — tipos text/list/color/voice (completados)', () => {
         });
     });
 
-    test('pon el color del pantalón rojo → pantsColor=#FF0000', () => {
-        expect(resolveConfigCommandFromText('pon el color del pantalón rojo')).toEqual({
-            accion: 'set_config',
-            componente: 'config',
-            clave: 'pantsColor',
-            valor: '#FF0000',
-        });
-    });
 
-    test('pon el color del avatar verde → avatarColor=Bunny_body:#00FF00', () => {
-        expect(resolveConfigCommandFromText('pon el color del avatar verde')).toEqual({
-            accion: 'set_config',
-            componente: 'config',
-            clave: 'avatarColor',
-            valor: 'Bunny_body:#00FF00',
-        });
-    });
 
-    test('pon el color del cuerpo azul → bodyColor=#0000FF', () => {
-        expect(resolveConfigCommandFromText('pon el color del cuerpo azul')).toEqual({
-            accion: 'set_config',
-            componente: 'config',
-            clave: 'bodyColor',
-            valor: '#0000FF',
-        });
-    });
 
     test('pon la voz a esperanza → voice=esperanza', () => {
         expect(resolveConfigCommandFromText('pon la voz a esperanza')).toEqual({
@@ -216,7 +184,7 @@ describe('configCommands — tipos text/list/color/voice (completados)', () => {
     });
 });
 
-describe('configCommands — wakeWords / debugLogs / clearCache (completados)', () => {
+describe('configCommands — wakeWords / clearCache (completados)', () => {
     test('agrega la palabra de activación hola flu → wakeWords=hola flu (add)', () => {
         expect(resolveConfigCommandFromText('agrega la palabra de activación hola flu')).toEqual({
             accion: 'set_config',
@@ -234,24 +202,6 @@ describe('configCommands — wakeWords / debugLogs / clearCache (completados)', 
             clave: 'wakeWords',
             valor: 'hey flu',
             subvalor: 'remove',
-        });
-    });
-
-    test('activa los logs de depuración → debugLogs=true', () => {
-        expect(resolveConfigCommandFromText('activa los logs de depuración')).toEqual({
-            accion: 'set_config',
-            componente: 'config',
-            clave: 'debugLogs',
-            valor: 'true',
-        });
-    });
-
-    test('desactiva los logs de depuración → debugLogs=false', () => {
-        expect(resolveConfigCommandFromText('desactiva los logs de depuración')).toEqual({
-            accion: 'set_config',
-            componente: 'config',
-            clave: 'debugLogs',
-            valor: 'false',
         });
     });
 

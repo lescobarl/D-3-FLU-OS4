@@ -167,8 +167,6 @@ export type ComponentVisibility = Record<BunnyComponent, boolean>;
 export interface BunnyControlState {
     /** Componentes visibles */
     components: ComponentVisibility;
-    /** Colores personalizados por componente */
-    componentColors: Record<BunnyComponent, string | undefined>;
     /** Animación actualmente reproduciéndose */
     currentAnimation: BunnyAnimation | null;
     /** Señal visual activa */

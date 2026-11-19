@@ -94,7 +94,7 @@ export function ShoppingPanel({
   };
 
   return (
-    <SettingsPanelShell title={ui.panelTitle || 'Lista de compras'} open>
+    <SettingsPanelShell title={ui.panelTitle || 'Lista de compras'}>
         {/* Alta */}
         <form className="flu-settings-section" onSubmit={handleSubmit}>
           <div className="flu-settings-section__body">

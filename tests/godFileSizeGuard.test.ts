@@ -32,7 +32,7 @@ export const TECHOS: Record<string, number> = {
   // (DEFAULT_MONITORED_COMPONENTS): App dejo de recopiarla.
   // -158 (2026-10-23): los helpers de despacho a nivel modulo (isRedundantTextWorkspace,\n  // buildArbiterOptions, resolveDomainScopedIntent y los dev hooks) salieron a\n  // src/app/appDispatchHelpers.ts: funciones puras de sus argumentos, sin estado del\n  // componente. App los importa y no conserva copia.\n  // -89 (2026-11-12): el archivo encogio en el cierre de rutas dobles y el techo no
   // se aprieto entonces; el trinquete solo puede bajar, asi que se ajusta a lo medido.
-  'src/App.tsx': 4396, // 5391 antes de P6.6
+  'src/App.tsx': 4344, // 5391 antes de P6.6; 4344 tras el recorte de módulos retirados
   // -40 en P8.32: el bloque de parametros del turno salio a src/voice/lib/contractParams.js
   // (buildContractParams), dueno unico de la lista de entradas del contrato de voz.
   // -3: la frase viva no se vacia al cerrar/entregar el turno (spec del dueno 2026-10-11).
@@ -74,7 +74,7 @@ export const TECHOS: Record<string, number> = {
   // +12 (2026-11-12): `restart.muteOpenLocutionMs` (20 s, el umbral medido del
   // Chrome mudo con la locucion vacia) y el comentario de `recognitionFinalizeMs`
   // (1000 ms, la espera real del final al cerrar conversacion). (Medido: 2578.)
-  'src/voice/lib/fluConfig.js': 2578,
+  'src/voice/lib/fluConfig.js': 2535,
   // -62 (2026-11-02): se eliminaron los clientes muertos
   // requestParticipantEvaluation/requestConversationSummary (la via viva es
   // services/gemini.ts por /contract y mode:minute).

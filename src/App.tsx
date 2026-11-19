@@ -105,7 +105,6 @@ import './avatar/App.css';
 // ============================================================
 import { FluShellTabs } from './voice/components/FluShellTabs';
 import { VoiceAssistantBarWrapper } from './components/VoiceAssistantBarWrapper';
-import type { SettingsGroupId } from './components/FluSettingsTabView';
 import { OnboardingOverlay } from './components/OnboardingOverlay';
 import { useOnboarding } from './hooks/useOnboarding';
 import { useOnboardingVoiceCapture } from './hooks/useOnboardingVoiceCapture';
@@ -128,11 +127,10 @@ import {
     resolveActiveUser,
     setActiveUser,
 } from './core/onboarding/onboardingService';
-// ---- Fase 3 — Multi-usuario: participantes, materia gris y paneles ----
+// ---- Fase 3 — Multi-usuario: participantes y paneles ----
 import { useParticipants } from './hooks/useParticipants';
 
 import { resolveKindRole } from './core/multiuser/participantRegistry';
-import { useMateriaGris } from './hooks/useMateriaGris';
 // ---- Fase 6 — Módulos I y J: contactos y diario personal ----
 import { useContacts } from './hooks/useContacts';
 import { useDiary } from './hooks/useDiary';
@@ -461,8 +459,6 @@ function App() {
         };
     }, []);
 
-    // ---- Sub-sección activa del panel de Ajustes (Fase A2: FLU / Mis datos / Gestión) ----
-    const [settingsGroup, setSettingsGroup] = useState<SettingsGroupId>('flu');
 
     // ---- Ref para MinuteDraftPanel (accede a .save()) ----
     const minutePanelRef = useRef<{ save: () => void }>(null);
@@ -471,10 +467,6 @@ function App() {
     const avatarCurrentExpression = useBunnyStore((s) => s.currentExpression ?? null);
     const avatarCurrentAnimation = useBunnyStore((s) => s.currentAnimation ?? null);
     const avatarBlendQueue = useBunnyStore((s) => s.blendQueue ?? []);
-
-    // ---- Acciones del avatar (colores por voz — usadas en onContractResolved) ----
-    const setComponentColor = useBunnyStore((s) => s.setComponentColor);
-    const resetComponentColors = useBunnyStore((s) => s.resetComponentColors);
 
     // ---- Config Persistence (extraído a hook dedicado) ----
     const {
@@ -512,8 +504,12 @@ function App() {
         setSessionRole,
         wakeWords,
         setWakeWords,
-        debugLogsEnabled,
-        setDebugLogsEnabled,
+        verboseLogsEnabled,
+        setVerboseLogsEnabled,
+        relayLogsEnabled,
+        setRelayLogsEnabled,
+        recordingEnabled,
+        setRecordingEnabled,
         wakeWordsRef,
     } = useConfigPersistence();
 
@@ -754,7 +750,7 @@ function App() {
         setHorarioImportBusy(false);
     }, []);
 
-    // ---- Fase 3 — Multi-usuario: participantes del hogar y materia gris ----
+    // ---- Fase 3 — Multi-usuario: participantes del hogar ----
     const participants = useParticipants({});
     // Onboarding multiusuario: usuario activo (undefined/'default' → ruta legacy)
     // y selector "¿Quién eres?" para elegir/crear el perfil que personaliza FLU.
@@ -770,7 +766,6 @@ function App() {
     // dispara desde el MISMO flujo que completa (onCompleted del hook), sin
     // depender de un efecto que la lista refrescada pueda cancelar (Bug #1).
     const handleOnboardingCompletedRef = useRef<(state: OnboardingState) => void>(() => undefined);
-    const materiaGris = useMateriaGris({});
     // ---- FASE P — Personalización profunda por persona (nivel de explicación + tono) ----
     const communicationProfiles = useCommunicationProfiles({});
     // ---- Punto 2 — Navegador curado: perfil de navegador por participante ----
@@ -2214,14 +2209,10 @@ function App() {
                         setImageConfig: integrationStore.setImageConfig,
                         voices,
                         handleSetAiProvider,
-                        setCelebrateAchievements: branding.seasonalActions.setCelebrateAchievements,
                         applyProfile: integrationStore.applyProfile,
-                        setComponentColor,
-                        resetComponentColors,
                         handleClearCache,
                         wakeWordsRef,
                         setWakeWords,
-                        setDebugLogsEnabled,
                     });
                 } catch (err) {
                     logCaughtError('[App] applyConfigAction failed (non-critical)', err);
@@ -4109,6 +4100,18 @@ const {
                                                 },
                                             },
                                         },
+                                        contacts: {
+                                            participants: participants.participants,
+                                            contacts: contacts.contacts,
+                                            birthdayNear: contacts.birthdayNear,
+                                            loading: contacts.loading,
+                                            onAdd: async (input) => {
+                                                await contacts.addContact(input);
+                                            },
+                                            onRemove: async (id) => {
+                                                await contacts.removeContact(id);
+                                            },
+                                        },
                                         language,
                                     }}
                                 />
@@ -4147,8 +4150,6 @@ const {
                                 activeTab={activeTab}
                                 expandedFrameId={expandedFrameId}
                                 onToggleExpand={handleToggleExpand}
-                                group={settingsGroup}
-                                onGroupChange={setSettingsGroup}
                                 flu={{
                                     language,
                                     apiKey,
@@ -4179,19 +4180,21 @@ const {
                                     onClearCache: handleClearCache,
                                     wakeWords,
                                     setWakeWords,
-                                    debugLogsEnabled,
-                                    setDebugLogsEnabled,
+                                    verboseLogsEnabled,
+                                    setVerboseLogsEnabled,
+                                    relayLogsEnabled,
+                                    setRelayLogsEnabled,
+                                    recordingEnabled,
+                                    setRecordingEnabled,
                                     handleParticipantConfigChange,
                                     searchOverrides,
                                     onSearchOverridesChange: handleSearchConfigChange,
                                     brandingMode: branding.config.mode,
                                     brandingSeason: branding.config.activeSeason,
                                     brandingBirthday: branding.config.birthday,
-                                    brandingCelebrateAchievements: branding.config.celebrateAchievements,
                                     onBrandingModeChange: branding.seasonalActions.setMode,
                                     onBrandingSeasonChange: branding.seasonalActions.setActiveSeason,
                                     onBrandingBirthdayChange: branding.seasonalActions.setBirthday,
-                                    onBrandingCelebrateAchievementsChange: branding.seasonalActions.setCelebrateAchievements,
                                     aiProvider,
                                     setAiProvider: handleSetAiProvider,
                                 }}
@@ -4247,72 +4250,12 @@ const {
                                     overrides: searchOverrides,
                                     onChange: handleSearchConfigChange,
                                     onReset: handleSearchConfigReset,
-                                    allowlist: resolvedBrowserAllowlist,
                                     sites: searchSites.sites,
                                     dynamicDomains: searchSites.dynamicDomains,
                                     loading: searchSites.loading,
                                     onRegister: searchSites.register,
                                     onUpdate: searchSites.update,
                                     onRemove: searchSites.remove,
-                                }}
-                                contacts={{
-                                    participants: participants.participants,
-                                    contacts: contacts.contacts,
-                                    birthdayNear: contacts.birthdayNear,
-                                    loading: contacts.loading,
-                                    onAdd: async (input) => {
-                                        await contacts.addContact(input);
-                                    },
-                                    onRemove: async (id) => {
-                                        await contacts.removeContact(id);
-                                    },
-                                }}
-                                agenda={{
-                                    items: agenda.items,
-                                    colors: agendaColors,
-                                    onCancel: async (id) => {
-                                        await agendaCancel(id);
-                                    },
-                                    labels: agendaLabels,
-                                    ringing: agenda.ringing,
-                                    onStop: agenda.stopRinging,
-                                    onAdd: async (input) => {
-                                        await agendaCreate({ ...input, personId: realParticipantId });
-                                    },
-                                    onEdit: async (id, patch) => {
-                                        await agendaUpdate(id, patch);
-                                    },
-                                }}
-                                shopping={{
-                                    items: shopping.items,
-                                    loading: shopping.loading,
-                                    remainingCount: shopping.remainingCount,
-                                    onAdd: async (label) => {
-                                        await shopping.addMany(
-                                            label
-                                                .split(',')
-                                                .map((s) => s.trim())
-                                                .filter(Boolean),
-                                        );
-                                    },
-                                    onToggle: async (id) => {
-                                        await shopping.toggle(id);
-                                    },
-                                    onRemove: async (id) => {
-                                        await shopping.remove(id);
-                                    },
-                                    onClearChecked: async () => {
-                                        await shopping.clearChecked();
-                                    },
-                                }}
-                                materiaGris={{
-                                    participants: participants.participants,
-                                    leaderboard: materiaGris.leaderboard,
-                                    history: materiaGris.history,
-                                    loading: materiaGris.loading,
-                                    onAward: async (input) => {
-                                        await materiaGris.awardPoints(input);
-                                    },
                                 }}
                             />
 

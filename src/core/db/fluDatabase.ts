@@ -177,7 +177,7 @@ export interface SessionStateRecord {
  */
 export interface BrandingConfigRecord {
     id: string; // UUIDv4
-    /** Clave de configuración: 'activeSeason', 'mode', 'birthday', 'customEvent', 'celebrateAchievements' */
+    /** Clave de configuración: 'activeSeason', 'mode', 'birthday', 'customEvent' */
     key: string;
     /** Valor de la configuración */
     value: string;
@@ -281,21 +281,8 @@ export interface ParticipantRecord {
 }
 
 // -----------------------------------------------------------
-// Materia Gris Record (persistente) — F5 gamificación
+// Participantes y contactos (persistentes)
 // -----------------------------------------------------------
-
-/** Registro de puntos de "materia gris" otorgados a un participante (F5). */
-export interface MateriaGrisRecord {
-    id: string; // UUIDv4
-    participantId: string;
-    participantName?: string;
-    /** Acción que otorgó los puntos ('recordatorio_completado', 'cuento', ...). */
-    action: string;
-    points: number;
-    createdAt: number;
-    updatedAt: number;
-    sync: SyncTuple;
-}
 
 
 // -----------------------------------------------------------
@@ -636,6 +623,11 @@ export const DEXIE_VERSIONS: ReadonlyArray<{
         conversations: 'id, role, timestamp, speakerId, participantId, sessionId',
         conversationFilas: null,
     } },
+    // v27: ELIMINAR la tabla de Materia Gris (gamificación retirada).
+    // Se conserva v6 como histórico; Dexie necesita ver la baja explicita.
+    { version: 27, stores: {
+        materiaGris: null,
+    } },
 ];
 
 /** Tablas resultantes del esquema: altas menos bajas, en orden de aparicion. */
@@ -664,7 +656,6 @@ export class FluDatabase extends Dexie {
     brandingConfig!: EntityTable<BrandingConfigRecord, 'id'>;
     shoppingItems!: EntityTable<ShoppingItemRecord, 'id'>;
     participants!: EntityTable<ParticipantRecord, 'id'>;
-    materiaGris!: EntityTable<MateriaGrisRecord, 'id'>;
     contacts!: EntityTable<ContactRecord, 'id'>;
     diaryEntries!: EntityTable<DiaryEntryRecord, 'id'>;
     ambientes!: EntityTable<AmbienteCatalogRecord, 'id'>;

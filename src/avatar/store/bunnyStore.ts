@@ -92,20 +92,8 @@ const initialComponents = (): Record<BunnyComponent, boolean> => ({
     Bunny_ears: true,
 });
 
-const initialComponentColors = (): Record<BunnyComponent, string | undefined> => ({
-    Bunny_full: undefined,
-    Bunny_body: undefined,
-    Bunny_pants: undefined,
-    Bunny_face: undefined,
-    Bunny_eyes: undefined,
-    Bunny_cap: undefined,
-    Bunny_glasses: undefined,
-    Bunny_ears: undefined,
-});
-
 const initialState: BunnyControlState = {
     components: initialComponents(),
-    componentColors: initialComponentColors(),
     currentAnimation: 'Idle_2' as BunnyAnimation,
     currentSignal: 'NONE',
     currentState: 'IDLE',
@@ -130,10 +118,6 @@ interface BunnyStoreActions {
     toggleComponent: (component: BunnyComponent) => void;
     /** Mostrar/ocultar un componente específico */
     setComponentVisibility: (component: BunnyComponent, visible: boolean) => void;
-    /** Establecer color de un componente */
-    setComponentColor: (component: BunnyComponent, color: string) => void;
-    /** Restablecer todos los colores de componentes a sus valores por defecto */
-    resetComponentColors: () => void;
     /** Disparar una animación */
     playAnimation: (animation: BunnyAnimation) => void;
     /** Detener animación actual */
@@ -191,22 +175,6 @@ export const useBunnyStore = create<BunnyStore>((set, _get) => ({
 
     setComponentVisibility: (component: BunnyComponent, visible: boolean) => {
         set((state) => withComponentVisibility(state, component, visible));
-    },
-
-    setComponentColor: (component: BunnyComponent, color: string) => {
-        set((state) => {
-            const newComponentColors = { ...state.componentColors, [component]: color };
-            const logs = withLog(state, 'component',
-                        'COLOR',
-                        `${component} → ${color}`);
-            return { componentColors: newComponentColors, logs };
-        });
-    },
-    resetComponentColors: () => {
-        set((state) => ({
-            componentColors: initialComponentColors(),
-            logs: withLog(state, 'component', 'RESET_COLORS', 'Todos los colores restablecidos'),
-        }));
     },
 
     playAnimation: (animation: BunnyAnimation) => {
@@ -359,7 +327,7 @@ export const useBunnyStore = create<BunnyStore>((set, _get) => ({
 }));
 
 /**
- * Fuerza la visibilidad y un color válido de `Bunny_pants` al arrancar.
+ * Fuerza la visibilidad de `Bunny_pants` al arrancar.
  * Es determinista y síncrono: el store de Zustand es síncrono (sin persist),
  * por lo que `getState()` está disponible inmediatamente — no se requieren timers.
  * Reemplaza el parche previo de `setTimeout(1000ms)` en App.tsx (Rule #2: NO PARCHES).
@@ -369,14 +337,6 @@ export function ensureAvatarPantsVisible(): void {
         const state = useBunnyStore.getState();
         if (state.components && state.components.Bunny_pants === false) {
             state.setComponentVisibility('Bunny_pants', true);
-        }
-        const pantsColor = state.componentColors?.Bunny_pants;
-        if (pantsColor) {
-            const colorLower = pantsColor.toLowerCase();
-            if (colorLower === '#ffffff' || colorLower === 'white' || colorLower === '#fff' ||
-                colorLower === 'transparent' || colorLower === 'rgba(255,255,255,0)') {
-                state.setComponentColor('Bunny_pants', '#8B4513');
-            }
         }
     } catch (error) {
         logCaughtError('[Avatar Init] Could not check avatar pants', error);

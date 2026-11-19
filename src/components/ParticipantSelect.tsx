@@ -2,7 +2,7 @@
  * Selector de participante de los paneles de ajustes.
  *
  * Dueño único de ese control: etiqueta, opción vacía y lista de opciones. Antes
- * estaba copiado en ContactsPanel y MateriaGrisPanel.
+ * estaba copiado en ContactsPanel.
  */
 export interface ParticipantSelectProps {
     /** Id seleccionado ('' = ninguno). */

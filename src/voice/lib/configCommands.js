@@ -132,7 +132,6 @@ const CONFIG_NOUNS = Object.freeze({
   mode: ['modo', 'mode'],
   birthday: ['cumpleanos', 'birthday', 'fecha de cumpleanos'],
   customEvent: ['festividad personalizada', 'aniversario personalizado', 'evento personalizado', 'evento especial', 'custom festivity', 'custom event', 'special event', 'anniversary', 'festividad', 'aniversario', 'evento'],
-  celebrateAchievements: ['celebracion de logros', 'celebrar logros', 'celebraciones', 'celebrate achievements', 'logros'],
   language: ['idioma', 'language'],
   sessionRole: ['rol de sesion', 'session role', 'rol'],
   voiceSpeed: ['velocidad de voz', 'velocidad de habla', 'voice speed', 'speed'],
@@ -159,10 +158,6 @@ const CONFIG_NOUNS = Object.freeze({
   systemEventDedupBucketMs: ['deduplicacion de eventos', 'dedup bucket'],
   capVisible: ['gorra', 'gorro', 'cap'],
   hairVisible: ['cabello', 'pelo', 'hair'],
-  avatarColor: ['color del avatar', 'avatar color'],
-  pantsColor: ['color del pantalon', 'pants color'],
-  bodyColor: ['color del cuerpo', 'body color'],
-  faceColor: ['color de la cara', 'face color'],
   aiProvider: ['proveedor de ia', 'motor de ia', 'motor de inteligencia artificial', 'ai provider', 'provider', 'proveedor'],
   profile: ['perfil', 'profile'],
   textModel: ['modelo de texto', 'text model', 'modelo'],
@@ -174,7 +169,6 @@ const CONFIG_NOUNS = Object.freeze({
   ocrApiUrl: ['url de ocr', 'ocr api url'],
   voice: ['voz', 'voice'],
   wakeWords: ['palabra de activacion', 'palabras de activacion', 'wake word', 'wake words'],
-  debugLogs: ['logs de depuracion', 'debug logs'],
   clearCache: ['limpiar la cache', 'limpia la cache', 'limpiar cache', 'limpiar la caché', 'limpia la caché', 'clear cache', 'cache'],
 })
 
@@ -548,67 +542,6 @@ function extractTextValue(text = '', entry = {}) {
   return rest || null
 }
 
-// Alias de componente del avatar para avatarColor ("pantalon" → "Bunny_pants").
-const AVATAR_COMPONENT_ALIASES = {
-  pantalon: 'Bunny_pants',
-  pantalones: 'Bunny_pants',
-  pantaloneta: 'Bunny_pants',
-  cuerpo: 'Bunny_body',
-  cara: 'Bunny_face',
-}
-
-// Nombres de color → hexadecimal (sin prefijo # para evitar falsos positivos tipo "cafe").
-const COLOR_NAME_HEX = {
-  rojo: '#FF0000', red: '#FF0000',
-  verde: '#00FF00', green: '#00FF00',
-  azul: '#0000FF', blue: '#0000FF',
-  amarillo: '#FFFF00', yellow: '#FFFF00',
-  blanco: '#FFFFFF', white: '#FFFFFF',
-  negro: '#000000', black: '#000000',
-  gris: '#808080', gray: '#808080', grey: '#808080',
-  naranja: '#FFA500', orange: '#FFA500',
-  morado: '#800080', purple: '#800080',
-  rosa: '#FFC0CB', pink: '#FFC0CB',
-  cafe: '#8B4513', marron: '#8B4513', brown: '#8B4513',
-  turquesa: '#40E0D0', celeste: '#87CEEB', aqua: '#00FFFF', cyan: '#00FFFF',
-  lima: '#32CD32', dorado: '#FFD700', gold: '#FFD700', plata: '#C0C0C0', silver: '#C0C0C0',
-}
-
-/**
- * Resuelve un valor de color: acepta "#RRGGBB"/"#RGB" o un nombre de color.
- * Para avatarColor empaqueta "componente:color" (p. ej. "Bunny_pants:#FF0000").
- */
-function resolveColorValue(text = '', entry = {}) {
-  const normalized = normalizeForMatch(text)
-  const hexMatch = normalized.match(/#([0-9a-f]{6}|[0-9a-f]{3})\b/i)
-  let hex = null
-  if (hexMatch) {
-    hex = hexMatch[1].toUpperCase()
-    if (hex.length === 3) hex = hex.split('').map((c) => c + c).join('')
-    hex = `#${hex}`
-  } else {
-    for (const name of Object.keys(COLOR_NAME_HEX)) {
-      if (hasVoiceToken(normalized, name)) {
-        hex = COLOR_NAME_HEX[name]
-        break
-      }
-    }
-  }
-  if (!hex) return null
-  if (entry.clave === 'avatarColor') {
-    let component = 'Bunny_body'
-    for (const alias of Object.keys(AVATAR_COMPONENT_ALIASES)) {
-      if (hasVoiceToken(normalized, alias)) {
-        component = AVATAR_COMPONENT_ALIASES[alias]
-        break
-      }
-    }
-    return `${component}:${hex}`
-  }
-  return hex
-}
-
-// ------------------------------------------------------------
 // Resolución del contrato desde el texto transcrito
 // ------------------------------------------------------------
 
@@ -621,13 +554,11 @@ function resolveValueForEntry(text = '', entry = {}) {
     case 'select':
     case 'list':
       return resolveSelectValue(text, entry)
-    case 'color':
-      return resolveColorValue(text, entry)
     case 'text':
     case 'voice':
       return extractTextValue(text, entry)
     case 'action':
-      // resetAvatarColors / clearCache: el despachador actúa; el valor es un marcador.
+      // clearCache: el despachador actúa; el valor es un marcador.
       return 'reset'
     case 'date':
       return resolveDateValue(text)

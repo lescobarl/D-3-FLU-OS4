@@ -1,6 +1,6 @@
 {
   "_nota": "Linea base del barrido de clones a 25 tokens. Cada par declara su motivo y dueno. Un par NUEVO es ROJO; un par que deja de existir se recorta aqui. Solo baja.",
-  "minPairs": 143,
+  "minPairs": 135,
   "minSources": 400,
   "pairs": [
     {
@@ -11,15 +11,6 @@
       "fragments": 1,
       "reason": "interno: bloque repetido dentro del mismo modulo (medido)",
       "owner": "src/app/appDispatchHelpers.ts"
-    },
-    {
-      "a": "src/app/appTypeGuards.ts",
-      "b": "src/avatar/store/bunnyStore.ts",
-      "key": "src/app/appTypeGuards.ts|src/avatar/store/bunnyStore.ts",
-      "lines": 8,
-      "fragments": 1,
-      "reason": "medido: patron de servicio/entidad distinta",
-      "owner": "src/app/appTypeGuards.ts"
     },
     {
       "a": "src/avatar/components/AnimationPanel.tsx",
@@ -119,24 +110,6 @@
       "fragments": 1,
       "reason": "medido: patron de servicio/entidad distinta",
       "owner": "src/components/catalogPanelEditors.ts"
-    },
-    {
-      "a": "src/components/ContactsPanel.tsx",
-      "b": "src/components/ContactsPanel.tsx",
-      "key": "src/components/ContactsPanel.tsx|src/components/ContactsPanel.tsx",
-      "lines": 9,
-      "fragments": 1,
-      "reason": "interno: bloque repetido dentro del mismo modulo (medido)",
-      "owner": "src/components/ContactsPanel.tsx"
-    },
-    {
-      "a": "src/components/ContactsPanel.tsx",
-      "b": "src/components/ParticipantsPanel.tsx",
-      "key": "src/components/ContactsPanel.tsx|src/components/ParticipantsPanel.tsx",
-      "lines": 17,
-      "fragments": 2,
-      "reason": "llamada al dueno compartido / forma de props",
-      "owner": "src/components/ContactsPanel.tsx"
     },
     {
       "a": "src/components/ContactsPanel.tsx",
@@ -329,30 +302,12 @@
     },
     {
       "a": "src/core/contacts/contactService.ts",
-      "b": "src/core/multiuser/materiaGrisService.ts",
-      "key": "src/core/contacts/contactService.ts|src/core/multiuser/materiaGrisService.ts",
-      "lines": 8,
-      "fragments": 1,
-      "reason": "medido: patron de servicio/entidad distinta",
-      "owner": "src/core/contacts/contactService.ts"
-    },
-    {
-      "a": "src/core/contacts/contactService.ts",
       "b": "src/core/reminders/shoppingService.ts",
       "key": "src/core/contacts/contactService.ts|src/core/reminders/shoppingService.ts",
       "lines": 6,
       "fragments": 1,
       "reason": "medido: patron de servicio/entidad distinta",
       "owner": "src/core/contacts/contactService.ts"
-    },
-    {
-      "a": "src/core/diary/diaryService.ts",
-      "b": "src/core/multiuser/materiaGrisService.ts",
-      "key": "src/core/diary/diaryService.ts|src/core/multiuser/materiaGrisService.ts",
-      "lines": 8,
-      "fragments": 1,
-      "reason": "medido: patron de servicio/entidad distinta",
-      "owner": "src/core/diary/diaryService.ts"
     },
     {
       "a": "src/core/diary/diaryService.ts",
@@ -1057,15 +1012,6 @@
       "owner": "src/core/games/"
     },
     {
-      "a": "src/core/multiuser/materiaGrisService.ts",
-      "b": "src/core/reminders/shoppingService.ts",
-      "key": "src/core/multiuser/materiaGrisService.ts|src/core/reminders/shoppingService.ts",
-      "lines": 8,
-      "fragments": 1,
-      "reason": "medido: patron de servicio/entidad distinta",
-      "owner": "src/core/multiuser/materiaGrisService.ts"
-    },
-    {
       "a": "src/core/notes/notesService.ts",
       "b": "src/core/reminders/shoppingService.ts",
       "key": "src/core/notes/notesService.ts|src/core/reminders/shoppingService.ts",
@@ -1112,30 +1058,12 @@
     },
     {
       "a": "src/hooks/useContacts.ts",
-      "b": "src/hooks/useMateriaGris.ts",
-      "key": "src/hooks/useContacts.ts|src/hooks/useMateriaGris.ts",
-      "lines": 9,
-      "fragments": 1,
-      "reason": "forma: wrapper delegado en refreshOnOk/refreshOnValue",
-      "owner": "src/hooks/useContacts.ts"
-    },
-    {
-      "a": "src/hooks/useContacts.ts",
       "b": "src/hooks/useParticipants.ts",
       "key": "src/hooks/useContacts.ts|src/hooks/useParticipants.ts",
       "lines": 7,
       "fragments": 1,
       "reason": "forma: wrapper delegado en refreshOnOk/refreshOnValue",
       "owner": "src/hooks/useContacts.ts"
-    },
-    {
-      "a": "src/hooks/useDiary.ts",
-      "b": "src/hooks/useMateriaGris.ts",
-      "key": "src/hooks/useDiary.ts|src/hooks/useMateriaGris.ts",
-      "lines": 9,
-      "fragments": 1,
-      "reason": "forma: wrapper delegado en refreshOnOk/refreshOnValue",
-      "owner": "src/hooks/useDiary.ts"
     },
     {
       "a": "src/hooks/useDiary.ts",
@@ -1154,15 +1082,6 @@
       "fragments": 1,
       "reason": "forma: wrapper delegado en refreshOnOk/refreshOnValue",
       "owner": "src/hooks/useDocumentGeneration.ts"
-    },
-    {
-      "a": "src/hooks/useMateriaGris.ts",
-      "b": "src/hooks/useParticipants.ts",
-      "key": "src/hooks/useMateriaGris.ts|src/hooks/useParticipants.ts",
-      "lines": 6,
-      "fragments": 1,
-      "reason": "forma: wrapper delegado en refreshOnOk/refreshOnValue",
-      "owner": "src/hooks/useMateriaGris.ts"
     },
     {
       "a": "src/hooks/useMinuteKnowledge.ts",
@@ -1289,6 +1208,15 @@
       "fragments": 2,
       "reason": "forma: bootstrap comun de workers",
       "owner": "src/voice/workers/voiceId.worker.js"
+    },
+    {
+      "a": "src/hooks/useContacts.ts",
+      "b": "src/hooks/useDiary.ts",
+      "key": "src/hooks/useContacts.ts|src/hooks/useDiary.ts",
+      "lines": 7,
+      "fragments": 1,
+      "reason": "forma: wrapper delegado en refreshOnOk/refreshOnValue",
+      "owner": "src/hooks/useContacts.ts"
     }
   ]
 }

@@ -76,16 +76,15 @@ export default function FluParticipantSettingsPanel({
   return (
     <details className="flu-settings-image-config">
       <summary className="flu-settings-image-config__summary">
-        <span className="flu-settings-image-config__icon">🔊</span>
         <span>{resolveParticipantFloorLabel('panelTitle', lang)}</span>
       </summary>
       <div className="flu-settings-image-config__body">
         {/* ---- Voz: selector global ---- */}
         <div className="flu-settings-image-config__group">
-          <div className="flu-settings-image-config__group-title">🗣️ Voz</div>
+          <div className="flu-settings-image-config__group-title">Voz</div>
           <label className="flu-settings-image-config__field flu-settings-image-config__field--stacked">
             <span className="flu-settings-image-config__section-label">Seleccionar voz</span>
-            <div className="flu-settings-row" style={{ gap: 8 }}>
+            <div className="flu-settings-row">
               <select
                 value={integrationStore?.voiceConfig?.voiceURI || ''}
                 onChange={(e) => {
@@ -128,7 +127,7 @@ export default function FluParticipantSettingsPanel({
 
         {/* ---- Parámetros del participante ---- */}
         <div className="flu-settings-section">
-          <div className="flu-settings-section__title">⚙️ Parámetros</div>
+          <div className="flu-settings-section__title">Parámetros</div>
           <div className="flu-settings-section__body flu-settings-fields-grid">
             {FLU_PARTICIPANT_EDITABLE_FIELDS.map((field) => {
               const label = resolveFluParticipantFieldLabel(field.key, lang)

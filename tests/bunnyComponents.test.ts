@@ -65,7 +65,6 @@ vi.mock('three', () => {
 import * as THREE from 'three';
 import {
     applyComponentVisibility,
-    applyComponentColor,
     findGroupByName,
     COMPONENT_GROUPS,
 } from '../src/avatar/model/bunnyComponents';
@@ -148,12 +147,6 @@ function visibleAll(overrides: Record<string, boolean> = {}): Record<string, boo
     return { ...base, ...overrides };
 }
 
-function hexOf(mesh: THREE.Mesh, index?: number): number {
-    if (index === undefined) {
-        return (mesh.material as THREE.MeshStandardMaterial).color.getHex();
-    }
-    return (mesh.material as THREE.MeshStandardMaterial[])[index].color.getHex();
-}
 
 // ------------------------------------------------------------
 // Mapa de grupos (contrato de nombres)
@@ -283,56 +276,5 @@ describe('findGroupByName', () => {
 
         expect(findGroupByName(model, 'Face')).toBe(face);
         expect(findGroupByName(model, 'NoExiste')).toBeNull();
-    });
-});
-
-// ------------------------------------------------------------
-// Color por componente
-// ------------------------------------------------------------
-describe('applyComponentColor', () => {
-    it('aplica el hex (con #) a todos los meshes del grupo Body', () => {
-        const { model, bodyMesh, tail } = buildModel();
-
-        applyComponentColor(model, 'Bunny_body', '#ff0000');
-
-        expect(hexOf(bodyMesh)).toBe(0xff0000);
-        expect(hexOf(tail)).toBe(0xff0000);
-        expect((bodyMesh.material as THREE.MeshStandardMaterial).needsUpdate).toBe(true);
-    });
-
-    it('acepta color sin # y no hace nada con componente desconocido o vacio', () => {
-        const { model, bodyMesh } = buildModel();
-
-        applyComponentColor(model, 'Bunny_body', '00ff00');
-        expect(hexOf(bodyMesh)).toBe(0x00ff00);
-
-        applyComponentColor(model, 'Bunny_glasses', '#123456');
-        applyComponentColor(model, 'Bunny_no_existe', '#123456');
-        expect(hexOf(bodyMesh)).toBe(0x00ff00);
-    });
-
-    it('aplica color a materiales en array e ignora materiales no estandar', () => {
-        const { model, body } = buildModel();
-        const matA = new THREE.MeshStandardMaterial();
-        const matB = new THREE.MeshStandardMaterial();
-        const arrayMesh = named(new THREE.Mesh(null as unknown as THREE.BufferGeometry, [matA, matB] as unknown as THREE.Material), 'ArrayPart');
-        body.add(arrayMesh);
-        const plain = { color: { setHex: (): void => undefined } } as unknown as THREE.Material;
-        const plainMesh = named(new THREE.Mesh(null as unknown as THREE.BufferGeometry, plain), 'PlainPart');
-        body.add(plainMesh);
-
-        applyComponentColor(model, 'Bunny_body', '#0000ff');
-
-        expect(hexOf(arrayMesh, 0)).toBe(0x0000ff);
-        expect(hexOf(arrayMesh, 1)).toBe(0x0000ff);
-    });
-
-    it('Bunny_eyes colorea todo el grupo Face (no solo los ojos)', () => {
-        const { model, eyeR, tongue } = buildModel();
-
-        applyComponentColor(model, 'Bunny_eyes', '#abcdef');
-
-        expect(hexOf(eyeR)).toBe(0xabcdef);
-        expect(hexOf(tongue)).toBe(0xabcdef);
     });
 });

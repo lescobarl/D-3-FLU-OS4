@@ -1,5 +1,5 @@
 // ============================================================
-// AssistantSettingsPanel — Ajustes del asistente personal (Fase 1)
+// AssistantSettingsPanel — Notificaciones y descanso (Fase 1)
 // ------------------------------------------------------------
 // Componente controlado (presentacional): notificaciones (canal),
 // no molestar (DND) y repetición del onboarding. El estado vive en
@@ -37,7 +37,7 @@ export function AssistantSettingsPanel({
   onReplayOnboarding,
 }: AssistantSettingsPanelProps) {
   return (
-    <SettingsPanelShell title="Asistente personal">
+    <SettingsPanelShell title="Notificaciones y descanso">
         {/* Notificaciones */}
         <div className="flu-settings-section">
           <div className="flu-settings-section__body">

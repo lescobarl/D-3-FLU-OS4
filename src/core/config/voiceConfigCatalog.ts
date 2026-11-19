@@ -31,7 +31,6 @@ export type ConfigHandlerKey =
     | 'brandingActiveSeason'
     | 'brandingMode'
     | 'brandingBirthday'
-    | 'brandingCelebrateAchievements'
     | 'brandingCustomEvent'
     // Text (Gemini)
     | 'textApiKey'
@@ -62,15 +61,10 @@ export type ConfigHandlerKey =
     // Imagen del avatar (ImageConfig → setImageConfig)
     | 'imageBoolean'
     // Colores del avatar (BunnyStore)
-    | 'avatarColor'
-    | 'avatarComponentColor'
-    | 'resetAvatarColors'
-    // Motor IA / Perfil
     | 'aiProvider'
     | 'applyProfile'
     // Voz / utilidades (set_config → useConfigPersistence)
     | 'wakeWords'
-    | 'debugLogs'
     | 'clearCache'
     // No gestionable por voz (documentado; no emite acción)
     | 'unsupported';
@@ -86,7 +80,7 @@ export interface ConfigCatalogEntry {
     /** Estrategia de despacho en App.tsx */
     handler: ConfigHandlerKey;
     /** Tipo semántico del valor esperado */
-    tipo: 'text' | 'password' | 'number' | 'boolean' | 'select' | 'color' | 'action' | 'list' | 'voice' | 'date' | 'custom';
+    tipo: 'text' | 'password' | 'number' | 'boolean' | 'select' | 'action' | 'list' | 'voice' | 'date' | 'custom';
     /** Rango mínimo (solo tipo number) */
     min?: number;
     /** Rango máximo (solo tipo number) */
@@ -187,14 +181,6 @@ export const VOICE_CONFIG_CATALOG: ConfigCatalogEntry[] = [
         tipo: 'date',
         descripcionEs: 'Fecha de cumpleaños en formato AAAA-MM-DD (para celebrar).',
         descripcionEn: 'Birthday date in YYYY-MM-DD format (used to celebrate).',
-    },
-    {
-        clave: 'celebrateAchievements',
-        accion: 'set_branding',
-        handler: 'brandingCelebrateAchievements',
-        tipo: 'boolean',
-        descripcionEs: 'Activa o desactiva las celebraciones visuales por logros.',
-        descripcionEn: 'Enables or disables visual celebrations for achievements.',
     },
     {
         clave: 'customEvent',
@@ -387,50 +373,6 @@ export const VOICE_CONFIG_CATALOG: ConfigCatalogEntry[] = [
     },
 
     // ============================================================
-    // COLORES DEL AVATAR (set_config → BunnyStore)
-    // ============================================================
-    {
-        clave: 'avatarColor',
-        accion: 'set_config',
-        handler: 'avatarColor',
-        tipo: 'color',
-        descripcionEs: 'Color de un componente del avatar: formato "componente:color" (ej. "Bunny_pants:#8B4513").',
-        descripcionEn: 'Avatar component color: format "component:color" (e.g. "Bunny_pants:#8B4513").',
-    },
-    {
-        clave: 'pantsColor',
-        accion: 'set_config',
-        handler: 'avatarComponentColor',
-        tipo: 'color',
-        descripcionEs: 'Color del pantalón (código hexadecimal).',
-        descripcionEn: 'Pants color (hex code).',
-    },
-    {
-        clave: 'bodyColor',
-        accion: 'set_config',
-        handler: 'avatarComponentColor',
-        tipo: 'color',
-        descripcionEs: 'Color del cuerpo (código hexadecimal).',
-        descripcionEn: 'Body color (hex code).',
-    },
-    {
-        clave: 'faceColor',
-        accion: 'set_config',
-        handler: 'avatarComponentColor',
-        tipo: 'color',
-        descripcionEs: 'Color de la cara (código hexadecimal).',
-        descripcionEn: 'Face color (hex code).',
-    },
-    {
-        clave: 'resetAvatarColors',
-        accion: 'set_config',
-        handler: 'resetAvatarColors',
-        tipo: 'action',
-        descripcionEs: 'Restablece los colores del avatar a sus valores por defecto.',
-        descripcionEn: 'Resets the avatar colors to their defaults.',
-    },
-
-    // ============================================================
     // MOTOR IA / PERFIL (set_config)
     // ============================================================
     {
@@ -471,14 +413,6 @@ export const VOICE_CONFIG_CATALOG: ConfigCatalogEntry[] = [
         tipo: 'action',
         descripcionEs: 'Limpia la caché y recarga la aplicación.',
         descripcionEn: 'Clears the cache and reloads the app.',
-    },
-    {
-        clave: 'debugLogs',
-        accion: 'set_config',
-        handler: 'debugLogs',
-        tipo: 'boolean',
-        descripcionEs: 'Habilita o deshabilita los logs de depuración.',
-        descripcionEn: 'Enables or disables debug logs.',
     },
     // ============================================================
     // NO SOPORTADO por voz (documentado; sin acción)
@@ -566,10 +500,6 @@ function formatValueEs(entry: ConfigCatalogEntry): string {
             return ' (string)';
         case 'voice':
             return ' (nombre o URI de una voz TTS instalada)';
-        case 'color':
-            return entry.clave === 'avatarColor'
-                ? ' (formato: "componente:color", ej. "Bunny_pants:#8B4513")'
-                : ' (código hexadecimal, ej. "#FF5733")';
         case 'date':
             return ' (AAAA-MM-DD)';
         case 'custom':
@@ -596,10 +526,6 @@ function formatValueEn(entry: ConfigCatalogEntry): string {
             return ' (string)';
         case 'voice':
             return ' (name or URI of an installed TTS voice)';
-        case 'color':
-            return entry.clave === 'avatarColor'
-                ? ' (format: "component:color", e.g. "Bunny_pants:#8B4513")'
-                : ' (hex code, e.g. "#FF5733")';
         case 'date':
             return ' (YYYY-MM-DD)';
         case 'custom':

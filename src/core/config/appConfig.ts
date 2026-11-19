@@ -118,20 +118,16 @@ export const STORAGE_KEYS = {
     VOICE_SPEED: 'flu-voice-speed',
     VOICE_VOLUME: 'flu-voice-volume',
     VOICE_PITCH: 'flu-voice-pitch',
-    // Wake words & debug logs (persistentes vía useConfigPersistence)
+    // Wake words & diagnóstico (persistentes vía useConfigPersistence)
     WAKE_WORDS: 'flu-wake-words',
-    DEBUG_LOGS_ENABLED: 'flu-debug-logs-enabled',
+    VERBOSE_LOGS_ENABLED: 'flu-verbose-logs-enabled',
+    RELAY_LOGS_ENABLED: 'flu-relay-logs-enabled',
     /** Bandera de la grabación de sesión (dev); la legacy `flu.recorder` se migra. */
     RECORDER_ENABLED: 'flu-recorder-enabled',
     // UI preferences
     UI_THEME: 'flu-ui-theme',
     UI_FONT_SIZE: 'flu-ui-font-size',
     UI_ANIMATIONS: 'flu-ui-animations',
-    // Avatar configuration
-    AVATAR_COLOR: 'flu-avatar-color',
-    AVATAR_PANTS_COLOR: 'flu-avatar-pants-color',
-    AVATAR_BODY_COLOR: 'flu-avatar-body-color',
-    AVATAR_FACE_COLOR: 'flu-avatar-face-color',
     // Branding: sin claves localStorage — vive en Dexie (fluDb.brandingConfig).
     // Autonomy
     AUTONOMY_HEALTH_MONITORING: 'flu-health-monitoring',

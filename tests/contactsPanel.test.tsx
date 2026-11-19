@@ -1,22 +1,12 @@
 // @vitest-environment jsdom
 /**
- * ContactsPanel - la agenda de contactos del panel de Ajustes (0%).
+ * ContactsPanel — contactos compactos dentro del panel HOY.
  *
- * POR QUE ESTE TEST: 295 lineas presentacionales que nadie ejecutaba y por las que
- * pasa TODO el alta/baja de contactos de la app. Se prueban las reglas que importan:
- * las etiquetas salen de la CONFIG (nada hardcodeado), el alta manda los campos
- * recortados y con `undefined` en los vacios, el `participantName` se RESUELVE del
- * id elegido, el formulario se limpia tras el alta, el guardado no se puede disparar
- * dos veces (busy) y la etiqueta de cumpleaños distingue hoy / mañana / N dias.
- *
- * HALLAZGO DECLARADO (mutacion equivalente medida): pasar `busy` a `runBusyAction`
- * es redundante en React (el doble clic ya lo frena el re-render con busy=true):
- * sustituirlo por `false` deja las 25 pruebas verdes. Se deja como red, documentado.
- *
- * HALLAZGO: si la config declara `birthdayNearLabel`, la ventana de dias NO se ve en
- * pantalla (la ventana solo aparece en el texto de reserva del componente).
+ * Navegación como Notas: fila, título, detalle al expandir y acción.
+ * Se prueban consulta, alta/baja, cumpleaños y etiquetas de config.
+ * No usa demo (MODE=test): los ejemplos solo existen en desarrollo.
  */
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { ContactsPanel } from '../src/components/ContactsPanel.js';
 import { FLU_CONFIG } from '../src/voice/lib/fluConfig.js';
@@ -25,245 +15,228 @@ const ui = (FLU_CONFIG.contacts as Record<string, unknown>).ui as Record<string,
 
 const PARTICIPANTES = [{ id: 'p1', name: 'Ana' }];
 const CONTACTOS = [
-    {
-        id: 'c1',
-        name: 'Luis',
-        relationship: 'hermano',
-        phone: '600',
-        birthday: '1980-05-05',
-        participantName: 'Ana',
-        email: 'luis@ejemplo.org',
-        notes: 'le gusta el cafe',
-        favorite: true,
-    },
+  {
+    id: 'c1',
+    name: 'Luis',
+    relationship: 'hermano',
+    phone: '600',
+    birthday: '1980-05-05',
+    participantName: 'Ana',
+    email: 'luis@ejemplo.org',
+    notes: 'le gusta el cafe',
+    favorite: true,
+    createdAt: 2,
+  },
+  {
+    id: 'c2',
+    name: 'Beto',
+    relationship: 'amigo',
+    phone: '700',
+    email: 'beto@ejemplo.org',
+    favorite: false,
+    createdAt: 1,
+  },
 ];
 
 const montar = (over: Partial<Record<string, unknown>> = {}) => {
-    const onAdd = (over.onAdd as ReturnType<typeof vi.fn>) ?? vi.fn(async () => {});
-    const onRemove = (over.onRemove as ReturnType<typeof vi.fn>) ?? vi.fn(async () => {});
-    render(
-        <ContactsPanel
-            participants={(over.participants as never) ?? (PARTICIPANTES as never)}
-            contacts={(over.contacts as never) ?? ([] as never)}
-            birthdayNear={(over.birthdayNear as never) ?? ([] as never)}
-            loading={(over.loading as boolean) ?? false}
-            onAdd={onAdd as never}
-            onRemove={onRemove as never}
-        />,
-    );
-    return { onAdd, onRemove };
+  const onAdd = (over.onAdd as ReturnType<typeof vi.fn>) ?? vi.fn(async () => {});
+  const onRemove = (over.onRemove as ReturnType<typeof vi.fn>) ?? vi.fn(async () => {});
+  render(
+    <ContactsPanel
+      participants={(over.participants as never) ?? (PARTICIPANTES as never)}
+      contacts={(over.contacts as never) ?? ([] as never)}
+      birthdayNear={(over.birthdayNear as never) ?? ([] as never)}
+      loading={(over.loading as boolean) ?? false}
+      onAdd={onAdd as never}
+      onRemove={onRemove as never}
+    />,
+  );
+  return { onAdd, onRemove };
 };
 
 const escribir = (caja: string, valor: string) => {
-    fireEvent.change(screen.getByTestId(caja), { target: { value: valor } });
+  fireEvent.change(screen.getByTestId(caja), { target: { value: valor } });
 };
 
 const enviar = () => fireEvent.submit(screen.getByTestId('contacts-add-submit').closest('form')!);
 
-describe('ContactsPanel - etiquetas y estado', () => {
-    it('todas las etiquetas salen de la config (nada hardcodeado)', () => {
-        montar();
+describe('ContactsPanel — consulta compacta', () => {
+  it('muestra contador, búsqueda y filas', () => {
+    montar({ contacts: CONTACTOS });
 
-        expect(screen.getByText(ui.panelTitle)).toBeTruthy();
-        expect(screen.getByText(ui.nameLabel)).toBeTruthy();
-        expect(screen.getByTestId('contacts-add-submit').textContent).toBe(ui.addLabel);
-        expect(screen.getByTestId('contacts-add-name').getAttribute('placeholder')).toBe(ui.namePlaceholder);
-    });
+    expect(screen.getByText('2/2')).toBeTruthy();
+    expect(screen.getByTestId('contacts-search').getAttribute('placeholder')).toBe(ui.searchPlaceholder);
+    expect(screen.getAllByTestId(/contacts-item-/)).toHaveLength(2);
+  });
 
-    it('cargando: puntos suspensivos y sin listas', () => {
-        montar({ loading: true });
+  it('busca por nombre, teléfono o correo', () => {
+    montar({ contacts: CONTACTOS });
 
-        expect(screen.queryByTestId('contacts-list')).toBeNull();
-        expect(screen.queryByTestId('contacts-birthday-list')).toBeNull();
-        expect(screen.queryAllByText('…').length).toBeGreaterThanOrEqual(2);
-    });
+    escribir('contacts-search', '700');
+    expect(screen.getByTestId('contacts-item-c2')).toBeTruthy();
+    expect(screen.queryByTestId('contacts-item-c1')).toBeNull();
 
-    it('el encabezado de cumpleaños usa la etiqueta de la config', () => {
-        montar();
+    escribir('contacts-search', 'luis@ejemplo');
+    expect(screen.getByTestId('contacts-item-c1')).toBeTruthy();
+    expect(screen.queryByTestId('contacts-item-c2')).toBeNull();
+  });
 
-        const cabecera = screen.getByTestId('contacts-birthday-near').textContent;
+  it('filtra por relación y ordena por nombre', () => {
+    montar({ contacts: CONTACTOS });
 
-        // Cuando la config declara etiqueta, MANDA la etiqueta (la ventana de dias
-        // solo aparece en el texto de reserva). Comportamiento real, documentado.
-        expect(cabecera).toContain(ui.birthdayNearLabel);
-    });
+    fireEvent.change(screen.getByTestId('contacts-filter-relationship'), { target: { value: 'amigo' } });
+    expect(screen.getByTestId('contacts-item-c2')).toBeTruthy();
+    expect(screen.queryByTestId('contacts-item-c1')).toBeNull();
 
-    it('sin contactos se muestran los mensajes de vacio de la config', () => {
-        montar();
+    fireEvent.change(screen.getByTestId('contacts-filter-relationship'), { target: { value: 'all' } });
+    const filas = screen.getAllByTestId(/contacts-item-/).map((fila) => fila.textContent);
+    expect(filas[0]).toContain('Beto');
+    expect(filas[1]).toContain('Luis');
+  });
 
-        expect(screen.getByText(ui.emptyState)).toBeTruthy();
-        expect(screen.getByText(ui.emptyBirthdayNear)).toBeTruthy();
-    });
+  it('sin coincidencias y sin contactos muestra el mensaje de la config', () => {
+    montar({ contacts: CONTACTOS });
+    escribir('contacts-search', 'zzz');
+    expect(screen.getByText(ui.noResults)).toBeTruthy();
+  });
+
+  it('sin contactos muestra el vacío de la config', () => {
+    montar();
+    expect(screen.getByText(ui.emptyState)).toBeTruthy();
+  });
+
+  it('cargando no pinta filas ni cumpleaños', () => {
+    montar({ loading: true });
+    expect(screen.queryByTestId('contacts-list')).toBeNull();
+    expect(screen.queryByTestId('contacts-birthday-near')).toBeNull();
+  });
 });
 
-describe('ContactsPanel - alta', () => {
-    it('el boton esta deshabilitado hasta que hay nombre (los espacios no cuentan)', () => {
-        montar();
-        const boton = screen.getByTestId('contacts-add-submit') as HTMLButtonElement;
+describe('ContactsPanel — alta', () => {
+  it('el alta nace colapsada', () => {
+    montar();
+    const details = screen.getByText(ui.addLabel).closest('details');
+    expect(details?.open).toBe(false);
+  });
 
-        expect(boton.disabled).toBe(true);
-        escribir('contacts-add-name', '   ');
-        expect(boton.disabled).toBe(true);
+  it('el botón está deshabilitado hasta que hay nombre', () => {
+    montar();
+    const boton = screen.getByTestId('contacts-add-submit') as HTMLButtonElement;
 
-        escribir('contacts-add-name', 'Ana');
-        expect(boton.disabled).toBe(false);
+    expect(boton.textContent).toBe(ui.saveContactLabel);
+    expect(boton.disabled).toBe(true);
+    escribir('contacts-add-name', '   ');
+    expect(boton.disabled).toBe(true);
+    escribir('contacts-add-name', 'Ana');
+    expect(boton.disabled).toBe(false);
+  });
+
+  it('no hay campo de notas', () => {
+    montar();
+    expect(screen.queryByTestId('contacts-add-notes')).toBeNull();
+  });
+
+  it('manda los campos recortados y resuelve el participante', async () => {
+    const { onAdd } = montar();
+    escribir('contacts-add-name', '  Luis  ');
+    escribir('contacts-add-phone', ' 600 ');
+    escribir('contacts-add-email', '   ');
+    escribir('contacts-add-relationship', ' hermano ');
+    escribir('contacts-add-birthday', '1990-01-02');
+    fireEvent.change(screen.getByTestId('contacts-add-participant'), { target: { value: 'p1' } });
+
+    await act(async () => {
+      enviar();
     });
 
-    it('el alta manda los campos recortados y con undefined en los vacios', async () => {
-        const { onAdd } = montar();
-        escribir('contacts-add-name', '  Luis  ');
-        escribir('contacts-add-phone', ' 600 ');
-        escribir('contacts-add-email', '   ');
-        escribir('contacts-add-relationship', ' hermano ');
-        escribir('contacts-add-birthday', '1990-01-02');
-        escribir('contacts-add-notes', '  nota  ');
+    expect(onAdd).toHaveBeenCalledWith({
+      name: 'Luis',
+      phone: '600',
+      email: undefined,
+      relationship: 'hermano',
+      birthday: '1990-01-02',
+      participantId: 'p1',
+      participantName: 'Ana',
+    });
+  });
 
-        await act(async () => {
-            enviar();
-        });
+  it('tras el alta el formulario se limpia', async () => {
+    const { onAdd } = montar();
+    escribir('contacts-add-name', 'Luis');
 
-        expect(onAdd).toHaveBeenCalledWith({
-            name: 'Luis',
-            phone: '600',
-            email: undefined,
-            relationship: 'hermano',
-            birthday: '1990-01-02',
-            participantId: undefined,
-            participantName: undefined,
-            notes: 'nota',
-        });
+    await act(async () => {
+      enviar();
     });
 
-    it('el participantName se RESUELVE del id elegido', async () => {
-        const { onAdd } = montar();
-        escribir('contacts-add-name', 'Luis');
-        fireEvent.change(screen.getByTestId('contacts-add-participant'), { target: { value: 'p1' } });
-
-        await act(async () => {
-            enviar();
-        });
-
-        expect(onAdd).toHaveBeenCalledWith(
-            expect.objectContaining({ participantId: 'p1', participantName: 'Ana' }),
-        );
+    await vi.waitFor(() => {
+      expect((screen.getByTestId('contacts-add-name') as HTMLInputElement).value).toBe('');
     });
+    expect(onAdd).toHaveBeenCalledTimes(1);
+  });
 
-    it('el selector ofrece una opcion vacia y los participantes recibidos', () => {
-        montar();
+  it('sin nombre no envía y un doble submit guarda una vez', async () => {
+    let resolver: () => void = () => {};
+    const onAdd = vi.fn(
+      () =>
+        new Promise<void>((listo) => {
+          resolver = listo;
+        }),
+    );
+    montar({ onAdd });
 
-        const select = screen.getByTestId('contacts-add-participant') as HTMLSelectElement;
+    enviar();
+    expect(onAdd).not.toHaveBeenCalled();
 
-        expect([...select.options].map((o) => o.value)).toEqual(['', 'p1']);
-        expect([...select.options].map((o) => o.textContent)).toEqual([ui.participantEmpty, 'Ana']);
+    escribir('contacts-add-name', 'Luis');
+    await act(async () => {
+      enviar();
+      enviar();
     });
-
-    it('tras el alta el formulario se limpia', async () => {
-        const { onAdd } = montar();
-        escribir('contacts-add-name', 'Luis');
-        escribir('contacts-add-phone', '600');
-
-        await act(async () => {
-            enviar();
-        });
-
-        await vi.waitFor(() => {
-            expect((screen.getByTestId('contacts-add-name') as HTMLInputElement).value).toBe('');
-        });
-        expect((screen.getByTestId('contacts-add-phone') as HTMLInputElement).value).toBe('');
-        expect(onAdd).toHaveBeenCalledTimes(1);
+    expect(onAdd).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      resolver();
     });
-
-    it('sin nombre no se envia nada aunque se fuerce el submit', () => {
-        const { onAdd } = montar();
-
-        enviar();
-
-        expect(onAdd).not.toHaveBeenCalled();
-    });
-
-    it('un doble submit seguido solo guarda UNA vez (busy)', async () => {
-        let resolver: () => void = () => {};
-        const onAdd = vi.fn(
-            () =>
-                new Promise<void>((listo) => {
-                    resolver = listo;
-                }),
-        );
-        montar({ onAdd });
-        escribir('contacts-add-name', 'Luis');
-
-        await act(async () => {
-            enviar();
-            enviar();
-        });
-
-        expect(onAdd).toHaveBeenCalledTimes(1);
-        await act(async () => {
-            resolver();
-        });
-        await vi.waitFor(() => {
-            expect((screen.getByTestId('contacts-add-name') as HTMLInputElement).disabled).toBe(false);
-        });
-    });
-
-    it('mientras guarda, los campos quedan bloqueados', () => {
-        montar({ onAdd: vi.fn(() => new Promise<void>(() => {})) });
-        escribir('contacts-add-name', 'Luis');
-
-        enviar();
-
-        expect((screen.getByTestId('contacts-add-name') as HTMLInputElement).disabled).toBe(true);
-        expect((screen.getByTestId('contacts-add-submit') as HTMLButtonElement).disabled).toBe(true);
-    });
+  });
 });
 
-describe('ContactsPanel - agenda', () => {
-    it('la fila une relacion, telefono, cumpleaños y participante', () => {
-        montar({ contacts: CONTACTOS });
+describe('ContactsPanel — fila, detalle, cumpleaños y baja', () => {
+  it('la fila muestra nombre y meta; expandir muestra el detalle', () => {
+    montar({ contacts: CONTACTOS });
+    const fila = screen.getByTestId('contacts-item-c1');
 
-        const fila = screen.getByTestId('contacts-item-c1');
+    expect(within(fila).getByRole('button', { name: /Luis/ })).toBeTruthy();
+    expect(fila.textContent).toContain('hermano · 600');
 
-        expect(fila.textContent).toContain('Luis');
-        expect(fila.textContent).toContain('hermano · 600 · 1980-05-05 · Ana');
-        expect(fila.textContent).toContain('luis@ejemplo.org');
-        expect(fila.textContent).toContain('le gusta el cafe');
-        expect(fila.textContent).toContain(ui.favoriteMark);
+    fireEvent.click(within(fila).getByRole('button', { name: /Luis/ }));
+    expect(fila.textContent).toContain('luis@ejemplo.org');
+    expect(fila.textContent).toContain('1980-05-05');
+    expect(fila.textContent).toContain('Ana');
+  });
+
+  it('borrar manda el id y no se repite mientras está ocupado', () => {
+    const onRemove = vi.fn(() => new Promise<void>(() => {}));
+    montar({ contacts: [{ id: 'c1', name: 'Luis', favorite: false }], onRemove });
+
+    const boton = screen.getByTestId('contacts-remove-c1') as HTMLButtonElement;
+    fireEvent.click(boton);
+    fireEvent.click(boton);
+
+    expect(onRemove).toHaveBeenCalledTimes(1);
+    expect(onRemove).toHaveBeenCalledWith('c1');
+  });
+
+  it('la marca de cumpleaños distingue hoy, mañana y N días', () => {
+    const base = { record: { id: 'x', name: 'Ana' }, nextBirthday: '2026-01-01' };
+    montar({
+      birthdayNear: [
+        { ...base, daysUntil: 0 },
+        { ...base, record: { id: 'y', name: 'Beto' }, daysUntil: 1 },
+        { ...base, record: { id: 'z', name: 'Caro' }, daysUntil: 5 },
+      ],
     });
 
-    it('sin correo ni notas no se pintan lineas de mas', () => {
-        montar({ contacts: [{ id: 'c2', name: 'Solo', favorite: false }] });
-
-        const fila = screen.getByTestId('contacts-item-c2');
-
-        expect(fila.textContent).toContain('Solo');
-        expect(fila.textContent).not.toContain(ui.favoriteMark);
-    });
-
-    it('borrar manda el id y no se puede repetir mientras esta ocupado', async () => {
-        const onRemove = vi.fn(() => new Promise<void>(() => {}));
-        montar({ contacts: [{ id: 'c1', name: 'Luis', favorite: false }], onRemove });
-
-        const boton = screen.getByTestId('contacts-remove-c1') as HTMLButtonElement;
-        fireEvent.click(boton);
-        fireEvent.click(boton);
-
-        expect(onRemove).toHaveBeenCalledTimes(1);
-        expect(onRemove).toHaveBeenCalledWith('c1');
-    });
-
-    it('la marca de cumpleaños distingue hoy, mañana y N dias', () => {
-        const base = { record: { id: 'x', name: 'Ana' }, nextBirthday: '2026-01-01' };
-        montar({
-            birthdayNear: [
-                { ...base, daysUntil: 0 },
-                { ...base, record: { id: 'y', name: 'Beto' }, daysUntil: 1 },
-                { ...base, record: { id: 'z', name: 'Caro' }, daysUntil: 5 },
-            ],
-        });
-
-        expect(screen.getByTestId('contacts-birthday-item-x').textContent).toContain(ui.todayLabel);
-        expect(screen.getByTestId('contacts-birthday-item-y').textContent).toContain(ui.tomorrowLabel);
-        expect(screen.getByTestId('contacts-birthday-item-z').textContent).toContain(ui.inDaysLabel);
-        expect(screen.getByTestId('contacts-birthday-item-z').textContent).toContain(ui.daysLabel);
-    });
+    expect(screen.getByTestId('contacts-birthday-item-x').textContent).toContain(ui.todayLabel);
+    expect(screen.getByTestId('contacts-birthday-item-y').textContent).toContain(ui.tomorrowLabel);
+    expect(screen.getByTestId('contacts-birthday-item-z').textContent).toContain(ui.inDaysLabel);
+  });
 });

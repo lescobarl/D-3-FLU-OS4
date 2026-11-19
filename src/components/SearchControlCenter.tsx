@@ -13,8 +13,6 @@ import { languageLabel } from '../lib/languageLabel'
 //      categoría (los tiles del inicio se derivan solos).
 //   4. Idiomas y nivel: tabla de defaults por rol (defaultsByRole).
 //   5. Seguridad: safeSearch / supervisado / límite diario.
-//   6. Vista previa (dev): consulta de prueba (resultados + IA)
-//      antes de confirmar la configuración.
 //
 // Regla #1: sin hardcode — todas las etiquetas viven en
 // FLU_CONFIG.browser.search.ui (+ browser.ui / browser.catalog /
@@ -29,15 +27,9 @@ import { languageLabel } from '../lib/languageLabel'
 // duplican en localStorage.
 // ============================================================
 import { useEffect, useMemo, useState } from 'react';
-import type { FormEvent } from 'react';
 import { FLU_CONFIG } from '../voice/api/config';
 import { asConfigNode, configTextMap } from './configText';
-import {
-  buildRuntimeConfig,
-  fetchAiOverview,
-  fetchTypeResults,
-  resolveMergedSearchConfig,
-} from '../hooks/useWorkspaceSearch';
+import { buildRuntimeConfig } from '../hooks/useWorkspaceSearch';
 import {
   applyProviderOverrides,
   mergeSearchConfig,
@@ -47,14 +39,12 @@ import {
 } from '../core/search/searchConfigOverrides';
 import type {
   SearchProviderConfig,
-  SearchResult,
   SearchResultType,
 } from '../core/search/searchSession';
 import type { SearchSite } from '../core/search/searchSiteTypes';
 import type { RegisterResult, UpdateResult } from '../core/catalogs/catalogRegistry';
 import { SearchCatalogPanel } from './SearchCatalogPanel';
 import { useSettingsSaveRegistration } from './SettingsSaveContext';
-import { logCaughtError } from '../lib/caughtError';
 
 export interface SearchControlCenterProps {
   /** Overrides persistidos vigentes (cargados en App). */
@@ -66,8 +56,6 @@ export interface SearchControlCenterProps {
   ) => void;
   /** Restablece los overrides a la config base (App: limpiar storage + audit). */
   onReset?: () => void;
-  /** Allowlist curada del perfil (para la vista previa segura). */
-  allowlist?: readonly string[];
   /** Catálogo fusionado vigente (built-ins + dinámicos). */
   sites: readonly SearchSite[];
   /** Dominios de sitios dinámicos (editables/borrables). */
@@ -85,14 +73,6 @@ function numText(value: number | string | undefined): string {
   if (value === undefined || value === null) return '';
   return String(value);
 }
-
-interface PreviewState {
-  state: 'idle' | 'loading' | 'error' | 'done';
-  results: SearchResult[];
-  ai: string;
-}
-
-const PREVIEW_IDLE: PreviewState = { state: 'idle', results: [], ai: '' };
 
 /** Campo numérico de proveedor (dueño único del input repetido). */
 function ProviderNumberField({
@@ -127,7 +107,6 @@ export function SearchControlCenter({
   overrides,
   onChange,
   onReset,
-  allowlist,
   sites,
   dynamicDomains,
   loading,
@@ -177,8 +156,6 @@ export function SearchControlCenter({
   const [dailyLimitText, setDailyLimitText] = useState(() =>
     overrides.dailyLimit !== undefined ? String(overrides.dailyLimit) : '',
   );
-  const [previewQuery, setPreviewQuery] = useState('');
-  const [preview, setPreview] = useState<PreviewState>(PREVIEW_IDLE);
 
   // Sincroniza el borrador cuando App persiste un cambio (post-save/reset).
   useEffect(() => {
@@ -256,8 +233,6 @@ export function SearchControlCenter({
   const handleReset = (): void => {
     setDraft({});
     setDailyLimitText('');
-    setPreviewQuery('');
-    setPreview(PREVIEW_IDLE);
     if (onReset) {
       onReset();
     } else {
@@ -268,45 +243,6 @@ export function SearchControlCenter({
   // Guardar/Restablecer GLOBAL del configurador (barra al pie de Configuración).
   useSettingsSaveRegistration('search-control', { commit: handleSave, reset: handleReset });
 
-  /**
-   * Vista previa (dev): ejecuta la consulta contra el proxy con la config
-   * efectiva del borrador (safeSearch / allowlist / proveedores / topes) y
-   * el resumen de IA. La IA es best-effort: si falla no rompe la preview.
-   */
-  const handleRunPreview = async (event: FormEvent): Promise<void> => {
-    event.preventDefault();
-    const q = previewQuery.trim();
-    if (!q) return;
-    const resolved = resolveMergedSearchConfig(draft);
-    const baseParams = new URLSearchParams();
-    baseParams.set('q', q);
-    baseParams.set('lang', 'es');
-    if (resolved.effectiveSafe) baseParams.set('safe', '1');
-    if (allowlist && allowlist.length > 0) baseParams.set('allowlist', allowlist.join(','));
-    setPreview({ state: 'loading', results: [], ai: '' });
-    try {
-      const fetched = await fetchTypeResults(
-        resolved.endpoints.web,
-        'web',
-        resolved.providers.web,
-        baseParams,
-        resolved.timeoutMs,
-        resolved.maxResultsByType.web,
-      );
-      if (!fetched.ok) {
-        setPreview({ state: 'error', results: [], ai: '' });
-        return;
-      }
-      let ai = '';
-      if (resolved.aiEnabled) {
-        ai = await fetchAiOverview(q, 'es', resolved.maxChars, resolved.aiOverviewTitle);
-      }
-      setPreview({ state: 'done', results: fetched.results, ai });
-    } catch (e) {
-        logCaughtError('[catch] src/components/SearchControlCenter.tsx', e);
-      setPreview({ state: 'error', results: [], ai: '' });
-    }
-  };
 
   const groupLabel = (type: SearchResultType): string => {
     const key =
@@ -452,7 +388,7 @@ export function SearchControlCenter({
                                 </span>
                                 <input
                                   type="text"
-                                  style={{ fontFamily: 'monospace' }}
+
                                   value={typeof ov.model === 'string' ? ov.model : ''}
                                   placeholder={String(provider.model || '')}
                                   data-testid={`search-provider-model-${type}-${id}`}
@@ -534,77 +470,6 @@ export function SearchControlCenter({
           </div>
         </div>
 
-        {/* 6. Vista previa (dev) */}
-        <div className="flu-settings-section">
-          <div className="flu-settings-section__body">
-            <h4 className="flu-reminders__heading">{label('previewSection', 'Vista previa (dev)')}</h4>
-            <form
-              onSubmit={handleRunPreview}
-              className="flu-browser-profile__row flu-browser-profile__row--wrap"
-            >
-              <label className="flu-browser-profile__field flu-browser-profile__field--wide">
-                <span className="flu-settings-image-config__hint">
-                  {label('previewQueryLabel', 'Consulta de prueba')}
-                </span>
-                <input
-                  type="text"
-                  value={previewQuery}
-                  placeholder={label('previewQueryPlaceholder', 'Escribí una consulta de prueba…')}
-                  data-testid="search-preview-query"
-                  onChange={(e) => setPreviewQuery(e.target.value)}
-                />
-              </label>
-              <button type="submit" className="flu-ambientes-panel__create" data-testid="search-preview-run">
-                {label('runPreview', 'Probar consulta')}
-              </button>
-            </form>
-            {preview.state === 'loading' && (
-              <p className="flu-settings-image-config__hint" data-testid="search-preview-loading">
-                {label('previewLoading', 'Consultando…')}
-              </p>
-            )}
-            {preview.state === 'error' && (
-              <p className="flu-settings-image-config__hint" data-testid="search-preview-error">
-                {label('previewError', 'No se pudo completar la consulta de prueba.')}
-              </p>
-            )}
-            {preview.state === 'done' && (
-              <div className="flu-settings-section__body" data-testid="search-preview-done">
-                {preview.ai ? (
-                  <>
-                    <h5 className="flu-reminders__heading">{label('previewAi', 'Resumen de IA')}</h5>
-                    <p className="flu-settings-image-config__hint">{preview.ai}</p>
-                  </>
-                ) : null}
-                <h5 className="flu-reminders__heading">{label('previewResults', 'Resultados')}</h5>
-                {preview.results.length === 0 ? (
-                  <p className="flu-settings-image-config__hint">{label('previewEmpty', 'Sin resultados.')}</p>
-                ) : (
-                  <ul className="flu-reminders-list">
-                    {preview.results.map((result, index) => (
-                      <li
-                        key={result.url || index}
-                        className="flu-reminders-item flu-reminders-item--with-profile"
-                      >
-                        <div className="flu-reminders-item__info">
-                          <span className="flu-reminders-item__text">{result.title}</span>
-                          {result.snippet ? (
-                            <span className="flu-reminders-item__when">{result.snippet}</span>
-                          ) : null}
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            )}
-            {preview.state === 'idle' && (
-              <p className="flu-settings-image-config__hint" data-testid="search-preview-empty">
-                {label('previewEmpty', 'Ejecutá una consulta para ver la vista previa.')}
-              </p>
-            )}
-          </div>
-        </div>
       </SettingsPanelShell>
   );
 }

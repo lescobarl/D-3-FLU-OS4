@@ -6,8 +6,6 @@
  * los setters que le pasa el llamante. App.tsx usa applyConfigAction.
  */
 
-import { isBunnyComponent } from '../app/appTypeGuards';
-import type { BunnyComponent } from '../avatar/types/bunny';
 import { useEnhancedBranding } from '../core/branding/useEnhancedBranding';
 import { AI_PROVIDERS, BRANDING_MODES, FLU_PROFILE_IDS, UI_LANGUAGES, VOICE_CONFIG_CATALOG } from '../core/config/voiceConfigCatalog';
 import type { ConfigCatalogEntry } from '../core/config/voiceConfigCatalog';
@@ -37,8 +35,6 @@ interface ApplyConfigContext {
     handleOcrApiKeyCommit?: (key: string) => void;
     handleOcrModelCommit?: (model: string) => void;
     handleOcrApiUrlCommit?: (url: string) => void;
-    setComponentColor?: (component: BunnyComponent, color: string) => void;
-    resetComponentColors?: () => void;
     /** Aplicar configuración de voz (rate/volume) al integrationStore */
     setVoiceConfig?: (config: Partial<VoiceConfig>) => void;
     /** Establecer configuración de personalidad (setPersonality del integrationStore) */
@@ -51,8 +47,6 @@ interface ApplyConfigContext {
     voices?: SpeechSynthesisVoice[];
     /** Cambiar el proveedor de IA preferido */
     handleSetAiProvider?: (provider: string) => void;
-    /** Activar/desactivar celebraciones por logros (branding) */
-    setCelebrateAchievements?: (enabled: boolean) => void;
     /** Aplicar un perfil completo de FLU */
     applyProfile?: (profileId: FluProfile) => void;
     /** Limpiar caché y recargar (useConfigPersistence) */
@@ -60,8 +54,6 @@ interface ApplyConfigContext {
     /** Palabras de activación actuales (ref fresca para onContractResolved memoizado) */
     wakeWordsRef: React.MutableRefObject<string>;
     setWakeWords?: (value: string) => void;
-    /** Logs de depuración persistidos */
-    setDebugLogsEnabled?: (enabled: boolean) => void;
 }
 
 // ============================================================
@@ -155,15 +147,6 @@ export async function applyConfigAction(
         case 'brandingBirthday': {
             // Cumpleaños: "YYYY-MM-DD"
             await ctx.branding.seasonalActions.setBirthday(valor || null);
-            break;
-        }
-        case 'brandingCelebrateAchievements': {
-            const enabled = parseBoolean(valor);
-            if (enabled !== null) {
-                await ctx.setCelebrateAchievements?.(enabled);
-            } else {
-                relayLog('WARN', 'config', '[applyConfigAction] Booleano inválido para celebrateAchievements:', valor);
-            }
             break;
         }
         case 'brandingCustomEvent': {
@@ -346,36 +329,6 @@ export async function applyConfigAction(
         }
 
         // --------------------------------------------------------
-        // COLORES DEL AVATAR (set_config → BunnyStore)
-        // --------------------------------------------------------
-        case 'avatarColor': {
-            // Formato: "component:color" (ej. "Bunny_pants:#8B4513")
-            const [component, color] = valor.split(':');
-            if (component && color && isBunnyComponent(component)) {
-                ctx.setComponentColor?.(component, color);
-            } else {
-                relayLog('WARN', 'config', '[applyConfigAction] avatarColor requiere "componente:color":', valor);
-            }
-            break;
-        }
-        case 'avatarComponentColor': {
-            const map: Record<string, BunnyComponent> = {
-                pantsColor: 'Bunny_pants',
-                bodyColor: 'Bunny_body',
-                faceColor: 'Bunny_face',
-            };
-            const component = map[entry.clave];
-            if (component) {
-                ctx.setComponentColor?.(component, valor);
-            }
-            break;
-        }
-        case 'resetAvatarColors': {
-            ctx.resetComponentColors?.();
-            break;
-        }
-
-        // --------------------------------------------------------
         // MOTOR IA / PERFIL (set_config)
         // --------------------------------------------------------
         case 'aiProvider': {
@@ -412,15 +365,6 @@ export async function applyConfigAction(
                 break;
             }
             ctx.setWakeWords?.(next.join('\n'));
-            break;
-        }
-        case 'debugLogs': {
-            const enabled = parseBoolean(valor);
-            if (enabled !== null) {
-                ctx.setDebugLogsEnabled?.(enabled);
-            } else {
-                relayLog('WARN', 'config', '[applyConfigAction] Booleano inválido para debugLogs:', valor);
-            }
             break;
         }
         case 'clearCache': {

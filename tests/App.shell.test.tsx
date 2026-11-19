@@ -79,7 +79,6 @@ const H = vi.hoisted(() => {
             handleOcrApiUrlCommit: fn(),
             handleClearCache: fn(),
             setWakeWords: fn(),
-            setDebugLogsEnabled: fn(),
         },
         shopping: { addMany: fn(), toggle: fn(), remove: fn(), clearChecked: fn() },
         agenda: {
@@ -137,7 +136,6 @@ const H = vi.hoisted(() => {
             setMode: fn(),
             setActiveSeason: fn(),
             setBirthday: fn(),
-            setCelebrateAchievements: fn(),
         },
         catalogs: {
             handleActivateAmbiente: fn(),
@@ -216,8 +214,6 @@ const H = vi.hoisted(() => {
         currentExpression: null as string | null,
         currentAnimation: null as string | null,
         blendQueue: [] as string[],
-        setComponentColor: fn(),
-        resetComponentColors: fn(),
     };
 
     const useIntegrationStore = Object.assign(() => integration, { getState: () => integration });
@@ -261,7 +257,12 @@ const H = vi.hoisted(() => {
             sessionRoleRef,
             wakeWords: [] as string[],
             wakeWordsRef: { current: [] as string[] },
-            debugLogsEnabled: false,
+            verboseLogsEnabled: false,
+            relayLogsEnabled: false,
+            recordingEnabled: false,
+            setVerboseLogsEnabled: fn(),
+            setRelayLogsEnabled: fn(),
+            setRecordingEnabled: fn(),
             ...spy.config,
         },
         audit: spy.audit,
@@ -306,7 +307,6 @@ const H = vi.hoisted(() => {
                 resolveParticipantBySpeakerLabel: spy.participants.resolveParticipantBySpeakerLabel,
             },
         },
-        materiaGris: { leaderboard: [] as unknown[], history: [] as unknown[], loading: false, awardPoints: fn() },
         communicationProfiles: { profiles: [], setManual: fn(), resetPerson: fn() },
         browserProfiles: { profiles: [], reset: fn(), update: fn() },
         searchSites: { sites: [], dynamicDomains: [], loading: false, register: fn(), update: fn(), remove: fn() },
@@ -376,7 +376,7 @@ const H = vi.hoisted(() => {
             ...spy.notifications,
         },
         branding: {
-            config: { mode: 'auto', activeSeason: 'spring', birthday: null, celebrateAchievements: true },
+            config: { mode: 'auto', activeSeason: 'spring', birthday: null },
             isBirthday: false,
             celebrandoA: false,
             isEcologicalBranding: false,
@@ -424,7 +424,6 @@ const H = vi.hoisted(() => {
         useShoppingList: () => returns.shopping,
         useAgenda: () => returns.agenda,
         useParticipants: () => returns.participants,
-        useMateriaGris: () => returns.materiaGris,
         useCommunicationProfiles: () => returns.communicationProfiles,
         useBrowserProfiles: () => returns.browserProfiles,
         useSearchSites: () => returns.searchSites,
@@ -476,7 +475,6 @@ vi.mock('../src/hooks/useDocuments', () => ({ useDocuments: H.hooks.useDocuments
 vi.mock('../src/hooks/useShoppingList', () => ({ useShoppingList: H.hooks.useShoppingList }));
 vi.mock('../src/hooks/useAgenda', () => ({ useAgenda: H.hooks.useAgenda }));
 vi.mock('../src/hooks/useParticipants', () => ({ useParticipants: H.hooks.useParticipants }));
-vi.mock('../src/hooks/useMateriaGris', () => ({ useMateriaGris: H.hooks.useMateriaGris }));
 vi.mock('../src/hooks/useCommunicationProfiles', () => ({ useCommunicationProfiles: H.hooks.useCommunicationProfiles }));
 vi.mock('../src/hooks/useBrowserProfiles', () => ({ useBrowserProfiles: H.hooks.useBrowserProfiles }));
 vi.mock('../src/hooks/useSearchSites', () => ({ useSearchSites: H.hooks.useSearchSites }));

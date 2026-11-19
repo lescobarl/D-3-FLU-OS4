@@ -34,8 +34,6 @@ export interface BrandingConfig {
     birthday: string | null;
     /** Eventos personalizados */
     customEvents: CustomEvent[];
-    /** Celebrar logros de Materia Gris */
-    celebrateAchievements: boolean;
     /** Celebrar aniversarios de uso */
     celebrateAnniversaries: boolean;
 }
@@ -54,7 +52,6 @@ export interface SeasonalBrandingActions {
     setBirthday: (birthday: string | null) => Promise<void>;
     addCustomEvent: (event: CustomEvent) => Promise<void>;
     removeCustomEvent: (id: string) => Promise<void>;
-    setCelebrateAchievements: (enabled: boolean) => Promise<void>;
     setCelebrateAnniversaries: (enabled: boolean) => Promise<void>;
     refresh: () => Promise<void>;
 }
@@ -72,7 +69,6 @@ const DEFAULT_CONFIG: BrandingConfig = {
     activeSeason: 'default',
     birthday: null,
     customEvents: [],
-    celebrateAchievements: false,
     celebrateAnniversaries: false,
 };
 
@@ -85,7 +81,6 @@ const CONFIG_KEYS = {
     ACTIVE_SEASON: 'branding_activeSeason',
     BIRTHDAY: 'branding_birthday',
     CUSTOM_EVENTS: 'branding_customEvents',
-    CELEBRATE_ACHIEVEMENTS: 'branding_celebrateAchievements',
     CELEBRATE_ANNIVERSARIES: 'branding_celebrateAnniversaries',
     // Bandera de migración única: el branding ahora arranca APAGADO por defecto.
     MIGRATED: 'branding_migrated_v2',
@@ -118,9 +113,6 @@ async function loadConfigFromDB(): Promise<BrandingConfig> {
                         }
                     } catch (e) {
         logCaughtError('[catch] src/core/branding/useSeasonalBranding.ts', e); /* ignore */ }
-                    break;
-                case CONFIG_KEYS.CELEBRATE_ACHIEVEMENTS:
-                    config.celebrateAchievements = record.value === 'true';
                     break;
                 case CONFIG_KEYS.CELEBRATE_ANNIVERSARIES:
                     config.celebrateAnniversaries = record.value === 'true';
@@ -206,10 +198,10 @@ export function useSeasonalBranding(): SeasonalBrandingState & SeasonalBrandingA
         let seasonKey: string;
 
         if (cfg.mode === 'auto') {
-            const result = getActiveSeason(cfg.birthday, cfg.customEvents, cfg.celebrateAchievements);
+            const result = getActiveSeason(cfg.birthday, cfg.customEvents);
             seasonKey = result.event.palette;
         } else {
-            // manual: usar la temporada que el usuario configuró
+            // manual: usar la temporada que el usuario configurÃ³
             seasonKey = cfg.activeSeason;
         }
 
@@ -223,7 +215,7 @@ export function useSeasonalBranding(): SeasonalBrandingState & SeasonalBrandingA
         }));
 
         if (cfg.mode === 'auto') {
-            const result = getActiveSeason(cfg.birthday, cfg.customEvents, cfg.celebrateAchievements);
+            const result = getActiveSeason(cfg.birthday, cfg.customEvents);
             setCurrentEvent(result.event);
             setIsBirthdayState(result.isBirthday);
             setCelebrandoA(result.celebrandoA);
@@ -276,12 +268,6 @@ export function useSeasonalBranding(): SeasonalBrandingState & SeasonalBrandingA
         await addAuditLog('config:branding', 'branding', CONFIG_KEYS.CUSTOM_EVENTS, config.customEvents, updated, 'Custom event removed');
     }, [config.customEvents]);
 
-    const setCelebrateAchievements = useCallback(async (enabled: boolean) => {
-        setConfig((prev) => ({ ...prev, celebrateAchievements: enabled }));
-        await saveConfigToDB(CONFIG_KEYS.CELEBRATE_ACHIEVEMENTS, String(enabled));
-        await addAuditLog('config:branding', 'branding', CONFIG_KEYS.CELEBRATE_ACHIEVEMENTS, config.celebrateAchievements, enabled, 'Celebrate achievements toggled');
-    }, [config.celebrateAchievements]);
-
     const setCelebrateAnniversaries = useCallback(async (enabled: boolean) => {
         setConfig((prev) => ({ ...prev, celebrateAnniversaries: enabled }));
         await saveConfigToDB(CONFIG_KEYS.CELEBRATE_ANNIVERSARIES, String(enabled));
@@ -311,7 +297,6 @@ export function useSeasonalBranding(): SeasonalBrandingState & SeasonalBrandingA
         setBirthday,
         addCustomEvent,
         removeCustomEvent,
-        setCelebrateAchievements,
         setCelebrateAnniversaries,
         refresh,
     };
