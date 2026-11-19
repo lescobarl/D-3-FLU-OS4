@@ -61,10 +61,13 @@ const crearReloj = () => {
 
 const crearRegistro = () => {
   const contextos: string[] = []
+  const eventos: Array<{ contexto: string; datos: unknown[] }> = []
   return {
     contextos,
-    registrar: (contexto: string) => {
+    eventos,
+    registrar: (contexto: string, ...datos: unknown[]) => {
       contextos.push(contexto)
+      eventos.push({ contexto, datos })
     },
   }
 }
@@ -356,6 +359,22 @@ describe('regla 4 y stop — provisional o descarte contado', () => {
       expect.objectContaining({ motivo: 'sinTexto' }),
     ])
     expect(registro.contextos).toContain('conversacion.descarte')
+  })
+
+  it('la fila commiteada deja su etiqueta en el log (auditoría de identidad)', async () => {
+    const { api, registro } = crearEscenario()
+    await api.start()
+    const tramoId = await abrirConVoz(api)
+    await api.ingestAsr(asr(tramoId, { texto: 'hola' }))
+    const estado = await api.stop('user')
+    expect(estado.filas).toHaveLength(1)
+    const evento = registro.eventos.find(
+      (item) => item.contexto === 'conversacion.fila.etiquetada',
+    )
+    expect(evento?.datos[0]).toMatchObject({
+      locutionId: estado.filas[0].locutionId,
+      etiqueta: estado.filas[0].etiqueta,
+    })
   })
 
   it('stop a mitad de frase nunca pierde el texto ya escrito', async () => {

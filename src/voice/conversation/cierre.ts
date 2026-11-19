@@ -567,6 +567,17 @@ export function crearReglasCierre(contexto: ContextoCierre): ReglasCierre {
       const plantilla = estado.plantillasVoz.get(idVoz)
       if (plantilla) estado.plantillasVoz.set(idVoz, { ...plantilla, etiqueta: fila.etiqueta })
     }
+    // AUDITORÍA DE IDENTIDAD (una por fila): la medida temprana no registraba su
+    // decisión y no se podía saber si una voz nueva (p. ej. la mujer) quedó con
+    // su etiqueta o heredó la anterior. No es una segunda ruta de decisión: la
+    // etiqueta ya está commiteada; esto solo la deja en el log del cliente.
+    registro.registrar('conversacion.fila.etiquetada', {
+      sessionId: estado.sessionId,
+      locutionId: fila.locutionId,
+      etiqueta: fila.etiqueta,
+      vozId: idVoz,
+      evidencia: fila.evidencia ?? null,
+    })
     return fila
   }
 
